@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DryIoc" Version="5.4.3" />
+    <PackageReference Include="NLog" Version="5.5.1" />
+  </ItemGroup>
+</Project>
