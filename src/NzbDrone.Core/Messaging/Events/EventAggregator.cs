@@ -15,7 +15,8 @@ public class EventAggregator : IEventAggregator
         _serviceProvider = serviceProvider;
     }
 
-    public void PublishEvent<TEvent>(TEvent @event) where TEvent : class, IEvent
+    public void PublishEvent<TEvent>(TEvent @event)
+        where TEvent : class, IEvent
     {
         _logger.Trace("Publishing {0}", @event.GetType().Name);
 
