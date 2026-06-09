@@ -4,9 +4,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DryIoc" Version="5.4.3">
-      <ExcludeAssets>contentFiles</ExcludeAssets>
-    </PackageReference>
+    <PackageReference Include="DryIoc.dll" Version="5.4.3" />
     <PackageReference Include="NLog" Version="5.5.1" />
   </ItemGroup>
 </Project>
