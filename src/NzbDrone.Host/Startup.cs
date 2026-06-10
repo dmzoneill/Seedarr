@@ -40,14 +40,7 @@ public class Startup
         services.AddAuthorization();
 
         services.AddEndpointsApiExplorer();
-        services.AddSwaggerGen(c =>
-        {
-            c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
-            {
-                Title = "Seedarr API",
-                Version = "v1"
-            });
-        });
+        services.AddSwaggerGen();
 
         services.AddCors(options =>
         {
