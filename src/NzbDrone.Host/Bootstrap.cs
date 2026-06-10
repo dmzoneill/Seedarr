@@ -8,6 +8,7 @@ using NLog;
 using NzbDrone.Common.Composition;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Host;
 
@@ -47,6 +48,11 @@ public static class Bootstrap
 
         var app = builder.Build();
         startup.Configure(app);
+
+        TableRegistration.RegisterTables();
+
+        var mainDb = app.Services.GetRequiredService<IMainDatabase>();
+        Logger.Info("Database initialized: {0}", mainDb.DatabaseType);
 
         var configProvider = app.Services.GetRequiredService<IConfigFileProvider>();
         var url = $"http://{configProvider.BindAddress}:{configProvider.Port}";
