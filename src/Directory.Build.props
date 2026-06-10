@@ -8,6 +8,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
+    <NuGetAuditLevel>critical</NuGetAuditLevel>
 
     <SeedarrRootDir>$(MSBuildThisFileDirectory)..\</SeedarrRootDir>
 
