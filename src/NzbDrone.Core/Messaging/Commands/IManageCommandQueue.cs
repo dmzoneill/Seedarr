@@ -1,0 +1,12 @@
+using System.Collections.Generic;
+
+namespace NzbDrone.Core.Messaging.Commands;
+
+public interface IManageCommandQueue
+{
+    CommandModel Push<TCommand>(TCommand command, CommandTrigger trigger = CommandTrigger.Unspecified)
+        where TCommand : Command;
+
+    IEnumerable<CommandModel> GetStarted();
+    IEnumerable<CommandModel> GetQueued();
+}
