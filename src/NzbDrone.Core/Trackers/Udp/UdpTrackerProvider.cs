@@ -7,11 +7,12 @@ namespace NzbDrone.Core.Trackers.Udp;
 
 public class UdpTrackerProvider : ITrackerProvider
 {
-    private readonly Logger _logger;
     private const long ProtocolMagic = 0x41727101980;
     private const int ActionConnect = 0;
     private const int ActionAnnounce = 1;
     private const int ActionScrape = 2;
+
+    private readonly Logger _logger;
 
     public string Name => "UDP";
 
