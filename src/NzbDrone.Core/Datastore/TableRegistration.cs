@@ -2,6 +2,7 @@ using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
+using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
@@ -20,5 +21,6 @@ public static class TableRegistration
         TableMapping.Register<ClientProfileDefinition>("ClientProfileDefinitions");
         TableMapping.Register<TrackerProviderDefinition>("TrackerProviderDefinitions");
         TableMapping.Register<ArrConnectionDefinition>("ArrConnectionDefinitions");
+        TableMapping.Register<NotificationDefinition>("NotificationDefinitions");
     }
 }
