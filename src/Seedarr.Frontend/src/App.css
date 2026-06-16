@@ -67,6 +67,9 @@ body {
   font-weight: 700;
   text-decoration: none;
   letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .app-nav {
@@ -81,6 +84,19 @@ body {
   border-radius: 4px;
   font-size: 0.9rem;
   transition: background-color 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.app-nav a svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.app-nav a:hover svg {
+  opacity: 1;
 }
 
 .app-nav a:hover {
