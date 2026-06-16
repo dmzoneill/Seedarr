@@ -1,0 +1,24 @@
+services:
+  seedarr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: seedarr
+    ports:
+      - "9898:9898"
+    volumes:
+      - seedarr-config:/config
+      - seedarr-data:/data
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9898/api/v1/system/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  seedarr-config:
+  seedarr-data:

@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Seeding.Distribution;
+using NzbDrone.Core.Seeding.Scheduling;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Seeding;
@@ -14,6 +15,7 @@ public class SeedingEngine : BackgroundService
 {
     private readonly ITorrentService _torrentService;
     private readonly ISpeedDistributionManager _distributionManager;
+    private readonly ISpeedScheduler _speedScheduler;
     private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
 
@@ -22,10 +24,12 @@ public class SeedingEngine : BackgroundService
     public SeedingEngine(
         ITorrentService torrentService,
         ISpeedDistributionManager distributionManager,
+        ISpeedScheduler speedScheduler,
         IEventAggregator eventAggregator)
     {
         _torrentService = torrentService;
         _distributionManager = distributionManager;
+        _speedScheduler = speedScheduler;
         _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -60,7 +64,8 @@ public class SeedingEngine : BackgroundService
             return;
         }
 
-        var speeds = _distributionManager.DistributeSpeeds(torrents.Count);
+        var limits = _speedScheduler.GetCurrentLimits();
+        var speeds = _distributionManager.DistributeSpeeds(torrents.Count, limits.MaxUploadSpeed);
 
         for (var i = 0; i < torrents.Count; i++)
         {

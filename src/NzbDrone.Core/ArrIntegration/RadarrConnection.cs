@@ -3,12 +3,16 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json;
 using NLog;
+using NzbDrone.Core.Http;
+using Polly;
 
 namespace NzbDrone.Core.ArrIntegration;
 
 public class RadarrConnection : IArrConnection
 {
     private static readonly HttpClient Client = new();
+    private static readonly ResiliencePipeline Policy = ResiliencePolicies.GetArrApiPolicy();
+
     private readonly Logger _logger;
 
     public string Name => "Radarr";
@@ -26,17 +30,27 @@ public class RadarrConnection : IArrConnection
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v3/history?pageSize=50&sortKey=date&sortDirection=descending");
-            request.Headers.Add("X-Api-Key", ApiKey);
-
-            var response = Client.Send(request);
-            if (!response.IsSuccessStatusCode)
+            var result = Policy.Execute(ct =>
             {
-                _logger.Warn("Radarr API returned {0}", response.StatusCode);
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v3/history?pageSize=50&sortKey=date&sortDirection=descending");
+                request.Headers.Add("X-Api-Key", ApiKey);
+
+                var response = Client.Send(request, ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.Warn("Radarr API returned {0}", response.StatusCode);
+                    return (string)null;
+                }
+
+                return response.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+            });
+
+            if (result == null)
+            {
                 return new List<ArrDownloadRecord>();
             }
 
-            var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            var json = result;
             var doc = JsonDocument.Parse(json);
             var records = new List<ArrDownloadRecord>();
 
@@ -85,10 +99,13 @@ public class RadarrConnection : IArrConnection
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v3/system/status");
-            request.Headers.Add("X-Api-Key", ApiKey);
-            var response = Client.Send(request);
-            return response.IsSuccessStatusCode;
+            return Policy.Execute(ct =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v3/system/status");
+                request.Headers.Add("X-Api-Key", ApiKey);
+                var response = Client.Send(request, ct);
+                return response.IsSuccessStatusCode;
+            });
         }
         catch (Exception ex)
         {
