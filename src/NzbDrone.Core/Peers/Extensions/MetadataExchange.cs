@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using BencodeNET.Objects;
+using BencodeNET.Parsing;
 using NLog;
 
 namespace NzbDrone.Core.Peers.Extensions;
@@ -12,7 +15,7 @@ public interface IMetadataExchange
 
 public class MetadataMessage
 {
-    public int MessageType { get; set; }  // 0=request, 1=data, 2=reject
+    public int MessageType { get; set; }
     public int Piece { get; set; }
     public int TotalSize { get; set; }
     public byte[] Data { get; set; }
@@ -29,10 +32,10 @@ public class MetadataExchange : IMetadataExchange
 
     public byte[] BuildMetadataRequest(int piece)
     {
-        var dict = new BencodeNET.Objects.BDictionary
+        var dict = new BDictionary
         {
-            ["msg_type"] = new BencodeNET.Objects.BNumber(0),
-            ["piece"] = new BencodeNET.Objects.BNumber(piece)
+            ["msg_type"] = new BNumber(0),
+            ["piece"] = new BNumber(piece)
         };
 
         return dict.EncodeAsBytes();
@@ -40,11 +43,11 @@ public class MetadataExchange : IMetadataExchange
 
     public byte[] BuildMetadataResponse(int piece, int totalSize, byte[] data)
     {
-        var dict = new BencodeNET.Objects.BDictionary
+        var dict = new BDictionary
         {
-            ["msg_type"] = new BencodeNET.Objects.BNumber(1),
-            ["piece"] = new BencodeNET.Objects.BNumber(piece),
-            ["total_size"] = new BencodeNET.Objects.BNumber(totalSize)
+            ["msg_type"] = new BNumber(1),
+            ["piece"] = new BNumber(piece),
+            ["total_size"] = new BNumber(totalSize)
         };
 
         var header = dict.EncodeAsBytes();
@@ -58,14 +61,15 @@ public class MetadataExchange : IMetadataExchange
     {
         try
         {
-            var parser = new BencodeNET.Parsing.BencodeParser();
-            var dict = parser.Parse<BencodeNET.Objects.BDictionary>(data);
+            var parser = new BencodeParser();
+            using var stream = new MemoryStream(data);
+            var dict = parser.Parse<BDictionary>(stream);
 
             return new MetadataMessage
             {
-                MessageType = (int)((BencodeNET.Objects.BNumber)dict["msg_type"]).Value,
-                Piece = (int)((BencodeNET.Objects.BNumber)dict["piece"]).Value,
-                TotalSize = dict.ContainsKey("total_size") ? (int)((BencodeNET.Objects.BNumber)dict["total_size"]).Value : 0
+                MessageType = (int)((BNumber)dict["msg_type"]).Value,
+                Piece = (int)((BNumber)dict["piece"]).Value,
+                TotalSize = dict.ContainsKey("total_size") ? (int)((BNumber)dict["total_size"]).Value : 0
             };
         }
         catch (Exception ex)

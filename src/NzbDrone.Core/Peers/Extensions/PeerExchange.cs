@@ -1,5 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using BencodeNET.Objects;
+using BencodeNET.Parsing;
 using NLog;
 
 namespace NzbDrone.Core.Peers.Extensions;
@@ -36,10 +39,10 @@ public class PeerExchange : IPeerExchange
         var addedCompact = CompactPeers(added);
         var droppedCompact = CompactPeers(dropped);
 
-        var dict = new BencodeNET.Objects.BDictionary
+        var dict = new BDictionary
         {
-            ["added"] = new BencodeNET.Objects.BString(addedCompact),
-            ["dropped"] = new BencodeNET.Objects.BString(droppedCompact)
+            ["added"] = new BString(addedCompact),
+            ["dropped"] = new BString(droppedCompact)
         };
 
         return dict.EncodeAsBytes();
@@ -49,19 +52,20 @@ public class PeerExchange : IPeerExchange
     {
         try
         {
-            var parser = new BencodeNET.Parsing.BencodeParser();
-            var dict = parser.Parse<BencodeNET.Objects.BDictionary>(data);
+            var parser = new BencodeParser();
+            using var stream = new MemoryStream(data);
+            var dict = parser.Parse<BDictionary>(stream);
             var result = new PexData();
 
             if (dict.ContainsKey("added"))
             {
-                var addedBytes = ((BencodeNET.Objects.BString)dict["added"]).Value;
+                var addedBytes = ((BString)dict["added"]).Value;
                 result.Added = ParseCompactPeers(addedBytes.Span);
             }
 
             if (dict.ContainsKey("dropped"))
             {
-                var droppedBytes = ((BencodeNET.Objects.BString)dict["dropped"]).Value;
+                var droppedBytes = ((BString)dict["dropped"]).Value;
                 result.Dropped = ParseCompactPeers(droppedBytes.Span);
             }
 
