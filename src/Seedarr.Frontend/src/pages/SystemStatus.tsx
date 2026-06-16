@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
 
@@ -110,6 +111,10 @@ function SystemStatus() {
               <span className="status-label">App Data</span>
               <span className="status-value">{status.appData}</span>
             </div>
+          </div>
+
+          <div className="card">
+            <Link to="/system/tasks">View Scheduled Tasks</Link>
           </div>
         </>
       )}
