@@ -6,6 +6,8 @@ import Settings from './pages/Settings';
 import SystemStatus from './pages/SystemStatus';
 import SystemTasks from './pages/SystemTasks';
 import StatusBar from './components/StatusBar';
+import SeedarrLogo from './components/icons/SeedarrLogo';
+import { DashboardIcon, TorrentIcon, SettingsIcon, SystemIcon } from './components/icons/NavIcons';
 
 function App() {
   const location = useLocation();
@@ -16,13 +18,14 @@ function App() {
       <header className="app-header">
         <div className="app-header-content">
           <Link to="/" className="app-logo">
+            <SeedarrLogo size={28} />
             Seedarr
           </Link>
           <nav className="app-nav">
-            <Link to="/">Dashboard</Link>
-            <Link to="/torrents">Torrents</Link>
-            <Link to="/settings">Settings</Link>
-            <Link to="/system/status">System</Link>
+            <Link to="/"><DashboardIcon /> Dashboard</Link>
+            <Link to="/torrents"><TorrentIcon /> Torrents</Link>
+            <Link to="/settings"><SettingsIcon /> Settings</Link>
+            <Link to="/system/status"><SystemIcon /> System</Link>
           </nav>
         </div>
         {isSystemRoute && (
