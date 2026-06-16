@@ -6,15 +6,16 @@ namespace NzbDrone.Core.Seeding.Distribution;
 public interface ISpeedDistributionManager
 {
     long[] DistributeSpeeds(int torrentCount);
+    long[] DistributeSpeeds(int torrentCount, long maxUploadSpeed);
     List<string> GetAvailableDistributions();
     string CurrentDistribution { get; }
 }
 
 public class SpeedDistributionManager : ISpeedDistributionManager
 {
-    private readonly IEnumerable<ISpeedDistributor> _distributors;
+    private const long DefaultBytesPerSecond = 1_048_576;
 
-    private readonly long _totalBytesPerSecond = 1_048_576;
+    private readonly IEnumerable<ISpeedDistributor> _distributors;
     private readonly string _currentDistribution = "Equal";
 
     public string CurrentDistribution => _currentDistribution;
@@ -26,10 +27,16 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
     public long[] DistributeSpeeds(int torrentCount)
     {
+        return DistributeSpeeds(torrentCount, 0);
+    }
+
+    public long[] DistributeSpeeds(int torrentCount, long maxUploadSpeed)
+    {
         var distributor = _distributors.FirstOrDefault(d => d.Name == _currentDistribution)
                           ?? _distributors.First();
 
-        return distributor.Distribute(_totalBytesPerSecond, torrentCount);
+        var effectiveSpeed = maxUploadSpeed > 0 ? maxUploadSpeed : DefaultBytesPerSecond;
+        return distributor.Distribute(effectiveSpeed, torrentCount);
     }
 
     public List<string> GetAvailableDistributions()
