@@ -17,10 +17,10 @@
 
 **/Logo
 
-**/.dockerignore
-**/Dockerfile
-**/docker-compose.yml
-**/docker-compose*.yml
+**/.containerignore
+**/Containerfile
+**/podman-compose.yml
+**/podman-compose*.yml
 
 **/*.user
 **/*.suo
