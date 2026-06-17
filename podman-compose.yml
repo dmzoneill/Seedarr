@@ -2,7 +2,7 @@ services:
   seedarr:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Containerfile
     container_name: seedarr
     ports:
       - "9898:9898"
