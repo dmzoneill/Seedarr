@@ -20,3 +20,5 @@ jobs:
       test-ready: "true"
       dotnet: "true"
       dotnet-version: "10.0.x"
+      docker-build: "true"
+      container-file: "Containerfile"

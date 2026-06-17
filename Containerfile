@@ -38,6 +38,7 @@ RUN dotnet publish src/NzbDrone.Console/Seedarr.Console.csproj \
 # Stage 3: Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
+# hadolint ignore=DL3008
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
