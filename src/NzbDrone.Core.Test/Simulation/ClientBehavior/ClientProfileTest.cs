@@ -52,7 +52,9 @@ public class ClientProfileTest
     {
         var peerId = profile.GeneratePeerId();
 
-        Assert.That(peerId, Has.Length.EqualTo(20),
+        Assert.That(
+            peerId,
+            Has.Length.EqualTo(20),
             $"Peer ID for {profile.Name} should be exactly 20 characters (BitTorrent spec)");
     }
 
@@ -62,7 +64,9 @@ public class ClientProfileTest
         var peerId = profile.GeneratePeerId();
         var bytes = Encoding.ASCII.GetBytes(peerId);
 
-        Assert.That(bytes, Has.Length.EqualTo(20),
+        Assert.That(
+            bytes,
+            Has.Length.EqualTo(20),
             $"Peer ID for {profile.Name} must be exactly 20 bytes per BitTorrent protocol");
     }
 
@@ -77,7 +81,9 @@ public class ClientProfileTest
     [TestCaseSource(nameof(AllProfiles))]
     public void GeneratePeerId_prefix_should_be_8_characters(IClientProfile profile)
     {
-        Assert.That(profile.PeerIdPrefix, Has.Length.EqualTo(8),
+        Assert.That(
+            profile.PeerIdPrefix,
+            Has.Length.EqualTo(8),
             $"Azureus-style peer ID prefix for {profile.Name} must be 8 characters");
     }
 
@@ -87,7 +93,9 @@ public class ClientProfileTest
         var peerId = profile.GeneratePeerId();
         var suffix = peerId.Substring(profile.PeerIdPrefix.Length);
 
-        Assert.That(suffix, Does.Match("^[0-9]+$"),
+        Assert.That(
+            suffix,
+            Does.Match("^[0-9]+$"),
             $"Suffix for {profile.Name} should be numeric digits only");
     }
 
@@ -98,7 +106,9 @@ public class ClientProfileTest
         var uniqueIds = new HashSet<string>(ids);
 
         // With 12 random decimal digits, collisions in 100 samples are astronomically unlikely
-        Assert.That(uniqueIds.Count, Is.EqualTo(100),
+        Assert.That(
+            uniqueIds.Count,
+            Is.EqualTo(100),
             $"100 generated peer IDs for {profile.Name} should all be unique");
     }
 
@@ -106,7 +116,9 @@ public class ClientProfileTest
     public void PeerIdPrefix_should_follow_azureus_style_format(IClientProfile profile)
     {
         // Azureus-style: -XXYYYY- where XX is client id and YYYY is version
-        Assert.That(profile.PeerIdPrefix, Does.Match("^-[A-Za-z]{2}[0-9]{4}-$"),
+        Assert.That(
+            profile.PeerIdPrefix,
+            Does.Match("^-[A-Za-z]{2}[0-9]{4}-$"),
             $"Peer ID prefix for {profile.Name} should follow Azureus-style: -XXYYYY-");
     }
 
