@@ -53,7 +53,7 @@ public class UtpConnection : IUtpConnection
     {
         _udpClient = new UdpClient();
         _logger = LogManager.GetCurrentClassLogger();
-        _connectionId = (ushort)(new Random().Next(0, ushort.MaxValue));
+        _connectionId = (ushort)new Random().Next(0, ushort.MaxValue);
         _sequenceNumber = 1;
     }
 
@@ -143,7 +143,7 @@ public class UtpConnection : IUtpConnection
         packet[12] = (byte)(DefaultWindowSize >> 24);
         packet[13] = (byte)(DefaultWindowSize >> 16);
         packet[14] = (byte)(DefaultWindowSize >> 8);
-        packet[15] = (byte)DefaultWindowSize;
+        packet[15] = (byte)(DefaultWindowSize & 0xFF);
 
         packet[16] = (byte)(_sequenceNumber >> 8);
         packet[17] = (byte)_sequenceNumber;
