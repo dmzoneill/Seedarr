@@ -67,6 +67,7 @@ public class SpeedDistributorTest
 
         Assert.That(speeds, Has.Length.EqualTo(3));
         Assert.That(speeds, Is.All.EqualTo(333L));
+
         // Sum is 999, not 1000 -- integer division truncation
         Assert.That(speeds.Sum(), Is.EqualTo(999L));
     }
@@ -112,7 +113,9 @@ public class SpeedDistributorTest
         // Due to integer truncation, sum will be close but not necessarily exact
         var sum = speeds.Sum();
         Assert.That(sum, Is.LessThanOrEqualTo(totalSpeed));
-        Assert.That(sum, Is.GreaterThan(totalSpeed * 0.95),
+        Assert.That(
+            sum,
+            Is.GreaterThan(totalSpeed * 0.95),
             "Sum of Pareto-distributed speeds should be within 5% of total");
     }
 
@@ -132,7 +135,9 @@ public class SpeedDistributorTest
 
         for (var i = 1; i < speeds.Length; i++)
         {
-            Assert.That(speeds[i], Is.LessThanOrEqualTo(speeds[i - 1]),
+            Assert.That(
+                speeds[i],
+                Is.LessThanOrEqualTo(speeds[i - 1]),
                 $"Speed at index {i} should be <= speed at index {i - 1}");
         }
     }
@@ -177,7 +182,9 @@ public class SpeedDistributorTest
         var topTwoSum = speeds[0] + speeds[1];
         var equalShare = totalSpeed * 2 / count; // 200,000
 
-        Assert.That(topTwoSum, Is.GreaterThan(equalShare),
+        Assert.That(
+            topTwoSum,
+            Is.GreaterThan(equalShare),
             "Top 20% of torrents should receive more than equal share under Pareto distribution");
     }
 
