@@ -87,8 +87,11 @@ public class PeerServer : BackgroundService
             var peerId = "-SD1000-000000000000";
             connection.SendHandshake(torrent.InfoHash, peerId);
 
-            _logger.Debug("Peer {0} connected (encrypted: {1}, method: {2})",
-                connection.RemoteIp, connection.IsEncrypted, connection.EncryptionMethod);
+            _logger.Debug(
+                "Peer {0} connected (encrypted: {1}, method: {2})",
+                connection.RemoteIp,
+                connection.IsEncrypted,
+                connection.EncryptionMethod);
 
             // Send bitfield (all pieces)
             connection.SendBitfield(torrent.PieceCount);

@@ -236,8 +236,12 @@ public class FastExtensionHandler : IFastExtensionHandler
                 break;
 
             case FastMessageType.RejectRequest:
-                _logger.Debug("Peer {0} rejected request: piece={1} begin={2} length={3}",
-                    connection.RemoteIp, fastMessage.PieceIndex, fastMessage.Begin, fastMessage.Length);
+                _logger.Debug(
+                    "Peer {0} rejected request: piece={1} begin={2} length={3}",
+                    connection.RemoteIp,
+                    fastMessage.PieceIndex,
+                    fastMessage.Begin,
+                    fastMessage.Length);
                 break;
         }
     }

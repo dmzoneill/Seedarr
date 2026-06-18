@@ -184,8 +184,13 @@ public class UdpTrackerServer : BackgroundService
         BinaryPrimitives.WriteInt32BigEndian(response.AsSpan(16, 4), stats.Complete);
         Buffer.BlockCopy(compactPeers, 0, response, 20, compactPeers.Length);
 
-        _logger.Debug("UDP announce for {0} from {1}:{2}, event={3}, returning {4} peers",
-            infoHash, peerIp, peerPort, eventName, compactPeers.Length / CompactPeerSize);
+        _logger.Debug(
+            "UDP announce for {0} from {1}:{2}, event={3}, returning {4} peers",
+            infoHash,
+            peerIp,
+            peerPort,
+            eventName,
+            compactPeers.Length / CompactPeerSize);
 
         return response;
     }
