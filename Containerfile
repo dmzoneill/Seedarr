@@ -22,7 +22,7 @@ COPY src/NzbDrone.SignalR/Seedarr.SignalR.csproj src/NzbDrone.SignalR/
 COPY src/Seedarr.Http/Seedarr.Http.csproj src/Seedarr.Http/
 COPY src/Seedarr.Api.V1/Seedarr.Api.V1.csproj src/Seedarr.Api.V1/
 
-RUN dotnet restore src/Seedarr.sln
+RUN dotnet restore src/NzbDrone.Console/Seedarr.Console.csproj
 
 # Copy full source and publish
 COPY src/ src/
