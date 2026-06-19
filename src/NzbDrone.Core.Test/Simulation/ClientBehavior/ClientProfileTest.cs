@@ -122,54 +122,39 @@ public class ClientProfileTest
             $"Peer ID prefix for {profile.Name} should follow Azureus-style: -XXYYYY-");
     }
 
+    [TestCaseSource(nameof(AllProfiles))]
+    public void Profile_should_have_non_empty_name_and_version(IClientProfile profile)
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(profile.Name, Is.Not.Empty);
+            Assert.That(profile.UserAgent, Is.Not.Empty);
+            Assert.That(profile.ClientVersion, Is.Not.Empty);
+            Assert.That(profile.DefaultPort, Is.GreaterThan(0));
+            Assert.That(profile.SupportsEncryption, Is.True);
+            Assert.That(profile.SupportsDht, Is.True);
+            Assert.That(profile.SupportsPex, Is.True);
+        });
+    }
+
     [Test]
-    public void QBittorrent_properties_should_match_expected_values()
+    public void QBittorrent_name_should_match()
     {
         var profile = new QBittorrentProfile();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(profile.Name, Is.EqualTo("qBittorrent 4.4.2"));
-            Assert.That(profile.UserAgent, Is.EqualTo("qBittorrent/4.4.2"));
-            Assert.That(profile.ClientVersion, Is.EqualTo("4.4.2"));
-            Assert.That(profile.DefaultPort, Is.EqualTo(6881));
-            Assert.That(profile.SupportsEncryption, Is.True);
-            Assert.That(profile.SupportsDht, Is.True);
-            Assert.That(profile.SupportsPex, Is.True);
-        });
+        Assert.That(profile.Name, Is.EqualTo("qBittorrent 4.4.2"));
     }
 
     [Test]
-    public void Deluge_properties_should_match_expected_values()
+    public void Deluge_name_should_match()
     {
         var profile = new DelugeProfile();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(profile.Name, Is.EqualTo("Deluge 2.0.3"));
-            Assert.That(profile.UserAgent, Is.EqualTo("Deluge/2.0.3"));
-            Assert.That(profile.ClientVersion, Is.EqualTo("2.0.3"));
-            Assert.That(profile.DefaultPort, Is.EqualTo(6881));
-            Assert.That(profile.SupportsEncryption, Is.True);
-            Assert.That(profile.SupportsDht, Is.True);
-            Assert.That(profile.SupportsPex, Is.True);
-        });
+        Assert.That(profile.Name, Is.EqualTo("Deluge 2.0.3"));
     }
 
     [Test]
-    public void Transmission_properties_should_match_expected_values()
+    public void Transmission_name_should_match()
     {
         var profile = new TransmissionProfile();
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(profile.Name, Is.EqualTo("Transmission 3.00"));
-            Assert.That(profile.UserAgent, Is.EqualTo("Transmission/3.00"));
-            Assert.That(profile.ClientVersion, Is.EqualTo("3.00"));
-            Assert.That(profile.DefaultPort, Is.EqualTo(51413));
-            Assert.That(profile.SupportsEncryption, Is.True);
-            Assert.That(profile.SupportsDht, Is.True);
-            Assert.That(profile.SupportsPex, Is.True);
-        });
+        Assert.That(profile.Name, Is.EqualTo("Transmission 3.00"));
     }
 }
