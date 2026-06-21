@@ -33,6 +33,7 @@ COPY --from=frontend /build/src/NzbDrone.Host/wwwroot/ src/NzbDrone.Host/wwwroot
 RUN dotnet publish src/NzbDrone.Console/Seedarr.Console.csproj \
     -c Release \
     -o /app \
+    -p:RunAnalyzers=false \
     --no-restore
 
 # Stage 3: Runtime
