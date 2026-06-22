@@ -1,8 +1,8 @@
+# Seedarr
+
 <p align="center">
   <img src="Logo/Seedarr.svg" alt="Seedarr" width="200"/>
 </p>
-
-<h1 align="center">Seedarr</h1>
 
 <p align="center">
   <strong>BitTorrent Seeding Simulator</strong> &mdash; the *arr-family approach to maintaining your ratio
@@ -110,7 +110,7 @@ docker run -d \
   feeditout/seedarr:latest
 ```
 
-Then open **http://localhost:9898**
+Then open **<http://localhost:9898>**
 
 ### Docker Compose / Podman Compose
 
@@ -196,7 +196,7 @@ Seedarr exposes a full REST API at `/api/v1/`. Interactive documentation is avai
 
 ### Key Endpoints
 
-```
+```text
 GET    /api/v1/system/status     # System info
 GET    /api/v1/torrent           # List torrents
 POST   /api/v1/torrent           # Add torrent
@@ -223,7 +223,7 @@ Real-time updates via SignalR at `/signalr/messages`:
 
 ## Architecture
 
-```
+```text
 Seedarr.Console          Entry point (Kestrel host)
   └── Seedarr.Host       ASP.NET middleware, Swagger, auth
        ├── Seedarr.Api.V1    REST controllers + SignalR
@@ -247,7 +247,7 @@ Seedarr.Console          Entry point (Kestrel host)
 | Layer | Technology |
 |-------|-----------|
 | **Runtime** | .NET 10 / ASP.NET Core |
-| **Frontend** | React 18, TypeScript 5, Webpack 5 |
+| **Frontend** | React 18, TypeScript 5, webpack 5 |
 | **Real-time** | ASP.NET SignalR |
 | **Database** | SQLite (default) / PostgreSQL |
 | **ORM** | Dapper + FluentMigrator |

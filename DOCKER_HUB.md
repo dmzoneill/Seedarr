@@ -22,7 +22,7 @@ docker run -d \
   feeditout/seedarr:latest
 ```
 
-Open **http://localhost:9898**
+Open **<http://localhost:9898>**
 
 ## Docker Compose
 
