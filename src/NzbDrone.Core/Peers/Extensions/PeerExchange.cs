@@ -1,14 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NLog;
+using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Peers.Extensions;
 
 public interface IPeerExchange
 {
+    int IntervalSeconds { get; }
     byte[] BuildPexMessage(List<PeerInfo> added, List<PeerInfo> dropped);
     PexData ParsePexMessage(byte[] data);
 }
@@ -27,17 +30,30 @@ public class PexData
 
 public class PeerExchange : IPeerExchange
 {
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
 
-    public PeerExchange()
+    public int IntervalSeconds => _configService.PexInterval;
+
+    public PeerExchange(IConfigService configService)
     {
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
     public byte[] BuildPexMessage(List<PeerInfo> added, List<PeerInfo> dropped)
     {
-        var addedCompact = CompactPeers(added);
-        var droppedCompact = CompactPeers(dropped);
+        if (!_configService.EnablePex)
+        {
+            return Array.Empty<byte>();
+        }
+
+        var maxPeers = _configService.PexMaxPeersPerMessage;
+        var cappedAdded = added.Count > maxPeers ? added.Take(maxPeers).ToList() : added;
+        var cappedDropped = dropped.Count > maxPeers ? dropped.Take(maxPeers).ToList() : dropped;
+
+        var addedCompact = CompactPeers(cappedAdded);
+        var droppedCompact = CompactPeers(cappedDropped);
 
         var dict = new BDictionary
         {
@@ -50,6 +66,11 @@ public class PeerExchange : IPeerExchange
 
     public PexData ParsePexMessage(byte[] data)
     {
+        if (!_configService.EnablePex)
+        {
+            return new PexData();
+        }
+
         try
         {
             var parser = new BencodeParser();

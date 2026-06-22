@@ -1,14 +1,33 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import TorrentTable from '../components/TorrentTable';
 import TorrentGrid from '../components/TorrentGrid';
+import TorrentDetailPanel from '../components/TorrentDetailPanel';
 import AddTorrentModal from '../components/AddTorrentModal';
 import {
   useTorrents,
   useStartAllSeeding,
   useStopAllSeeding,
+  useSeedingConfig,
+  useSaveSeedingConfig,
 } from '../api/hooks';
+import { extractTrackerDomain } from '../utils/formatters';
+import {
+  AllIcon, SeedingIcon, StoppedIcon, QueuedIcon, ErrorIcon,
+  PlusIcon, PlayIcon, StopIcon, TableIcon, GridIcon, GlobeIcon,
+} from '../components/icons/UIIcons';
 
 type ViewMode = 'table' | 'grid';
+
+const STATE_FILTER_ICONS: Record<string, React.ReactNode> = {
+  All: <AllIcon size={13} />,
+  Seeding: <SeedingIcon size={13} />,
+  Stopped: <StoppedIcon size={13} />,
+  Queued: <QueuedIcon size={13} />,
+  Error: <ErrorIcon size={13} />,
+};
+
+const STATE_FILTERS = ['All', 'Seeding', 'Stopped', 'Queued', 'Error'] as const;
 
 function getInitialViewMode(): ViewMode {
   const stored = localStorage.getItem('seedarr-view-mode');
@@ -16,14 +35,85 @@ function getInitialViewMode(): ViewMode {
 }
 
 function TorrentIndex() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: torrents } = useTorrents();
   const startAll = useStartAllSeeding();
   const stopAll = useStopAllSeeding();
-  const [filter, setFilter] = useState('');
+  const { data: seedingConfig } = useSeedingConfig();
+  const saveSeedingConfig = useSaveSeedingConfig();
+  const [filter, setFilter] = useState(() => searchParams.get('q') || '');
   const [showAddModal, setShowAddModal] = useState(false);
+
+  // Sync filter from URL search params when they change
+  useEffect(() => {
+    const q = searchParams.get('q');
+    if (q) {
+      setFilter(q);
+      // Clear the param after consuming it so the URL stays clean
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
+  const [selectedState, setSelectedState] = useState<string>('All');
+  const [selectedTracker, setSelectedTracker] = useState<string>('All');
+  const [selectedTorrentId, setSelectedTorrentId] = useState<number | null>(null);
 
   const count = torrents?.length ?? 0;
+
+  const adjustSpeed = useCallback(
+    (field: 'maxUploadSpeedKbps' | 'maxDownloadSpeedKbps', factor: number) => {
+      if (!seedingConfig) return;
+      const current = seedingConfig[field];
+      const newSpeed = Math.max(1, Math.round(current * factor));
+      saveSeedingConfig.mutate({ ...seedingConfig, [field]: newSpeed });
+    },
+    [seedingConfig, saveSeedingConfig]
+  );
+
+  const stateCounts = useMemo(() => {
+    const all = torrents ?? [];
+    const counts: Record<string, number> = {
+      All: all.length,
+      Seeding: 0,
+      Stopped: 0,
+      Queued: 0,
+      Error: 0,
+    };
+    for (const t of all) {
+      if (t.status in counts) {
+        counts[t.status]++;
+      }
+    }
+    return counts;
+  }, [torrents]);
+
+  const trackerGroups = useMemo(() => {
+    const all = torrents ?? [];
+    const groups: Record<string, number> = {};
+    for (const t of all) {
+      const domain = extractTrackerDomain(t.trackerUrl);
+      groups[domain] = (groups[domain] || 0) + 1;
+    }
+    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [torrents]);
+
+  const { totalUploadSpeed, totalDownloadSpeed } = useMemo(() => {
+    const all = torrents ?? [];
+    let ul = 0;
+    let dl = 0;
+    for (const t of all) {
+      ul += t.uploadSpeed ?? 0;
+      dl += t.downloadSpeed ?? 0;
+    }
+    return { totalUploadSpeed: ul, totalDownloadSpeed: dl };
+  }, [torrents]);
+
+  function formatSpeed(bytesPerSec: number): string {
+    if (bytesPerSec < 1024) return `${bytesPerSec} B/s`;
+    const kbps = bytesPerSec / 1024;
+    if (kbps < 1024) return `${kbps.toFixed(1)} KB/s`;
+    return `${(kbps / 1024).toFixed(2)} MB/s`;
+  }
 
   function handleViewMode(mode: ViewMode) {
     setViewMode(mode);
@@ -31,10 +121,50 @@ function TorrentIndex() {
   }
 
   return (
-    <div>
+    <div className="torrent-index-page">
       <div className="page-header">
         <h1 className="page-heading">Torrents ({count})</h1>
         <div className="page-header-actions">
+          <div className="speed-controls" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '0.85em', opacity: 0.8 }}>
+              UL: {formatSpeed(totalUploadSpeed)}
+            </span>
+            <button
+              className="btn btn-small btn-success"
+              onClick={() => adjustSpeed('maxUploadSpeedKbps', 2)}
+              title="Double upload speed limit"
+              disabled={!seedingConfig}
+            >
+              &#9650;&#9650;
+            </button>
+            <button
+              className="btn btn-small btn-success"
+              onClick={() => adjustSpeed('maxUploadSpeedKbps', 0.5)}
+              title="Halve upload speed limit"
+              disabled={!seedingConfig}
+            >
+              &#9660;&#9660;
+            </button>
+            <span style={{ fontSize: '0.85em', opacity: 0.8, marginLeft: '8px' }}>
+              DL: {formatSpeed(totalDownloadSpeed)}
+            </span>
+            <button
+              className="btn btn-small btn-danger"
+              onClick={() => adjustSpeed('maxDownloadSpeedKbps', 2)}
+              title="Double download speed limit"
+              disabled={!seedingConfig}
+            >
+              &#9650;&#9650;
+            </button>
+            <button
+              className="btn btn-small btn-danger"
+              onClick={() => adjustSpeed('maxDownloadSpeedKbps', 0.5)}
+              title="Halve download speed limit"
+              disabled={!seedingConfig}
+            >
+              &#9660;&#9660;
+            </button>
+          </div>
           <input
             type="text"
             className="search-input"
@@ -48,38 +178,97 @@ function TorrentIndex() {
               onClick={() => handleViewMode('table')}
               title="Table view"
             >
-              Table
+              <TableIcon size={13} /> Table
             </button>
             <button
               className={`view-toggle-btn${viewMode === 'grid' ? ' active' : ''}`}
               onClick={() => handleViewMode('grid')}
               title="Grid view"
             >
-              Grid
+              <GridIcon size={13} /> Grid
             </button>
           </div>
           <button
             className="btn btn-success"
             onClick={() => setShowAddModal(true)}
           >
-            Add Torrent
+            <PlusIcon size={13} /> Add Torrent
           </button>
           <button
             className="btn btn-success"
             onClick={() => startAll.mutate()}
           >
-            Start All
+            <PlayIcon size={13} /> Start All
           </button>
-          <button className="btn" onClick={() => stopAll.mutate()}>
-            Stop All
+          <button className="btn btn-danger" onClick={() => stopAll.mutate()}>
+            <StopIcon size={13} /> Stop All
           </button>
         </div>
       </div>
-      {viewMode === 'table' ? (
-        <TorrentTable filter={filter} />
-      ) : (
-        <TorrentGrid filter={filter} />
-      )}
+      <div className="torrent-content-layout">
+        <div className="filter-panel">
+          <div className="filter-panel-section">State</div>
+          <ul className="filter-panel-list">
+            {STATE_FILTERS.map((state) => (
+              <li key={state}>
+                <button
+                  className={`filter-panel-item${selectedState === state ? ' active' : ''}`}
+                  onClick={() => setSelectedState(state)}
+                >
+                  <span className="filter-panel-label">{STATE_FILTER_ICONS[state]} {state}</span>
+                  <span className="filter-panel-count">{stateCounts[state] ?? 0}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="filter-panel-section">Tracker</div>
+          <ul className="filter-panel-list">
+            <li>
+              <button
+                className={`filter-panel-item${selectedTracker === 'All' ? ' active' : ''}`}
+                onClick={() => setSelectedTracker('All')}
+              >
+                <span className="filter-panel-label"><AllIcon size={13} /> All</span>
+                <span className="filter-panel-count">{count}</span>
+              </button>
+            </li>
+            {trackerGroups.map(([domain, groupCount]) => (
+              <li key={domain}>
+                <button
+                  className={`filter-panel-item${selectedTracker === domain ? ' active' : ''}`}
+                  onClick={() => setSelectedTracker(domain)}
+                >
+                  <span className="filter-panel-label"><GlobeIcon size={13} /> {domain}</span>
+                  <span className="filter-panel-count">{groupCount}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="filter-content">
+          <div className="torrent-split-pane">
+            <div className="torrent-split-top">
+              {viewMode === 'table' ? (
+                <TorrentTable
+                  filter={filter}
+                  stateFilter={selectedState}
+                  trackerFilter={selectedTracker}
+                  selectedTorrentId={selectedTorrentId}
+                  onSelectTorrent={setSelectedTorrentId}
+                />
+              ) : (
+                <TorrentGrid filter={filter} stateFilter={selectedState} trackerFilter={selectedTracker} />
+              )}
+            </div>
+            {selectedTorrentId != null && (
+              <TorrentDetailPanel
+                torrentId={selectedTorrentId}
+                onClose={() => setSelectedTorrentId(null)}
+              />
+            )}
+          </div>
+        </div>
+      </div>
       {showAddModal && (
         <AddTorrentModal onClose={() => setShowAddModal(false)} />
       )}

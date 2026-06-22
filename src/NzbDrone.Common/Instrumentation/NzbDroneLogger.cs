@@ -19,6 +19,11 @@ public static class NzbDroneLogger
         config.AddTarget(consoleTarget);
         config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget);
 
+        var ringBufferTarget = new RingBufferTarget(2048) { Name = "ringBuffer" };
+        RingBufferTarget.Instance = ringBufferTarget;
+        config.AddTarget(ringBufferTarget);
+        config.AddRule(LogLevel.Trace, LogLevel.Fatal, ringBufferTarget);
+
         LogManager.Configuration = config;
     }
 }

@@ -6,6 +6,8 @@ namespace NzbDrone.Core.ArrIntegration;
 public interface IArrConnection : IProvider
 {
     string ArrType { get; }
+    string Url { get; set; }
+    string ApiKey { get; set; }
     List<ArrDownloadRecord> GetDownloadHistory();
     bool TestConnection();
 }
