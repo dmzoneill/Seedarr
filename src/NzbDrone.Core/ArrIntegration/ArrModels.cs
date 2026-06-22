@@ -9,6 +9,8 @@ public class ArrConnectionDefinition : ProviderDefinition
     public string ApiKey { get; set; }
     public string ArrType { get; set; }
     public int SyncIntervalMinutes { get; set; } = 60;
+    public bool SyncEnabled { get; set; } = true;
+    public bool EnableAutomaticAdd { get; set; } = true;
 }
 
 public class ArrDownloadRecord

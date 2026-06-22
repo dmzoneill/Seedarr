@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Torrents;
 
@@ -14,22 +15,38 @@ namespace NzbDrone.Core.Peers;
 
 public class PeerServer : BackgroundService
 {
-    private const int DefaultPort = 6881;
-
+    private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;
     private readonly Logger _logger;
 
-    public EncryptionMode EncryptionMode { get; set; } = EncryptionMode.PreferEncrypted;
-
-    public PeerServer(ITorrentService torrentService)
+    public PeerServer(IConfigService configService, ITorrentService torrentService)
     {
+        _configService = configService;
         _torrentService = torrentService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
+    private EncryptionMode GetEncryptionMode()
+    {
+        return _configService.EncryptionMode switch
+        {
+            "required" => EncryptionMode.RequireEncrypted,
+            "disabled" => EncryptionMode.PreferPlainText,
+            _ => EncryptionMode.PreferEncrypted
+        };
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var listener = new TcpListener(IPAddress.Any, DefaultPort);
+        var listenerTask = RunListenerAsync(stoppingToken);
+        var contactTask = RunPeerContactLoopAsync(stoppingToken);
+        await Task.WhenAll(listenerTask, contactTask);
+    }
+
+    private async Task RunListenerAsync(CancellationToken stoppingToken)
+    {
+        var listeningPort = _configService.ListeningPort;
+        var listener = new TcpListener(IPAddress.Any, listeningPort);
 
         try
         {
@@ -39,11 +56,11 @@ public class PeerServer : BackgroundService
             }
             catch (SocketException ex)
             {
-                _logger.Warn(ex, "Peer server failed to bind port {0}, skipping", DefaultPort);
+                _logger.Warn(ex, "Peer server failed to bind port {0}, skipping", listeningPort);
                 return;
             }
 
-            _logger.Info("Peer server listening on port {0}", DefaultPort);
+            _logger.Info("Peer server listening on port {0}", listeningPort);
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -61,15 +78,46 @@ public class PeerServer : BackgroundService
         }
     }
 
+    private async Task RunPeerContactLoopAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                var intervalSeconds = _configService.PeerContactIntervalSeconds;
+                await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), stoppingToken);
+
+                var torrents = _torrentService.GetAll()
+                    .Where(t => t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading)
+                    .ToList();
+
+                _logger.Debug(
+                    "Peer contact cycle: {0} active torrents (interval: {1}s)",
+                    torrents.Count,
+                    intervalSeconds);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown
+        }
+    }
+
     private void HandleConnection(TcpClient client)
     {
         using var connection = new PeerConnection(client);
+        connection.HandshakeTimeoutMs = _configService.HandshakeTimeoutSeconds * 1000;
+        connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
+        connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
+        connection.MaxPipelinedRequests = _configService.PeerRequestCount;
+        connection.IdleChance = _configService.PeerIdleChance;
+
         _logger.Debug("Incoming peer: {0}:{1}", connection.RemoteIp, connection.RemotePort);
 
         try
         {
             // Attempt MSE/PE negotiation - this will detect plain BT handshakes and fall through
-            var negotiated = connection.NegotiateEncryptionIncoming(ValidateInfoHash, EncryptionMode);
+            var negotiated = connection.NegotiateEncryptionIncoming(ValidateInfoHash, GetEncryptionMode());
             if (!negotiated)
             {
                 _logger.Debug("Encryption negotiation failed from {0}", connection.RemoteIp);
@@ -109,12 +157,18 @@ public class PeerServer : BackgroundService
             connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
             connection.AmChoking = false;
 
-            // Handle messages
+            // Handle messages with keep-alive support
             while (connection.IsConnected)
             {
                 var message = connection.ReceiveMessage();
                 if (message == null)
                 {
+                    var elapsed = DateTime.UtcNow - connection.LastActivity;
+                    if (elapsed.TotalSeconds >= connection.KeepAliveIntervalSeconds)
+                    {
+                        connection.SendKeepAlive();
+                    }
+
                     continue;
                 }
 
@@ -157,9 +211,25 @@ public class PeerServer : BackgroundService
                 break;
 
             case PeerMessageType.Request:
+                if (Random.Shared.NextDouble() < connection.IdleChance)
+                {
+                    connection.SendKeepAlive();
+                    break;
+                }
+
+                if (connection.PendingRequestCount >= connection.MaxPipelinedRequests)
+                {
+                    _logger.Trace(
+                        "Request pipeline full ({0}) from {1}, ignoring",
+                        connection.MaxPipelinedRequests,
+                        connection.RemoteIp);
+                    break;
+                }
+
                 if (message.Payload != null && message.Payload.Length >= 12)
                 {
                     HandlePieceRequest(connection, message.Payload);
+                    connection.PendingRequestCount++;
                 }
 
                 break;

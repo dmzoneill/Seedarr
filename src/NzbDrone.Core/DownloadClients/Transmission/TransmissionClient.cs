@@ -1,0 +1,203 @@
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using NLog;
+
+namespace NzbDrone.Core.DownloadClients.Transmission;
+
+public class TransmissionClient : IDownloadClient
+{
+    private readonly Logger _logger;
+    private HttpClient _client;
+    private string _sessionId;
+
+    public string Name => "Transmission";
+    public string ClientType => "Transmission";
+    public string Host { get; set; } = "localhost";
+    public int Port { get; set; } = 9091;
+    public bool UseSsl { get; set; }
+    public string Username { get; set; } = "";
+    public string Password { get; set; } = "";
+    public string Category { get; set; } = "";
+
+    public TransmissionClient()
+    {
+        _logger = LogManager.GetCurrentClassLogger();
+        var handler = new HttpClientHandler
+        {
+            CheckCertificateRevocationList = true,
+        };
+
+        _client = new HttpClient(handler);
+    }
+
+    private string RpcUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}/transmission/rpc";
+
+    private HttpRequestMessage CreateRequest(string method, object arguments)
+    {
+        var payload = new { method, arguments };
+        var json = JsonSerializer.Serialize(payload);
+        var request = new HttpRequestMessage(HttpMethod.Post, RpcUrl)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json"),
+        };
+
+        if (!string.IsNullOrEmpty(Username))
+        {
+            var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Username}:{Password}"));
+            request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+        }
+
+        if (!string.IsNullOrEmpty(_sessionId))
+        {
+            request.Headers.Add("X-Transmission-Session-Id", _sessionId);
+        }
+
+        return request;
+    }
+
+    private JsonDocument SendRequest(string method, object arguments)
+    {
+        var request = CreateRequest(method, arguments);
+        var response = _client.SendAsync(request).GetAwaiter().GetResult();
+
+        if (response.StatusCode == HttpStatusCode.Conflict)
+        {
+            if (response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
+            {
+                _sessionId = string.Join("", values);
+            }
+
+            request = CreateRequest(method, arguments);
+            response = _client.SendAsync(request).GetAwaiter().GetResult();
+        }
+
+        response.EnsureSuccessStatusCode();
+        var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        return JsonDocument.Parse(body);
+    }
+
+    public List<DownloadClientItem> GetItems()
+    {
+        var items = new List<DownloadClientItem>();
+
+        try
+        {
+            var arguments = new
+            {
+                fields = new[] { "hashString", "name", "totalSize", "leftUntilDone", "status", "downloadDir", "labels" },
+            };
+
+            var doc = SendRequest("torrent-get", arguments);
+            var torrents = doc.RootElement
+                .GetProperty("arguments")
+                .GetProperty("torrents");
+
+            foreach (var t in torrents.EnumerateArray())
+            {
+                var labels = new List<string>();
+                if (t.TryGetProperty("labels", out var labelsEl))
+                {
+                    foreach (var label in labelsEl.EnumerateArray())
+                    {
+                        labels.Add(label.GetString());
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(Category) && !labels.Contains(Category))
+                {
+                    continue;
+                }
+
+                var status = t.TryGetProperty("status", out var st) ? st.GetInt32() : 0;
+
+                items.Add(new DownloadClientItem
+                {
+                    InfoHash = t.TryGetProperty("hashString", out var h) ? h.GetString() : "",
+                    Title = t.TryGetProperty("name", out var n) ? n.GetString() : "",
+                    TotalSize = t.TryGetProperty("totalSize", out var ts) ? ts.GetInt64() : 0,
+                    RemainingSize = t.TryGetProperty("leftUntilDone", out var lu) ? lu.GetInt64() : 0,
+                    Status = MapStatus(status),
+                    OutputPath = t.TryGetProperty("downloadDir", out var dd) ? dd.GetString() : "",
+                    Category = labels.Count > 0 ? labels[0] : "",
+                });
+            }
+
+            _logger.Debug("Fetched {0} items from Transmission", items.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to fetch Transmission items");
+        }
+
+        return items;
+    }
+
+    public byte[] GetTorrentFile(string infoHash)
+    {
+        try
+        {
+            var arguments = new
+            {
+                ids = new[] { infoHash },
+                fields = new[] { "torrentFile" },
+            };
+
+            var doc = SendRequest("torrent-get", arguments);
+            var torrents = doc.RootElement
+                .GetProperty("arguments")
+                .GetProperty("torrents");
+
+            foreach (var t in torrents.EnumerateArray())
+            {
+                if (t.TryGetProperty("torrentFile", out var tf))
+                {
+                    var filePath = tf.GetString();
+                    if (!string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
+                    {
+                        return System.IO.File.ReadAllBytes(filePath);
+                    }
+
+                    _logger.Warn("Transmission torrent file path not accessible: {0}", filePath);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to get .torrent from Transmission: {0}", infoHash);
+        }
+
+        return null;
+    }
+
+    public bool TestConnection()
+    {
+        try
+        {
+            var doc = SendRequest("session-get", new { });
+            return doc.RootElement.TryGetProperty("result", out var result) &&
+                   result.GetString() == "success";
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Transmission connection test failed");
+            return false;
+        }
+    }
+
+    private static string MapStatus(int transmissionStatus)
+    {
+        return transmissionStatus switch
+        {
+            0 => "paused",
+            1 or 2 => "checking",
+            3 or 4 => "downloading",
+            5 or 6 => "seeding",
+            _ => "unknown",
+        };
+    }
+}

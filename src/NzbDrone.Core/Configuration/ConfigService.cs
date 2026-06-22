@@ -74,6 +74,9 @@ public interface IConfigService
     int DownloadCustomIntervalMinutes { get; }
     int DownloadStoppedMinPercentage { get; }
     int DownloadStoppedMaxPercentage { get; }
+    double SpeedVariationMin { get; }
+    double SpeedVariationMax { get; }
+    int DownloadThresholdPercent { get; }
 
     // Scheduler
     bool SchedulerEnabled { get; }
@@ -259,7 +262,7 @@ public class ConfigService : IConfigService
     }
 
     // General
-    public bool AutoStart => GetValueBoolean("AutoStart", false);
+    public bool AutoStart => GetValueBoolean("AutoStart", true);
     public string ThemeStyle => GetValue("ThemeStyle", "system");
     public string ColorScheme => GetValue("ColorScheme", "auto");
 
@@ -317,6 +320,9 @@ public class ConfigService : IConfigService
     public int DownloadCustomIntervalMinutes => GetValueInt("DownloadCustomIntervalMinutes", 5);
     public int DownloadStoppedMinPercentage => GetValueInt("DownloadStoppedMinPercentage", 20);
     public int DownloadStoppedMaxPercentage => GetValueInt("DownloadStoppedMaxPercentage", 40);
+    public double SpeedVariationMin => GetValueDouble("SpeedVariationMin", 0.2);
+    public double SpeedVariationMax => GetValueDouble("SpeedVariationMax", 0.8);
+    public int DownloadThresholdPercent => GetValueInt("DownloadThresholdPercent", 30);
 
     // Scheduler
     public bool SchedulerEnabled => GetValueBoolean("SchedulerEnabled", false);
@@ -342,7 +348,7 @@ public class ConfigService : IConfigService
     public int PeerRequestCount => GetValueInt("PeerRequestCount", 200);
 
     // Peer Behavior
-    public double SeederUploadActivityProbability => GetValueDouble("SeederUploadActivityProbability", 0.3);
+    public double SeederUploadActivityProbability => GetValueDouble("SeederUploadActivityProbability", 0.85);
     public double PeerIdleChance => GetValueDouble("PeerIdleChance", 0.3);
     public double PeerDropoutProbability => GetValueDouble("PeerDropoutProbability", 0.1);
     public double ConnectionRotationPercentage => GetValueDouble("ConnectionRotationPercentage", 0.25);

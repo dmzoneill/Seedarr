@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using Open.Nat;
 
 namespace NzbDrone.Core.Network;
 
@@ -37,8 +38,6 @@ public interface IUpnpService
 
 public class UpnpService : BackgroundService, IUpnpService
 {
-    private const int PeerPort = 6881;
-    private const int TrackerPort = 9696;
     private const int LifetimeSeconds = 7200;
 
     private readonly IConfigService _configService;
@@ -66,7 +65,7 @@ public class UpnpService : BackgroundService, IUpnpService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_configService.GetValueBoolean("EnableUpnp", false))
+        if (!_configService.UpnpEnabled)
         {
             _logger.Info("UPnP disabled in configuration");
             return;
@@ -96,24 +95,27 @@ public class UpnpService : BackgroundService, IUpnpService
         try
         {
             var discoverer = new NatDiscoverer();
-            var device = await discoverer.DiscoverDeviceAsync(stoppingToken);
-
-            if (device == null)
-            {
-                _logger.Warn("No UPnP device found");
-                IsAvailable = false;
-                return;
-            }
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            cts.CancelAfter(TimeSpan.FromSeconds(10));
+            var device = await discoverer.DiscoverDeviceAsync(PortMapper.Upnp, cts);
 
             IsAvailable = true;
             ExternalIp = (await device.GetExternalIPAsync()).ToString();
             _logger.Info("UPnP device found, external IP: {0}", ExternalIp);
 
-            await MapPort(device, PeerPort, "TCP", "Seedarr Peer");
-            await MapPort(device, TrackerPort, "TCP", "Seedarr Tracker HTTP");
-            await MapPort(device, PeerPort, "UDP", "Seedarr DHT");
+            var peerPort = _configService.ListeningPort;
+            var trackerPort = _configService.TrackerHttpPort;
 
-            _eventAggregator.PublishEvent(new UpnpMappingCreatedEvent(PeerPort));
+            await MapPort(device, peerPort, Protocol.Tcp, "Seedarr Peer");
+            await MapPort(device, trackerPort, Protocol.Tcp, "Seedarr Tracker HTTP");
+            await MapPort(device, peerPort, Protocol.Udp, "Seedarr DHT");
+
+            _eventAggregator.PublishEvent(new UpnpMappingCreatedEvent(peerPort));
+        }
+        catch (NatDeviceNotFoundException)
+        {
+            _logger.Warn("No UPnP device found");
+            IsAvailable = false;
         }
         catch (Exception ex)
         {
@@ -122,16 +124,18 @@ public class UpnpService : BackgroundService, IUpnpService
         }
     }
 
-    private async Task MapPort(INatDevice device, int port, string protocol, string description)
+    private async Task MapPort(NatDevice device, int port, Protocol protocol, string description)
     {
         try
         {
             var mapping = new Mapping(protocol, port, port, LifetimeSeconds, description);
             await device.CreatePortMapAsync(mapping);
 
+            var protocolName = protocol.ToString().ToUpperInvariant();
+
             lock (_mappings)
             {
-                var existing = _mappings.Find(m => m.InternalPort == port && m.Protocol == protocol);
+                var existing = _mappings.Find(m => m.InternalPort == port && m.Protocol == protocolName);
                 if (existing != null)
                 {
                     existing.IsActive = true;
@@ -142,14 +146,14 @@ public class UpnpService : BackgroundService, IUpnpService
                     {
                         InternalPort = port,
                         ExternalPort = port,
-                        Protocol = protocol,
+                        Protocol = protocolName,
                         Description = description,
                         IsActive = true
                     });
                 }
             }
 
-            _logger.Info("UPnP: mapped {0} port {1} ({2})", protocol, port, description);
+            _logger.Info("UPnP: mapped {0} port {1} ({2})", protocolName, port, description);
         }
         catch (Exception ex)
         {
@@ -163,12 +167,7 @@ public class UpnpService : BackgroundService, IUpnpService
         {
             var discoverer = new NatDiscoverer();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var device = await discoverer.DiscoverDeviceAsync(cts.Token);
-
-            if (device == null)
-            {
-                return;
-            }
+            var device = await discoverer.DiscoverDeviceAsync(PortMapper.Upnp, cts);
 
             List<PortMapping> snapshot;
             lock (_mappings)
@@ -176,58 +175,31 @@ public class UpnpService : BackgroundService, IUpnpService
                 snapshot = new List<PortMapping>(_mappings);
             }
 
-            foreach (var mapping in snapshot)
+            foreach (var portMapping in snapshot)
             {
                 try
                 {
-                    var natMapping = new Mapping(mapping.Protocol, mapping.InternalPort, mapping.ExternalPort, 0, mapping.Description);
+                    var protocol = string.Equals(portMapping.Protocol, "UDP", StringComparison.OrdinalIgnoreCase)
+                        ? Protocol.Udp
+                        : Protocol.Tcp;
+                    var natMapping = new Mapping(protocol, portMapping.InternalPort, portMapping.ExternalPort, 0, portMapping.Description);
                     await device.DeletePortMapAsync(natMapping);
-                    mapping.IsActive = false;
-                    _logger.Info("UPnP: removed {0} port {1}", mapping.Protocol, mapping.InternalPort);
+                    portMapping.IsActive = false;
+                    _logger.Info("UPnP: removed {0} port {1}", portMapping.Protocol, portMapping.InternalPort);
                 }
                 catch (Exception ex)
                 {
-                    _logger.Debug(ex, "UPnP: failed to remove mapping {0}:{1}", mapping.Protocol, mapping.InternalPort);
+                    _logger.Debug(ex, "UPnP: failed to remove mapping {0}:{1}", portMapping.Protocol, portMapping.InternalPort);
                 }
             }
+        }
+        catch (NatDeviceNotFoundException)
+        {
+            _logger.Debug("UPnP: no device found during cleanup");
         }
         catch (Exception ex)
         {
             _logger.Debug(ex, "UPnP cleanup failed");
         }
-    }
-}
-
-// Stubs for Open.NAT types — replaced when the NuGet is added
-internal class NatDiscoverer
-{
-    public Task<INatDevice> DiscoverDeviceAsync(CancellationToken token)
-    {
-        return Task.FromResult<INatDevice>(null);
-    }
-}
-
-internal interface INatDevice
-{
-    Task CreatePortMapAsync(Mapping mapping);
-    Task DeletePortMapAsync(Mapping mapping);
-    Task<System.Net.IPAddress> GetExternalIPAsync();
-}
-
-internal class Mapping
-{
-    public string Protocol { get; }
-    public int InternalPort { get; }
-    public int ExternalPort { get; }
-    public int Lifetime { get; }
-    public string Description { get; }
-
-    public Mapping(string protocol, int internalPort, int externalPort, int lifetime, string description)
-    {
-        Protocol = protocol;
-        InternalPort = internalPort;
-        ExternalPort = externalPort;
-        Lifetime = lifetime;
-        Description = description;
     }
 }

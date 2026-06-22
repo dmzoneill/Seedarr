@@ -25,12 +25,14 @@ public interface INetworkStatusService
 public class NetworkStatusService : INetworkStatusService
 {
     private readonly IUpnpService _upnpService;
+    private readonly IExternalIpService _externalIpService;
     private readonly IProxySettingsProvider _proxySettings;
     private readonly Logger _logger;
 
-    public NetworkStatusService(IUpnpService upnpService, IProxySettingsProvider proxySettings)
+    public NetworkStatusService(IUpnpService upnpService, IExternalIpService externalIpService, IProxySettingsProvider proxySettings)
     {
         _upnpService = upnpService;
+        _externalIpService = externalIpService;
         _proxySettings = proxySettings;
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -40,10 +42,22 @@ public class NetworkStatusService : INetworkStatusService
         var localAddresses = GetLocalAddresses();
         _logger.Debug("Local addresses: {0}", string.Join(", ", localAddresses));
 
+        var externalIp = _upnpService.ExternalIp;
+
+        if (string.IsNullOrEmpty(externalIp))
+        {
+            externalIp = _externalIpService.CachedIp;
+
+            if (string.IsNullOrEmpty(externalIp))
+            {
+                _ = _externalIpService.GetExternalIpAsync();
+            }
+        }
+
         return new NetworkStatus
         {
             LocalIp = localAddresses.FirstOrDefault() ?? "unknown",
-            ExternalIp = _upnpService.ExternalIp,
+            ExternalIp = externalIp,
             UpnpAvailable = _upnpService.IsAvailable,
             ProxyEnabled = _proxySettings.IsEnabled,
             PortMappings = _upnpService.GetMappings()

@@ -78,7 +78,9 @@ public class SeedingConfigController : Controller
             downloadRedistributionMode = _configService.DownloadRedistributionMode,
             downloadCustomIntervalMinutes = _configService.DownloadCustomIntervalMinutes,
             downloadStoppedMinPercentage = _configService.DownloadStoppedMinPercentage,
-            downloadStoppedMaxPercentage = _configService.DownloadStoppedMaxPercentage
+            downloadStoppedMaxPercentage = _configService.DownloadStoppedMaxPercentage,
+            speedVariationMin = _configService.SpeedVariationMin,
+            speedVariationMax = _configService.SpeedVariationMax
         });
     }
 

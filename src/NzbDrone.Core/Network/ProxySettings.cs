@@ -65,7 +65,7 @@ public class ProxySettingsProvider : IProxySettingsProvider
 
         var proxy = new WebProxy(proxyUri);
 
-        if (!string.IsNullOrEmpty(Username))
+        if (_configService.ProxyAuthEnabled)
         {
             proxy.Credentials = new NetworkCredential(Username, Password);
         }

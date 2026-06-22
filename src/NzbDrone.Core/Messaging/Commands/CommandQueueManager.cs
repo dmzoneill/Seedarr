@@ -40,6 +40,13 @@ public class CommandQueueManager : IManageCommandQueue
         return model;
     }
 
+    public IEnumerable<CommandModel> GetAll()
+    {
+        return _repository.All()
+            .OrderByDescending(c => c.QueuedAt)
+            .Take(50);
+    }
+
     public IEnumerable<CommandModel> GetStarted()
     {
         return _repository.All().Where(c => c.Status == CommandStatus.Started);

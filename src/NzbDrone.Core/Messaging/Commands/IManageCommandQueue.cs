@@ -7,6 +7,7 @@ public interface IManageCommandQueue
     CommandModel Push<TCommand>(TCommand command, CommandTrigger trigger = CommandTrigger.Unspecified)
         where TCommand : Command;
 
+    IEnumerable<CommandModel> GetAll();
     IEnumerable<CommandModel> GetStarted();
     IEnumerable<CommandModel> GetQueued();
 }

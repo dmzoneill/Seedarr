@@ -1,5 +1,6 @@
 using System;
 using NLog;
+using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Simulation.Swarm;
 
@@ -22,20 +23,39 @@ public class SwarmAnalyzer : ISwarmAnalyzer
     private const double HealthyAvailabilityScoreFloor = 0.6;
     private const double HealthyRatioFloor = 0.5;
 
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
 
-    public SwarmAnalyzer()
+    public SwarmAnalyzer(IConfigService configService)
     {
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
     public SwarmRecommendation Analyze(SwarmSnapshot snapshot)
     {
+        if (!_configService.SwarmIntelligenceEnabled)
+        {
+            _logger.Debug("Swarm intelligence disabled, returning neutral Maintain recommendation");
+            var neutralMetrics = ComputeMetrics(snapshot);
+            return new SwarmRecommendation
+            {
+                Recommendation = SeedingRecommendation.Maintain,
+                Metrics = neutralMetrics,
+                Reason = "Swarm intelligence is disabled; maintaining current seeding level",
+                Confidence = 1.0
+            };
+        }
+
         var metrics = ComputeMetrics(snapshot);
         var (recommendation, reason, confidence) = EvaluateRecommendation(snapshot, metrics);
 
+        // Apply swarmAdaptationRate to scale confidence toward neutral (1.0 = full confidence, 0.0 = no adaptation)
+        var adaptationRate = _configService.SwarmAdaptationRate;
+        confidence *= adaptationRate;
+
         _logger.Debug(
-            "Swarm analysis: seeds={0}, leeches={1}, ratio={2:F2}, availabilityScore={3:F2}, saturation={4:F2} -> {5} (confidence={6:F2}, reason={7})",
+            "Swarm analysis: seeds={0}, leeches={1}, ratio={2:F2}, availabilityScore={3:F2}, saturation={4:F2} -> {5} (confidence={6:F2}, reason={7}, adaptationRate={8:F2})",
             snapshot.SeedCount,
             snapshot.LeechCount,
             metrics.SeedLeechRatio,
@@ -43,7 +63,8 @@ public class SwarmAnalyzer : ISwarmAnalyzer
             metrics.SwarmSaturationScore,
             recommendation,
             confidence,
-            reason);
+            reason,
+            adaptationRate);
 
         return new SwarmRecommendation
         {
@@ -59,6 +80,14 @@ public class SwarmAnalyzer : ISwarmAnalyzer
         var seedCount = Math.Max(snapshot.SeedCount, 0);
         var leechCount = Math.Max(snapshot.LeechCount, 0);
         var availability = Math.Max(snapshot.PieceAvailability, 0.0);
+
+        // Limit peer analysis depth: cap seed and leech counts used in analysis
+        var analysisDepth = _configService.SwarmPeerAnalysisDepth;
+        if (analysisDepth > 0)
+        {
+            seedCount = Math.Min(seedCount, analysisDepth);
+            leechCount = Math.Min(leechCount, analysisDepth);
+        }
 
         var seedLeechRatio = ComputeSeedLeechRatio(seedCount, leechCount);
         var availabilityScore = NormalizePieceAvailability(availability);
@@ -97,7 +126,7 @@ public class SwarmAnalyzer : ISwarmAnalyzer
         return ratioFactor * availabilityFactor;
     }
 
-    private static (SeedingRecommendation Recommendation, string Reason, double Confidence) EvaluateRecommendation(
+    private (SeedingRecommendation Recommendation, string Reason, double Confidence) EvaluateRecommendation(
         SwarmSnapshot snapshot,
         SwarmMetrics metrics)
     {

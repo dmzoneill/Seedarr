@@ -42,6 +42,7 @@ public class UtpConnection : IUtpConnection
 
     private readonly UdpClient _udpClient;
     private readonly Logger _logger;
+    private readonly int _connectionTimeoutSeconds;
     private ushort _connectionId;
     private ushort _sequenceNumber;
     private ushort _ackNumber;
@@ -49,17 +50,20 @@ public class UtpConnection : IUtpConnection
 
     public bool IsConnected { get; private set; }
 
-    public UtpConnection()
+    public UtpConnection(int connectionTimeoutSeconds = 30)
     {
         _udpClient = new UdpClient();
         _logger = LogManager.GetCurrentClassLogger();
         _connectionId = (ushort)new Random().Next(0, ushort.MaxValue);
         _sequenceNumber = 1;
+        _connectionTimeoutSeconds = connectionTimeoutSeconds;
     }
 
     public void Connect(IPEndPoint endpoint)
     {
         _remoteEndpoint = endpoint;
+        _udpClient.Client.ReceiveTimeout = _connectionTimeoutSeconds * 1000;
+        _udpClient.Client.SendTimeout = _connectionTimeoutSeconds * 1000;
 
         var synPacket = BuildPacket(UtpPacketType.Syn, Array.Empty<byte>());
         _udpClient.Send(synPacket, synPacket.Length, _remoteEndpoint);

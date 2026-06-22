@@ -4,6 +4,17 @@ using System.Linq;
 
 namespace NzbDrone.Core.TrackerServer;
 
+public interface IPeerDatabase
+{
+    void AddPeer(string infoHash, string ip, int port, string peerId);
+    void RemovePeer(string infoHash, string ip, int port);
+    List<TrackerPeerEntry> GetPeers(string infoHash);
+    ScrapeStats GetStats(string infoHash);
+    List<string> GetAllInfoHashes();
+    int GetTotalPeerCount();
+    int GetTotalTorrentCount();
+}
+
 public class TrackerPeerEntry
 {
     public string Ip { get; set; }
@@ -19,7 +30,7 @@ public class ScrapeStats
     public int Downloaded { get; set; }
 }
 
-public class PeerDatabase
+public class PeerDatabase : IPeerDatabase
 {
     private const int PeerTtlMinutes = 45;
 
@@ -97,6 +108,35 @@ public class PeerDatabase
                 Incomplete = 0,
                 Downloaded = active.Count
             };
+        }
+    }
+
+    public List<string> GetAllInfoHashes()
+    {
+        lock (_lock)
+        {
+            return _peers
+                .Where(kvp => kvp.Value.Any(p => (DateTime.UtcNow - p.LastAnnounce).TotalMinutes <= PeerTtlMinutes))
+                .Select(kvp => kvp.Key)
+                .ToList();
+        }
+    }
+
+    public int GetTotalPeerCount()
+    {
+        lock (_lock)
+        {
+            return _peers.Values
+                .SelectMany(list => list)
+                .Count(p => (DateTime.UtcNow - p.LastAnnounce).TotalMinutes <= PeerTtlMinutes);
+        }
+    }
+
+    public int GetTotalTorrentCount()
+    {
+        lock (_lock)
+        {
+            return _peers.Count(kvp => kvp.Value.Any(p => (DateTime.UtcNow - p.LastAnnounce).TotalMinutes <= PeerTtlMinutes));
         }
     }
 }

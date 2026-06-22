@@ -10,12 +10,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
+using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.TrackerServer;
 
 public class UdpTrackerServer : BackgroundService
 {
-    private const int DefaultUdpPort = 6969;
     private const long ProtocolMagic = 0x41727101980;
     private const int ConnectAction = 0;
     private const int AnnounceAction = 1;
@@ -27,37 +27,61 @@ public class UdpTrackerServer : BackgroundService
     private const int PeerIdLength = 20;
     private const int CompactPeerSize = 6;
     private const int ConnectionIdTtlMinutes = 2;
-    private const int DefaultAnnounceInterval = 1800;
     private const int MaxScrapeHashes = 74;
     private const int ScrapeRequestHeaderSize = 16;
 
-    private readonly PeerDatabase _peerDatabase;
+    private readonly IPeerDatabase _peerDatabase;
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<long, ConnectionEntry> _connectionIds = new();
+    private readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
 
-    public UdpTrackerServer(PeerDatabase peerDatabase)
+    public UdpTrackerServer(IPeerDatabase peerDatabase, IConfigService configService)
     {
         _peerDatabase = peerDatabase;
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_configService.TrackerServerEnabled)
+        {
+            _logger.Debug("Built-in tracker is disabled, skipping UDP tracker");
+            return;
+        }
+
+        if (!_configService.TrackerUdpEnabled)
+        {
+            _logger.Debug("UDP tracker is disabled, skipping");
+            return;
+        }
+
+        var port = _configService.TrackerUdpPort;
+        var bindAddress = IPAddress.Parse(_configService.TrackerBindAddress);
         UdpClient client;
 
         try
         {
-            client = new UdpClient(DefaultUdpPort);
+            client = new UdpClient(new IPEndPoint(bindAddress, port));
         }
         catch (SocketException ex)
         {
-            _logger.Warn(ex, "UDP tracker failed to bind port {0}, skipping", DefaultUdpPort);
+            _logger.Warn(ex, "UDP tracker failed to bind {0}:{1}, skipping", bindAddress, port);
             return;
         }
 
-        _logger.Info("UDP tracker listening on port {0}", DefaultUdpPort);
+        _logger.Info("UDP tracker listening on {0}:{1}", bindAddress, port);
 
-        var cleanupTimer = new Timer(_ => PurgeExpiredConnections(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        var cleanupTimer = new Timer(
+            _ =>
+            {
+                PurgeExpiredConnections();
+                PurgeExpiredRateLimits();
+            },
+            null,
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromMinutes(1));
 
         try
         {
@@ -89,9 +113,18 @@ public class UdpTrackerServer : BackgroundService
                 return;
             }
 
+            var transactionId = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(12, 4));
+            var clientIp = remote.Address.ToString();
+
+            if (IsRateLimited(clientIp))
+            {
+                var errorResponse = BuildErrorResponse(transactionId, "Rate limit exceeded");
+                client.Send(errorResponse, errorResponse.Length, remote);
+                return;
+            }
+
             var connectionId = BinaryPrimitives.ReadInt64BigEndian(data.AsSpan(0, 8));
             var action = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(8, 4));
-            var transactionId = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(12, 4));
 
             var response = action switch
             {
@@ -147,11 +180,9 @@ public class UdpTrackerServer : BackgroundService
         var infoHash = ConvertInfoHashToHex(data, 16);
         var peerId = Encoding.Latin1.GetString(data, 16 + InfoHashLength, PeerIdLength);
 
-        // Offsets 56-79: downloaded (8), left (8), uploaded (8) - tracked by PeerDatabase
         var eventId = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(80, 4));
         var ipAddress = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(84, 4));
 
-        // Offset 88: key (4) - optional client identifier, not needed for peer tracking
         var numWant = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(92, 4));
         var port = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(96, 2));
 
@@ -161,9 +192,11 @@ public class UdpTrackerServer : BackgroundService
 
         var peerPort = port > 0 ? port : remote.Port;
 
-        if (numWant < 0)
+        var configMaxPeers = _configService.TrackerMaxPeersPerAnnounce;
+
+        if (numWant < 0 || numWant > configMaxPeers)
         {
-            numWant = 50;
+            numWant = configMaxPeers;
         }
 
         var eventName = eventId switch
@@ -187,21 +220,26 @@ public class UdpTrackerServer : BackgroundService
         var compactPeers = BuildCompactPeers(peers, peerIp, peerPort, numWant);
         var stats = _peerDatabase.GetStats(infoHash);
 
+        var announceInterval = _configService.TrackerAnnounceInterval;
+
         var response = new byte[20 + compactPeers.Length];
         BinaryPrimitives.WriteInt32BigEndian(response.AsSpan(0, 4), AnnounceAction);
         BinaryPrimitives.WriteInt32BigEndian(response.AsSpan(4, 4), transactionId);
-        BinaryPrimitives.WriteInt32BigEndian(response.AsSpan(8, 4), DefaultAnnounceInterval);
+        BinaryPrimitives.WriteInt32BigEndian(response.AsSpan(8, 4), announceInterval);
         BinaryPrimitives.WriteInt32BigEndian(response.AsSpan(12, 4), stats.Incomplete);
         BinaryPrimitives.WriteInt32BigEndian(response.AsSpan(16, 4), stats.Complete);
         Buffer.BlockCopy(compactPeers, 0, response, 20, compactPeers.Length);
 
-        _logger.Debug(
-            "UDP announce for {0} from {1}:{2}, event={3}, returning {4} peers",
-            infoHash,
-            peerIp,
-            peerPort,
-            eventName,
-            compactPeers.Length / CompactPeerSize);
+        if (_configService.TrackerLogAnnounces)
+        {
+            _logger.Info(
+                "UDP announce for {0} from {1}:{2}, event={3}, returning {4} peers",
+                infoHash,
+                peerIp,
+                peerPort,
+                eventName,
+                compactPeers.Length / CompactPeerSize);
+        }
 
         return response;
     }
@@ -211,6 +249,11 @@ public class UdpTrackerServer : BackgroundService
         if (!ValidateConnectionId(connectionId))
         {
             return BuildErrorResponse(transactionId, "Invalid connection_id");
+        }
+
+        if (!_configService.TrackerEnableScrape)
+        {
+            return BuildErrorResponse(transactionId, "Scrape disabled");
         }
 
         var payloadLength = data.Length - ScrapeRequestHeaderSize;
@@ -337,8 +380,54 @@ public class UdpTrackerServer : BackgroundService
         }
     }
 
+    private bool IsRateLimited(string ip)
+    {
+        var rateLimit = _configService.TrackerRateLimitPerMinute;
+
+        if (rateLimit <= 0)
+        {
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        var entry = _rateLimits.AddOrUpdate(
+            ip,
+            _ => new RateLimitEntry { Count = 1, WindowStart = now },
+            (_, existing) =>
+            {
+                if ((now - existing.WindowStart).TotalMinutes >= 1)
+                {
+                    return new RateLimitEntry { Count = 1, WindowStart = now };
+                }
+
+                return new RateLimitEntry { Count = existing.Count + 1, WindowStart = existing.WindowStart };
+            });
+
+        return entry.Count > rateLimit;
+    }
+
+    private void PurgeExpiredRateLimits()
+    {
+        var now = DateTime.UtcNow;
+        var expired = _rateLimits
+            .Where(kvp => (now - kvp.Value.WindowStart).TotalMinutes >= 2)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in expired)
+        {
+            _rateLimits.TryRemove(key, out _);
+        }
+    }
+
     private sealed class ConnectionEntry
     {
         public DateTime Created { get; init; }
+    }
+
+    private sealed class RateLimitEntry
+    {
+        public int Count { get; init; }
+        public DateTime WindowStart { get; init; }
     }
 }

@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Update;
 using Seedarr.Http;
@@ -15,9 +17,42 @@ public class UpdateController : Controller
     }
 
     [HttpGet]
-    public ActionResult<UpdateInfo> GetUpdate()
+    public ActionResult<List<UpdateResource>> GetUpdates()
     {
         var info = _updateService.CheckForUpdate();
-        return info;
+        var results = new List<UpdateResource>();
+
+        if (info.UpdateAvailable && info.LatestVersion != null)
+        {
+            results.Add(new UpdateResource
+            {
+                Version = info.LatestVersion,
+                ReleaseDate = DateTime.UtcNow,
+                Installed = false,
+                Latest = true,
+                Changes = new UpdateChanges
+                {
+                    New = !string.IsNullOrWhiteSpace(info.ReleaseNotes)
+                        ? new List<string> { info.ReleaseNotes }
+                        : new List<string>(),
+                    Fixed = new List<string>()
+                }
+            });
+        }
+
+        results.Add(new UpdateResource
+        {
+            Version = info.CurrentVersion,
+            ReleaseDate = DateTime.UtcNow,
+            Installed = true,
+            Latest = !info.UpdateAvailable,
+            Changes = new UpdateChanges
+            {
+                New = new List<string> { "Currently running version" },
+                Fixed = new List<string>()
+            }
+        });
+
+        return Ok(results);
     }
 }

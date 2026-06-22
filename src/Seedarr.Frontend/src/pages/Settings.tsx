@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   useNetworkStatus,
   useTrackerServerConfig,
@@ -22,6 +23,17 @@ import {
   useSaveSchedulerConfig,
   useAdvancedConfig,
   useSaveAdvancedConfig,
+  useArrConnections,
+  useCreateArrConnection,
+  useUpdateArrConnection,
+  useDeleteArrConnection,
+  useTestArrConnection,
+  useArrSync,
+  useDownloadClients,
+  useCreateDownloadClient,
+  useUpdateDownloadClient,
+  useDeleteDownloadClient,
+  useTestDownloadClient,
 } from '../api/hooks';
 import type {
   GeneralConfig,
@@ -34,19 +46,10 @@ import type {
   TrackerServerConfig,
   SchedulerConfig,
   AdvancedConfig,
+  ArrConnection,
+  DownloadClientDefinition,
+  NotificationSettings,
 } from '../api/types';
-
-type SettingsTab =
-  | 'general'
-  | 'seeding'
-  | 'bittorrent'
-  | 'network'
-  | 'peer-protocol'
-  | 'protocols'
-  | 'simulation'
-  | 'tracker-server'
-  | 'scheduler'
-  | 'advanced';
 
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
@@ -104,9 +107,9 @@ function SaveBar({
   onSave: () => void;
 }) {
   return (
-    <div className="form-actions">
+    <div className="settings-toolbar">
       <button className="btn btn-success" onClick={onSave} disabled={!dirty || isPending}>
-        {isPending ? 'Saving...' : 'Save'}
+        {isPending ? 'Saving...' : dirty ? 'Save Changes' : 'No Changes'}
       </button>
       <SaveFeedback
         isPending={isPending}
@@ -127,6 +130,7 @@ function NumberInput({
   max,
   step,
   hint,
+  suffix,
   disabled,
 }: {
   label: string;
@@ -136,24 +140,36 @@ function NumberInput({
   max?: number;
   step?: number;
   hint?: string;
+  suffix?: string;
   disabled?: boolean;
 }) {
+  const inputEl = (
+    <input
+      type="number"
+      className="form-input"
+      value={value}
+      onChange={(e) => onChange(step && step < 1 ? parseFloat(e.target.value) || 0 : parseInt(e.target.value, 10) || 0)}
+      min={min}
+      max={max}
+      step={step}
+      disabled={disabled}
+    />
+  );
+
   return (
     <div className="form-group">
-      <label className="form-label">
-        {label}
+      <label className="form-label">{label}</label>
+      <div className="form-input-wrapper">
+        {suffix ? (
+          <div className="form-input-with-suffix">
+            {inputEl}
+            <span className="form-input-suffix">{suffix}</span>
+          </div>
+        ) : (
+          inputEl
+        )}
         {hint && <span className="form-hint">{hint}</span>}
-      </label>
-      <input
-        type="number"
-        className="form-input"
-        value={value}
-        onChange={(e) => onChange(step && step < 1 ? parseFloat(e.target.value) || 0 : parseInt(e.target.value, 10) || 0)}
-        min={min}
-        max={max}
-        step={step}
-        disabled={disabled}
-      />
+      </div>
     </div>
   );
 }
@@ -177,19 +193,18 @@ function TextInput({
 }) {
   return (
     <div className="form-group">
-      <label className="form-label">
-        {label}
+      <label className="form-label">{label}</label>
+      <div className="form-input-wrapper">
+        <input
+          type={type || 'text'}
+          className="form-input"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
         {hint && <span className="form-hint">{hint}</span>}
-      </label>
-      <input
-        type={type || 'text'}
-        className="form-input"
-        style={{ width: '200px', textAlign: 'left' }}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-      />
+      </div>
     </div>
   );
 }
@@ -207,14 +222,16 @@ function Toggle({
 }) {
   return (
     <div className="form-group">
-      <label className="form-label">
-        {label}
-        {hint && <span className="form-hint">{hint}</span>}
-      </label>
-      <label className="toggle-switch">
-        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-        <span className="toggle-slider" />
-      </label>
+      <label className="form-label">{label}</label>
+      <div className="form-input-wrapper">
+        <div className="form-toggle-row">
+          <label className="toggle-switch">
+            <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+            <span className="toggle-slider" />
+          </label>
+          {hint && <span className="form-toggle-description">{hint}</span>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -236,28 +253,58 @@ function SelectInput({
 }) {
   return (
     <div className="form-group">
-      <label className="form-label">
-        {label}
+      <label className="form-label">{label}</label>
+      <div className="form-input-wrapper">
+        <select
+          className="form-select"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
         {hint && <span className="form-hint">{hint}</span>}
-      </label>
-      <select
-        className="form-select"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={disabled}
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      </div>
     </div>
   );
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return <div className="form-section-title">{children}</div>;
+}
+
+const NOTIFICATION_SETTINGS_KEY = 'seedarr-notification-settings';
+
+const defaultNotificationSettings: NotificationSettings = {
+  enabled: true,
+  position: 'top-right',
+  autoDismissSeconds: 5,
+  showInfo: true,
+  showSuccess: true,
+  showWarning: true,
+  showError: true,
+};
+
+function useNotificationSettings(): [NotificationSettings, (settings: NotificationSettings) => void] {
+  const [settings, setSettings] = useState<NotificationSettings>(() => {
+    try {
+      const stored = localStorage.getItem(NOTIFICATION_SETTINGS_KEY);
+      return stored ? { ...defaultNotificationSettings, ...JSON.parse(stored) } : defaultNotificationSettings;
+    } catch {
+      return defaultNotificationSettings;
+    }
+  });
+
+  const saveSettings = (newSettings: NotificationSettings) => {
+    setSettings(newSettings);
+    localStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(newSettings));
+  };
+
+  return [settings, saveSettings];
 }
 
 function GeneralTab() {
@@ -277,6 +324,11 @@ function GeneralTab() {
     urlBase: '',
     authenticationEnabled: false,
     apiKey: '',
+    httpsEnabled: false,
+    username: '',
+    password: '',
+    sessionTimeoutMinutes: 30,
+    localhostOnly: false,
   });
   const [dirty, setDirty] = useState(false);
 
@@ -295,8 +347,9 @@ function GeneralTab() {
   if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
-    <div className="card">
-      <h3>General Settings</h3>
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      <div className="card">
 
       <SectionTitle>Application</SectionTitle>
       <Toggle label="Auto Start" checked={form.autoStart} onChange={(v) => set('autoStart', v)} hint="Start seeding on launch" />
@@ -343,7 +396,7 @@ function GeneralTab() {
         value={form.watchFolderScanIntervalSeconds}
         onChange={(v) => set('watchFolderScanIntervalSeconds', v)}
         min={1}
-        hint="seconds"
+        suffix="seconds"
         disabled={!form.watchFolderEnabled}
       />
       <Toggle
@@ -357,7 +410,7 @@ function GeneralTab() {
         onChange={(v) => set('watchFolderDeleteAddedTorrents', v)}
       />
 
-      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      </div>
     </div>
   );
 }
@@ -412,24 +465,88 @@ function SeedingTab() {
   if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
-    <div className="card">
-      <h3>Speed &amp; Distribution</h3>
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      <div className="card">
+
+      <SectionTitle>Quick Profiles</SectionTitle>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+        <button
+          className="btn"
+          onClick={() => {
+            setForm((prev) => ({
+              ...prev,
+              maxUploadSpeedKbps: 100,
+              maxDownloadSpeedKbps: 200,
+              uploadDistributionAlgorithm: 'Equal',
+              uploadDistributionSpreadPercentage: 30,
+              downloadDistributionAlgorithm: 'Equal',
+              downloadDistributionSpreadPercentage: 30,
+              globalSeedRatioLimit: 1.5,
+            }));
+            setDirty(true);
+          }}
+        >
+          Conservative
+        </button>
+        <button
+          className="btn"
+          onClick={() => {
+            setForm((prev) => ({
+              ...prev,
+              maxUploadSpeedKbps: 500,
+              maxDownloadSpeedKbps: 1000,
+              uploadDistributionAlgorithm: 'Pareto',
+              uploadDistributionSpreadPercentage: 50,
+              downloadDistributionAlgorithm: 'Pareto',
+              downloadDistributionSpreadPercentage: 50,
+              globalSeedRatioLimit: 2.0,
+            }));
+            setDirty(true);
+          }}
+        >
+          Balanced
+        </button>
+        <button
+          className="btn"
+          onClick={() => {
+            setForm((prev) => ({
+              ...prev,
+              maxUploadSpeedKbps: 0,
+              maxDownloadSpeedKbps: 0,
+              uploadDistributionAlgorithm: 'PowerLaw',
+              uploadDistributionSpreadPercentage: 80,
+              downloadDistributionAlgorithm: 'PowerLaw',
+              downloadDistributionSpreadPercentage: 80,
+              globalSeedRatioLimit: 0,
+            }));
+            setDirty(true);
+          }}
+        >
+          Aggressive
+        </button>
+      </div>
+      <div className="form-hint" style={{ marginBottom: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+        Conservative: low speeds, equal distribution, 1.5 ratio limit.
+        Balanced: medium speeds, Pareto distribution, 2.0 ratio limit.
+        Aggressive: unlimited speeds, power law distribution, no ratio limit.
+      </div>
 
       <SectionTitle>Speed Limits</SectionTitle>
-      <NumberInput label="Max Upload Speed" value={form.maxUploadSpeedKbps} onChange={(v) => set('maxUploadSpeedKbps', v)} min={0} hint="KB/s, 0 = unlimited" />
-      <NumberInput label="Max Download Speed" value={form.maxDownloadSpeedKbps} onChange={(v) => set('maxDownloadSpeedKbps', v)} min={0} hint="KB/s, 0 = unlimited" />
-      <NumberInput label="Global Seed Ratio Limit" value={form.globalSeedRatioLimit} onChange={(v) => set('globalSeedRatioLimit', v)} min={0} step={0.1} hint="0 = no limit" />
+      <NumberInput label="Max Upload Speed" value={form.maxUploadSpeedKbps} onChange={(v) => set('maxUploadSpeedKbps', v)} min={0} suffix="KB/s" hint="Set to 0 for unlimited speed" />
+      <NumberInput label="Max Download Speed" value={form.maxDownloadSpeedKbps} onChange={(v) => set('maxDownloadSpeedKbps', v)} min={0} suffix="KB/s" hint="Set to 0 for unlimited speed" />
+      <NumberInput label="Global Seed Ratio Limit" value={form.globalSeedRatioLimit} onChange={(v) => set('globalSeedRatioLimit', v)} min={0} step={0.1} hint="Stop seeding when ratio reaches this value. Set to 0 to disable." />
 
       <SectionTitle>Alternative Speeds</SectionTitle>
       <Toggle label="Enable Alt Speeds" checked={form.alternativeSpeedEnabled} onChange={(v) => set('alternativeSpeedEnabled', v)} />
-      <NumberInput label="Alt Upload Speed" value={form.altUploadSpeedKbps} onChange={(v) => set('altUploadSpeedKbps', v)} min={0} hint="KB/s" disabled={!form.alternativeSpeedEnabled} />
-      <NumberInput label="Alt Download Speed" value={form.altDownloadSpeedKbps} onChange={(v) => set('altDownloadSpeedKbps', v)} min={0} hint="KB/s" disabled={!form.alternativeSpeedEnabled} />
+      <NumberInput label="Alt Upload Speed" value={form.altUploadSpeedKbps} onChange={(v) => set('altUploadSpeedKbps', v)} min={0} suffix="KB/s" disabled={!form.alternativeSpeedEnabled} />
+      <NumberInput label="Alt Download Speed" value={form.altDownloadSpeedKbps} onChange={(v) => set('altDownloadSpeedKbps', v)} min={0} suffix="KB/s" disabled={!form.alternativeSpeedEnabled} />
 
       <SectionTitle>Upload Distribution</SectionTitle>
       <SelectInput label="Algorithm" value={form.uploadDistributionAlgorithm} onChange={(v) => set('uploadDistributionAlgorithm', v)} options={distOptions} />
       <NumberInput label="Spread %" value={form.uploadDistributionSpreadPercentage} onChange={(v) => set('uploadDistributionSpreadPercentage', v)} min={0} max={100} />
       <SelectInput label="Redistribution" value={form.uploadRedistributionMode} onChange={(v) => set('uploadRedistributionMode', v)} options={redistOptions} />
-      <NumberInput label="Custom Interval" value={form.uploadCustomIntervalMinutes} onChange={(v) => set('uploadCustomIntervalMinutes', v)} min={1} hint="minutes" disabled={form.uploadRedistributionMode !== 'custom'} />
+      <NumberInput label="Custom Interval" value={form.uploadCustomIntervalMinutes} onChange={(v) => set('uploadCustomIntervalMinutes', v)} min={1} suffix="minutes" disabled={form.uploadRedistributionMode !== 'custom'} />
       <NumberInput label="Stopped Min %" value={form.uploadStoppedMinPercentage} onChange={(v) => set('uploadStoppedMinPercentage', v)} min={0} max={100} />
       <NumberInput label="Stopped Max %" value={form.uploadStoppedMaxPercentage} onChange={(v) => set('uploadStoppedMaxPercentage', v)} min={0} max={100} />
 
@@ -437,11 +554,11 @@ function SeedingTab() {
       <SelectInput label="Algorithm" value={form.downloadDistributionAlgorithm} onChange={(v) => set('downloadDistributionAlgorithm', v)} options={distOptions} />
       <NumberInput label="Spread %" value={form.downloadDistributionSpreadPercentage} onChange={(v) => set('downloadDistributionSpreadPercentage', v)} min={0} max={100} />
       <SelectInput label="Redistribution" value={form.downloadRedistributionMode} onChange={(v) => set('downloadRedistributionMode', v)} options={redistOptions} />
-      <NumberInput label="Custom Interval" value={form.downloadCustomIntervalMinutes} onChange={(v) => set('downloadCustomIntervalMinutes', v)} min={1} hint="minutes" disabled={form.downloadRedistributionMode !== 'custom'} />
+      <NumberInput label="Custom Interval" value={form.downloadCustomIntervalMinutes} onChange={(v) => set('downloadCustomIntervalMinutes', v)} min={1} suffix="minutes" disabled={form.downloadRedistributionMode !== 'custom'} />
       <NumberInput label="Stopped Min %" value={form.downloadStoppedMinPercentage} onChange={(v) => set('downloadStoppedMinPercentage', v)} min={0} max={100} />
       <NumberInput label="Stopped Max %" value={form.downloadStoppedMaxPercentage} onChange={(v) => set('downloadStoppedMaxPercentage', v)} min={0} max={100} />
 
-      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      </div>
     </div>
   );
 }
@@ -474,8 +591,9 @@ function BitTorrentTab() {
   if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
-    <div className="card">
-      <h3>BitTorrent Settings</h3>
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      <div className="card">
 
       <SectionTitle>Protocol Features</SectionTitle>
       <Toggle label="DHT" checked={form.enableDht} onChange={(v) => set('enableDht', v)} hint="Distributed Hash Table" />
@@ -497,11 +615,11 @@ function BitTorrentTab() {
       <TextInput label="Peer ID Prefix" value={form.peerIdPrefix} onChange={(v) => set('peerIdPrefix', v)} hint="8-char Azureus-style" />
 
       <SectionTitle>Tracker Timing</SectionTitle>
-      <NumberInput label="Announce Interval" value={form.announceIntervalSeconds} onChange={(v) => set('announceIntervalSeconds', v)} min={60} hint="seconds" />
-      <NumberInput label="Min Announce Interval" value={form.minAnnounceIntervalSeconds} onChange={(v) => set('minAnnounceIntervalSeconds', v)} min={30} hint="seconds" />
-      <NumberInput label="Scrape Interval" value={form.scrapeIntervalSeconds} onChange={(v) => set('scrapeIntervalSeconds', v)} min={60} hint="seconds" />
+      <NumberInput label="Announce Interval" value={form.announceIntervalSeconds} onChange={(v) => set('announceIntervalSeconds', v)} min={60} suffix="seconds" hint="Time between tracker announces" />
+      <NumberInput label="Min Announce Interval" value={form.minAnnounceIntervalSeconds} onChange={(v) => set('minAnnounceIntervalSeconds', v)} min={30} suffix="seconds" />
+      <NumberInput label="Scrape Interval" value={form.scrapeIntervalSeconds} onChange={(v) => set('scrapeIntervalSeconds', v)} min={60} suffix="seconds" />
 
-      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      </div>
     </div>
   );
 }
@@ -537,7 +655,8 @@ function NetworkTab() {
   if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
-    <>
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
       <div className="card">
         <h3>Network Status</h3>
         <div className="status-row">
@@ -551,10 +670,9 @@ function NetworkTab() {
       </div>
 
       <div className="card">
-        <h3>Connection Settings</h3>
 
         <SectionTitle>Listening</SectionTitle>
-        <NumberInput label="Port" value={form.listeningPort} onChange={(v) => set('listeningPort', v)} min={1} max={65535} />
+        <NumberInput label="Port" value={form.listeningPort} onChange={(v) => set('listeningPort', v)} min={1} max={65535} hint="Port used for incoming peer connections" />
         <Toggle label="UPnP" checked={form.upnpEnabled} onChange={(v) => set('upnpEnabled', v)} hint="Auto port mapping" />
 
         <SectionTitle>Limits</SectionTitle>
@@ -580,9 +698,8 @@ function NetworkTab() {
         <TextInput label="Username" value={form.proxyUsername} onChange={(v) => set('proxyUsername', v)} disabled={!form.proxyAuthEnabled} />
         <TextInput label="Password" value={form.proxyPassword} onChange={(v) => set('proxyPassword', v)} type="password" disabled={!form.proxyAuthEnabled} />
 
-        <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
       </div>
-    </>
+    </div>
   );
 }
 
@@ -616,17 +733,18 @@ function PeerProtocolTab() {
   if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
-    <div className="card">
-      <h3>Peer Protocol</h3>
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      <div className="card">
 
       <SectionTitle>Timeouts</SectionTitle>
-      <NumberInput label="Handshake Timeout" value={form.handshakeTimeoutSeconds} onChange={(v) => set('handshakeTimeoutSeconds', v)} min={1} hint="seconds" />
-      <NumberInput label="Message Read Timeout" value={form.messageReadTimeoutSeconds} onChange={(v) => set('messageReadTimeoutSeconds', v)} min={1} hint="seconds" />
-      <NumberInput label="Keep Alive Interval" value={form.keepAliveIntervalSeconds} onChange={(v) => set('keepAliveIntervalSeconds', v)} min={1} hint="seconds" />
-      <NumberInput label="Peer Contact Interval" value={form.peerContactIntervalSeconds} onChange={(v) => set('peerContactIntervalSeconds', v)} min={1} hint="seconds" />
-      <NumberInput label="UDP Tracker Timeout" value={form.udpTrackerTimeoutSeconds} onChange={(v) => set('udpTrackerTimeoutSeconds', v)} min={1} hint="seconds" />
-      <NumberInput label="HTTP Tracker Timeout" value={form.httpTrackerTimeoutSeconds} onChange={(v) => set('httpTrackerTimeoutSeconds', v)} min={1} hint="seconds" />
-      <NumberInput label="Peer Request Count" value={form.peerRequestCount} onChange={(v) => set('peerRequestCount', v)} min={1} hint="peers to contact" />
+      <NumberInput label="Handshake Timeout" value={form.handshakeTimeoutSeconds} onChange={(v) => set('handshakeTimeoutSeconds', v)} min={1} suffix="seconds" />
+      <NumberInput label="Message Read Timeout" value={form.messageReadTimeoutSeconds} onChange={(v) => set('messageReadTimeoutSeconds', v)} min={1} suffix="seconds" />
+      <NumberInput label="Keep Alive Interval" value={form.keepAliveIntervalSeconds} onChange={(v) => set('keepAliveIntervalSeconds', v)} min={1} suffix="seconds" />
+      <NumberInput label="Peer Contact Interval" value={form.peerContactIntervalSeconds} onChange={(v) => set('peerContactIntervalSeconds', v)} min={1} suffix="seconds" />
+      <NumberInput label="UDP Tracker Timeout" value={form.udpTrackerTimeoutSeconds} onChange={(v) => set('udpTrackerTimeoutSeconds', v)} min={1} suffix="seconds" />
+      <NumberInput label="HTTP Tracker Timeout" value={form.httpTrackerTimeoutSeconds} onChange={(v) => set('httpTrackerTimeoutSeconds', v)} min={1} suffix="seconds" />
+      <NumberInput label="Peer Request Count" value={form.peerRequestCount} onChange={(v) => set('peerRequestCount', v)} min={1} suffix="peers" />
 
       <SectionTitle>Peer Behavior</SectionTitle>
       <NumberInput label="Upload Activity Probability" value={form.seederUploadActivityProbability} onChange={(v) => set('seederUploadActivityProbability', v)} min={0} max={1} step={0.05} hint="0.0 - 1.0" />
@@ -634,7 +752,7 @@ function PeerProtocolTab() {
       <NumberInput label="Dropout Probability" value={form.peerDropoutProbability} onChange={(v) => set('peerDropoutProbability', v)} min={0} max={1} step={0.05} hint="0.0 - 1.0" />
       <NumberInput label="Connection Rotation" value={form.connectionRotationPercentage} onChange={(v) => set('connectionRotationPercentage', v)} min={0} max={1} step={0.05} hint="0.0 - 1.0" />
 
-      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      </div>
     </div>
   );
 }
@@ -684,8 +802,9 @@ function ProtocolsTab() {
   if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
-    <div className="card">
-      <h3>Protocol Extensions</h3>
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      <div className="card">
 
       <SectionTitle>BEP Extensions</SectionTitle>
       <Toggle label="ut_metadata" checked={form.extensionUtMetadata} onChange={(v) => set('extensionUtMetadata', v)} hint="BEP 9" />
@@ -696,10 +815,10 @@ function ProtocolsTab() {
       <SectionTitle>Transport</SectionTitle>
       <Toggle label="uTP" checked={form.utpEnabled} onChange={(v) => set('utpEnabled', v)} hint="BEP 29, LEDBAT" />
       <Toggle label="TCP Fallback" checked={form.tcpFallback} onChange={(v) => set('tcpFallback', v)} />
-      <NumberInput label="Connection Timeout" value={form.transportConnectionTimeoutSeconds} onChange={(v) => set('transportConnectionTimeoutSeconds', v)} min={1} hint="seconds" />
+      <NumberInput label="Connection Timeout" value={form.transportConnectionTimeoutSeconds} onChange={(v) => set('transportConnectionTimeoutSeconds', v)} min={1} suffix="seconds" />
 
       <SectionTitle>PEX</SectionTitle>
-      <NumberInput label="PEX Interval" value={form.pexInterval} onChange={(v) => set('pexInterval', v)} min={10} hint="seconds" />
+      <NumberInput label="PEX Interval" value={form.pexInterval} onChange={(v) => set('pexInterval', v)} min={10} suffix="seconds" />
       <NumberInput label="Max Peers Per Message" value={form.pexMaxPeersPerMessage} onChange={(v) => set('pexMaxPeersPerMessage', v)} min={1} />
 
       <SectionTitle>Multi-Tracker</SectionTitle>
@@ -708,22 +827,22 @@ function ProtocolsTab() {
       <Toggle label="Announce to All Tiers" checked={form.announceToAllTiers} onChange={(v) => set('announceToAllTiers', v)} />
       <Toggle label="Announce to All in Tier" checked={form.announceToAllInTier} onChange={(v) => set('announceToAllInTier', v)} />
       <NumberInput label="Max Consecutive Failures" value={form.failoverMaxConsecutiveFailures} onChange={(v) => set('failoverMaxConsecutiveFailures', v)} min={1} />
-      <NumberInput label="Backoff Base" value={form.failoverBackoffBaseSeconds} onChange={(v) => set('failoverBackoffBaseSeconds', v)} min={1} hint="seconds" />
-      <NumberInput label="Max Backoff" value={form.failoverMaxBackoffSeconds} onChange={(v) => set('failoverMaxBackoffSeconds', v)} min={1} hint="seconds" />
+      <NumberInput label="Backoff Base" value={form.failoverBackoffBaseSeconds} onChange={(v) => set('failoverBackoffBaseSeconds', v)} min={1} suffix="seconds" />
+      <NumberInput label="Max Backoff" value={form.failoverMaxBackoffSeconds} onChange={(v) => set('failoverMaxBackoffSeconds', v)} min={1} suffix="seconds" />
 
       <SectionTitle>DHT</SectionTitle>
       <Toggle label="Auto Bootstrap" checked={form.dhtAutoBootstrap} onChange={(v) => set('dhtAutoBootstrap', v)} />
       <Toggle label="Rate Limiting" checked={form.dhtRateLimitEnabled} onChange={(v) => set('dhtRateLimitEnabled', v)} />
       <NumberInput label="Max Queries/sec" value={form.dhtMaxQueriesPerSecond} onChange={(v) => set('dhtMaxQueriesPerSecond', v)} min={1} disabled={!form.dhtRateLimitEnabled} />
       <NumberInput label="Routing Table Size" value={form.dhtRoutingTableSize} onChange={(v) => set('dhtRoutingTableSize', v)} min={1} />
-      <NumberInput label="Announcement Interval" value={form.dhtAnnouncementInterval} onChange={(v) => set('dhtAnnouncementInterval', v)} min={60} hint="seconds" />
-      <NumberInput label="Bootstrap Timeout" value={form.dhtBootstrapTimeout} onChange={(v) => set('dhtBootstrapTimeout', v)} min={1} hint="seconds" />
-      <NumberInput label="Query Timeout" value={form.dhtQueryTimeout} onChange={(v) => set('dhtQueryTimeout', v)} min={1} hint="seconds" />
+      <NumberInput label="Announcement Interval" value={form.dhtAnnouncementInterval} onChange={(v) => set('dhtAnnouncementInterval', v)} min={60} suffix="seconds" />
+      <NumberInput label="Bootstrap Timeout" value={form.dhtBootstrapTimeout} onChange={(v) => set('dhtBootstrapTimeout', v)} min={1} suffix="seconds" />
+      <NumberInput label="Query Timeout" value={form.dhtQueryTimeout} onChange={(v) => set('dhtQueryTimeout', v)} min={1} suffix="seconds" />
       <NumberInput label="Max Nodes" value={form.dhtMaxNodes} onChange={(v) => set('dhtMaxNodes', v)} min={1} />
       <NumberInput label="Bucket Size (K)" value={form.dhtBucketSize} onChange={(v) => set('dhtBucketSize', v)} min={1} />
       <NumberInput label="Concurrent Queries" value={form.dhtConcurrentQueries} onChange={(v) => set('dhtConcurrentQueries', v)} min={1} />
 
-      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      </div>
     </div>
   );
 }
@@ -758,8 +877,9 @@ function SimulationTab() {
   if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
-    <div className="card">
-      <h3>Client Simulation</h3>
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      <div className="card">
 
       <SectionTitle>Behavior Engine</SectionTitle>
       <Toggle label="Enabled" checked={form.clientBehaviorEngineEnabled} onChange={(v) => set('clientBehaviorEngineEnabled', v)} />
@@ -780,7 +900,7 @@ function SimulationTab() {
 
       <SectionTitle>Profile Switching</SectionTitle>
       <Toggle label="Client Switching" checked={form.clientProfileSwitching} onChange={(v) => set('clientProfileSwitching', v)} hint="Rotate client identity" />
-      <NumberInput label="Switch Probability" value={form.switchClientProbability} onChange={(v) => set('switchClientProbability', v)} min={0} max={1} step={0.01} hint="per announce" disabled={!form.clientProfileSwitching} />
+      <NumberInput label="Switch Probability" value={form.switchClientProbability} onChange={(v) => set('switchClientProbability', v)} min={0} max={1} step={0.01} suffix="/ announce" hint="0.0 - 1.0" disabled={!form.clientProfileSwitching} />
 
       <SectionTitle>Traffic Patterns</SectionTitle>
       <SelectInput
@@ -798,10 +918,10 @@ function SimulationTab() {
 
       <SectionTitle>Swarm Intelligence</SectionTitle>
       <Toggle label="Enabled" checked={form.swarmIntelligenceEnabled} onChange={(v) => set('swarmIntelligenceEnabled', v)} />
-      <NumberInput label="Adaptation Rate" value={form.swarmAdaptationRate} onChange={(v) => set('swarmAdaptationRate', v)} min={0} max={1} step={0.1} disabled={!form.swarmIntelligenceEnabled} />
+      <NumberInput label="Adaptation Rate" value={form.swarmAdaptationRate} onChange={(v) => set('swarmAdaptationRate', v)} min={0} max={1} step={0.1} hint="0.0 - 1.0" disabled={!form.swarmIntelligenceEnabled} />
       <NumberInput label="Peer Analysis Depth" value={form.swarmPeerAnalysisDepth} onChange={(v) => set('swarmPeerAnalysisDepth', v)} min={1} disabled={!form.swarmIntelligenceEnabled} />
 
-      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      </div>
     </div>
   );
 }
@@ -838,9 +958,9 @@ function TrackerServerTab() {
   if (configLoading) return <div className="loading">Loading...</div>;
 
   return (
-    <>
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
       <div className="card">
-        <h3>Tracker Server</h3>
 
         <Toggle label="Enabled" checked={form.trackerServerEnabled} onChange={(v) => set('trackerServerEnabled', v)} hint="Built-in tracker" />
         <TextInput label="Bind Address" value={form.trackerBindAddress} onChange={(v) => set('trackerBindAddress', v)} placeholder="0.0.0.0" disabled={!form.trackerServerEnabled} />
@@ -854,14 +974,13 @@ function TrackerServerTab() {
         <NumberInput label="UDP Port" value={form.trackerUdpPort} onChange={(v) => set('trackerUdpPort', v)} min={1} max={65535} disabled={!form.trackerUdpEnabled} />
 
         <SectionTitle>Behavior</SectionTitle>
-        <NumberInput label="Announce Interval" value={form.trackerAnnounceInterval} onChange={(v) => set('trackerAnnounceInterval', v)} min={60} hint="seconds" />
+        <NumberInput label="Announce Interval" value={form.trackerAnnounceInterval} onChange={(v) => set('trackerAnnounceInterval', v)} min={60} suffix="seconds" hint="Time between tracker announces" />
         <NumberInput label="Max Peers Per Announce" value={form.trackerMaxPeersPerAnnounce} onChange={(v) => set('trackerMaxPeersPerAnnounce', v)} min={1} />
         <Toggle label="Enable Scrape" checked={form.trackerEnableScrape} onChange={(v) => set('trackerEnableScrape', v)} />
         <Toggle label="Private Mode" checked={form.trackerPrivateMode} onChange={(v) => set('trackerPrivateMode', v)} />
         <Toggle label="Log Announces" checked={form.trackerLogAnnounces} onChange={(v) => set('trackerLogAnnounces', v)} />
-        <NumberInput label="Rate Limit" value={form.trackerRateLimitPerMinute} onChange={(v) => set('trackerRateLimitPerMinute', v)} min={1} hint="per minute" />
+        <NumberInput label="Rate Limit" value={form.trackerRateLimitPerMinute} onChange={(v) => set('trackerRateLimitPerMinute', v)} min={1} suffix="/ min" />
 
-        <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
       </div>
 
       <div className="card">
@@ -897,7 +1016,7 @@ function TrackerServerTab() {
           <div className="loading">No stats available</div>
         )}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -942,8 +1061,9 @@ function SchedulerTab() {
   ];
 
   return (
-    <div className="card">
-      <h3>Speed Scheduler</h3>
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      <div className="card">
 
       <Toggle label="Enabled" checked={form.schedulerEnabled} onChange={(v) => set('schedulerEnabled', v)} hint="Use alt speeds on schedule" />
 
@@ -963,7 +1083,7 @@ function SchedulerTab() {
         />
       ))}
 
-      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      </div>
     </div>
   );
 }
@@ -991,8 +1111,9 @@ function AdvancedTab() {
   if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
-    <div className="card">
-      <h3>Advanced / Logging</h3>
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      <div className="card">
 
       <SectionTitle>Logging</SectionTitle>
       <Toggle label="Log to File" checked={form.logToFile} onChange={(v) => set('logToFile', v)} />
@@ -1012,55 +1133,465 @@ function AdvancedTab() {
       <Toggle label="Debug Mode" checked={form.debugMode} onChange={(v) => set('debugMode', v)} />
 
       <SectionTitle>UI</SectionTitle>
-      <NumberInput label="Refresh Rate" value={form.uiRefreshRateSec} onChange={(v) => set('uiRefreshRateSec', v)} min={1} max={60} hint="seconds" />
+      <NumberInput label="Refresh Rate" value={form.uiRefreshRateSec} onChange={(v) => set('uiRefreshRateSec', v)} min={1} max={60} suffix="seconds" />
 
-      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      </div>
     </div>
   );
 }
 
-function Settings() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('general');
+function ConnectionsTab() {
+  const { data: connections, isLoading } = useArrConnections();
+  const createMutation = useCreateArrConnection();
+  const updateMutation = useUpdateArrConnection();
+  const deleteMutation = useDeleteArrConnection();
+  const testMutation = useTestArrConnection();
+  const syncMutation = useArrSync();
+  const [editing, setEditing] = useState<Partial<ArrConnection> | null>(null);
+  const [testResults, setTestResults] = useState<Record<number, boolean | null>>({});
 
-  const tabs: { key: SettingsTab; label: string }[] = [
-    { key: 'general', label: 'General' },
-    { key: 'seeding', label: 'Seeding' },
-    { key: 'bittorrent', label: 'BitTorrent' },
-    { key: 'network', label: 'Network' },
-    { key: 'peer-protocol', label: 'Peer Protocol' },
-    { key: 'protocols', label: 'Protocols' },
-    { key: 'simulation', label: 'Simulation' },
-    { key: 'tracker-server', label: 'Tracker Server' },
-    { key: 'scheduler', label: 'Scheduler' },
-    { key: 'advanced', label: 'Advanced' },
-  ];
+  const defaultConnection: Partial<ArrConnection> = {
+    name: '',
+    arrType: 'Sonarr',
+    url: 'http://localhost:8989',
+    apiKey: '',
+    syncEnabled: true,
+    enableAutomaticAdd: true,
+  };
+
+  const handleSave = () => {
+    if (!editing) return;
+    if (editing.id) {
+      updateMutation.mutate(editing as ArrConnection, { onSuccess: () => setEditing(null) });
+    } else {
+      createMutation.mutate(editing, { onSuccess: () => setEditing(null) });
+    }
+  };
+
+  const handleTest = (id: number) => {
+    setTestResults((prev) => ({ ...prev, [id]: null }));
+    testMutation.mutate(id, {
+      onSuccess: (data) => setTestResults((prev) => ({ ...prev, [id]: data.success })),
+      onError: () => setTestResults((prev) => ({ ...prev, [id]: false })),
+    });
+  };
+
+  if (isLoading) return <div className="loading">Loading...</div>;
+
+  return (
+    <>
+      <div className="card">
+        <div className="provider-section-header">
+          <h3>Arr Connections</h3>
+          <button
+            className="btn btn-small"
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+          >
+            {syncMutation.isPending ? 'Syncing...' : 'Sync Now'}
+          </button>
+          {syncMutation.isError && (
+            <span style={{ color: 'var(--danger)', fontSize: '0.85rem' }}>
+              Sync failed: {syncMutation.error?.message}
+            </span>
+          )}
+          {syncMutation.isSuccess && (
+            <span style={{ color: 'var(--success)', fontSize: '0.85rem' }}>
+              Sync complete
+            </span>
+          )}
+        </div>
+
+        <div className="provider-cards">
+          {connections?.map((conn) => (
+            <div key={conn.id} className="provider-card" onClick={() => setEditing({ ...conn })}>
+              <div className="provider-card-actions">
+                <button
+                  className="provider-card-action"
+                  title="Test"
+                  onClick={(e) => { e.stopPropagation(); handleTest(conn.id); }}
+                >
+                  &#x2713;
+                </button>
+                <button
+                  className="provider-card-action provider-card-action-danger"
+                  title="Delete"
+                  onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(conn.id); }}
+                >
+                  &#x2715;
+                </button>
+              </div>
+              <div className="provider-card-name">{conn.name}</div>
+              <div className="provider-card-badges">
+                <span className="provider-card-badge provider-card-badge-green">{conn.arrType}</span>
+                {conn.syncEnabled && <span className="provider-card-badge provider-card-badge-blue">Sync</span>}
+                {conn.enableAutomaticAdd && <span className="provider-card-badge provider-card-badge-blue">Auto Add</span>}
+              </div>
+              <div className="provider-card-info">{conn.url}</div>
+              {testResults[conn.id] === true && <div className="provider-card-test provider-card-test-ok">Test passed</div>}
+              {testResults[conn.id] === false && <div className="provider-card-test provider-card-test-fail">Test failed</div>}
+              {testResults[conn.id] === null && <div className="provider-card-test provider-card-test-pending">Testing...</div>}
+            </div>
+          ))}
+          <div className="provider-card-add" onClick={() => setEditing({ ...defaultConnection })}>
+            <span className="provider-card-add-icon">+</span>
+          </div>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="modal-overlay" onClick={() => setEditing(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">{editing.id ? 'Edit Connection' : 'Add Connection'}</div>
+            <TextInput label="Name" value={editing.name || ''} onChange={(v) => setEditing({ ...editing, name: v })} placeholder="My Sonarr" />
+            <SelectInput
+              label="Type"
+              value={editing.arrType || 'Sonarr'}
+              onChange={(v) => {
+                const defaults: Record<string, string> = { Sonarr: 'http://localhost:8989', Radarr: 'http://localhost:7878', Lidarr: 'http://localhost:8686' };
+                setEditing({ ...editing, arrType: v, url: defaults[v] || editing.url || '' });
+              }}
+              options={[
+                { value: 'Sonarr', label: 'Sonarr' },
+                { value: 'Radarr', label: 'Radarr' },
+                { value: 'Lidarr', label: 'Lidarr' },
+              ]}
+            />
+            <TextInput label="URL" value={editing.url || ''} onChange={(v) => setEditing({ ...editing, url: v })} placeholder="http://localhost:8989" />
+            <TextInput label="API Key" value={editing.apiKey || ''} onChange={(v) => setEditing({ ...editing, apiKey: v })} type="password" />
+            <Toggle label="Sync Enabled" checked={editing.syncEnabled ?? true} onChange={(v) => setEditing({ ...editing, syncEnabled: v })} />
+            <Toggle label="Auto Add" checked={editing.enableAutomaticAdd ?? true} onChange={(v) => setEditing({ ...editing, enableAutomaticAdd: v })} />
+            {(createMutation.isError || updateMutation.isError) && (
+              <div className="modal-error">{(createMutation.error || updateMutation.error)?.message}</div>
+            )}
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setEditing(null)}>Cancel</button>
+              <button className="btn btn-success" onClick={handleSave} disabled={createMutation.isPending || updateMutation.isPending}>
+                {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function DownloadClientsTab() {
+  const { data: clients, isLoading } = useDownloadClients();
+  const createMutation = useCreateDownloadClient();
+  const updateMutation = useUpdateDownloadClient();
+  const deleteMutation = useDeleteDownloadClient();
+  const testMutation = useTestDownloadClient();
+  const [editing, setEditing] = useState<Partial<DownloadClientDefinition> | null>(null);
+  const [testResults, setTestResults] = useState<Record<number, boolean | null>>({});
+
+  const defaultClient: Partial<DownloadClientDefinition> = {
+    name: '',
+    clientType: 'QBitTorrent',
+    host: 'localhost',
+    port: 8080,
+    useSsl: false,
+    username: '',
+    password: '',
+    category: '',
+    enable: true,
+  };
+
+  const clientDefaults: Record<string, { port: number }> = {
+    QBitTorrent: { port: 8080 },
+    Transmission: { port: 9091 },
+    Deluge: { port: 8112 },
+  };
+
+  const handleSave = () => {
+    if (!editing) return;
+    if (editing.id) {
+      updateMutation.mutate(editing as DownloadClientDefinition, { onSuccess: () => setEditing(null) });
+    } else {
+      createMutation.mutate(editing, { onSuccess: () => setEditing(null) });
+    }
+  };
+
+  const handleTest = (id: number) => {
+    setTestResults((prev) => ({ ...prev, [id]: null }));
+    testMutation.mutate(id, {
+      onSuccess: (data) => setTestResults((prev) => ({ ...prev, [id]: data.success })),
+      onError: () => setTestResults((prev) => ({ ...prev, [id]: false })),
+    });
+  };
+
+  if (isLoading) return <div className="loading">Loading...</div>;
+
+  return (
+    <>
+      <div className="card">
+        <h3>Download Clients</h3>
+
+        <div className="provider-cards">
+          {clients?.map((client) => (
+            <div key={client.id} className="provider-card" onClick={() => setEditing({ ...client })}>
+              <div className="provider-card-actions">
+                <button
+                  className="provider-card-action"
+                  title="Test"
+                  onClick={(e) => { e.stopPropagation(); handleTest(client.id); }}
+                >
+                  &#x2713;
+                </button>
+                <button
+                  className="provider-card-action provider-card-action-danger"
+                  title="Delete"
+                  onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(client.id); }}
+                >
+                  &#x2715;
+                </button>
+              </div>
+              <div className="provider-card-name">{client.name}</div>
+              <div className="provider-card-badges">
+                <span className="provider-card-badge provider-card-badge-green">{client.clientType}</span>
+                {client.enable && <span className="provider-card-badge provider-card-badge-blue">Enabled</span>}
+                {!client.enable && <span className="provider-card-badge provider-card-badge-gray">Disabled</span>}
+                {client.useSsl && <span className="provider-card-badge provider-card-badge-amber">SSL</span>}
+              </div>
+              <div className="provider-card-info">{client.host}:{client.port}</div>
+              {testResults[client.id] === true && <div className="provider-card-test provider-card-test-ok">Test passed</div>}
+              {testResults[client.id] === false && <div className="provider-card-test provider-card-test-fail">Test failed</div>}
+              {testResults[client.id] === null && <div className="provider-card-test provider-card-test-pending">Testing...</div>}
+            </div>
+          ))}
+          <div className="provider-card-add" onClick={() => setEditing({ ...defaultClient })}>
+            <span className="provider-card-add-icon">+</span>
+          </div>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="modal-overlay" onClick={() => setEditing(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-title">{editing.id ? 'Edit Download Client' : 'Add Download Client'}</div>
+            <TextInput label="Name" value={editing.name || ''} onChange={(v) => setEditing({ ...editing, name: v })} placeholder="My qBittorrent" />
+            <SelectInput
+              label="Client Type"
+              value={editing.clientType || 'QBitTorrent'}
+              onChange={(v) => setEditing({ ...editing, clientType: v, port: clientDefaults[v]?.port || editing.port || 8080 })}
+              options={[
+                { value: 'QBitTorrent', label: 'qBittorrent' },
+                { value: 'Transmission', label: 'Transmission' },
+                { value: 'Deluge', label: 'Deluge' },
+              ]}
+            />
+            <TextInput label="Host" value={editing.host || ''} onChange={(v) => setEditing({ ...editing, host: v })} placeholder="localhost" />
+            <NumberInput label="Port" value={editing.port || 8080} onChange={(v) => setEditing({ ...editing, port: v })} min={1} max={65535} />
+            <Toggle label="Use SSL" checked={editing.useSsl ?? false} onChange={(v) => setEditing({ ...editing, useSsl: v })} />
+            <TextInput label="Username" value={editing.username || ''} onChange={(v) => setEditing({ ...editing, username: v })} />
+            <TextInput label="Password" value={editing.password || ''} onChange={(v) => setEditing({ ...editing, password: v })} type="password" />
+            <TextInput label="Category" value={editing.category || ''} onChange={(v) => setEditing({ ...editing, category: v })} hint="Filter by category" />
+            <Toggle label="Enabled" checked={editing.enable ?? true} onChange={(v) => setEditing({ ...editing, enable: v })} />
+            {(createMutation.isError || updateMutation.isError) && (
+              <div className="modal-error">{(createMutation.error || updateMutation.error)?.message}</div>
+            )}
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setEditing(null)}>Cancel</button>
+              <button className="btn btn-success" onClick={handleSave} disabled={createMutation.isPending || updateMutation.isPending}>
+                {createMutation.isPending || updateMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function NotificationsTab() {
+  const [settings, saveSettings] = useNotificationSettings();
+  const [form, setForm] = useState<NotificationSettings>(settings);
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const set = <K extends keyof NotificationSettings>(key: K, value: NotificationSettings[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+    setSaved(false);
+  };
+
+  const handleSave = () => {
+    saveSettings(form);
+    setDirty(false);
+    setSaved(true);
+  };
 
   return (
     <div>
-      <h1 className="page-heading">Settings</h1>
-
-      <div className="tab-nav">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            className={`tab-btn ${activeTab === tab.key ? 'tab-btn-active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="settings-toolbar">
+        <button className="btn btn-success" onClick={handleSave} disabled={!dirty}>
+          {dirty ? 'Save Changes' : 'No Changes'}
+        </button>
+        {saved && !dirty && (
+          <span style={{ marginLeft: '0.75rem', fontSize: '0.85rem', color: 'var(--success)' }}>
+            Saved
+          </span>
+        )}
       </div>
+      <div className="card">
 
-      {activeTab === 'general' && <GeneralTab />}
-      {activeTab === 'seeding' && <SeedingTab />}
-      {activeTab === 'bittorrent' && <BitTorrentTab />}
-      {activeTab === 'network' && <NetworkTab />}
-      {activeTab === 'peer-protocol' && <PeerProtocolTab />}
-      {activeTab === 'protocols' && <ProtocolsTab />}
-      {activeTab === 'simulation' && <SimulationTab />}
-      {activeTab === 'tracker-server' && <TrackerServerTab />}
-      {activeTab === 'scheduler' && <SchedulerTab />}
-      {activeTab === 'advanced' && <AdvancedTab />}
+      <SectionTitle>General</SectionTitle>
+      <Toggle label="Enable Notifications" checked={form.enabled} onChange={(v) => set('enabled', v)} hint="Show toast notifications" />
+      <SelectInput
+        label="Position"
+        value={form.position}
+        onChange={(v) => set('position', v)}
+        options={[
+          { value: 'top-right', label: 'Top Right' },
+          { value: 'top-left', label: 'Top Left' },
+          { value: 'bottom-right', label: 'Bottom Right' },
+          { value: 'bottom-left', label: 'Bottom Left' },
+        ]}
+        disabled={!form.enabled}
+      />
+      <NumberInput
+        label="Auto-Dismiss Timeout"
+        value={form.autoDismissSeconds}
+        onChange={(v) => set('autoDismissSeconds', v)}
+        min={1}
+        max={60}
+        suffix="seconds"
+        disabled={!form.enabled}
+      />
+
+      <SectionTitle>Notification Types</SectionTitle>
+      <Toggle label="Info" checked={form.showInfo} onChange={(v) => set('showInfo', v)} hint="General information" />
+      <Toggle label="Success" checked={form.showSuccess} onChange={(v) => set('showSuccess', v)} hint="Successful operations" />
+      <Toggle label="Warning" checked={form.showWarning} onChange={(v) => set('showWarning', v)} hint="Warnings and cautions" />
+      <Toggle label="Error" checked={form.showError} onChange={(v) => set('showError', v)} hint="Errors and failures" />
+
+      </div>
+    </div>
+  );
+}
+
+function WebUITab() {
+  const { data: config, isLoading } = useGeneralConfig();
+  const save = useSaveGeneralConfig();
+  const [form, setForm] = useState<GeneralConfig>({
+    autoStart: false,
+    themeStyle: 'system',
+    colorScheme: 'auto',
+    watchFolderEnabled: false,
+    watchFolderPath: '',
+    watchFolderScanIntervalSeconds: 10,
+    watchFolderAutoStartTorrents: true,
+    watchFolderDeleteAddedTorrents: false,
+    port: 9898,
+    bindAddress: '0.0.0.0',
+    urlBase: '',
+    authenticationEnabled: false,
+    apiKey: '',
+    httpsEnabled: false,
+    username: '',
+    password: '',
+    sessionTimeoutMinutes: 30,
+    localhostOnly: false,
+  });
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (config) {
+      setForm(config);
+      setDirty(false);
+    }
+  }, [config]);
+
+  const set = <K extends keyof GeneralConfig>(key: K, value: GeneralConfig[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+
+  if (isLoading) return <div className="loading">Loading...</div>;
+
+  return (
+    <div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      <div className="card">
+
+      <SectionTitle>Connection</SectionTitle>
+      <Toggle label="HTTPS Enabled" checked={form.httpsEnabled} onChange={(v) => set('httpsEnabled', v)} hint="Serve over HTTPS" />
+      <NumberInput label="Port" value={form.port} onChange={(v) => set('port', v)} min={1} max={65535} />
+      <TextInput label="Bind Address" value={form.bindAddress} onChange={(v) => set('bindAddress', v)} placeholder="0.0.0.0" />
+      <Toggle label="Localhost Only" checked={form.localhostOnly} onChange={(v) => set('localhostOnly', v)} hint="Only allow local connections" />
+
+      <SectionTitle>Authentication</SectionTitle>
+      <Toggle label="Authentication Enabled" checked={form.authenticationEnabled} onChange={(v) => set('authenticationEnabled', v)} hint="Require login" />
+      <TextInput
+        label="Username"
+        value={form.username}
+        onChange={(v) => set('username', v)}
+        placeholder="admin"
+        disabled={!form.authenticationEnabled}
+      />
+      <TextInput
+        label="Password"
+        value={form.password}
+        onChange={(v) => set('password', v)}
+        type="password"
+        disabled={!form.authenticationEnabled}
+      />
+      <NumberInput
+        label="Session Timeout"
+        value={form.sessionTimeoutMinutes}
+        onChange={(v) => set('sessionTimeoutMinutes', v)}
+        min={1}
+        max={1440}
+        suffix="minutes"
+        disabled={!form.authenticationEnabled}
+      />
+
+      </div>
+    </div>
+  );
+}
+
+const sectionTitles: Record<string, string> = {
+  general: 'General',
+  webui: 'Web UI',
+  notifications: 'Notifications',
+  seeding: 'Seeding',
+  bittorrent: 'BitTorrent',
+  network: 'Network',
+  'peer-protocol': 'Peer Protocol',
+  protocols: 'Protocols',
+  simulation: 'Simulation',
+  'tracker-server': 'Tracker Server',
+  scheduler: 'Scheduler',
+  connections: 'Connections',
+  'download-clients': 'Download Clients',
+  advanced: 'Advanced',
+};
+
+function Settings() {
+  const { section } = useParams<{ section?: string }>();
+  const activeSection = section || 'general';
+  const title = sectionTitles[activeSection] || 'Settings';
+
+  return (
+    <div>
+      <h1 className="page-heading">{title}</h1>
+
+      {activeSection === 'general' && <GeneralTab />}
+      {activeSection === 'webui' && <WebUITab />}
+      {activeSection === 'notifications' && <NotificationsTab />}
+      {activeSection === 'seeding' && <SeedingTab />}
+      {activeSection === 'bittorrent' && <BitTorrentTab />}
+      {activeSection === 'network' && <NetworkTab />}
+      {activeSection === 'peer-protocol' && <PeerProtocolTab />}
+      {activeSection === 'protocols' && <ProtocolsTab />}
+      {activeSection === 'simulation' && <SimulationTab />}
+      {activeSection === 'tracker-server' && <TrackerServerTab />}
+      {activeSection === 'scheduler' && <SchedulerTab />}
+      {activeSection === 'connections' && <ConnectionsTab />}
+      {activeSection === 'download-clients' && <DownloadClientsTab />}
+      {activeSection === 'advanced' && <AdvancedTab />}
     </div>
   );
 }

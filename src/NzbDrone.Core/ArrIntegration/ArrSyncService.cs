@@ -9,6 +9,7 @@ namespace NzbDrone.Core.ArrIntegration;
 public interface IArrSyncService
 {
     SyncResult Sync();
+    bool TestConnection(int id);
 }
 
 public class SyncResult
@@ -43,10 +44,23 @@ public class ArrSyncService : IArrSyncService
                 .Select(t => t.InfoHash.ToLowerInvariant()),
             StringComparer.OrdinalIgnoreCase);
 
-        var providers = _connectionFactory.GetAvailableProviders();
+        var definitions = _connectionFactory.All();
 
-        foreach (var provider in providers)
+        foreach (var definition in definitions)
         {
+            if (!definition.Enable || !definition.SyncEnabled)
+            {
+                continue;
+            }
+
+            var provider = CreateProvider(definition);
+            if (provider == null)
+            {
+                _logger.Warn("Unknown ArrType '{0}' for connection '{1}'", definition.ArrType, definition.Name);
+                result.Failed++;
+                continue;
+            }
+
             try
             {
                 var records = provider.GetDownloadHistory();
@@ -88,5 +102,43 @@ public class ArrSyncService : IArrSyncService
 
         _logger.Info("Arr sync complete: {0} added, {1} skipped, {2} failed", result.Added, result.Skipped, result.Failed);
         return result;
+    }
+
+    public bool TestConnection(int id)
+    {
+        var definition = _connectionFactory.Get(id);
+        var provider = CreateProvider(definition);
+        if (provider == null)
+        {
+            _logger.Warn("Unknown ArrType '{0}' for connection '{1}'", definition.ArrType, definition.Name);
+            return false;
+        }
+
+        return provider.TestConnection();
+    }
+
+    private IArrConnection CreateProvider(ArrConnectionDefinition definition)
+    {
+        IArrConnection provider;
+
+        switch (definition.ArrType)
+        {
+            case "Sonarr":
+                provider = new SonarrConnection();
+                break;
+            case "Radarr":
+                provider = new RadarrConnection();
+                break;
+            case "Lidarr":
+                provider = new LidarrConnection();
+                break;
+            default:
+                return null;
+        }
+
+        provider.Url = definition.Url;
+        provider.ApiKey = definition.ApiKey;
+
+        return provider;
     }
 }
