@@ -42,23 +42,37 @@ public class UtpManager : BackgroundService, IUtpManager
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var listener = new UdpClient(ListenPort);
-        _logger.Info("uTP manager listening on port {0}", ListenPort);
+        UdpClient listener;
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            listener = new UdpClient(ListenPort);
+        }
+        catch (SocketException ex)
+        {
+            _logger.Warn(ex, "uTP manager failed to bind port {0}, skipping", ListenPort);
+            return;
+        }
+
+        using (listener)
+        {
+            _logger.Info("uTP manager listening on port {0}", ListenPort);
+
+            while (!stoppingToken.IsCancellationRequested)
             {
-                var result = await listener.ReceiveAsync(stoppingToken);
-                HandleIncoming(result.Buffer, result.RemoteEndPoint);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "uTP receive error");
+                try
+                {
+                    var result = await listener.ReceiveAsync(stoppingToken);
+                    HandleIncoming(result.Buffer, result.RemoteEndPoint);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "uTP receive error");
+                }
             }
         }
     }

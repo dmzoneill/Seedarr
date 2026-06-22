@@ -28,7 +28,17 @@ public class TrackerServer : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var listener = new TcpListener(IPAddress.Any, TrackerPort);
-        listener.Start();
+
+        try
+        {
+            listener.Start();
+        }
+        catch (SocketException ex)
+        {
+            _logger.Warn(ex, "Built-in tracker failed to bind port {0}, skipping", TrackerPort);
+            return;
+        }
+
         _logger.Info("Built-in tracker listening on port {0}", TrackerPort);
 
         try

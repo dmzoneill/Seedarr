@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using DryIoc;
@@ -23,7 +24,7 @@ public static class ContainerExtensions
 
         foreach (var type in types)
         {
-            if (type.IsInterface || type.IsAbstract || type.IsEnum)
+            if (type.IsInterface || type.IsAbstract || type.IsEnum || type.IsSubclassOf(typeof(Attribute)))
             {
                 continue;
             }
