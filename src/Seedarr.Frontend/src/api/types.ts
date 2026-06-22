@@ -78,15 +78,6 @@ export interface Peer {
   flags: string;
 }
 
-export interface TrackerServerConfig {
-  httpEnabled: boolean;
-  httpPort: number;
-  udpEnabled: boolean;
-  udpPort: number;
-  maxPeersPerTorrent: number;
-  announceInterval: number;
-}
-
 export interface TrackerServerStats {
   totalTorrents: number;
   totalPeers: number;
@@ -96,28 +87,158 @@ export interface TrackerServerStats {
 }
 
 export interface GeneralConfig {
-  instanceName: string;
+  autoStart: boolean;
+  themeStyle: string;
+  colorScheme: string;
+  watchFolderEnabled: boolean;
+  watchFolderPath: string;
+  watchFolderScanIntervalSeconds: number;
+  watchFolderAutoStartTorrents: boolean;
+  watchFolderDeleteAddedTorrents: boolean;
   port: number;
+  bindAddress: string;
   urlBase: string;
-  authEnabled: boolean;
-  username: string;
-  password: string;
+  authenticationEnabled: boolean;
+  apiKey: string;
 }
 
 export interface SeedingConfig {
-  maxUploadSpeed: number;
-  maxDownloadSpeed: number;
-  distributionType: string;
+  maxUploadSpeedKbps: number;
+  maxDownloadSpeedKbps: number;
+  alternativeSpeedEnabled: boolean;
+  altUploadSpeedKbps: number;
+  altDownloadSpeedKbps: number;
   globalSeedRatioLimit: number;
-  listenPort: number;
+  uploadDistributionAlgorithm: string;
+  uploadDistributionSpreadPercentage: number;
+  uploadRedistributionMode: string;
+  uploadCustomIntervalMinutes: number;
+  uploadStoppedMinPercentage: number;
+  uploadStoppedMaxPercentage: number;
+  downloadDistributionAlgorithm: string;
+  downloadDistributionSpreadPercentage: number;
+  downloadRedistributionMode: string;
+  downloadCustomIntervalMinutes: number;
+  downloadStoppedMinPercentage: number;
+  downloadStoppedMaxPercentage: number;
 }
 
 export interface NetworkConfig {
-  proxyEnabled: boolean;
+  listeningPort: number;
+  upnpEnabled: boolean;
+  maxGlobalConnections: number;
+  maxPerTorrentConnections: number;
+  maxUploadSlots: number;
   proxyType: string;
   proxyHost: string;
   proxyPort: number;
+  proxyAuthEnabled: boolean;
   proxyUsername: string;
   proxyPassword: string;
-  upnpEnabled: boolean;
+}
+
+export interface BitTorrentConfig {
+  enableDht: boolean;
+  enablePex: boolean;
+  enableLpd: boolean;
+  encryptionMode: string;
+  bitTorrentUserAgent: string;
+  peerIdPrefix: string;
+  announceIntervalSeconds: number;
+  minAnnounceIntervalSeconds: number;
+  scrapeIntervalSeconds: number;
+}
+
+export interface PeerProtocolConfig {
+  handshakeTimeoutSeconds: number;
+  messageReadTimeoutSeconds: number;
+  keepAliveIntervalSeconds: number;
+  peerContactIntervalSeconds: number;
+  udpTrackerTimeoutSeconds: number;
+  httpTrackerTimeoutSeconds: number;
+  peerRequestCount: number;
+  seederUploadActivityProbability: number;
+  peerIdleChance: number;
+  peerDropoutProbability: number;
+  connectionRotationPercentage: number;
+}
+
+export interface ProtocolsConfig {
+  extensionUtMetadata: boolean;
+  extensionUtPex: boolean;
+  extensionLtDontHave: boolean;
+  extensionFastExtension: boolean;
+  utpEnabled: boolean;
+  tcpFallback: boolean;
+  transportConnectionTimeoutSeconds: number;
+  pexInterval: number;
+  pexMaxPeersPerMessage: number;
+  multiTrackerEnabled: boolean;
+  multiTrackerFailoverEnabled: boolean;
+  announceToAllTiers: boolean;
+  announceToAllInTier: boolean;
+  failoverMaxConsecutiveFailures: number;
+  failoverBackoffBaseSeconds: number;
+  failoverMaxBackoffSeconds: number;
+  dhtRoutingTableSize: number;
+  dhtAnnouncementInterval: number;
+  dhtBootstrapTimeout: number;
+  dhtQueryTimeout: number;
+  dhtMaxNodes: number;
+  dhtBucketSize: number;
+  dhtConcurrentQueries: number;
+  dhtAutoBootstrap: boolean;
+  dhtRateLimitEnabled: boolean;
+  dhtMaxQueriesPerSecond: number;
+}
+
+export interface SimulationConfig {
+  clientBehaviorEngineEnabled: boolean;
+  primaryClient: string;
+  behaviorVariation: number;
+  clientProfileSwitching: boolean;
+  switchClientProbability: number;
+  trafficPatternProfile: string;
+  realisticVariations: boolean;
+  timeBasedPatterns: boolean;
+  swarmIntelligenceEnabled: boolean;
+  swarmAdaptationRate: number;
+  swarmPeerAnalysisDepth: number;
+}
+
+export interface TrackerServerConfig {
+  trackerServerEnabled: boolean;
+  trackerHttpEnabled: boolean;
+  trackerHttpPort: number;
+  trackerUdpEnabled: boolean;
+  trackerUdpPort: number;
+  trackerBindAddress: string;
+  trackerAnnounceInterval: number;
+  trackerMaxPeersPerAnnounce: number;
+  trackerEnableScrape: boolean;
+  trackerPrivateMode: boolean;
+  trackerLogAnnounces: boolean;
+  trackerRateLimitPerMinute: number;
+}
+
+export interface SchedulerConfig {
+  schedulerEnabled: boolean;
+  schedulerStartHour: number;
+  schedulerStartMinute: number;
+  schedulerEndHour: number;
+  schedulerEndMinute: number;
+  schedulerMonday: boolean;
+  schedulerTuesday: boolean;
+  schedulerWednesday: boolean;
+  schedulerThursday: boolean;
+  schedulerFriday: boolean;
+  schedulerSaturday: boolean;
+  schedulerSunday: boolean;
+}
+
+export interface AdvancedConfig {
+  logToFile: boolean;
+  fileLogLevel: string;
+  debugMode: boolean;
+  uiRefreshRateSec: number;
 }

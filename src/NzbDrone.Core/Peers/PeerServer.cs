@@ -33,7 +33,16 @@ public class PeerServer : BackgroundService
 
         try
         {
-            listener.Start();
+            try
+            {
+                listener.Start();
+            }
+            catch (SocketException ex)
+            {
+                _logger.Warn(ex, "Peer server failed to bind port {0}, skipping", DefaultPort);
+                return;
+            }
+
             _logger.Info("Peer server listening on port {0}", DefaultPort);
 
             while (!stoppingToken.IsCancellationRequested)
