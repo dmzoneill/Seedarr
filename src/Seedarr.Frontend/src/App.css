@@ -124,8 +124,14 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-secondary);
   min-height: 100vh;
@@ -375,8 +381,14 @@ body {
 
 /* Skeleton Loading */
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.4; }
-  50% { opacity: 1.0; }
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .skeleton {
@@ -830,8 +842,15 @@ body {
 }
 
 @keyframes toast-slide-in {
-  from { opacity: 0; transform: translateX(100%); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .toast-success {
@@ -1173,7 +1192,7 @@ body {
 }
 
 .toggle-slider::before {
-  content: '';
+  content: "";
   position: absolute;
   height: 14px;
   width: 14px;
@@ -1197,7 +1216,7 @@ body {
   ============================================ */
 
 .mono {
-  font-family: 'Cascadia Code', 'Fira Code', monospace;
+  font-family: "Cascadia Code", "Fira Code", monospace;
   font-size: 0.8em;
   word-break: break-all;
 }
@@ -1668,7 +1687,7 @@ body {
 
   .torrent-table-wrapper::after,
   .peer-table-wrapper::after {
-    content: '';
+    content: "";
     position: absolute;
     top: 0;
     right: 0;
@@ -1732,8 +1751,15 @@ body {
   }
 
   @keyframes toast-slide-down {
-    from { opacity: 0; transform: translateY(-100%); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .modal {
@@ -1941,7 +1967,7 @@ body {
   flex: 1;
   overflow-y: auto;
   background-color: var(--sidebar-bg);
-  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
   font-size: 0.78rem;
   line-height: 1.6;
   padding: 0.5rem 0;
@@ -1951,7 +1977,7 @@ body {
   color: var(--text-dim);
   padding: 1rem;
   text-align: center;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 .log-entry {
@@ -2224,7 +2250,7 @@ body {
 }
 
 .info-hash {
-  font-family: 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', monospace;
+  font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.8rem;
   color: var(--text-secondary);
 }

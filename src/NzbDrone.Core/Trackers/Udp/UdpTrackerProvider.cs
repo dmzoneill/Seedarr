@@ -226,8 +226,8 @@ public class UdpTrackerProvider : ITrackerProvider
     private static int ReadInt32BigEndian(byte[] buffer, int offset)
     {
         return (buffer[offset] << 24) |
-               (buffer[offset + 1] << 16) |
-               (buffer[offset + 2] << 8) |
-               buffer[offset + 3];
+            (buffer[offset + 1] << 16) |
+            (buffer[offset + 2] << 8) |
+            buffer[offset + 3];
     }
 }
