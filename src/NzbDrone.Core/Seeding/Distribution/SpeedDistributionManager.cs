@@ -141,8 +141,8 @@ public class SpeedDistributionManager : ISpeedDistributionManager
     private long[] DistributeWithConfig(int torrentCount, long maxSpeed, string algorithm, int spreadPercentage)
     {
         var distributor = _distributors.FirstOrDefault(d =>
-                              string.Equals(d.Name, algorithm, StringComparison.OrdinalIgnoreCase))
-                          ?? _distributors.First();
+                string.Equals(d.Name, algorithm, StringComparison.OrdinalIgnoreCase))
+            ?? _distributors.First();
 
         var effectiveSpeed = maxSpeed > 0 ? maxSpeed : DefaultBytesPerSecond;
         var speeds = distributor.Distribute(effectiveSpeed, torrentCount);

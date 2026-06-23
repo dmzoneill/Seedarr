@@ -77,7 +77,7 @@ public class LogNormalDistributor : ISpeedDistributor
         const double d3 = 0.001308;
 
         var result = t - ((c0 + (c1 * t) + (c2 * t * t)) /
-                          (1.0 + (d1 * t) + (d2 * t * t) + (d3 * t * t * t)));
+                (1.0 + (d1 * t) + (d2 * t * t) + (d3 * t * t * t)));
 
         return sign * result;
     }

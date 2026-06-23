@@ -46,10 +46,10 @@ public class SystemController : ControllerBase
     public ActionResult<SystemResource> GetStatus()
     {
         var isDocker = global::System.IO.File.Exists("/.dockerenv") ||
-                       string.Equals(
-                           Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
-                           "true",
-                           StringComparison.OrdinalIgnoreCase);
+                string.Equals(
+                    Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
+                    "true",
+                    StringComparison.OrdinalIgnoreCase);
 
 #if DEBUG
         var isDebug = true;

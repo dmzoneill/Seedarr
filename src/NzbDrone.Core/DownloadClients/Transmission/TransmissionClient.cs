@@ -180,7 +180,7 @@ public class TransmissionClient : IDownloadClient
         {
             var doc = SendRequest("session-get", new { });
             return doc.RootElement.TryGetProperty("result", out var result) &&
-                   result.GetString() == "success";
+                result.GetString() == "success";
         }
         catch (Exception ex)
         {
