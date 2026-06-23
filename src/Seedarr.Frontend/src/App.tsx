@@ -142,7 +142,7 @@ function App() {
           <NavLink to="/torrents" className="sidebar-nav-item sidebar-nav-sub">
             <TorrentIcon /> <span>Library</span>
           </NavLink>
-<NavLink to="/activity" className="sidebar-nav-item">
+          <NavLink to="/activity" className="sidebar-nav-item">
             <ActivityIcon /> <span>Activity</span>
           </NavLink>
           <NavLink to="/tracker" className="sidebar-nav-item">
