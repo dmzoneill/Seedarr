@@ -4,21 +4,504 @@ services:
       context: .
       dockerfile: Containerfile
     container_name: seedarr
+    hostname: seedarr.local
     ports:
       - "9898:9898"
     volumes:
       - seedarr-config:/config
       - seedarr-data:/data
+      - ./tests/fixtures:/app/fixtures:ro,z
     restart: unless-stopped
     environment:
       - TZ=UTC
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9898/api/v1/system/status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      arr-network:
+        aliases:
+          - seedarr.local
+    depends_on:
+      sonarr:
+        condition: service_healthy
+      radarr:
+        condition: service_healthy
+      lidarr:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+
+  sonarr:
+    image: docker.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    hostname: sonarr.local
+    ports:
+      - "8989:8989"
+    volumes:
+      - sonarr-config:/config
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8989/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
       start_period: 30s
+    networks:
+      arr-network:
+        aliases:
+          - sonarr.local
+
+  radarr:
+    image: docker.io/linuxserver/radarr:latest
+    container_name: radarr
+    hostname: radarr.local
+    ports:
+      - "7878:7878"
+    volumes:
+      - radarr-config:/config
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7878/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      arr-network:
+        aliases:
+          - radarr.local
+
+  lidarr:
+    image: docker.io/linuxserver/lidarr:latest
+    container_name: lidarr
+    hostname: lidarr.local
+    ports:
+      - "8686:8686"
+    volumes:
+      - lidarr-config:/config
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8686/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      arr-network:
+        aliases:
+          - lidarr.local
+
+  prowlarr:
+    image: docker.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    hostname: prowlarr.local
+    ports:
+      - "9696:9696"
+    volumes:
+      - prowlarr-config:/config
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9696/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      arr-network:
+        aliases:
+          - prowlarr.local
+
+  transmission:
+    image: docker.io/linuxserver/transmission:latest
+    container_name: transmission
+    hostname: transmission.local
+    ports:
+      - "9091:9091"
+      - "51413:51413"
+      - "51413:51413/udp"
+    volumes:
+      - transmission-config:/config
+      - transmission-downloads:/downloads
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/transmission/web/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      arr-network:
+        aliases:
+          - transmission.local
+
+  configure:
+    image: docker.io/curlimages/curl:latest
+    container_name: arr-configure
+    depends_on:
+      seedarr:
+        condition: service_healthy
+      sonarr:
+        condition: service_healthy
+      radarr:
+        condition: service_healthy
+      lidarr:
+        condition: service_healthy
+      prowlarr:
+        condition: service_healthy
+      transmission:
+        condition: service_healthy
+    volumes:
+      - sonarr-config:/sonarr-config:ro
+      - radarr-config:/radarr-config:ro
+      - lidarr-config:/lidarr-config:ro
+      - prowlarr-config:/prowlarr-config:ro
+      - ./tests/fixtures:/fixtures:ro,z
+    networks:
+      - arr-network
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        echo "=== Configuring *arr stack ==="
+
+        # Read API keys from config.xml files on mounted volumes
+        get_api_key() {
+          local config_path=$$1
+          grep -o '<ApiKey>[^<]*</ApiKey>' "$$config_path" | sed 's/<[^>]*>//g'
+        }
+
+        # Wait for config.xml files to exist (first boot generates them)
+        echo "Waiting for *arr apps to initialize..."
+        for i in $$(seq 1 60); do
+          if [ -f /sonarr-config/config.xml ] && \
+             [ -f /radarr-config/config.xml ] && \
+             [ -f /lidarr-config/config.xml ] && \
+             [ -f /prowlarr-config/config.xml ]; then
+            break
+          fi
+          sleep 2
+        done
+
+        echo "Reading API keys from config files..."
+        SONARR_KEY=$$(get_api_key /sonarr-config/config.xml)
+        RADARR_KEY=$$(get_api_key /radarr-config/config.xml)
+        LIDARR_KEY=$$(get_api_key /lidarr-config/config.xml)
+        PROWLARR_KEY=$$(get_api_key /prowlarr-config/config.xml)
+
+        echo "  Sonarr:   $${SONARR_KEY:0:8}..."
+        echo "  Radarr:   $${RADARR_KEY:0:8}..."
+        echo "  Lidarr:   $${LIDARR_KEY:0:8}..."
+        echo "  Prowlarr: $${PROWLARR_KEY:0:8}..."
+
+        # Wait for APIs to be fully ready (not just ping)
+        echo "Waiting for APIs to be ready..."
+        for i in $$(seq 1 60); do
+          sonarr_ok=$$(curl -sf "http://sonarr.local:8989/api/v3/system/status" -H "X-Api-Key: $$SONARR_KEY" > /dev/null 2>&1 && echo 1 || echo 0)
+          radarr_ok=$$(curl -sf "http://radarr.local:7878/api/v3/system/status" -H "X-Api-Key: $$RADARR_KEY" > /dev/null 2>&1 && echo 1 || echo 0)
+          lidarr_ok=$$(curl -sf "http://lidarr.local:8686/api/v1/system/status" -H "X-Api-Key: $$LIDARR_KEY" > /dev/null 2>&1 && echo 1 || echo 0)
+          prowlarr_ok=$$(curl -sf "http://prowlarr.local:9696/api/v1/system/status" -H "X-Api-Key: $$PROWLARR_KEY" > /dev/null 2>&1 && echo 1 || echo 0)
+          seedarr_ok=$$(curl -sf "http://seedarr.local:9898/api/v1/system/status" > /dev/null 2>&1 && echo 1 || echo 0)
+          if [ "$$sonarr_ok$$radarr_ok$$lidarr_ok$$prowlarr_ok$$seedarr_ok" = "11111" ]; then
+            echo "  All APIs ready after $${i}s"
+            break
+          fi
+          sleep 1
+        done
+
+        # --- Disable authentication on all *arr apps ---
+        disable_auth() {
+          local name=$$1 url=$$2 api_key=$$3 api_ver=$$4
+          current=$$(curl -sf "$$url/api/$$api_ver/config/host" -H "X-Api-Key: $$api_key")
+          if echo "$$current" | grep -q '"authenticationMethod":"external"'; then
+            echo "  $$name: auth already disabled"
+            return
+          fi
+          updated=$$(echo "$$current" | sed 's/"authenticationRequired":"[^"]*"/"authenticationRequired":"disabledForLocalAddresses"/;s/"authenticationMethod":"[^"]*"/"authenticationMethod":"external"/')
+          curl -sf -X PUT "$$url/api/$$api_ver/config/host" \
+            -H "X-Api-Key: $$api_key" \
+            -H "Content-Type: application/json" \
+            -d "$$updated" > /dev/null 2>&1 && echo "  $$name: auth disabled" || echo "  $$name: failed to disable auth"
+        }
+
+        echo ""
+        echo "--- Disabling authentication ---"
+        disable_auth "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY" "v3"
+        disable_auth "Radarr" "http://radarr.local:7878" "$$RADARR_KEY" "v3"
+        disable_auth "Lidarr" "http://lidarr.local:8686" "$$LIDARR_KEY" "v1"
+        disable_auth "Prowlarr" "http://prowlarr.local:9696" "$$PROWLARR_KEY" "v1"
+
+        # --- Add NoNaMe Club indexer to Prowlarr (idempotent) ---
+        echo ""
+        echo "--- Adding indexer to Prowlarr ---"
+        prowlarr_idx_exists=$$(curl -sf "http://prowlarr.local:9696/api/v1/indexer" \
+          -H "X-Api-Key: $$PROWLARR_KEY" | grep -c 'NoNaMe Club' || true)
+        if [ "$$prowlarr_idx_exists" = "0" ]; then
+          curl -sf -X POST "http://prowlarr.local:9696/api/v1/indexer" \
+            -H "X-Api-Key: $$PROWLARR_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "NoNaMe Club",
+              "implementation": "Cardigann",
+              "configContract": "CardigannSettings",
+              "enable": true,
+              "appProfileId": 1,
+              "tags": [],
+              "fields": [
+                {"name": "definitionFile", "value": "noname-club"},
+                {"name": "baseUrl"},
+                {"name": "baseSettings.queryLimit"},
+                {"name": "baseSettings.grabLimit"},
+                {"name": "baseSettings.limitsUnit", "value": 0},
+                {"name": "torrentBaseSettings.appMinimumSeeders"},
+                {"name": "torrentBaseSettings.seedRatio"},
+                {"name": "torrentBaseSettings.seedTime"},
+                {"name": "torrentBaseSettings.packSeedTime"},
+                {"name": "torrentBaseSettings.preferMagnetUrl", "value": false},
+                {"name": "stripcyrillic", "value": false},
+                {"name": "addrussiantotitle", "value": false},
+                {"name": "sort", "value": 0},
+                {"name": "type", "value": 1}
+              ]
+            }' > /dev/null 2>&1 && echo "  NoNaMe Club: OK" || echo "  NoNaMe Club: Failed"
+        else
+          echo "  NoNaMe Club: already exists, skipping"
+        fi
+
+        # --- Connect Prowlarr to Sonarr, Radarr, Lidarr as applications ---
+        add_prowlarr_app() {
+          local name=$$1 impl=$$2 url=$$3 api_key=$$4 sync_level=$$5 categories=$$6
+          existing=$$(curl -sf "http://prowlarr.local:9696/api/v1/applications" \
+            -H "X-Api-Key: $$PROWLARR_KEY" | grep -c "\"$$name\"" || true)
+          if [ "$$existing" != "0" ]; then
+            echo "  $$name: already exists, skipping"
+            return
+          fi
+          echo "  Adding $$name to Prowlarr..."
+          curl -sf -X POST "http://prowlarr.local:9696/api/v1/applications" \
+            -H "X-Api-Key: $$PROWLARR_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"$$name\",
+              \"implementation\": \"$$impl\",
+              \"configContract\": \"$${impl}Settings\",
+              \"syncLevel\": \"$$sync_level\",
+              \"fields\": [
+                {\"name\": \"baseUrl\", \"value\": \"$$url\"},
+                {\"name\": \"prowlarrUrl\", \"value\": \"http://prowlarr.local:9696\"},
+                {\"name\": \"apiKey\", \"value\": \"$$api_key\"},
+                {\"name\": \"syncCategories\", \"value\": [$$categories]}
+              ]
+            }" > /dev/null 2>&1 && echo "    OK" || echo "    Failed"
+        }
+
+        echo ""
+        echo "--- Connecting Prowlarr to *arr apps ---"
+        add_prowlarr_app "Sonarr" "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY" "fullSync" "5000,5010,5020,5030,5040,5045"
+        add_prowlarr_app "Radarr" "Radarr" "http://radarr.local:7878" "$$RADARR_KEY" "fullSync" "2000,2010,2020,2030,2040,2045"
+        add_prowlarr_app "Lidarr" "Lidarr" "http://lidarr.local:8686" "$$LIDARR_KEY" "fullSync" "3000,3010,3020,3030,3040"
+
+        # --- Add Transmission as download client in *arr apps (idempotent) ---
+        add_download_client() {
+          local name=$$1 url=$$2 api_key=$$3 api_ver=$$4
+          existing=$$(curl -sf "$$url/api/$$api_ver/downloadclient" -H "X-Api-Key: $$api_key" | grep -c 'Transmission' || true)
+          if [ "$$existing" != "0" ]; then
+            echo "  $$name: Transmission already configured"
+            return
+          fi
+          echo "  Adding Transmission to $$name..."
+          curl -sf -X POST "$$url/api/$$api_ver/downloadclient" \
+            -H "X-Api-Key: $$api_key" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "Transmission",
+              "implementation": "Transmission",
+              "configContract": "TransmissionSettings",
+              "enable": true,
+              "priority": 1,
+              "fields": [
+                {"name": "host", "value": "transmission.local"},
+                {"name": "port", "value": 9091},
+                {"name": "useSsl", "value": false},
+                {"name": "urlBase", "value": "/transmission/rpc"}
+              ]
+            }' > /dev/null 2>&1 && echo "    OK" || echo "    Failed"
+        }
+
+        echo ""
+        echo "--- Adding Transmission download client ---"
+        add_download_client "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY" "v3"
+        add_download_client "Radarr" "http://radarr.local:7878" "$$RADARR_KEY" "v3"
+        add_download_client "Lidarr" "http://lidarr.local:8686" "$$LIDARR_KEY" "v1"
+
+        # --- Connect Seedarr to Sonarr, Radarr, Lidarr (idempotent) ---
+        add_seedarr_connection() {
+          local name=$$1 arr_type=$$2 url=$$3 api_key=$$4
+          existing=$$(curl -sf "http://seedarr.local:9898/api/v1/arrconnections" | grep -c "\"name\":\"$$name\"" || true)
+          if [ "$$existing" != "0" ]; then
+            echo "  $$name: already exists, skipping"
+            return
+          fi
+          echo "  Adding $$name to Seedarr..."
+          curl -sf -X POST "http://seedarr.local:9898/api/v1/arrconnections" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"$$name\",
+              \"arrType\": \"$$arr_type\",
+              \"url\": \"$$url\",
+              \"apiKey\": \"$$api_key\",
+              \"syncEnabled\": true,
+              \"enableAutomaticAdd\": true,
+              \"webhookEnabled\": true,
+              \"enable\": true,
+              \"implementation\": \"$${arr_type}Connection\",
+              \"configContract\": \"ArrConnectionDefinition\"
+            }" > /dev/null 2>&1 && echo "    OK" || echo "    Failed"
+        }
+
+        echo ""
+        echo "--- Connecting Seedarr to *arr apps ---"
+        add_seedarr_connection "Sonarr" "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY"
+        add_seedarr_connection "Radarr" "Radarr" "http://radarr.local:7878" "$$RADARR_KEY"
+        add_seedarr_connection "Lidarr" "Lidarr" "http://lidarr.local:8686" "$$LIDARR_KEY"
+
+        # --- Add Prowlarr as indexer in Seedarr (idempotent) ---
+        echo ""
+        echo "--- Adding Prowlarr indexer to Seedarr ---"
+        idx_exists=$$(curl -sf "http://seedarr.local:9898/api/v1/indexers" | grep -c "\"name\":\"Prowlarr\"" || true)
+        if [ "$$idx_exists" = "0" ]; then
+          curl -sf -X POST "http://seedarr.local:9898/api/v1/indexers" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"Prowlarr\",
+              \"indexerType\": \"Prowlarr\",
+              \"url\": \"http://prowlarr.local:9696\",
+              \"apiKey\": \"$$PROWLARR_KEY\",
+              \"apiPath\": \"/api\",
+              \"enableRss\": true,
+              \"enableSearch\": true,
+              \"categories\": \"2000,3000,5000\",
+              \"implementation\": \"ProwlarrIndexer\",
+              \"configContract\": \"IndexerDefinition\"
+            }" > /dev/null 2>&1 && echo "  Prowlarr indexer: OK" || echo "  Prowlarr indexer: Failed"
+        else
+          echo "  Prowlarr indexer: already exists, skipping"
+        fi
+
+        # --- Add webhook notifications in *arr apps (idempotent) ---
+        add_webhook() {
+          local name=$$1 url=$$2 api_key=$$3 api_ver=$$4
+          existing=$$(curl -sf "$$url/api/$$api_ver/notification" -H "X-Api-Key: $$api_key" | grep -c '"Seedarr"' || true)
+          if [ "$$existing" != "0" ]; then
+            echo "  $$name: Seedarr webhook already exists"
+            return
+          fi
+          echo "  Adding Seedarr webhook to $$name..."
+          curl -sf -X POST "$$url/api/$$api_ver/notification" \
+            -H "X-Api-Key: $$api_key" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "Seedarr",
+              "implementation": "Webhook",
+              "configContract": "WebhookSettings",
+              "onGrab": true,
+              "onDownload": false,
+              "onUpgrade": false,
+              "onRename": false,
+              "onHealthIssue": false,
+              "onApplicationUpdate": false,
+              "fields": [
+                {"name": "url", "value": "http://seedarr.local:9898/api/v1/webhook/arr"},
+                {"name": "method", "value": 1}
+              ]
+            }' > /dev/null 2>&1 && echo "    OK" || echo "    Failed"
+        }
+
+        echo ""
+        echo "--- Adding Seedarr webhook to *arr apps ---"
+        add_webhook "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY" "v3"
+        add_webhook "Radarr" "http://radarr.local:7878" "$$RADARR_KEY" "v3"
+        add_webhook "Lidarr" "http://lidarr.local:8686" "$$LIDARR_KEY" "v1"
+
+        # --- Setup Radarr for E2E testing (root folder + test movie) ---
+        echo ""
+        echo "--- Setting up Radarr E2E test data ---"
+        radarr_root=$$(curl -sf "http://radarr.local:7878/api/v3/rootfolder" -H "X-Api-Key: $$RADARR_KEY" | grep -c '/config/movies' || true)
+        if [ "$$radarr_root" = "0" ]; then
+          echo "  Root folder: creating /config/movies..."
+          for attempt in 1 2 3 4 5; do
+            result=$$(curl -s -w "\n%{http_code}" -X POST "http://radarr.local:7878/api/v3/rootfolder" \
+              -H "X-Api-Key: $$RADARR_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{"path": "/config/movies"}')
+            http_code=$$(echo "$$result" | tail -1)
+            if [ "$$http_code" = "201" ] || [ "$$http_code" = "200" ]; then
+              echo "  Root folder: OK"
+              break
+            fi
+            echo "  Root folder: attempt $$attempt failed (HTTP $$http_code), retrying in 5s..."
+            sleep 5
+          done
+        else
+          echo "  Root folder: already exists"
+        fi
+
+        radarr_movie=$$(curl -sf "http://radarr.local:7878/api/v3/movie" -H "X-Api-Key: $$RADARR_KEY" | grep -c '"The Matrix"' || true)
+        if [ "$$radarr_movie" = "0" ]; then
+          movie_data=$$(curl -sf "http://radarr.local:7878/api/v3/movie/lookup/tmdb?tmdbId=603" -H "X-Api-Key: $$RADARR_KEY")
+          if [ -n "$$movie_data" ]; then
+            echo "$$movie_data" | sed 's|}$$|,"rootFolderPath":"/config/movies","qualityProfileId":1,"monitored":true,"addOptions":{"searchForMovie":false}}|' | \
+              curl -sf -X POST "http://radarr.local:7878/api/v3/movie" \
+                -H "X-Api-Key: $$RADARR_KEY" \
+                -H "Content-Type: application/json" \
+                -d @- > /dev/null 2>&1 && echo "  Test movie (The Matrix): OK" || echo "  Test movie: Failed"
+          fi
+        else
+          echo "  Test movie (The Matrix): already exists"
+        fi
+
+        echo ""
+        echo "=== Configuration complete ==="
+        echo "  Seedarr:       http://localhost:9898"
+        echo "  Sonarr:        http://localhost:8989"
+        echo "  Radarr:        http://localhost:7878"
+        echo "  Lidarr:        http://localhost:8686"
+        echo "  Prowlarr:      http://localhost:9696"
+        echo "  Transmission:  http://localhost:9091"
+
+networks:
+  arr-network:
+    driver: bridge
 
 volumes:
   seedarr-config:
   seedarr-data:
+  sonarr-config:
+  radarr-config:
+  lidarr-config:
+  prowlarr-config:
+  transmission-config:
+  transmission-downloads:

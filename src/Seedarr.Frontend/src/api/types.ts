@@ -326,6 +326,7 @@ export interface ArrConnection {
   apiKey: string;
   syncEnabled: boolean;
   enableAutomaticAdd: boolean;
+  webhookEnabled: boolean;
   implementation: string;
   configContract: string;
 }
@@ -340,6 +341,22 @@ export interface DownloadClientDefinition {
   username: string;
   password: string;
   category: string;
+  implementation: string;
+  configContract: string;
+  enable: boolean;
+}
+
+export interface IndexerDefinition {
+  id: number;
+  name: string;
+  indexerType: string;
+  url: string;
+  apiKey: string;
+  apiPath: string;
+  enableRss: boolean;
+  enableSearch: boolean;
+  categories: string;
+  downloadClientId: number;
   implementation: string;
   configContract: string;
   enable: boolean;

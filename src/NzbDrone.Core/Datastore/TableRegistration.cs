@@ -1,6 +1,7 @@
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
+using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Notifications;
@@ -26,6 +27,7 @@ public static class TableRegistration
         TableMapping.Register<TrackerProviderDefinition>("TrackerProviderDefinitions");
         TableMapping.Register<ArrConnectionDefinition>("ArrConnectionDefinitions");
         TableMapping.Register<DownloadClientDefinition>("DownloadClientDefinitions");
+        TableMapping.Register<IndexerDefinition>("IndexerDefinitions");
         TableMapping.Register<NotificationDefinition>("NotificationDefinitions");
         TableMapping.Register<Tag>("Tags");
         TableMapping.Register<SpeedSchedule>("SpeedSchedules");

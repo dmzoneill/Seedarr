@@ -114,6 +114,7 @@ const settingsSubItems = [
   { path: '/settings/simulation', label: 'Simulation' },
   { path: '/settings/tracker-server', label: 'Tracker Server' },
   { path: '/settings/scheduler', label: 'Scheduler' },
+  { path: '/settings/indexers', label: 'Indexers' },
   { path: '/settings/connections', label: 'Connections' },
   { path: '/settings/download-clients', label: 'Download Clients' },
   { path: '/settings/advanced', label: 'Advanced' },

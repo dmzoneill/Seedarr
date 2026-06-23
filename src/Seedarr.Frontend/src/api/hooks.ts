@@ -37,6 +37,7 @@ import type {
   SchedulerConfig,
   AdvancedConfig,
   ArrConnection,
+  IndexerDefinition,
   DownloadClientDefinition,
   DiskSpaceInfo,
   Backup,
@@ -464,6 +465,43 @@ export function useDeleteDownloadClient() {
 export function useTestDownloadClient() {
   return useMutation<{ success: boolean }, Error, number>({
     mutationFn: (id) => apiClient.post(`/downloadclients/${id}/test`),
+  });
+}
+
+export function useIndexers() {
+  return useQuery<IndexerDefinition[]>({
+    queryKey: ['indexers'],
+    queryFn: () => apiClient.get('/indexers'),
+  });
+}
+
+export function useCreateIndexer() {
+  const queryClient = useQueryClient();
+  return useMutation<IndexerDefinition, Error, Partial<IndexerDefinition>>({
+    mutationFn: (indexer) => apiClient.post('/indexers', indexer),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['indexers'] }),
+  });
+}
+
+export function useUpdateIndexer() {
+  const queryClient = useQueryClient();
+  return useMutation<IndexerDefinition, Error, IndexerDefinition>({
+    mutationFn: (indexer) => apiClient.put(`/indexers/${indexer.id}`, indexer),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['indexers'] }),
+  });
+}
+
+export function useDeleteIndexer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/indexers/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['indexers'] }),
+  });
+}
+
+export function useTestIndexer() {
+  return useMutation<{ success: boolean }, Error, number>({
+    mutationFn: (id) => apiClient.post(`/indexers/${id}/test`),
   });
 }
 
