@@ -93,7 +93,7 @@ public class SwarmAnalyzer : ISwarmAnalyzer
         var availabilityScore = NormalizePieceAvailability(availability);
         var saturationScore = ComputeSwarmSaturation(seedLeechRatio, availability);
         var isRare = seedCount <= RareContentSeedThreshold
-                     && availability < RareContentAvailabilityThreshold;
+                && availability < RareContentAvailabilityThreshold;
         var isHealthy = availabilityScore > HealthyAvailabilityScoreFloor
                         && seedLeechRatio >= HealthyRatioFloor;
 

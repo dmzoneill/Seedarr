@@ -214,13 +214,13 @@ public class UdpTrackerProvider : ITrackerProvider
     private static long ReadInt64BigEndian(byte[] buffer, int offset)
     {
         return ((long)buffer[offset] << 56) |
-               ((long)buffer[offset + 1] << 48) |
-               ((long)buffer[offset + 2] << 40) |
-               ((long)buffer[offset + 3] << 32) |
-               ((long)buffer[offset + 4] << 24) |
-               ((long)buffer[offset + 5] << 16) |
-               ((long)buffer[offset + 6] << 8) |
-               buffer[offset + 7];
+            ((long)buffer[offset + 1] << 48) |
+            ((long)buffer[offset + 2] << 40) |
+            ((long)buffer[offset + 3] << 32) |
+            ((long)buffer[offset + 4] << 24) |
+            ((long)buffer[offset + 5] << 16) |
+            ((long)buffer[offset + 6] << 8) |
+            buffer[offset + 7];
     }
 
     private static int ReadInt32BigEndian(byte[] buffer, int offset)

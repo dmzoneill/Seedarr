@@ -24,7 +24,7 @@ docker run -d \
 
 Open **<http://localhost:9898>**
 
-## Docker Compose
+## Docker Compose / Podman Compose
 
 ```yaml
 services:
@@ -51,6 +51,12 @@ volumes:
   seedarr-data:
 ```
 
+```bash
+docker compose up -d
+# or
+podman-compose up -d
+```
+
 ## Volumes
 
 | Path | Purpose |
@@ -73,23 +79,32 @@ volumes:
 
 ## Features
 
-- **Seeding Simulation** &mdash; configurable speeds, multiple distribution algorithms, time-of-day scheduling
-- **Client Profiles** &mdash; impersonate qBittorrent, Deluge, Transmission with authentic peer IDs
-- **Full Protocol Support** &mdash; HTTP/UDP trackers, DHT, PEX, MSE/PE encryption, uTP, LPD
-- **Web Interface** &mdash; real-time dashboard, speed graphs, dark/light theme, responsive design
-- **\*arr Integration** &mdash; connect to Sonarr/Radarr to auto-seed your download history
-- **Built-in Tracker** &mdash; embedded HTTP + UDP tracker server
-- **Notifications** &mdash; webhook, email, Discord alerts
-- **Health Monitoring** &mdash; comprehensive system health checks
+- **Seeding Simulation** &mdash; configurable upload/download speeds, 4 distribution algorithms (Pareto, Power Law, Log-Normal, Equal), time-of-day scheduling with day-of-week support
+- **Client Profiles** &mdash; impersonate qBittorrent, Deluge, Transmission, uTorrent, BiglyBT with authentic peer IDs and protocol behavior
+- **Full Protocol Support** &mdash; HTTP/UDP trackers, multi-tracker failover, DHT, PEX, MSE/PE encryption, uTP, LPD, metadata exchange, fast extension
+- **Web Interface** &mdash; Sonarr-style UI with chunky card layouts, real-time aggregate speed display, table and grid views, drag-and-drop upload, dark/light theme with custom scrollbars, responsive design
+- **\*arr Integration** &mdash; connect Sonarr, Radarr, and Lidarr to auto-seed your download history via provider card tiles
+- **Download Clients** &mdash; integrate with qBittorrent, Transmission, and Deluge
+- **Built-in Tracker** &mdash; embedded HTTP + UDP tracker server with rate limiting and peer database
+- **Notifications** &mdash; webhook, email, Discord alerts with configurable event triggers
+- **Health Monitoring** &mdash; comprehensive system health checks with status dashboard
+- **System Pages** &mdash; Status, Tasks, Backup, Updates, Events, Log Files
 - **REST API** &mdash; full API at `/api/v1/` with Swagger docs at `/swagger`
+- **Auto-Start** &mdash; seeding engine starts automatically on container boot, with force start support
+
+## Settings
+
+14 settings tabs with 120+ configurable properties covering general, seeding, BitTorrent protocol, network, peer protocol, protocol extensions, simulation, tracker server, scheduler, advanced, connections, download clients, notifications, and web UI.
 
 ## Tech Stack
 
 - .NET 10 / ASP.NET Core
-- React 18 + TypeScript
+- React 18 + TypeScript 5
 - SQLite (default) / PostgreSQL
 - SignalR real-time updates
-- Polly resilience (retry + circuit breaker)
+- Polly 8 resilience (retry + circuit breaker)
+- BouncyCastle (MSE/PE encryption)
+- BencodeNET (torrent parsing)
 
 ## Tags
 
