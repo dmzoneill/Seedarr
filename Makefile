@@ -1,4 +1,4 @@
-.PHONY: setup test-setup test build clean restore frontend \
+.PHONY: setup test-setup test integration build clean restore frontend \
        stack-up stack-down stack-configure stack-healthy stack-rebuild \
        test-unit test-integration test-integration-rerun test-integration-only test-all
 
@@ -32,14 +32,19 @@ clean:
 	dotnet clean $(SOLUTION) 2>/dev/null || true
 	rm -rf _output _temp
 
-# --- Tests (called by upstream CI: make test) ---
+# --- Tests (called by upstream CI: make test / make integration) ---
 
 test:
 	dotnet test $(SOLUTION) --configuration Release --no-build \
 		--filter "Category!=IntegrationTest" \
 		--logger "trx;LogFileName=test-results.trx" \
 		--collect:"XPlat Code Coverage"
-	@if [ -f $(FRONTEND)/package.json ]; then cd $(FRONTEND) && npm test 2>/dev/null || true; fi
+
+integration:
+	dotnet test $(SOLUTION) --configuration Release --no-build \
+		--filter "Category=IntegrationTest" \
+		--logger "trx;LogFileName=integration-results.trx" \
+		--collect:"XPlat Code Coverage"
 
 test-unit: test
 
