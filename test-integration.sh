@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck disable=SC2016
 #
 # Integration test for Seedarr webhook + indexer flow
 # Requires: podman-compose stack running (all services healthy)
@@ -22,7 +23,6 @@ PASS=0
 FAIL=0
 TOTAL=0
 
-# shellcheck disable=SC2016
 assert() {
 	local name="$1" condition="$2"
 	TOTAL=$((TOTAL + 1))
@@ -124,15 +124,15 @@ echo ""
 
 echo "--- Preflight: service health ---"
 assert "Seedarr healthy" \
-  'curl -sf "$SEEDARR_URL/api/v1/system/status" > /dev/null'
+	'curl -sf "$SEEDARR_URL/api/v1/system/status" > /dev/null'
 assert "Sonarr healthy" \
-  'curl -sf "$SONARR_URL/ping" > /dev/null'
+	'curl -sf "$SONARR_URL/ping" > /dev/null'
 assert "Radarr healthy" \
-  'curl -sf "$RADARR_URL/ping" > /dev/null'
+	'curl -sf "$RADARR_URL/ping" > /dev/null'
 assert "Lidarr healthy" \
-  'curl -sf "$LIDARR_URL/ping" > /dev/null'
+	'curl -sf "$LIDARR_URL/ping" > /dev/null'
 assert "Prowlarr healthy" \
-  'curl -sf "$PROWLARR_URL/ping" > /dev/null'
+	'curl -sf "$PROWLARR_URL/ping" > /dev/null'
 
 # ─── Test 1: API endpoints exist ─────────────────────────
 echo ""
