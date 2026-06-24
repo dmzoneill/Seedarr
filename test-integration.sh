@@ -1,5 +1,5 @@
 #!/bin/bash
-# shellcheck disable=SC2016
+# shellcheck disable=SC2016,SC2034
 #
 # Integration test for Seedarr webhook + indexer flow
 # Requires: podman-compose stack running (all services healthy)
@@ -7,10 +7,8 @@
 set -euo pipefail
 
 SEEDARR_URL="http://localhost:9898"
-# shellcheck disable=SC2034
 SONARR_URL="http://localhost:8989"
 RADARR_URL="http://localhost:7878"
-# shellcheck disable=SC2034
 LIDARR_URL="http://localhost:8686"
 PROWLARR_URL="http://localhost:9696"
 
