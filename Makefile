@@ -7,6 +7,7 @@ CONSOLE := src/NzbDrone.Console/Seedarr.Console.csproj
 FRONTEND := src/Seedarr.Frontend
 COMPOSE := podman-compose
 SERVICES := seedarr sonarr radarr lidarr prowlarr transmission
+DEPS := sonarr radarr lidarr prowlarr transmission
 
 # --- Build targets (called by upstream CI: make setup) ---
 
@@ -57,7 +58,20 @@ stack-rebuild:
 	$(COMPOSE) build --no-cache seedarr
 
 stack-up:
-	$(COMPOSE) up -d $(SERVICES)
+	$(COMPOSE) up -d $(DEPS)
+	@echo "Waiting for dependency services..."
+	@for i in $$(seq 1 120); do \
+		if curl -sf http://localhost:8989/ping > /dev/null 2>&1 && \
+		   curl -sf http://localhost:7878/ping > /dev/null 2>&1 && \
+		   curl -sf http://localhost:8686/ping > /dev/null 2>&1 && \
+		   curl -sf http://localhost:9696/ping > /dev/null 2>&1 && \
+		   curl -sf http://localhost:9091/transmission/web/ > /dev/null 2>&1; then \
+			echo "Dependencies healthy after $${i}s"; \
+			break; \
+		fi; \
+		sleep 1; \
+	done
+	$(COMPOSE) up -d seedarr
 
 stack-down:
 	$(COMPOSE) down 2>/dev/null || true
@@ -68,20 +82,15 @@ stack-clean:
 	@$(COMPOSE) down -v 2>/dev/null || true
 
 stack-healthy:
-	@echo "Waiting for services..."
+	@echo "Waiting for Seedarr..."
 	@for i in $$(seq 1 120); do \
-		if curl -sf http://localhost:9898/api/v1/system/status > /dev/null 2>&1 && \
-		   curl -sf http://localhost:8989/ping > /dev/null 2>&1 && \
-		   curl -sf http://localhost:7878/ping > /dev/null 2>&1 && \
-		   curl -sf http://localhost:8686/ping > /dev/null 2>&1 && \
-		   curl -sf http://localhost:9696/ping > /dev/null 2>&1 && \
-		   curl -sf http://localhost:9091/transmission/web/ > /dev/null 2>&1; then \
-			echo "All services healthy after $${i}s"; \
+		if curl -sf http://localhost:9898/api/v1/system/status > /dev/null 2>&1; then \
+			echo "Seedarr healthy after $${i}s"; \
 			exit 0; \
 		fi; \
 		sleep 1; \
 	done; \
-	echo "Timeout waiting for services"; exit 1
+	echo "Timeout waiting for Seedarr"; exit 1
 
 stack-configure:
 	@podman exec radarr mkdir -p /config/movies 2>/dev/null || true
