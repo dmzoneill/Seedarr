@@ -13,6 +13,7 @@ SERVICES := seedarr sonarr radarr lidarr prowlarr transmission
 setup:
 	dotnet restore $(SOLUTION)
 	@if [ -f $(FRONTEND)/package.json ]; then cd $(FRONTEND) && npm ci; fi
+	@command -v podman-compose > /dev/null 2>&1 || pip install podman-compose 2>/dev/null || true
 
 test-setup:
 	dotnet build $(SOLUTION) --configuration Release
@@ -40,11 +41,10 @@ test:
 		--logger "trx;LogFileName=test-results.trx" \
 		--collect:"XPlat Code Coverage"
 
-integration:
-	dotnet test $(SOLUTION) --configuration Release --no-build \
-		--filter "Category=IntegrationTest" \
-		--logger "trx;LogFileName=integration-results.trx" \
-		--collect:"XPlat Code Coverage"
+integration: stack-clean stack-build stack-up stack-healthy stack-configure
+	@echo ""
+	@echo "Running integration tests..."
+	bash test-integration.sh
 
 test-unit: test
 
