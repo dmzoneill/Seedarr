@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -14,6 +15,15 @@ public class UpdateInfo
     public bool UpdateAvailable { get; set; }
     public string ReleaseUrl { get; set; }
     public string ReleaseNotes { get; set; }
+    public List<ReleaseInfo> Releases { get; set; } = new();
+}
+
+public class ReleaseInfo
+{
+    public string Version { get; set; }
+    public DateTime PublishedAt { get; set; }
+    public string Body { get; set; }
+    public string Url { get; set; }
 }
 
 public interface IUpdateService
@@ -24,7 +34,7 @@ public interface IUpdateService
 
 public class UpdateService : IUpdateService
 {
-    private const string GitHubReleasesUrl = "https://api.github.com/repos/dmzoneill/Seedarr/releases/latest";
+    private const string GitHubReleasesUrl = "https://api.github.com/repos/dmzoneill/Seedarr/releases";
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(6);
 
     private static readonly HttpClient Client = CreateHttpClient();
@@ -71,52 +81,84 @@ public class UpdateService : IUpdateService
 
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, GitHubReleasesUrl);
+            var request = new HttpRequestMessage(HttpMethod.Get, GitHubReleasesUrl + "?per_page=20");
             var response = Client.Send(request);
 
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("GitHub releases API returned {0}", response.StatusCode);
-                return BuildResult(currentVersion, null, null, null);
+                return BuildResult(currentVersion, null, new List<ReleaseInfo>());
             }
 
             var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
+            var releases = JsonDocument.Parse(json).RootElement;
 
-            var tagName = root.TryGetProperty("tag_name", out var tag) ? tag.GetString() : null;
-            var htmlUrl = root.TryGetProperty("html_url", out var url) ? url.GetString() : null;
-            var body = root.TryGetProperty("body", out var notes) ? notes.GetString() : null;
-
-            var latestVersionString = tagName?.TrimStart('v', 'V');
-
-            if (!Version.TryParse(latestVersionString, out var latestVersion))
+            if (releases.ValueKind != JsonValueKind.Array)
             {
-                _logger.Warn("Unable to parse version from tag: {0}", tagName);
-                return BuildResult(currentVersion, null, htmlUrl, body);
+                _logger.Warn("GitHub releases response was not an array");
+                return BuildResult(currentVersion, null, new List<ReleaseInfo>());
             }
 
-            _logger.Debug("Current: {0}, Latest: {1}", currentVersion, latestVersion);
-            return BuildResult(currentVersion, latestVersion, htmlUrl, body);
+            var releaseList = new List<ReleaseInfo>();
+            Version latestVersion = null;
+
+            foreach (var release in releases.EnumerateArray())
+            {
+                var tagName = release.TryGetProperty("tag_name", out var tag) ? tag.GetString() : null;
+                var versionString = tagName?.TrimStart('v', 'V');
+
+                if (!Version.TryParse(versionString, out var version))
+                {
+                    continue;
+                }
+
+                if (release.TryGetProperty("draft", out var draft) && draft.GetBoolean())
+                {
+                    continue;
+                }
+
+                var publishedAt = release.TryGetProperty("published_at", out var pub) && pub.ValueKind == JsonValueKind.String
+                    ? DateTime.Parse(pub.GetString())
+                    : DateTime.UtcNow;
+
+                var body = release.TryGetProperty("body", out var notes) ? notes.GetString() : null;
+                var htmlUrl = release.TryGetProperty("html_url", out var url) ? url.GetString() : null;
+
+                releaseList.Add(new ReleaseInfo
+                {
+                    Version = version.ToString(),
+                    PublishedAt = publishedAt,
+                    Body = body,
+                    Url = htmlUrl,
+                });
+
+                if (latestVersion == null || version > latestVersion)
+                {
+                    latestVersion = version;
+                }
+            }
+
+            _logger.Debug("Current: {0}, Latest: {1}, Releases: {2}", currentVersion, latestVersion, releaseList.Count);
+            return BuildResult(currentVersion, latestVersion, releaseList);
         }
         catch (HttpRequestException ex)
         {
             _logger.Error(ex, "Failed to check for updates");
-            return BuildResult(currentVersion, null, null, null);
+            return BuildResult(currentVersion, null, new List<ReleaseInfo>());
         }
         catch (JsonException ex)
         {
             _logger.Error(ex, "Failed to parse GitHub releases response");
-            return BuildResult(currentVersion, null, null, null);
+            return BuildResult(currentVersion, null, new List<ReleaseInfo>());
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Unexpected error checking for updates");
-            return BuildResult(currentVersion, null, null, null);
+            return BuildResult(currentVersion, null, new List<ReleaseInfo>());
         }
     }
 
-    private static UpdateInfo BuildResult(Version currentVersion, Version latestVersion, string releaseUrl, string releaseNotes)
+    private static UpdateInfo BuildResult(Version currentVersion, Version latestVersion, List<ReleaseInfo> releases)
     {
         var updateAvailable = latestVersion != null && latestVersion > currentVersion;
 
@@ -125,8 +167,7 @@ public class UpdateService : IUpdateService
             CurrentVersion = currentVersion.ToString(),
             LatestVersion = latestVersion?.ToString(),
             UpdateAvailable = updateAvailable,
-            ReleaseUrl = releaseUrl,
-            ReleaseNotes = releaseNotes
+            Releases = releases,
         };
     }
 
