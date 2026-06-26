@@ -170,6 +170,8 @@ body {
   padding: 1rem;
   gap: 0.25rem;
   min-height: 56px;
+  text-decoration: none;
+  color: inherit;
 }
 
 .sidebar-nav {

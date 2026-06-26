@@ -46,6 +46,12 @@ RUN apt-get update && \
 
 RUN mkdir -p /config /data
 
+LABEL org.opencontainers.image.title="Seedarr" \
+      org.opencontainers.image.description="BitTorrent Seeding Simulator" \
+      org.opencontainers.image.url="https://www.seedarr.net" \
+      org.opencontainers.image.source="https://github.com/dmzoneill/Seedarr" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
 WORKDIR /app
 
 COPY --from=backend /app ./
