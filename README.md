@@ -1,7 +1,7 @@
 # Seedarr
 
 <p align="center">
-  <img src="Logo/Seedarr.svg" alt="Seedarr" width="200"/>
+  <img src="logo/seedarr-skull.svg" alt="Seedarr" width="200"/>
 </p>
 
 <p align="center">
