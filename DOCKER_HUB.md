@@ -114,6 +114,7 @@ podman-compose up -d
 ## Also Available
 
 - **GHCR**: `ghcr.io/dmzoneill/seedarr:latest`
+- **Website**: [www.seedarr.net](https://www.seedarr.net)
 - **Source**: [github.com/dmzoneill/Seedarr](https://github.com/dmzoneill/Seedarr)
 
 ## License
