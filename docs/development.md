@@ -35,30 +35,32 @@ Seedarr/
   src/
     NzbDrone.Common/        Shared infrastructure (DI, logging, HTTP)
     NzbDrone.Core/          Domain logic
-      ArrIntegration/       Sonarr/Radarr API clients
+      ArrIntegration/       Sonarr/Radarr/Lidarr API clients + webhooks
       Configuration/        Two-tier config system
       Datastore/            Dapper + FluentMigrator
-        Migration/          Numbered DB migrations
+        Migration/          Numbered DB migrations (001-017)
       Dht/                  BEP 5 DHT implementation
+      DownloadClients/      qBittorrent, Transmission, Deluge integration
       HealthCheck/          Health check framework
+      Indexers/             Prowlarr, Torznab, Newznab integration
       Jobs/                 Task scheduler
       Messaging/            Command + Event system
       Network/              UPnP, proxy
       Notifications/        Notification providers
       Peers/                Peer wire protocol, MSE, extensions
         Encryption/         MSE/PE (DH + RC4)
-        Extensions/         PEX, metadata, fast extension
+        Extensions/         PEX, metadata, fast extension, lt_donthave
         Lpd/                Local Peer Discovery
       Seeding/              Simulation engine
         Distribution/       Speed distribution algorithms
-        Scheduling/         Time-based speed control
+        Scheduling/         Time-based speed control + SpeedSchedule model
       Simulation/           Client behavior, traffic, swarm
-        ClientBehavior/     5 client profiles
+        ClientBehavior/     5 client profiles (qBittorrent, Deluge, Transmission, uTorrent, BiglyBT)
         Swarm/              Swarm health analysis
         Traffic/            Traffic pattern simulation
       Tags/                 Tag system
-      Torrents/             Torrent domain model
-      TrackerServer/        Built-in tracker
+      Torrents/             Torrent domain model + TrackerEntry
+      TrackerServer/        Built-in HTTP/UDP tracker
       Trackers/             Tracker communication
         Http/               BEP 3 HTTP tracker
         Udp/                BEP 15 UDP tracker
@@ -66,39 +68,61 @@ Seedarr/
       Transport/            uTP (BEP 29)
     NzbDrone.SignalR/       SignalR hub
     Seedarr.Http/           REST framework
-    Seedarr.Api.V1/         API controllers
+    Seedarr.Api.V1/         API controllers (19 files, 24 controller classes)
     NzbDrone.Host/          Web server, startup
     NzbDrone.Console/       Entry point
     Seedarr.Frontend/       React SPA
-    NzbDrone.Core.Test/     Unit tests
-    NzbDrone.Integration.Test/  Integration tests
+    NzbDrone.Core.Test/     Unit tests (NUnit)
+  test-integration.sh       Shell-based integration tests (52 tests)
   .github/workflows/       CI/CD pipelines
 ```
 
 ## Testing
 
+### Unit Tests
+
 ```bash
 # Unit tests only
 dotnet test src/Seedarr.sln --filter "Category!=IntegrationTest"
 
-# Integration tests only
-dotnet test src/Seedarr.sln --filter "Category=IntegrationTest"
-
-# All tests
+# All dotnet tests
 dotnet test src/Seedarr.sln
 
 # Specific test class
-dotnet test src/Seedarr.sln --filter "FullyQualifiedName~TorrentServiceFixture"
+dotnet test src/Seedarr.sln --filter "FullyQualifiedName~InfoHashCalculatorTest"
+```
+
+### Integration Tests
+
+Integration tests use `test-integration.sh` — a shell script that brings up the full podman-compose stack and runs 52 API-level tests against live services.
+
+```bash
+# Full integration (builds, starts stack, configures, tests)
+make integration
+
+# Re-run against already-running stack
+make test-integration-rerun
+
+# Just the shell tests (stack must be running)
+make test-integration-only
 ```
 
 ### Test Conventions
 
-- Test projects mirror source structure
-- Test class naming: `{ClassName}Fixture.cs`
-- Use NUnit + Moq + FluentAssertions
-- Unit tests: mock all dependencies
-- Integration tests: use in-memory SQLite, marked `[Category("IntegrationTest")]`
-- Test data builders for domain objects
+- Test project: `NzbDrone.Core.Test/` (mirrors source structure)
+- Test class naming: `{ClassName}Test.cs`
+- Framework: **NUnit 4.6** with built-in assertions (`Assert.That` / `Assert.Multiple`)
+- Coverage: **coverlet.collector**
+- No Moq, no FluentAssertions — pure NUnit constraint model
+- Integration tests: shell-based via `test-integration.sh`, run against podman-compose stack
+
+### Existing Test Files
+
+| Test File | What it covers |
+|-----------|---------------|
+| `Torrents/InfoHashCalculatorTest.cs` | SHA-1 info hash calculation (7 tests) |
+| `Simulation/ClientBehavior/ClientProfileTest.cs` | Peer ID generation for qBittorrent, Deluge, Transmission |
+| `Seeding/Distribution/SpeedDistributorTest.cs` | EqualDistributor and ParetoDistributor behavior |
 
 ## Database Migrations
 
@@ -111,18 +135,42 @@ dotnet test src/Seedarr.sln --filter "FullyQualifiedName~TorrentServiceFixture"
 ```
 
 ```csharp
-// Example migration
+// Example migration (from 002_add_torrents.cs)
 [Migration(2)]
-public class AddTrackerFields : NzbDroneMigrationBase
+public class AddTorrents : NzbDroneMigrationBase
 {
     protected override void MainDbUpgrade()
     {
-        Alter.Table("TorrentTrackers")
-            .AddColumn("Seeders").AsInt32().WithDefaultValue(0)
-            .AddColumn("Leechers").AsInt32().WithDefaultValue(0);
+        Create.Table("Torrents")
+            .WithColumn("Id").AsInt32().PrimaryKey().Identity()
+            .WithColumn("Name").AsString().NotNullable()
+            .WithColumn("InfoHash").AsString().NotNullable();
+        // ...
     }
 }
 ```
+
+### Migration History
+
+| # | Migration | Tables/Columns |
+|---|-----------|---------------|
+| 001 | `initial_setup` | Config, ScheduledTasks, Commands, Tags |
+| 002 | `add_torrents` | Torrents, TorrentFiles |
+| 003 | `add_tracker_providers` | TrackerProviderDefinitions |
+| 004 | `add_client_profiles` | ClientProfileDefinitions |
+| 005 | `add_arr_connections` | ArrConnectionDefinitions |
+| 006 | `add_notification_definitions` | NotificationDefinitions |
+| 007 | `add_speed_schedules` | SpeedSchedules |
+| 008 | `add_download_clients` | DownloadClientDefinitions |
+| 009 | `add_torrent_options` | +Priority, UploadLimit, DownloadLimit, SuperSeeding, ForceStart, Label |
+| 010 | `add_download_progress` | +Progress |
+| 011 | `add_tracker_entries` | TrackerEntries (announce stats, response times) |
+| 012 | `add_torrent_runtime_fields` | +SequentialDownload, AnnounceInterval, speeds, Eta, etc. |
+| 013 | `add_arr_connection_sync_flags` | +SyncEnabled, EnableAutomaticAdd |
+| 014 | `add_torrent_sort_order` | +SortOrder |
+| 015 | `add_force_completed` | +ForceCompleted |
+| 016 | `add_webhook_enabled` | +WebhookEnabled |
+| 017 | `add_indexer_definitions` | IndexerDefinitions |
 
 ## Configuration
 
@@ -141,7 +189,28 @@ Location: `~/.config/Seedarr/config.xml`
 
 ### App Config (Database)
 
-Stored in `Config` table, managed via `ConfigService`. Accessed through Settings API.
+Stored in `Config` table, managed via `ConfigService`. Accessed through 10 config API sections (general, seeding, bittorrent, network, peerprotocol, protocols, simulation, trackerserver, scheduler, advanced).
+
+## Makefile Targets
+
+```bash
+make setup              # Restore .NET + npm dependencies
+make test-setup         # Build solution (Release)
+make test               # Run unit tests (excludes IntegrationTest category)
+make integration        # Full integration: build stack, start, configure, test
+make test-integration   # Same as integration
+make test-integration-rerun  # Re-run tests on existing stack
+make test-integration-only   # Run test script only (stack must be up)
+make test-all           # Unit + integration tests
+make build              # setup + test-setup
+make publish            # Publish release artifacts
+make frontend           # Build frontend production bundle
+make clean              # Clean build artifacts
+make stack-up           # Start podman-compose stack
+make stack-down         # Stop stack
+make stack-clean        # Stop + remove containers + volumes
+make stack-rebuild      # Rebuild seedarr container (no cache)
+```
 
 ## Debugging
 
