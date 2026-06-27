@@ -147,6 +147,7 @@ export interface TrackerServerStats {
 }
 
 export interface GeneralConfig {
+  id: number;
   autoStart: boolean;
   themeStyle: string;
   colorScheme: string;
@@ -160,14 +161,10 @@ export interface GeneralConfig {
   urlBase: string;
   authenticationEnabled: boolean;
   apiKey: string;
-  httpsEnabled: boolean;
-  username: string;
-  password: string;
-  sessionTimeoutMinutes: number;
-  localhostOnly: boolean;
 }
 
 export interface SeedingConfig {
+  id: number;
   maxUploadSpeedKbps: number;
   maxDownloadSpeedKbps: number;
   alternativeSpeedEnabled: boolean;
@@ -186,9 +183,12 @@ export interface SeedingConfig {
   downloadCustomIntervalMinutes: number;
   downloadStoppedMinPercentage: number;
   downloadStoppedMaxPercentage: number;
+  speedVariationMin: number;
+  speedVariationMax: number;
 }
 
 export interface NetworkConfig {
+  id: number;
   listeningPort: number;
   upnpEnabled: boolean;
   maxGlobalConnections: number;
@@ -203,6 +203,7 @@ export interface NetworkConfig {
 }
 
 export interface BitTorrentConfig {
+  id: number;
   enableDht: boolean;
   enablePex: boolean;
   enableLpd: boolean;
@@ -215,6 +216,7 @@ export interface BitTorrentConfig {
 }
 
 export interface PeerProtocolConfig {
+  id: number;
   handshakeTimeoutSeconds: number;
   messageReadTimeoutSeconds: number;
   keepAliveIntervalSeconds: number;
@@ -229,6 +231,7 @@ export interface PeerProtocolConfig {
 }
 
 export interface ProtocolsConfig {
+  id: number;
   extensionUtMetadata: boolean;
   extensionUtPex: boolean;
   extensionLtDontHave: boolean;
@@ -258,6 +261,7 @@ export interface ProtocolsConfig {
 }
 
 export interface SimulationConfig {
+  id: number;
   clientBehaviorEngineEnabled: boolean;
   primaryClient: string;
   behaviorVariation: number;
@@ -272,6 +276,7 @@ export interface SimulationConfig {
 }
 
 export interface TrackerServerConfig {
+  id: number;
   trackerServerEnabled: boolean;
   trackerHttpEnabled: boolean;
   trackerHttpPort: number;
@@ -287,6 +292,7 @@ export interface TrackerServerConfig {
 }
 
 export interface SchedulerConfig {
+  id: number;
   schedulerEnabled: boolean;
   schedulerStartHour: number;
   schedulerStartMinute: number;
@@ -302,6 +308,7 @@ export interface SchedulerConfig {
 }
 
 export interface AdvancedConfig {
+  id: number;
   logToFile: boolean;
   fileLogLevel: string;
   debugMode: boolean;
@@ -423,4 +430,23 @@ export interface Backup {
   name: string;
   size: number;
   time: string;
+}
+
+export interface PeerGraphNode {
+  id: string;
+  label: string;
+  type: 'center' | 'torrent' | 'peer';
+  infoHash?: string;
+  isEncrypted?: boolean;
+}
+
+export interface PeerGraphLink {
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface PeerGraphData {
+  nodes: PeerGraphNode[];
+  links: PeerGraphLink[];
 }

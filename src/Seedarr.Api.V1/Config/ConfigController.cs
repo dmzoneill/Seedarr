@@ -1,397 +1,271 @@
-using System.Collections.Generic;
-using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Config;
 
 [V1ApiController("config/general")]
-public class GeneralConfigController : Controller
+public class GeneralConfigController : ConfigController<GeneralConfigResource>
 {
-    private readonly IConfigService _configService;
     private readonly IConfigFileProvider _configFileProvider;
 
     public GeneralConfigController(IConfigService configService, IConfigFileProvider configFileProvider)
+        : base(configService)
     {
-        _configService = configService;
         _configFileProvider = configFileProvider;
+
+        SharedValidator.RuleFor(c => c.WatchFolderScanIntervalSeconds)
+            .GreaterThanOrEqualTo(1);
     }
 
-    [HttpGet]
-    public IActionResult Get()
+    protected override GeneralConfigResource ToResource(IConfigService model)
     {
-        return Ok(new
-        {
-            autoStart = _configService.AutoStart,
-            themeStyle = _configService.ThemeStyle,
-            colorScheme = _configService.ColorScheme,
-            watchFolderEnabled = _configService.WatchFolderEnabled,
-            watchFolderPath = _configService.WatchFolderPath,
-            watchFolderScanIntervalSeconds = _configService.WatchFolderScanIntervalSeconds,
-            watchFolderAutoStartTorrents = _configService.WatchFolderAutoStartTorrents,
-            watchFolderDeleteAddedTorrents = _configService.WatchFolderDeleteAddedTorrents,
-            port = _configFileProvider.Port,
-            bindAddress = _configFileProvider.BindAddress,
-            urlBase = _configFileProvider.UrlBase,
-            authenticationEnabled = _configFileProvider.AuthenticationEnabled,
-            apiKey = _configFileProvider.ApiKey
-        });
-    }
-
-    [HttpPut]
-    public IActionResult Save([FromBody] Dictionary<string, object> config)
-    {
-        _configService.SaveConfigDictionary(config);
-        return Get();
+        return GeneralConfigResourceMapper.ToResource(model, _configFileProvider);
     }
 }
 
 [V1ApiController("config/seeding")]
-public class SeedingConfigController : Controller
+public class SeedingConfigController : ConfigController<SeedingConfigResource>
 {
-    private readonly IConfigService _configService;
-
     public SeedingConfigController(IConfigService configService)
+        : base(configService)
     {
-        _configService = configService;
+        SharedValidator.RuleFor(c => c.MaxUploadSpeedKbps)
+            .GreaterThanOrEqualTo(0);
+
+        SharedValidator.RuleFor(c => c.MaxDownloadSpeedKbps)
+            .GreaterThanOrEqualTo(0);
+
+        SharedValidator.RuleFor(c => c.AltUploadSpeedKbps)
+            .GreaterThanOrEqualTo(0);
+
+        SharedValidator.RuleFor(c => c.AltDownloadSpeedKbps)
+            .GreaterThanOrEqualTo(0);
+
+        SharedValidator.RuleFor(c => c.GlobalSeedRatioLimit)
+            .GreaterThanOrEqualTo(0);
+
+        SharedValidator.RuleFor(c => c.UploadDistributionSpreadPercentage)
+            .InclusiveBetween(0, 100);
+
+        SharedValidator.RuleFor(c => c.DownloadDistributionSpreadPercentage)
+            .InclusiveBetween(0, 100);
     }
 
-    [HttpGet]
-    public IActionResult Get()
+    protected override SeedingConfigResource ToResource(IConfigService model)
     {
-        return Ok(new
-        {
-            maxUploadSpeedKbps = _configService.MaxUploadSpeedKbps,
-            maxDownloadSpeedKbps = _configService.MaxDownloadSpeedKbps,
-            alternativeSpeedEnabled = _configService.AlternativeSpeedEnabled,
-            altUploadSpeedKbps = _configService.AltUploadSpeedKbps,
-            altDownloadSpeedKbps = _configService.AltDownloadSpeedKbps,
-            globalSeedRatioLimit = _configService.GlobalSeedRatioLimit,
-            uploadDistributionAlgorithm = _configService.UploadDistributionAlgorithm,
-            uploadDistributionSpreadPercentage = _configService.UploadDistributionSpreadPercentage,
-            uploadRedistributionMode = _configService.UploadRedistributionMode,
-            uploadCustomIntervalMinutes = _configService.UploadCustomIntervalMinutes,
-            uploadStoppedMinPercentage = _configService.UploadStoppedMinPercentage,
-            uploadStoppedMaxPercentage = _configService.UploadStoppedMaxPercentage,
-            downloadDistributionAlgorithm = _configService.DownloadDistributionAlgorithm,
-            downloadDistributionSpreadPercentage = _configService.DownloadDistributionSpreadPercentage,
-            downloadRedistributionMode = _configService.DownloadRedistributionMode,
-            downloadCustomIntervalMinutes = _configService.DownloadCustomIntervalMinutes,
-            downloadStoppedMinPercentage = _configService.DownloadStoppedMinPercentage,
-            downloadStoppedMaxPercentage = _configService.DownloadStoppedMaxPercentage,
-            speedVariationMin = _configService.SpeedVariationMin,
-            speedVariationMax = _configService.SpeedVariationMax
-        });
-    }
-
-    [HttpPut]
-    public IActionResult Save([FromBody] Dictionary<string, object> config)
-    {
-        _configService.SaveConfigDictionary(config);
-        return Get();
+        return SeedingConfigResourceMapper.ToResource(model);
     }
 }
 
 [V1ApiController("config/network")]
-public class NetworkConfigController : Controller
+public class NetworkConfigController : ConfigController<NetworkConfigResource>
 {
-    private readonly IConfigService _configService;
-
     public NetworkConfigController(IConfigService configService)
+        : base(configService)
     {
-        _configService = configService;
+        SharedValidator.RuleFor(c => c.ListeningPort)
+            .InclusiveBetween(1, 65535);
+
+        SharedValidator.RuleFor(c => c.MaxGlobalConnections)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.MaxPerTorrentConnections)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.MaxUploadSlots)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.ProxyPort)
+            .InclusiveBetween(1, 65535);
     }
 
-    [HttpGet]
-    public IActionResult Get()
+    protected override NetworkConfigResource ToResource(IConfigService model)
     {
-        return Ok(new
-        {
-            listeningPort = _configService.ListeningPort,
-            upnpEnabled = _configService.UpnpEnabled,
-            maxGlobalConnections = _configService.MaxGlobalConnections,
-            maxPerTorrentConnections = _configService.MaxPerTorrentConnections,
-            maxUploadSlots = _configService.MaxUploadSlots,
-            proxyType = _configService.ProxyType,
-            proxyHost = _configService.ProxyHost,
-            proxyPort = _configService.ProxyPort,
-            proxyAuthEnabled = _configService.ProxyAuthEnabled,
-            proxyUsername = _configService.ProxyUsername,
-            proxyPassword = _configService.ProxyPassword
-        });
-    }
-
-    [HttpPut]
-    public IActionResult Save([FromBody] Dictionary<string, object> config)
-    {
-        _configService.SaveConfigDictionary(config);
-        return Get();
+        return NetworkConfigResourceMapper.ToResource(model);
     }
 }
 
 [V1ApiController("config/bittorrent")]
-public class BitTorrentConfigController : Controller
+public class BitTorrentConfigController : ConfigController<BitTorrentConfigResource>
 {
-    private readonly IConfigService _configService;
-
     public BitTorrentConfigController(IConfigService configService)
+        : base(configService)
     {
-        _configService = configService;
+        SharedValidator.RuleFor(c => c.AnnounceIntervalSeconds)
+            .GreaterThanOrEqualTo(60);
+
+        SharedValidator.RuleFor(c => c.MinAnnounceIntervalSeconds)
+            .GreaterThanOrEqualTo(30);
+
+        SharedValidator.RuleFor(c => c.ScrapeIntervalSeconds)
+            .GreaterThanOrEqualTo(60);
     }
 
-    [HttpGet]
-    public IActionResult Get()
+    protected override BitTorrentConfigResource ToResource(IConfigService model)
     {
-        return Ok(new
-        {
-            enableDht = _configService.EnableDht,
-            enablePex = _configService.EnablePex,
-            enableLpd = _configService.EnableLpd,
-            encryptionMode = _configService.EncryptionMode,
-            bitTorrentUserAgent = _configService.BitTorrentUserAgent,
-            peerIdPrefix = _configService.PeerIdPrefix,
-            announceIntervalSeconds = _configService.AnnounceIntervalSeconds,
-            minAnnounceIntervalSeconds = _configService.MinAnnounceIntervalSeconds,
-            scrapeIntervalSeconds = _configService.ScrapeIntervalSeconds
-        });
-    }
-
-    [HttpPut]
-    public IActionResult Save([FromBody] Dictionary<string, object> config)
-    {
-        _configService.SaveConfigDictionary(config);
-        return Get();
+        return BitTorrentConfigResourceMapper.ToResource(model);
     }
 }
 
 [V1ApiController("config/peerprotocol")]
-public class PeerProtocolConfigController : Controller
+public class PeerProtocolConfigController : ConfigController<PeerProtocolConfigResource>
 {
-    private readonly IConfigService _configService;
-
     public PeerProtocolConfigController(IConfigService configService)
+        : base(configService)
     {
-        _configService = configService;
+        SharedValidator.RuleFor(c => c.HandshakeTimeoutSeconds)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.MessageReadTimeoutSeconds)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.KeepAliveIntervalSeconds)
+            .GreaterThanOrEqualTo(30);
+
+        SharedValidator.RuleFor(c => c.PeerRequestCount)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.SeederUploadActivityProbability)
+            .InclusiveBetween(0.0, 1.0);
+
+        SharedValidator.RuleFor(c => c.PeerIdleChance)
+            .InclusiveBetween(0.0, 1.0);
+
+        SharedValidator.RuleFor(c => c.PeerDropoutProbability)
+            .InclusiveBetween(0.0, 1.0);
+
+        SharedValidator.RuleFor(c => c.ConnectionRotationPercentage)
+            .InclusiveBetween(0.0, 1.0);
     }
 
-    [HttpGet]
-    public IActionResult Get()
+    protected override PeerProtocolConfigResource ToResource(IConfigService model)
     {
-        return Ok(new
-        {
-            handshakeTimeoutSeconds = _configService.HandshakeTimeoutSeconds,
-            messageReadTimeoutSeconds = _configService.MessageReadTimeoutSeconds,
-            keepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds,
-            peerContactIntervalSeconds = _configService.PeerContactIntervalSeconds,
-            udpTrackerTimeoutSeconds = _configService.UdpTrackerTimeoutSeconds,
-            httpTrackerTimeoutSeconds = _configService.HttpTrackerTimeoutSeconds,
-            peerRequestCount = _configService.PeerRequestCount,
-            seederUploadActivityProbability = _configService.SeederUploadActivityProbability,
-            peerIdleChance = _configService.PeerIdleChance,
-            peerDropoutProbability = _configService.PeerDropoutProbability,
-            connectionRotationPercentage = _configService.ConnectionRotationPercentage
-        });
-    }
-
-    [HttpPut]
-    public IActionResult Save([FromBody] Dictionary<string, object> config)
-    {
-        _configService.SaveConfigDictionary(config);
-        return Get();
+        return PeerProtocolConfigResourceMapper.ToResource(model);
     }
 }
 
 [V1ApiController("config/protocols")]
-public class ProtocolsConfigController : Controller
+public class ProtocolsConfigController : ConfigController<ProtocolsConfigResource>
 {
-    private readonly IConfigService _configService;
-
     public ProtocolsConfigController(IConfigService configService)
+        : base(configService)
     {
-        _configService = configService;
+        SharedValidator.RuleFor(c => c.TransportConnectionTimeoutSeconds)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.PexInterval)
+            .GreaterThanOrEqualTo(10);
+
+        SharedValidator.RuleFor(c => c.PexMaxPeersPerMessage)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.FailoverMaxConsecutiveFailures)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.DhtBucketSize)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.DhtMaxQueriesPerSecond)
+            .GreaterThanOrEqualTo(1);
     }
 
-    [HttpGet]
-    public IActionResult Get()
+    protected override ProtocolsConfigResource ToResource(IConfigService model)
     {
-        return Ok(new
-        {
-            extensionUtMetadata = _configService.ExtensionUtMetadata,
-            extensionUtPex = _configService.ExtensionUtPex,
-            extensionLtDontHave = _configService.ExtensionLtDontHave,
-            extensionFastExtension = _configService.ExtensionFastExtension,
-            utpEnabled = _configService.UtpEnabled,
-            tcpFallback = _configService.TcpFallback,
-            transportConnectionTimeoutSeconds = _configService.TransportConnectionTimeoutSeconds,
-            pexInterval = _configService.PexInterval,
-            pexMaxPeersPerMessage = _configService.PexMaxPeersPerMessage,
-            multiTrackerEnabled = _configService.MultiTrackerEnabled,
-            multiTrackerFailoverEnabled = _configService.MultiTrackerFailoverEnabled,
-            announceToAllTiers = _configService.AnnounceToAllTiers,
-            announceToAllInTier = _configService.AnnounceToAllInTier,
-            failoverMaxConsecutiveFailures = _configService.FailoverMaxConsecutiveFailures,
-            failoverBackoffBaseSeconds = _configService.FailoverBackoffBaseSeconds,
-            failoverMaxBackoffSeconds = _configService.FailoverMaxBackoffSeconds,
-            dhtRoutingTableSize = _configService.DhtRoutingTableSize,
-            dhtAnnouncementInterval = _configService.DhtAnnouncementInterval,
-            dhtBootstrapTimeout = _configService.DhtBootstrapTimeout,
-            dhtQueryTimeout = _configService.DhtQueryTimeout,
-            dhtMaxNodes = _configService.DhtMaxNodes,
-            dhtBucketSize = _configService.DhtBucketSize,
-            dhtConcurrentQueries = _configService.DhtConcurrentQueries,
-            dhtAutoBootstrap = _configService.DhtAutoBootstrap,
-            dhtRateLimitEnabled = _configService.DhtRateLimitEnabled,
-            dhtMaxQueriesPerSecond = _configService.DhtMaxQueriesPerSecond
-        });
-    }
-
-    [HttpPut]
-    public IActionResult Save([FromBody] Dictionary<string, object> config)
-    {
-        _configService.SaveConfigDictionary(config);
-        return Get();
+        return ProtocolsConfigResourceMapper.ToResource(model);
     }
 }
 
 [V1ApiController("config/simulation")]
-public class SimulationConfigController : Controller
+public class SimulationConfigController : ConfigController<SimulationConfigResource>
 {
-    private readonly IConfigService _configService;
-
     public SimulationConfigController(IConfigService configService)
+        : base(configService)
     {
-        _configService = configService;
+        SharedValidator.RuleFor(c => c.BehaviorVariation)
+            .InclusiveBetween(0.0, 1.0);
+
+        SharedValidator.RuleFor(c => c.SwitchClientProbability)
+            .InclusiveBetween(0.0, 1.0);
+
+        SharedValidator.RuleFor(c => c.SwarmAdaptationRate)
+            .InclusiveBetween(0.0, 1.0);
+
+        SharedValidator.RuleFor(c => c.SwarmPeerAnalysisDepth)
+            .GreaterThanOrEqualTo(1);
     }
 
-    [HttpGet]
-    public IActionResult Get()
+    protected override SimulationConfigResource ToResource(IConfigService model)
     {
-        return Ok(new
-        {
-            clientBehaviorEngineEnabled = _configService.ClientBehaviorEngineEnabled,
-            primaryClient = _configService.PrimaryClient,
-            behaviorVariation = _configService.BehaviorVariation,
-            clientProfileSwitching = _configService.ClientProfileSwitching,
-            switchClientProbability = _configService.SwitchClientProbability,
-            trafficPatternProfile = _configService.TrafficPatternProfile,
-            realisticVariations = _configService.RealisticVariations,
-            timeBasedPatterns = _configService.TimeBasedPatterns,
-            swarmIntelligenceEnabled = _configService.SwarmIntelligenceEnabled,
-            swarmAdaptationRate = _configService.SwarmAdaptationRate,
-            swarmPeerAnalysisDepth = _configService.SwarmPeerAnalysisDepth
-        });
-    }
-
-    [HttpPut]
-    public IActionResult Save([FromBody] Dictionary<string, object> config)
-    {
-        _configService.SaveConfigDictionary(config);
-        return Get();
+        return SimulationConfigResourceMapper.ToResource(model);
     }
 }
 
 [V1ApiController("config/trackerserver")]
-public class TrackerServerConfigController : Controller
+public class TrackerServerConfigController : ConfigController<TrackerServerConfigResource>
 {
-    private readonly IConfigService _configService;
-
     public TrackerServerConfigController(IConfigService configService)
+        : base(configService)
     {
-        _configService = configService;
+        SharedValidator.RuleFor(c => c.TrackerHttpPort)
+            .InclusiveBetween(1, 65535);
+
+        SharedValidator.RuleFor(c => c.TrackerUdpPort)
+            .InclusiveBetween(1, 65535);
+
+        SharedValidator.RuleFor(c => c.TrackerAnnounceInterval)
+            .GreaterThanOrEqualTo(60);
+
+        SharedValidator.RuleFor(c => c.TrackerMaxPeersPerAnnounce)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.TrackerRateLimitPerMinute)
+            .GreaterThanOrEqualTo(1);
     }
 
-    [HttpGet]
-    public IActionResult Get()
+    protected override TrackerServerConfigResource ToResource(IConfigService model)
     {
-        return Ok(new
-        {
-            trackerServerEnabled = _configService.TrackerServerEnabled,
-            trackerHttpEnabled = _configService.TrackerHttpEnabled,
-            trackerHttpPort = _configService.TrackerHttpPort,
-            trackerUdpEnabled = _configService.TrackerUdpEnabled,
-            trackerUdpPort = _configService.TrackerUdpPort,
-            trackerBindAddress = _configService.TrackerBindAddress,
-            trackerAnnounceInterval = _configService.TrackerAnnounceInterval,
-            trackerMaxPeersPerAnnounce = _configService.TrackerMaxPeersPerAnnounce,
-            trackerEnableScrape = _configService.TrackerEnableScrape,
-            trackerPrivateMode = _configService.TrackerPrivateMode,
-            trackerLogAnnounces = _configService.TrackerLogAnnounces,
-            trackerRateLimitPerMinute = _configService.TrackerRateLimitPerMinute
-        });
-    }
-
-    [HttpPut]
-    public IActionResult Save([FromBody] Dictionary<string, object> config)
-    {
-        _configService.SaveConfigDictionary(config);
-        return Get();
+        return TrackerServerConfigResourceMapper.ToResource(model);
     }
 }
 
 [V1ApiController("config/scheduler")]
-public class SchedulerConfigController : Controller
+public class SchedulerConfigController : ConfigController<SchedulerConfigResource>
 {
-    private readonly IConfigService _configService;
-
     public SchedulerConfigController(IConfigService configService)
+        : base(configService)
     {
-        _configService = configService;
+        SharedValidator.RuleFor(c => c.SchedulerStartHour)
+            .InclusiveBetween(0, 23);
+
+        SharedValidator.RuleFor(c => c.SchedulerStartMinute)
+            .InclusiveBetween(0, 59);
+
+        SharedValidator.RuleFor(c => c.SchedulerEndHour)
+            .InclusiveBetween(0, 23);
+
+        SharedValidator.RuleFor(c => c.SchedulerEndMinute)
+            .InclusiveBetween(0, 59);
     }
 
-    [HttpGet]
-    public IActionResult Get()
+    protected override SchedulerConfigResource ToResource(IConfigService model)
     {
-        return Ok(new
-        {
-            schedulerEnabled = _configService.SchedulerEnabled,
-            schedulerStartHour = _configService.SchedulerStartHour,
-            schedulerStartMinute = _configService.SchedulerStartMinute,
-            schedulerEndHour = _configService.SchedulerEndHour,
-            schedulerEndMinute = _configService.SchedulerEndMinute,
-            schedulerMonday = _configService.SchedulerMonday,
-            schedulerTuesday = _configService.SchedulerTuesday,
-            schedulerWednesday = _configService.SchedulerWednesday,
-            schedulerThursday = _configService.SchedulerThursday,
-            schedulerFriday = _configService.SchedulerFriday,
-            schedulerSaturday = _configService.SchedulerSaturday,
-            schedulerSunday = _configService.SchedulerSunday
-        });
-    }
-
-    [HttpPut]
-    public IActionResult Save([FromBody] Dictionary<string, object> config)
-    {
-        _configService.SaveConfigDictionary(config);
-        return Get();
+        return SchedulerConfigResourceMapper.ToResource(model);
     }
 }
 
 [V1ApiController("config/advanced")]
-public class AdvancedConfigController : Controller
+public class AdvancedConfigController : ConfigController<AdvancedConfigResource>
 {
-    private readonly IConfigService _configService;
-
     public AdvancedConfigController(IConfigService configService)
+        : base(configService)
     {
-        _configService = configService;
+        SharedValidator.RuleFor(c => c.UiRefreshRateSec)
+            .GreaterThanOrEqualTo(1);
     }
 
-    [HttpGet]
-    public IActionResult Get()
+    protected override AdvancedConfigResource ToResource(IConfigService model)
     {
-        return Ok(new
-        {
-            logToFile = _configService.LogToFile,
-            fileLogLevel = _configService.FileLogLevel,
-            debugMode = _configService.DebugMode,
-            uiRefreshRateSec = _configService.UiRefreshRateSec
-        });
-    }
-
-    [HttpPut]
-    public IActionResult Save([FromBody] Dictionary<string, object> config)
-    {
-        _configService.SaveConfigDictionary(config);
-        return Get();
+        return AdvancedConfigResourceMapper.ToResource(model);
     }
 }

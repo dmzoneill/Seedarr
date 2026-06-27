@@ -2755,3 +2755,106 @@ body {
   border: none;
   padding: 0;
 }
+
+/* Peer Map */
+.peer-map-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.peer-map-label {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-right: 0.25rem;
+}
+
+.peer-map-btn {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+}
+
+.peer-map-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.peer-map-btn-active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.peer-map-stats {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.peer-map-legend {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.peer-map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.peer-map-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.peer-map-legend-line {
+  width: 20px;
+  height: 0;
+  border-top: 2px solid;
+  display: inline-block;
+}
+
+.peer-map-container {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 220px);
+  min-height: 400px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.peer-map-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.peer-map-loading,
+.peer-map-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}

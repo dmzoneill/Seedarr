@@ -598,6 +598,88 @@ for t in json.load(sys.stdin):
 	fi
 fi
 
+# ─── Test 18: Config API — CRUD for all settings sections ───
+echo ""
+echo "--- Test 18: Config API — CRUD for all settings sections ---"
+
+config_sections=(
+	"general"
+	"seeding"
+	"network"
+	"bittorrent"
+	"peerprotocol"
+	"protocols"
+	"simulation"
+	"trackerserver"
+	"scheduler"
+	"advanced"
+)
+
+for section in "${config_sections[@]}"; do
+	RESP=$(curl -sf "$SEEDARR_URL/api/v1/config/$section" 2>/dev/null || echo "")
+	assert "GET config/$section returns JSON with id=1" \
+		'echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get(\"id\")==1, f\"id={d.get(\"id\")}\"" 2>/dev/null'
+done
+
+# GET by id (singleton)
+RESP=$(curl -sf "$SEEDARR_URL/api/v1/config/advanced/1" 2>/dev/null || echo "")
+assert "GET config/advanced/1 returns singleton" \
+	'echo "$RESP" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get(\"id\")==1" 2>/dev/null'
+
+# PUT round-trip: change uiRefreshRateSec, verify it persists
+ORIG_RATE=$(curl -sf "$SEEDARR_URL/api/v1/config/advanced" | python3 -c "import json,sys; print(json.load(sys.stdin).get('uiRefreshRateSec',9))" 2>/dev/null)
+NEW_RATE=$((ORIG_RATE + 1))
+PUT_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -X PUT "$SEEDARR_URL/api/v1/config/advanced/1" \
+	-H "Content-Type: application/json" \
+	-d "{\"id\":1,\"logToFile\":true,\"fileLogLevel\":\"Info\",\"debugMode\":false,\"uiRefreshRateSec\":$NEW_RATE}" 2>/dev/null)
+assert "PUT config/advanced/1 returns 202 Accepted" \
+	'[ "$PUT_STATUS" = "202" ]'
+
+UPDATED_RATE=$(curl -sf "$SEEDARR_URL/api/v1/config/advanced" | python3 -c "import json,sys; print(json.load(sys.stdin).get('uiRefreshRateSec',0))" 2>/dev/null)
+assert "Config round-trip: uiRefreshRateSec updated to $NEW_RATE" \
+	'[ "$UPDATED_RATE" = "$NEW_RATE" ]'
+
+# Restore original value
+curl -sf -X PUT "$SEEDARR_URL/api/v1/config/advanced/1" \
+	-H "Content-Type: application/json" \
+	-d "{\"id\":1,\"logToFile\":true,\"fileLogLevel\":\"Info\",\"debugMode\":false,\"uiRefreshRateSec\":$ORIG_RATE}" >/dev/null 2>&1
+
+# PUT round-trip: seeding config
+ORIG_SPEED=$(curl -sf "$SEEDARR_URL/api/v1/config/seeding" | python3 -c "import json,sys; print(json.load(sys.stdin).get('maxUploadSpeedKbps',0))" 2>/dev/null)
+SEEDING_BODY=$(curl -sf "$SEEDARR_URL/api/v1/config/seeding" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+d['maxUploadSpeedKbps']=12345
+print(json.dumps(d))
+" 2>/dev/null)
+PUT_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -X PUT "$SEEDARR_URL/api/v1/config/seeding/1" \
+	-H "Content-Type: application/json" \
+	-d "$SEEDING_BODY" 2>/dev/null)
+assert "PUT config/seeding/1 returns 202" \
+	'[ "$PUT_STATUS" = "202" ]'
+
+UPDATED_SPEED=$(curl -sf "$SEEDARR_URL/api/v1/config/seeding" | python3 -c "import json,sys; print(json.load(sys.stdin).get('maxUploadSpeedKbps',0))" 2>/dev/null)
+assert "Config round-trip: maxUploadSpeedKbps updated to 12345" \
+	'[ "$UPDATED_SPEED" = "12345" ]'
+
+# Restore original
+SEEDING_BODY=$(curl -sf "$SEEDARR_URL/api/v1/config/seeding" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+d['maxUploadSpeedKbps']=$ORIG_SPEED
+print(json.dumps(d))
+" 2>/dev/null)
+curl -sf -X PUT "$SEEDARR_URL/api/v1/config/seeding/1" \
+	-H "Content-Type: application/json" \
+	-d "$SEEDING_BODY" >/dev/null 2>&1
+
+# PUT validation: negative port should fail
+VAL_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -X PUT "$SEEDARR_URL/api/v1/config/network/1" \
+	-H "Content-Type: application/json" \
+	-d '{"id":1,"listeningPort":0,"upnpEnabled":true,"maxGlobalConnections":200,"maxPerTorrentConnections":50,"maxUploadSlots":4,"proxyType":"none","proxyHost":"","proxyPort":8080,"proxyAuthEnabled":false,"proxyUsername":"","proxyPassword":""}' 2>/dev/null)
+assert "PUT config/network with invalid port returns 400" \
+	'[ "$VAL_STATUS" = "400" ]'
+
 # ─── Cleanup ─────────────────────────────────────────────
 echo ""
 echo "--- Cleanup ---"

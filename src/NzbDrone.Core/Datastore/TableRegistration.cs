@@ -5,6 +5,7 @@ using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Notifications;
+using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding.Scheduling;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Tags;
@@ -29,6 +30,7 @@ public static class TableRegistration
         TableMapping.Register<DownloadClientDefinition>("DownloadClientDefinitions");
         TableMapping.Register<IndexerDefinition>("IndexerDefinitions");
         TableMapping.Register<NotificationDefinition>("NotificationDefinitions");
+        TableMapping.Register<PeerConnectionLog>("PeerConnectionLogs");
         TableMapping.Register<Tag>("Tags");
         TableMapping.Register<SpeedSchedule>("SpeedSchedules");
     }

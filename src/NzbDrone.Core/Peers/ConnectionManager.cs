@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
@@ -21,6 +22,8 @@ public interface IConnectionManager
 public class ConnectionManager : IConnectionManager
 {
     private readonly IConfigService _configService;
+    private readonly IPeerConnectionLogService _connectionLogService;
+    private readonly ITorrentService _torrentService;
     private readonly List<PeerConnection> _connections = new();
     private readonly object _lock = new();
     private readonly Logger _logger;
@@ -36,9 +39,11 @@ public class ConnectionManager : IConnectionManager
         }
     }
 
-    public ConnectionManager(IConfigService configService)
+    public ConnectionManager(IConfigService configService, IPeerConnectionLogService connectionLogService, ITorrentService torrentService)
     {
         _configService = configService;
+        _connectionLogService = connectionLogService;
+        _torrentService = torrentService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -52,12 +57,15 @@ public class ConnectionManager : IConnectionManager
             {
                 var oldest = _connections.OrderBy(c => c.LastActivity).First();
                 _logger.Debug("Evicting peer {0} (LRU, global limit {1})", oldest.RemoteIp, maxGlobal);
+                LogDisconnect(oldest);
                 oldest.Dispose();
                 _connections.Remove(oldest);
             }
 
             _connections.Add(connection);
         }
+
+        LogConnect(connection);
     }
 
     public void Remove(PeerConnection connection)
@@ -66,6 +74,8 @@ public class ConnectionManager : IConnectionManager
         {
             _connections.Remove(connection);
         }
+
+        LogDisconnect(connection);
     }
 
     public List<PeerConnection> GetConnections(string infoHash)
@@ -116,6 +126,7 @@ public class ConnectionManager : IConnectionManager
                     "Peer {0} dropped out (probability: {1:F2})",
                     conn.RemoteIp,
                     dropoutProbability);
+                LogDisconnect(conn);
                 conn.Dispose();
                 _connections.Remove(conn);
             }
@@ -147,9 +158,52 @@ public class ConnectionManager : IConnectionManager
                     "Rotating out peer {0} (oldest, rotation: {1:P0})",
                     conn.RemoteIp,
                     rotationPct);
+                LogDisconnect(conn);
                 conn.Dispose();
                 _connections.Remove(conn);
             }
+        }
+    }
+
+    private string ResolveTorrentName(string infoHash)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return null;
+        }
+
+        try
+        {
+            var torrents = _torrentService.GetAll();
+            return torrents.FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase))?.Name;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void LogConnect(PeerConnection connection)
+    {
+        try
+        {
+            _connectionLogService.LogConnected(connection, ResolveTorrentName(connection.InfoHash));
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to log peer connection event");
+        }
+    }
+
+    private void LogDisconnect(PeerConnection connection)
+    {
+        try
+        {
+            _connectionLogService.LogDisconnected(connection, ResolveTorrentName(connection.InfoHash));
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to log peer disconnection event");
         }
     }
 }

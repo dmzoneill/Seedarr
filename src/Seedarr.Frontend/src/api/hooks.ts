@@ -43,6 +43,7 @@ import type {
   Backup,
   UpdateEntry,
   LogFile,
+  PeerGraphData,
 } from './types';
 
 type AddTorrentInput =
@@ -291,7 +292,7 @@ function useConfigQuery<T>(section: string) {
 function useConfigMutation<T>(section: string) {
   const queryClient = useQueryClient();
   return useMutation<T, Error, T>({
-    mutationFn: (config) => apiClient.put(`/config/${section}`, config),
+    mutationFn: (config) => apiClient.put(`/config/${section}/1`, config),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', section] }),
   });
 }
@@ -554,5 +555,18 @@ export function useClearLogFiles() {
   return useMutation({
     mutationFn: () => apiClient.delete('/logfile'),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['logfiles'] }),
+  });
+}
+
+export function usePeerGraph(start?: string, end?: string) {
+  const interval = useRefetchInterval();
+  const params = new URLSearchParams();
+  if (start) params.set('start', start);
+  if (end) params.set('end', end);
+  const query = params.toString();
+  return useQuery<PeerGraphData>({
+    queryKey: ['peerlog', 'graph', start, end],
+    queryFn: () => apiClient.get(`/peerlog/graph${query ? `?${query}` : ''}`),
+    refetchInterval: interval,
   });
 }

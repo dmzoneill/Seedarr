@@ -317,6 +317,7 @@ function GeneralTab() {
   const { data: config, isLoading } = useGeneralConfig();
   const save = useSaveGeneralConfig();
   const [form, setForm] = useState<GeneralConfig>({
+    id: 1,
     autoStart: false,
     themeStyle: 'system',
     colorScheme: 'auto',
@@ -330,11 +331,6 @@ function GeneralTab() {
     urlBase: '',
     authenticationEnabled: false,
     apiKey: '',
-    httpsEnabled: false,
-    username: '',
-    password: '',
-    sessionTimeoutMinutes: 30,
-    localhostOnly: false,
   });
   const [dirty, setDirty] = useState(false);
 
@@ -425,12 +421,15 @@ function SeedingTab() {
   const { data: config, isLoading } = useSeedingConfig();
   const save = useSaveSeedingConfig();
   const [form, setForm] = useState<SeedingConfig>({
+    id: 1,
     maxUploadSpeedKbps: 0,
     maxDownloadSpeedKbps: 0,
     alternativeSpeedEnabled: false,
     altUploadSpeedKbps: 50,
     altDownloadSpeedKbps: 100,
     globalSeedRatioLimit: 0,
+    speedVariationMin: 0.2,
+    speedVariationMax: 0.8,
     uploadDistributionAlgorithm: 'Equal',
     uploadDistributionSpreadPercentage: 50,
     uploadRedistributionMode: 'tick',
@@ -573,6 +572,7 @@ function BitTorrentTab() {
   const { data: config, isLoading } = useBitTorrentConfig();
   const save = useSaveBitTorrentConfig();
   const [form, setForm] = useState<BitTorrentConfig>({
+    id: 1,
     enableDht: true,
     enablePex: true,
     enableLpd: true,
@@ -635,6 +635,7 @@ function NetworkTab() {
   const { data: config, isLoading } = useNetworkConfig();
   const save = useSaveNetworkConfig();
   const [form, setForm] = useState<NetworkConfig>({
+    id: 1,
     listeningPort: 6881,
     upnpEnabled: true,
     maxGlobalConnections: 200,
@@ -713,6 +714,7 @@ function PeerProtocolTab() {
   const { data: config, isLoading } = usePeerProtocolConfig();
   const save = useSavePeerProtocolConfig();
   const [form, setForm] = useState<PeerProtocolConfig>({
+    id: 1,
     handshakeTimeoutSeconds: 30,
     messageReadTimeoutSeconds: 60,
     keepAliveIntervalSeconds: 120,
@@ -767,6 +769,7 @@ function ProtocolsTab() {
   const { data: config, isLoading } = useProtocolsConfig();
   const save = useSaveProtocolsConfig();
   const [form, setForm] = useState<ProtocolsConfig>({
+    id: 1,
     extensionUtMetadata: true,
     extensionUtPex: true,
     extensionLtDontHave: true,
@@ -857,6 +860,7 @@ function SimulationTab() {
   const { data: config, isLoading } = useSimulationConfig();
   const save = useSaveSimulationConfig();
   const [form, setForm] = useState<SimulationConfig>({
+    id: 1,
     clientBehaviorEngineEnabled: true,
     primaryClient: 'qBittorrent',
     behaviorVariation: 0.3,
@@ -937,6 +941,7 @@ function TrackerServerTab() {
   const { data: stats, isLoading: statsLoading } = useTrackerServerStats();
   const save = useSaveTrackerServerConfig();
   const [form, setForm] = useState<TrackerServerConfig>({
+    id: 1,
     trackerServerEnabled: false,
     trackerHttpEnabled: true,
     trackerHttpPort: 9696,
@@ -1030,6 +1035,7 @@ function SchedulerTab() {
   const { data: config, isLoading } = useSchedulerConfig();
   const save = useSaveSchedulerConfig();
   const [form, setForm] = useState<SchedulerConfig>({
+    id: 1,
     schedulerEnabled: false,
     schedulerStartHour: 22,
     schedulerStartMinute: 0,
@@ -1098,6 +1104,7 @@ function AdvancedTab() {
   const { data: config, isLoading } = useAdvancedConfig();
   const save = useSaveAdvancedConfig();
   const [form, setForm] = useState<AdvancedConfig>({
+    id: 1,
     logToFile: true,
     fileLogLevel: 'Info',
     debugMode: false,
@@ -1613,6 +1620,7 @@ function WebUITab() {
   const { data: config, isLoading } = useGeneralConfig();
   const save = useSaveGeneralConfig();
   const [form, setForm] = useState<GeneralConfig>({
+    id: 1,
     autoStart: false,
     themeStyle: 'system',
     colorScheme: 'auto',
@@ -1626,11 +1634,6 @@ function WebUITab() {
     urlBase: '',
     authenticationEnabled: false,
     apiKey: '',
-    httpsEnabled: false,
-    username: '',
-    password: '',
-    sessionTimeoutMinutes: 30,
-    localhostOnly: false,
   });
   const [dirty, setDirty] = useState(false);
 
@@ -1654,36 +1657,11 @@ function WebUITab() {
       <div className="card">
 
       <SectionTitle>Connection</SectionTitle>
-      <Toggle label="HTTPS Enabled" checked={form.httpsEnabled} onChange={(v) => set('httpsEnabled', v)} hint="Serve over HTTPS" />
       <NumberInput label="Port" value={form.port} onChange={(v) => set('port', v)} min={1} max={65535} />
       <TextInput label="Bind Address" value={form.bindAddress} onChange={(v) => set('bindAddress', v)} placeholder="0.0.0.0" />
-      <Toggle label="Localhost Only" checked={form.localhostOnly} onChange={(v) => set('localhostOnly', v)} hint="Only allow local connections" />
 
       <SectionTitle>Authentication</SectionTitle>
       <Toggle label="Authentication Enabled" checked={form.authenticationEnabled} onChange={(v) => set('authenticationEnabled', v)} hint="Require login" />
-      <TextInput
-        label="Username"
-        value={form.username}
-        onChange={(v) => set('username', v)}
-        placeholder="admin"
-        disabled={!form.authenticationEnabled}
-      />
-      <TextInput
-        label="Password"
-        value={form.password}
-        onChange={(v) => set('password', v)}
-        type="password"
-        disabled={!form.authenticationEnabled}
-      />
-      <NumberInput
-        label="Session Timeout"
-        value={form.sessionTimeoutMinutes}
-        onChange={(v) => set('sessionTimeoutMinutes', v)}
-        min={1}
-        max={1440}
-        suffix="minutes"
-        disabled={!form.authenticationEnabled}
-      />
 
       </div>
     </div>
