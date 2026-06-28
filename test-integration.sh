@@ -674,7 +674,7 @@ curl -sf -X PUT "$SEEDARR_URL/api/v1/config/seeding/1" \
 	-d "$SEEDING_BODY" >/dev/null 2>&1
 
 # PUT validation: negative port should fail
-VAL_STATUS=$(curl -sf -o /dev/null -w "%{http_code}" -X PUT "$SEEDARR_URL/api/v1/config/network/1" \
+VAL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "$SEEDARR_URL/api/v1/config/network/1" \
 	-H "Content-Type: application/json" \
 	-d '{"id":1,"listeningPort":0,"upnpEnabled":true,"maxGlobalConnections":200,"maxPerTorrentConnections":50,"maxUploadSlots":4,"proxyType":"none","proxyHost":"","proxyPort":8080,"proxyAuthEnabled":false,"proxyUsername":"","proxyPassword":""}' 2>/dev/null)
 assert "PUT config/network with invalid port returns 400" \
