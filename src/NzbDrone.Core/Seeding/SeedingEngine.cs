@@ -206,6 +206,16 @@ public class SeedingEngine : BackgroundService
             }
         }
 
+        var activeIds = new HashSet<int>(activeTorrents.Select(t => t.Id));
+        var staleIds = _prevUploaded.Keys.Where(id => !activeIds.Contains(id)).ToList();
+        foreach (var id in staleIds)
+        {
+            _prevUploaded.Remove(id);
+            _prevDownloaded.Remove(id);
+            _sessionStartUploaded.Remove(id);
+            _sessionStartDownloaded.Remove(id);
+        }
+
         var totalActive = downloadingTorrents.Count + seedingTorrents.Count;
         _eventAggregator.PublishEvent(new SeedingTickEvent(totalActive));
 

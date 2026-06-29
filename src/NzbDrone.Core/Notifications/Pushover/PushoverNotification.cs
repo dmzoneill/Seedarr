@@ -9,7 +9,10 @@ public class PushoverNotification : INotificationService
 {
     private const string PushoverApiUrl = "https://api.pushover.net/1/messages.json";
 
-    private static readonly HttpClient HttpClient = new();
+    private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+    });
 
     private readonly Logger _logger;
 
@@ -37,7 +40,7 @@ public class PushoverNotification : INotificationService
 
         try
         {
-            var formData = new FormUrlEncodedContent(new[]
+            using var formData = new FormUrlEncodedContent(new[]
             {
                 new KeyValuePair<string, string>("token", ApiToken),
                 new KeyValuePair<string, string>("user", UserKey),
@@ -46,7 +49,7 @@ public class PushoverNotification : INotificationService
                 new KeyValuePair<string, string>("timestamp", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
             });
 
-            var response = HttpClient.PostAsync(PushoverApiUrl, formData).GetAwaiter().GetResult();
+            using var response = HttpClient.PostAsync(PushoverApiUrl, formData).GetAwaiter().GetResult();
             _logger.Debug("Pushover notification sent, status: {0}", response.StatusCode);
         }
         catch (Exception ex)

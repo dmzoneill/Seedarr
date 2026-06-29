@@ -502,6 +502,17 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
   });
   const panelRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
+  const dragListenersRef = useRef<{ move: (e: MouseEvent) => void; up: (e: MouseEvent) => void } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (dragListenersRef.current) {
+        document.removeEventListener('mousemove', dragListenersRef.current.move);
+        document.removeEventListener('mouseup', dragListenersRef.current.up);
+        dragListenersRef.current = null;
+      }
+    };
+  }, []);
 
   const onMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -517,16 +528,17 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
+      dragListenersRef.current = null;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
       if (dragRef.current) {
-        const delta = dragRef.current.startY - 0;
         const finalH = panelRef.current?.offsetHeight ?? panelHeight;
         localStorage.setItem('seedarr-detail-height', String(finalH));
       }
       dragRef.current = null;
     };
 
+    dragListenersRef.current = { move: onMouseMove, up: onMouseUp };
     document.body.style.cursor = 'row-resize';
     document.body.style.userSelect = 'none';
     document.addEventListener('mousemove', onMouseMove);

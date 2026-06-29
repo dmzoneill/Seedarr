@@ -56,6 +56,12 @@ public class DhtService : BackgroundService
         _querySemaphore = new SemaphoreSlim(maxConcurrent > 0 ? maxConcurrent : 3, maxConcurrent > 0 ? maxConcurrent : 3);
     }
 
+    public override void Dispose()
+    {
+        _querySemaphore?.Dispose();
+        base.Dispose();
+    }
+
     public RoutingTable RoutingTable => _routingTable;
 
     public DhtPeerStore PeerStore => _peerStore;

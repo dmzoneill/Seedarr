@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -17,13 +18,21 @@ public class PeerServer : BackgroundService
 {
     private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;
+    private readonly SemaphoreSlim _connectionSemaphore;
     private readonly Logger _logger;
 
     public PeerServer(IConfigService configService, ITorrentService torrentService)
     {
         _configService = configService;
         _torrentService = torrentService;
+        _connectionSemaphore = new SemaphoreSlim(configService.MaxGlobalConnections);
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public override void Dispose()
+    {
+        _connectionSemaphore?.Dispose();
+        base.Dispose();
     }
 
     private EncryptionMode GetEncryptionMode()
@@ -65,7 +74,33 @@ public class PeerServer : BackgroundService
             while (!stoppingToken.IsCancellationRequested)
             {
                 var client = await listener.AcceptTcpClientAsync(stoppingToken);
-                _ = Task.Run(() => HandleConnection(client), stoppingToken);
+                _ = Task.Run(
+                    async () =>
+                    {
+                        try
+                        {
+                            if (!await _connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                            {
+                                client.Dispose();
+                                return;
+                            }
+                        }
+                        catch
+                        {
+                            client.Dispose();
+                            return;
+                        }
+
+                        try
+                        {
+                            HandleConnection(client, stoppingToken);
+                        }
+                        finally
+                        {
+                            _connectionSemaphore.Release();
+                        }
+                    },
+                    stoppingToken);
             }
         }
         catch (OperationCanceledException)
@@ -103,7 +138,7 @@ public class PeerServer : BackgroundService
         }
     }
 
-    private void HandleConnection(TcpClient client)
+    private void HandleConnection(TcpClient client, CancellationToken stoppingToken)
     {
         using var connection = new PeerConnection(client);
         connection.HandshakeTimeoutMs = _configService.HandshakeTimeoutSeconds * 1000;
@@ -158,7 +193,7 @@ public class PeerServer : BackgroundService
             connection.AmChoking = false;
 
             // Handle messages with keep-alive support
-            while (connection.IsConnected)
+            while (connection.IsConnected && !stoppingToken.IsCancellationRequested)
             {
                 var message = connection.ReceiveMessage();
                 if (message == null)
@@ -242,22 +277,29 @@ public class PeerServer : BackgroundService
 
     private static void HandlePieceRequest(PeerConnection connection, byte[] payload)
     {
-        // Parse request: index (4) + begin (4) + length (4)
         var index = (payload[0] << 24) | (payload[1] << 16) | (payload[2] << 8) | payload[3];
         var begin = (payload[4] << 24) | (payload[5] << 16) | (payload[6] << 8) | payload[7];
         var length = (payload[8] << 24) | (payload[9] << 16) | (payload[10] << 8) | payload[11];
 
-        // Send fake piece data (zeros)
-        var piecePayload = new byte[8 + length];
-        piecePayload[0] = (byte)(index >> 24);
-        piecePayload[1] = (byte)(index >> 16);
-        piecePayload[2] = (byte)(index >> 8);
-        piecePayload[3] = (byte)index;
-        piecePayload[4] = (byte)(begin >> 24);
-        piecePayload[5] = (byte)(begin >> 16);
-        piecePayload[6] = (byte)(begin >> 8);
-        piecePayload[7] = (byte)begin;
+        var payloadSize = 8 + length;
+        var piecePayload = ArrayPool<byte>.Shared.Rent(payloadSize);
+        try
+        {
+            Array.Clear(piecePayload, 0, payloadSize);
+            piecePayload[0] = (byte)(index >> 24);
+            piecePayload[1] = (byte)(index >> 16);
+            piecePayload[2] = (byte)(index >> 8);
+            piecePayload[3] = (byte)index;
+            piecePayload[4] = (byte)(begin >> 24);
+            piecePayload[5] = (byte)(begin >> 16);
+            piecePayload[6] = (byte)(begin >> 8);
+            piecePayload[7] = (byte)begin;
 
-        connection.SendMessage(new PeerMessage { Type = PeerMessageType.Piece, Payload = piecePayload });
+            connection.SendMessage(new PeerMessage { Type = PeerMessageType.Piece, Payload = piecePayload, PayloadLength = payloadSize });
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(piecePayload);
+        }
     }
 }
