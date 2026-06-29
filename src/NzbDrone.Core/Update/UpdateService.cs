@@ -37,14 +37,16 @@ public class UpdateService : IUpdateService
     private const string GitHubReleasesUrl = "https://api.github.com/repos/dmzoneill/Seedarr/releases";
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(6);
 
-    private static readonly HttpClient Client = CreateHttpClient();
+    private static readonly HttpClient SharedClient = CreateHttpClient();
+    private readonly HttpClient _client;
     private readonly Logger _logger;
     private readonly object _cacheLock = new();
     private UpdateInfo _cachedResult;
     private DateTime _cacheExpiry = DateTime.MinValue;
 
-    public UpdateService()
+    public UpdateService(HttpClient httpClient = null)
     {
+        _client = httpClient ?? SharedClient;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -82,7 +84,7 @@ public class UpdateService : IUpdateService
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, GitHubReleasesUrl + "?per_page=20");
-            using var response = Client.Send(request);
+            using var response = _client.Send(request);
 
             if (!response.IsSuccessStatusCode)
             {

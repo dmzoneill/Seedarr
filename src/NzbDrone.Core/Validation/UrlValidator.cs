@@ -51,13 +51,13 @@ public static class UrlValidator
         var bytes = ip.GetAddressBytes();
 
         return ip.Equals(IPAddress.Loopback) ||
-               ip.Equals(IPAddress.IPv6Loopback) ||
-               ip.IsIPv6LinkLocal ||
-               ip.IsIPv6SiteLocal ||
-               (bytes.Length == 4 && bytes[0] == 10) ||
-               (bytes.Length == 4 && bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
-               (bytes.Length == 4 && bytes[0] == 192 && bytes[1] == 168) ||
-               (bytes.Length == 4 && bytes[0] == 169 && bytes[1] == 254) ||
-               (bytes.Length == 4 && bytes[0] == 127);
+            ip.Equals(IPAddress.IPv6Loopback) ||
+            ip.IsIPv6LinkLocal ||
+            ip.IsIPv6SiteLocal ||
+            (bytes.Length == 4 && bytes[0] == 10) ||
+            (bytes.Length == 4 && bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
+            (bytes.Length == 4 && bytes[0] == 192 && bytes[1] == 168) ||
+            (bytes.Length == 4 && bytes[0] == 169 && bytes[1] == 254) ||
+            (bytes.Length == 4 && bytes[0] == 127);
     }
 }
