@@ -1,5 +1,7 @@
 using System.Linq;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
@@ -47,7 +49,9 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        if (apiKey != _configFileProvider.ApiKey)
+        if (!CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(apiKey),
+            Encoding.UTF8.GetBytes(_configFileProvider.ApiKey)))
         {
             return Task.FromResult(AuthenticateResult.Fail("Invalid API Key"));
         }

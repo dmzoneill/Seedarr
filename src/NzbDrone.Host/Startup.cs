@@ -1,10 +1,13 @@
+using System;
 using System.IO;
 using System.Reflection;
 using DryIoc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using NzbDrone.Common.Serializer;
 using NzbDrone.SignalR;
@@ -46,7 +49,12 @@ public class Startup
             .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
                 ApiKeyAuthenticationOptions.DefaultScheme, _ => { });
 
-        services.AddAuthorization();
+        services.AddAuthorization(options =>
+        {
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build();
+        });
 
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(c =>
@@ -63,9 +71,14 @@ public class Startup
         {
             options.AddDefaultPolicy(builder =>
             {
-                builder.AllowAnyOrigin()
+                builder.SetIsOriginAllowed(origin =>
+                    {
+                        var uri = new Uri(origin);
+                        return uri.Host == "localhost" || uri.Host == "127.0.0.1" || uri.Host == "::1";
+                    })
                     .AllowAnyMethod()
-                    .AllowAnyHeader();
+                    .AllowAnyHeader()
+                    .AllowCredentials();
             });
         });
     }
@@ -98,8 +111,11 @@ public class Startup
         app.UseAuthentication();
         app.UseAuthorization();
 
-        app.UseSwagger();
-        app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Seedarr API V1"));
+        if (app.Environment.IsDevelopment())
+        {
+            app.UseSwagger();
+            app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Seedarr API V1"));
+        }
 
         app.MapControllers();
         app.MapHub<MessageHub>("/signalr/messages");

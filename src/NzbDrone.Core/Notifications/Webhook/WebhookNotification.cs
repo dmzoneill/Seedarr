@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using NLog;
 using NzbDrone.Core.Http;
+using NzbDrone.Core.Validation;
 using Polly;
 
 namespace NzbDrone.Core.Notifications.Webhook;
@@ -51,6 +52,12 @@ public class WebhookNotification : INotificationService
         if (string.IsNullOrWhiteSpace(WebhookUrl))
         {
             _logger.Warn("Webhook URL is not configured");
+            return;
+        }
+
+        if (!UrlValidator.IsSafeUrl(WebhookUrl))
+        {
+            _logger.Warn("Webhook URL targets private network, blocked: {0}", WebhookUrl);
             return;
         }
 

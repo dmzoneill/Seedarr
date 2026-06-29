@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using NLog;
+using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Notifications.Discord;
 
@@ -33,6 +34,12 @@ public class DiscordNotification : INotificationService
         if (string.IsNullOrWhiteSpace(WebhookUrl))
         {
             _logger.Warn("Discord webhook URL is not configured");
+            return;
+        }
+
+        if (!UrlValidator.IsSafeUrl(WebhookUrl))
+        {
+            _logger.Warn("Webhook URL targets private network, blocked: {0}", WebhookUrl);
             return;
         }
 

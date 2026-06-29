@@ -1,6 +1,7 @@
 using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using NLog;
 
 namespace NzbDrone.Core.Transport;
@@ -54,7 +55,7 @@ public class UtpConnection : IUtpConnection
     {
         _udpClient = new UdpClient();
         _logger = LogManager.GetCurrentClassLogger();
-        _connectionId = (ushort)new Random().Next(0, ushort.MaxValue);
+        _connectionId = (ushort)RandomNumberGenerator.GetInt32(0, ushort.MaxValue + 1);
         _sequenceNumber = 1;
         _connectionTimeoutSeconds = connectionTimeoutSeconds;
     }
