@@ -58,6 +58,14 @@ public class MseKeyDerivation
     public byte[] ComputeSharedSecret(byte[] remotePublicKeyBytes)
     {
         var remoteY = new Org.BouncyCastle.Math.BigInteger(1, remotePublicKeyBytes);
+
+        // Validate DH public key to prevent small subgroup attacks
+        if (remoteY.CompareTo(Org.BouncyCastle.Math.BigInteger.One) <= 0 ||
+            remoteY.CompareTo(Prime.Subtract(Org.BouncyCastle.Math.BigInteger.One)) >= 0)
+        {
+            throw new InvalidOperationException("Invalid DH public key");
+        }
+
         var remotePublicKey = new DHPublicKeyParameters(remoteY, new DHParameters(Prime, Generator));
 
         var agreement = new DHBasicAgreement();

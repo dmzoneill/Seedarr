@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -16,9 +17,11 @@ namespace NzbDrone.Core.Peers;
 
 public class PeerServer : BackgroundService
 {
+    private const int MaxConnectionsPerIp = 5;
     private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;
     private readonly SemaphoreSlim _connectionSemaphore;
+    private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
     private readonly Logger _logger;
 
     public PeerServer(IConfigService configService, ITorrentService torrentService)
@@ -77,16 +80,27 @@ public class PeerServer : BackgroundService
                 _ = Task.Run(
                     async () =>
                     {
+                        var clientIp = ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString();
+                        var currentCount = _connectionsPerIp.AddOrUpdate(clientIp, 1, (_, count) => count + 1);
+                        if (currentCount > MaxConnectionsPerIp)
+                        {
+                            _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
+                            client.Dispose();
+                            return;
+                        }
+
                         try
                         {
                             if (!await _connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
                             {
+                                _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
                                 client.Dispose();
                                 return;
                             }
                         }
                         catch
                         {
+                            _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
                             client.Dispose();
                             return;
                         }
@@ -98,6 +112,7 @@ public class PeerServer : BackgroundService
                         finally
                         {
                             _connectionSemaphore.Release();
+                            _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
                         }
                     },
                     stoppingToken);
@@ -280,6 +295,17 @@ public class PeerServer : BackgroundService
         var index = (payload[0] << 24) | (payload[1] << 16) | (payload[2] << 8) | payload[3];
         var begin = (payload[4] << 24) | (payload[5] << 16) | (payload[6] << 8) | payload[7];
         var length = (payload[8] << 24) | (payload[9] << 16) | (payload[10] << 8) | payload[11];
+
+        const int MaxBlockSize = 32768; // 2x standard 16KB block size
+        if (length <= 0 || length > MaxBlockSize)
+        {
+            return;
+        }
+
+        if (index < 0 || begin < 0)
+        {
+            return;
+        }
 
         var payloadSize = 8 + length;
         var piecePayload = ArrayPool<byte>.Shared.Rent(payloadSize);

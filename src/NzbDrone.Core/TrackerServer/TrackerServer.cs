@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -167,6 +166,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     {
         try
         {
+            client.Client.ReceiveTimeout = 10000;
             var remoteEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
             var clientIp = remoteEndpoint.Address.ToString();
 
@@ -180,9 +180,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
                 return;
             }
 
-            using var reader = new StreamReader(stream, Encoding.ASCII);
-
-            var requestLine = reader.ReadLine();
+            var requestLine = ReadBoundedLine(stream, 8192);
             if (requestLine == null)
             {
                 return;
@@ -232,6 +230,31 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
     }
 
+    private static string ReadBoundedLine(NetworkStream stream, int maxLength)
+    {
+        var buffer = new byte[maxLength];
+        var position = 0;
+
+        while (position < maxLength)
+        {
+            var b = stream.ReadByte();
+
+            if (b == -1)
+            {
+                return position > 0 ? Encoding.ASCII.GetString(buffer, 0, position) : null;
+            }
+
+            if (b == '\n')
+            {
+                return Encoding.ASCII.GetString(buffer, 0, position).TrimEnd('\r');
+            }
+
+            buffer[position++] = (byte)b;
+        }
+
+        return null; // Line too long, reject
+    }
+
     private (Dictionary<string, string> Parameters, string Error) ParseRequest(string path)
     {
         var queryIndex = path.IndexOf('?');
@@ -258,7 +281,11 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             return "d14:failure reason25:Missing required parameterse";
         }
 
-        var port = int.Parse(portStr);
+        if (!int.TryParse(portStr, out var port) || port < 1 || port > 65535)
+        {
+            return "d14:failure reason12:invalid porte";
+        }
+
         var peerIp = remoteEndpoint.Address.ToString();
 
         parameters.TryGetValue("peer_id", out var peerId);

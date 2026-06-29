@@ -34,7 +34,7 @@ public static class NetworkConfigResourceMapper
             ProxyPort = model.ProxyPort,
             ProxyAuthEnabled = model.ProxyAuthEnabled,
             ProxyUsername = model.ProxyUsername,
-            ProxyPassword = model.ProxyPassword
+            ProxyPassword = string.IsNullOrEmpty(model.ProxyPassword) ? "" : "********"
         };
     }
 }
