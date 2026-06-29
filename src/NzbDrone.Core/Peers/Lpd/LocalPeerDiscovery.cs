@@ -16,8 +16,9 @@ public class LocalPeerDiscovery : BackgroundService
 {
     private const string MulticastAddress = "239.192.152.143";
     private const int MulticastPort = 6771;
-    private const int AnnounceIntervalSeconds = 300;
     private const int PeerPort = 6881;
+
+    protected virtual int AnnounceIntervalSeconds => 300;
 
     private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;

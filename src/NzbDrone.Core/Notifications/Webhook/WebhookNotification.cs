@@ -11,12 +11,15 @@ namespace NzbDrone.Core.Notifications.Webhook;
 
 public class WebhookNotification : INotificationService
 {
-    private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
+    private static readonly HttpClient SharedHttpClient = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10)
     });
-    private static readonly ResiliencePipeline Policy = ResiliencePolicies.GetWebhookPolicy();
 
+    private static readonly ResiliencePipeline SharedPolicy = ResiliencePolicies.GetWebhookPolicy();
+
+    private readonly HttpClient _httpClient;
+    private readonly ResiliencePipeline _policy;
     private readonly Logger _logger;
 
     public string Name => "Webhook";
@@ -25,6 +28,15 @@ public class WebhookNotification : INotificationService
     public WebhookNotification()
     {
         _logger = LogManager.GetCurrentClassLogger();
+        _httpClient = SharedHttpClient;
+        _policy = SharedPolicy;
+    }
+
+    public WebhookNotification(HttpClient httpClient, ResiliencePipeline policy)
+    {
+        _logger = LogManager.GetCurrentClassLogger();
+        _httpClient = httpClient;
+        _policy = policy;
     }
 
     public void OnTorrentAdded(string torrentName)
@@ -63,11 +75,11 @@ public class WebhookNotification : INotificationService
 
         try
         {
-            Policy.Execute(ct =>
+            _policy.Execute(ct =>
             {
                 var json = JsonSerializer.Serialize(payload);
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                using var response = HttpClient.PostAsync(WebhookUrl, content, ct).GetAwaiter().GetResult();
+                using var response = _httpClient.PostAsync(WebhookUrl, content, ct).GetAwaiter().GetResult();
                 _logger.Debug("Webhook sent to {0}, status: {1}", WebhookUrl, response.StatusCode);
             });
         }

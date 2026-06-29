@@ -100,20 +100,25 @@ public class EmailNotification : INotificationService
                 return;
             }
 
-            using var client = new SmtpClient(Settings.SmtpHost, Settings.SmtpPort);
-            client.EnableSsl = Settings.UseTls;
-
-            if (!string.IsNullOrWhiteSpace(Settings.Username))
-            {
-                client.Credentials = new NetworkCredential(Settings.Username, Settings.Password);
-            }
-
-            client.SendMailAsync(message).GetAwaiter().GetResult();
+            SmtpSend(message);
             _logger.Debug("Email notification sent to {0}", Settings.ToAddresses);
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to send email notification to {0}", Settings.ToAddresses);
         }
+    }
+
+    protected virtual void SmtpSend(MailMessage message)
+    {
+        using var client = new SmtpClient(Settings.SmtpHost, Settings.SmtpPort);
+        client.EnableSsl = Settings.UseTls;
+
+        if (!string.IsNullOrWhiteSpace(Settings.Username))
+        {
+            client.Credentials = new NetworkCredential(Settings.Username, Settings.Password);
+        }
+
+        client.SendMailAsync(message).GetAwaiter().GetResult();
     }
 }

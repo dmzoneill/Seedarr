@@ -9,11 +9,12 @@ namespace NzbDrone.Core.Notifications.Discord;
 
 public class DiscordNotification : INotificationService
 {
-    private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
+    private static readonly HttpClient SharedHttpClient = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10)
     });
 
+    private readonly HttpClient _httpClient;
     private readonly Logger _logger;
 
     public string Name => "Discord";
@@ -22,6 +23,13 @@ public class DiscordNotification : INotificationService
     public DiscordNotification()
     {
         _logger = LogManager.GetCurrentClassLogger();
+        _httpClient = SharedHttpClient;
+    }
+
+    public DiscordNotification(HttpClient httpClient)
+    {
+        _logger = LogManager.GetCurrentClassLogger();
+        _httpClient = httpClient;
     }
 
     public void OnTorrentAdded(string torrentName) => SendEmbed("Torrent Added", torrentName, 0x35C5F4);
@@ -62,7 +70,7 @@ public class DiscordNotification : INotificationService
 
             var json = JsonSerializer.Serialize(payload);
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
-            using var response = HttpClient.PostAsync(WebhookUrl, content).GetAwaiter().GetResult();
+            using var response = _httpClient.PostAsync(WebhookUrl, content).GetAwaiter().GetResult();
             _logger.Debug("Discord notification sent, status: {0}", response.StatusCode);
         }
         catch (Exception ex)

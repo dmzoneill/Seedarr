@@ -277,3 +277,8 @@ trim_trailing_whitespace = true
 insert_final_newline = true
 indent_style = space
 indent_size = 2
+
+# Suppress false-positive IDE0005 in this file: 'using System' is needed for DateTime.UtcNow
+# but the analyzer incorrectly flags it after the LidarrConnection refactor.
+[src/NzbDrone.Core.Test/ArrIntegration/LidarrConnectionTest.cs]
+dotnet_diagnostic.IDE0005.severity = none

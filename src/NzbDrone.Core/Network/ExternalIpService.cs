@@ -22,20 +22,22 @@ public class ExternalIpService : IExternalIpService
         "https://checkip.amazonaws.com"
     };
 
-    private static readonly HttpClient Client = new(new SocketsHttpHandler
+    private static readonly HttpClient SharedClient = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10)
     })
     { Timeout = TimeSpan.FromSeconds(5) };
 
+    private readonly HttpClient _client;
     private readonly Logger _logger;
     private string _cachedIp = "";
     private DateTime _lastFetch = DateTime.MinValue;
 
     public string CachedIp => _cachedIp;
 
-    public ExternalIpService()
+    public ExternalIpService(HttpClient httpClient = null)
     {
+        _client = httpClient ?? SharedClient;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -50,7 +52,7 @@ public class ExternalIpService : IExternalIpService
         {
             try
             {
-                var ip = (await Client.GetStringAsync(source, cancellationToken)).Trim();
+                var ip = (await _client.GetStringAsync(source, cancellationToken)).Trim();
 
                 if (System.Net.IPAddress.TryParse(ip, out _))
                 {
