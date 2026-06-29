@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -20,13 +19,10 @@ public interface IUtpManager
 
 public class UtpManager : BackgroundService, IUtpManager
 {
-    private const int MaxConnections = 100;
-
     private readonly IConfigService _configService;
-    private readonly ConcurrentDictionary<ushort, UtpConnection> _connections = new();
     private readonly Logger _logger;
 
-    public int ActiveConnections => _connections.Count;
+    public int ActiveConnections => 0;
     public bool IsEnabled => _configService.UtpEnabled;
     public bool TcpFallbackEnabled => _configService.TcpFallback;
 
@@ -41,11 +37,6 @@ public class UtpManager : BackgroundService, IUtpManager
         if (!_configService.UtpEnabled)
         {
             throw new InvalidOperationException("uTP is disabled");
-        }
-
-        if (_connections.Count >= MaxConnections)
-        {
-            throw new InvalidOperationException("Maximum uTP connections reached");
         }
 
         var timeoutSeconds = _configService.TransportConnectionTimeoutSeconds;

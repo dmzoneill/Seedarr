@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 
 namespace NzbDrone.Core.Peers.Encryption;
@@ -42,9 +43,16 @@ public class EncryptedStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        var encrypted = new byte[count];
-        _encryptor.Process(buffer, offset, count, encrypted, 0);
-        _inner.Write(encrypted, 0, count);
+        var encrypted = ArrayPool<byte>.Shared.Rent(count);
+        try
+        {
+            _encryptor.Process(buffer, offset, count, encrypted, 0);
+            _inner.Write(encrypted, 0, count);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(encrypted);
+        }
     }
 
     public override void Flush()

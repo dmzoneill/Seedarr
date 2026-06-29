@@ -65,6 +65,11 @@ public class PeerDatabase : IPeerDatabase
             }
 
             list.RemoveAll(p => (DateTime.UtcNow - p.LastAnnounce).TotalMinutes > PeerTtlMinutes);
+
+            if (list.Count == 0)
+            {
+                _peers.Remove(infoHash);
+            }
         }
     }
 
@@ -75,6 +80,11 @@ public class PeerDatabase : IPeerDatabase
             if (_peers.TryGetValue(infoHash, out var list))
             {
                 list.RemoveAll(p => p.Ip == ip && p.Port == port);
+
+                if (list.Count == 0)
+                {
+                    _peers.Remove(infoHash);
+                }
             }
         }
     }

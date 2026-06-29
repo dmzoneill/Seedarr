@@ -184,6 +184,8 @@ public class ConfigService : IConfigService
     private readonly IBasicRepository<ConfigModel> _repository;
     private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
+    private readonly object _cacheLock = new();
+    private volatile Dictionary<string, string> _cache;
 
     public ConfigService(IBasicRepository<ConfigModel> repository, IEventAggregator eventAggregator)
     {
@@ -212,6 +214,8 @@ public class ConfigService : IConfigService
             }
         }
 
+        _cache = null;
+
         _logger.Debug("Saved {0} config values", configValues.Count);
         _eventAggregator.PublishEvent(new ConfigSavedEvent());
     }
@@ -230,11 +234,24 @@ public class ConfigService : IConfigService
 
     public string GetValue(string key, string defaultValue = "")
     {
-        var all = _repository.All().ToList();
-        var config = all.FirstOrDefault(c =>
-            string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+        var snapshot = _cache;
 
-        return config?.Value ?? defaultValue;
+        if (snapshot == null)
+        {
+            lock (_cacheLock)
+            {
+                snapshot = _cache;
+
+                if (snapshot == null)
+                {
+                    snapshot = _repository.All()
+                        .ToDictionary(c => c.Key, c => c.Value, StringComparer.OrdinalIgnoreCase);
+                    _cache = snapshot;
+                }
+            }
+        }
+
+        return snapshot.TryGetValue(key, out var value) ? value : defaultValue;
     }
 
     public int GetValueInt(string key, int defaultValue = 0)

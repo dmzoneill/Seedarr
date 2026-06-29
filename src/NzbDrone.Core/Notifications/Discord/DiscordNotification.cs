@@ -8,7 +8,10 @@ namespace NzbDrone.Core.Notifications.Discord;
 
 public class DiscordNotification : INotificationService
 {
-    private static readonly HttpClient HttpClient = new();
+    private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+    });
 
     private readonly Logger _logger;
 
@@ -51,8 +54,8 @@ public class DiscordNotification : INotificationService
             };
 
             var json = JsonSerializer.Serialize(payload);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = HttpClient.PostAsync(WebhookUrl, content).GetAwaiter().GetResult();
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            using var response = HttpClient.PostAsync(WebhookUrl, content).GetAwaiter().GetResult();
             _logger.Debug("Discord notification sent, status: {0}", response.StatusCode);
         }
         catch (Exception ex)

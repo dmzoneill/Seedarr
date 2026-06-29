@@ -10,7 +10,10 @@ namespace NzbDrone.Core.ArrIntegration;
 
 public class SonarrConnection : IArrConnection
 {
-    private static readonly HttpClient Client = new();
+    private static readonly HttpClient Client = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+    });
     private static readonly ResiliencePipeline Policy = ResiliencePolicies.GetArrApiPolicy();
 
     private readonly Logger _logger;
@@ -32,10 +35,10 @@ public class SonarrConnection : IArrConnection
         {
             var result = Policy.Execute(ct =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v3/history?pageSize=50&sortKey=date&sortDirection=descending");
+                using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v3/history?pageSize=50&sortKey=date&sortDirection=descending");
                 request.Headers.Add("X-Api-Key", ApiKey);
 
-                var response = Client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.Warn("Sonarr API returned {0}", response.StatusCode);
@@ -51,7 +54,7 @@ public class SonarrConnection : IArrConnection
             }
 
             var json = result;
-            var doc = JsonDocument.Parse(json);
+            using var doc = JsonDocument.Parse(json);
             var records = new List<ArrDownloadRecord>();
 
             if (doc.RootElement.TryGetProperty("records", out var recordsArray))
@@ -102,9 +105,9 @@ public class SonarrConnection : IArrConnection
         {
             return Policy.Execute(ct =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v3/system/status");
+                using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v3/system/status");
                 request.Headers.Add("X-Api-Key", ApiKey);
-                var response = Client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 return response.IsSuccessStatusCode;
             });
         }

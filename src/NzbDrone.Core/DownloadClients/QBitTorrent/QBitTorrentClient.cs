@@ -7,7 +7,7 @@ using NLog;
 
 namespace NzbDrone.Core.DownloadClients.QBitTorrent;
 
-public class QBitTorrentClient : IDownloadClient
+public class QBitTorrentClient : IDownloadClient, IDisposable
 {
     private readonly Logger _logger;
     private readonly CookieContainer _cookies = new();
@@ -40,7 +40,7 @@ public class QBitTorrentClient : IDownloadClient
     {
         try
         {
-            var content = new FormUrlEncodedContent(new[]
+            using var content = new FormUrlEncodedContent(new[]
             {
                 new KeyValuePair<string, string>("username", Username),
                 new KeyValuePair<string, string>("password", Password),
@@ -81,7 +81,7 @@ public class QBitTorrentClient : IDownloadClient
             }
 
             var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            var torrents = JsonDocument.Parse(json);
+            using var torrents = JsonDocument.Parse(json);
 
             foreach (var t in torrents.RootElement.EnumerateArray())
             {
@@ -151,6 +151,11 @@ public class QBitTorrentClient : IDownloadClient
             _logger.Error(ex, "qBittorrent connection test failed");
             return false;
         }
+    }
+
+    public void Dispose()
+    {
+        _client?.Dispose();
     }
 
     private static string MapState(string qbtState)

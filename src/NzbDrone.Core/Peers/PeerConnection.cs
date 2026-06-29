@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -11,6 +12,7 @@ namespace NzbDrone.Core.Peers;
 public class PeerConnection : IDisposable
 {
     private const string ProtocolString = "BitTorrent protocol";
+    private const int MaxMessageLength = 16 * 1024 * 1024;
 
     private readonly TcpClient _client;
     private readonly NetworkStream _networkStream;
@@ -53,14 +55,22 @@ public class PeerConnection : IDisposable
     public PeerConnection(string host, int port)
     {
         _client = new TcpClient();
-        _client.Connect(host, port);
-        _networkStream = _client.GetStream();
-        _activeStream = _networkStream;
-        _logger = LogManager.GetCurrentClassLogger();
-        RemoteIp = host;
-        RemotePort = port;
-        ConnectedAt = DateTime.UtcNow;
-        LastActivity = DateTime.UtcNow;
+        try
+        {
+            _client.Connect(host, port);
+            _networkStream = _client.GetStream();
+            _activeStream = _networkStream;
+            _logger = LogManager.GetCurrentClassLogger();
+            RemoteIp = host;
+            RemotePort = port;
+            ConnectedAt = DateTime.UtcNow;
+            LastActivity = DateTime.UtcNow;
+        }
+        catch
+        {
+            _client.Dispose();
+            throw;
+        }
     }
 
     public bool NegotiateEncryptionOutgoing(string infoHash, EncryptionMode mode)
@@ -186,21 +196,30 @@ public class PeerConnection : IDisposable
     public void SendMessage(PeerMessage message)
     {
         var length = message.Length;
-        var buffer = new byte[4 + length];
-        buffer[0] = (byte)(length >> 24);
-        buffer[1] = (byte)(length >> 16);
-        buffer[2] = (byte)(length >> 8);
-        buffer[3] = (byte)length;
-        buffer[4] = (byte)message.Type;
-
-        if (message.Payload != null && message.Payload.Length > 0)
+        var bufferSize = 4 + length;
+        var buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
+        try
         {
-            Array.Copy(message.Payload, 0, buffer, 5, message.Payload.Length);
-        }
+            buffer[0] = (byte)(length >> 24);
+            buffer[1] = (byte)(length >> 16);
+            buffer[2] = (byte)(length >> 8);
+            buffer[3] = (byte)length;
+            buffer[4] = (byte)message.Type;
 
-        _activeStream.Write(buffer, 0, buffer.Length);
-        _activeStream.Flush();
-        LastActivity = DateTime.UtcNow;
+            var payloadLength = message.EffectivePayloadLength;
+            if (message.Payload != null && payloadLength > 0)
+            {
+                Array.Copy(message.Payload, 0, buffer, 5, payloadLength);
+            }
+
+            _activeStream.Write(buffer, 0, bufferSize);
+            _activeStream.Flush();
+            LastActivity = DateTime.UtcNow;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     public void SendKeepAlive()
@@ -232,6 +251,13 @@ public class PeerConnection : IDisposable
             if (length == 0)
             {
                 return null; // keep-alive
+            }
+
+            if (length > MaxMessageLength)
+            {
+                _logger.Warn("Peer {0}:{1} sent message with length {2} exceeding max {3}, closing connection", RemoteIp, RemotePort, length, MaxMessageLength);
+                Dispose();
+                return null;
             }
 
             var messageBuffer = new byte[length];

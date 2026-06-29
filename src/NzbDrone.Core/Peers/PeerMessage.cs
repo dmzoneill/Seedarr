@@ -19,5 +19,7 @@ public class PeerMessage
 {
     public PeerMessageType Type { get; set; }
     public byte[] Payload { get; set; }
-    public int Length => (Payload?.Length ?? 0) + 1;
+    public int PayloadLength { get; set; } = -1;
+    internal int EffectivePayloadLength => PayloadLength >= 0 ? PayloadLength : (Payload?.Length ?? 0);
+    public int Length => EffectivePayloadLength + 1;
 }

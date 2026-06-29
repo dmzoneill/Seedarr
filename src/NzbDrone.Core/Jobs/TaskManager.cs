@@ -12,6 +12,7 @@ public interface ITaskManager
 {
     IEnumerable<ScheduledTask> GetAll();
     ScheduledTask GetNextScheduled();
+    void UpdateLastExecution(string typeName);
 }
 
 public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
@@ -39,6 +40,18 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         return _repository.All()
             .OrderBy(t => t.LastExecution.AddMinutes(t.Interval))
             .FirstOrDefault();
+    }
+
+    public void UpdateLastExecution(string typeName)
+    {
+        var task = _repository.All()
+            .FirstOrDefault(t => string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase));
+
+        if (task != null)
+        {
+            task.LastExecution = DateTime.UtcNow;
+            _repository.Update(task);
+        }
     }
 
     public void Handle(ApplicationStartedEvent message)

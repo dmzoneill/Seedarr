@@ -81,8 +81,8 @@ public class UpdateService : IUpdateService
 
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, GitHubReleasesUrl + "?per_page=20");
-            var response = Client.Send(request);
+            using var request = new HttpRequestMessage(HttpMethod.Get, GitHubReleasesUrl + "?per_page=20");
+            using var response = Client.Send(request);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -91,7 +91,8 @@ public class UpdateService : IUpdateService
             }
 
             var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            var releases = JsonDocument.Parse(json).RootElement;
+            using var doc = JsonDocument.Parse(json);
+            var releases = doc.RootElement;
 
             if (releases.ValueKind != JsonValueKind.Array)
             {
@@ -173,7 +174,10 @@ public class UpdateService : IUpdateService
 
     private static HttpClient CreateHttpClient()
     {
-        var client = new HttpClient();
+        var client = new HttpClient(new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+        });
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
         client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Seedarr", BuildInfo.Version.ToString()));
         client.Timeout = TimeSpan.FromSeconds(15);

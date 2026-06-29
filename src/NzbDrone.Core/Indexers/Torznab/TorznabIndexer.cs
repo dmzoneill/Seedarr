@@ -24,8 +24,8 @@ public class TorznabIndexer : IIndexer
             var apiPath = string.IsNullOrEmpty(definition.ApiPath) ? "/api" : definition.ApiPath;
             var url = $"{definition.Url.TrimEnd('/')}{apiPath}?t=caps&apikey={definition.ApiKey}";
 
-            var request = new HttpRequestMessage(HttpMethod.Get, url);
-            var response = Client.Send(request);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var response = Client.Send(request);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

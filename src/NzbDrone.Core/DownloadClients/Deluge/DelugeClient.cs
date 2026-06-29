@@ -8,7 +8,7 @@ using NLog;
 
 namespace NzbDrone.Core.DownloadClients.Deluge;
 
-public class DelugeClient : IDownloadClient
+public class DelugeClient : IDownloadClient, IDisposable
 {
     private readonly Logger _logger;
     private readonly CookieContainer _cookies = new();
@@ -48,7 +48,7 @@ public class DelugeClient : IDownloadClient
         };
 
         var json = JsonSerializer.Serialize(payload);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
         var response = _client.PostAsync(JsonUrl, content).GetAwaiter().GetResult();
         response.EnsureSuccessStatusCode();
 
@@ -60,7 +60,7 @@ public class DelugeClient : IDownloadClient
     {
         try
         {
-            var doc = SendRequest("auth.login", new object[] { Password });
+            using var doc = SendRequest("auth.login", new object[] { Password });
             return doc.RootElement.TryGetProperty("result", out var result) && result.GetBoolean();
         }
         catch (Exception ex)
@@ -89,7 +89,7 @@ public class DelugeClient : IDownloadClient
                 filters["label"] = Category;
             }
 
-            var doc = SendRequest("web.update_ui", new object[] { fields, filters });
+            using var doc = SendRequest("web.update_ui", new object[] { fields, filters });
 
             if (!doc.RootElement.TryGetProperty("result", out var result))
             {
@@ -143,7 +143,7 @@ public class DelugeClient : IDownloadClient
                 return false;
             }
 
-            var doc = SendRequest("daemon.get_method_list", Array.Empty<object>());
+            using var doc = SendRequest("daemon.get_method_list", Array.Empty<object>());
             return doc.RootElement.TryGetProperty("result", out _);
         }
         catch (Exception ex)
@@ -151,6 +151,11 @@ public class DelugeClient : IDownloadClient
             _logger.Error(ex, "Deluge connection test failed");
             return false;
         }
+    }
+
+    public void Dispose()
+    {
+        _client?.Dispose();
     }
 
     private static string MapState(string delugeState)
