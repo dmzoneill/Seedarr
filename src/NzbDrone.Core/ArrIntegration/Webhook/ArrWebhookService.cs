@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Http;
 using NzbDrone.Core.Torrents;
-using NzbDrone.Core.Validation;
 using Polly;
 
 namespace NzbDrone.Core.ArrIntegration.Webhook;
@@ -263,9 +262,15 @@ public class ArrWebhookService : IArrWebhookService
 
     private byte[] FetchTorrentFile(string downloadUrl)
     {
-        if (!UrlValidator.IsSafeUrl(downloadUrl))
+        if (string.IsNullOrWhiteSpace(downloadUrl))
         {
-            _logger.Warn("Blocked SSRF attempt: {0}", downloadUrl);
+            return null;
+        }
+
+        if (!Uri.TryCreate(downloadUrl, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            _logger.Warn("Blocked non-HTTP torrent fetch URL: {0}", downloadUrl);
             return null;
         }
 
