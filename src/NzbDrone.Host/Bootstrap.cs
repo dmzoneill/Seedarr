@@ -26,7 +26,7 @@ public static class Bootstrap
         "Seedarr.Api.V1"
     };
 
-    public static void Start(StartupContext startupContext)
+    public static WebApplication CreateApplication(StartupContext startupContext, string[] urls = null)
     {
         Logger.Info("Starting Seedarr - {0}", BuildInfo.Version);
 
@@ -54,12 +54,26 @@ public static class Bootstrap
         var mainDb = app.Services.GetRequiredService<IMainDatabase>();
         Logger.Info("Database initialized: {0}", mainDb.DatabaseType);
 
-        var configProvider = app.Services.GetRequiredService<IConfigFileProvider>();
-        var url = $"http://{configProvider.BindAddress}:{configProvider.Port}";
+        if (urls != null)
+        {
+            foreach (var url in urls)
+            {
+                app.Urls.Add(url);
+            }
+        }
+        else
+        {
+            var configProvider = app.Services.GetRequiredService<IConfigFileProvider>();
+            var url = $"http://{configProvider.BindAddress}:{configProvider.Port}";
+            Logger.Info("Listening on {0}", url);
+            app.Urls.Add(url);
+        }
 
-        Logger.Info("Listening on {0}", url);
-        app.Urls.Add(url);
+        return app;
+    }
 
-        app.Run();
+    public static void Start(StartupContext startupContext)
+    {
+        CreateApplication(startupContext).Run();
     }
 }

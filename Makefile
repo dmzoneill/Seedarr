@@ -1,8 +1,9 @@
 .PHONY: setup test-setup test integration build clean restore frontend \
        stack-up stack-down stack-configure stack-healthy stack-rebuild \
-       test-unit test-integration test-integration-rerun test-integration-only test-all
+       test-unit test-dotnet-integration test-integration test-integration-rerun test-integration-only test-all
 
 SOLUTION := src/Seedarr.sln
+INTEGRATION_TEST := src/NzbDrone.Integration.Test/Seedarr.Integration.Test.csproj
 CONSOLE := src/NzbDrone.Console/Seedarr.Console.csproj
 FRONTEND := src/Seedarr.Frontend
 COMPOSE := podman-compose
@@ -48,6 +49,11 @@ integration: stack-clean stack-build stack-up stack-healthy stack-configure
 	bash test-integration.sh
 
 test-unit: test
+
+test-dotnet-integration:
+	dotnet test $(INTEGRATION_TEST) --no-build \
+		--logger "trx;LogFileName=integration-test-results.trx" \
+		--collect:"XPlat Code Coverage"
 
 # --- Integration test stack ---
 
@@ -113,4 +119,4 @@ test-integration-only:
 
 # --- Combined ---
 
-test-all: test test-integration
+test-all: test test-dotnet-integration test-integration
