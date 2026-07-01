@@ -350,20 +350,13 @@ assert "Connection matched by URL" \
 # ─── Test 12: Prowlarr connectivity from Seedarr ────────
 echo ""
 echo "--- Test 12: Prowlarr reachability ---"
-PROWLARR_KEY=$(curl -sf "$SEEDARR_URL/api/v1/indexers" | python3 -c "
-import json,sys
-for i in json.load(sys.stdin):
-    if i.get('indexerType') == 'Prowlarr':
-        print(i.get('apiKey','')); break
-" 2>/dev/null || echo "")
-if [ -n "$PROWLARR_KEY" ]; then
-	assert "Prowlarr API reachable from host" \
-		'curl -sf "$PROWLARR_URL/api/v1/health" -H "X-Api-Key: $PROWLARR_KEY" > /dev/null'
-fi
+# Auth is disabled on Prowlarr by the configure step — no API key needed
+assert "Prowlarr API reachable from host" \
+	'curl -sf "$PROWLARR_URL/api/v1/health" > /dev/null'
 
-# Verify Prowlarr has the 3 apps configured
+# Verify Prowlarr has the 3 apps configured (Sonarr, Radarr, Lidarr)
 PROWLARR_APPS=$(curl -sf "$PROWLARR_URL/api/v1/applications" \
-	-H "X-Api-Key: $PROWLARR_KEY" | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+	| python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
 assert "Prowlarr has 3 apps configured" '[ "$PROWLARR_APPS" -ge 3 ]'
 
 # ─── Test 13: Fixture serving ────────────────────────────
