@@ -80,8 +80,8 @@ public class E2ETests : ApiTestBase
                 }
             }
         }
-        else if (pushDoc.RootElement.ValueKind == JsonValueKind.Object &&
-                 pushDoc.RootElement.TryGetProperty("approved", out var approvedEl2))
+        else if (pushDoc.RootElement.ValueKind == JsonValueKind.Object
+            && pushDoc.RootElement.TryGetProperty("approved", out var approvedEl2))
         {
             approved = approvedEl2.GetBoolean();
         }

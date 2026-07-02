@@ -35,16 +35,7 @@ public class FixtureTests : ApiTestBase
         var apiKey = await GetApiKeyAsync(SonarrUrl);
         if (string.IsNullOrEmpty(apiKey))
             Assert.Ignore("Sonarr API key not available");
-
-        var json = await GetJsonAsync($"{SonarrUrl}/api/v3/downloadclient", apiKey);
-        using var doc = JsonDocument.Parse(json);
-        var count = 0;
-        foreach (var client in doc.RootElement.EnumerateArray())
-        {
-            if (client.TryGetProperty("name", out var n) && n.GetString()?.Contains("Transmission") == true)
-                count++;
-        }
-
+        var count = await CountTransmissionClientsAsync($"{SonarrUrl}/api/v3/downloadclient", apiKey);
         Assert.That(count, Is.GreaterThanOrEqualTo(1));
     }
 
@@ -54,16 +45,7 @@ public class FixtureTests : ApiTestBase
         var apiKey = await GetApiKeyAsync(RadarrUrl);
         if (string.IsNullOrEmpty(apiKey))
             Assert.Ignore("Radarr API key not available");
-
-        var json = await GetJsonAsync($"{RadarrUrl}/api/v3/downloadclient", apiKey);
-        using var doc = JsonDocument.Parse(json);
-        var count = 0;
-        foreach (var client in doc.RootElement.EnumerateArray())
-        {
-            if (client.TryGetProperty("name", out var n) && n.GetString()?.Contains("Transmission") == true)
-                count++;
-        }
-
+        var count = await CountTransmissionClientsAsync($"{RadarrUrl}/api/v3/downloadclient", apiKey);
         Assert.That(count, Is.GreaterThanOrEqualTo(1));
     }
 
@@ -73,8 +55,13 @@ public class FixtureTests : ApiTestBase
         var apiKey = await GetApiKeyAsync(LidarrUrl);
         if (string.IsNullOrEmpty(apiKey))
             Assert.Ignore("Lidarr API key not available");
+        var count = await CountTransmissionClientsAsync($"{LidarrUrl}/api/v1/downloadclient", apiKey);
+        Assert.That(count, Is.GreaterThanOrEqualTo(1));
+    }
 
-        var json = await GetJsonAsync($"{LidarrUrl}/api/v1/downloadclient", apiKey);
+    private async Task<int> CountTransmissionClientsAsync(string url, string apiKey)
+    {
+        var json = await GetJsonAsync(url, apiKey);
         using var doc = JsonDocument.Parse(json);
         var count = 0;
         foreach (var client in doc.RootElement.EnumerateArray())
@@ -83,6 +70,6 @@ public class FixtureTests : ApiTestBase
                 count++;
         }
 
-        Assert.That(count, Is.GreaterThanOrEqualTo(1));
+        return count;
     }
 }
