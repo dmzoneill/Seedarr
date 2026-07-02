@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -79,16 +78,10 @@ public class WebhookTests : ApiTestBase
     public async Task Sonarr_torrent_appears_in_list()
     {
         await PostWebhookAsync(BuildSonarrGrabPayload(SonarrDownloadId));
-
-        var listJson = await GetJsonAsync($"{SeedarrUrl}/api/v1/torrent", _apiKey);
-        using var doc = JsonDocument.Parse(listJson);
-
-        var torrent = doc.RootElement.EnumerateArray()
-            .FirstOrDefault(t => t.TryGetProperty("infoHash", out var h) &&
-                                 string.Equals(h.GetString(), SonarrHash, StringComparison.OrdinalIgnoreCase));
-
-        Assert.That(torrent.ValueKind, Is.Not.EqualTo(JsonValueKind.Undefined), "Torrent not found in list");
-        Assert.That(torrent.GetProperty("name").GetString(), Does.Contain("Integration.Test.Sonarr"));
+        var torrentJson = await FindTorrentByHashAsync(SonarrHash);
+        Assert.That(torrentJson, Is.Not.Null, "Torrent not found in list");
+        using var doc = JsonDocument.Parse(torrentJson);
+        Assert.That(doc.RootElement.GetProperty("name").GetString(), Does.Contain("Integration.Test.Sonarr"));
     }
 
     [Test]
@@ -106,15 +99,7 @@ public class WebhookTests : ApiTestBase
         var response = await PostWebhookAsync(BuildRadarrGrabPayload(RadarrDownloadId));
         using var doc = JsonDocument.Parse(response);
         Assert.That(doc.RootElement.GetProperty("success").GetBoolean(), Is.True);
-
-        var listJson = await GetJsonAsync($"{SeedarrUrl}/api/v1/torrent", _apiKey);
-        using var listDoc = JsonDocument.Parse(listJson);
-
-        var found = listDoc.RootElement.EnumerateArray()
-            .Any(t => t.TryGetProperty("infoHash", out var h) &&
-                      string.Equals(h.GetString(), RadarrHash, StringComparison.OrdinalIgnoreCase));
-
-        Assert.That(found, Is.True, "Radarr torrent not found in list");
+        Assert.That(await FindTorrentByHashAsync(RadarrHash), Is.Not.Null, "Radarr torrent not found in list");
     }
 
     [Test]
@@ -123,15 +108,7 @@ public class WebhookTests : ApiTestBase
         var response = await PostWebhookAsync(BuildLidarrGrabPayload(LidarrDownloadId));
         using var doc = JsonDocument.Parse(response);
         Assert.That(doc.RootElement.GetProperty("success").GetBoolean(), Is.True);
-
-        var listJson = await GetJsonAsync($"{SeedarrUrl}/api/v1/torrent", _apiKey);
-        using var listDoc = JsonDocument.Parse(listJson);
-
-        var found = listDoc.RootElement.EnumerateArray()
-            .Any(t => t.TryGetProperty("infoHash", out var h) &&
-                      string.Equals(h.GetString(), LidarrHash, StringComparison.OrdinalIgnoreCase));
-
-        Assert.That(found, Is.True, "Lidarr torrent not found in list");
+        Assert.That(await FindTorrentByHashAsync(LidarrHash), Is.Not.Null, "Lidarr torrent not found in list");
     }
 
     [Test]
@@ -163,17 +140,11 @@ public class WebhookTests : ApiTestBase
     public async Task Real_hash_torrent_has_correct_metadata()
     {
         await PostWebhookAsync(BuildSonarrGrabPayload(RealDownloadId, "VideoHive.Test.1080p.WEB-DL"));
-
-        var listJson = await GetJsonAsync($"{SeedarrUrl}/api/v1/torrent", _apiKey);
-        using var doc = JsonDocument.Parse(listJson);
-
-        var torrent = doc.RootElement.EnumerateArray()
-            .FirstOrDefault(t => t.TryGetProperty("infoHash", out var h) &&
-                                 string.Equals(h.GetString(), RealHash, StringComparison.OrdinalIgnoreCase));
-
-        Assert.That(torrent.ValueKind, Is.Not.EqualTo(JsonValueKind.Undefined), "Torrent not found in list");
-        Assert.That(torrent.GetProperty("name").GetString(), Does.Contain("VideoHive"));
-        Assert.That(torrent.GetProperty("totalSize").GetInt64(), Is.EqualTo(158649340L));
+        var torrentJson = await FindTorrentByHashAsync(RealHash);
+        Assert.That(torrentJson, Is.Not.Null, "Torrent not found in list");
+        using var doc = JsonDocument.Parse(torrentJson);
+        Assert.That(doc.RootElement.GetProperty("name").GetString(), Does.Contain("VideoHive"));
+        Assert.That(doc.RootElement.GetProperty("totalSize").GetInt64(), Is.EqualTo(158649340L));
     }
 
     [Test]
@@ -241,5 +212,21 @@ public class WebhookTests : ApiTestBase
                 quality = "FLAC"
             }
         };
+    }
+
+    private async Task<string> FindTorrentByHashAsync(string hash)
+    {
+        var listJson = await GetJsonAsync($"{SeedarrUrl}/api/v1/torrent", _apiKey);
+        using var doc = JsonDocument.Parse(listJson);
+        foreach (var t in doc.RootElement.EnumerateArray())
+        {
+            if (t.TryGetProperty("infoHash", out var h)
+                && string.Equals(h.GetString(), hash, StringComparison.OrdinalIgnoreCase))
+            {
+                return t.GetRawText();
+            }
+        }
+
+        return null;
     }
 }
