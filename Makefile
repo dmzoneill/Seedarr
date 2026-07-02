@@ -3,6 +3,7 @@
        test-unit test-integration test-integration-rerun test-integration-only test-all
 
 SOLUTION := src/Seedarr.sln
+UNIT_TEST := src/NzbDrone.Core.Test/Seedarr.Core.Test.csproj
 INTEGRATION_TEST := src/NzbDrone.Integration.Test/Seedarr.Integration.Test.csproj
 AUTOMATION_TEST := src/NzbDrone.Automation.Test/Seedarr.Automation.Test.csproj
 CONSOLE := src/NzbDrone.Console/Seedarr.Console.csproj
@@ -39,8 +40,7 @@ clean:
 # --- Tests (called by upstream CI: make test / make integration) ---
 
 test:
-	dotnet test $(SOLUTION) --configuration Release --no-build \
-		--filter "Category!=IntegrationTest&Category!=AutomationTest" \
+	dotnet test $(UNIT_TEST) --configuration Release --no-build \
 		--logger "trx;LogFileName=test-results.trx" \
 		--collect:"XPlat Code Coverage"
 

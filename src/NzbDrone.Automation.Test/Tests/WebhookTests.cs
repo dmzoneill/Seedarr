@@ -130,7 +130,7 @@ public class WebhookTests : ApiTestBase
     [Test]
     public async Task Real_hash_webhook_accepted()
     {
-        var response = await PostWebhookAsync(BuildSonarrGrabPayload(RealDownloadId, "VideoHive.Test.1080p.WEB-DL"));
+        var response = await PostWebhookAsync(BuildSonarrGrabPayload(RealDownloadId, "VideoHive.Test.1080p.WEB-DL", 158649340L));
         using var doc = JsonDocument.Parse(response);
         Assert.That(doc.RootElement.GetProperty("success").GetBoolean(), Is.True);
         Assert.That(doc.RootElement.GetProperty("infoHash").GetString(), Is.EqualTo(RealHash));
@@ -139,7 +139,7 @@ public class WebhookTests : ApiTestBase
     [Test]
     public async Task Real_hash_torrent_has_correct_metadata()
     {
-        await PostWebhookAsync(BuildSonarrGrabPayload(RealDownloadId, "VideoHive.Test.1080p.WEB-DL"));
+        await PostWebhookAsync(BuildSonarrGrabPayload(RealDownloadId, "VideoHive.Test.1080p.WEB-DL", 158649340L));
         var torrentJson = await FindTorrentByHashAsync(RealHash);
         Assert.That(torrentJson, Is.Not.Null, "Torrent not found in list");
         using var doc = JsonDocument.Parse(torrentJson);
@@ -150,12 +150,15 @@ public class WebhookTests : ApiTestBase
     [Test]
     public async Task Duplicate_real_hash_is_rejected()
     {
-        await PostWebhookAsync(BuildSonarrGrabPayload(RealDownloadId, "VideoHive.Test.1080p.WEB-DL"));
+        await PostWebhookAsync(BuildSonarrGrabPayload(RealDownloadId, "VideoHive.Test.1080p.WEB-DL", 158649340L));
         var response = await PostWebhookAsync(BuildRadarrGrabPayload(RealDownloadId, "VideoHive.Test.Movie.2024.1080p.BluRay"));
         Assert.That(response, Does.Contain("already exists"));
     }
 
-    private static object BuildSonarrGrabPayload(string downloadId, string releaseTitle = "Integration.Test.Sonarr.S01E01.720p.WEB-DL")
+    private static object BuildSonarrGrabPayload(
+        string downloadId,
+        string releaseTitle = "Integration.Test.Sonarr.S01E01.720p.WEB-DL",
+        long size = 1073741824L)
     {
         return new
         {
@@ -169,7 +172,7 @@ public class WebhookTests : ApiTestBase
             {
                 releaseTitle,
                 indexer = "TestIndexer",
-                size = 1073741824L,
+                size,
                 quality = "HDTV-720p",
                 releaseGroup = "TestGroup"
             }

@@ -88,31 +88,31 @@ public class E2ETests : ApiTestBase
 
         Assert.That(approved, Is.True, "Radarr release/push accepted");
 
-        await Task.Delay(TimeSpan.FromSeconds(25));
-
-        var queueJson = await GetJsonAsync($"{RadarrUrl}/api/v3/queue", _radarrKey);
-        using var queueDoc = JsonDocument.Parse(queueJson);
-        var queueRecords = queueDoc.RootElement.TryGetProperty("records", out var recordsEl)
-            ? recordsEl
-            : queueDoc.RootElement;
         var inQueue = false;
-        if (queueRecords.ValueKind == JsonValueKind.Array)
+        for (var poll = 0; poll < 20 && !inQueue; poll++)
         {
+            await Task.Delay(TimeSpan.FromSeconds(3));
+            var queueJson = await GetJsonAsync($"{RadarrUrl}/api/v3/queue", _radarrKey);
+            using var queueDoc = JsonDocument.Parse(queueJson);
+            var queueRecords = queueDoc.RootElement.TryGetProperty("records", out var recordsEl)
+                ? recordsEl
+                : queueDoc.RootElement;
+            if (queueRecords.ValueKind != JsonValueKind.Array)
+                continue;
             foreach (var record in queueRecords.EnumerateArray())
             {
-                if (record.TryGetProperty("downloadId", out var dlId))
+                if (record.TryGetProperty("downloadId", out var dlId)
+                    && (dlId.GetString() ?? string.Empty).Contains("E63E5567", StringComparison.OrdinalIgnoreCase))
                 {
-                    var dlIdStr = dlId.GetString() ?? string.Empty;
-                    if (dlIdStr.Contains("E63E5567", StringComparison.OrdinalIgnoreCase))
-                    {
-                        inQueue = true;
-                        break;
-                    }
+                    inQueue = true;
+                    break;
                 }
             }
         }
 
         Assert.That(inQueue, Is.True, "Torrent in Radarr queue");
+
+        await Task.Delay(TimeSpan.FromSeconds(20));
 
         var transJson = await TransmissionRpcAsync("torrent-get", new
         {
