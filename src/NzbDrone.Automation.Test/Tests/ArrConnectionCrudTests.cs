@@ -70,6 +70,13 @@ public class ArrConnectionCrudTests : ApiTestBase
         }
     }
 
+    private async Task<int> CreateTestConnectionAsync()
+    {
+        var json = await PostJsonAsync($"{SeedarrUrl}/api/v1/arrconnections", CreatePayload, _apiKey);
+        using var doc = JsonDocument.Parse(json);
+        return doc.RootElement.GetProperty("id").GetInt32();
+    }
+
     [Test]
     public async Task Arr_connections_list_returns_array()
     {
@@ -95,12 +102,7 @@ public class ArrConnectionCrudTests : ApiTestBase
     [Test]
     public async Task Get_arr_connection_by_id()
     {
-        var createJson = await PostJsonAsync($"{SeedarrUrl}/api/v1/arrconnections", CreatePayload, _apiKey);
-        int id;
-        using (var createDoc = JsonDocument.Parse(createJson))
-        {
-            id = createDoc.RootElement.GetProperty("id").GetInt32();
-        }
+        var id = await CreateTestConnectionAsync();
 
         var getJson = await GetJsonAsync($"{SeedarrUrl}/api/v1/arrconnections/{id}", _apiKey);
         using var doc = JsonDocument.Parse(getJson);
@@ -112,12 +114,7 @@ public class ArrConnectionCrudTests : ApiTestBase
     [Test]
     public async Task Update_arr_connection_changes_name()
     {
-        var createJson = await PostJsonAsync($"{SeedarrUrl}/api/v1/arrconnections", CreatePayload, _apiKey);
-        int id;
-        using (var createDoc = JsonDocument.Parse(createJson))
-        {
-            id = createDoc.RootElement.GetProperty("id").GetInt32();
-        }
+        var id = await CreateTestConnectionAsync();
 
         var updatePayload = new
         {
@@ -138,12 +135,7 @@ public class ArrConnectionCrudTests : ApiTestBase
     [Test]
     public async Task Delete_arr_connection_removes_it()
     {
-        var createJson = await PostJsonAsync($"{SeedarrUrl}/api/v1/arrconnections", CreatePayload, _apiKey);
-        int id;
-        using (var createDoc = JsonDocument.Parse(createJson))
-        {
-            id = createDoc.RootElement.GetProperty("id").GetInt32();
-        }
+        var id = await CreateTestConnectionAsync();
 
         await DeleteAsync($"{SeedarrUrl}/api/v1/arrconnections/{id}");
 
