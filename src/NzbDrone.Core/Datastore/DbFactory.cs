@@ -28,6 +28,19 @@ public class SqliteDoubleTypeHandler : SqlMapper.TypeHandler<double>
     }
 }
 
+public class TimeOnlyTypeHandler : SqlMapper.TypeHandler<TimeOnly>
+{
+    public override void SetValue(IDbDataParameter parameter, TimeOnly value)
+    {
+        parameter.Value = value.ToString("HH:mm:ss");
+    }
+
+    public override TimeOnly Parse(object value)
+    {
+        return TimeOnly.Parse((string)value);
+    }
+}
+
 public class DbFactory : IDbFactory
 {
     private static bool _typeHandlersRegistered;
@@ -38,6 +51,7 @@ public class DbFactory : IDbFactory
         if (!_typeHandlersRegistered)
         {
             SqlMapper.AddTypeHandler(new SqliteDoubleTypeHandler());
+            SqlMapper.AddTypeHandler(new TimeOnlyTypeHandler());
             _typeHandlersRegistered = true;
         }
 

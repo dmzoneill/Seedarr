@@ -14,11 +14,13 @@ public class ArrConnectionCrudTests : ApiTestBase
     {
         name = "TestConn-Integration",
         arrType = "Sonarr",
-        baseUrl = "http://localhost:19999",
+        url = "http://localhost:19999",
         apiKey = "testkey-not-real-00000000",
-        enabled = false,
-        syncCategories = new int[] { },
-        tags = new int[] { }
+        implementation = "SonarrConnection",
+        configContract = "ArrConnectionDefinition",
+        enable = false,
+        webhookEnabled = false,
+        syncEnabled = false
     };
 
     [OneTimeSetUp]
@@ -121,11 +123,13 @@ public class ArrConnectionCrudTests : ApiTestBase
             id,
             name = "TestConn-Updated",
             arrType = "Sonarr",
-            baseUrl = "http://localhost:19999",
+            url = "http://localhost:19999",
             apiKey = "testkey-not-real-00000000",
-            enabled = false,
-            syncCategories = new int[] { },
-            tags = new int[] { }
+            implementation = "SonarrConnection",
+            configContract = "ArrConnectionDefinition",
+            enable = false,
+            webhookEnabled = false,
+            syncEnabled = false
         };
 
         var (statusCode, _) = await PutJsonAsync($"{SeedarrUrl}/api/v1/arrconnections/{id}", updatePayload, _apiKey);

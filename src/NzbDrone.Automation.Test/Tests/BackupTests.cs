@@ -99,25 +99,21 @@ public class BackupTests : ApiTestBase
             Is.True,
             $"POST /api/v1/backup returned {(int)createResponse.StatusCode}");
 
-        var listJson = await GetJsonAsync($"{SeedarrUrl}/api/v1/backup", _apiKey);
-        using var listDoc = JsonDocument.Parse(listJson);
-        Assert.That(
-            listDoc.RootElement.GetArrayLength(),
-            Is.GreaterThanOrEqualTo(1),
-            "Backup list must not be empty after creation");
+        var createBody = await createResponse.Content.ReadAsStringAsync();
+        using var createDoc = JsonDocument.Parse(createBody);
+        var createdName = createDoc.RootElement.GetProperty("name").GetString();
+        var createdId = createDoc.RootElement.GetProperty("id").GetInt32();
 
-        var latestId = listDoc.RootElement[0].GetProperty("id").GetInt32();
-
-        var deleted = await DeleteAsync($"{SeedarrUrl}/api/v1/backup/{latestId}");
-        Assert.That(deleted, Is.True, $"DELETE /api/v1/backup/{latestId} did not succeed");
+        var deleted = await DeleteAsync($"{SeedarrUrl}/api/v1/backup/{createdId}");
+        Assert.That(deleted, Is.True, $"DELETE /api/v1/backup/{createdId} did not succeed");
 
         var afterJson = await GetJsonAsync($"{SeedarrUrl}/api/v1/backup", _apiKey);
         using var afterDoc = JsonDocument.Parse(afterJson);
 
         foreach (var item in afterDoc.RootElement.EnumerateArray())
         {
-            var id = item.GetProperty("id").GetInt32();
-            Assert.That(id, Is.Not.EqualTo(latestId), $"Deleted backup id {latestId} still present in list");
+            var name = item.GetProperty("name").GetString();
+            Assert.That(name, Is.Not.EqualTo(createdName), $"Deleted backup '{createdName}' still present in list");
         }
     }
 }

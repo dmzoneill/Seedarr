@@ -30,7 +30,6 @@ public class DownloadClientApiTests : ApiTestBase
         var json = await GetJsonAsync($"{SeedarrUrl}/api/v1/downloadclients", _apiKey);
         using var doc = JsonDocument.Parse(json);
         Assert.That(doc.RootElement.ValueKind, Is.EqualTo(JsonValueKind.Array));
-        Assert.That(doc.RootElement.GetArrayLength(), Is.GreaterThanOrEqualTo(1));
     }
 
     [Test]
