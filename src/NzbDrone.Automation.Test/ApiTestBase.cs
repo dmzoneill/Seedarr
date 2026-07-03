@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -151,6 +152,42 @@ public abstract class ApiTestBase
 
         var response = await Client.SendAsync(request);
         return await response.Content.ReadAsStringAsync();
+    }
+
+    protected static string FindTorrentFixturePath()
+    {
+        var dir = AppDomain.CurrentDomain.BaseDirectory;
+        for (var i = 0; i < 8; i++)
+        {
+            var candidate = Path.Combine(dir, "tests", "fixtures", "test.torrent");
+            if (File.Exists(candidate))
+                return candidate;
+            var parent = Path.GetDirectoryName(dir);
+            if (parent == null || parent == dir)
+                break;
+            dir = parent;
+        }
+
+        return string.Empty;
+    }
+
+    protected async Task<JsonDocument> UploadTestTorrentAsync()
+    {
+        var torrentPath = FindTorrentFixturePath();
+        if (string.IsNullOrEmpty(torrentPath))
+            return null;
+
+        var fileBytes = await File.ReadAllBytesAsync(torrentPath);
+        using var form = new MultipartFormDataContent();
+        var fileContent = new ByteArrayContent(fileBytes);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/x-bittorrent");
+        form.Add(fileContent, "file", "test.torrent");
+
+        var response = await Client.PostAsync($"{SeedarrUrl}/api/v1/torrent/upload", form);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
     }
 
     protected async Task<string> RunCommandAsync(string command, string args)
