@@ -38,7 +38,7 @@ public class BackupService : IBackupService
         Directory.CreateDirectory(backupFolder);
 
         var version = BuildInfo.Version.ToString();
-        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd_HH-mm-ss");
+        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd_HH-mm-ss-fff");
         var backupFileName = $"seedarr_backup_{version}_{timestamp}.zip";
         var backupPath = Path.Combine(backupFolder, backupFileName);
         var dbPath = Path.Combine(_appFolderInfo.AppDataFolder, DbFileName);
