@@ -1,6 +1,7 @@
 .PHONY: setup test-setup test integration build clean restore frontend \
        stack-up stack-down stack-configure stack-healthy stack-rebuild \
-       test-unit test-integration test-integration-rerun test-integration-only test-all
+       test-unit test-integration test-integration-rerun test-integration-only test-all \
+       coverage-report
 
 SOLUTION := src/Seedarr.sln
 UNIT_TEST := src/NzbDrone.Core.Test/Seedarr.Core.Test.csproj
@@ -54,6 +55,14 @@ integration: stack-clean stack-build stack-up stack-healthy stack-configure
 	@echo "Running Selenium automation tests..."
 	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
 		--logger "trx;LogFileName=automation-test-results.trx"
+	@echo ""
+	@echo "Extracting automation coverage..."
+	@podman stop --time 30 seedarr 2>/dev/null || true
+	@sleep 3
+	@podman cp seedarr:/coverage/coverage.xml coverage-automation.xml 2>/dev/null && \
+		echo "Automation coverage extracted: coverage-automation.xml" || \
+		echo "Warning: no automation coverage file found (coverage may not have been enabled)"
+	$(MAKE) coverage-report
 
 test-unit: test
 
@@ -107,6 +116,20 @@ stack-configure:
 	@$(COMPOSE) up --no-deps configure 2>&1 | tail -30
 
 # --- Integration tests (requires podman-compose stack) ---
+
+coverage-report:
+	@INTEGRATION_COV=$$(find . -name "coverage.cobertura.xml" -path "*/TestResults/*" 2>/dev/null | head -1); \
+	AUTOMATION_COV=coverage-automation.xml; \
+	REPORTS=""; \
+	[ -n "$$INTEGRATION_COV" ] && REPORTS="$$INTEGRATION_COV"; \
+	[ -f "$$AUTOMATION_COV" ] && REPORTS="$${REPORTS:+$$REPORTS;}$$AUTOMATION_COV"; \
+	if [ -n "$$REPORTS" ]; then \
+		dotnet reportgenerator -reports:"$$REPORTS" -targetdir:coverage-report -reporttypes:Html 2>/dev/null && \
+		echo "Coverage report: coverage-report/index.html" || \
+		echo "Install reportgenerator: dotnet tool install -g dotnet-reportgenerator-globaltool"; \
+	else \
+		echo "No coverage files found"; \
+	fi
 
 test-integration: integration
 

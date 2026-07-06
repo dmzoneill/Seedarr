@@ -36,6 +36,8 @@ RUN dotnet publish src/NzbDrone.Console/Seedarr.Console.csproj \
     -p:RunAnalyzers=false \
     --no-restore
 
+RUN dotnet tool install --global dotnet-coverage
+
 # Stage 3: Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
@@ -56,12 +58,16 @@ WORKDIR /app
 
 COPY --from=backend /app ./
 COPY --from=frontend /build/src/NzbDrone.Host/wwwroot/ ./wwwroot/
+COPY --from=backend /root/.dotnet/tools /root/.dotnet/tools
 COPY version ./
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
 
 ENV SEEDARR__APP_DATA=/config
+ENV PATH="$PATH:/root/.dotnet/tools"
 
 EXPOSE 9898
 
 VOLUME ["/config", "/data"]
 
-ENTRYPOINT ["dotnet", "Seedarr.Console.dll", "--data=/config"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
