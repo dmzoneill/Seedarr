@@ -450,3 +450,39 @@ export interface PeerGraphData {
   nodes: PeerGraphNode[];
   links: PeerGraphLink[];
 }
+
+export interface SpeedScheduleEntry {
+  id: number;
+  name: string;
+  days: number;
+  startTime: string;
+  endTime: string;
+  maxUploadSpeed: number;
+  maxDownloadSpeed: number;
+  isEnabled: boolean;
+  priority: number;
+}
+
+export interface SpeedLimits {
+  maxUploadSpeed: number;
+  maxDownloadSpeed: number;
+  isScheduleActive: boolean;
+  activeScheduleName: string;
+}
+
+export interface Tag {
+  id: number;
+  label: string;
+}
+
+export interface PeerConnectionLogEntry {
+  id: number;
+  remoteIp: string;
+  remotePort: number;
+  infoHash: string;
+  torrentName: string;
+  peerId: string;
+  isEncrypted: boolean;
+  eventType: string;
+  timestamp: string;
+}

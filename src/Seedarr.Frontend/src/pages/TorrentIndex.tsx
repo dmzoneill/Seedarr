@@ -6,6 +6,9 @@ import TorrentDetailPanel from '../components/TorrentDetailPanel';
 import AddTorrentModal from '../components/AddTorrentModal';
 import {
   useTorrents,
+  useStartSeeding,
+  useStopSeeding,
+  useDeleteTorrent,
   useStartAllSeeding,
   useStopAllSeeding,
   useSeedingConfig,
@@ -37,12 +40,17 @@ function getInitialViewMode(): ViewMode {
 function TorrentIndex() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { data: torrents } = useTorrents();
+  const startSeeding = useStartSeeding();
+  const stopSeeding = useStopSeeding();
+  const deleteTorrent = useDeleteTorrent();
   const startAll = useStartAllSeeding();
   const stopAll = useStopAllSeeding();
   const { data: seedingConfig } = useSeedingConfig();
   const saveSeedingConfig = useSaveSeedingConfig();
   const [filter, setFilter] = useState(() => searchParams.get('q') || '');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   // Sync filter from URL search params when they change
   useEffect(() => {
@@ -203,6 +211,12 @@ function TorrentIndex() {
           <button className="btn btn-danger" onClick={() => stopAll.mutate()}>
             <StopIcon size={13} /> Stop All
           </button>
+          <button
+            className={`btn ${selectMode ? 'btn-primary' : 'btn-default'}`}
+            onClick={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+          >
+            Select
+          </button>
         </div>
       </div>
       <div className="torrent-content-layout">
@@ -255,6 +269,21 @@ function TorrentIndex() {
                   trackerFilter={selectedTracker}
                   selectedTorrentId={selectedTorrentId}
                   onSelectTorrent={setSelectedTorrentId}
+                  selectMode={selectMode}
+                  selectedIds={selectedIds}
+                  onToggleSelect={(id) => {
+                    setSelectedIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(id)) next.delete(id);
+                      else next.add(id);
+                      return next;
+                    });
+                  }}
+                  onSelectAll={(ids) => {
+                    setSelectedIds((prev) =>
+                      prev.size === ids.length ? new Set() : new Set(ids)
+                    );
+                  }}
                 />
               ) : (
                 <TorrentGrid filter={filter} stateFilter={selectedState} trackerFilter={selectedTracker} />
@@ -269,6 +298,28 @@ function TorrentIndex() {
           </div>
         </div>
       </div>
+      {selectMode && selectedIds.size > 0 && (
+        <div className="card" style={{ position: 'sticky', bottom: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', margin: '8px 0 0' }}>
+          <span style={{ fontWeight: 600 }}>{selectedIds.size} selected</span>
+          <button className="btn btn-success btn-sm" onClick={() => { selectedIds.forEach((id) => startSeeding.mutate(id)); setSelectedIds(new Set()); }}>
+            <PlayIcon size={12} /> Start
+          </button>
+          <button className="btn btn-danger btn-sm" onClick={() => { selectedIds.forEach((id) => stopSeeding.mutate(id)); setSelectedIds(new Set()); }}>
+            <StopIcon size={12} /> Stop
+          </button>
+          <button className="btn btn-danger btn-sm" onClick={() => {
+            if (confirm(`Delete ${selectedIds.size} torrent(s)?`)) {
+              selectedIds.forEach((id) => deleteTorrent.mutate({ id }));
+              setSelectedIds(new Set());
+            }
+          }}>
+            Delete
+          </button>
+          <button className="btn btn-default btn-sm" onClick={() => setSelectedIds(new Set())}>
+            Clear
+          </button>
+        </div>
+      )}
       {showAddModal && (
         <AddTorrentModal onClose={() => setShowAddModal(false)} />
       )}

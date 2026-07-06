@@ -44,6 +44,10 @@ import type {
   UpdateEntry,
   LogFile,
   PeerGraphData,
+  SpeedScheduleEntry,
+  SpeedLimits,
+  Tag,
+  PeerConnectionLogEntry,
 } from './types';
 
 type AddTorrentInput =
@@ -567,6 +571,98 @@ export function usePeerGraph(start?: string, end?: string) {
   return useQuery<PeerGraphData>({
     queryKey: ['peerlog', 'graph', start, end],
     queryFn: () => apiClient.get(`/peerlog/graph${query ? `?${query}` : ''}`),
+    refetchInterval: interval,
+  });
+}
+
+export function useSpeedSchedules() {
+  return useQuery<SpeedScheduleEntry[]>({
+    queryKey: ['speedschedule'],
+    queryFn: () => apiClient.get('/speedschedule'),
+  });
+}
+
+export function useActiveSpeedLimits() {
+  const interval = useRefetchInterval();
+  return useQuery<SpeedLimits>({
+    queryKey: ['speedschedule', 'active'],
+    queryFn: () => apiClient.get('/speedschedule/active'),
+    refetchInterval: interval,
+  });
+}
+
+export function useCreateSpeedSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation<SpeedScheduleEntry, Error, Partial<SpeedScheduleEntry>>({
+    mutationFn: (schedule) => apiClient.post('/speedschedule', schedule),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['speedschedule'] }),
+  });
+}
+
+export function useUpdateSpeedSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation<SpeedScheduleEntry, Error, SpeedScheduleEntry>({
+    mutationFn: (schedule) => apiClient.put(`/speedschedule/${schedule.id}`, schedule),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['speedschedule'] }),
+  });
+}
+
+export function useDeleteSpeedSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/speedschedule/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['speedschedule'] }),
+  });
+}
+
+export function useTags() {
+  return useQuery<Tag[]>({
+    queryKey: ['tags'],
+    queryFn: () => apiClient.get('/tag'),
+  });
+}
+
+export function useCreateTag() {
+  const queryClient = useQueryClient();
+  return useMutation<Tag, Error, Partial<Tag>>({
+    mutationFn: (tag) => apiClient.post('/tag', tag),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags'] }),
+  });
+}
+
+export function useUpdateTag() {
+  const queryClient = useQueryClient();
+  return useMutation<Tag, Error, Tag>({
+    mutationFn: (tag) => apiClient.put('/tag', tag),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags'] }),
+  });
+}
+
+export function useDeleteTag() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/tag/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags'] }),
+  });
+}
+
+export function usePeerConnectionLog(params?: { start?: string; end?: string; infoHash?: string }) {
+  const searchParams = new URLSearchParams();
+  if (params?.start) searchParams.set('start', params.start);
+  if (params?.end) searchParams.set('end', params.end);
+  if (params?.infoHash) searchParams.set('infoHash', params.infoHash);
+  const query = searchParams.toString();
+  return useQuery<PeerConnectionLogEntry[]>({
+    queryKey: ['peerlog', params?.start, params?.end, params?.infoHash],
+    queryFn: () => apiClient.get(`/peerlog${query ? `?${query}` : ''}`),
+  });
+}
+
+export function useActivePeers() {
+  const interval = useRefetchInterval();
+  return useQuery<PeerConnectionLogEntry[]>({
+    queryKey: ['peerlog', 'active'],
+    queryFn: () => apiClient.get('/peerlog/active'),
     refetchInterval: interval,
   });
 }
