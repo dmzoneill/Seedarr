@@ -388,6 +388,30 @@ services:
         add_seedarr_connection "Radarr" "Radarr" "http://radarr.local:7878" "$$RADARR_KEY"
         add_seedarr_connection "Lidarr" "Lidarr" "http://lidarr.local:8686" "$$LIDARR_KEY"
 
+        # --- Add Transmission as download client in Seedarr (idempotent) ---
+        echo ""
+        echo "--- Adding Transmission download client to Seedarr ---"
+        dc_exists=$$(curl -sf "http://seedarr.local:9898/api/v1/downloadclients" | grep -c '"Transmission"' || true)
+        if [ "$$dc_exists" = "0" ]; then
+          curl -sf -X POST "http://seedarr.local:9898/api/v1/downloadclients" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "Transmission",
+              "implementation": "Transmission",
+              "configContract": "TransmissionSettings",
+              "clientType": "Transmission",
+              "host": "transmission.local",
+              "port": 9091,
+              "useSsl": false,
+              "username": "",
+              "password": "",
+              "category": "",
+              "enable": true
+            }' > /dev/null 2>&1 && echo "  Transmission download client: OK" || echo "  Transmission download client: Failed"
+        else
+          echo "  Transmission download client: already exists, skipping"
+        fi
+
         # --- Add Prowlarr as indexer in Seedarr (idempotent) ---
         echo ""
         echo "--- Adding Prowlarr indexer to Seedarr ---"
