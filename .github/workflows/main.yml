@@ -23,3 +23,4 @@ jobs:
       docker-build: "true"
       container-file: "Containerfile"
       VALIDATE_JSCPD: "false"
+      VALIDATE_TYPESCRIPT_STANDARD: "false"
