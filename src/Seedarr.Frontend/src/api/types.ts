@@ -475,6 +475,24 @@ export interface Tag {
   label: string;
 }
 
+export interface NetworkDiagnostics {
+  localIp: string;
+  externalIp: string;
+  localAddresses: string[];
+  upnpAvailable: boolean;
+  proxyEnabled: boolean;
+  portMappings: PortMapping[];
+  listeningPort: number;
+  activeConnections: number;
+  uploadSlots: number;
+  dhtEnabled: boolean;
+  dhtNodeCount: number;
+  encryptionMode: string;
+  encryptedConnections: number;
+  plaintextConnections: number;
+  encryptionPercentage: number;
+}
+
 export interface PeerConnectionLogEntry {
   id: number;
   remoteIp: string;

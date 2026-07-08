@@ -48,6 +48,7 @@ import type {
   SpeedLimits,
   Tag,
   PeerConnectionLogEntry,
+  NetworkDiagnostics,
 } from './types';
 
 type AddTorrentInput =
@@ -655,6 +656,15 @@ export function usePeerConnectionLog(params?: { start?: string; end?: string; in
   return useQuery<PeerConnectionLogEntry[]>({
     queryKey: ['peerlog', params?.start, params?.end, params?.infoHash],
     queryFn: () => apiClient.get(`/peerlog${query ? `?${query}` : ''}`),
+  });
+}
+
+export function useNetworkDiagnostics() {
+  const interval = useRefetchInterval();
+  return useQuery<NetworkDiagnostics>({
+    queryKey: ['network', 'diagnostics'],
+    queryFn: () => apiClient.get('/network/diagnostics'),
+    refetchInterval: interval,
   });
 }
 
