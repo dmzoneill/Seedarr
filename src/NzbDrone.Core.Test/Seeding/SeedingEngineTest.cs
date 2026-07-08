@@ -521,6 +521,54 @@ public class SeedingEngineTest
     }
 
     [Test]
+    public void Tick_should_use_per_torrent_threshold_over_global()
+    {
+        _configService.DownloadThresholdPercent.Returns(80);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1000,
+            Downloaded = 350,
+            Progress = 0.35,
+            Threshold = 30,
+            InfoHash = "abc123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 100 });
+
+        CallTick();
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+    }
+
+    [Test]
+    public void Tick_should_not_switch_when_below_per_torrent_threshold()
+    {
+        _configService.DownloadThresholdPercent.Returns(10);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1_000_000,
+            Downloaded = 250_000,
+            Progress = 0.25,
+            Threshold = 50,
+            InfoHash = "abc123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 100 });
+
+        CallTick();
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
+    }
+
+    [Test]
     public void Tick_should_set_active_true_and_last_active()
     {
         var torrent = new Torrent
