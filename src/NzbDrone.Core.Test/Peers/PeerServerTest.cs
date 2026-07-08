@@ -11,6 +11,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers.MultiTracker;
 
 namespace NzbDrone.Core.Test.Peers;
 
@@ -19,6 +20,9 @@ public class PeerServerTest
 {
     private IConfigService _configService;
     private ITorrentService _torrentService;
+    private IConnectionManager _connectionManager;
+    private IPeerDiscoveryService _peerDiscovery;
+    private IMultiTrackerManager _multiTracker;
     private PeerServer _server;
     private List<PeerConnection> _connections;
     private List<TcpListener> _listeners;
@@ -29,6 +33,9 @@ public class PeerServerTest
     {
         _configService = Substitute.For<IConfigService>();
         _torrentService = Substitute.For<ITorrentService>();
+        _connectionManager = Substitute.For<IConnectionManager>();
+        _peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        _multiTracker = Substitute.For<IMultiTrackerManager>();
 
         _configService.MaxGlobalConnections.Returns(200);
         _configService.ListeningPort.Returns(0);
@@ -40,7 +47,7 @@ public class PeerServerTest
         _configService.PeerIdleChance.Returns(0.0);
         _configService.PeerContactIntervalSeconds.Returns(300);
 
-        _server = new PeerServer(_configService, _torrentService);
+        _server = new PeerServer(_configService, _torrentService, _connectionManager, _peerDiscovery, _multiTracker);
         _connections = new List<PeerConnection>();
         _listeners = new List<TcpListener>();
         _clients = new List<TcpClient>();
@@ -147,9 +154,8 @@ public class PeerServerTest
     public void Constructor_should_use_max_global_connections_for_semaphore()
     {
         _configService.MaxGlobalConnections.Returns(50);
-        var server = new PeerServer(_configService, _torrentService);
+        var server = new PeerServer(_configService, _torrentService, _connectionManager, _peerDiscovery, _multiTracker);
 
-        // Verify server was created successfully with the configured limit
         Assert.That(server, Is.Not.Null);
         server.Dispose();
     }
@@ -686,29 +692,28 @@ public class PeerServerTest
     [Test]
     public async Task RunPeerContactLoopAsync_should_stop_cleanly_when_cancelled()
     {
-        _configService.PeerContactIntervalSeconds.Returns(300);
+        _configService.PeerContactIntervalSeconds.Returns(1);
         _torrentService.GetAll().Returns(new System.Collections.Generic.List<Torrent>());
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
         await InvokeRunPeerContactLoopAsync(cts.Token);
 
         Assert.Pass();
     }
 
     [Test]
-    public async Task RunPeerContactLoopAsync_should_log_active_torrents_each_cycle()
+    public async Task RunPeerContactLoopAsync_should_query_torrents_each_cycle()
     {
-        _configService.PeerContactIntervalSeconds.Returns(0);
+        _configService.PeerContactIntervalSeconds.Returns(1);
         _torrentService.GetAll().Returns(new System.Collections.Generic.List<Torrent>
         {
-            new Torrent { Status = TorrentStatus.Seeding },
-            new Torrent { Status = TorrentStatus.Downloading }
+            new Torrent { Status = TorrentStatus.Seeding, InfoHash = "abc123" },
+            new Torrent { Status = TorrentStatus.Downloading, InfoHash = "def456" }
         });
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         await InvokeRunPeerContactLoopAsync(cts.Token);
 
-        // Verify GetAll was called at least once (cycle ran)
         _torrentService.Received().GetAll();
     }
 
@@ -851,14 +856,15 @@ public class PeerServerTest
     }
 
     [Test]
-    public async Task ExecuteAsync_contact_loop_queries_torrents_with_zero_interval()
+    [CancelAfter(10000)]
+    public async Task ExecuteAsync_contact_loop_queries_torrents()
     {
-        _configService.PeerContactIntervalSeconds.Returns(0);
+        _configService.PeerContactIntervalSeconds.Returns(1);
         _torrentService.GetAll().Returns(new List<Torrent>());
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
 
         await _server.StartAsync(cts.Token);
-        await Task.Delay(500);
+        await Task.Delay(3500);
 
         _torrentService.Received().GetAll();
     }

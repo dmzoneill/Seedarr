@@ -18,16 +18,28 @@ namespace NzbDrone.Core.Peers;
 public class PeerServer : BackgroundService
 {
     private const int MaxConnectionsPerIp = 5;
+    private const int OutgoingConnectTimeoutMs = 5000;
     private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;
+    private readonly IConnectionManager _connectionManager;
+    private readonly IPeerDiscoveryService _peerDiscovery;
+    private readonly Trackers.MultiTracker.IMultiTrackerManager _multiTracker;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
     private readonly Logger _logger;
 
-    public PeerServer(IConfigService configService, ITorrentService torrentService)
+    public PeerServer(
+        IConfigService configService,
+        ITorrentService torrentService,
+        IConnectionManager connectionManager,
+        IPeerDiscoveryService peerDiscovery,
+        Trackers.MultiTracker.IMultiTrackerManager multiTracker)
     {
         _configService = configService;
         _torrentService = torrentService;
+        _connectionManager = connectionManager;
+        _peerDiscovery = peerDiscovery;
+        _multiTracker = multiTracker;
         _connectionSemaphore = new SemaphoreSlim(configService.MaxGlobalConnections);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -132,24 +144,190 @@ public class PeerServer : BackgroundService
     {
         try
         {
+            var startupDelay = Math.Max(1, _configService.PeerContactIntervalSeconds);
+            await Task.Delay(TimeSpan.FromSeconds(startupDelay), stoppingToken);
             while (!stoppingToken.IsCancellationRequested)
             {
                 var intervalSeconds = _configService.PeerContactIntervalSeconds;
-                await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), stoppingToken);
 
                 var torrents = _torrentService.GetAll()
                     .Where(t => t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading)
+                    .Where(t => !string.IsNullOrEmpty(t.InfoHash))
                     .ToList();
 
-                _logger.Debug(
-                    "Peer contact cycle: {0} active torrents (interval: {1}s)",
-                    torrents.Count,
-                    intervalSeconds);
+                _logger.Debug("Peer contact cycle: {0} active torrents", torrents.Count);
+
+                foreach (var torrent in torrents)
+                {
+                    if (stoppingToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    DiscoverPeersFromTracker(torrent);
+                    ConnectToDiscoveredPeers(torrent, stoppingToken);
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), stoppingToken);
             }
         }
         catch (OperationCanceledException)
         {
-            // Shutdown
+        }
+    }
+
+    private void DiscoverPeersFromTracker(Torrent torrent)
+    {
+        try
+        {
+            var trackerUrl = torrent.TrackerUrl;
+            if (string.IsNullOrEmpty(trackerUrl))
+            {
+                return;
+            }
+
+            var request = new Trackers.TrackerAnnounceRequest
+            {
+                InfoHash = torrent.InfoHash,
+                PeerId = "-SD1000-000000000000",
+                Port = _configService.ListeningPort,
+                Uploaded = torrent.Uploaded,
+                Downloaded = torrent.Downloaded,
+                Left = Math.Max(0, torrent.TotalSize - torrent.Downloaded),
+                Event = "started",
+                TrackerUrl = trackerUrl,
+                Compact = true,
+                NumWant = 50
+            };
+
+            var announceList = new System.Collections.Generic.List<System.Collections.Generic.List<string>>
+            {
+                new() { trackerUrl }
+            };
+
+            var response = _multiTracker.Announce(request, announceList);
+
+            if (response.Success && response.Peers.Count > 0)
+            {
+                _peerDiscovery.AddPeers(torrent.InfoHash, response.Peers, "tracker");
+                _logger.Debug("Discovered {0} peers for {1} from tracker", response.Peers.Count, torrent.Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Tracker announce failed for {0}", torrent.Name);
+        }
+    }
+
+    private void ConnectToDiscoveredPeers(Torrent torrent, CancellationToken stoppingToken)
+    {
+        if (!_connectionManager.CanAddConnectionForTorrent(torrent.InfoHash))
+        {
+            return;
+        }
+
+        var candidates = _peerDiscovery.GetPeers(torrent.InfoHash, 5);
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var candidate in candidates)
+        {
+            if (stoppingToken.IsCancellationRequested || !_connectionManager.CanAddConnectionForTorrent(torrent.InfoHash))
+            {
+                break;
+            }
+
+            _ = Task.Run(() => ConnectToPeer(torrent, candidate), stoppingToken);
+        }
+    }
+
+    private void ConnectToPeer(Torrent torrent, DiscoveredPeer candidate)
+    {
+        PeerConnection connection = null;
+        try
+        {
+            _logger.Debug("Connecting to peer {0}:{1} for {2}", candidate.Ip, candidate.Port, torrent.Name);
+
+            connection = new PeerConnection(candidate.Ip, candidate.Port);
+            connection.HandshakeTimeoutMs = Math.Min(_configService.HandshakeTimeoutSeconds * 1000, OutgoingConnectTimeoutMs);
+            connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
+            connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
+            connection.MaxPipelinedRequests = _configService.PeerRequestCount;
+            connection.IdleChance = _configService.PeerIdleChance;
+
+            if (!connection.NegotiateEncryptionOutgoing(torrent.InfoHash, GetEncryptionMode()))
+            {
+                _logger.Debug("Outgoing encryption failed to {0}:{1}", candidate.Ip, candidate.Port);
+                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                connection.Dispose();
+                return;
+            }
+
+            var peerId = "-SD1000-000000000000";
+            connection.SendHandshake(torrent.InfoHash, peerId);
+
+            if (!connection.ReceiveHandshake())
+            {
+                _logger.Debug("Outgoing handshake failed from {0}:{1}", candidate.Ip, candidate.Port);
+                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                connection.Dispose();
+                return;
+            }
+
+            connection.SendBitfield(torrent.PieceCount);
+            connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+            connection.AmChoking = false;
+
+            _connectionManager.Add(connection);
+            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, true);
+
+            _logger.Info(
+                "Outgoing peer connected: {0}:{1} for {2} (encrypted: {3})",
+                candidate.Ip,
+                candidate.Port,
+                torrent.Name,
+                connection.IsEncrypted);
+
+            HandlePeerSession(connection, torrent);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to connect to peer {0}:{1}", candidate.Ip, candidate.Port);
+            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+            connection?.Dispose();
+        }
+    }
+
+    private void HandlePeerSession(PeerConnection connection, Torrent torrent)
+    {
+        try
+        {
+            while (connection.IsConnected)
+            {
+                var message = connection.ReceiveMessage();
+                if (message == null)
+                {
+                    var elapsed = DateTime.UtcNow - connection.LastActivity;
+                    if (elapsed.TotalSeconds >= connection.KeepAliveIntervalSeconds)
+                    {
+                        connection.SendKeepAlive();
+                    }
+
+                    continue;
+                }
+
+                HandleMessage(connection, message);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Peer session ended with {0}:{1}", connection.RemoteIp, connection.RemotePort);
+        }
+        finally
+        {
+            _connectionManager.Remove(connection);
         }
     }
 
