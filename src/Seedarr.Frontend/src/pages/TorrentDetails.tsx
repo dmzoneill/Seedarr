@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router';
 import { useTorrent, useTorrentFiles, useTorrentTrackers, useStartSeeding, useStopSeeding, useUpdateTorrent } from '../api/hooks';
 import { formatBytes, formatSpeed, formatRatio, formatDate } from '../utils/formatters';
 import { SkeletonLine } from '../components/Skeleton';
