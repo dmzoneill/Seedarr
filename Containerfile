@@ -1,5 +1,5 @@
 # Stage 1: Build frontend
-FROM node:20-alpine AS frontend
+FROM node:24-alpine AS frontend
 WORKDIR /build/src/Seedarr.Frontend
 COPY src/Seedarr.Frontend/package.json src/Seedarr.Frontend/package-lock.json ./
 RUN npm ci
