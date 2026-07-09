@@ -61,7 +61,7 @@ public class LoggingReconfigurationService : IHandle<ConfigSavedEvent>
                 {
                     FileName = logFilePath,
                     ArchiveFileName = Path.Combine(_appFolderInfo.AppDataFolder, "logs", "seedarr.{#}.txt"),
-                    ArchiveNumbering = ArchiveNumberingMode.Rolling,
+                    ArchiveSuffixFormat = "{#}",
                     MaxArchiveFiles = 5,
                     ArchiveAboveSize = 1_048_576,
                     Layout = "${date:format=yyyy-MM-dd HH\\:mm\\:ss.f}|${level:uppercase=true}|${logger}|${message}${onexception:inner=${newline}${exception:format=toString}}"
