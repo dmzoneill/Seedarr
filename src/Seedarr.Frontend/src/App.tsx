@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router';
 import Dashboard from './pages/Dashboard';
 import TorrentIndex from './pages/TorrentIndex';
 import TorrentDetails from './pages/TorrentDetails';
