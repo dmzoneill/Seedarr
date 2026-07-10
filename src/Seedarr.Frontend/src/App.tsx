@@ -174,6 +174,7 @@ function App() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const isSettingsRoute = location.pathname.startsWith('/settings');
   const isSystemRoute = location.pathname.startsWith('/system');
 
@@ -261,8 +262,39 @@ function App() {
             <button className="topbar-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
               {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
             </button>
-            <span className="topbar-btn topbar-heart"><HeartIcon /></span>
-            <span className="topbar-btn"><UserIcon /></span>
+            <a className="topbar-btn topbar-heart" href="https://github.com/sponsors/dmzoneill" target="_blank" rel="noopener noreferrer" title="Support Seedarr">
+              <HeartIcon />
+            </a>
+            <div style={{ position: 'relative' }}>
+              <button className="topbar-btn" onClick={() => setShowActionsMenu(!showActionsMenu)} title="Actions">
+                <UserIcon />
+              </button>
+              {showActionsMenu && (
+                <div className="topbar-dropdown" onClick={() => setShowActionsMenu(false)}>
+                  <button className="topbar-dropdown-item" onClick={() => navigate('/system/status')}>
+                    System Status
+                  </button>
+                  <button className="topbar-dropdown-item" onClick={() => navigate('/settings/general')}>
+                    Settings
+                  </button>
+                  <div className="topbar-dropdown-separator" />
+                  <button className="topbar-dropdown-item" onClick={() => {
+                    if (confirm('Restart Seedarr?')) {
+                      fetch('/api/v1/system/restart', { method: 'POST' });
+                    }
+                  }}>
+                    Restart
+                  </button>
+                  <button className="topbar-dropdown-item topbar-dropdown-danger" onClick={() => {
+                    if (confirm('Shut down Seedarr?')) {
+                      fetch('/api/v1/system/shutdown', { method: 'POST' });
+                    }
+                  }}>
+                    Shutdown
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
