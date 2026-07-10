@@ -1,25 +1,5 @@
 import { useSystemStatus, useHealthChecks, useDiskSpace } from '../api/hooks';
-
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  const idx = Math.min(i, units.length - 1);
-  return `${(bytes / Math.pow(1024, idx)).toFixed(1)} ${units[idx]}`;
-}
-
-function formatUptime(seconds: number): string {
-  const d = Math.floor(seconds / 86400);
-  const h = Math.floor((seconds % 86400) / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const parts: string[] = [];
-  if (d > 0) parts.push(`${d}d`);
-  if (h > 0) parts.push(`${h}h`);
-  if (m > 0) parts.push(`${m}m`);
-  parts.push(`${s}s`);
-  return parts.join(' ');
-}
+import { formatBytes, formatUptime } from '../utils/formatters';
 
 function SystemStatus() {
   const { data: status, isLoading: statusLoading } = useSystemStatus();

@@ -14,7 +14,7 @@ import {
   useSeedingConfig,
   useSaveSeedingConfig,
 } from '../api/hooks';
-import { extractTrackerDomain } from '../utils/formatters';
+import { extractTrackerDomain, formatSpeed } from '../utils/formatters';
 import {
   AllIcon, SeedingIcon, StoppedIcon, QueuedIcon, ErrorIcon,
   PlusIcon, PlayIcon, StopIcon, TableIcon, GridIcon, GlobeIcon,
@@ -115,13 +115,6 @@ function TorrentIndex() {
     }
     return { totalUploadSpeed: ul, totalDownloadSpeed: dl };
   }, [torrents]);
-
-  function formatSpeed(bytesPerSec: number): string {
-    if (bytesPerSec < 1024) return `${bytesPerSec} B/s`;
-    const kbps = bytesPerSec / 1024;
-    if (kbps < 1024) return `${kbps.toFixed(1)} KB/s`;
-    return `${(kbps / 1024).toFixed(2)} MB/s`;
-  }
 
   function handleViewMode(mode: ViewMode) {
     setViewMode(mode);
