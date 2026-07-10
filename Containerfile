@@ -2,7 +2,7 @@
 FROM node:24-alpine AS frontend
 WORKDIR /build/src/Seedarr.Frontend
 COPY src/Seedarr.Frontend/package.json src/Seedarr.Frontend/package-lock.json ./
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 COPY src/Seedarr.Frontend/ ./
 RUN npm run build
 
