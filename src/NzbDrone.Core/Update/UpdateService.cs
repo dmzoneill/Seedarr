@@ -64,15 +64,10 @@ public class UpdateService : IUpdateService
 
         lock (_cacheLock)
         {
-            if (result.Releases.Count > 0)
-            {
-                _cachedResult = result;
-                _cacheExpiry = DateTime.UtcNow.Add(CacheDuration);
-            }
-            else
-            {
-                _cacheExpiry = DateTime.UtcNow.AddMinutes(5);
-            }
+            _cachedResult = result;
+            _cacheExpiry = result.Releases.Count > 0
+                ? DateTime.UtcNow.Add(CacheDuration)
+                : DateTime.UtcNow.AddMinutes(5);
         }
 
         return result;
