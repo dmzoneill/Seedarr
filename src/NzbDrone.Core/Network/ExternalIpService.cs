@@ -2,6 +2,7 @@ using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Hosting;
 using NLog;
 
 namespace NzbDrone.Core.Network;
@@ -12,8 +13,10 @@ public interface IExternalIpService
     Task<string> GetExternalIpAsync(CancellationToken cancellationToken = default);
 }
 
-public class ExternalIpService : IExternalIpService
+public class ExternalIpService : BackgroundService, IExternalIpService
 {
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromHours(1);
+
     private static readonly string[] Sources =
     {
         "https://api.ipify.org",
@@ -41,13 +44,45 @@ public class ExternalIpService : IExternalIpService
         _logger = LogManager.GetCurrentClassLogger();
     }
 
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                var ip = await FetchExternalIpAsync(stoppingToken);
+                if (!string.IsNullOrEmpty(ip) && ip != _cachedIp)
+                {
+                    _logger.Info("External IP updated: {0}", ip);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Periodic external IP refresh failed");
+            }
+
+            await Task.Delay(RefreshInterval, stoppingToken);
+        }
+    }
+
     public async Task<string> GetExternalIpAsync(CancellationToken cancellationToken = default)
     {
-        if (!string.IsNullOrEmpty(_cachedIp) && DateTime.UtcNow - _lastFetch < TimeSpan.FromMinutes(10))
+        if (!string.IsNullOrEmpty(_cachedIp) && DateTime.UtcNow - _lastFetch < RefreshInterval)
         {
             return _cachedIp;
         }
 
+        return await FetchExternalIpAsync(cancellationToken);
+    }
+
+    private async Task<string> FetchExternalIpAsync(CancellationToken cancellationToken)
+    {
         foreach (var source in Sources)
         {
             try
