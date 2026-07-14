@@ -19,7 +19,7 @@ function HealthAlerts() {
           className={`health-alert health-alert-${alert.type.toLowerCase()}`}
         >
           <span className="health-alert-message">
-            {alert.source}: {alert.message}
+            {alert.message}
           </span>
           <button
             className="health-alert-dismiss"
