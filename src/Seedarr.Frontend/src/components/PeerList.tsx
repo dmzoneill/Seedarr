@@ -6,9 +6,10 @@ interface PeerListProps {
 }
 
 function PeerList({ torrentId }: PeerListProps) {
-  const { data: peers, isLoading } = usePeers(torrentId);
+  const { data: peers, isLoading, isError } = usePeers(torrentId);
 
   if (isLoading) return <p className="loading">Loading peers...</p>;
+  if (isError) return <p className="error">Failed to load peers.</p>;
 
   return (
     <div className="card">

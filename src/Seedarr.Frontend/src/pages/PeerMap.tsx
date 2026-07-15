@@ -36,7 +36,7 @@ function PeerMap() {
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   const range = getTimeRange(hours);
-  const { data: graphData, isLoading } = usePeerGraph(range.start, range.end);
+  const { data: graphData, isLoading, isError } = usePeerGraph(range.start, range.end);
 
   const updateDimensions = useCallback(() => {
     if (containerRef.current) {
@@ -266,7 +266,8 @@ function PeerMap() {
       </div>
       <div ref={containerRef} className="peer-map-container">
         {isLoading && <div className="peer-map-loading">Loading peer data...</div>}
-        {!isLoading && peerCount === 0 && (
+        {!isLoading && isError && <p className="error">Failed to load peer data.</p>}
+        {!isLoading && !isError && peerCount === 0 && (
           <div className="peer-map-empty">No peer connections in the selected time range.</div>
         )}
         <svg

@@ -42,7 +42,7 @@ function TrashIcon() {
 }
 
 function SystemBackup() {
-  const { data: backups, isLoading } = useBackups();
+  const { data: backups, isLoading, isError } = useBackups();
   const createBackup = useCreateBackup();
   const deleteBackup = useDeleteBackup();
   const restoreBackup = useRestoreBackup();
@@ -94,6 +94,7 @@ function SystemBackup() {
       </div>
 
       {isLoading && <p className="loading">Loading backups...</p>}
+      {!isLoading && isError && <p className="error">Failed to load backups.</p>}
 
       {backups && (
         <div className="torrent-table-wrapper">

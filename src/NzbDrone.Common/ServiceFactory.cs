@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using DryIoc;
 
@@ -7,6 +8,8 @@ public interface IServiceFactory
 {
     T Build<T>()
         where T : class;
+
+    object Build(Type type);
 
     IEnumerable<T> BuildAll<T>()
         where T : class;
@@ -25,6 +28,11 @@ public class ServiceFactory : IServiceFactory
         where T : class
     {
         return _resolver.Resolve<T>();
+    }
+
+    public object Build(Type type)
+    {
+        return _resolver.Resolve(type);
     }
 
     public IEnumerable<T> BuildAll<T>()

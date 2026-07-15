@@ -189,7 +189,7 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
 }
 
 function SpeedSchedule() {
-  const { data: schedules, isLoading } = useSpeedSchedules();
+  const { data: schedules, isLoading, isError } = useSpeedSchedules();
   const { data: activeLimits } = useActiveSpeedLimits();
   const createSchedule = useCreateSpeedSchedule();
   const updateSchedule = useUpdateSpeedSchedule();
@@ -241,12 +241,14 @@ function SpeedSchedule() {
         </div>
       )}
 
-      {!isLoading && <WeeklyCalendar schedules={schedules ?? []} />}
+      {!isLoading && !isError && <WeeklyCalendar schedules={schedules ?? []} />}
 
       <div className="card">
         <h3>Schedules</h3>
         {isLoading ? (
           <p className="loading">Loading schedules...</p>
+        ) : isError ? (
+          <p className="error">Failed to load data.</p>
         ) : (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">
