@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Containerfile
+      args:
+        COVERAGE_TOOLS: "true"
     container_name: seedarr
     hostname: seedarr.local
     ports:
