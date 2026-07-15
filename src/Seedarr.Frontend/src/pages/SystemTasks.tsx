@@ -113,14 +113,14 @@ function statusClass(status: string): string {
 }
 
 function SystemTasks() {
-  const { data: tasks, isLoading: tasksLoading } = useQuery<ScheduledTask[]>({
+  const { data: tasks, isLoading: tasksLoading, isError: tasksError } = useQuery<ScheduledTask[]>({
     queryKey: ['system', 'tasks'],
     queryFn: () => apiClient.get('/system/task'),
     retry: false,
     refetchInterval: 30000,
   });
 
-  const { data: commands, isLoading: commandsLoading } = useQuery<CommandItem[]>({
+  const { data: commands, isLoading: commandsLoading, isError: commandsError } = useQuery<CommandItem[]>({
     queryKey: ['system', 'commands'],
     queryFn: () => apiClient.get('/system/command'),
     retry: false,
@@ -135,6 +135,7 @@ function SystemTasks() {
       <div className="card">
         <h3>Scheduled</h3>
         {tasksLoading && <p className="loading">Loading tasks...</p>}
+        {!tasksLoading && tasksError && <p className="error">Failed to load tasks.</p>}
         {tasks && tasks.length > 0 && (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">
@@ -174,6 +175,7 @@ function SystemTasks() {
       <div className="card">
         <h3>Queue</h3>
         {commandsLoading && <p className="loading">Loading commands...</p>}
+        {!commandsLoading && commandsError && <p className="error">Failed to load commands.</p>}
         {commands && commands.length > 0 && (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">

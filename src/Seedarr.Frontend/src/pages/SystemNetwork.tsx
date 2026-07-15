@@ -36,13 +36,22 @@ function EncryptionDonut({ encrypted, plaintext }: { encrypted: number; plaintex
 }
 
 function SystemNetwork() {
-  const { data: diag, isLoading } = useNetworkDiagnostics();
+  const { data: diag, isLoading, isError } = useNetworkDiagnostics();
 
-  if (isLoading || !diag) {
+  if (isLoading) {
     return (
       <div>
         <h1 className="page-heading">Network Diagnostics</h1>
         <p className="loading">Loading diagnostics...</p>
+      </div>
+    );
+  }
+
+  if (isError || !diag) {
+    return (
+      <div>
+        <h1 className="page-heading">Network Diagnostics</h1>
+        <p className="error">Failed to load data.</p>
       </div>
     );
   }

@@ -112,7 +112,7 @@ interface TorrentTableProps {
 }
 
 function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, onSelectTorrent, selectMode, selectedIds, onToggleSelect, onSelectAll }: TorrentTableProps) {
-  const { data: torrents, isLoading } = useTorrents();
+  const { data: torrents, isLoading, isError } = useTorrents();
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
   const deleteTorrent = useDeleteTorrent();
@@ -183,6 +183,10 @@ function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, o
         </table>
       </div>
     );
+  }
+
+  if (isError) {
+    return <p className="error">Failed to load data.</p>;
   }
 
   const filtered = (torrents ?? []).filter((t) => {

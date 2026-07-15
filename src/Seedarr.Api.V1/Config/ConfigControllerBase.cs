@@ -57,7 +57,7 @@ public abstract class ConfigController<TResource> : Controller
 
         _configService.SaveConfigDictionary(dictionary);
 
-        return Accepted(resource.Id);
+        return Accepted(resource);
     }
 
     protected abstract TResource ToResource(IConfigService model);

@@ -7,10 +7,10 @@ function History() {
   const [filters, setFilters] = useState({ start: '', end: '', infoHash: '' });
   const [appliedFilters, setAppliedFilters] = useState<{ start?: string; end?: string; infoHash?: string }>({});
 
-  const { data: logs, isLoading: logsLoading } = usePeerConnectionLog(
+  const { data: logs, isLoading: logsLoading, isError: logsError } = usePeerConnectionLog(
     activeTab === 'log' ? appliedFilters : undefined
   );
-  const { data: activePeers, isLoading: activeLoading } = useActivePeers();
+  const { data: activePeers, isLoading: activeLoading, isError: activeError } = useActivePeers();
 
   function applyFilters() {
     setAppliedFilters({
@@ -80,6 +80,8 @@ function History() {
           <div className="card">
             {logsLoading ? (
               <p className="loading">Loading connection log...</p>
+            ) : logsError ? (
+              <p className="error">Failed to load data.</p>
             ) : (
               <div className="torrent-table-wrapper">
                 <table className="torrent-table">
@@ -130,6 +132,8 @@ function History() {
         <div className="card">
           {activeLoading ? (
             <p className="loading">Loading active peers...</p>
+          ) : activeError ? (
+            <p className="error">Failed to load data.</p>
           ) : (
             <div className="torrent-table-wrapper">
               <table className="torrent-table">

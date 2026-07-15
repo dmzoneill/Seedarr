@@ -30,12 +30,27 @@ public class IndexerController : Controller
     [HttpGet("{id}")]
     public ActionResult<IndexerDefinition> Get(int id)
     {
-        return Ok(MaskApiKey(_indexerFactory.Get(id)));
+        var definition = _indexerFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(MaskApiKey(definition));
     }
 
     [HttpPost]
     public ActionResult<IndexerDefinition> Create([FromBody] IndexerDefinition definition)
     {
+        try
+        {
+            CreateIndexer(definition);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
         var created = _indexerFactory.Create(definition);
         return Ok(MaskApiKey(created));
     }
@@ -67,7 +82,21 @@ public class IndexerController : Controller
     public ActionResult<object> TestConnection(int id)
     {
         var definition = _indexerFactory.Get(id);
-        var indexer = CreateIndexer(definition);
+        if (definition == null)
+        {
+            return NotFound();
+        }
+
+        IIndexer indexer;
+        try
+        {
+            indexer = CreateIndexer(definition);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
         var success = indexer.TestConnection(definition);
         return Ok(new { success });
     }

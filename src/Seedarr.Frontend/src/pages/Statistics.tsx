@@ -10,7 +10,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function Statistics() {
-  const { data: torrents, isLoading: torrentsLoading } = useTorrents();
+  const { data: torrents, isLoading: torrentsLoading, isError: torrentsError } = useTorrents();
 
   const statusCounts: Record<string, number> = {};
   (torrents ?? []).forEach((t) => {
@@ -83,6 +83,8 @@ function Statistics() {
           <h3>Top Torrents by Upload</h3>
           {torrentsLoading ? (
             <p className="loading">Loading...</p>
+          ) : torrentsError ? (
+            <p className="error">Failed to load data.</p>
           ) : (
             <div className="torrent-table-wrapper">
               <table className="torrent-table">

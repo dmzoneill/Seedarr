@@ -32,12 +32,27 @@ public class DownloadClientController : Controller
     [HttpGet("{id}")]
     public ActionResult<DownloadClientDefinition> Get(int id)
     {
-        return Ok(MaskPassword(_downloadClientFactory.Get(id)));
+        var definition = _downloadClientFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(MaskPassword(definition));
     }
 
     [HttpPost]
     public ActionResult<DownloadClientDefinition> Create([FromBody] DownloadClientDefinition definition)
     {
+        try
+        {
+            CreateClient(definition);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
         var created = _downloadClientFactory.Create(definition);
         return Ok(MaskPassword(created));
     }
@@ -69,7 +84,21 @@ public class DownloadClientController : Controller
     public ActionResult<object> TestConnection(int id)
     {
         var definition = _downloadClientFactory.Get(id);
-        var client = CreateClient(definition);
+        if (definition == null)
+        {
+            return NotFound();
+        }
+
+        IDownloadClient client;
+        try
+        {
+            client = CreateClient(definition);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+
         var success = client.TestConnection();
         return Ok(new { success });
     }

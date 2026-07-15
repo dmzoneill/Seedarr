@@ -3,7 +3,7 @@ import { useTags, useCreateTag, useUpdateTag, useDeleteTag, useTorrents } from '
 import type { Tag } from '../api/types';
 
 function Tags() {
-  const { data: tags, isLoading } = useTags();
+  const { data: tags, isLoading, isError } = useTags();
   const { data: torrents } = useTorrents();
   const createTag = useCreateTag();
   const updateTag = useUpdateTag();
@@ -73,6 +73,8 @@ function Tags() {
       <div className="card">
         {isLoading ? (
           <p className="loading">Loading tags...</p>
+        ) : isError ? (
+          <p className="error">Failed to load tags.</p>
         ) : (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">
