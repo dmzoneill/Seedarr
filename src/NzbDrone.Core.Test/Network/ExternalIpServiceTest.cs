@@ -181,7 +181,7 @@ public class ExternalIpServiceTest
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, "50.60.70.80");
         var subject = new ExternalIpService(new HttpClient(handler));
-        SetCache(subject, "old.ip.address", DateTime.UtcNow.AddMinutes(-15));
+        SetCache(subject, "old.ip.address", DateTime.UtcNow.AddHours(-2));
 
         var result = await subject.GetExternalIpAsync();
 

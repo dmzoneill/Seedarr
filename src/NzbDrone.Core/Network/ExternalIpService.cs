@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using System.Net.NetworkInformation;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -15,7 +16,8 @@ public interface IExternalIpService
 
 public class ExternalIpService : BackgroundService, IExternalIpService
 {
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromHours(1);
+    private static readonly TimeSpan FallbackInterval = TimeSpan.FromHours(6);
+    private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(1);
 
     private static readonly string[] Sources =
     {
@@ -33,8 +35,10 @@ public class ExternalIpService : BackgroundService, IExternalIpService
 
     private readonly HttpClient _client;
     private readonly Logger _logger;
+    private readonly SemaphoreSlim _fetchLock = new(1, 1);
     private string _cachedIp = "";
     private DateTime _lastFetch = DateTime.MinValue;
+    private volatile bool _networkChanged;
 
     public string CachedIp => _cachedIp;
 
@@ -46,34 +50,64 @@ public class ExternalIpService : BackgroundService, IExternalIpService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+        NetworkChange.NetworkAddressChanged += OnNetworkChanged;
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            try
+            await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            await FetchExternalIpAsync(stoppingToken);
+
+            while (!stoppingToken.IsCancellationRequested)
             {
-                var ip = await FetchExternalIpAsync(stoppingToken);
-                if (!string.IsNullOrEmpty(ip) && ip != _cachedIp)
+                await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+
+                if (_networkChanged)
                 {
-                    _logger.Info("External IP updated: {0}", ip);
+                    _networkChanged = false;
+                    _logger.Info("Network change detected, refreshing external IP");
+                    await RefreshIp(stoppingToken);
+                }
+                else if (DateTime.UtcNow - _lastFetch > FallbackInterval)
+                {
+                    await RefreshIp(stoppingToken);
                 }
             }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Periodic external IP refresh failed");
-            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            NetworkChange.NetworkAddressChanged -= OnNetworkChanged;
+        }
+    }
 
-            await Task.Delay(RefreshInterval, stoppingToken);
+    private void OnNetworkChanged(object sender, EventArgs e)
+    {
+        _networkChanged = true;
+    }
+
+    private async Task RefreshIp(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var oldIp = _cachedIp;
+            var newIp = await FetchExternalIpAsync(cancellationToken);
+
+            if (!string.IsNullOrEmpty(newIp) && newIp != oldIp)
+            {
+                _logger.Info("External IP changed: {0} -> {1}", oldIp, newIp);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "External IP refresh failed");
         }
     }
 
     public async Task<string> GetExternalIpAsync(CancellationToken cancellationToken = default)
     {
-        if (!string.IsNullOrEmpty(_cachedIp) && DateTime.UtcNow - _lastFetch < RefreshInterval)
+        if (!string.IsNullOrEmpty(_cachedIp) && DateTime.UtcNow - _lastFetch < CacheDuration)
         {
             return _cachedIp;
         }
@@ -83,26 +117,38 @@ public class ExternalIpService : BackgroundService, IExternalIpService
 
     private async Task<string> FetchExternalIpAsync(CancellationToken cancellationToken)
     {
-        foreach (var source in Sources)
+        if (!await _fetchLock.WaitAsync(0, cancellationToken))
         {
-            try
-            {
-                var ip = (await _client.GetStringAsync(source, cancellationToken)).Trim();
-
-                if (System.Net.IPAddress.TryParse(ip, out _))
-                {
-                    _cachedIp = ip;
-                    _lastFetch = DateTime.UtcNow;
-                    _logger.Debug("External IP from {0}: {1}", source, ip);
-                    return ip;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Failed to get external IP from {0}", source);
-            }
+            return _cachedIp;
         }
 
-        return _cachedIp;
+        try
+        {
+            foreach (var source in Sources)
+            {
+                try
+                {
+                    var ip = (await _client.GetStringAsync(source, cancellationToken)).Trim();
+
+                    if (System.Net.IPAddress.TryParse(ip, out _))
+                    {
+                        _cachedIp = ip;
+                        _lastFetch = DateTime.UtcNow;
+                        _logger.Debug("External IP from {0}: {1}", source, ip);
+                        return ip;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to get external IP from {0}", source);
+                }
+            }
+
+            return _cachedIp;
+        }
+        finally
+        {
+            _fetchLock.Release();
+        }
     }
 }
