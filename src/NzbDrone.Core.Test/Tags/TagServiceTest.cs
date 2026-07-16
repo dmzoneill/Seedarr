@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Tags;
 
@@ -69,14 +71,14 @@ public class TagServiceTest
     }
 
     [Test]
-    public void Add_should_publish_tags_updated_event()
+    public void Add_should_publish_model_event()
     {
         var tag = new Tag { Label = "NewTag" };
         _repo.Insert(tag).Returns(tag);
 
         _subject.Add(tag);
 
-        _eventAggregator.Received(1).PublishEvent(Arg.Any<TagsUpdatedEvent>());
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<ModelEvent<Tag>>(e => e.Action == ModelAction.Created));
     }
 
     [Test]
@@ -90,13 +92,13 @@ public class TagServiceTest
     }
 
     [Test]
-    public void Update_should_publish_tags_updated_event()
+    public void Update_should_publish_model_event()
     {
         var tag = new Tag { Id = 1, Label = "Updated" };
 
         _subject.Update(tag);
 
-        _eventAggregator.Received(1).PublishEvent(Arg.Any<TagsUpdatedEvent>());
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<ModelEvent<Tag>>(e => e.Action == ModelAction.Updated));
     }
 
     [Test]
@@ -118,10 +120,13 @@ public class TagServiceTest
     }
 
     [Test]
-    public void Delete_should_publish_tags_updated_event()
+    public void Delete_should_publish_model_event_when_tag_exists()
     {
+        var tag = new Tag { Id = 5, Label = "ToDelete" };
+        _repo.Get(5).Returns(tag);
+
         _subject.Delete(5);
 
-        _eventAggregator.Received(1).PublishEvent(Arg.Any<TagsUpdatedEvent>());
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<ModelEvent<Tag>>(e => e.Action == ModelAction.Deleted));
     }
 }

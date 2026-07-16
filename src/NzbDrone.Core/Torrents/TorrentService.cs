@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Torrents;
@@ -60,36 +62,37 @@ public class TorrentService : ITorrentService
 
         var added = _repository.Insert(torrent);
         _eventAggregator.PublishEvent(new TorrentAddedEvent(added));
+        _eventAggregator.PublishEvent(new ModelEvent<Torrent>(added, ModelAction.Created));
         return added;
     }
 
     public Torrent Update(Torrent torrent)
     {
         _logger.Info("Updating torrent: {0}", torrent.Name);
-        return _repository.Update(torrent);
+        var updated = _repository.Update(torrent);
+        _eventAggregator.PublishEvent(new ModelEvent<Torrent>(updated, ModelAction.Updated));
+        return updated;
     }
 
     public void Delete(int id, bool deleteFiles = false)
     {
         _logger.Info("Deleting torrent {0} (deleteFiles={1})", id, deleteFiles);
 
-        if (deleteFiles)
+        var torrent = _repository.Get(id);
+
+        if (deleteFiles && torrent != null && !string.IsNullOrEmpty(torrent.SourcePath))
         {
-            var torrent = _repository.Get(id);
-            if (torrent != null && !string.IsNullOrEmpty(torrent.SourcePath))
+            try
             {
-                try
+                if (File.Exists(torrent.SourcePath))
                 {
-                    if (File.Exists(torrent.SourcePath))
-                    {
-                        File.Delete(torrent.SourcePath);
-                        _logger.Info("Deleted source file: {0}", torrent.SourcePath);
-                    }
+                    File.Delete(torrent.SourcePath);
+                    _logger.Info("Deleted source file: {0}", torrent.SourcePath);
                 }
-                catch (Exception ex)
-                {
-                    _logger.Warn(ex, "Failed to delete source file: {0}", torrent.SourcePath);
-                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to delete source file: {0}", torrent.SourcePath);
             }
         }
 
@@ -97,6 +100,11 @@ public class TorrentService : ITorrentService
         _trackerEntryService.DeleteByTorrentId(id);
         _repository.Delete(id);
         _eventAggregator.PublishEvent(new TorrentDeletedEvent(id));
+
+        if (torrent != null)
+        {
+            _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
+        }
     }
 
     public Torrent Recheck(int id)
