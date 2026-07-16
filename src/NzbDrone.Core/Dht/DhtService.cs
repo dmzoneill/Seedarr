@@ -198,6 +198,10 @@ public class DhtService : BackgroundService
                     _logger.Debug("DHT bootstrap: sent find_node to {0}", node);
                 }
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.Debug(ex, "DHT bootstrap failed for {0}", node);
