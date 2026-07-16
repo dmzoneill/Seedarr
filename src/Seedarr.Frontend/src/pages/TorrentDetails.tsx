@@ -444,7 +444,7 @@ function OptionsTab({ torrent }: { torrent: import('../api/types').Torrent }) {
         </button>
         {updateTorrent.isError && (
           <span className="error" style={{ marginLeft: '0.75rem', fontSize: '0.85rem' }}>
-            Failed to save: {updateTorrent.error?.message}
+            Failed to save: {updateTorrent.error?.message ?? 'Unknown error'}
           </span>
         )}
         {updateTorrent.isSuccess && !dirty && (
@@ -547,17 +547,25 @@ function MonitoringTab({ torrent }: { torrent: import('../api/types').Torrent })
 function LogTab({ torrent }: { torrent: import('../api/types').Torrent }) {
   const events = [
     { time: torrent.dateAdded, event: 'Torrent added' },
-    ...(torrent.lastActive
-      ? [{ time: torrent.lastActive, event: `Last active (status: ${torrent.status})` }]
+    ...(torrent.forceCompleted
+      ? [{ time: torrent.lastActive ?? torrent.dateAdded, event: 'Marked as force-completed (100%)' }]
       : []),
-  ];
+    ...(torrent.progress >= 1.0 && !torrent.forceCompleted && torrent.lastActive
+      ? [{ time: torrent.lastActive, event: 'Download completed' }]
+      : []),
+    ...(torrent.forceStart
+      ? [{ time: torrent.lastActive ?? torrent.dateAdded, event: 'Force-start enabled' }]
+      : []),
+    ...(torrent.lastActive && torrent.lastActive !== torrent.dateAdded
+      ? [{ time: torrent.lastActive, event: `Last active — status: ${torrent.status}` }]
+      : []),
+  ]
+    .filter(e => e.time)
+    .sort((a, b) => new Date(a.time!).getTime() - new Date(b.time!).getTime());
 
   return (
     <div className="card">
       <h3>Log</h3>
-      <p style={{ color: 'var(--text-dim)', marginBottom: '1rem', fontSize: '0.9rem' }}>
-        Per-torrent logging coming soon. Key events for this torrent are shown below.
-      </p>
       <div className="torrent-table-wrapper">
         <table className="torrent-table">
           <thead>
@@ -567,12 +575,18 @@ function LogTab({ torrent }: { torrent: import('../api/types').Torrent }) {
             </tr>
           </thead>
           <tbody>
-            {events.map((entry, i) => (
-              <tr key={i} className="torrent-table-row">
-                <td>{formatDate(entry.time)}</td>
-                <td>{entry.event}</td>
+            {events.length === 0 ? (
+              <tr className="torrent-table-row">
+                <td colSpan={2} style={{ color: 'var(--text-dim)', textAlign: 'center' }}>No events recorded</td>
               </tr>
-            ))}
+            ) : (
+              events.map((entry, i) => (
+                <tr key={i} className="torrent-table-row">
+                  <td>{formatDate(entry.time)}</td>
+                  <td>{entry.event}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
