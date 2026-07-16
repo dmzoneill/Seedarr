@@ -27,6 +27,7 @@ import SeedarrLogo from './components/icons/SeedarrLogo';
 import SeedarrText from './components/icons/SeedarrText';
 import { DashboardIcon, TorrentIcon, SettingsIcon, SystemIcon } from './components/icons/NavIcons';
 import { useTheme } from './context/ThemeContext';
+import { apiClient } from './api/client';
 
 function ActivityIcon() {
   return (
@@ -280,14 +281,14 @@ function App() {
                   <div className="topbar-dropdown-separator" />
                   <button className="topbar-dropdown-item" onClick={() => {
                     if (confirm('Restart Seedarr?')) {
-                      fetch('/api/v1/system/restart', { method: 'POST' });
+                      apiClient.post('/system/restart').catch(() => {});
                     }
                   }}>
                     Restart
                   </button>
                   <button className="topbar-dropdown-item topbar-dropdown-danger" onClick={() => {
                     if (confirm('Shut down Seedarr?')) {
-                      fetch('/api/v1/system/shutdown', { method: 'POST' });
+                      apiClient.post('/system/shutdown').catch(() => {});
                     }
                   }}>
                     Shutdown
