@@ -64,10 +64,16 @@ public class ArrConnectionController : Controller
     {
         definition.Id = id;
 
-        if (definition.ApiKey != null && definition.ApiKey.Contains('*'))
+        if (definition.ApiKey != null)
         {
             var existing = _connectionFactory.Get(id);
-            definition.ApiKey = existing.ApiKey;
+            var maskedKey = existing.ApiKey?.Length > 4
+                ? new string('*', existing.ApiKey.Length - 4) + existing.ApiKey[^4..]
+                : new string('*', existing.ApiKey?.Length ?? 0);
+            if (definition.ApiKey == maskedKey)
+            {
+                definition.ApiKey = existing.ApiKey;
+            }
         }
 
         _connectionFactory.Update(definition);

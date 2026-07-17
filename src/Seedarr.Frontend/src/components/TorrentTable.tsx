@@ -83,7 +83,7 @@ function loadVisibleColumns(): Set<string> {
       const parsed = JSON.parse(stored) as string[];
       if (Array.isArray(parsed) && parsed.length > 0) return new Set(parsed);
     }
-  } catch { /* ignore */ }
+  } catch (err) { console.warn('Failed to parse localStorage:', err); }
   return new Set(DEFAULT_VISIBLE);
 }
 

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useTorrents, useSeedingStats, useActiveSpeedLimits } from '../api/hooks';
 import { formatBytes, formatSpeed, formatRatio, formatDate } from '../utils/formatters';
 import HealthAlerts from '../components/HealthAlerts';
@@ -69,17 +70,19 @@ function Dashboard() {
     statusCounts[s] = (statusCounts[s] || 0) + 1;
   });
 
-  const trackerCounts: Record<string, number> = {};
-  (torrents ?? []).forEach((t) => {
-    let domain = 'No tracker';
-    if (t.trackerUrl) {
-      try { domain = new URL(t.trackerUrl).hostname; } catch { domain = t.trackerUrl; }
-    }
-    trackerCounts[domain] = (trackerCounts[domain] || 0) + 1;
-  });
-  const topTrackers = Object.entries(trackerCounts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+  const topTrackers = useMemo(() => {
+    const trackerCounts: Record<string, number> = {};
+    (torrents ?? []).forEach((t) => {
+      let domain = 'No tracker';
+      if (t.trackerUrl) {
+        try { domain = new URL(t.trackerUrl).hostname; } catch { domain = t.trackerUrl; }
+      }
+      trackerCounts[domain] = (trackerCounts[domain] || 0) + 1;
+    });
+    return Object.entries(trackerCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+  }, [torrents]);
 
   return (
     <div>

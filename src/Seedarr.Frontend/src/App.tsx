@@ -281,14 +281,14 @@ function App() {
                   <div className="topbar-dropdown-separator" />
                   <button className="topbar-dropdown-item" onClick={() => {
                     if (confirm('Restart Seedarr?')) {
-                      apiClient.post('/system/restart').catch(() => {});
+                      apiClient.post('/system/restart').catch((err) => console.error('System action failed:', err));
                     }
                   }}>
                     Restart
                   </button>
                   <button className="topbar-dropdown-item topbar-dropdown-danger" onClick={() => {
                     if (confirm('Shut down Seedarr?')) {
-                      apiClient.post('/system/shutdown').catch(() => {});
+                      apiClient.post('/system/shutdown').catch((err) => console.error('System action failed:', err));
                     }
                   }}>
                     Shutdown

@@ -56,7 +56,10 @@ public class TorrentFileParser : ITorrentFileParser
     {
         var parser = new BencodeParser();
         var torrent = parser.Parse<BDictionary>(stream);
-        var info = (BDictionary)torrent["info"];
+        if (!torrent.ContainsKey("info") || torrent["info"] is not BDictionary info)
+        {
+            throw new InvalidOperationException("Malformed torrent file: missing or invalid 'info' dictionary.");
+        }
 
         var pieceLength = ((BNumber)info["piece length"]).Value;
         var pieces = ((BString)info["pieces"]).Value;

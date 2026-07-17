@@ -43,9 +43,9 @@ public class TagService : ITagService
     public Tag Update(Tag tag)
     {
         _logger.Info("Updating tag: {0}", tag.Label);
-        _repo.Update(tag);
-        _eventAggregator.PublishEvent(new ModelEvent<Tag>(tag, ModelAction.Updated));
-        return tag;
+        var result = _repo.Update(tag);
+        _eventAggregator.PublishEvent(new ModelEvent<Tag>(result, ModelAction.Updated));
+        return result;
     }
 
     public void Delete(int id)

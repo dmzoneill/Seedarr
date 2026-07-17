@@ -19,6 +19,7 @@ public class WatchFolderService : BackgroundService
     private readonly IConfigService _configService;
     private readonly Logger _logger;
     private FileSystemWatcher _watcher;
+    private CancellationTokenSource _debounceCts;
 
     public WatchFolderService(ITorrentFileParser parser, ITorrentService torrentService, ITrackerEntryService trackerEntryService, IAppFolderInfo appFolderInfo, IConfigService configService)
     {
@@ -118,10 +119,21 @@ public class WatchFolderService : BackgroundService
         }
     }
 
-    private void OnTorrentFileCreated(object sender, FileSystemEventArgs e)
+    private async void OnTorrentFileCreated(object sender, FileSystemEventArgs e)
     {
-        Thread.Sleep(500);
-        ProcessTorrentFile(e.FullPath);
+        _debounceCts?.Cancel();
+        _debounceCts = new CancellationTokenSource();
+        var token = _debounceCts.Token;
+
+        try
+        {
+            await Task.Delay(500, token);
+            ProcessTorrentFile(e.FullPath);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer event superseded this one; processing skipped.
+        }
     }
 
     private void ProcessTorrentFile(string filePath)
