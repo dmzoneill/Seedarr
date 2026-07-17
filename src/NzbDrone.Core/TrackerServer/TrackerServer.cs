@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using BencodeNET.Objects;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
@@ -194,14 +195,15 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
             var path = parts[1];
 
-            string responseBody;
+            byte[] bodyBytes;
 
             if (path.StartsWith("/announce"))
             {
-                responseBody = HandleAnnounce(path, remoteEndpoint);
+                bodyBytes = HandleAnnounce(path, remoteEndpoint);
             }
             else if (path.StartsWith("/scrape"))
             {
+                string responseBody;
                 if (!_configService.TrackerEnableScrape)
                 {
                     responseBody = "d14:failure reason15:Scrape disablede";
@@ -210,15 +212,18 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
                 {
                     responseBody = HandleScrape(path);
                 }
+
+                bodyBytes = Encoding.ASCII.GetBytes(responseBody);
             }
             else
             {
-                responseBody = "d14:failure reason13:Invalid requeste";
+                bodyBytes = Encoding.ASCII.GetBytes("d14:failure reason13:Invalid requeste");
             }
 
-            var httpResponse = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {responseBody.Length}\r\nConnection: close\r\n\r\n{responseBody}";
-            var responseBytes = Encoding.ASCII.GetBytes(httpResponse);
-            stream.Write(responseBytes, 0, responseBytes.Length);
+            var httpHeaders = $"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {bodyBytes.Length}\r\nConnection: close\r\n\r\n";
+            var headerBytes = Encoding.ASCII.GetBytes(httpHeaders);
+            stream.Write(headerBytes, 0, headerBytes.Length);
+            stream.Write(bodyBytes, 0, bodyBytes.Length);
         }
         catch (Exception ex)
         {
@@ -267,23 +272,23 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         return (ParseQueryString(query), null);
     }
 
-    private string HandleAnnounce(string path, IPEndPoint remoteEndpoint)
+    private byte[] HandleAnnounce(string path, IPEndPoint remoteEndpoint)
     {
         var (parameters, error) = ParseRequest(path);
         if (error != null)
         {
-            return error;
+            return Encoding.ASCII.GetBytes(error);
         }
 
         if (!parameters.TryGetValue("info_hash", out var infoHash) ||
             !parameters.TryGetValue("port", out var portStr))
         {
-            return "d14:failure reason25:Missing required parameterse";
+            return Encoding.ASCII.GetBytes("d14:failure reason25:Missing required parameterse");
         }
 
         if (!int.TryParse(portStr, out var port) || port < 1 || port > 65535)
         {
-            return "d14:failure reason12:invalid porte";
+            return Encoding.ASCII.GetBytes("d14:failure reason12:invalid porte");
         }
 
         var peerIp = remoteEndpoint.Address.ToString();
@@ -317,16 +322,19 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         var minInterval = _configService.MinAnnounceIntervalSeconds;
-        var response = $"d8:intervali{interval}e12:min intervali{minInterval}e5:peers{compactPeers.Length}:{Encoding.Latin1.GetString(compactPeers)}";
+        var dict = new BDictionary
+        {
+            ["interval"] = new BNumber(interval),
+            ["min interval"] = new BNumber(minInterval),
+            ["peers"] = new BString(compactPeers),
+        };
 
         if (_configService.TrackerPrivateMode)
         {
-            response += "7:privatei1e";
+            dict["private"] = new BNumber(1);
         }
 
-        response += "e";
-
-        return response;
+        return dict.EncodeAsBytes();
     }
 
     private string HandleScrape(string path)
@@ -350,19 +358,21 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     private static byte[] BuildCompactPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
     {
         var filtered = peers.Where(p => p.Ip != excludeIp || p.Port != excludePort).Take(maxPeers).ToList();
-        var data = new byte[filtered.Count * 6];
-        for (var i = 0; i < filtered.Count; i++)
+        var chunks = new List<byte>(filtered.Count * 6);
+        foreach (var peer in filtered)
         {
-            var ipParts = filtered[i].Ip.Split('.');
-            data[i * 6] = byte.Parse(ipParts[0]);
-            data[(i * 6) + 1] = byte.Parse(ipParts[1]);
-            data[(i * 6) + 2] = byte.Parse(ipParts[2]);
-            data[(i * 6) + 3] = byte.Parse(ipParts[3]);
-            data[(i * 6) + 4] = (byte)(filtered[i].Port >> 8);
-            data[(i * 6) + 5] = (byte)filtered[i].Port;
+            if (!IPAddress.TryParse(peer.Ip, out var addr) || addr.AddressFamily != AddressFamily.InterNetwork)
+            {
+                continue;
+            }
+
+            var ipBytes = addr.GetAddressBytes();
+            chunks.AddRange(ipBytes);
+            chunks.Add((byte)(peer.Port >> 8));
+            chunks.Add((byte)peer.Port);
         }
 
-        return data;
+        return chunks.ToArray();
     }
 
     private static Dictionary<string, string> ParseQueryString(string query)

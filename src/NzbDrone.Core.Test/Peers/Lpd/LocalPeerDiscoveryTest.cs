@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -9,8 +10,10 @@ using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Lpd;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Test.Peers.Lpd;
 
@@ -19,6 +22,7 @@ public class LocalPeerDiscoveryTest
 {
     private IConfigService _configService;
     private ITorrentService _torrentService;
+    private IPeerDiscoveryService _peerDiscovery;
     private LocalPeerDiscovery _lpd;
 
     [SetUp]
@@ -26,8 +30,9 @@ public class LocalPeerDiscoveryTest
     {
         _configService = Substitute.For<IConfigService>();
         _torrentService = Substitute.For<ITorrentService>();
+        _peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         _configService.EnableLpd.Returns(true);
-        _lpd = new LocalPeerDiscovery(_configService, _torrentService);
+        _lpd = new LocalPeerDiscovery(_configService, _torrentService, _peerDiscovery);
     }
 
     [TearDown]
@@ -122,9 +127,11 @@ public class LocalPeerDiscoveryTest
     [Test]
     public void ParseAnnouncement_should_extract_infohash_and_port()
     {
-        var configService = Substitute.For<IConfigService>();
-        var torrentService = Substitute.For<ITorrentService>();
-        var lpd = new LocalPeerDiscovery(configService, torrentService);
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
@@ -132,15 +139,22 @@ public class LocalPeerDiscoveryTest
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        Assert.DoesNotThrow(() => method.Invoke(lpd, new object[] { announcement, sender }));
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            "abc123def456",
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Port == 6881),
+            "lpd");
     }
 
     [Test]
     public void ParseAnnouncement_should_ignore_non_bt_search_message()
     {
-        var configService = Substitute.For<IConfigService>();
-        var torrentService = Substitute.For<ITorrentService>();
-        var lpd = new LocalPeerDiscovery(configService, torrentService);
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
 
         var message = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
@@ -148,15 +162,20 @@ public class LocalPeerDiscoveryTest
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        Assert.DoesNotThrow(() => method.Invoke(lpd, new object[] { message, sender }));
+        method.Invoke(lpd, new object[] { message, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
     }
 
     [Test]
     public void ParseAnnouncement_should_handle_missing_infohash()
     {
-        var configService = Substitute.For<IConfigService>();
-        var torrentService = Substitute.For<ITorrentService>();
-        var lpd = new LocalPeerDiscovery(configService, torrentService);
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
@@ -164,15 +183,20 @@ public class LocalPeerDiscoveryTest
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        Assert.DoesNotThrow(() => method.Invoke(lpd, new object[] { announcement, sender }));
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
     }
 
     [Test]
     public void ParseAnnouncement_should_handle_missing_port()
     {
-        var configService = Substitute.For<IConfigService>();
-        var torrentService = Substitute.For<ITorrentService>();
-        var lpd = new LocalPeerDiscovery(configService, torrentService);
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nInfohash: abc123\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
@@ -180,15 +204,20 @@ public class LocalPeerDiscoveryTest
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        Assert.DoesNotThrow(() => method.Invoke(lpd, new object[] { announcement, sender }));
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
     }
 
     [Test]
     public void ParseAnnouncement_should_handle_invalid_port_value()
     {
-        var configService = Substitute.For<IConfigService>();
-        var torrentService = Substitute.For<ITorrentService>();
-        var lpd = new LocalPeerDiscovery(configService, torrentService);
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: notanumber\r\nInfohash: abc123\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
@@ -196,15 +225,20 @@ public class LocalPeerDiscoveryTest
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        Assert.DoesNotThrow(() => method.Invoke(lpd, new object[] { announcement, sender }));
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
     }
 
     [Test]
     public void ParseAnnouncement_should_handle_zero_port()
     {
-        var configService = Substitute.For<IConfigService>();
-        var torrentService = Substitute.For<ITorrentService>();
-        var lpd = new LocalPeerDiscovery(configService, torrentService);
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 0\r\nInfohash: abc123\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
@@ -212,15 +246,20 @@ public class LocalPeerDiscoveryTest
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        Assert.DoesNotThrow(() => method.Invoke(lpd, new object[] { announcement, sender }));
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
     }
 
     [Test]
     public void ParseAnnouncement_should_parse_case_insensitive_headers()
     {
-        var configService = Substitute.For<IConfigService>();
-        var torrentService = Substitute.For<ITorrentService>();
-        var lpd = new LocalPeerDiscovery(configService, torrentService);
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nport: 6881\r\ninfohash: abc123\r\n\r\n";
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
@@ -228,22 +267,32 @@ public class LocalPeerDiscoveryTest
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        Assert.DoesNotThrow(() => method.Invoke(lpd, new object[] { announcement, sender }));
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            "abc123",
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Port == 6881),
+            "lpd");
     }
 
     [Test]
     public void ParseAnnouncement_should_handle_empty_message()
     {
-        var configService = Substitute.For<IConfigService>();
-        var torrentService = Substitute.For<ITorrentService>();
-        var lpd = new LocalPeerDiscovery(configService, torrentService);
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
 
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
 
         var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        Assert.DoesNotThrow(() => method.Invoke(lpd, new object[] { "", sender }));
+        method.Invoke(lpd, new object[] { "", sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
     }
 
     [Test]
@@ -262,8 +311,9 @@ public class LocalPeerDiscoveryTest
     {
         var configService = Substitute.For<IConfigService>();
         var torrentService = Substitute.For<ITorrentService>();
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
 
-        var lpd = new LocalPeerDiscovery(configService, torrentService);
+        var lpd = new LocalPeerDiscovery(configService, torrentService, peerDiscovery);
 
         Assert.That(lpd, Is.Not.Null);
         lpd.Dispose();
@@ -273,8 +323,8 @@ public class LocalPeerDiscoveryTest
     // can be exercised in tests without waiting 300 seconds.
     private sealed class FastAnnouncingLpd : LocalPeerDiscovery
     {
-        public FastAnnouncingLpd(IConfigService configService, ITorrentService torrentService)
-            : base(configService, torrentService) { }
+        public FastAnnouncingLpd(IConfigService configService, ITorrentService torrentService, IPeerDiscoveryService peerDiscovery)
+            : base(configService, torrentService, peerDiscovery) { }
 
         protected override int AnnounceIntervalSeconds => 0;
     }
@@ -336,7 +386,7 @@ public class LocalPeerDiscoveryTest
         var torrent = new Torrent { InfoHash = "deadbeef1234567890abcdef12345678deadbeef" };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
-        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService);
+        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService, _peerDiscovery);
         var method = typeof(LocalPeerDiscovery).GetMethod(
             "AnnounceLoop",
             BindingFlags.NonPublic | BindingFlags.Instance);
@@ -356,7 +406,7 @@ public class LocalPeerDiscoveryTest
         var torrent = new Torrent { InfoHash = "" };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
-        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService);
+        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService, _peerDiscovery);
         var method = typeof(LocalPeerDiscovery).GetMethod(
             "AnnounceLoop",
             BindingFlags.NonPublic | BindingFlags.Instance);
@@ -375,7 +425,7 @@ public class LocalPeerDiscoveryTest
     {
         _torrentService.GetAll().Returns(x => throw new Exception("DB unavailable"));
 
-        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService);
+        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService, _peerDiscovery);
         var method = typeof(LocalPeerDiscovery).GetMethod(
             "AnnounceLoop",
             BindingFlags.NonPublic | BindingFlags.Instance);
@@ -394,7 +444,7 @@ public class LocalPeerDiscoveryTest
         var torrent = new Torrent { InfoHash = null };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
-        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService);
+        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService, _peerDiscovery);
         var method = typeof(LocalPeerDiscovery).GetMethod(
             "AnnounceLoop",
             BindingFlags.NonPublic | BindingFlags.Instance);

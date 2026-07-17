@@ -9,6 +9,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Peers.Lpd;
 
@@ -22,12 +23,14 @@ public class LocalPeerDiscovery : BackgroundService
 
     private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;
+    private readonly IPeerDiscoveryService _peerDiscovery;
     private readonly Logger _logger;
 
-    public LocalPeerDiscovery(IConfigService configService, ITorrentService torrentService)
+    public LocalPeerDiscovery(IConfigService configService, ITorrentService torrentService, IPeerDiscoveryService peerDiscovery)
     {
         _configService = configService;
         _torrentService = torrentService;
+        _peerDiscovery = peerDiscovery;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -186,6 +189,7 @@ public class LocalPeerDiscovery : BackgroundService
         if (infoHash != null && port > 0)
         {
             _logger.Debug("LPD: peer {0}:{1} for {2}", sender.Address, port, infoHash);
+            _peerDiscovery.AddPeers(infoHash, new[] { new TrackerPeer { Ip = sender.Address.ToString(), Port = port } }, "lpd");
         }
     }
 }

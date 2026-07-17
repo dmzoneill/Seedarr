@@ -245,15 +245,15 @@ public class PeerConnection : IDisposable
                 return null;
             }
 
-            var length = (lengthBuffer[0] << 24) | (lengthBuffer[1] << 16) |
-                (lengthBuffer[2] << 8) | lengthBuffer[3];
+            var length = (int)(((uint)lengthBuffer[0] << 24) | ((uint)lengthBuffer[1] << 16) |
+                ((uint)lengthBuffer[2] << 8) | lengthBuffer[3]);
 
             if (length == 0)
             {
                 return null; // keep-alive
             }
 
-            if (length > MaxMessageLength)
+            if (length < 0 || length > MaxMessageLength)
             {
                 _logger.Warn("Peer {0}:{1} sent message with length {2} exceeding max {3}, closing connection", RemoteIp, RemotePort, length, MaxMessageLength);
                 Dispose();

@@ -415,9 +415,9 @@ public class MseHandshake
             ((uint)bytes[2] << 8) | bytes[3];
     }
 
-    private static int ReadUint16(byte[] bytes)
+    private static ushort ReadUint16(byte[] bytes)
     {
-        return (bytes[0] << 8) | bytes[1];
+        return (ushort)((bytes[0] << 8) | bytes[1]);
     }
 
     private static byte[] GeneratePadding()
