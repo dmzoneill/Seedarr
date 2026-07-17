@@ -499,6 +499,48 @@ public class PeerServerTest
     }
 
     [Test]
+    public void HandlePieceRequest_should_reject_high_bit_set_in_index()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+
+        // int.MinValue = 0x80000000 — only the high bit set; reconstructed as a negative int
+        // via (uint) shifts then (int) cast, caught by the index < 0 guard.
+        var payload = BuildRequestPayload(int.MinValue, 0, 16384);
+        InvokeHandlePieceRequest(serverConn, payload);
+
+        clientConn.MessageReadTimeoutMs = 200;
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Null);
+    }
+
+    [Test]
+    public void HandlePieceRequest_should_reject_high_bit_set_in_begin()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+
+        var payload = BuildRequestPayload(0, int.MinValue, 16384);
+        InvokeHandlePieceRequest(serverConn, payload);
+
+        clientConn.MessageReadTimeoutMs = 200;
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Null);
+    }
+
+    [Test]
+    public void HandlePieceRequest_should_reject_high_bit_set_in_length()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+
+        // int.MinValue as length: reconstructed as -2147483648, caught by length <= 0 guard.
+        var payload = BuildRequestPayload(0, 0, int.MinValue);
+        InvokeHandlePieceRequest(serverConn, payload);
+
+        clientConn.MessageReadTimeoutMs = 200;
+        var received = clientConn.ReceiveMessage();
+        Assert.That(received, Is.Null);
+    }
+
+    [Test]
     public void HandlePieceRequest_should_encode_index_and_begin_in_response()
     {
         var (clientConn, serverConn) = CreateTestPair();

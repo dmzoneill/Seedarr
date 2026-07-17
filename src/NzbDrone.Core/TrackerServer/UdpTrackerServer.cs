@@ -308,21 +308,22 @@ public class UdpTrackerServer : BackgroundService
             .Take(maxPeers)
             .ToList();
 
-        var data = new byte[filtered.Count * CompactPeerSize];
+        var chunks = new List<byte>(filtered.Count * CompactPeerSize);
 
-        for (var i = 0; i < filtered.Count; i++)
+        foreach (var peer in filtered)
         {
-            var ipParts = filtered[i].Ip.Split('.');
-            var baseOffset = i * CompactPeerSize;
-            data[baseOffset] = byte.Parse(ipParts[0]);
-            data[baseOffset + 1] = byte.Parse(ipParts[1]);
-            data[baseOffset + 2] = byte.Parse(ipParts[2]);
-            data[baseOffset + 3] = byte.Parse(ipParts[3]);
-            data[baseOffset + 4] = (byte)(filtered[i].Port >> 8);
-            data[baseOffset + 5] = (byte)filtered[i].Port;
+            if (!IPAddress.TryParse(peer.Ip, out var addr) || addr.AddressFamily != AddressFamily.InterNetwork)
+            {
+                continue;
+            }
+
+            var ipBytes = addr.GetAddressBytes();
+            chunks.AddRange(ipBytes);
+            chunks.Add((byte)(peer.Port >> 8));
+            chunks.Add((byte)peer.Port);
         }
 
-        return data;
+        return chunks.ToArray();
     }
 
     private static string ConvertInfoHashToHex(byte[] data, int offset)
