@@ -60,13 +60,16 @@ public class TrackerServerTest
         return (byte[])method.Invoke(null, new object[] { peers, excludeIp, excludePort, maxPeers });
     }
 
-    private string InvokeHandleAnnounce(string path, IPEndPoint remoteEndpoint)
+    private byte[] InvokeHandleAnnounce(string path, IPEndPoint remoteEndpoint)
     {
         var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
             "HandleAnnounce",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        return (string)method.Invoke(_trackerServer, new object[] { path, remoteEndpoint });
+        return (byte[])method.Invoke(_trackerServer, new object[] { path, remoteEndpoint });
     }
+
+    private string InvokeHandleAnnounceText(string path, IPEndPoint remoteEndpoint)
+        => Encoding.ASCII.GetString(InvokeHandleAnnounce(path, remoteEndpoint));
 
     private string InvokeHandleScrape(string path)
     {
@@ -369,6 +372,54 @@ public class TrackerServerTest
         Assert.That(result[3], Is.EqualTo(2));
     }
 
+    [Test]
+    public void BuildCompactPeers_should_skip_malformed_ip()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "not.an.ip", Port = 6881 },
+            new TrackerPeerEntry { Ip = "10.0.0.1", Port = 6882 }
+        };
+
+        var result = InvokeBuildCompactPeers(peers, "10.0.0.99", 9999, 50);
+
+        // The malformed IP is silently skipped; only the valid peer is encoded
+        Assert.That(result, Has.Length.EqualTo(6));
+        Assert.That(result[0], Is.EqualTo(10));
+        Assert.That(result[3], Is.EqualTo(1));
+    }
+
+    [Test]
+    public void BuildCompactPeers_should_skip_ipv6_address()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "::1", Port = 6881 },
+            new TrackerPeerEntry { Ip = "10.0.0.2", Port = 6882 }
+        };
+
+        var result = InvokeBuildCompactPeers(peers, "10.0.0.99", 9999, 50);
+
+        // IPv6 addresses are not InterNetwork family and are silently skipped
+        Assert.That(result, Has.Length.EqualTo(6));
+        Assert.That(result[3], Is.EqualTo(2));
+    }
+
+    [Test]
+    public void BuildCompactPeers_should_return_empty_when_all_ips_are_invalid()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "not.an.ip", Port = 6881 },
+            new TrackerPeerEntry { Ip = "999.999.999.999", Port = 6882 },
+            new TrackerPeerEntry { Ip = "::1", Port = 6883 }
+        };
+
+        var result = InvokeBuildCompactPeers(peers, "10.0.0.99", 9999, 50);
+
+        Assert.That(result, Is.Empty);
+    }
+
     // ---- ParseRequest tests ----
 
     [Test]
@@ -414,7 +465,7 @@ public class TrackerServerTest
     [Test]
     public void HandleAnnounce_should_return_error_when_missing_query_string()
     {
-        var result = InvokeHandleAnnounce("/announce", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText("/announce", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("Missing query string"));
     }
@@ -422,7 +473,7 @@ public class TrackerServerTest
     [Test]
     public void HandleAnnounce_should_return_error_when_missing_info_hash()
     {
-        var result = InvokeHandleAnnounce("/announce?port=6881", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText("/announce?port=6881", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("Missing required parameters"));
     }
@@ -430,7 +481,7 @@ public class TrackerServerTest
     [Test]
     public void HandleAnnounce_should_return_error_when_missing_port()
     {
-        var result = InvokeHandleAnnounce("/announce?info_hash=abc", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText("/announce?info_hash=abc", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("Missing required parameters"));
     }
@@ -438,7 +489,7 @@ public class TrackerServerTest
     [Test]
     public void HandleAnnounce_should_return_error_when_port_is_zero()
     {
-        var result = InvokeHandleAnnounce("/announce?info_hash=abc&port=0", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText("/announce?info_hash=abc&port=0", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("invalid port"));
     }
@@ -446,7 +497,7 @@ public class TrackerServerTest
     [Test]
     public void HandleAnnounce_should_return_error_when_port_is_negative()
     {
-        var result = InvokeHandleAnnounce("/announce?info_hash=abc&port=-1", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText("/announce?info_hash=abc&port=-1", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("invalid port"));
     }
@@ -454,7 +505,7 @@ public class TrackerServerTest
     [Test]
     public void HandleAnnounce_should_return_error_when_port_exceeds_65535()
     {
-        var result = InvokeHandleAnnounce("/announce?info_hash=abc&port=65536", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText("/announce?info_hash=abc&port=65536", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("invalid port"));
     }
@@ -462,7 +513,7 @@ public class TrackerServerTest
     [Test]
     public void HandleAnnounce_should_return_error_when_port_is_not_numeric()
     {
-        var result = InvokeHandleAnnounce("/announce?info_hash=abc&port=notanumber", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText("/announce?info_hash=abc&port=notanumber", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("invalid port"));
     }
@@ -521,7 +572,7 @@ public class TrackerServerTest
     {
         _peerDatabase.GetPeers("abc").Returns(new List<TrackerPeerEntry>());
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=6881",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
@@ -535,7 +586,7 @@ public class TrackerServerTest
         _configService.TrackerPrivateMode.Returns(true);
         _peerDatabase.GetPeers("abc").Returns(new List<TrackerPeerEntry>());
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=6881",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
@@ -548,7 +599,7 @@ public class TrackerServerTest
         _configService.TrackerPrivateMode.Returns(false);
         _peerDatabase.GetPeers("abc").Returns(new List<TrackerPeerEntry>());
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=6881",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
@@ -574,7 +625,7 @@ public class TrackerServerTest
         _configService.TrackerLogAnnounces.Returns(true);
         _peerDatabase.GetPeers("abc").Returns(new List<TrackerPeerEntry>());
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=6881&event=started",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
@@ -593,7 +644,7 @@ public class TrackerServerTest
         };
         _peerDatabase.GetPeers("abc").Returns(peers);
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=6882",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6882));
 
@@ -607,7 +658,7 @@ public class TrackerServerTest
         _configService.MinAnnounceIntervalSeconds.Returns(600);
         _peerDatabase.GetPeers("abc").Returns(new List<TrackerPeerEntry>());
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=6881",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
@@ -618,7 +669,7 @@ public class TrackerServerTest
     [Test]
     public void HandleAnnounce_should_return_error_when_only_info_hash_no_port()
     {
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&peer_id=test",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
@@ -889,7 +940,7 @@ public class TrackerServerTest
     {
         _peerDatabase.GetPeers("abc").Returns(new List<TrackerPeerEntry>());
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=1",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
@@ -901,7 +952,7 @@ public class TrackerServerTest
     {
         _peerDatabase.GetPeers("abc").Returns(new List<TrackerPeerEntry>());
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=65535",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
@@ -913,7 +964,7 @@ public class TrackerServerTest
     {
         _peerDatabase.GetPeers("abc").Returns(new List<TrackerPeerEntry>());
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=6881",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
@@ -926,7 +977,7 @@ public class TrackerServerTest
     {
         _peerDatabase.GetPeers("abc").Returns(new List<TrackerPeerEntry>());
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=6881",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
@@ -943,11 +994,50 @@ public class TrackerServerTest
         };
         _peerDatabase.GetPeers("abc").Returns(peers);
 
-        var result = InvokeHandleAnnounce(
+        var result = InvokeHandleAnnounceText(
             "/announce?info_hash=abc&port=9999",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 9999));
 
         Assert.That(result, Does.Contain("5:peers6:"));
+    }
+
+    [Test]
+    public void HandleAnnounce_should_encode_compact_peers_as_raw_bytes_not_latin1()
+    {
+        // IP 1.2.3.4, port 6881 = 0x1AE1; low byte 0xE1 = 225 (> 127).
+        // The old Latin1-string path inflated byte 225 to two UTF-8 bytes, producing
+        // a 7-byte peers field. The fixed path uses new BString(byte[]) directly.
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "1.2.3.4", Port = 6881 }
+        };
+        _peerDatabase.GetPeers("abc").Returns(peers);
+
+        var result = InvokeHandleAnnounce(
+            "/announce?info_hash=abc&port=9999",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 9999));
+
+        var marker = Encoding.ASCII.GetBytes("5:peers");
+        var markerIdx = FindBytesInArray(result, marker);
+        Assert.That(markerIdx, Is.GreaterThanOrEqualTo(0), "Response must contain '5:peers' key");
+
+        var pos = markerIdx + marker.Length;
+        var colonIdx = Array.IndexOf(result, (byte)':', pos);
+        var lenStr = Encoding.ASCII.GetString(result, pos, colonIdx - pos);
+        Assert.That(int.TryParse(lenStr, out var peersLen), Is.True);
+        Assert.That(
+            peersLen,
+            Is.EqualTo(6),
+            "One IPv4 peer must occupy exactly 6 bytes; Latin1 inflation would produce 7");
+
+        // Verify the exact binary values
+        var dataStart = colonIdx + 1;
+        Assert.That(result[dataStart],     Is.EqualTo(1),    "IP byte 0 must be 1");
+        Assert.That(result[dataStart + 1], Is.EqualTo(2),    "IP byte 1 must be 2");
+        Assert.That(result[dataStart + 2], Is.EqualTo(3),    "IP byte 2 must be 3");
+        Assert.That(result[dataStart + 3], Is.EqualTo(4),    "IP byte 3 must be 4");
+        Assert.That(result[dataStart + 4], Is.EqualTo(0x1A), "Port high byte must be 0x1A");
+        Assert.That(result[dataStart + 5], Is.EqualTo(0xE1), "Port low byte must be 0xE1 (225), not UTF-8 inflated");
     }
 
     // ---- ReadBoundedLine tests (via real TCP socket pair) ----
@@ -1369,5 +1459,26 @@ public class TrackerServerTest
             "HandleRequest",
             BindingFlags.NonPublic | BindingFlags.Instance);
         method.Invoke(_trackerServer, new object[] { client });
+    }
+
+    private static int FindBytesInArray(byte[] haystack, byte[] needle)
+    {
+        for (var i = 0; i <= haystack.Length - needle.Length; i++)
+        {
+            var match = true;
+            for (var j = 0; j < needle.Length; j++)
+            {
+                if (haystack[i + j] != needle[j])
+                {
+                    match = false;
+                    break;
+                }
+            }
+
+            if (match)
+                return i;
+        }
+
+        return -1;
     }
 }
