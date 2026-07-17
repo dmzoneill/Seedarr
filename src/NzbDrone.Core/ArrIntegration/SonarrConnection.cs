@@ -49,7 +49,9 @@ public class SonarrConnection : IArrConnection
                     return (string)null;
                 }
 
-                return response.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult();
+                using var stream = response.Content.ReadAsStream(ct);
+                using var reader = new System.IO.StreamReader(stream);
+                return reader.ReadToEnd();
             });
 
             if (result == null)
