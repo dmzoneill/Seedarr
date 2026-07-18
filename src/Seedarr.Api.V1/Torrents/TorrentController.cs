@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Web;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Peers;
@@ -42,13 +41,13 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
     protected override TorrentResource GetResourceById(Torrent model)
     {
-        return ToResource(model);
+        return TorrentResourceMapper.ToResource(model);
     }
 
     [HttpGet]
     public List<TorrentResource> GetAll()
     {
-        return _torrentService.GetAll().Select(ToResource).ToList();
+        return _torrentService.GetAll().Select(TorrentResourceMapper.ToResource).ToList();
     }
 
     [HttpGet("{id:int}")]
@@ -60,7 +59,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
-        return ToResource(torrent);
+        return TorrentResourceMapper.ToResource(torrent);
     }
 
     [HttpGet("{torrentId:int}/files")]
@@ -73,7 +72,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         var files = _torrentFileService.GetByTorrentId(torrentId);
-        return files.Select(ToFileResource).ToList();
+        return files.Select(TorrentResourceMapper.ToFileResource).ToList();
     }
 
     [HttpGet("{torrentId:int}/trackers")]
@@ -86,7 +85,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         var trackers = _trackerEntryService.GetByTorrentId(torrentId);
-        return trackers.Select(ToTrackerResource).ToList();
+        return trackers.Select(TorrentResourceMapper.ToTrackerResource).ToList();
     }
 
     [HttpGet("{torrentId:int}/peers")]
@@ -105,7 +104,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         var connections = _connectionManager.GetConnections(torrent.InfoHash);
         var id = 1;
-        return connections.Select(c => ToPeerResource(c, id++)).ToList();
+        return connections.Select(c => TorrentResourceMapper.ToPeerResource(c, id++)).ToList();
     }
 
     [HttpPost]
@@ -122,10 +121,10 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return BadRequest(validationResult.Errors);
         }
 
-        var torrent = ToModel(resource);
+        var torrent = TorrentResourceMapper.ToModel(resource);
         torrent.DateAdded = DateTime.UtcNow;
         var added = _torrentService.Add(torrent);
-        return Created($"/api/v1/torrent/{added.Id}", ToResource(added));
+        return Created($"/api/v1/torrent/{added.Id}", TorrentResourceMapper.ToResource(added));
     }
 
     [HttpPost("upload")]
@@ -192,7 +191,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             _trackerEntryService.Add(new TrackerEntry { TorrentId = added.Id, Url = parsed.AnnounceUrl, Tier = 0, Enabled = true });
         }
 
-        return Created($"/api/v1/torrent/{added.Id}", ToResource(added));
+        return Created($"/api/v1/torrent/{added.Id}", TorrentResourceMapper.ToResource(added));
     }
 
     [HttpPut("{id:int}")]
@@ -216,7 +215,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
-        var torrent = ToModel(resource);
+        var torrent = TorrentResourceMapper.ToModel(resource);
         torrent.Id = id;
 
         // Preserve internal statistics fields — not settable via API
@@ -231,7 +230,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         torrent.DownloadSpeed = existing.DownloadSpeed;
 
         var updated = _torrentService.Update(torrent);
-        return ToResource(updated);
+        return TorrentResourceMapper.ToResource(updated);
     }
 
     [HttpPost("{id:int}/announce")]
@@ -275,7 +274,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
-        return ToResource(torrent);
+        return TorrentResourceMapper.ToResource(torrent);
     }
 
     [HttpPut("{id:int}/queue")]
@@ -298,310 +297,46 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return Ok();
     }
 
-    private static TorrentResource ToResource(Torrent model)
-    {
-        return new TorrentResource
-        {
-            Id = model.Id,
-            Name = model.Name,
-            InfoHash = model.InfoHash,
-            TotalSize = model.TotalSize,
-            PieceCount = model.PieceCount,
-            PieceLength = model.PieceLength,
-            Comment = model.Comment,
-            CreatedBy = model.CreatedBy,
-            CreationDate = model.CreationDate,
-            IsPrivate = model.IsPrivate,
-            Status = model.Status.ToString(),
-            Uploaded = model.Uploaded,
-            Downloaded = model.Downloaded,
-            Ratio = model.Ratio,
-            Seeders = model.Seeders,
-            Leechers = model.Leechers,
-            TrackerUrl = model.TrackerUrl,
-            DateAdded = model.DateAdded,
-            LastActive = model.LastActive,
-            Priority = model.Priority,
-            UploadLimit = model.UploadLimit,
-            DownloadLimit = model.DownloadLimit,
-            SuperSeeding = model.SuperSeeding,
-            ForceStart = model.ForceStart,
-            Label = model.Label,
-            Progress = model.Progress,
-            SequentialDownload = model.SequentialDownload,
-            AnnounceInterval = model.AnnounceInterval,
-            NextUpdate = model.NextUpdate,
-            SessionUploaded = model.SessionUploaded,
-            SessionDownloaded = model.SessionDownloaded,
-            SmallTorrentLimit = model.SmallTorrentLimit,
-            Threshold = model.Threshold,
-            UploadSpeed = model.UploadSpeed,
-            DownloadSpeed = model.DownloadSpeed,
-            Active = model.Active,
-            Availability = model.Availability,
-            Eta = model.Eta,
-            SortOrder = model.SortOrder,
-            ForceCompleted = model.ForceCompleted
-        };
-    }
-
-    private static Torrent ToModel(TorrentResource resource)
-    {
-        return new Torrent
-        {
-            Id = resource.Id,
-            Name = resource.Name,
-            InfoHash = resource.InfoHash,
-            TotalSize = resource.TotalSize,
-            PieceCount = resource.PieceCount,
-            PieceLength = resource.PieceLength,
-            Comment = resource.Comment,
-            CreatedBy = resource.CreatedBy,
-            CreationDate = resource.CreationDate,
-            IsPrivate = resource.IsPrivate,
-            Status = Enum.TryParse<TorrentStatus>(resource.Status, true, out var status) ? status : TorrentStatus.Stopped,
-            Uploaded = resource.Uploaded,
-            Downloaded = resource.Downloaded,
-            Ratio = resource.Ratio,
-            Seeders = resource.Seeders,
-            Leechers = resource.Leechers,
-            TrackerUrl = resource.TrackerUrl,
-            DateAdded = resource.DateAdded,
-            LastActive = resource.LastActive,
-            Priority = resource.Priority,
-            UploadLimit = resource.UploadLimit,
-            DownloadLimit = resource.DownloadLimit,
-            SuperSeeding = resource.SuperSeeding,
-            ForceStart = resource.ForceStart,
-            Label = resource.Label,
-            Progress = resource.Progress,
-            SequentialDownload = resource.SequentialDownload,
-            AnnounceInterval = resource.AnnounceInterval,
-            NextUpdate = resource.NextUpdate,
-            SessionUploaded = resource.SessionUploaded,
-            SessionDownloaded = resource.SessionDownloaded,
-            SmallTorrentLimit = resource.SmallTorrentLimit,
-            Threshold = resource.Threshold,
-            UploadSpeed = resource.UploadSpeed,
-            DownloadSpeed = resource.DownloadSpeed,
-            Active = resource.Active,
-            Availability = resource.Availability,
-            Eta = resource.Eta,
-            SortOrder = resource.SortOrder,
-            ForceCompleted = resource.ForceCompleted
-        };
-    }
-
-    private static TorrentFileResource ToFileResource(TorrentFile model)
-    {
-        return new TorrentFileResource
-        {
-            Id = model.Id,
-            TorrentId = model.TorrentId,
-            Path = model.Path,
-            Size = model.Size,
-            PieceOffset = model.PieceOffset,
-            PieceCount = model.PieceCount
-        };
-    }
-
-    private static TrackerEntryResource ToTrackerResource(TrackerEntry model)
-    {
-        return new TrackerEntryResource
-        {
-            Id = model.Id,
-            TorrentId = model.TorrentId,
-            Url = model.Url,
-            Tier = model.Tier,
-            Status = model.Status.ToString(),
-            Enabled = model.Enabled,
-            Seeders = model.Seeders,
-            Leechers = model.Leechers,
-            Downloaded = model.Downloaded,
-            TotalAnnounces = model.TotalAnnounces,
-            SuccessfulAnnounces = model.SuccessfulAnnounces,
-            ConsecutiveFailures = model.ConsecutiveFailures,
-            LastResponseTime = model.LastResponseTime,
-            AverageResponseTime = model.AverageResponseTime,
-            AnnounceInterval = model.AnnounceInterval,
-            MinAnnounceInterval = model.MinAnnounceInterval,
-            LastAnnounce = model.LastAnnounce,
-            LastScrape = model.LastScrape,
-            NextAnnounce = model.NextAnnounce,
-            ErrorMessage = model.ErrorMessage,
-            LastErrorTime = model.LastErrorTime,
-            WarningMessage = model.WarningMessage
-        };
-    }
-
-    private static PeerResource ToPeerResource(PeerConnection connection, int id)
-    {
-        var flags = string.Empty;
-        if (connection.IsEncrypted)
-        {
-            flags += "E";
-        }
-
-        if (connection.PeerInterested)
-        {
-            flags += "I";
-        }
-
-        if (!connection.AmChoking)
-        {
-            flags += "U";
-        }
-
-        return new PeerResource
-        {
-            Id = id,
-            Ip = connection.RemoteIp,
-            Port = connection.RemotePort,
-            Client = connection.PeerId ?? string.Empty,
-            UploadSpeed = 0,
-            DownloadSpeed = 0,
-            Uploaded = 0,
-            Downloaded = 0,
-            Progress = 0,
-            Flags = flags
-        };
-    }
-
     private ActionResult<TorrentResource> CreateFromMagnet(TorrentResource resource)
     {
-        var magnetUri = resource.MagnetLink;
-        var queryStart = magnetUri.IndexOf('?');
-        if (queryStart < 0)
+        ParsedMagnetLink parsed;
+        try
         {
-            return BadRequest("Invalid magnet link: no parameters found");
+            parsed = MagnetLinkParser.Parse(resource.MagnetLink);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
         }
 
-        var queryString = magnetUri[(queryStart + 1)..];
-        var parameters = HttpUtility.ParseQueryString(queryString);
-
-        var xt = parameters["xt"];
-        if (string.IsNullOrEmpty(xt) || !xt.StartsWith("urn:btih:", StringComparison.OrdinalIgnoreCase))
-        {
-            return BadRequest("Invalid magnet link: missing urn:btih: parameter");
-        }
-
-        var infoHash = xt["urn:btih:".Length..];
-
-        if (infoHash.Length == 32)
-        {
-            var bytes = Base32Decode(infoHash);
-            if (bytes == null || bytes.Length != 20)
-            {
-                return BadRequest("Invalid magnet link: could not decode base32 info hash");
-            }
-
-            infoHash = Convert.ToHexString(bytes).ToLowerInvariant();
-        }
-        else
-        {
-            infoHash = infoHash.ToLowerInvariant();
-        }
-
-        if (infoHash.Length != 40)
-        {
-            return BadRequest("Invalid magnet link: info hash must be 40 hex characters");
-        }
-
-        if (_torrentService.ExistsByInfoHash(infoHash))
+        if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
         {
             return Conflict(new { message = "Torrent with this info hash already exists" });
         }
 
-        var displayName = parameters["dn"];
-        if (!string.IsNullOrEmpty(displayName))
-        {
-            displayName = HttpUtility.UrlDecode(displayName);
-        }
-        else
-        {
-            displayName = infoHash;
-        }
-
-        var trackerUrls = parameters.GetValues("tr");
-        var primaryTracker = trackerUrls?.FirstOrDefault();
-
         var torrent = new Torrent
         {
-            Name = displayName,
-            InfoHash = infoHash,
-            TrackerUrl = primaryTracker != null ? HttpUtility.UrlDecode(primaryTracker) : null,
+            Name = parsed.Name,
+            InfoHash = parsed.InfoHash,
+            TrackerUrl = parsed.Trackers.Length > 0 ? parsed.Trackers[0] : null,
             Status = TorrentStatus.Queued,
             DateAdded = DateTime.UtcNow
         };
 
         var added = _torrentService.Add(torrent);
 
-        if (trackerUrls != null)
+        var tier = 0;
+        foreach (var url in parsed.Trackers)
         {
-            var tier = 0;
-            foreach (var url in trackerUrls)
+            _trackerEntryService.Add(new TrackerEntry
             {
-                var decodedUrl = HttpUtility.UrlDecode(url);
-                _trackerEntryService.Add(new TrackerEntry
-                {
-                    TorrentId = added.Id,
-                    Url = decodedUrl,
-                    Tier = tier++,
-                    Enabled = true
-                });
-            }
+                TorrentId = added.Id,
+                Url = url,
+                Tier = tier++,
+                Enabled = true
+            });
         }
 
-        return Created($"/api/v1/torrent/{added.Id}", ToResource(added));
-    }
-
-    private static byte[] Base32Decode(string input)
-    {
-        input = input.ToUpperInvariant();
-        var output = new byte[input.Length * 5 / 8];
-        var bitIndex = 0;
-        var inputIndex = 0;
-        var outputBits = 0;
-        var outputIndex = 0;
-
-        while (inputIndex < input.Length)
-        {
-            var byteIndex = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".IndexOf(input[inputIndex]);
-            if (byteIndex < 0)
-            {
-                return null;
-            }
-
-            var bits = Math.Min(5, 8 - bitIndex);
-            if (bitIndex == 0)
-            {
-                outputBits = byteIndex << 3;
-            }
-            else if (bits < 5)
-            {
-                outputBits |= byteIndex >> (5 - bits);
-                output[outputIndex++] = (byte)outputBits;
-                outputBits = (byteIndex << (3 + bits)) & 0xFF;
-            }
-            else
-            {
-                outputBits |= byteIndex << (8 - bitIndex - 5);
-            }
-
-            bitIndex += 5;
-            if (bitIndex >= 8)
-            {
-                bitIndex -= 8;
-                if (bitIndex == 0)
-                {
-                    output[outputIndex++] = (byte)outputBits;
-                    outputBits = 0;
-                }
-            }
-
-            inputIndex++;
-        }
-
-        return output;
+        return Created($"/api/v1/torrent/{added.Id}", TorrentResourceMapper.ToResource(added));
     }
 }
