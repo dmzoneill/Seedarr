@@ -1,0 +1,93 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  integration-tests-sqlite:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: ['10.0.x']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Restore dependencies
+        run: dotnet restore src/Seedarr.sln
+
+      - name: Run integration tests (SQLite)
+        run: >
+          dotnet test src/Seedarr.sln
+          --no-restore
+          --configuration Release
+          --filter "Category=IntegrationTest"
+          --logger "trx;LogFileName=integration-results.trx"
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results-sqlite
+          path: '**/integration-results.trx'
+
+  integration-tests-postgres:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: ['10.0.x']
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: seedarr
+          POSTGRES_PASSWORD: seedarr_test
+          POSTGRES_DB: seedarr_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Restore dependencies
+        run: dotnet restore src/Seedarr.sln
+
+      - name: Run integration tests (PostgreSQL)
+        env:
+          SEEDARR_POSTGRES_HOST: localhost
+          SEEDARR_POSTGRES_PORT: 5432
+          SEEDARR_POSTGRES_USER: seedarr
+          SEEDARR_POSTGRES_PASSWORD: seedarr_test
+          SEEDARR_POSTGRES_DB: seedarr_test
+        run: >
+          dotnet test src/Seedarr.sln
+          --no-restore
+          --configuration Release
+          --filter "Category=IntegrationTest&Category=PostgresTest"
+          --logger "trx;LogFileName=integration-results-pg.trx"
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results-postgres
+          path: '**/integration-results-pg.trx'
