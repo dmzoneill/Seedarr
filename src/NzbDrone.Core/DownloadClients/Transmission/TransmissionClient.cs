@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using NLog;
 
 namespace NzbDrone.Core.DownloadClients.Transmission;
@@ -63,7 +64,7 @@ public class TransmissionClient : IDownloadClient, IDisposable
     private JsonDocument SendRequest(string method, object arguments)
     {
         var request = CreateRequest(method, arguments);
-        var response = _client.SendAsync(request).GetAwaiter().GetResult();
+        var response = Task.Run(() => _client.SendAsync(request)).GetAwaiter().GetResult();
 
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
@@ -72,12 +73,13 @@ public class TransmissionClient : IDownloadClient, IDisposable
                 _sessionId = string.Join("", values);
             }
 
+            response.Dispose();
             request = CreateRequest(method, arguments);
-            response = _client.SendAsync(request).GetAwaiter().GetResult();
+            response = Task.Run(() => _client.SendAsync(request)).GetAwaiter().GetResult();
         }
 
         response.EnsureSuccessStatusCode();
-        var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        var body = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
         return JsonDocument.Parse(body);
     }
 

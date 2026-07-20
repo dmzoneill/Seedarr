@@ -183,7 +183,7 @@ function Dashboard() {
           <div key={t.id} className="status-row">
             <span className="status-label">{t.name}</span>
             <span className="status-value">
-              <span className={`badge badge-${t.status.toLowerCase()}`}>{t.status}</span>
+              <span className={`badge badge-${(t.status ?? 'unknown').toLowerCase()}`}>{t.status}</span>
               {' '}
               {formatDate(t.dateAdded)}
             </span>
