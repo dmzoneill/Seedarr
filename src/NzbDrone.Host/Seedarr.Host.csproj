@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NzbDrone.Common\Seedarr.Common.csproj" />
+    <ProjectReference Include="..\NzbDrone.Core\Seedarr.Core.csproj" />
+    <ProjectReference Include="..\NzbDrone.SignalR\Seedarr.SignalR.csproj" />
+    <ProjectReference Include="..\Seedarr.Api.V1\Seedarr.Api.V1.csproj" />
+    <ProjectReference Include="..\Seedarr.Http\Seedarr.Http.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DryIoc.Microsoft.DependencyInjection" Version="6.2.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
+    <PackageReference Include="NLog.Extensions.Logging" Version="5.3.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+</Project>
