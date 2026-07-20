@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Backup;
@@ -64,7 +66,14 @@ public class BackupController : Controller
             fileName = backups[id - 1].Name;
         }
 
-        _backupService.DeleteBackup(fileName);
+        var safeFileName = Path.GetFileName(fileName);
+
+        if (string.IsNullOrWhiteSpace(safeFileName) || !safeFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Invalid backup file name" });
+        }
+
+        _backupService.DeleteBackup(safeFileName);
         return Ok();
     }
 
@@ -97,7 +106,14 @@ public class BackupController : Controller
             return BadRequest(new { message = "fileName is required" });
         }
 
-        _backupService.RestoreBackup(request.FileName);
+        var safeFileName = Path.GetFileName(request.FileName);
+
+        if (string.IsNullOrWhiteSpace(safeFileName) || !safeFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { message = "Invalid backup file name" });
+        }
+
+        _backupService.RestoreBackup(safeFileName);
         return Ok(new { message = "Backup restored. Restart required." });
     }
 }

@@ -145,16 +145,16 @@ public class SeedingEngine : BackgroundService
 
         if (configUploadBps > 0)
         {
-            limits.MaxUploadSpeed = limits.MaxUploadSpeed > 0
-                ? Math.Min(limits.MaxUploadSpeed, configUploadBps)
-                : configUploadBps;
+            limits.MaxUploadSpeed = limits.MaxUploadSpeed == SpeedLimits.Unlimited
+                ? configUploadBps
+                : Math.Min(limits.MaxUploadSpeed, configUploadBps);
         }
 
         if (configDownloadBps > 0)
         {
-            limits.MaxDownloadSpeed = limits.MaxDownloadSpeed > 0
-                ? Math.Min(limits.MaxDownloadSpeed, configDownloadBps)
-                : configDownloadBps;
+            limits.MaxDownloadSpeed = limits.MaxDownloadSpeed == SpeedLimits.Unlimited
+                ? configDownloadBps
+                : Math.Min(limits.MaxDownloadSpeed, configDownloadBps);
         }
 
         var variationMin = _configService.SpeedVariationMin;
@@ -296,7 +296,9 @@ public class SeedingEngine : BackgroundService
     {
         var stoppedIndices = SelectDownloadStoppedTorrents(torrents.Count);
         var priorityWeights = GetPriorityWeights(torrents);
-        var speeds = _distributionManager.DistributeDownloadSpeeds(torrents.Count, maxDownloadSpeed, priorityWeights);
+        var speeds = maxDownloadSpeed == SpeedLimits.Unlimited
+            ? Enumerable.Repeat(1_000_000_000L, torrents.Count).ToArray()
+            : _distributionManager.DistributeDownloadSpeeds(torrents.Count, maxDownloadSpeed, priorityWeights);
 
         for (var i = 0; i < torrents.Count; i++)
         {
@@ -366,9 +368,23 @@ public class SeedingEngine : BackgroundService
             activePriorityWeights[j] = GetPriorityWeight(torrents[activeTorrentIndices[j]].Priority);
         }
 
-        var speeds = activeCount > 0
-            ? _distributionManager.DistributeUploadSpeeds(activeCount, limits.MaxUploadSpeed, activePriorityWeights)
-            : Array.Empty<long>();
+        long[] speeds;
+        if (activeCount > 0)
+        {
+            if (limits.MaxUploadSpeed == SpeedLimits.Unlimited)
+            {
+                speeds = new long[activeCount];
+                Array.Fill(speeds, 1_000_000_000L);
+            }
+            else
+            {
+                speeds = _distributionManager.DistributeUploadSpeeds(activeCount, limits.MaxUploadSpeed, activePriorityWeights);
+            }
+        }
+        else
+        {
+            speeds = Array.Empty<long>();
+        }
 
         var activeIndex = 0;
 
@@ -413,7 +429,8 @@ public class SeedingEngine : BackgroundService
             if (!torrent.ForceCompleted && torrent.Progress < 1.0 && torrent.TotalSize > 0)
             {
                 var dlVariationFactor = variationMin + (Random.Shared.NextDouble() * (variationMax - variationMin));
-                var dlBytesThisTick = (long)(limits.MaxDownloadSpeed * dlVariationFactor * TickInterval.TotalSeconds / Math.Max(1, torrents.Count));
+                var effectiveDownloadBps = limits.MaxDownloadSpeed == SpeedLimits.Unlimited ? 1_000_000_000L : limits.MaxDownloadSpeed;
+                var dlBytesThisTick = (long)(effectiveDownloadBps * dlVariationFactor * TickInterval.TotalSeconds / Math.Max(1, torrents.Count));
 
                 torrent.Downloaded += dlBytesThisTick;
                 torrent.Progress = torrent.Downloaded >= torrent.TotalSize

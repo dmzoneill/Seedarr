@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading.Tasks;
 using NLog;
 
 namespace NzbDrone.Core.DownloadClients.QBitTorrent;
@@ -46,8 +47,8 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 new KeyValuePair<string, string>("password", Password),
             });
 
-            var response = _client.PostAsync($"{BaseUrl}/api/v2/auth/login", content).GetAwaiter().GetResult();
-            var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            var response = Task.Run(() => _client.PostAsync($"{BaseUrl}/api/v2/auth/login", content)).GetAwaiter().GetResult();
+            var body = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
             return response.IsSuccessStatusCode && body.Contains("Ok");
         }
         catch (Exception ex)
@@ -74,13 +75,13 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 url += $"?category={Uri.EscapeDataString(Category)}";
             }
 
-            var response = _client.GetAsync(url).GetAwaiter().GetResult();
+            var response = Task.Run(() => _client.GetAsync(url)).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
             {
                 return items;
             }
 
-            var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            var json = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
             using var torrents = JsonDocument.Parse(json);
 
             foreach (var t in torrents.RootElement.EnumerateArray())
@@ -118,14 +119,14 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
         try
         {
-            var response = _client.GetAsync($"{BaseUrl}/api/v2/torrents/export?hash={infoHash}").GetAwaiter().GetResult();
+            var response = Task.Run(() => _client.GetAsync($"{BaseUrl}/api/v2/torrents/export?hash={infoHash}")).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("qBittorrent export failed for {0}: {1}", infoHash, response.StatusCode);
                 return null;
             }
 
-            return response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+            return Task.Run(() => response.Content.ReadAsByteArrayAsync()).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
@@ -138,7 +139,7 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
     {
         try
         {
-            var response = _client.GetAsync($"{BaseUrl}/api/v2/app/version").GetAwaiter().GetResult();
+            var response = Task.Run(() => _client.GetAsync($"{BaseUrl}/api/v2/app/version")).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
             {
                 return Authenticate();

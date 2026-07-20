@@ -29,6 +29,10 @@ class ApiClient {
       throw new Error(`API error: ${response.status} ${response.statusText}`);
     }
 
+    if (response.status === 204 || response.headers.get('content-length') === '0') {
+      return null as unknown as T;
+    }
+
     return response.json();
   }
 

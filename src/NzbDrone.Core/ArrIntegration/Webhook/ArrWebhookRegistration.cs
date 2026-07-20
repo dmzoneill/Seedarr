@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -56,6 +57,24 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                 return true;
             }
 
+            var fields = new List<object>
+            {
+                new { name = "url", value = (object)webhookUrl },
+                new { name = "method", value = (object)1 }
+            };
+
+            if (!string.IsNullOrEmpty(connection.WebhookSecret))
+            {
+                fields.Add(new
+                {
+                    name = "headers",
+                    value = (object)new[]
+                    {
+                        new { key = "X-Seedarr-Secret", value = connection.WebhookSecret }
+                    }
+                });
+            }
+
             var notificationBody = new
             {
                 name = "Seedarr",
@@ -67,11 +86,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                 onRename = false,
                 onHealthIssue = false,
                 includeHealthWarnings = false,
-                fields = new object[]
-                {
-                    new { name = "url", value = (object)webhookUrl },
-                    new { name = "method", value = (object)1 }
-                }
+                fields
             };
 
             var json = JsonSerializer.Serialize(notificationBody);

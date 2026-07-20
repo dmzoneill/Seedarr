@@ -66,6 +66,11 @@ public class DownloadClientController : Controller
         if (definition.Password == PasswordMask)
         {
             var existing = _downloadClientFactory.Get(id);
+            if (existing == null)
+            {
+                return NotFound();
+            }
+
             definition.Password = existing.Password;
         }
 
@@ -105,8 +110,9 @@ public class DownloadClientController : Controller
 
     private static DownloadClientDefinition MaskPassword(DownloadClientDefinition definition)
     {
-        definition.Password = string.IsNullOrEmpty(definition.Password) ? "" : PasswordMask;
-        return definition;
+        var clone = definition.Clone();
+        clone.Password = string.IsNullOrEmpty(clone.Password) ? "" : PasswordMask;
+        return clone;
     }
 
     private static IDownloadClient CreateClient(DownloadClientDefinition definition)

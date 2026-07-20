@@ -64,6 +64,11 @@ public class IndexerController : Controller
         if (definition.ApiKey != null && definition.ApiKey.Contains('*'))
         {
             var existing = _indexerFactory.Get(id);
+            if (existing == null)
+            {
+                return NotFound();
+            }
+
             definition.ApiKey = existing.ApiKey;
         }
 
@@ -103,10 +108,11 @@ public class IndexerController : Controller
 
     private static IndexerDefinition MaskApiKey(IndexerDefinition definition)
     {
-        definition.ApiKey = definition.ApiKey?.Length > 4
-            ? new string('*', definition.ApiKey.Length - 4) + definition.ApiKey[^4..]
-            : new string('*', definition.ApiKey?.Length ?? 0);
-        return definition;
+        var clone = definition.Clone();
+        clone.ApiKey = clone.ApiKey?.Length > 4
+            ? new string('*', clone.ApiKey.Length - 4) + clone.ApiKey[^4..]
+            : new string('*', clone.ApiKey?.Length ?? 0);
+        return clone;
     }
 
     private static IIndexer CreateIndexer(IndexerDefinition definition)

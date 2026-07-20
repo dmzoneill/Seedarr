@@ -512,6 +512,11 @@ public class DhtService : BackgroundService
 
     public void SendGetPeers(IPEndPoint target, byte[] infoHash)
     {
+        if (_udpClient == null)
+        {
+            return;
+        }
+
         _querySemaphore.Wait();
         try
         {
@@ -540,6 +545,11 @@ public class DhtService : BackgroundService
 
     public void SendAnnouncePeer(IPEndPoint target, byte[] infoHash, int port, byte[] token, bool impliedPort = false)
     {
+        if (_udpClient == null)
+        {
+            return;
+        }
+
         _querySemaphore.Wait();
         try
         {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using NzbDrone.Common;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Commands;
 
 namespace NzbDrone.Core.Test.Messaging;
@@ -26,6 +27,51 @@ internal class ThrowingCommandExecutor : IExecute<ThrowingCommand>
     public void Execute(ThrowingCommand command)
     {
         throw new InvalidOperationException("Handler error");
+    }
+}
+
+internal class StubCommandRepository : IBasicRepository<CommandModel>
+{
+    public CommandModel LastUpdated { get; private set; }
+
+    public CommandModel Get(int id) => null;
+
+    public IEnumerable<CommandModel> All() => [];
+
+    public CommandModel Insert(CommandModel model) => model;
+
+    public CommandModel Update(CommandModel model)
+    {
+        LastUpdated = model;
+        return model;
+    }
+
+    public void Delete(int id)
+    {
+    }
+
+    public void Delete(CommandModel model)
+    {
+    }
+
+    public IEnumerable<CommandModel> InsertMany(IEnumerable<CommandModel> models) => models;
+
+    public IEnumerable<CommandModel> UpdateMany(IEnumerable<CommandModel> models) => models;
+
+    public void DeleteMany(IEnumerable<int> ids)
+    {
+    }
+
+    public void Purge(bool vacuum = false)
+    {
+    }
+
+    public bool HasItems() => false;
+
+    public CommandModel Upsert(CommandModel model) => model;
+
+    public void SetFields(CommandModel model, params System.Linq.Expressions.Expression<Func<CommandModel, object>>[] properties)
+    {
     }
 }
 
@@ -67,12 +113,14 @@ public class CommandExecutorTest
 {
     private CommandExecutor _subject;
     private StubServiceFactory _serviceFactory;
+    private StubCommandRepository _repository;
 
     [SetUp]
     public void SetUp()
     {
         _serviceFactory = new StubServiceFactory();
-        _subject = new CommandExecutor(_serviceFactory);
+        _repository = new StubCommandRepository();
+        _subject = new CommandExecutor(_serviceFactory, _repository);
     }
 
     [Test]

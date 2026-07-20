@@ -5,6 +5,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Backup;
+using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.Test.Backup;
 
@@ -12,6 +13,7 @@ namespace NzbDrone.Core.Test.Backup;
 public class BackupServiceTest
 {
     private IAppFolderInfo _appFolderInfo;
+    private IConnectionStringFactory _connectionStringFactory;
     private BackupService _subject;
     private string _tempDir;
 
@@ -23,7 +25,12 @@ public class BackupServiceTest
 
         _appFolderInfo = Substitute.For<IAppFolderInfo>();
         _appFolderInfo.AppDataFolder.Returns(_tempDir);
-        _subject = new BackupService(_appFolderInfo);
+
+        _connectionStringFactory = Substitute.For<IConnectionStringFactory>();
+        _connectionStringFactory.DatabaseType.Returns(DatabaseType.PostgreSQL);
+        _connectionStringFactory.MainDbConnectionString.Returns("Host=localhost;Database=seedarr");
+
+        _subject = new BackupService(_appFolderInfo, _connectionStringFactory);
     }
 
     [TearDown]
@@ -164,9 +171,9 @@ public class BackupServiceTest
 
         _subject.RestoreBackup("restore_test.zip");
 
-        var dbPath = Path.Combine(_tempDir, "seedarr.db");
-        Assert.That(File.Exists(dbPath), Is.True);
-        Assert.That(File.ReadAllText(dbPath), Is.EqualTo("restored db content"));
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+        Assert.That(File.Exists(dbRestorePath), Is.True);
+        Assert.That(File.ReadAllText(dbRestorePath), Is.EqualTo("restored db content"));
     }
 
     [Test]

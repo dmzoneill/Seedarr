@@ -121,18 +121,26 @@ public class WatchFolderService : BackgroundService
 
     private async void OnTorrentFileCreated(object sender, FileSystemEventArgs e)
     {
-        _debounceCts?.Cancel();
-        _debounceCts = new CancellationTokenSource();
-        var token = _debounceCts.Token;
-
         try
         {
-            await Task.Delay(500, token);
-            ProcessTorrentFile(e.FullPath);
+            var cts = new CancellationTokenSource();
+            var old = Interlocked.Exchange(ref _debounceCts, cts);
+            old?.Cancel();
+            old?.Dispose();
+
+            try
+            {
+                await Task.Delay(500, cts.Token);
+                ProcessTorrentFile(e.FullPath);
+            }
+            catch (OperationCanceledException)
+            {
+                // A newer event superseded this one; processing skipped.
+            }
         }
-        catch (OperationCanceledException)
+        catch (Exception ex)
         {
-            // A newer event superseded this one; processing skipped.
+            _logger.Error(ex, "Unhandled error in watch folder file created handler");
         }
     }
 
@@ -170,6 +178,12 @@ public class WatchFolderService : BackgroundService
                 Status = autoStart ? TorrentStatus.Seeding : TorrentStatus.Stopped,
                 Progress = 0.0
             };
+
+            if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
+            {
+                _logger.Debug("Torrent already exists, skipping: {0}", fileName);
+                return;
+            }
 
             var added = _torrentService.Add(torrent);
 

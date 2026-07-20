@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using NLog;
 
 namespace NzbDrone.Core.DownloadClients.Deluge;
@@ -49,10 +50,10 @@ public class DelugeClient : IDownloadClient, IDisposable
 
         var json = JsonSerializer.Serialize(payload);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var response = _client.PostAsync(JsonUrl, content).GetAwaiter().GetResult();
+        var response = Task.Run(() => _client.PostAsync(JsonUrl, content)).GetAwaiter().GetResult();
         response.EnsureSuccessStatusCode();
 
-        var body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        var body = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
         return JsonDocument.Parse(body);
     }
 

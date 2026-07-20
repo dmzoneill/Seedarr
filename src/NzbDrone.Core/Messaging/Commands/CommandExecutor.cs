@@ -5,6 +5,7 @@ using System.Text.Json;
 using NLog;
 using NzbDrone.Common;
 using NzbDrone.Common.Serializer;
+using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.Messaging.Commands;
 
@@ -16,11 +17,13 @@ public interface ICommandExecutor
 public class CommandExecutor : ICommandExecutor
 {
     private readonly IServiceFactory _serviceFactory;
+    private readonly IBasicRepository<CommandModel> _repository;
     private readonly Logger _logger;
 
-    public CommandExecutor(IServiceFactory serviceFactory)
+    public CommandExecutor(IServiceFactory serviceFactory, IBasicRepository<CommandModel> repository)
     {
         _serviceFactory = serviceFactory;
+        _repository = repository;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -74,6 +77,7 @@ public class CommandExecutor : ICommandExecutor
         finally
         {
             command.EndedAt = DateTime.UtcNow;
+            _repository.Update(command);
         }
     }
 

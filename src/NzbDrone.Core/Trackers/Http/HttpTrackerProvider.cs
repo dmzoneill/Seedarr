@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading.Tasks;
 using System.Web;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
@@ -43,7 +44,7 @@ public class HttpTrackerProvider : ITrackerProvider
             var url = BuildAnnounceUrl(request);
             _logger.Debug("HTTP announce: {0}", url);
 
-            var responseBytes = Policy.Execute(ct => _client.GetByteArrayAsync(url, ct).GetAwaiter().GetResult());
+            var responseBytes = Policy.Execute(ct => Task.Run(() => _client.GetByteArrayAsync(url, ct)).GetAwaiter().GetResult());
             var parser = new BencodeParser();
             var dict = parser.Parse<BDictionary>(responseBytes);
 
@@ -123,7 +124,7 @@ public class HttpTrackerProvider : ITrackerProvider
 
             _logger.Debug("HTTP scrape: {0}", scrapeUrl);
 
-            var responseBytes = Policy.Execute(ct => _client.GetByteArrayAsync(scrapeUrl, ct).GetAwaiter().GetResult());
+            var responseBytes = Policy.Execute(ct => Task.Run(() => _client.GetByteArrayAsync(scrapeUrl, ct)).GetAwaiter().GetResult());
             var parser = new BencodeParser();
             var dict = parser.Parse<BDictionary>(responseBytes);
 
