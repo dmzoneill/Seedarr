@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Library</OutputType>
+    <NoWarn>$(NoWarn);SYSLIB0051;CA5362</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
