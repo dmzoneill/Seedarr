@@ -105,11 +105,11 @@ function ScheduleModal({
           <div style={{ display: 'flex', gap: 12 }}>
             <label style={{ flex: 1 }}>
               <span className="status-label">Max Upload (KB/s, 0=unlimited)</span>
-              <input className="form-input" type="number" min={0} value={form.maxUploadSpeed / 1024} onChange={(e) => setForm({ ...form, maxUploadSpeed: Number(e.target.value) * 1024 })} />
+              <input className="form-input" type="number" min={0} value={form.maxUploadSpeed / 1024} onChange={(e) => setForm({ ...form, maxUploadSpeed: Math.round(Number(e.target.value) * 1024) })} />
             </label>
             <label style={{ flex: 1 }}>
               <span className="status-label">Max Download (KB/s, 0=unlimited)</span>
-              <input className="form-input" type="number" min={0} value={form.maxDownloadSpeed / 1024} onChange={(e) => setForm({ ...form, maxDownloadSpeed: Number(e.target.value) * 1024 })} />
+              <input className="form-input" type="number" min={0} value={form.maxDownloadSpeed / 1024} onChange={(e) => setForm({ ...form, maxDownloadSpeed: Math.round(Number(e.target.value) * 1024) })} />
             </label>
           </div>
           <div style={{ display: 'flex', gap: 12 }}>

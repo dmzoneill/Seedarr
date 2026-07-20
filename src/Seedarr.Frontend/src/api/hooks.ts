@@ -100,7 +100,7 @@ export function useAddTorrent() {
         const formData = new FormData();
         formData.append('file', input.file);
         return apiClient.postForm<Torrent>('/torrent/upload', formData).catch((err: Error) => {
-          if (err.message.includes('409')) throw new Error('Torrent with this info hash already exists');
+          if (err.message.startsWith('API error: 409')) throw new Error('Torrent with this info hash already exists');
           throw err;
         });
       }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Torrent, TorrentFileInfo } from '../../api/types';
 import { useTorrentFiles } from '../../api/hooks';
 import { formatBytes } from '../../utils/formatters';
@@ -87,14 +87,14 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
   const { data: files, isLoading, error } = useTorrentFiles(torrent.id);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
-  function toggleDir(path: string) {
+  const toggleDir = useCallback((path: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
       return next;
     });
-  }
+  }, []);
 
   function expandAll() {
     if (!files) return;
