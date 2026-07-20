@@ -86,13 +86,6 @@ function SystemLogs() {
     setCleared(true);
   }, []);
 
-  // Reset cleared state when new data arrives with different length
-  useEffect(() => {
-    if (cleared && entries) {
-      // Keep cleared until user changes filters or new entries arrive
-    }
-  }, [entries, cleared]);
-
   // Auto-scroll to bottom
   useEffect(() => {
     if (autoScroll && logContentRef.current) {
@@ -160,7 +153,7 @@ function SystemLogs() {
               {entry.level.toUpperCase().padEnd(5)}
             </span>
             <span className="log-source">{entry.source}</span>
-            <span className="log-message">{entry.message}</span>
+            <span className="log-message" style={{ whiteSpace: 'pre-wrap' }}>{entry.message}</span>
           </div>
         ))}
       </div>

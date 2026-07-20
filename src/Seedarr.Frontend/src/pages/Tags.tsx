@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTags, useCreateTag, useUpdateTag, useDeleteTag, useTorrents } from '../api/hooks';
 import type { Tag } from '../api/types';
 
@@ -13,10 +13,15 @@ function Tags() {
   const [newLabel, setNewLabel] = useState('');
   const [showAdd, setShowAdd] = useState(false);
 
-  function getUsageCount(tagLabel: string): number {
-    if (!torrents) return 0;
-    return torrents.filter((t) => t.label === tagLabel).length;
-  }
+  const tagUsageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    if (torrents) {
+      for (const t of torrents) {
+        if (t.label) counts[t.label] = (counts[t.label] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [torrents]);
 
   function handleCreate() {
     if (!newLabel.trim()) return;
@@ -107,7 +112,7 @@ function Tags() {
                           <span className="badge badge-info">{tag.label}</span>
                         )}
                       </td>
-                      <td>{getUsageCount(tag.label)}</td>
+                      <td>{tagUsageCounts[tag.label] ?? 0}</td>
                       <td>
                         {editing?.id === tag.id ? (
                           <div style={{ display: 'flex', gap: 4 }}>

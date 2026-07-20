@@ -44,7 +44,7 @@ function TorrentContextMenu({
   }, [onClose]);
 
   function handleCopy(text: string) {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text).catch((err) => console.warn('Clipboard write failed:', err));
     onClose();
   }
 

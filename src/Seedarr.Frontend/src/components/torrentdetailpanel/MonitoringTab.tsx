@@ -42,11 +42,13 @@ export function MonitoringTab({ torrent }: { torrent: Torrent }) {
   const prevRef = useRef<{ uploaded: number; downloaded: number; ts: number } | null>(null);
   const [, setTick] = useState(0);
 
-  if (history && history.length > 0 && !seededRef.current) {
+  useEffect(() => {
+    if (!history || history.length === 0 || seededRef.current) return;
     seededRef.current = true;
     histRef.current.up = history.map((s) => s.uploadSpeed);
     histRef.current.down = history.map((s) => s.downloadSpeed);
-  }
+    setTick((t) => t + 1);
+  }, [history]);
 
   useEffect(() => {
     const now = Date.now();
