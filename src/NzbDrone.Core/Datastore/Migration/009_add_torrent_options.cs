@@ -18,5 +18,6 @@ public class AddTorrentOptions : NzbDroneMigrationBase
 
     public override void Down()
     {
+        // Downgrades are not supported; this migration is intentionally irreversible.
     }
 }

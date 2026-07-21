@@ -38,8 +38,8 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
                 <td colSpan={2} style={{ color: 'var(--text-dim)', textAlign: 'center' }}>No events recorded</td>
               </tr>
             ) : (
-              events.map((entry, i) => (
-                <tr key={i} className="torrent-table-row">
+              events.map((entry) => (
+                <tr key={`${entry.time}-${entry.event}`} className="torrent-table-row">
                   <td>{formatDate(entry.time)}</td>
                   <td>{entry.event}</td>
                 </tr>

@@ -201,10 +201,10 @@ public class DiskSpaceServiceTest
 
     // --- AddDriveInfo tests (private static, via reflection) ---
 
-    private static void InvokeAddDriveInfo(List<DiskSpaceInfo> result, HashSet<string> seen, string path, string label)
+    private void InvokeAddDriveInfo(List<DiskSpaceInfo> result, HashSet<string> seen, string path, string label)
     {
-        var method = typeof(DiskSpaceService).GetMethod("AddDriveInfo", BindingFlags.NonPublic | BindingFlags.Static);
-        method.Invoke(null, new object[] { result, seen, path, label });
+        var method = typeof(DiskSpaceService).GetMethod("AddDriveInfo", BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { result, seen, path, label });
     }
 
     [Test]

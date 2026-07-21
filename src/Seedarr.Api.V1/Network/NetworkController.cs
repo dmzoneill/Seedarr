@@ -14,14 +14,14 @@ public class NetworkController : Controller
 {
     private readonly INetworkStatusService _networkStatusService;
     private readonly IConnectionManager _connectionManager;
-    private readonly DhtService _dhtService;
+    private readonly IDhtService _dhtService;
     private readonly IConfigService _configService;
     private readonly IPeerConnectionLogService _peerLogService;
 
     public NetworkController(
         INetworkStatusService networkStatusService,
         IConnectionManager connectionManager,
-        DhtService dhtService,
+        IDhtService dhtService,
         IConfigService configService,
         IPeerConnectionLogService peerLogService)
     {

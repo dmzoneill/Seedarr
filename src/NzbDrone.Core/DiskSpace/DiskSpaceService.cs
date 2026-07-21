@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 
 namespace NzbDrone.Core.DiskSpace;
@@ -24,6 +25,7 @@ public interface IDiskSpaceService
 public class DiskSpaceService : IDiskSpaceService
 {
     private readonly IAppFolderInfo _appFolderInfo;
+    private readonly Logger _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DiskSpaceService"/> class.
@@ -32,6 +34,7 @@ public class DiskSpaceService : IDiskSpaceService
     public DiskSpaceService(IAppFolderInfo appFolderInfo)
     {
         _appFolderInfo = appFolderInfo;
+        _logger = LogManager.GetCurrentClassLogger();
     }
 
     /// <inheritdoc/>
@@ -63,15 +66,15 @@ public class DiskSpaceService : IDiskSpaceService
                 }
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // If we cannot enumerate drives, return what we have
+            _logger.Warn(ex, "Failed to enumerate fixed drives");
         }
 
         return result;
     }
 
-    private static void AddDriveInfo(
+    private void AddDriveInfo(
         List<DiskSpaceInfo> result,
         HashSet<string> seen,
         string path,
@@ -104,9 +107,9 @@ public class DiskSpaceService : IDiskSpaceService
                 });
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Ignore drives that are inaccessible
+            _logger.Warn(ex, "Failed to get drive info for path {0} ({1})", path, label);
         }
     }
 }

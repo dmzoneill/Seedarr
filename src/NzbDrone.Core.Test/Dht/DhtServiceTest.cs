@@ -1162,7 +1162,7 @@ public class DhtServiceTest
 
         var method = typeof(DhtService).GetMethod("SendFindNode", BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.DoesNotThrow(() =>
-            method.Invoke(_service, new object[] { target, targetId }));
+            method.Invoke(_service, new object[] { target, targetId, CancellationToken.None }));
     }
 
     // ── SendPingResponse / SendFindNodeResponse / SendErrorResponse ──

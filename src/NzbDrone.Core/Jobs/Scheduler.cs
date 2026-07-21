@@ -46,15 +46,17 @@ public class Scheduler : BackgroundService
                         {
                             try
                             {
-                                taskInstance.Execute();
+                                await Task.Run(() => taskInstance.Execute(), stoppingToken);
                                 _logger.Debug("Scheduled task completed: {0}", next.TypeName);
                             }
                             catch (Exception ex)
                             {
                                 _logger.Error(ex, "Scheduled task failed: {0}", next.TypeName);
                             }
-
-                            _taskManager.UpdateLastExecution(next.TypeName);
+                            finally
+                            {
+                                _taskManager.UpdateLastExecution(next.TypeName);
+                            }
                         }
                         else
                         {

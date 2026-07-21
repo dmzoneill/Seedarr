@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
@@ -52,6 +53,13 @@ public abstract class ProviderFactory<TProvider, TProviderDefinition> : IProvide
 
     public List<TProvider> GetAvailableProviders()
     {
-        return _serviceFactory.BuildAll<TProvider>().ToList();
+        var enabledImplementations = All()
+            .Where(d => d.Enable)
+            .Select(d => d.Implementation)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return _serviceFactory.BuildAll<TProvider>()
+            .Where(p => enabledImplementations.Contains(p.GetType().Name))
+            .ToList();
     }
 }

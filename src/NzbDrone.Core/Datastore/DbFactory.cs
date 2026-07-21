@@ -55,7 +55,7 @@ public class DbFactory : IDbFactory
             _typeHandlersRegistered = true;
         }
 
-        _logger.Info("Creating {0} database: {1}", dbType, connectionString);
+        _logger.Info("Creating {0} database: {1}", dbType, RedactConnectionString(dbType, connectionString));
 
         RunMigrations(dbType, connectionString);
 
@@ -66,6 +66,18 @@ public class DbFactory : IDbFactory
         };
 
         return new Database(factory, dbType);
+    }
+
+    private static string RedactConnectionString(DatabaseType dbType, string connectionString)
+    {
+        if (dbType == DatabaseType.PostgreSQL)
+        {
+            var builder = new NpgsqlConnectionStringBuilder(connectionString);
+            return $"Host={builder.Host};Database={builder.Database}";
+        }
+
+        var sqliteBuilder = new SqliteConnectionStringBuilder(connectionString);
+        return $"Data Source={sqliteBuilder.DataSource}";
     }
 
     private void RunMigrations(DatabaseType dbType, string connectionString)

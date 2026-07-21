@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 
 namespace NzbDrone.Core.Dht;
 
@@ -95,6 +96,7 @@ public class DhtPeerStore
             return list
                 .Where(p => (now - p.LastSeen).TotalMinutes <= _peerTtlMinutes)
                 .Select(p => EncodeCompactPeer(p.Address, p.Port))
+                .Where(b => b != null)
                 .ToList();
         }
     }
@@ -117,7 +119,13 @@ public class DhtPeerStore
 
     private static byte[] EncodeCompactPeer(IPAddress address, int port)
     {
-        // Compact peer info: 4 bytes IP + 2 bytes port (big-endian)
+        // Compact peer info is IPv4-only (4 bytes IP + 2 bytes port, big-endian).
+        // IPv6 peers are skipped rather than silently truncating their 16-byte address.
+        if (address.AddressFamily != AddressFamily.InterNetwork)
+        {
+            return null;
+        }
+
         var ipBytes = address.GetAddressBytes();
         var result = new byte[6];
         Array.Copy(ipBytes, 0, result, 0, 4);
