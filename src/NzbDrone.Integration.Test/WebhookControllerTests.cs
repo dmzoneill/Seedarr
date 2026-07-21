@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using NUnit.Framework;
 
@@ -11,11 +13,33 @@ namespace NzbDrone.Integration.Test;
 [Category("IntegrationTest")]
 public class WebhookControllerTests : IntegrationTestBase
 {
+    private const string TestWebhookSecret = "test-webhook-secret-abc123";
+
+    [OneTimeSetUp]
+    public async Task CreateTestArrConnectionAsync()
+    {
+        var connection = new
+        {
+            enable = true,
+            webhookEnabled = true,
+            webhookSecret = TestWebhookSecret,
+            name = "TestConnection",
+            arrType = "Sonarr",
+            url = "http://localhost:8989",
+            apiKey = "test-api-key",
+        };
+        await PostJsonAsync("/api/v1/arrconnections", connection);
+    }
+
     private async Task<(HttpStatusCode Status, Dictionary<string, object> Body)> PostWebhookAsync(object payload)
     {
-        var response = await PostJsonAsync("/api/v1/webhook/arr", payload);
-        var json = await response.Content.ReadAsStringAsync();
-        return (response.StatusCode, Deserialize<Dictionary<string, object>>(json));
+        var json = JsonSerializer.Serialize(payload);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/webhook/arr") { Content = content };
+        request.Headers.Add("X-Seedarr-Secret", TestWebhookSecret);
+        var response = await Client.SendAsync(request);
+        var responseJson = await response.Content.ReadAsStringAsync();
+        return (response.StatusCode, Deserialize<Dictionary<string, object>>(responseJson));
     }
 
     [Test]
