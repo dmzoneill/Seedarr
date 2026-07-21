@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR;
 using NLog;
 
@@ -19,6 +20,7 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
     public void BroadcastMessage(SignalRMessage message)
     {
         _logger.Trace("Broadcasting SignalR message: {0}", message.Name);
-        _ = _hubContext.Clients.All.SendAsync("receiveMessage", message);
+        _hubContext.Clients.All.SendAsync("receiveMessage", message)
+            .ContinueWith(t => _logger.Warn(t.Exception, "SignalR broadcast failed"), TaskContinuationOptions.OnlyOnFaulted);
     }
 }

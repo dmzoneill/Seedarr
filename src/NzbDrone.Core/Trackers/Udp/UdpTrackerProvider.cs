@@ -44,7 +44,7 @@ public class UdpTrackerProvider : ITrackerProvider
             client.Send(announceRequest, announceRequest.Length);
 
             var response = client.Receive(ref endpoint);
-            return ParseAnnounceResponse(response);
+            return ParseAnnounceResponse(response, transactionId);
         }
         catch (Exception ex)
         {
@@ -88,6 +88,19 @@ public class UdpTrackerProvider : ITrackerProvider
                 return new TrackerScrapeResponse { Success = false, FailureReason = "Response too short" };
             }
 
+            var scrapeResponseAction = ReadInt32BigEndian(response, 0);
+            var scrapeResponseTxId = ReadInt32BigEndian(response, 4);
+
+            if (scrapeResponseAction != ActionScrape)
+            {
+                return new TrackerScrapeResponse { Success = false, FailureReason = $"Unexpected scrape response action: {scrapeResponseAction}" };
+            }
+
+            if (scrapeResponseTxId != transactionId)
+            {
+                return new TrackerScrapeResponse { Success = false, FailureReason = "Scrape response transaction ID mismatch" };
+            }
+
             return new TrackerScrapeResponse
             {
                 Success = true,
@@ -117,6 +130,19 @@ public class UdpTrackerProvider : ITrackerProvider
         if (response.Length < 16)
         {
             throw new InvalidOperationException("UDP connect response too short");
+        }
+
+        var responseAction = ReadInt32BigEndian(response, 0);
+        var responseTxId = ReadInt32BigEndian(response, 4);
+
+        if (responseAction != ActionConnect)
+        {
+            throw new InvalidOperationException($"UDP connect response has unexpected action: {responseAction}");
+        }
+
+        if (responseTxId != transactionId)
+        {
+            throw new InvalidOperationException("UDP connect response transaction ID mismatch");
         }
 
         return ReadInt64BigEndian(response, 8);
@@ -155,11 +181,24 @@ public class UdpTrackerProvider : ITrackerProvider
         return packet;
     }
 
-    private static TrackerAnnounceResponse ParseAnnounceResponse(byte[] response)
+    private static TrackerAnnounceResponse ParseAnnounceResponse(byte[] response, int transactionId)
     {
         if (response.Length < 20)
         {
             return new TrackerAnnounceResponse { Success = false, FailureReason = "Response too short" };
+        }
+
+        var responseAction = ReadInt32BigEndian(response, 0);
+        var responseTxId = ReadInt32BigEndian(response, 4);
+
+        if (responseAction != ActionAnnounce)
+        {
+            return new TrackerAnnounceResponse { Success = false, FailureReason = $"Unexpected announce response action: {responseAction}" };
+        }
+
+        if (responseTxId != transactionId)
+        {
+            return new TrackerAnnounceResponse { Success = false, FailureReason = "Announce response transaction ID mismatch" };
         }
 
         var result = new TrackerAnnounceResponse

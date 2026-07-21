@@ -1,18 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
-
-const DEFAULT_REFETCH_MS = 5000;
-
-export function useRefetchInterval(): number {
-  const { data } = useQuery<{ uiRefreshRateSec: number }>({
-    queryKey: ['config', 'advanced'],
-    queryFn: () => apiClient.get('/config/advanced'),
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
-  });
-  return data?.uiRefreshRateSec ? data.uiRefreshRateSec * 1000 : DEFAULT_REFETCH_MS;
-}
-
 import type {
   Torrent,
   TorrentFileInfo,
@@ -50,6 +37,18 @@ import type {
   PeerConnectionLogEntry,
   NetworkDiagnostics,
 } from './types';
+
+const DEFAULT_REFETCH_MS = 5000;
+
+export function useRefetchInterval(): number {
+  const { data } = useQuery<{ uiRefreshRateSec: number }>({
+    queryKey: ['config', 'advanced'],
+    queryFn: () => apiClient.get('/config/advanced'),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  return data?.uiRefreshRateSec ? data.uiRefreshRateSec * 1000 : DEFAULT_REFETCH_MS;
+}
 
 type AddTorrentInput =
   | { file: File; magnetLink?: never }
@@ -627,7 +626,7 @@ export function useCreateTag() {
 export function useUpdateTag() {
   const queryClient = useQueryClient();
   return useMutation<Tag, Error, Tag>({
-    mutationFn: (tag) => apiClient.put(`/tag/${tag.id}`, tag),
+    mutationFn: (tag) => apiClient.put('/tag', tag),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags'] }),
   });
 }

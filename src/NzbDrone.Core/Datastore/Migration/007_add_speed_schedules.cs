@@ -21,5 +21,6 @@ public class AddSpeedSchedules : NzbDroneMigrationBase
 
     public override void Down()
     {
+        // Downgrades are not supported; this migration is intentionally irreversible.
     }
 }

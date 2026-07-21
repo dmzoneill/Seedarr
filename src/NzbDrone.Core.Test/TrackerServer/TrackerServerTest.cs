@@ -76,7 +76,8 @@ public class TrackerServerTest
         var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
             "HandleScrape",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        return (string)method.Invoke(_trackerServer, new object[] { path });
+        var bytes = (byte[])method.Invoke(_trackerServer, new object[] { path });
+        return Encoding.Latin1.GetString(bytes);
     }
 
     private bool InvokeIsRateLimited(string ip)
@@ -721,9 +722,9 @@ public class TrackerServerTest
     [Test]
     public void HandleScrape_should_return_valid_response()
     {
-        _peerDatabase.GetStats("abc").Returns(new ScrapeStats { Complete = 5, Incomplete = 2, Downloaded = 10 });
+        _peerDatabase.GetStats("abcdefghijklmnopqrst").Returns(new ScrapeStats { Complete = 5, Incomplete = 2, Downloaded = 10 });
 
-        var result = InvokeHandleScrape("/scrape?info_hash=abc");
+        var result = InvokeHandleScrape("/scrape?info_hash=abcdefghijklmnopqrst");
 
         Assert.That(result, Does.Contain("8:completei5e"));
         Assert.That(result, Does.Contain("10:downloadedi10e"));
@@ -735,9 +736,9 @@ public class TrackerServerTest
     public void HandleScrape_should_use_configured_scrape_interval()
     {
         _configService.ScrapeIntervalSeconds.Returns(1200);
-        _peerDatabase.GetStats("abc").Returns(new ScrapeStats { Complete = 0, Incomplete = 0, Downloaded = 0 });
+        _peerDatabase.GetStats("abcdefghijklmnopqrst").Returns(new ScrapeStats { Complete = 0, Incomplete = 0, Downloaded = 0 });
 
-        var result = InvokeHandleScrape("/scrape?info_hash=abc");
+        var result = InvokeHandleScrape("/scrape?info_hash=abcdefghijklmnopqrst");
 
         Assert.That(result, Does.Contain("20:min_request_intervali1200e"));
     }
@@ -745,9 +746,9 @@ public class TrackerServerTest
     [Test]
     public void HandleScrape_should_return_zero_stats_for_unknown_torrent()
     {
-        _peerDatabase.GetStats("unknown").Returns(new ScrapeStats { Complete = 0, Incomplete = 0, Downloaded = 0 });
+        _peerDatabase.GetStats("unknownhashnnnnnnnnn").Returns(new ScrapeStats { Complete = 0, Incomplete = 0, Downloaded = 0 });
 
-        var result = InvokeHandleScrape("/scrape?info_hash=unknown");
+        var result = InvokeHandleScrape("/scrape?info_hash=unknownhashnnnnnnnnn");
 
         Assert.That(result, Does.Contain("8:completei0e"));
         Assert.That(result, Does.Contain("10:downloadedi0e"));
@@ -757,11 +758,11 @@ public class TrackerServerTest
     [Test]
     public void HandleScrape_should_include_info_hash_in_response()
     {
-        _peerDatabase.GetStats("testhash").Returns(new ScrapeStats { Complete = 1, Incomplete = 0, Downloaded = 1 });
+        _peerDatabase.GetStats("testhashhashhashhash").Returns(new ScrapeStats { Complete = 1, Incomplete = 0, Downloaded = 1 });
 
-        var result = InvokeHandleScrape("/scrape?info_hash=testhash");
+        var result = InvokeHandleScrape("/scrape?info_hash=testhashhashhashhash");
 
-        Assert.That(result, Does.Contain("8:testhash"));
+        Assert.That(result, Does.Contain("20:testhashhashhashhash"));
     }
 
     // ---- IsRateLimited tests ----
@@ -1171,7 +1172,7 @@ public class TrackerServerTest
         _configService.TrackerEnableScrape.Returns(true);
         _peerDatabase.GetStats(Arg.Any<string>()).Returns(new ScrapeStats { Complete = 1, Incomplete = 0, Downloaded = 1 });
 
-        var result = InvokeHandleScrape("/scrape?info_hash=abc");
+        var result = InvokeHandleScrape("/scrape?info_hash=abcdefghijklmnopqrst");
 
         Assert.That(result, Does.Contain("8:completei1e"));
     }

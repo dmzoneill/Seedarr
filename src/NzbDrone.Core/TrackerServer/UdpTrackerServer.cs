@@ -36,6 +36,7 @@ public class UdpTrackerServer : BackgroundService
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<long, ConnectionEntry> _connectionIds = new();
     private readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
+    private readonly object _sendLock = new();
 
     public UdpTrackerServer(IPeerDatabase peerDatabase, IConfigService configService)
     {
@@ -120,7 +121,11 @@ public class UdpTrackerServer : BackgroundService
             if (IsRateLimited(clientIp))
             {
                 var errorResponse = BuildErrorResponse(transactionId, "Rate limit exceeded");
-                client.Send(errorResponse, errorResponse.Length, remote);
+                lock (_sendLock)
+                {
+                    client.Send(errorResponse, errorResponse.Length, remote);
+                }
+
                 return;
             }
 
@@ -137,7 +142,10 @@ public class UdpTrackerServer : BackgroundService
 
             if (response != null)
             {
-                client.Send(response, response.Length, remote);
+                lock (_sendLock)
+                {
+                    client.Send(response, response.Length, remote);
+                }
             }
         }
         catch (Exception ex)

@@ -14,7 +14,7 @@ using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Dht;
 
-public class DhtService : BackgroundService
+public class DhtService : BackgroundService, IDhtService
 {
     private const int DhtPort = 6882;
     private const int PeerTtlMinutes = 30;
@@ -194,7 +194,7 @@ public class DhtService : BackgroundService
                 if (addresses.Length > 0)
                 {
                     var endpoint = new IPEndPoint(addresses[0], int.Parse(parts[1]));
-                    SendFindNode(endpoint, _nodeId);
+                    await SendFindNode(endpoint, _nodeId, stoppingToken);
                     _logger.Debug("DHT bootstrap: sent find_node to {0}", node);
                 }
             }
@@ -483,9 +483,9 @@ public class DhtService : BackgroundService
         _udpClient.Send(bytes, bytes.Length, target);
     }
 
-    private void SendFindNode(IPEndPoint target, byte[] targetId)
+    private async Task SendFindNode(IPEndPoint target, byte[] targetId, CancellationToken ct = default)
     {
-        _querySemaphore.Wait();
+        await _querySemaphore.WaitAsync(ct);
         try
         {
             var transactionId = RandomNumberGenerator.GetBytes(2);
@@ -502,7 +502,7 @@ public class DhtService : BackgroundService
             };
 
             var bytes = query.EncodeAsBytes();
-            _udpClient.Send(bytes, bytes.Length, target);
+            await _udpClient.SendAsync(bytes, bytes.Length, target);
         }
         finally
         {
@@ -510,14 +510,14 @@ public class DhtService : BackgroundService
         }
     }
 
-    public void SendGetPeers(IPEndPoint target, byte[] infoHash)
+    public async Task SendGetPeers(IPEndPoint target, byte[] infoHash, CancellationToken ct = default)
     {
         if (_udpClient == null)
         {
             return;
         }
 
-        _querySemaphore.Wait();
+        await _querySemaphore.WaitAsync(ct);
         try
         {
             var transactionId = RandomNumberGenerator.GetBytes(2);
@@ -534,7 +534,7 @@ public class DhtService : BackgroundService
             };
 
             var bytes = query.EncodeAsBytes();
-            _udpClient.Send(bytes, bytes.Length, target);
+            await _udpClient.SendAsync(bytes, bytes.Length, target);
             _logger.Debug("DHT sent get_peers to {0} for {1}", target, Convert.ToHexString(infoHash));
         }
         finally
@@ -543,14 +543,14 @@ public class DhtService : BackgroundService
         }
     }
 
-    public void SendAnnouncePeer(IPEndPoint target, byte[] infoHash, int port, byte[] token, bool impliedPort = false)
+    public async Task SendAnnouncePeer(IPEndPoint target, byte[] infoHash, int port, byte[] token, bool impliedPort = false, CancellationToken ct = default)
     {
         if (_udpClient == null)
         {
             return;
         }
 
-        _querySemaphore.Wait();
+        await _querySemaphore.WaitAsync(ct);
         try
         {
             var transactionId = RandomNumberGenerator.GetBytes(2);
@@ -576,7 +576,7 @@ public class DhtService : BackgroundService
             };
 
             var bytes = query.EncodeAsBytes();
-            _udpClient.Send(bytes, bytes.Length, target);
+            await _udpClient.SendAsync(bytes, bytes.Length, target);
             _logger.Debug("DHT sent announce_peer to {0} for {1} port {2}", target, Convert.ToHexString(infoHash), port);
         }
         finally

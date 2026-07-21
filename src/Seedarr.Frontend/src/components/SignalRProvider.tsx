@@ -20,8 +20,10 @@ export default function SignalRProvider() {
   showToastRef.current = showToast;
 
   useEffect(() => {
+    const handlers: Array<[string, (data?: unknown) => void]> = [];
+
     for (const [event, queryKeys] of Object.entries(EVENT_INVALIDATION_MAP)) {
-      connection.on(event, (data?: unknown) => {
+      const handler = (data?: unknown) => {
         for (const key of queryKeys) {
           queryClient.invalidateQueries({ queryKey: key });
         }
@@ -39,12 +41,14 @@ export default function SignalRProvider() {
         } else if (event === 'TorrentDeleted') {
           showToastRef.current('Torrent removed', 'info');
         }
-      });
+      };
+      handlers.push([event, handler]);
+      connection.on(event, handler);
     }
 
     return () => {
-      for (const event of Object.keys(EVENT_INVALIDATION_MAP)) {
-        connection.off(event);
+      for (const [event, handler] of handlers) {
+        connection.off(event, handler);
       }
     };
   }, [connection, queryClient]);

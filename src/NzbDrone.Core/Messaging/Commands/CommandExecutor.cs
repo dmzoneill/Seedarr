@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
@@ -16,6 +17,8 @@ public interface ICommandExecutor
 
 public class CommandExecutor : ICommandExecutor
 {
+    private static readonly ConcurrentDictionary<string, Type> CommandTypeCache = new(StringComparer.OrdinalIgnoreCase);
+
     private readonly IServiceFactory _serviceFactory;
     private readonly IBasicRepository<CommandModel> _repository;
     private readonly Logger _logger;
@@ -83,23 +86,24 @@ public class CommandExecutor : ICommandExecutor
 
     private static Type FindCommandType(string name)
     {
-        return AppDomain.CurrentDomain.GetAssemblies()
-            .SelectMany(a =>
-            {
-                try
+        return CommandTypeCache.GetOrAdd(name, static n =>
+            AppDomain.CurrentDomain.GetAssemblies()
+                .SelectMany(a =>
                 {
-                    return a.GetTypes();
-                }
-                catch
-                {
-                    return Array.Empty<Type>();
-                }
-            })
-            .FirstOrDefault(t =>
-                t.Name == name &&
-                t.IsClass &&
-                !t.IsAbstract &&
-                typeof(Command).IsAssignableFrom(t));
+                    try
+                    {
+                        return a.GetTypes();
+                    }
+                    catch
+                    {
+                        return Array.Empty<Type>();
+                    }
+                })
+                .FirstOrDefault(t =>
+                    t.Name == n &&
+                    t.IsClass &&
+                    !t.IsAbstract &&
+                    typeof(Command).IsAssignableFrom(t)));
     }
 
     private static Command DeserializeCommand(string body, Type commandType)

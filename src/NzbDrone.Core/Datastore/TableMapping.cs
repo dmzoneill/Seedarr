@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
 
@@ -7,7 +7,8 @@ namespace NzbDrone.Core.Datastore;
 
 public static class TableMapping
 {
-    private static readonly Dictionary<Type, string> TableNames = new();
+    private static readonly ConcurrentDictionary<Type, string> TableNames = new();
+    private static readonly ConcurrentDictionary<Type, PropertyInfo[]> PropertyCache = new();
 
     public static void Register<TModel>(string tableName)
         where TModel : ModelBase
@@ -44,10 +45,11 @@ public static class TableMapping
         return $"UPDATE \"{table}\" SET {setClauses} WHERE \"Id\" = @Id";
     }
 
-    private static List<PropertyInfo> GetWritableProperties(Type type)
+    private static PropertyInfo[] GetWritableProperties(Type type)
     {
-        return type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.Name != "Id" && p.CanRead && p.CanWrite)
-            .ToList();
+        return PropertyCache.GetOrAdd(type, static t =>
+            t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+             .Where(p => p.Name != "Id" && p.CanRead && p.CanWrite)
+             .ToArray());
     }
 }

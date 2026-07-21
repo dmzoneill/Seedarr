@@ -1,4 +1,6 @@
+using System;
 using System.IO;
+using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 
 namespace NzbDrone.Core.HealthCheck.Checks;
@@ -8,10 +10,12 @@ public class DiskSpaceCheck : IHealthCheck
     private const long MinFreeBytes = 500 * 1024 * 1024;
 
     private readonly IAppFolderInfo _appFolderInfo;
+    private readonly Logger _logger;
 
     public DiskSpaceCheck(IAppFolderInfo appFolderInfo)
     {
         _appFolderInfo = appFolderInfo;
+        _logger = LogManager.GetCurrentClassLogger();
     }
 
     public HealthCheckResult Check()
@@ -30,9 +34,10 @@ public class DiskSpaceCheck : IHealthCheck
 
             return HealthCheckResult.Ok("DiskSpace");
         }
-        catch
+        catch (Exception ex)
         {
-            return HealthCheckResult.Ok("DiskSpace");
+            _logger.Warn(ex, "Failed to check disk space for app data folder");
+            return HealthCheckResult.Warning("DiskSpace", "Unable to determine available disk space");
         }
     }
 }

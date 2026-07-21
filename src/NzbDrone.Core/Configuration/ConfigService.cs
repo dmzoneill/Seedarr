@@ -196,25 +196,28 @@ public class ConfigService : IConfigService
 
     public void SaveConfigDictionary(Dictionary<string, object> configValues)
     {
-        var all = _repository.All().ToList();
-
-        foreach (var configValue in configValues)
+        lock (_cacheLock)
         {
-            var existing = all.FirstOrDefault(c =>
-                string.Equals(c.Key, configValue.Key, StringComparison.OrdinalIgnoreCase));
+            var all = _repository.All().ToList();
 
-            if (existing == null)
+            foreach (var configValue in configValues)
             {
-                _repository.Insert(new ConfigModel { Key = configValue.Key, Value = configValue.Value?.ToString() ?? string.Empty });
+                var existing = all.FirstOrDefault(c =>
+                    string.Equals(c.Key, configValue.Key, StringComparison.OrdinalIgnoreCase));
+
+                if (existing == null)
+                {
+                    _repository.Insert(new ConfigModel { Key = configValue.Key, Value = configValue.Value?.ToString() ?? string.Empty });
+                }
+                else
+                {
+                    existing.Value = configValue.Value?.ToString() ?? string.Empty;
+                    _repository.Update(existing);
+                }
             }
-            else
-            {
-                existing.Value = configValue.Value?.ToString() ?? string.Empty;
-                _repository.Update(existing);
-            }
+
+            _cache = null;
         }
-
-        _cache = null;
 
         _logger.Debug("Saved {0} config values", configValues.Count);
         _eventAggregator.PublishEvent(new ConfigSavedEvent());

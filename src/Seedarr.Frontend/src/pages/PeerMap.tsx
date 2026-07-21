@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
 import { usePeerGraph } from '../api/hooks';
 import type { PeerGraphNode, PeerGraphLink } from '../api/types';
@@ -35,7 +35,7 @@ function PeerMap() {
   const [hours, setHours] = useState(1);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
-  const range = getTimeRange(hours);
+  const range = useMemo(() => getTimeRange(hours), [hours]);
   const { data: graphData, isLoading, isError } = usePeerGraph(range.start, range.end);
 
   const updateDimensions = useCallback(() => {

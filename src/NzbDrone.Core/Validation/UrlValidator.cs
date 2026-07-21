@@ -17,7 +17,7 @@ public static class UrlValidator
             return false;
         }
 
-        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != "udp")
         {
             return false;
         }

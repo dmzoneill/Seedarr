@@ -132,7 +132,8 @@ public static class ResiliencePolicies
                 BackoffType = DelayBackoffType.Constant,
                 ShouldHandle = new PredicateBuilder()
                     .Handle<HttpRequestException>()
-                    .Handle<TaskCanceledException>(),
+                    .Handle<TaskCanceledException>()
+                    .Handle<TimeoutRejectedException>(),
                 OnRetry = args =>
                 {
                     Log.Warn("Webhook retry #{0} after {1}: {2}",

@@ -24,11 +24,22 @@ const tabs: { key: Tab; label: string }[] = [
 
 function TorrentDetails() {
   const { id } = useParams<{ id: string }>();
-  const torrentId = Number(id) || 0;
+  const parsed = Number(id);
+  const isValidId = id !== undefined && !isNaN(parsed) && parsed > 0;
+  const torrentId = isValidId ? parsed : 0;
   const { data: torrent, isLoading, error } = useTorrent(torrentId);
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
   const [activeTab, setActiveTab] = useState<Tab>('general');
+
+  if (!isValidId) {
+    return (
+      <div>
+        <Link to="/torrents" className="back-link">Back to Torrents</Link>
+        <p className="error">Invalid torrent ID.</p>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

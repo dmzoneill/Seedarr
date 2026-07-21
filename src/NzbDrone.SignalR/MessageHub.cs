@@ -17,7 +17,16 @@ public class MessageHub : Hub
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public static bool IsConnected => Connections.Count > 0;
+    public static bool IsConnected
+    {
+        get
+        {
+            lock (Connections)
+            {
+                return Connections.Count > 0;
+            }
+        }
+    }
 
     public override Task OnConnectedAsync()
     {

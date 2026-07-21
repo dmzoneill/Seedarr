@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NLog;
 
@@ -24,13 +25,22 @@ public class HealthCheckService : IHealthCheckService
         var results = new List<HealthCheckResult>();
         foreach (var check in _healthChecks)
         {
-            var result = check.Check();
-            if (result.Type != HealthCheckResultType.Ok)
+            try
             {
-                _logger.Warn("Health check {0}: {1}", result.Source, result.Message);
-            }
+                var result = check.Check();
+                if (result.Type != HealthCheckResultType.Ok)
+                {
+                    _logger.Warn("Health check {0}: {1}", result.Source, result.Message);
+                }
 
-            results.Add(result);
+                results.Add(result);
+            }
+            catch (Exception ex)
+            {
+                var checkName = check.GetType().Name;
+                _logger.Error(ex, "Health check {0} threw an unhandled exception", checkName);
+                results.Add(HealthCheckResult.Error(checkName, $"Health check failed with exception: {ex.Message}"));
+            }
         }
 
         return results;

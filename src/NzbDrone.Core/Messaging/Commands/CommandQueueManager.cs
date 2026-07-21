@@ -4,17 +4,16 @@ using System.Linq;
 using System.Threading;
 using NLog;
 using NzbDrone.Common.Serializer;
-using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.Messaging.Commands;
 
 public class CommandQueueManager : IManageCommandQueue, IDisposable
 {
-    private readonly IBasicRepository<CommandModel> _repository;
+    private readonly ICommandRepository _repository;
     private readonly Logger _logger;
     private readonly Timer _cleanupTimer;
 
-    public CommandQueueManager(IBasicRepository<CommandModel> repository)
+    public CommandQueueManager(ICommandRepository repository)
     {
         _repository = repository;
         _logger = LogManager.GetCurrentClassLogger();
@@ -83,31 +82,19 @@ public class CommandQueueManager : IManageCommandQueue, IDisposable
 
     public IEnumerable<CommandModel> GetStarted()
     {
-        return _repository.All().Where(c => c.Status == CommandStatus.Started);
+        return _repository.GetByStatus(CommandStatus.Started);
     }
 
     public IEnumerable<CommandModel> GetQueued()
     {
-        return _repository.All().Where(c => c.Status == CommandStatus.Queued);
+        return _repository.GetByStatus(CommandStatus.Queued);
     }
 
     private void CleanupOldCommands()
     {
         var cutoff = DateTime.UtcNow.AddDays(-7);
-        var old = _repository.All()
-            .Where(c => c.Status is CommandStatus.Completed or CommandStatus.Failed or CommandStatus.Cancelled)
-            .Where(c => c.EndedAt.HasValue && c.EndedAt.Value < cutoff)
-            .ToList();
-
-        foreach (var command in old)
-        {
-            _repository.Delete(command);
-        }
-
-        if (old.Count > 0)
-        {
-            _logger.Info("Cleaned up {0} old command records", old.Count);
-        }
+        _repository.DeleteOldTerminalCommands(cutoff);
+        _logger.Debug("Cleaned up terminal command records older than {0:yyyy-MM-dd}", cutoff);
     }
 
     public void Dispose()

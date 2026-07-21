@@ -105,6 +105,7 @@ public class TagServiceTest
     public void Update_should_return_the_same_tag()
     {
         var tag = new Tag { Id = 1, Label = "Updated" };
+        _repo.Update(tag).Returns(tag);
 
         var result = _subject.Update(tag);
 

@@ -107,6 +107,12 @@ public class ArrSyncService : IArrSyncService
     public bool TestConnection(int id)
     {
         var definition = _connectionFactory.Get(id);
+        if (definition == null)
+        {
+            _logger.Warn("No ArrConnection found with id {0}", id);
+            return false;
+        }
+
         var provider = CreateProvider(definition);
         if (provider == null)
         {

@@ -50,7 +50,7 @@ public class DiskSpaceCheckTest
 
         var result = _subject.Check();
 
-        Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
+        Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Warning));
         Assert.That(result.Source, Is.EqualTo("DiskSpace"));
     }
 

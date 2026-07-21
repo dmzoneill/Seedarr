@@ -51,6 +51,7 @@ export function useTorrentIndexState() {
     (field: 'maxUploadSpeedKbps' | 'maxDownloadSpeedKbps', factor: number) => {
       if (!seedingConfig) return;
       const current = seedingConfig[field];
+      if (current === 0) return; // 0 means unlimited; adjusting would silently cap to 1 KB/s
       saveSeedingConfig.mutate({ ...seedingConfig, [field]: Math.max(1, Math.round(current * factor)) });
     },
     [seedingConfig, saveSeedingConfig]
