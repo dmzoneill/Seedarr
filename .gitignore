@@ -38,3 +38,4 @@ Backups/
 
 # Secrets
 *.env
+.claude/

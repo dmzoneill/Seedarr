@@ -1,3 +1,4 @@
+/* eslint-disable n/no-missing-import, n/no-unsupported-features/node-builtins */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
 import type {
@@ -53,7 +54,8 @@ export function useRefetchInterval(): number {
 }
 
 type AddTorrentInput =
-  { file: File; magnetLink?: never } | { magnetLink: string; file?: never };
+  | { file: File; magnetLink?: never }
+  | { magnetLink: string; file?: never };
 
 export function useTorrents() {
   const interval = useRefetchInterval();
