@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from './client';
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient } from "./client";
 import type {
   Torrent,
   TorrentFileInfo,
@@ -36,29 +36,30 @@ import type {
   Tag,
   PeerConnectionLogEntry,
   NetworkDiagnostics,
-} from './types';
+} from "./types";
 
 const DEFAULT_REFETCH_MS = 5000;
 
 export function useRefetchInterval(): number {
   const { data } = useQuery<{ uiRefreshRateSec: number }>({
-    queryKey: ['config', 'advanced'],
-    queryFn: () => apiClient.get('/config/advanced'),
+    queryKey: ["config", "advanced"],
+    queryFn: () => apiClient.get("/config/advanced"),
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
-  return data?.uiRefreshRateSec ? data.uiRefreshRateSec * 1000 : DEFAULT_REFETCH_MS;
+  return data?.uiRefreshRateSec
+    ? data.uiRefreshRateSec * 1000
+    : DEFAULT_REFETCH_MS;
 }
 
 type AddTorrentInput =
-  | { file: File; magnetLink?: never }
-  | { magnetLink: string; file?: never };
+  { file: File; magnetLink?: never } | { magnetLink: string; file?: never };
 
 export function useTorrents() {
   const interval = useRefetchInterval();
   return useQuery<Torrent[]>({
-    queryKey: ['torrents'],
-    queryFn: () => apiClient.get('/torrent'),
+    queryKey: ["torrents"],
+    queryFn: () => apiClient.get("/torrent"),
     refetchInterval: interval,
   });
 }
@@ -66,7 +67,7 @@ export function useTorrents() {
 export function useTorrent(id: number) {
   const interval = useRefetchInterval();
   return useQuery<Torrent>({
-    queryKey: ['torrents', id],
+    queryKey: ["torrents", id],
     queryFn: () => apiClient.get(`/torrent/${id}`),
     enabled: id > 0,
     refetchInterval: interval,
@@ -75,7 +76,7 @@ export function useTorrent(id: number) {
 
 export function useTorrentFiles(torrentId: number) {
   return useQuery<TorrentFileInfo[]>({
-    queryKey: ['torrents', torrentId, 'files'],
+    queryKey: ["torrents", torrentId, "files"],
     queryFn: () => apiClient.get(`/torrent/${torrentId}/files`),
     enabled: torrentId > 0,
   });
@@ -84,7 +85,7 @@ export function useTorrentFiles(torrentId: number) {
 export function useTorrentTrackers(torrentId: number) {
   const interval = useRefetchInterval();
   return useQuery<TrackerEntry[]>({
-    queryKey: ['torrents', torrentId, 'trackers'],
+    queryKey: ["torrents", torrentId, "trackers"],
     queryFn: () => apiClient.get(`/torrent/${torrentId}/trackers`),
     enabled: torrentId > 0,
     refetchInterval: interval,
@@ -97,15 +98,18 @@ export function useAddTorrent() {
     mutationFn: async (input) => {
       if (input.file) {
         const formData = new FormData();
-        formData.append('file', input.file);
-        return apiClient.postForm<Torrent>('/torrent/upload', formData).catch((err: Error) => {
-          if (err.message.startsWith('API error: 409')) throw new Error('Torrent with this info hash already exists');
-          throw err;
-        });
+        formData.append("file", input.file);
+        return apiClient
+          .postForm<Torrent>("/torrent/upload", formData)
+          .catch((err: Error) => {
+            if (err.message.startsWith("API error: 409"))
+              throw new Error("Torrent with this info hash already exists");
+            throw err;
+          });
       }
-      return apiClient.post('/torrent', { magnetLink: input.magnetLink });
+      return apiClient.post("/torrent", { magnetLink: input.magnetLink });
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['torrents'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["torrents"] }),
   });
 }
 
@@ -114,8 +118,8 @@ export function useUpdateTorrent() {
   return useMutation<Torrent, Error, Torrent>({
     mutationFn: (torrent) => apiClient.put(`/torrent/${torrent.id}`, torrent),
     onSuccess: (_, torrent) => {
-      queryClient.invalidateQueries({ queryKey: ['torrents'] });
-      queryClient.invalidateQueries({ queryKey: ['torrents', torrent.id] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["torrents", torrent.id] });
     },
   });
 }
@@ -123,9 +127,17 @@ export function useUpdateTorrent() {
 export function useDeleteTorrent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, deleteFiles = false }: { id: number; deleteFiles?: boolean }) =>
-      apiClient.delete(`/torrent/${id}${deleteFiles ? '?deleteFiles=true' : ''}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['torrents'] }),
+    mutationFn: ({
+      id,
+      deleteFiles = false,
+    }: {
+      id: number;
+      deleteFiles?: boolean;
+    }) =>
+      apiClient.delete(
+        `/torrent/${id}${deleteFiles ? "?deleteFiles=true" : ""}`,
+      ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["torrents"] }),
   });
 }
 
@@ -134,7 +146,7 @@ export function useAnnounceTorrent() {
   return useMutation({
     mutationFn: (id: number) => apiClient.post(`/torrent/${id}/announce`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['torrents'] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
     },
   });
 }
@@ -144,7 +156,7 @@ export function useRecheckTorrent() {
   return useMutation({
     mutationFn: (id: number) => apiClient.post(`/torrent/${id}/recheck`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['torrents'] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
     },
   });
 }
@@ -155,7 +167,7 @@ export function useMoveTorrentQueue() {
     mutationFn: ({ id, position }: { id: number; position: string }) =>
       apiClient.put(`/torrent/${id}/queue`, { position }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['torrents'] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
     },
   });
 }
@@ -165,8 +177,8 @@ export function useStartSeeding() {
   return useMutation({
     mutationFn: (id: number) => apiClient.post(`/seeding/start/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['torrents'] });
-      queryClient.invalidateQueries({ queryKey: ['seeding'] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["seeding"] });
     },
   });
 }
@@ -176,8 +188,8 @@ export function useStopSeeding() {
   return useMutation({
     mutationFn: (id: number) => apiClient.post(`/seeding/stop/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['torrents'] });
-      queryClient.invalidateQueries({ queryKey: ['seeding'] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["seeding"] });
     },
   });
 }
@@ -185,10 +197,10 @@ export function useStopSeeding() {
 export function useStartAllSeeding() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiClient.post('/seeding/start-all'),
+    mutationFn: () => apiClient.post("/seeding/start-all"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['torrents'] });
-      queryClient.invalidateQueries({ queryKey: ['seeding'] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["seeding"] });
     },
   });
 }
@@ -196,10 +208,10 @@ export function useStartAllSeeding() {
 export function useStopAllSeeding() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiClient.post('/seeding/stop-all'),
+    mutationFn: () => apiClient.post("/seeding/stop-all"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['torrents'] });
-      queryClient.invalidateQueries({ queryKey: ['seeding'] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["seeding"] });
     },
   });
 }
@@ -207,16 +219,16 @@ export function useStopAllSeeding() {
 export function useSeedingStats() {
   const interval = useRefetchInterval();
   return useQuery<SeedingStats>({
-    queryKey: ['seeding', 'stats'],
-    queryFn: () => apiClient.get('/seeding/stats'),
+    queryKey: ["seeding", "stats"],
+    queryFn: () => apiClient.get("/seeding/stats"),
     refetchInterval: interval,
   });
 }
 
 export function useSpeedHistory() {
   return useQuery<SpeedSnapshot[]>({
-    queryKey: ['seeding', 'history'],
-    queryFn: () => apiClient.get('/seeding/history'),
+    queryKey: ["seeding", "history"],
+    queryFn: () => apiClient.get("/seeding/history"),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
@@ -224,7 +236,7 @@ export function useSpeedHistory() {
 
 export function useTorrentSpeedHistory(torrentId: number) {
   return useQuery<TorrentSpeedSnapshot[]>({
-    queryKey: ['seeding', 'history', torrentId],
+    queryKey: ["seeding", "history", torrentId],
     queryFn: () => apiClient.get(`/seeding/history/${torrentId}`),
     staleTime: Infinity,
     refetchOnWindowFocus: false,
@@ -234,37 +246,37 @@ export function useTorrentSpeedHistory(torrentId: number) {
 
 export function useSystemStatus() {
   return useQuery<SystemStatus>({
-    queryKey: ['system', 'status'],
-    queryFn: () => apiClient.get('/system/status'),
+    queryKey: ["system", "status"],
+    queryFn: () => apiClient.get("/system/status"),
   });
 }
 
 export function useHealthChecks() {
   return useQuery<HealthCheckResult[]>({
-    queryKey: ['health'],
-    queryFn: () => apiClient.get('/health'),
+    queryKey: ["health"],
+    queryFn: () => apiClient.get("/health"),
     refetchInterval: 30000,
   });
 }
 
 export function useDiskSpace() {
   return useQuery<DiskSpaceInfo[]>({
-    queryKey: ['diskspace'],
-    queryFn: () => apiClient.get('/diskspace'),
+    queryKey: ["diskspace"],
+    queryFn: () => apiClient.get("/diskspace"),
   });
 }
 
 export function useNetworkStatus() {
   return useQuery<NetworkStatus>({
-    queryKey: ['network', 'status'],
-    queryFn: () => apiClient.get('/network/status'),
+    queryKey: ["network", "status"],
+    queryFn: () => apiClient.get("/network/status"),
   });
 }
 
 export function usePeers(torrentId: number) {
   const interval = useRefetchInterval();
   return useQuery<Peer[]>({
-    queryKey: ['torrents', torrentId, 'peers'],
+    queryKey: ["torrents", torrentId, "peers"],
     queryFn: () => apiClient.get(`/torrent/${torrentId}/peers`),
     enabled: torrentId > 0,
     refetchInterval: interval,
@@ -274,14 +286,14 @@ export function usePeers(torrentId: number) {
 export function useArrSync() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiClient.post('/arrsync/sync'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['torrents'] }),
+    mutationFn: () => apiClient.post("/arrsync/sync"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["torrents"] }),
   });
 }
 
 function useConfigQuery<T>(section: string) {
   return useQuery<T>({
-    queryKey: ['config', section],
+    queryKey: ["config", section],
     queryFn: () => apiClient.get(`/config/${section}`),
   });
 }
@@ -290,79 +302,80 @@ function useConfigMutation<T>(section: string) {
   const queryClient = useQueryClient();
   return useMutation<T, Error, T>({
     mutationFn: (config) => apiClient.put(`/config/${section}/1`, config),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', section] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["config", section] }),
   });
 }
 
 export function useGeneralConfig() {
-  return useConfigQuery<GeneralConfig>('general');
+  return useConfigQuery<GeneralConfig>("general");
 }
 
 export function useSaveGeneralConfig() {
-  return useConfigMutation<GeneralConfig>('general');
+  return useConfigMutation<GeneralConfig>("general");
 }
 
 export function useSeedingConfig() {
-  return useConfigQuery<SeedingConfig>('seeding');
+  return useConfigQuery<SeedingConfig>("seeding");
 }
 
 export function useSaveSeedingConfig() {
-  return useConfigMutation<SeedingConfig>('seeding');
+  return useConfigMutation<SeedingConfig>("seeding");
 }
 
 export function useNetworkConfig() {
-  return useConfigQuery<NetworkConfig>('network');
+  return useConfigQuery<NetworkConfig>("network");
 }
 
 export function useSaveNetworkConfig() {
-  return useConfigMutation<NetworkConfig>('network');
+  return useConfigMutation<NetworkConfig>("network");
 }
 
 export function useBitTorrentConfig() {
-  return useConfigQuery<BitTorrentConfig>('bittorrent');
+  return useConfigQuery<BitTorrentConfig>("bittorrent");
 }
 
 export function useSaveBitTorrentConfig() {
-  return useConfigMutation<BitTorrentConfig>('bittorrent');
+  return useConfigMutation<BitTorrentConfig>("bittorrent");
 }
 
 export function usePeerProtocolConfig() {
-  return useConfigQuery<PeerProtocolConfig>('peerprotocol');
+  return useConfigQuery<PeerProtocolConfig>("peerprotocol");
 }
 
 export function useSavePeerProtocolConfig() {
-  return useConfigMutation<PeerProtocolConfig>('peerprotocol');
+  return useConfigMutation<PeerProtocolConfig>("peerprotocol");
 }
 
 export function useProtocolsConfig() {
-  return useConfigQuery<ProtocolsConfig>('protocols');
+  return useConfigQuery<ProtocolsConfig>("protocols");
 }
 
 export function useSaveProtocolsConfig() {
-  return useConfigMutation<ProtocolsConfig>('protocols');
+  return useConfigMutation<ProtocolsConfig>("protocols");
 }
 
 export function useSimulationConfig() {
-  return useConfigQuery<SimulationConfig>('simulation');
+  return useConfigQuery<SimulationConfig>("simulation");
 }
 
 export function useSaveSimulationConfig() {
-  return useConfigMutation<SimulationConfig>('simulation');
+  return useConfigMutation<SimulationConfig>("simulation");
 }
 
 export function useTrackerServerConfig() {
-  return useConfigQuery<TrackerServerConfig>('trackerserver');
+  return useConfigQuery<TrackerServerConfig>("trackerserver");
 }
 
 export function useSaveTrackerServerConfig() {
-  return useConfigMutation<TrackerServerConfig>('trackerserver');
+  return useConfigMutation<TrackerServerConfig>("trackerserver");
 }
 
 export function useTrackerServerStats() {
   const interval = useRefetchInterval();
   return useQuery<TrackerServerStats>({
-    queryKey: ['trackerserver', 'stats'],
-    queryFn: () => apiClient.get('/trackerserver/stats'),
+    queryKey: ["trackerserver", "stats"],
+    queryFn: () => apiClient.get("/trackerserver/stats"),
     refetchInterval: interval,
   });
 }
@@ -370,48 +383,51 @@ export function useTrackerServerStats() {
 export function useTrackerServerTorrents() {
   const interval = useRefetchInterval();
   return useQuery<TrackerServerTorrent[]>({
-    queryKey: ['trackerserver', 'torrents'],
-    queryFn: () => apiClient.get('/trackerserver/torrents'),
+    queryKey: ["trackerserver", "torrents"],
+    queryFn: () => apiClient.get("/trackerserver/torrents"),
     refetchInterval: interval,
   });
 }
 
 export function useSchedulerConfig() {
-  return useConfigQuery<SchedulerConfig>('scheduler');
+  return useConfigQuery<SchedulerConfig>("scheduler");
 }
 
 export function useSaveSchedulerConfig() {
-  return useConfigMutation<SchedulerConfig>('scheduler');
+  return useConfigMutation<SchedulerConfig>("scheduler");
 }
 
 export function useAdvancedConfig() {
-  return useConfigQuery<AdvancedConfig>('advanced');
+  return useConfigQuery<AdvancedConfig>("advanced");
 }
 
 export function useSaveAdvancedConfig() {
-  return useConfigMutation<AdvancedConfig>('advanced');
+  return useConfigMutation<AdvancedConfig>("advanced");
 }
 
 export function useArrConnections() {
   return useQuery<ArrConnection[]>({
-    queryKey: ['arrconnections'],
-    queryFn: () => apiClient.get('/arrconnections'),
+    queryKey: ["arrconnections"],
+    queryFn: () => apiClient.get("/arrconnections"),
   });
 }
 
 export function useCreateArrConnection() {
   const queryClient = useQueryClient();
   return useMutation<ArrConnection, Error, Partial<ArrConnection>>({
-    mutationFn: (connection) => apiClient.post('/arrconnections', connection),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['arrconnections'] }),
+    mutationFn: (connection) => apiClient.post("/arrconnections", connection),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["arrconnections"] }),
   });
 }
 
 export function useUpdateArrConnection() {
   const queryClient = useQueryClient();
   return useMutation<ArrConnection, Error, ArrConnection>({
-    mutationFn: (connection) => apiClient.put(`/arrconnections/${connection.id}`, connection),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['arrconnections'] }),
+    mutationFn: (connection) =>
+      apiClient.put(`/arrconnections/${connection.id}`, connection),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["arrconnections"] }),
   });
 }
 
@@ -419,7 +435,8 @@ export function useDeleteArrConnection() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiClient.delete(`/arrconnections/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['arrconnections'] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["arrconnections"] }),
   });
 }
 
@@ -431,32 +448,42 @@ export function useTestArrConnection() {
 
 export function useDownloadClients() {
   return useQuery<DownloadClientDefinition[]>({
-    queryKey: ['downloadclients'],
-    queryFn: () => apiClient.get('/downloadclients'),
+    queryKey: ["downloadclients"],
+    queryFn: () => apiClient.get("/downloadclients"),
   });
 }
 
 export function useCreateDownloadClient() {
   const queryClient = useQueryClient();
-  return useMutation<DownloadClientDefinition, Error, Partial<DownloadClientDefinition>>({
-    mutationFn: (client) => apiClient.post('/downloadclients', client),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['downloadclients'] }),
+  return useMutation<
+    DownloadClientDefinition,
+    Error,
+    Partial<DownloadClientDefinition>
+  >({
+    mutationFn: (client) => apiClient.post("/downloadclients", client),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["downloadclients"] }),
   });
 }
 
 export function useUpdateDownloadClient() {
   const queryClient = useQueryClient();
-  return useMutation<DownloadClientDefinition, Error, DownloadClientDefinition>({
-    mutationFn: (client) => apiClient.put(`/downloadclients/${client.id}`, client),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['downloadclients'] }),
-  });
+  return useMutation<DownloadClientDefinition, Error, DownloadClientDefinition>(
+    {
+      mutationFn: (client) =>
+        apiClient.put(`/downloadclients/${client.id}`, client),
+      onSuccess: () =>
+        queryClient.invalidateQueries({ queryKey: ["downloadclients"] }),
+    },
+  );
 }
 
 export function useDeleteDownloadClient() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiClient.delete(`/downloadclients/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['downloadclients'] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["downloadclients"] }),
   });
 }
 
@@ -468,16 +495,16 @@ export function useTestDownloadClient() {
 
 export function useIndexers() {
   return useQuery<IndexerDefinition[]>({
-    queryKey: ['indexers'],
-    queryFn: () => apiClient.get('/indexers'),
+    queryKey: ["indexers"],
+    queryFn: () => apiClient.get("/indexers"),
   });
 }
 
 export function useCreateIndexer() {
   const queryClient = useQueryClient();
   return useMutation<IndexerDefinition, Error, Partial<IndexerDefinition>>({
-    mutationFn: (indexer) => apiClient.post('/indexers', indexer),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['indexers'] }),
+    mutationFn: (indexer) => apiClient.post("/indexers", indexer),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["indexers"] }),
   });
 }
 
@@ -485,7 +512,7 @@ export function useUpdateIndexer() {
   const queryClient = useQueryClient();
   return useMutation<IndexerDefinition, Error, IndexerDefinition>({
     mutationFn: (indexer) => apiClient.put(`/indexers/${indexer.id}`, indexer),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['indexers'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["indexers"] }),
   });
 }
 
@@ -493,7 +520,7 @@ export function useDeleteIndexer() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiClient.delete(`/indexers/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['indexers'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["indexers"] }),
   });
 }
 
@@ -505,16 +532,16 @@ export function useTestIndexer() {
 
 export function useBackups() {
   return useQuery<Backup[]>({
-    queryKey: ['backups'],
-    queryFn: () => apiClient.get('/backup'),
+    queryKey: ["backups"],
+    queryFn: () => apiClient.get("/backup"),
   });
 }
 
 export function useCreateBackup() {
   const queryClient = useQueryClient();
   return useMutation<Backup, Error, void>({
-    mutationFn: () => apiClient.post('/backup'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backups'] }),
+    mutationFn: () => apiClient.post("/backup"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["backups"] }),
   });
 }
 
@@ -522,64 +549,65 @@ export function useDeleteBackup() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiClient.delete(`/backup/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backups'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["backups"] }),
   });
 }
 
 export function useRestoreBackup() {
   return useMutation({
-    mutationFn: (fileName: string) => apiClient.post('/backup/restore', { fileName }),
+    mutationFn: (fileName: string) =>
+      apiClient.post("/backup/restore", { fileName }),
   });
 }
 
 export function useUpdates() {
   return useQuery<UpdateEntry[]>({
-    queryKey: ['updates'],
-    queryFn: () => apiClient.get('/update'),
+    queryKey: ["updates"],
+    queryFn: () => apiClient.get("/update"),
     staleTime: 60_000,
   });
 }
 
 export function useLogFiles() {
   return useQuery<LogFile[]>({
-    queryKey: ['logfiles'],
-    queryFn: () => apiClient.get('/logfile'),
+    queryKey: ["logfiles"],
+    queryFn: () => apiClient.get("/logfile"),
   });
 }
 
 export function useClearLogFiles() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiClient.delete('/logfile'),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['logfiles'] }),
+    mutationFn: () => apiClient.delete("/logfile"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["logfiles"] }),
   });
 }
 
 export function usePeerGraph(start?: string, end?: string) {
   const interval = useRefetchInterval();
   const params = new URLSearchParams();
-  if (start) params.set('start', start);
-  if (end) params.set('end', end);
+  if (start) params.set("start", start);
+  if (end) params.set("end", end);
   const query = params.toString();
   return useQuery<PeerGraphData>({
-    queryKey: ['peerlog', 'graph', start, end],
-    queryFn: () => apiClient.get(`/peerlog/graph${query ? `?${query}` : ''}`),
+    queryKey: ["peerlog", "graph", start, end],
+    queryFn: () => apiClient.get(`/peerlog/graph${query ? `?${query}` : ""}`),
     refetchInterval: interval,
   });
 }
 
 export function useSpeedSchedules() {
   return useQuery<SpeedScheduleEntry[]>({
-    queryKey: ['speedschedule'],
-    queryFn: () => apiClient.get('/speedschedule'),
+    queryKey: ["speedschedule"],
+    queryFn: () => apiClient.get("/speedschedule"),
   });
 }
 
 export function useActiveSpeedLimits() {
   const interval = useRefetchInterval();
   return useQuery<SpeedLimits>({
-    queryKey: ['speedschedule', 'active'],
-    queryFn: () => apiClient.get('/speedschedule/active'),
+    queryKey: ["speedschedule", "active"],
+    queryFn: () => apiClient.get("/speedschedule/active"),
     refetchInterval: interval,
   });
 }
@@ -587,16 +615,19 @@ export function useActiveSpeedLimits() {
 export function useCreateSpeedSchedule() {
   const queryClient = useQueryClient();
   return useMutation<SpeedScheduleEntry, Error, Partial<SpeedScheduleEntry>>({
-    mutationFn: (schedule) => apiClient.post('/speedschedule', schedule),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['speedschedule'] }),
+    mutationFn: (schedule) => apiClient.post("/speedschedule", schedule),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["speedschedule"] }),
   });
 }
 
 export function useUpdateSpeedSchedule() {
   const queryClient = useQueryClient();
   return useMutation<SpeedScheduleEntry, Error, SpeedScheduleEntry>({
-    mutationFn: (schedule) => apiClient.put(`/speedschedule/${schedule.id}`, schedule),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['speedschedule'] }),
+    mutationFn: (schedule) =>
+      apiClient.put(`/speedschedule/${schedule.id}`, schedule),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["speedschedule"] }),
   });
 }
 
@@ -604,30 +635,31 @@ export function useDeleteSpeedSchedule() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiClient.delete(`/speedschedule/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['speedschedule'] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["speedschedule"] }),
   });
 }
 
 export function useTags() {
   return useQuery<Tag[]>({
-    queryKey: ['tags'],
-    queryFn: () => apiClient.get('/tag'),
+    queryKey: ["tags"],
+    queryFn: () => apiClient.get("/tag"),
   });
 }
 
 export function useCreateTag() {
   const queryClient = useQueryClient();
   return useMutation<Tag, Error, Partial<Tag>>({
-    mutationFn: (tag) => apiClient.post('/tag', tag),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags'] }),
+    mutationFn: (tag) => apiClient.post("/tag", tag),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tags"] }),
   });
 }
 
 export function useUpdateTag() {
   const queryClient = useQueryClient();
   return useMutation<Tag, Error, Tag>({
-    mutationFn: (tag) => apiClient.put('/tag', tag),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags'] }),
+    mutationFn: (tag) => apiClient.put("/tag", tag),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tags"] }),
   });
 }
 
@@ -635,27 +667,31 @@ export function useDeleteTag() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => apiClient.delete(`/tag/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tags'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tags"] }),
   });
 }
 
-export function usePeerConnectionLog(params?: { start?: string; end?: string; infoHash?: string }) {
+export function usePeerConnectionLog(params?: {
+  start?: string;
+  end?: string;
+  infoHash?: string;
+}) {
   const searchParams = new URLSearchParams();
-  if (params?.start) searchParams.set('start', params.start);
-  if (params?.end) searchParams.set('end', params.end);
-  if (params?.infoHash) searchParams.set('infoHash', params.infoHash);
+  if (params?.start) searchParams.set("start", params.start);
+  if (params?.end) searchParams.set("end", params.end);
+  if (params?.infoHash) searchParams.set("infoHash", params.infoHash);
   const query = searchParams.toString();
   return useQuery<PeerConnectionLogEntry[]>({
-    queryKey: ['peerlog', params?.start, params?.end, params?.infoHash],
-    queryFn: () => apiClient.get(`/peerlog${query ? `?${query}` : ''}`),
+    queryKey: ["peerlog", params?.start, params?.end, params?.infoHash],
+    queryFn: () => apiClient.get(`/peerlog${query ? `?${query}` : ""}`),
   });
 }
 
 export function useNetworkDiagnostics() {
   const interval = useRefetchInterval();
   return useQuery<NetworkDiagnostics>({
-    queryKey: ['network', 'diagnostics'],
-    queryFn: () => apiClient.get('/network/diagnostics'),
+    queryKey: ["network", "diagnostics"],
+    queryFn: () => apiClient.get("/network/diagnostics"),
     refetchInterval: interval,
   });
 }
@@ -663,8 +699,8 @@ export function useNetworkDiagnostics() {
 export function useActivePeers() {
   const interval = useRefetchInterval();
   return useQuery<PeerConnectionLogEntry[]>({
-    queryKey: ['peerlog', 'active'],
-    queryFn: () => apiClient.get('/peerlog/active'),
+    queryKey: ["peerlog", "active"],
+    queryFn: () => apiClient.get("/peerlog/active"),
     refetchInterval: interval,
   });
 }
