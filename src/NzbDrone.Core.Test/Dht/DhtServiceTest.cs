@@ -1542,8 +1542,15 @@ public class DhtServiceTest
         // Force periodic refresh — auto-bootstrap=true means Bootstrap() is called here too
         nextRefreshField.SetValue(service, DateTime.UtcNow.AddSeconds(-1));
 
-        // Wait for one full loop iteration (1 s receive timeout + 500 ms margin)
-        await Task.Delay(1500);
+        // Poll up to 5s for the service loop to update _nextRefresh (avoids flaky fixed-delay on slow CI)
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(200);
+            var current = (DateTime)nextRefreshField.GetValue(service);
+            if (current > DateTime.UtcNow)
+                break;
+        }
 
         var nextRefresh = (DateTime)nextRefreshField.GetValue(service);
         Assert.That(
