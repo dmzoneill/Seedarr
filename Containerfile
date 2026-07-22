@@ -68,6 +68,7 @@ COPY --from=backend /app ./
 COPY --from=frontend /build/src/NzbDrone.Host/wwwroot/ ./wwwroot/
 COPY --from=backend /root/.dotnet/tools /root/.dotnet/tools
 COPY version ./
+COPY tests/fixtures/ /app/fixtures/
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
