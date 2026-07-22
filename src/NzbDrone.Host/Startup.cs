@@ -100,14 +100,12 @@ public class Startup
         app.UseStaticFiles();
 
         var fixturesPath = Path.Combine(System.AppContext.BaseDirectory, "fixtures");
-        if (Directory.Exists(fixturesPath))
+        Directory.CreateDirectory(fixturesPath);
+        app.UseStaticFiles(new StaticFileOptions
         {
-            app.UseStaticFiles(new StaticFileOptions
-            {
-                FileProvider = new PhysicalFileProvider(fixturesPath),
-                RequestPath = "/fixtures"
-            });
-        }
+            FileProvider = new PhysicalFileProvider(fixturesPath),
+            RequestPath = "/fixtures"
+        });
 
         app.UseRouting();
 
