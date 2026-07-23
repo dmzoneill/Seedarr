@@ -1,3 +1,4 @@
+using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
@@ -18,5 +19,6 @@ public static class TableRegistration
         TableMapping.Register<TorrentFile>("TorrentFiles");
         TableMapping.Register<ClientProfileDefinition>("ClientProfileDefinitions");
         TableMapping.Register<TrackerProviderDefinition>("TrackerProviderDefinitions");
+        TableMapping.Register<ArrConnectionDefinition>("ArrConnectionDefinitions");
     }
 }
