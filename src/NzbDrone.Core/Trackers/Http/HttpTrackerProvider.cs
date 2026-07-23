@@ -42,7 +42,7 @@ public class HttpTrackerProvider : ITrackerProvider
         try
         {
             var url = BuildAnnounceUrl(request);
-            _logger.Debug("HTTP announce: {0}", url);
+            _logger.Debug("HTTP announce: {0}", RedactUrl(url));
 
             var responseBytes = Policy.Execute(ct => Task.Run(() => _client.GetByteArrayAsync(url, ct)).GetAwaiter().GetResult());
             var parser = new BencodeParser();
@@ -122,7 +122,7 @@ public class HttpTrackerProvider : ITrackerProvider
             var escapedHash = string.Join("", hashBytes.Select(b => $"%{b:X2}"));
             scrapeUrl += $"?info_hash={escapedHash}";
 
-            _logger.Debug("HTTP scrape: {0}", scrapeUrl);
+            _logger.Debug("HTTP scrape: {0}", RedactUrl(scrapeUrl));
 
             var responseBytes = Policy.Execute(ct => Task.Run(() => _client.GetByteArrayAsync(scrapeUrl, ct)).GetAwaiter().GetResult());
             var parser = new BencodeParser();
@@ -164,6 +164,18 @@ public class HttpTrackerProvider : ITrackerProvider
                 FailureReason = ex.Message
             };
         }
+    }
+
+    private static string RedactUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.UserInfo))
+        {
+            return url;
+        }
+
+        return uri.GetComponents(
+            UriComponents.Scheme | UriComponents.Host | UriComponents.Port | UriComponents.PathAndQuery,
+            UriFormat.UriEscaped);
     }
 
     private static string BuildAnnounceUrl(TrackerAnnounceRequest request)

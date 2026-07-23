@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NLog;
 
@@ -30,7 +31,7 @@ public class TrackerEntryService : ITrackerEntryService
 
     public TrackerEntry Add(TrackerEntry trackerEntry)
     {
-        _logger.Debug("Adding tracker entry: {0} for torrent {1}", trackerEntry.Url, trackerEntry.TorrentId);
+        _logger.Debug("Adding tracker entry: {0} for torrent {1}", RedactUrl(trackerEntry.Url), trackerEntry.TorrentId);
         return _repository.Insert(trackerEntry);
     }
 
@@ -42,6 +43,18 @@ public class TrackerEntryService : ITrackerEntryService
     public void Delete(int id)
     {
         _repository.Delete(id);
+    }
+
+    private static string RedactUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.UserInfo))
+        {
+            return url;
+        }
+
+        return uri.GetComponents(
+            UriComponents.Scheme | UriComponents.Host | UriComponents.Port | UriComponents.PathAndQuery,
+            UriFormat.UriEscaped);
     }
 
     public void DeleteByTorrentId(int torrentId)
