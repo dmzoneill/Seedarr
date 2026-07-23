@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.Torrents;
@@ -24,7 +25,7 @@ public class Torrent : ModelBase
     public string SourcePath { get; set; }
     public DateTime DateAdded { get; set; }
     public DateTime? LastActive { get; set; }
-    public int TagIds { get; set; }
+    public List<int> TagIds { get; set; } = new();
     public int Priority { get; set; }
     public int UploadLimit { get; set; }
     public int DownloadLimit { get; set; }
