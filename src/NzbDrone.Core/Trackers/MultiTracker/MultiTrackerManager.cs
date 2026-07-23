@@ -187,7 +187,7 @@ public class MultiTrackerManager : IMultiTrackerManager
             return false;
         }
 
-        if (state.ConsecutiveFailures < _configService.FailoverMaxConsecutiveFailures)
+        if (Volatile.Read(ref state.ConsecutiveFailures) < _configService.FailoverMaxConsecutiveFailures)
         {
             return false;
         }
@@ -203,21 +203,21 @@ public class MultiTrackerManager : IMultiTrackerManager
         }
 
         var state = _failureStates.GetOrAdd(trackerUrl, _ => new TrackerFailureState());
-        Interlocked.Increment(ref state.ConsecutiveFailures);
+        var failures = Interlocked.Increment(ref state.ConsecutiveFailures);
 
         var maxFailures = _configService.FailoverMaxConsecutiveFailures;
-        if (state.ConsecutiveFailures >= maxFailures)
+        if (failures >= maxFailures)
         {
             var baseSeconds = _configService.FailoverBackoffBaseSeconds;
             var maxBackoffSeconds = _configService.FailoverMaxBackoffSeconds;
-            var exponent = Math.Min(state.ConsecutiveFailures - maxFailures, 10);
+            var exponent = Math.Min(failures - maxFailures, 10);
             var backoffSeconds = Math.Min(baseSeconds * Math.Pow(2, exponent), maxBackoffSeconds);
             state.BackoffUntil = DateTime.UtcNow.AddSeconds(backoffSeconds);
             _logger.Warn(
                 "Tracker {0} disabled for {1:F0}s after {2} consecutive failures",
                 trackerUrl,
                 backoffSeconds,
-                state.ConsecutiveFailures);
+                failures);
         }
 
         if (_failureStates.Count > 1000)
@@ -230,7 +230,7 @@ public class MultiTrackerManager : IMultiTrackerManager
     {
         var now = DateTime.UtcNow;
         var staleKeys = _failureStates
-            .Where(kvp => kvp.Value.ConsecutiveFailures == 0 || kvp.Value.BackoffUntil < now)
+            .Where(kvp => Volatile.Read(ref kvp.Value.ConsecutiveFailures) == 0 || kvp.Value.BackoffUntil < now)
             .Select(kvp => kvp.Key)
             .ToList();
 
@@ -265,6 +265,12 @@ public class MultiTrackerManager : IMultiTrackerManager
     private class TrackerFailureState
     {
         public int ConsecutiveFailures;
-        public DateTime BackoffUntil { get; set; }
+        private long _backoffUntilTicks;
+
+        public DateTime BackoffUntil
+        {
+            get => new DateTime(Interlocked.Read(ref _backoffUntilTicks));
+            set => Interlocked.Exchange(ref _backoffUntilTicks, value.Ticks);
+        }
     }
 }
