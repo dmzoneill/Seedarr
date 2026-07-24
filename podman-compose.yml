@@ -447,24 +447,31 @@ services:
             return
           fi
           echo "  Adding Seedarr webhook to $$name..."
-          curl -sf -X POST "$$url/api/$$api_ver/notification" \
+          http_code=$$(curl -s -o /tmp/wh_resp -w "%{http_code}" -X POST "$$url/api/$$api_ver/notification" \
             -H "X-Api-Key: $$api_key" \
             -H "Content-Type: application/json" \
             -d '{
               "name": "Seedarr",
               "implementation": "Webhook",
               "configContract": "WebhookSettings",
+              "enable": true,
               "onGrab": true,
               "onDownload": false,
               "onUpgrade": false,
               "onRename": false,
               "onHealthIssue": false,
               "onApplicationUpdate": false,
+              "tags": [],
               "fields": [
                 {"name": "url", "value": "http://seedarr.local:9898/api/v1/webhook/arr"},
                 {"name": "method", "value": 1}
               ]
-            }' > /dev/null 2>&1 && echo "    OK" || echo "    Failed"
+            }' 2>/dev/null)
+          if [ "$$http_code" = "201" ] || [ "$$http_code" = "200" ]; then
+            echo "    OK"
+          else
+            echo "    Failed (HTTP $$http_code): $$(cat /tmp/wh_resp | head -c 300)"
+          fi
         }
 
         echo ""
