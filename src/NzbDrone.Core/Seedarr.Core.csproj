@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="BencodeNET" Version="4.0.0" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.5.1" />
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="FluentMigrator.Runner" Version="6.2.0" />
     <PackageReference Include="FluentMigrator.Runner.SQLite" Version="6.2.0" />

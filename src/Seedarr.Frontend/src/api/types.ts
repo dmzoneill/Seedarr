@@ -64,3 +64,60 @@ export interface PortMapping {
   description: string;
   isActive: boolean;
 }
+
+export interface Peer {
+  id: number;
+  ip: string;
+  port: number;
+  client: string;
+  uploadSpeed: number;
+  downloadSpeed: number;
+  uploaded: number;
+  downloaded: number;
+  progress: number;
+  flags: string;
+}
+
+export interface TrackerServerConfig {
+  httpEnabled: boolean;
+  httpPort: number;
+  udpEnabled: boolean;
+  udpPort: number;
+  maxPeersPerTorrent: number;
+  announceInterval: number;
+}
+
+export interface TrackerServerStats {
+  totalTorrents: number;
+  totalPeers: number;
+  totalAnnounces: number;
+  totalScrapes: number;
+  uptime: number;
+}
+
+export interface GeneralConfig {
+  instanceName: string;
+  port: number;
+  urlBase: string;
+  authEnabled: boolean;
+  username: string;
+  password: string;
+}
+
+export interface SeedingConfig {
+  maxUploadSpeed: number;
+  maxDownloadSpeed: number;
+  distributionType: string;
+  globalSeedRatioLimit: number;
+  listenPort: number;
+}
+
+export interface NetworkConfig {
+  proxyEnabled: boolean;
+  proxyType: string;
+  proxyHost: string;
+  proxyPort: number;
+  proxyUsername: string;
+  proxyPassword: string;
+  upnpEnabled: boolean;
+}
