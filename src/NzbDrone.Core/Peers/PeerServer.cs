@@ -1,10 +1,13 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
+using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
@@ -15,6 +18,8 @@ public class PeerServer : BackgroundService
 
     private readonly ITorrentService _torrentService;
     private readonly Logger _logger;
+
+    public EncryptionMode EncryptionMode { get; set; } = EncryptionMode.PreferEncrypted;
 
     public PeerServer(ITorrentService torrentService)
     {
@@ -54,6 +59,14 @@ public class PeerServer : BackgroundService
 
         try
         {
+            // Attempt MSE/PE negotiation - this will detect plain BT handshakes and fall through
+            var negotiated = connection.NegotiateEncryptionIncoming(ValidateInfoHash, EncryptionMode);
+            if (!negotiated)
+            {
+                _logger.Debug("Encryption negotiation failed from {0}", connection.RemoteIp);
+                return;
+            }
+
             if (!connection.ReceiveHandshake())
             {
                 _logger.Debug("Invalid handshake from {0}", connection.RemoteIp);
@@ -73,6 +86,9 @@ public class PeerServer : BackgroundService
             // Send our handshake back
             var peerId = "-SD1000-000000000000";
             connection.SendHandshake(torrent.InfoHash, peerId);
+
+            _logger.Debug("Peer {0} connected (encrypted: {1}, method: {2})",
+                connection.RemoteIp, connection.IsEncrypted, connection.EncryptionMethod);
 
             // Send bitfield (all pieces)
             connection.SendBitfield(torrent.PieceCount);
@@ -97,6 +113,17 @@ public class PeerServer : BackgroundService
         {
             _logger.Debug(ex, "Peer connection error: {0}", connection.RemoteIp);
         }
+    }
+
+    private bool ValidateInfoHash(byte[] skeyHash)
+    {
+        var torrents = _torrentService.GetAll();
+        return torrents.Any(t =>
+        {
+            var infoHashBytes = Convert.FromHexString(t.InfoHash);
+            var expected = MseKeyDerivation.DeriveKey(infoHashBytes, Encoding.ASCII.GetBytes("req2"));
+            return expected.AsSpan().SequenceEqual(skeyHash);
+        });
     }
 
     private void HandleMessage(PeerConnection connection, PeerMessage message)

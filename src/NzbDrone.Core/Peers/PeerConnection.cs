@@ -1,8 +1,10 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using NLog;
+using NzbDrone.Core.Peers.Encryption;
 
 namespace NzbDrone.Core.Peers;
 
@@ -11,14 +13,17 @@ public class PeerConnection : IDisposable
     private const string ProtocolString = "BitTorrent protocol";
 
     private readonly TcpClient _client;
-    private readonly NetworkStream _stream;
+    private readonly NetworkStream _networkStream;
     private readonly Logger _logger;
+    private Stream _activeStream;
 
     public string RemoteIp { get; }
     public int RemotePort { get; }
     public string InfoHash { get; private set; }
     public string PeerId { get; private set; }
     public bool IsConnected => _client?.Connected ?? false;
+    public bool IsEncrypted { get; private set; }
+    public CryptoMethod EncryptionMethod { get; private set; }
     public bool AmChoking { get; set; } = true;
     public bool AmInterested { get; set; }
     public bool PeerChoking { get; set; } = true;
@@ -29,7 +34,8 @@ public class PeerConnection : IDisposable
     public PeerConnection(TcpClient client)
     {
         _client = client;
-        _stream = client.GetStream();
+        _networkStream = client.GetStream();
+        _activeStream = _networkStream;
         _logger = LogManager.GetCurrentClassLogger();
         var endpoint = (IPEndPoint)client.Client.RemoteEndPoint;
         RemoteIp = endpoint.Address.ToString();
@@ -42,7 +48,8 @@ public class PeerConnection : IDisposable
     {
         _client = new TcpClient();
         _client.Connect(host, port);
-        _stream = _client.GetStream();
+        _networkStream = _client.GetStream();
+        _activeStream = _networkStream;
         _logger = LogManager.GetCurrentClassLogger();
         RemoteIp = host;
         RemotePort = port;
@@ -50,12 +57,73 @@ public class PeerConnection : IDisposable
         LastActivity = DateTime.UtcNow;
     }
 
+    public bool NegotiateEncryptionOutgoing(string infoHash, EncryptionMode mode)
+    {
+        try
+        {
+            var infoHashBytes = Convert.FromHexString(infoHash);
+            var handshake = new MseHandshake(infoHashBytes, mode);
+            _activeStream = handshake.NegotiateOutgoing(_networkStream);
+            EncryptionMethod = handshake.NegotiatedMethod;
+            IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
+            InfoHash = infoHash;
+            LastActivity = DateTime.UtcNow;
+            _logger.Debug("MSE/PE outgoing completed with {0}:{1} - method: {2}", RemoteIp, RemotePort, EncryptionMethod);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "MSE/PE outgoing negotiation failed with {0}:{1}", RemoteIp, RemotePort);
+            return false;
+        }
+    }
+
+    public bool NegotiateEncryptionIncoming(Func<byte[], bool> infoHashValidator, EncryptionMode mode)
+    {
+        try
+        {
+            // Peek the first byte to detect whether this is an MSE or plain handshake.
+            // A standard BT handshake starts with 0x13 (19); MSE starts with the DH public key.
+            var peek = new byte[1];
+            var read = _networkStream.Read(peek, 0, 1);
+            if (read == 0)
+            {
+                return false;
+            }
+
+            if (peek[0] == 19 && mode != EncryptionMode.RequireEncrypted)
+            {
+                // Plain BitTorrent handshake - feed the peeked byte back through a PrefixedStream
+                _activeStream = new PrefixedStream(peek, _networkStream);
+                EncryptionMethod = CryptoMethod.PlainText;
+                IsEncrypted = false;
+                return true;
+            }
+
+            // MSE/PE handshake - prefix the peeked byte back
+            var prefixed = new PrefixedStream(peek, _networkStream);
+            var handshake = new MseHandshake(Array.Empty<byte>(), mode);
+            _activeStream = handshake.NegotiateIncoming(prefixed, infoHashValidator);
+            EncryptionMethod = handshake.NegotiatedMethod;
+            IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
+            LastActivity = DateTime.UtcNow;
+            _logger.Debug("MSE/PE incoming completed with {0}:{1} - method: {2}", RemoteIp, RemotePort, EncryptionMethod);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "MSE/PE incoming negotiation failed with {0}:{1}", RemoteIp, RemotePort);
+            return false;
+        }
+    }
+
     public bool SendHandshake(string infoHash, string peerId)
     {
         try
         {
             var handshake = BuildHandshake(infoHash, peerId);
-            _stream.Write(handshake, 0, handshake.Length);
+            _activeStream.Write(handshake, 0, handshake.Length);
+            _activeStream.Flush();
             InfoHash = infoHash;
             PeerId = peerId;
             LastActivity = DateTime.UtcNow;
@@ -119,14 +187,16 @@ public class PeerConnection : IDisposable
             Array.Copy(message.Payload, 0, buffer, 5, message.Payload.Length);
         }
 
-        _stream.Write(buffer, 0, buffer.Length);
+        _activeStream.Write(buffer, 0, buffer.Length);
+        _activeStream.Flush();
         LastActivity = DateTime.UtcNow;
     }
 
     public void SendKeepAlive()
     {
         var buffer = new byte[4];
-        _stream.Write(buffer, 0, 4);
+        _activeStream.Write(buffer, 0, 4);
+        _activeStream.Flush();
         LastActivity = DateTime.UtcNow;
     }
 
@@ -205,7 +275,7 @@ public class PeerConnection : IDisposable
         var offset = 0;
         while (offset < count)
         {
-            var read = _stream.Read(buffer, offset, count - offset);
+            var read = _activeStream.Read(buffer, offset, count - offset);
             if (read == 0)
             {
                 return false;
@@ -219,7 +289,12 @@ public class PeerConnection : IDisposable
 
     public void Dispose()
     {
-        _stream?.Dispose();
+        if (_activeStream != _networkStream)
+        {
+            _activeStream?.Dispose();
+        }
+
+        _networkStream?.Dispose();
         _client?.Dispose();
     }
 }
