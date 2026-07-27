@@ -169,14 +169,14 @@ public class HttpTrackerProvider : ITrackerProvider
         var escapedPeerId = HttpUtility.UrlEncode(request.PeerId);
 
         return $"{request.TrackerUrl}" +
-               $"?info_hash={escapedHash}" +
-               $"&peer_id={escapedPeerId}" +
-               $"&port={request.Port}" +
-               $"&uploaded={request.Uploaded}" +
-               $"&downloaded={request.Downloaded}" +
-               $"&left={request.Left}" +
-               $"&compact={(request.Compact ? 1 : 0)}" +
-               $"&numwant={request.NumWant}" +
-               (string.IsNullOrEmpty(request.Event) ? "" : $"&event={request.Event}");
+            $"?info_hash={escapedHash}" +
+            $"&peer_id={escapedPeerId}" +
+            $"&port={request.Port}" +
+            $"&uploaded={request.Uploaded}" +
+            $"&downloaded={request.Downloaded}" +
+            $"&left={request.Left}" +
+            $"&compact={(request.Compact ? 1 : 0)}" +
+            $"&numwant={request.NumWant}" +
+            (string.IsNullOrEmpty(request.Event) ? "" : $"&event={request.Event}");
     }
 }
