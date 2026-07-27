@@ -30,6 +30,7 @@ public class SeedingEngine : BackgroundService
     private readonly IEventAggregator _eventAggregator;
     private readonly IPeerDatabase _peerDatabase;
     private readonly IConnectionManager _connectionManager;
+    private readonly ITorrentEventLogService _eventLogService;
     private readonly Logger _logger;
     private readonly Dictionary<int, long> _prevUploaded = new();
     private readonly Dictionary<int, long> _prevDownloaded = new();
@@ -45,7 +46,8 @@ public class SeedingEngine : BackgroundService
         IConfigService configService,
         IEventAggregator eventAggregator,
         IPeerDatabase peerDatabase,
-        IConnectionManager connectionManager)
+        IConnectionManager connectionManager,
+        ITorrentEventLogService eventLogService)
     {
         _torrentService = torrentService;
         _distributionManager = distributionManager;
@@ -54,6 +56,7 @@ public class SeedingEngine : BackgroundService
         _eventAggregator = eventAggregator;
         _peerDatabase = peerDatabase;
         _connectionManager = connectionManager;
+        _eventLogService = eventLogService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -181,6 +184,7 @@ public class SeedingEngine : BackgroundService
                 if (torrent.Ratio >= globalRatioLimit)
                 {
                     _logger.Info("Torrent {0} reached global seed ratio limit ({1:F2}), stopping", torrent.Name, globalRatioLimit);
+                    _eventLogService.Info(torrent.Id, "Seeding", $"Global seed ratio limit reached ({globalRatioLimit:F2}), torrent stopped");
                     torrent.Status = TorrentStatus.Stopped;
                     torrent.UploadSpeed = 0;
                     torrent.DownloadSpeed = 0;
@@ -307,8 +311,13 @@ public class SeedingEngine : BackgroundService
             // Skip progress recalculation for force-completed torrents
             if (torrent.ForceCompleted)
             {
-                _logger.Info("Torrent {0} is force-completed, switching to seeding", torrent.Name);
-                torrent.Status = TorrentStatus.Seeding;
+                if (torrent.Status == TorrentStatus.Downloading)
+                {
+                    torrent.Status = TorrentStatus.Seeding;
+                    _logger.Info("Torrent {0} is force-completed, switching to seeding", torrent.Name);
+                    _eventLogService.Info(torrent.Id, "Seeding", "Force-completed (100%), switched to seeding");
+                }
+
                 continue;
             }
 
@@ -332,15 +341,22 @@ public class SeedingEngine : BackgroundService
 
             if (torrent.TotalSize > 0)
             {
+                var wasComplete = torrent.Progress >= 1.0;
                 torrent.Progress = torrent.Downloaded >= torrent.TotalSize
                     ? 1.0
                     : Math.Round((double)torrent.Downloaded / torrent.TotalSize, 6);
+
+                if (!wasComplete && torrent.Progress >= 1.0)
+                {
+                    _eventLogService.Info(torrent.Id, "Download", $"Download complete ({FormatBytes(torrent.TotalSize)})");
+                }
             }
 
             var effectiveThreshold = torrent.Threshold > 0 ? torrent.Threshold / 100.0 : threshold;
-            if (torrent.Progress >= effectiveThreshold)
+            if (torrent.Progress >= effectiveThreshold && torrent.Status == TorrentStatus.Downloading)
             {
                 _logger.Info("Torrent {0} reached download threshold ({1}%), switching to seeding", torrent.Name, (int)(effectiveThreshold * 100));
+                _eventLogService.Info(torrent.Id, "Seeding", $"Download reached threshold ({(int)(effectiveThreshold * 100)}%), switching to seeding");
                 torrent.Status = TorrentStatus.Seeding;
             }
         }
@@ -436,6 +452,11 @@ public class SeedingEngine : BackgroundService
                 torrent.Progress = torrent.Downloaded >= torrent.TotalSize
                     ? 1.0
                     : Math.Round((double)torrent.Downloaded / torrent.TotalSize, 6);
+
+                if (torrent.Progress >= 1.0)
+                {
+                    _eventLogService.Info(torrent.Id, "Download", $"Download complete ({FormatBytes(torrent.TotalSize)})");
+                }
             }
         }
     }
@@ -560,5 +581,19 @@ public class SeedingEngine : BackgroundService
             0 => 0.5,
             _ => 1.0
         };
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        var size = (double)bytes;
+        var unit = 0;
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+
+        return $"{size:F1} {units[unit]}";
     }
 }

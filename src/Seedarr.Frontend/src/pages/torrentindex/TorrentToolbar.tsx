@@ -18,8 +18,12 @@ interface TorrentToolbarProps {
   onAddTorrent: () => void;
   onStartAll: () => void;
   onStopAll: () => void;
-  selectMode: boolean;
-  onToggleSelectMode: () => void;
+  selectedCount: number;
+  bulkPending: boolean;
+  onBulkStart: () => void;
+  onBulkStop: () => void;
+  onBulkDelete: () => void;
+  onBulkClear: () => void;
 }
 
 export function TorrentToolbar({
@@ -35,13 +39,45 @@ export function TorrentToolbar({
   onAddTorrent,
   onStartAll,
   onStopAll,
-  selectMode,
-  onToggleSelectMode,
+  selectedCount,
+  bulkPending,
+  onBulkStart,
+  onBulkStop,
+  onBulkDelete,
+  onBulkClear,
 }: TorrentToolbarProps) {
   return (
     <div className="page-header">
-      <h1 className="page-heading">Torrents ({count})</h1>
+      <div className="page-header-group">
+        <h1 className="page-heading">Torrents ({count})</h1>
+        <button className="btn btn-success" onClick={onAddTorrent}>
+          <PlusIcon size={13} /> Add Torrent
+        </button>
+        {selectedCount > 0 && (
+          <div className="bulk-actions">
+            <span className="bulk-actions-count">{selectedCount} selected</span>
+            <button className="btn btn-small btn-success" onClick={onBulkStart} disabled={bulkPending}>
+              <PlayIcon size={12} /> Start
+            </button>
+            <button className="btn btn-small" onClick={onBulkStop} disabled={bulkPending}>
+              <StopIcon size={12} /> Stop
+            </button>
+            <button className="btn btn-small btn-danger" onClick={onBulkDelete} disabled={bulkPending}>
+              Delete
+            </button>
+            <button className="btn btn-small" onClick={onBulkClear} disabled={bulkPending}>
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
       <div className="page-header-actions">
+        <button className="btn btn-success" onClick={onStartAll}>
+          <PlayIcon size={13} /> Start All
+        </button>
+        <button className="btn btn-danger" onClick={onStopAll}>
+          <StopIcon size={13} /> Stop All
+        </button>
         <div className="speed-controls" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <span style={{ fontSize: '0.85em', opacity: 0.8 }}>
             UL: {formatSpeed(totalUploadSpeed)}
@@ -105,21 +141,6 @@ export function TorrentToolbar({
             <GridIcon size={13} /> Grid
           </button>
         </div>
-        <button className="btn btn-success" onClick={onAddTorrent}>
-          <PlusIcon size={13} /> Add Torrent
-        </button>
-        <button className="btn btn-success" onClick={onStartAll}>
-          <PlayIcon size={13} /> Start All
-        </button>
-        <button className="btn btn-danger" onClick={onStopAll}>
-          <StopIcon size={13} /> Stop All
-        </button>
-        <button
-          className={`btn ${selectMode ? 'btn-primary' : 'btn-default'}`}
-          onClick={onToggleSelectMode}
-        >
-          Select
-        </button>
       </div>
     </div>
   );

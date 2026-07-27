@@ -15,7 +15,6 @@ namespace NzbDrone.Core.ArrIntegration.Webhook;
 
 public interface IArrWebhookService
 {
-    bool ValidateWebhookSecret(string secret);
     ArrWebhookResult ProcessWebhook(ArrWebhookPayload payload);
 }
 
@@ -54,30 +53,6 @@ public class ArrWebhookService : IArrWebhookService
         _logger = LogManager.GetCurrentClassLogger();
         _client = client ?? SharedClient;
         _policy = policy ?? SharedPolicy;
-    }
-
-    public bool ValidateWebhookSecret(string secret)
-    {
-        var connections = _connectionFactory.All()
-            .Where(d => d.Enable && d.WebhookEnabled)
-            .ToList();
-
-        if (!connections.Any())
-        {
-            return false;
-        }
-
-        if (string.IsNullOrEmpty(secret))
-        {
-            // DEPRECATED: Accepting webhooks without X-Seedarr-Secret is deprecated.
-            // Configure connections with an explicit WebhookSecret instead.
-            // This path will be removed in a future version.
-            return connections.Any(d => string.IsNullOrEmpty(d.WebhookSecret));
-        }
-
-        return connections.Any(d =>
-            !string.IsNullOrEmpty(d.WebhookSecret) &&
-            string.Equals(d.WebhookSecret, secret, StringComparison.Ordinal));
     }
 
     public ArrWebhookResult ProcessWebhook(ArrWebhookPayload payload)

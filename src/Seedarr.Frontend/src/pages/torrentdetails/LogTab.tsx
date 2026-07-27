@@ -1,25 +1,19 @@
 import { Torrent } from '../../api/types';
+import { useTorrentLogs } from '../../api/hooks';
 import { formatDate } from '../../utils/formatters';
 import { StatusRow } from './shared';
 
+function levelBadgeClass(level: string): string {
+  switch (level.toLowerCase()) {
+    case 'debug': return 'torrent-log-level-debug';
+    case 'warn': case 'warning': return 'torrent-log-level-warn';
+    case 'error': case 'fatal': return 'torrent-log-level-error';
+    default: return 'torrent-log-level-info';
+  }
+}
+
 export function LogTab({ torrent }: { torrent: Torrent }) {
-  const events = [
-    { time: torrent.dateAdded, event: 'Torrent added' },
-    ...(torrent.forceCompleted
-      ? [{ time: torrent.lastActive ?? torrent.dateAdded, event: 'Marked as force-completed (100%)' }]
-      : []),
-    ...(torrent.progress >= 1.0 && !torrent.forceCompleted && torrent.lastActive
-      ? [{ time: torrent.lastActive, event: 'Download completed' }]
-      : []),
-    ...(torrent.forceStart
-      ? [{ time: torrent.lastActive ?? torrent.dateAdded, event: 'Force-start enabled' }]
-      : []),
-    ...(torrent.lastActive && torrent.lastActive !== torrent.dateAdded
-      ? [{ time: torrent.lastActive, event: `Last active — status: ${torrent.status}` }]
-      : []),
-  ]
-    .filter(e => e.time)
-    .sort((a, b) => new Date(a.time!).getTime() - new Date(b.time!).getTime());
+  const { data: logs, isLoading, isError } = useTorrentLogs(torrent.id);
 
   return (
     <div className="card">
@@ -29,19 +23,35 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           <thead>
             <tr>
               <th className="torrent-table-th">Time</th>
+              <th className="torrent-table-th">Level</th>
+              <th className="torrent-table-th">Source</th>
               <th className="torrent-table-th">Event</th>
             </tr>
           </thead>
           <tbody>
-            {events.length === 0 ? (
+            {isLoading ? (
               <tr className="torrent-table-row">
-                <td colSpan={2} style={{ color: 'var(--text-dim)', textAlign: 'center' }}>No events recorded</td>
+                <td colSpan={4} style={{ color: 'var(--text-dim)', textAlign: 'center' }}>Loading log entries...</td>
+              </tr>
+            ) : isError ? (
+              <tr className="torrent-table-row">
+                <td colSpan={4} style={{ color: 'var(--danger)', textAlign: 'center' }}>Failed to load log entries</td>
+              </tr>
+            ) : !logs || logs.length === 0 ? (
+              <tr className="torrent-table-row">
+                <td colSpan={4} style={{ color: 'var(--text-dim)', textAlign: 'center' }}>No events recorded yet</td>
               </tr>
             ) : (
-              events.map((entry) => (
-                <tr key={`${entry.time}-${entry.event}`} className="torrent-table-row">
-                  <td>{formatDate(entry.time)}</td>
-                  <td>{entry.event}</td>
+              logs.map((entry) => (
+                <tr key={entry.id} className="torrent-table-row">
+                  <td>{formatDate(entry.timeStamp)}</td>
+                  <td>
+                    <span className={`torrent-log-level ${levelBadgeClass(entry.level)}`}>
+                      {entry.level.toUpperCase()}
+                    </span>
+                  </td>
+                  <td>{entry.source}</td>
+                  <td>{entry.message}</td>
                 </tr>
               ))
             )}
