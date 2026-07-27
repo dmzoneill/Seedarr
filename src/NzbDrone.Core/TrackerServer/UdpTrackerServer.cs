@@ -43,7 +43,18 @@ public class UdpTrackerServer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var client = new UdpClient(DefaultUdpPort);
+        UdpClient client;
+
+        try
+        {
+            client = new UdpClient(DefaultUdpPort);
+        }
+        catch (SocketException ex)
+        {
+            _logger.Warn(ex, "UDP tracker failed to bind port {0}, skipping", DefaultUdpPort);
+            return;
+        }
+
         _logger.Info("UDP tracker listening on port {0}", DefaultUdpPort);
 
         var cleanupTimer = new Timer(_ => PurgeExpiredConnections(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));

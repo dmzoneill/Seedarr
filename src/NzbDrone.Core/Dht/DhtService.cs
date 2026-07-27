@@ -13,7 +13,7 @@ namespace NzbDrone.Core.Dht;
 
 public class DhtService : BackgroundService
 {
-    private const int DhtPort = 6881;
+    private const int DhtPort = 6882;
 
     private readonly RoutingTable _routingTable;
     private readonly Logger _logger;
@@ -31,7 +31,16 @@ public class DhtService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _udpClient = new UdpClient(DhtPort);
+        try
+        {
+            _udpClient = new UdpClient(DhtPort);
+        }
+        catch (SocketException ex)
+        {
+            _logger.Warn(ex, "DHT service failed to bind port {0}, skipping", DhtPort);
+            return;
+        }
+
         _logger.Info("DHT service started on port {0}, node ID: {1}", DhtPort, Convert.ToHexString(_nodeId));
 
         // Bootstrap with well-known nodes

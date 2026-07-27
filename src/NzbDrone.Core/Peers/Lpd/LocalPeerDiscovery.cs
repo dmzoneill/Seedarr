@@ -24,15 +24,28 @@ public class LocalPeerDiscovery : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.Info("Local Peer Discovery (BEP 14) started on {0}:{1}", MulticastAddress, MulticastPort);
+        UdpClient client;
 
-        using var client = new UdpClient();
-        client.JoinMulticastGroup(IPAddress.Parse(MulticastAddress));
+        try
+        {
+            client = new UdpClient();
+            client.JoinMulticastGroup(IPAddress.Parse(MulticastAddress));
+        }
+        catch (SocketException ex)
+        {
+            _logger.Warn(ex, "Local Peer Discovery failed to join multicast group, skipping");
+            return;
+        }
 
-        var listenTask = ListenForPeers(client, stoppingToken);
-        var announceTask = AnnounceLoop(stoppingToken);
+        using (client)
+        {
+            _logger.Info("Local Peer Discovery (BEP 14) started on {0}:{1}", MulticastAddress, MulticastPort);
 
-        await Task.WhenAny(listenTask, announceTask);
+            var listenTask = ListenForPeers(client, stoppingToken);
+            var announceTask = AnnounceLoop(stoppingToken);
+
+            await Task.WhenAny(listenTask, announceTask);
+        }
     }
 
     private async Task ListenForPeers(UdpClient client, CancellationToken stoppingToken)

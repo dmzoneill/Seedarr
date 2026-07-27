@@ -20,7 +20,7 @@
     <TestProject Condition="$(MSBuildProjectName.EndsWith('.Test'))">true</TestProject>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <NoWarn>$(NoWarn);CS1591;SA1200</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>
