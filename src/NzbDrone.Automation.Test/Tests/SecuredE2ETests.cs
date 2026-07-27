@@ -287,8 +287,8 @@ public class SecuredE2ETests : ApiTestBase
             {
                 if (conn.TryGetProperty("arrType", out var at)
                     && at.GetString() == arrType
-                    && conn.TryGetProperty("id", out var idEl))
-                    return idEl.GetInt32();
+                    && conn.TryGetProperty("id", out var connId))
+                    return connId.GetInt32();
             }
         }
         catch { }
@@ -386,10 +386,10 @@ public class SecuredE2ETests : ApiTestBase
                     continue;
                 if (!(dlId.GetString() ?? string.Empty).Contains("E63E5567", StringComparison.OrdinalIgnoreCase))
                     continue;
-                if (!record.TryGetProperty("id", out var idEl))
+                if (!record.TryGetProperty("id", out var queueId))
                     continue;
                 await DeleteWithKeyAsync(
-                    $"{RadarrUrl}/api/v3/queue/{idEl.GetInt32()}?removeFromClient=true&blocklist=false",
+                    $"{RadarrUrl}/api/v3/queue/{queueId.GetInt32()}?removeFromClient=true&blocklist=false",
                     _radarrKey);
             }
         }
