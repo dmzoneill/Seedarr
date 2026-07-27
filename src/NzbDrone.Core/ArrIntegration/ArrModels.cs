@@ -13,8 +13,6 @@ public class ArrConnectionDefinition : ProviderDefinition
     public bool EnableAutomaticAdd { get; set; } = true;
     public bool WebhookEnabled { get; set; } = true;
 
-    public string WebhookSecret { get; set; }
-
     public ArrConnectionDefinition Clone() => (ArrConnectionDefinition)MemberwiseClone();
 }
 

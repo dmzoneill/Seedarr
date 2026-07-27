@@ -10,49 +10,25 @@ using NUnit.Framework;
 namespace NzbDrone.Automation.Test.Tests;
 
 /// <summary>
-/// E2E tests for the authenticated webhook flow where Seedarr connections are
-/// secured with a WebhookSecret. Arr apps include X-Seedarr-Secret in webhook
-/// notifications, and Seedarr rejects requests that omit or provide a wrong secret.
-///
-/// Runs in a separate stack (stack 2) from E2ETests so volumes are clean.
-/// Bring up via: make integration-secured
-///
-/// WEBHOOK_SECRET env var must match the secret used by stack-configure-secured.
+/// E2E tests for the authenticated webhook flow. Webhook endpoint requires
+/// X-Api-Key like all other Seedarr API endpoints. Arr apps include X-Api-Key
+/// in webhook notifications, registered by Seedarr during connection setup.
 /// </summary>
 [TestFixture]
-[Category("SecuredE2E")]
-public class SecuredE2ETests : ApiTestBase
+public class WebhookAuthE2ETests : ApiTestBase
 {
-    // Inception (tmdbId=27205) — different from E2ETests which uses The Matrix (603)
     private const int TestMovieTmdbId = 27205;
     private const string TestReleaseTitle = "Inception.2010.1080p.BluRay.x264-TestGroup";
-
-    // Same test.torrent file — hash is fixture-level, not movie-level
     private const string TestTorrentHash = "e63e5567d9352b7b0d7d6d9271c0c5b2a303a059";
 
-    // Must match WEBHOOK_SECRET passed to stack-configure-secured
-    private static readonly string WebhookSecret =
-        Environment.GetEnvironmentVariable("WEBHOOK_SECRET") ?? string.Empty;
-
+    private string _seedarrKey = string.Empty;
     private string _radarrKey = string.Empty;
-    private string _sonarrKey = string.Empty;
-    private string _lidarrKey = string.Empty;
-    private int _radarrConnectionId = -1;
-    private int _sonarrConnectionId = -1;
-    private int _lidarrConnectionId = -1;
 
     [OneTimeSetUp]
-    public async Task SetupSecuredStack()
+    public async Task Setup()
     {
-        if (string.IsNullOrEmpty(WebhookSecret))
-        {
-            Assert.Ignore("WEBHOOK_SECRET env not set — run via: make integration-secured");
-            return;
-        }
-
+        _seedarrKey = await GetApiKeyAsync(SeedarrUrl);
         _radarrKey = await GetApiKeyAsync(RadarrUrl);
-        _sonarrKey = await GetApiKeyAsync(SonarrUrl);
-        _lidarrKey = await GetApiKeyAsync(LidarrUrl);
 
         if (string.IsNullOrEmpty(_radarrKey))
         {
@@ -60,81 +36,38 @@ public class SecuredE2ETests : ApiTestBase
             return;
         }
 
-        _radarrConnectionId = await FindConnectionIdAsync("Radarr");
-        _sonarrConnectionId = await FindConnectionIdAsync("Sonarr");
-        _lidarrConnectionId = await FindConnectionIdAsync("Lidarr");
-
-        await CleanupSecuredAsync();
+        await CleanupAsync();
         await EnsureMovieInRadarrAsync(TestMovieTmdbId);
     }
 
     [OneTimeTearDown]
-    public async Task TeardownSecuredStack()
+    public async Task Teardown()
     {
-        await CleanupSecuredAsync();
-    }
-
-    // --- Connection API key tests ---
-
-    [Test]
-    public async Task Radarr_secured_connection_api_key_test_passes()
-    {
-        if (_radarrConnectionId < 0)
-            Assert.Ignore("Radarr connection not found in Seedarr — configure secured stack");
-
-        var json = await PostJsonAsync($"{SeedarrUrl}/api/v1/arrconnections/{_radarrConnectionId}/test", new { });
-        using var doc = JsonDocument.Parse(json);
-        Assert.That(doc.RootElement.GetProperty("success").GetBoolean(), Is.True, "Radarr API key connection test");
+        await CleanupAsync();
     }
 
     [Test]
-    public async Task Sonarr_secured_connection_api_key_test_passes()
+    public async Task Webhook_without_api_key_is_rejected()
     {
-        if (_sonarrConnectionId < 0)
-            Assert.Ignore("Sonarr connection not found in Seedarr — configure secured stack");
-
-        var json = await PostJsonAsync($"{SeedarrUrl}/api/v1/arrconnections/{_sonarrConnectionId}/test", new { });
-        using var doc = JsonDocument.Parse(json);
-        Assert.That(doc.RootElement.GetProperty("success").GetBoolean(), Is.True, "Sonarr API key connection test");
-    }
-
-    [Test]
-    public async Task Lidarr_secured_connection_api_key_test_passes()
-    {
-        if (_lidarrConnectionId < 0)
-            Assert.Ignore("Lidarr connection not found in Seedarr — configure secured stack");
-
-        var json = await PostJsonAsync($"{SeedarrUrl}/api/v1/arrconnections/{_lidarrConnectionId}/test", new { });
-        using var doc = JsonDocument.Parse(json);
-        Assert.That(doc.RootElement.GetProperty("success").GetBoolean(), Is.True, "Lidarr API key connection test");
-    }
-
-    // --- Webhook authentication tests ---
-
-    [Test]
-    public async Task Webhook_without_secret_header_is_rejected_when_all_connections_are_secured()
-    {
-        // All connections in the secured stack have WebhookSecret set, so
-        // ValidateWebhookSecret("") finds no connections with null secret → 401.
         var (status, _) = await SendWebhookDirectAsync(
             new { eventType = "Test", instanceName = "Radarr" },
             null);
 
-        Assert.That(status, Is.EqualTo(HttpStatusCode.Unauthorized), "Webhook without X-Seedarr-Secret must be rejected");
+        Assert.That(status, Is.EqualTo(HttpStatusCode.Unauthorized), "Webhook without X-Api-Key must be rejected");
     }
 
     [Test]
-    public async Task Webhook_with_wrong_secret_is_rejected()
+    public async Task Webhook_with_wrong_api_key_is_rejected()
     {
         var (status, _) = await SendWebhookDirectAsync(
             new { eventType = "Test", instanceName = "Radarr" },
-            "wrong-secret-that-does-not-match");
+            "wrong-key-that-does-not-match");
 
-        Assert.That(status, Is.EqualTo(HttpStatusCode.Unauthorized), "Webhook with wrong X-Seedarr-Secret must be rejected");
+        Assert.That(status, Is.EqualTo(HttpStatusCode.Unauthorized), "Webhook with wrong X-Api-Key must be rejected");
     }
 
     [Test]
-    public async Task Webhook_with_correct_secret_is_accepted()
+    public async Task Webhook_with_correct_api_key_is_accepted()
     {
         var (status, body) = await SendWebhookDirectAsync(
             new
@@ -144,25 +77,24 @@ public class SecuredE2ETests : ApiTestBase
                 downloadId = "aabbccdd11223344aabbccdd11223344aabbccdd",
                 release = new { releaseTitle = "Test.Movie.2024", size = 1073741824L }
             },
-            WebhookSecret);
+            _seedarrKey);
 
-        Assert.That(status, Is.EqualTo(HttpStatusCode.OK), "Webhook with correct X-Seedarr-Secret must be accepted");
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK), "Webhook with correct X-Api-Key must be accepted");
         Assert.That(body, Does.Contain("success"), "Response should be a success result");
 
-        // Clean up the torrent added by this test
-        await CleanupTorrentByInfHashAsync("aabbccdd11223344aabbccdd11223344aabbccdd");
+        await CleanupTorrentByHashAsync("aabbccdd11223344aabbccdd11223344aabbccdd");
     }
-
-    // --- Full secured E2E test ---
 
     [Test]
     [CancelAfter(120000)]
-    public async Task Full_secured_E2E_radarr_grab_triggers_authenticated_webhook_to_seedarr()
+    public async Task Full_E2E_radarr_grab_triggers_authenticated_webhook_to_seedarr()
     {
-        await CleanupSecuredAsync();
+        await CleanupAsync();
 
         if (string.IsNullOrEmpty(_radarrKey))
+        {
             Assert.Ignore("Radarr not available");
+        }
 
         var seedarrInternalUrl = Environment.GetEnvironmentVariable("SEEDARR_INTERNAL_URL") ?? "http://seedarr.local:9898";
         var torrentUrl = $"{seedarrInternalUrl}/fixtures/test.torrent";
@@ -180,7 +112,9 @@ public class SecuredE2ETests : ApiTestBase
         }
 
         if (!movieExists)
+        {
             Assert.Ignore($"Inception (tmdbId={TestMovieTmdbId}) not in Radarr library — setup may have failed");
+        }
 
         var pushBody = new
         {
@@ -225,7 +159,10 @@ public class SecuredE2ETests : ApiTestBase
                 ? recordsEl
                 : queueDoc.RootElement;
             if (queueRecords.ValueKind != JsonValueKind.Array)
+            {
                 continue;
+            }
+
             foreach (var record in queueRecords.EnumerateArray())
             {
                 if (record.TryGetProperty("downloadId", out var dlId)
@@ -239,7 +176,6 @@ public class SecuredE2ETests : ApiTestBase
 
         Assert.That(inQueue, Is.True, "Torrent in Radarr queue after Inception push");
 
-        // Wait for Radarr's authenticated grab webhook to reach Seedarr
         await Task.Delay(TimeSpan.FromSeconds(20));
 
         var seedarrJson = await GetJsonAsync($"{SeedarrUrl}/api/v1/torrent");
@@ -258,42 +194,24 @@ public class SecuredE2ETests : ApiTestBase
             }
         }
 
-        Assert.That(foundInSeedarr, Is.True, "Torrent in Seedarr via authenticated webhook — X-Seedarr-Secret accepted");
+        Assert.That(foundInSeedarr, Is.True, "Torrent in Seedarr via authenticated webhook — X-Api-Key accepted");
     }
 
-    // --- Helpers ---
-
-    private async Task<(HttpStatusCode Status, string Body)> SendWebhookDirectAsync(object payload, string secret)
+    private async Task<(HttpStatusCode Status, string Body)> SendWebhookDirectAsync(object payload, string apiKey)
     {
         var json = JsonSerializer.Serialize(payload);
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{SeedarrUrl}/api/v1/webhook/arr")
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
-        if (!string.IsNullOrEmpty(secret))
-            request.Headers.Add("X-Seedarr-Secret", secret);
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            request.Headers.Add("X-Api-Key", apiKey);
+        }
+
         var response = await Client.SendAsync(request);
         var body = await response.Content.ReadAsStringAsync();
         return (response.StatusCode, body);
-    }
-
-    private async Task<int> FindConnectionIdAsync(string arrType)
-    {
-        try
-        {
-            var json = await GetJsonAsync($"{SeedarrUrl}/api/v1/arrconnections");
-            using var doc = JsonDocument.Parse(json);
-            foreach (var conn in doc.RootElement.EnumerateArray())
-            {
-                if (conn.TryGetProperty("arrType", out var at)
-                    && at.GetString() == arrType
-                    && conn.TryGetProperty("id", out var connId))
-                    return connId.GetInt32();
-            }
-        }
-        catch { }
-
-        return -1;
     }
 
     private async Task EnsureMovieInRadarrAsync(int tmdbId)
@@ -305,7 +223,9 @@ public class SecuredE2ETests : ApiTestBase
             foreach (var movie in moviesDoc.RootElement.EnumerateArray())
             {
                 if (movie.TryGetProperty("tmdbId", out var tmdbEl) && tmdbEl.GetInt32() == tmdbId)
+                {
                     return;
+                }
             }
 
             var lookupJson = await GetJsonAsync($"{RadarrUrl}/api/v3/movie/lookup/tmdb?tmdbId={tmdbId}", _radarrKey);
@@ -322,7 +242,7 @@ public class SecuredE2ETests : ApiTestBase
         catch { }
     }
 
-    private async Task CleanupTorrentByInfHashAsync(string infoHash)
+    private async Task CleanupTorrentByHashAsync(string infoHash)
     {
         try
         {
@@ -332,7 +252,10 @@ public class SecuredE2ETests : ApiTestBase
             {
                 var hashStr = torrent.TryGetProperty("infoHash", out var h) ? h.GetString() ?? "" : "";
                 if (!hashStr.Equals(infoHash, StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
+
                 var id = torrent.GetProperty("id").GetInt32();
                 await DeleteAsync($"{SeedarrUrl}/api/v1/torrent/{id}");
             }
@@ -340,9 +263,8 @@ public class SecuredE2ETests : ApiTestBase
         catch { }
     }
 
-    private async Task CleanupSecuredAsync()
+    private async Task CleanupAsync()
     {
-        // Remove from Seedarr by hash
         try
         {
             var json = await GetJsonAsync($"{SeedarrUrl}/api/v1/torrent");
@@ -351,14 +273,16 @@ public class SecuredE2ETests : ApiTestBase
             {
                 var hashStr = torrent.TryGetProperty("infoHash", out var h) ? h.GetString() ?? "" : "";
                 if (!hashStr.Equals(TestTorrentHash, StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
+
                 var id = torrent.GetProperty("id").GetInt32();
                 await DeleteAsync($"{SeedarrUrl}/api/v1/torrent/{id}");
             }
         }
         catch { }
 
-        // Remove from Transmission
         try
         {
             await TransmissionRpcAsync("torrent-remove", new { ids = new[] { TestTorrentHash }, deleteLocalData = true });
@@ -366,9 +290,10 @@ public class SecuredE2ETests : ApiTestBase
         catch { }
 
         if (string.IsNullOrEmpty(_radarrKey))
+        {
             return;
+        }
 
-        // Remove from Radarr queue
         try
         {
             var queueJson = await GetJsonAsync($"{RadarrUrl}/api/v3/queue", _radarrKey);
@@ -378,16 +303,27 @@ public class SecuredE2ETests : ApiTestBase
                 : queueDoc.RootElement;
 
             if (records.ValueKind != JsonValueKind.Array)
+            {
                 return;
+            }
 
             foreach (var record in records.EnumerateArray())
             {
                 if (!record.TryGetProperty("downloadId", out var dlId))
+                {
                     continue;
+                }
+
                 if (!(dlId.GetString() ?? string.Empty).Contains("E63E5567", StringComparison.OrdinalIgnoreCase))
+                {
                     continue;
+                }
+
                 if (!record.TryGetProperty("id", out var queueId))
+                {
                     continue;
+                }
+
                 await DeleteWithKeyAsync(
                     $"{RadarrUrl}/api/v3/queue/{queueId.GetInt32()}?removeFromClient=true&blocklist=false",
                     _radarrKey);
@@ -400,7 +336,10 @@ public class SecuredE2ETests : ApiTestBase
     {
         using var request = new HttpRequestMessage(HttpMethod.Delete, url);
         if (!string.IsNullOrEmpty(apiKey))
+        {
             request.Headers.Add("X-Api-Key", apiKey);
+        }
+
         await Client.SendAsync(request);
     }
 }

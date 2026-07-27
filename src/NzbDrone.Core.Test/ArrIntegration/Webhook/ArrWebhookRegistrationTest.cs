@@ -129,6 +129,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Lidarr",
             Url = "http://nonexistent.invalid:8686",
             ApiKey = "test-key"
@@ -145,6 +146,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Sonarr",
             Url = "http://nonexistent.invalid:8989",
             ApiKey = "test-key"
@@ -176,6 +178,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Radarr",
             Url = "http://nonexistent.invalid:7878",
             ApiKey = "test-key"
@@ -222,6 +225,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Sonarr",
             Url = "http://nonexistent.invalid:8989",
             ApiKey = "api-key-123"
@@ -291,6 +295,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Sonarr",
             Url = "http://nonexistent.invalid:8989",
             ApiKey = "test-key"
@@ -322,6 +327,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Sonarr",
             Url = null,
             ApiKey = "test-key"
@@ -432,6 +438,7 @@ public class ArrWebhookRegistrationTest
         var lidarrConnection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Lidarr",
             Url = "http://nonexistent.invalid:8686",
             ApiKey = "key"
@@ -439,6 +446,7 @@ public class ArrWebhookRegistrationTest
         var radarrConnection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Radarr",
             Url = "http://nonexistent.invalid:7878",
             ApiKey = "key"
@@ -477,6 +485,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Radarr",
             Url = "http://nonexistent.invalid:7878",
             ApiKey = "test-key"
@@ -522,6 +531,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Sonarr",
             Url = "http://sonarr:8989",
             ApiKey = "test-key"
@@ -543,6 +553,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Sonarr",
             Url = "http://sonarr:8989",
             ApiKey = "test-key"
@@ -564,6 +575,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Radarr",
             Url = "http://radarr:7878",
             ApiKey = "test-key"
@@ -585,6 +597,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Lidarr",
             Url = "http://lidarr:8686",
             ApiKey = "test-key"
@@ -839,6 +852,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
+
             ArrType = "Sonarr",
             Url = "http://sonarr:8989",
             ApiKey = "test-key"

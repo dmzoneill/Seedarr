@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Common.Instrumentation;
+using NzbDrone.Core.Configuration;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.System;
@@ -11,6 +12,13 @@ namespace Seedarr.Api.V1.System;
 [V1ApiController("log")]
 public class LogController : ControllerBase
 {
+    private readonly IConfigService _configService;
+
+    public LogController(IConfigService configService)
+    {
+        _configService = configService;
+    }
+
     [HttpGet]
     public ActionResult<List<LogResource>> GetLogs(
         [FromQuery] string level = null,
@@ -26,18 +34,11 @@ public class LogController : ControllerBase
             count = 5000;
         }
 
-        var minimumLevel = LogLevel.Trace;
+        var minimumLevel = ParseLogLevel(_configService.FileLogLevel) ?? LogLevel.Info;
 
         if (!string.IsNullOrWhiteSpace(level))
         {
-            try
-            {
-                minimumLevel = LogLevel.FromString(level);
-            }
-            catch (ArgumentException)
-            {
-                // Invalid level string, fall back to Trace
-            }
+            minimumLevel = ParseLogLevel(level) ?? minimumLevel;
         }
 
         var target = RingBufferTarget.Instance;
@@ -60,6 +61,23 @@ public class LogController : ControllerBase
         }).ToList();
 
         return Ok(resources);
+    }
+
+    private static LogLevel ParseLogLevel(string level)
+    {
+        if (string.IsNullOrWhiteSpace(level))
+        {
+            return null;
+        }
+
+        try
+        {
+            return LogLevel.FromString(level.Trim());
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 }
 

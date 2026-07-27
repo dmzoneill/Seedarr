@@ -13,8 +13,6 @@ namespace NzbDrone.Integration.Test;
 [Category("IntegrationTest")]
 public class WebhookControllerTests : IntegrationTestBase
 {
-    private const string TestWebhookSecret = "test-webhook-secret-abc123";
-
     [OneTimeSetUp]
     public async Task CreateTestArrConnectionAsync()
     {
@@ -22,7 +20,6 @@ public class WebhookControllerTests : IntegrationTestBase
         {
             enable = true,
             webhookEnabled = true,
-            webhookSecret = TestWebhookSecret,
             name = "TestConnection",
             implementation = "SonarrConnection",
             arrType = "Sonarr",
@@ -38,7 +35,6 @@ public class WebhookControllerTests : IntegrationTestBase
         var json = JsonSerializer.Serialize(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/webhook/arr") { Content = content };
-        request.Headers.Add("X-Seedarr-Secret", TestWebhookSecret);
         var response = await Client.SendAsync(request);
         var responseJson = await response.Content.ReadAsStringAsync();
         return (response.StatusCode, Deserialize<Dictionary<string, object>>(responseJson));

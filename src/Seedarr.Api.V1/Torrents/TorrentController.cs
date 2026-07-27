@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.SignalR;
@@ -19,6 +20,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly ITorrentFileParser _torrentFileParser;
     private readonly IConnectionManager _connectionManager;
+    private readonly ITorrentEventLogService _eventLogService;
+    private readonly IConfigService _configService;
 
     public TorrentController(
         ITorrentService torrentService,
@@ -26,6 +29,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         ITrackerEntryService trackerEntryService,
         ITorrentFileParser torrentFileParser,
         IConnectionManager connectionManager,
+        ITorrentEventLogService eventLogService,
+        IConfigService configService,
         IBroadcastSignalRMessage signalRBroadcaster,
         TorrentResourceValidator torrentResourceValidator)
         : base(signalRBroadcaster)
@@ -35,6 +40,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _trackerEntryService = trackerEntryService;
         _torrentFileParser = torrentFileParser;
         _connectionManager = connectionManager;
+        _eventLogService = eventLogService;
+        _configService = configService;
 
         SharedValidator = torrentResourceValidator;
     }
@@ -129,69 +136,34 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
-    public ActionResult<TorrentResource> Upload(IFormFile file)
+    public IActionResult Upload([FromForm(Name = "file")] List<IFormFile> files)
     {
-        if (file == null || file.Length == 0)
+        if (files == null || files.Count == 0)
         {
             return BadRequest("No torrent file provided");
         }
 
-        ParsedTorrent parsed;
-        using (var stream = file.OpenReadStream())
-        {
-            parsed = _torrentFileParser.Parse(stream);
-        }
+        var added = new List<TorrentResource>();
+        var failed = new List<TorrentUploadFailure>();
 
-        if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
+        foreach (var file in files)
         {
-            return Conflict(new { message = "Torrent with this info hash already exists" });
-        }
-
-        var torrent = new Torrent
-        {
-            Name = parsed.Name,
-            InfoHash = parsed.InfoHash,
-            TotalSize = parsed.TotalSize,
-            PieceCount = parsed.PieceCount,
-            PieceLength = parsed.PieceLength,
-            Comment = parsed.Comment,
-            CreatedBy = parsed.CreatedBy,
-            CreationDate = parsed.CreationDate,
-            IsPrivate = parsed.IsPrivate,
-            TrackerUrl = parsed.AnnounceUrl,
-            Status = TorrentStatus.Queued,
-            DateAdded = DateTime.UtcNow
-        };
-
-        var added = _torrentService.Add(torrent);
-
-        if (parsed.Files != null)
-        {
-            foreach (var f in parsed.Files)
+            if (file == null || file.Length == 0)
             {
-                _torrentFileService.Add(new TorrentFile { TorrentId = added.Id, Path = f.Path, Size = f.Size });
+                continue;
+            }
+
+            try
+            {
+                added.Add(AddTorrentFromFile(file));
+            }
+            catch (Exception ex)
+            {
+                failed.Add(new TorrentUploadFailure(file.FileName, ex.Message));
             }
         }
 
-        if (parsed.AnnounceList != null)
-        {
-            var tier = 0;
-            foreach (var tierUrls in parsed.AnnounceList)
-            {
-                foreach (var url in tierUrls)
-                {
-                    _trackerEntryService.Add(new TrackerEntry { TorrentId = added.Id, Url = url, Tier = tier, Enabled = true });
-                }
-
-                tier++;
-            }
-        }
-        else if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
-        {
-            _trackerEntryService.Add(new TrackerEntry { TorrentId = added.Id, Url = parsed.AnnounceUrl, Tier = 0, Enabled = true });
-        }
-
-        return Created($"/api/v1/torrent/{added.Id}", TorrentResourceMapper.ToResource(added));
+        return Ok(new TorrentUploadResult(added, failed));
     }
 
     [HttpPut("{id:int}")]
@@ -214,6 +186,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         {
             return NotFound();
         }
+
+        LogUpdateTransitions(existing, resource);
 
         var torrent = TorrentResourceMapper.ToModel(resource);
         torrent.Id = id;
@@ -261,6 +235,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         torrent.LastActive = DateTime.UtcNow;
         _torrentService.Update(torrent);
+        _eventLogService.Info(id, "Tracker", $"Manual announce to {trackers.Count(t => t.Enabled)} enabled tracker(s)");
 
         return Ok();
     }
@@ -274,6 +249,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
+        _eventLogService.Info(id, "Recheck", $"Recheck complete: progress {torrent.Progress:P0}");
         return TorrentResourceMapper.ToResource(torrent);
     }
 
@@ -286,6 +262,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
+        _eventLogService.Info(id, "Queue", $"Queue position moved: {resource.Position}");
         _torrentService.MoveQueue(id, resource.Position);
         return Ok();
     }
@@ -295,6 +272,157 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     {
         _torrentService.Delete(id, deleteFiles);
         return Ok();
+    }
+
+    private TorrentResource AddTorrentFromFile(IFormFile file)
+    {
+        ParsedTorrent parsed;
+        using (var stream = file.OpenReadStream())
+        {
+            parsed = _torrentFileParser.Parse(stream);
+        }
+
+        if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
+        {
+            throw new InvalidOperationException("Torrent with this info hash already exists");
+        }
+
+        var torrent = new Torrent
+        {
+            Name = parsed.Name,
+            InfoHash = parsed.InfoHash,
+            TotalSize = parsed.TotalSize,
+            PieceCount = parsed.PieceCount,
+            PieceLength = parsed.PieceLength,
+            Comment = parsed.Comment,
+            CreatedBy = parsed.CreatedBy,
+            CreationDate = parsed.CreationDate,
+            IsPrivate = parsed.IsPrivate,
+            TrackerUrl = parsed.AnnounceUrl,
+            Status = TorrentStatus.Queued,
+            DateAdded = DateTime.UtcNow
+        };
+
+        var addedTorrent = _torrentService.Add(torrent);
+
+        _eventLogService.Info(addedTorrent.Id, "Add", $"Torrent '{parsed.Name}' added from file '{file.FileName}' ({file.Length} bytes)");
+
+        if (parsed.Files != null)
+        {
+            foreach (var f in parsed.Files)
+            {
+                _torrentFileService.Add(new TorrentFile { TorrentId = addedTorrent.Id, Path = f.Path, Size = f.Size });
+            }
+        }
+
+        if (parsed.AnnounceList != null)
+        {
+            var tier = 0;
+            foreach (var tierUrls in parsed.AnnounceList)
+            {
+                foreach (var url in tierUrls)
+                {
+                    _trackerEntryService.Add(new TrackerEntry { TorrentId = addedTorrent.Id, Url = url, Tier = tier, Enabled = true });
+                }
+
+                tier++;
+            }
+        }
+        else if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
+        {
+            _trackerEntryService.Add(new TrackerEntry { TorrentId = addedTorrent.Id, Url = parsed.AnnounceUrl, Tier = 0, Enabled = true });
+        }
+
+        return TorrentResourceMapper.ToResource(addedTorrent);
+    }
+
+    private void LogUpdateTransitions(Torrent existing, TorrentResource resource)
+    {
+        if (resource.ForceCompleted && !existing.ForceCompleted)
+        {
+            _eventLogService.Info(existing.Id, "Edit", "Marked as force-completed (100%)");
+        }
+
+        if (resource.ForceStart != existing.ForceStart)
+        {
+            _eventLogService.Info(existing.Id, "Edit", resource.ForceStart ? "Force start enabled" : "Force start disabled");
+        }
+
+        if (resource.SuperSeeding != existing.SuperSeeding)
+        {
+            _eventLogService.Info(existing.Id, "Edit", resource.SuperSeeding ? "Super seeding enabled" : "Super seeding disabled");
+        }
+
+        if (!string.IsNullOrEmpty(resource.Status) &&
+            !string.Equals(resource.Status, existing.Status.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            _eventLogService.Info(existing.Id, "Status", $"Status changed: {existing.Status} -> {resource.Status}");
+        }
+    }
+
+    [HttpGet("{id:int}/logs")]
+    public ActionResult<List<TorrentEventLogResource>> GetLogs(
+        int id,
+        [FromQuery] string level = null,
+        [FromQuery] int count = 200)
+    {
+        var torrent = _torrentService.Get(id);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        if (count < 1)
+        {
+            count = 1;
+        }
+
+        if (count > 1000)
+        {
+            count = 1000;
+        }
+
+        var minimumRank = ParseLevelRank(level) ?? ParseLevelRank(_configService.FileLogLevel) ?? LevelRank.Info;
+        var entries = _eventLogService.GetByTorrentId(id, count);
+
+        var resources = entries
+            .Where(e => ParseLevelRank(e.Level) >= minimumRank)
+            .Select(ToResource)
+            .ToList();
+
+        return Ok(resources);
+    }
+
+    private static int? ParseLevelRank(string level)
+    {
+        if (string.IsNullOrWhiteSpace(level))
+        {
+            return null;
+        }
+
+        return level.Trim().ToLowerInvariant() switch
+        {
+            "trace" => LevelRank.Trace,
+            "debug" => LevelRank.Debug,
+            "info" => LevelRank.Info,
+            "warn" or "warning" => LevelRank.Warn,
+            "error" => LevelRank.Error,
+            "fatal" => LevelRank.Fatal,
+            _ => null
+        };
+    }
+
+    private static TorrentEventLogResource ToResource(TorrentEventLog log)
+    {
+        return new TorrentEventLogResource
+        {
+            Id = log.Id,
+            TorrentId = log.TorrentId,
+            TimeStamp = log.TimeStamp,
+            Level = log.Level,
+            Source = log.Source,
+            Message = log.Message
+        };
     }
 
     private ActionResult<TorrentResource> CreateFromMagnet(TorrentResource resource)
@@ -324,6 +452,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         };
 
         var added = _torrentService.Add(torrent);
+        _eventLogService.Info(added.Id, "Add", $"Torrent '{parsed.Name}' added from magnet link");
 
         var tier = 0;
         foreach (var url in parsed.Trackers)
@@ -340,3 +469,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return Created($"/api/v1/torrent/{added.Id}", TorrentResourceMapper.ToResource(added));
     }
 }
+
+public record TorrentUploadFailure(string FileName, string Reason);
+
+public record TorrentUploadResult(List<TorrentResource> Added, List<TorrentUploadFailure> Failed);

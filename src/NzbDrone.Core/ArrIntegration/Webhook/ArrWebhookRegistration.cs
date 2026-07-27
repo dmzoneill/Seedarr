@@ -61,20 +61,16 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             var fields = new List<object>
             {
                 new { name = "url", value = (object)webhookUrl },
-                new { name = "method", value = (object)1 }
-            };
-
-            if (!string.IsNullOrEmpty(connection.WebhookSecret))
-            {
-                fields.Add(new
+                new { name = "method", value = (object)1 },
+                new
                 {
                     name = "headers",
                     value = (object)new[]
                     {
-                        new { key = "X-Seedarr-Secret", value = connection.WebhookSecret }
+                        new { key = "X-Api-Key", value = _configFileProvider.ApiKey }
                     }
-                });
-            }
+                }
+            };
 
             // NOTE: Only one "Seedarr" notification is supported per arr app.
             // FindExistingWebhook matches by this name + URL, so a second connection to the

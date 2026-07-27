@@ -49,6 +49,11 @@ public class ArrConnectionController : Controller
     [HttpPost]
     public ActionResult<ArrConnectionDefinition> Create([FromBody] ArrConnectionDefinition definition)
     {
+        if (!_arrSyncService.TestConnectionDirect(definition))
+        {
+            return BadRequest(new { message = $"Cannot connect to {definition.ArrType} at {definition.Url}" });
+        }
+
         var created = _connectionFactory.Create(definition);
 
         if (!_webhookRegistration.RegisterWebhook(created))
@@ -64,14 +69,14 @@ public class ArrConnectionController : Controller
     {
         definition.Id = id;
 
+        var existing = _connectionFactory.Get(id);
+        if (existing == null)
+        {
+            return NotFound();
+        }
+
         if (definition.ApiKey != null)
         {
-            var existing = _connectionFactory.Get(id);
-            if (existing == null)
-            {
-                return NotFound();
-            }
-
             var maskedKey = existing.ApiKey?.Length > 4
                 ? new string('*', existing.ApiKey.Length - 4) + existing.ApiKey[^4..]
                 : new string('*', existing.ApiKey?.Length ?? 0);

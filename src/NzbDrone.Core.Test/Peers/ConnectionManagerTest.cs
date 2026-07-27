@@ -18,6 +18,7 @@ public class ConnectionManagerTest
     private IPeerConnectionLogService _connectionLogService;
     private ITorrentService _torrentService;
     private IFastExtensionHandler _fastExtensionHandler;
+    private ITorrentEventLogService _eventLogService;
     private ConnectionManager _manager;
     private List<PeerConnection> _createdConnections;
     private List<TcpListener> _listeners;
@@ -30,7 +31,8 @@ public class ConnectionManagerTest
         _connectionLogService = Substitute.For<IPeerConnectionLogService>();
         _torrentService = Substitute.For<ITorrentService>();
         _fastExtensionHandler = Substitute.For<IFastExtensionHandler>();
-        _manager = new ConnectionManager(_configService, _connectionLogService, _torrentService, _fastExtensionHandler);
+        _eventLogService = Substitute.For<ITorrentEventLogService>();
+        _manager = new ConnectionManager(_configService, _connectionLogService, _torrentService, _fastExtensionHandler, _eventLogService);
 
         _createdConnections = new List<PeerConnection>();
         _listeners = new List<TcpListener>();

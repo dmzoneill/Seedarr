@@ -10,6 +10,7 @@ public interface IArrSyncService
 {
     SyncResult Sync();
     bool TestConnection(int id);
+    bool TestConnectionDirect(ArrConnectionDefinition definition);
 }
 
 public class SyncResult
@@ -113,6 +114,11 @@ public class ArrSyncService : IArrSyncService
             return false;
         }
 
+        return TestConnectionDirect(definition);
+    }
+
+    public bool TestConnectionDirect(ArrConnectionDefinition definition)
+    {
         var provider = CreateProvider(definition);
         if (provider == null)
         {

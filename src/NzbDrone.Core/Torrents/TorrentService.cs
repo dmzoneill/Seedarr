@@ -68,7 +68,7 @@ public class TorrentService : ITorrentService
 
     public Torrent Update(Torrent torrent)
     {
-        _logger.Info("Updating torrent: {0}", torrent.Name);
+        _logger.Debug("Updating torrent: {0}", torrent.Name);
         var updated = _repository.Update(torrent);
         _eventAggregator.PublishEvent(new ModelEvent<Torrent>(updated, ModelAction.Updated));
         return updated;
