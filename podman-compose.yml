@@ -176,6 +176,8 @@ services:
         condition: service_healthy
       transmission:
         condition: service_healthy
+    environment:
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
     volumes:
       - sonarr-config:/sonarr-config:ro
       - radarr-config:/radarr-config:ro
@@ -361,14 +363,20 @@ services:
         add_download_client "Lidarr" "http://lidarr.local:8686" "$$LIDARR_KEY" "v1"
 
         # --- Connect Seedarr to Sonarr, Radarr, Lidarr (idempotent) ---
+        # Optional 5th arg: webhook_secret — when set, connections are secured and
+        # RegisterWebhook adds X-Seedarr-Secret to the arr app's webhook notification.
         add_seedarr_connection() {
-          local name=$$1 arr_type=$$2 url=$$3 api_key=$$4
+          local name=$$1 arr_type=$$2 url=$$3 api_key=$$4 webhook_secret=$${5:-}
           existing=$$(curl -sf "http://seedarr.local:9898/api/v1/arrconnections" | grep -c "\"name\":\"$$name\"" || true)
           if [ "$$existing" != "0" ]; then
             echo "  $$name: already exists, skipping"
             return
           fi
           echo "  Adding $$name to Seedarr..."
+          local secret_field=""
+          if [ -n "$$webhook_secret" ]; then
+            secret_field=", \"webhookSecret\": \"$$webhook_secret\""
+          fi
           curl -sf -X POST "http://seedarr.local:9898/api/v1/arrconnections" \
             -H "Content-Type: application/json" \
             -d "{
@@ -381,15 +389,15 @@ services:
               \"webhookEnabled\": true,
               \"enable\": true,
               \"implementation\": \"$${arr_type}Connection\",
-              \"configContract\": \"ArrConnectionDefinition\"
+              \"configContract\": \"ArrConnectionDefinition\"$$secret_field
             }" > /dev/null 2>&1 && echo "    OK" || echo "    Failed"
         }
 
         echo ""
         echo "--- Connecting Seedarr to *arr apps ---"
-        add_seedarr_connection "Sonarr" "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY"
-        add_seedarr_connection "Radarr" "Radarr" "http://radarr.local:7878" "$$RADARR_KEY"
-        add_seedarr_connection "Lidarr" "Lidarr" "http://lidarr.local:8686" "$$LIDARR_KEY"
+        add_seedarr_connection "Sonarr" "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY" "$${WEBHOOK_SECRET:-}"
+        add_seedarr_connection "Radarr" "Radarr" "http://radarr.local:7878" "$$RADARR_KEY" "$${WEBHOOK_SECRET:-}"
+        add_seedarr_connection "Lidarr" "Lidarr" "http://lidarr.local:8686" "$$LIDARR_KEY" "$${WEBHOOK_SECRET:-}"
 
         # --- Add Transmission as download client in Seedarr (idempotent) ---
         echo ""
