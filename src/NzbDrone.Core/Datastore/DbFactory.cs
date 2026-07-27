@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Reflection;
+using Dapper;
 using FluentMigrator.Runner;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,12 +15,32 @@ public interface IDbFactory
     IDatabase Create(DatabaseType dbType, string connectionString);
 }
 
+public class SqliteDoubleTypeHandler : SqlMapper.TypeHandler<double>
+{
+    public override void SetValue(IDbDataParameter parameter, double value)
+    {
+        parameter.Value = value;
+    }
+
+    public override double Parse(object value)
+    {
+        return Convert.ToDouble(value);
+    }
+}
+
 public class DbFactory : IDbFactory
 {
+    private static bool _typeHandlersRegistered;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     public IDatabase Create(DatabaseType dbType, string connectionString)
     {
+        if (!_typeHandlersRegistered)
+        {
+            SqlMapper.AddTypeHandler(new SqliteDoubleTypeHandler());
+            _typeHandlersRegistered = true;
+        }
+
         _logger.Info("Creating {0} database: {1}", dbType, connectionString);
 
         RunMigrations(dbType, connectionString);

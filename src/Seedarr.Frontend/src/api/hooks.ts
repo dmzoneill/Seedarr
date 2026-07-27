@@ -1,12 +1,30 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
+
+const DEFAULT_REFETCH_MS = 5000;
+
+export function useRefetchInterval(): number {
+  const { data } = useQuery<{ uiRefreshRateSec: number }>({
+    queryKey: ['config', 'advanced'],
+    queryFn: () => apiClient.get('/config/advanced'),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+  return data?.uiRefreshRateSec ? data.uiRefreshRateSec * 1000 : DEFAULT_REFETCH_MS;
+}
+
 import type {
   Torrent,
+  TorrentFileInfo,
   SeedingStats,
+  SpeedSnapshot,
+  TorrentSpeedSnapshot,
   SystemStatus,
   HealthCheckResult,
   NetworkStatus,
   Peer,
+  TrackerEntry,
+  TrackerServerTorrent,
   GeneralConfig,
   SeedingConfig,
   NetworkConfig,
@@ -18,6 +36,12 @@ import type {
   TrackerServerStats,
   SchedulerConfig,
   AdvancedConfig,
+  ArrConnection,
+  DownloadClientDefinition,
+  DiskSpaceInfo,
+  Backup,
+  UpdateEntry,
+  LogFile,
 } from './types';
 
 type AddTorrentInput =
@@ -25,18 +49,39 @@ type AddTorrentInput =
   | { magnetLink: string; file?: never };
 
 export function useTorrents() {
+  const interval = useRefetchInterval();
   return useQuery<Torrent[]>({
     queryKey: ['torrents'],
-    queryFn: () => apiClient.get('/torrents'),
-    refetchInterval: 5000,
+    queryFn: () => apiClient.get('/torrent'),
+    refetchInterval: interval,
   });
 }
 
 export function useTorrent(id: number) {
+  const interval = useRefetchInterval();
   return useQuery<Torrent>({
     queryKey: ['torrents', id],
-    queryFn: () => apiClient.get(`/torrents/${id}`),
+    queryFn: () => apiClient.get(`/torrent/${id}`),
     enabled: id > 0,
+    refetchInterval: interval,
+  });
+}
+
+export function useTorrentFiles(torrentId: number) {
+  return useQuery<TorrentFileInfo[]>({
+    queryKey: ['torrents', torrentId, 'files'],
+    queryFn: () => apiClient.get(`/torrent/${torrentId}/files`),
+    enabled: torrentId > 0,
+  });
+}
+
+export function useTorrentTrackers(torrentId: number) {
+  const interval = useRefetchInterval();
+  return useQuery<TrackerEntry[]>({
+    queryKey: ['torrents', torrentId, 'trackers'],
+    queryFn: () => apiClient.get(`/torrent/${torrentId}/trackers`),
+    enabled: torrentId > 0,
+    refetchInterval: interval,
   });
 }
 
@@ -47,26 +92,72 @@ export function useAddTorrent() {
       if (input.file) {
         const formData = new FormData();
         formData.append('file', input.file);
-        const response = await fetch('/api/v1/torrents', {
+        const response = await fetch('/api/v1/torrent/upload', {
           method: 'POST',
           body: formData,
         });
+        if (response.status === 409) {
+          throw new Error('Torrent with this info hash already exists');
+        }
         if (!response.ok) {
           throw new Error(`API error: ${response.status} ${response.statusText}`);
         }
         return response.json();
       }
-      return apiClient.post('/torrents', { magnetLink: input.magnetLink });
+      return apiClient.post('/torrent', { magnetLink: input.magnetLink });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['torrents'] }),
+  });
+}
+
+export function useUpdateTorrent() {
+  const queryClient = useQueryClient();
+  return useMutation<Torrent, Error, Torrent>({
+    mutationFn: (torrent) => apiClient.put(`/torrent/${torrent.id}`, torrent),
+    onSuccess: (_, torrent) => {
+      queryClient.invalidateQueries({ queryKey: ['torrents'] });
+      queryClient.invalidateQueries({ queryKey: ['torrents', torrent.id] });
+    },
   });
 }
 
 export function useDeleteTorrent() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => apiClient.delete(`/torrents/${id}`),
+    mutationFn: ({ id, deleteFiles = false }: { id: number; deleteFiles?: boolean }) =>
+      apiClient.delete(`/torrent/${id}${deleteFiles ? '?deleteFiles=true' : ''}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['torrents'] }),
+  });
+}
+
+export function useAnnounceTorrent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.post(`/torrent/${id}/announce`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['torrents'] });
+    },
+  });
+}
+
+export function useRecheckTorrent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.post(`/torrent/${id}/recheck`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['torrents'] });
+    },
+  });
+}
+
+export function useMoveTorrentQueue() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, position }: { id: number; position: string }) =>
+      apiClient.put(`/torrent/${id}/queue`, { position }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['torrents'] });
+    },
   });
 }
 
@@ -115,10 +206,30 @@ export function useStopAllSeeding() {
 }
 
 export function useSeedingStats() {
+  const interval = useRefetchInterval();
   return useQuery<SeedingStats>({
     queryKey: ['seeding', 'stats'],
     queryFn: () => apiClient.get('/seeding/stats'),
-    refetchInterval: 5000,
+    refetchInterval: interval,
+  });
+}
+
+export function useSpeedHistory() {
+  return useQuery<SpeedSnapshot[]>({
+    queryKey: ['seeding', 'history'],
+    queryFn: () => apiClient.get('/seeding/history'),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useTorrentSpeedHistory(torrentId: number) {
+  return useQuery<TorrentSpeedSnapshot[]>({
+    queryKey: ['seeding', 'history', torrentId],
+    queryFn: () => apiClient.get(`/seeding/history/${torrentId}`),
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    enabled: torrentId > 0,
   });
 }
 
@@ -137,6 +248,13 @@ export function useHealthChecks() {
   });
 }
 
+export function useDiskSpace() {
+  return useQuery<DiskSpaceInfo[]>({
+    queryKey: ['diskspace'],
+    queryFn: () => apiClient.get('/diskspace'),
+  });
+}
+
 export function useNetworkStatus() {
   return useQuery<NetworkStatus>({
     queryKey: ['network', 'status'],
@@ -145,11 +263,12 @@ export function useNetworkStatus() {
 }
 
 export function usePeers(torrentId: number) {
+  const interval = useRefetchInterval();
   return useQuery<Peer[]>({
     queryKey: ['torrents', torrentId, 'peers'],
-    queryFn: () => apiClient.get(`/torrents/${torrentId}/peers`),
+    queryFn: () => apiClient.get(`/torrent/${torrentId}/peers`),
     enabled: torrentId > 0,
-    refetchInterval: 5000,
+    refetchInterval: interval,
   });
 }
 
@@ -241,10 +360,20 @@ export function useSaveTrackerServerConfig() {
 }
 
 export function useTrackerServerStats() {
+  const interval = useRefetchInterval();
   return useQuery<TrackerServerStats>({
     queryKey: ['trackerserver', 'stats'],
     queryFn: () => apiClient.get('/trackerserver/stats'),
-    refetchInterval: 5000,
+    refetchInterval: interval,
+  });
+}
+
+export function useTrackerServerTorrents() {
+  const interval = useRefetchInterval();
+  return useQuery<TrackerServerTorrent[]>({
+    queryKey: ['trackerserver', 'torrents'],
+    queryFn: () => apiClient.get('/trackerserver/torrents'),
+    refetchInterval: interval,
   });
 }
 
@@ -262,4 +391,130 @@ export function useAdvancedConfig() {
 
 export function useSaveAdvancedConfig() {
   return useConfigMutation<AdvancedConfig>('advanced');
+}
+
+export function useArrConnections() {
+  return useQuery<ArrConnection[]>({
+    queryKey: ['arrconnections'],
+    queryFn: () => apiClient.get('/arrconnections'),
+  });
+}
+
+export function useCreateArrConnection() {
+  const queryClient = useQueryClient();
+  return useMutation<ArrConnection, Error, Partial<ArrConnection>>({
+    mutationFn: (connection) => apiClient.post('/arrconnections', connection),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['arrconnections'] }),
+  });
+}
+
+export function useUpdateArrConnection() {
+  const queryClient = useQueryClient();
+  return useMutation<ArrConnection, Error, ArrConnection>({
+    mutationFn: (connection) => apiClient.put(`/arrconnections/${connection.id}`, connection),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['arrconnections'] }),
+  });
+}
+
+export function useDeleteArrConnection() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/arrconnections/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['arrconnections'] }),
+  });
+}
+
+export function useTestArrConnection() {
+  return useMutation<{ success: boolean }, Error, number>({
+    mutationFn: (id) => apiClient.post(`/arrconnections/${id}/test`),
+  });
+}
+
+export function useDownloadClients() {
+  return useQuery<DownloadClientDefinition[]>({
+    queryKey: ['downloadclients'],
+    queryFn: () => apiClient.get('/downloadclients'),
+  });
+}
+
+export function useCreateDownloadClient() {
+  const queryClient = useQueryClient();
+  return useMutation<DownloadClientDefinition, Error, Partial<DownloadClientDefinition>>({
+    mutationFn: (client) => apiClient.post('/downloadclients', client),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['downloadclients'] }),
+  });
+}
+
+export function useUpdateDownloadClient() {
+  const queryClient = useQueryClient();
+  return useMutation<DownloadClientDefinition, Error, DownloadClientDefinition>({
+    mutationFn: (client) => apiClient.put(`/downloadclients/${client.id}`, client),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['downloadclients'] }),
+  });
+}
+
+export function useDeleteDownloadClient() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/downloadclients/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['downloadclients'] }),
+  });
+}
+
+export function useTestDownloadClient() {
+  return useMutation<{ success: boolean }, Error, number>({
+    mutationFn: (id) => apiClient.post(`/downloadclients/${id}/test`),
+  });
+}
+
+export function useBackups() {
+  return useQuery<Backup[]>({
+    queryKey: ['backups'],
+    queryFn: () => apiClient.get('/backup'),
+  });
+}
+
+export function useCreateBackup() {
+  const queryClient = useQueryClient();
+  return useMutation<Backup, Error, void>({
+    mutationFn: () => apiClient.post('/backup'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backups'] }),
+  });
+}
+
+export function useDeleteBackup() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/backup/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['backups'] }),
+  });
+}
+
+export function useRestoreBackup() {
+  return useMutation({
+    mutationFn: (fileName: string) => apiClient.post('/backup/restore', { fileName }),
+  });
+}
+
+export function useUpdates() {
+  return useQuery<UpdateEntry[]>({
+    queryKey: ['updates'],
+    queryFn: () => apiClient.get('/update'),
+    staleTime: 60_000,
+  });
+}
+
+export function useLogFiles() {
+  return useQuery<LogFile[]>({
+    queryKey: ['logfiles'],
+    queryFn: () => apiClient.get('/logfile'),
+  });
+}
+
+export function useClearLogFiles() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.delete('/logfile'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['logfiles'] }),
+  });
 }

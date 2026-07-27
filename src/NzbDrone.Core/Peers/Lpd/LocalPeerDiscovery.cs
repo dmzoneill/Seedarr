@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -6,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
+using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers.Lpd;
 
@@ -14,21 +17,32 @@ public class LocalPeerDiscovery : BackgroundService
     private const string MulticastAddress = "239.192.152.143";
     private const int MulticastPort = 6771;
     private const int AnnounceIntervalSeconds = 300;
+    private const int PeerPort = 6881;
 
+    private readonly IConfigService _configService;
+    private readonly ITorrentService _torrentService;
     private readonly Logger _logger;
 
-    public LocalPeerDiscovery()
+    public LocalPeerDiscovery(IConfigService configService, ITorrentService torrentService)
     {
+        _configService = configService;
+        _torrentService = torrentService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        if (!_configService.EnableLpd)
+        {
+            _logger.Info("Local Peer Discovery disabled via configuration");
+            return;
+        }
+
         UdpClient client;
 
         try
         {
-            client = new UdpClient();
+            client = new UdpClient(MulticastPort);
             client.JoinMulticastGroup(IPAddress.Parse(MulticastAddress));
         }
         catch (SocketException ex)
@@ -67,6 +81,7 @@ public class LocalPeerDiscovery : BackgroundService
             catch (Exception ex)
             {
                 _logger.Debug(ex, "LPD receive error");
+                await Task.Delay(5000, stoppingToken);
             }
         }
     }
@@ -74,6 +89,7 @@ public class LocalPeerDiscovery : BackgroundService
     private async Task AnnounceLoop(CancellationToken stoppingToken)
     {
         using var sender = new UdpClient();
+        sender.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 1);
         var endpoint = new IPEndPoint(IPAddress.Parse(MulticastAddress), MulticastPort);
 
         while (!stoppingToken.IsCancellationRequested)
@@ -81,21 +97,44 @@ public class LocalPeerDiscovery : BackgroundService
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(AnnounceIntervalSeconds), stoppingToken);
+
+                List<Torrent> torrents;
+                try
+                {
+                    torrents = _torrentService.GetAll();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "LPD: failed to retrieve torrents");
+                    continue;
+                }
+
+                foreach (var torrent in torrents)
+                {
+                    if (string.IsNullOrEmpty(torrent.InfoHash))
+                    {
+                        continue;
+                    }
+
+                    var data = BuildAnnouncement(torrent.InfoHash, PeerPort);
+                    await sender.SendAsync(data, endpoint, stoppingToken);
+                    _logger.Debug("LPD: announced {0}", torrent.InfoHash);
+                }
             }
             catch (OperationCanceledException)
             {
                 break;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "LPD announce error");
             }
         }
     }
 
     public static byte[] BuildAnnouncement(string infoHash, int port)
     {
-        var message = $"BT-SEARCH * HTTP/1.1\r\n" +
-                      $"Host: {MulticastAddress}:{MulticastPort}\r\n" +
-                      $"Port: {port}\r\n" +
-                      $"Infohash: {infoHash}\r\n" +
-                      $"\r\n\r\n";
+        var message = $"BT-SEARCH * HTTP/1.1\r\nHost: {MulticastAddress}:{MulticastPort}\r\nPort: {port}\r\nInfohash: {infoHash}\r\n\r\n\r\n";
         return Encoding.ASCII.GetBytes(message);
     }
 

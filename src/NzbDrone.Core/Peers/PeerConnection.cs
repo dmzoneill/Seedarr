@@ -30,6 +30,12 @@ public class PeerConnection : IDisposable
     public bool PeerInterested { get; set; }
     public DateTime ConnectedAt { get; }
     public DateTime LastActivity { get; set; }
+    public int HandshakeTimeoutMs { get; set; }
+    public int MessageReadTimeoutMs { get; set; }
+    public int KeepAliveIntervalSeconds { get; set; } = 120;
+    public int MaxPipelinedRequests { get; set; } = 200;
+    public int PendingRequestCount { get; set; }
+    public double IdleChance { get; set; }
 
     public PeerConnection(TcpClient client)
     {
@@ -140,6 +146,11 @@ public class PeerConnection : IDisposable
     {
         try
         {
+            if (HandshakeTimeoutMs > 0)
+            {
+                _client.Client.ReceiveTimeout = HandshakeTimeoutMs;
+            }
+
             var buffer = new byte[68];
             var read = ReadExact(buffer, 68);
             if (!read)
@@ -202,39 +213,55 @@ public class PeerConnection : IDisposable
 
     public PeerMessage ReceiveMessage()
     {
-        var lengthBuffer = new byte[4];
-        if (!ReadExact(lengthBuffer, 4))
+        try
+        {
+            if (MessageReadTimeoutMs > 0)
+            {
+                _client.Client.ReceiveTimeout = MessageReadTimeoutMs;
+            }
+
+            var lengthBuffer = new byte[4];
+            if (!ReadExact(lengthBuffer, 4))
+            {
+                return null;
+            }
+
+            var length = (lengthBuffer[0] << 24) | (lengthBuffer[1] << 16) |
+                (lengthBuffer[2] << 8) | lengthBuffer[3];
+
+            if (length == 0)
+            {
+                return null; // keep-alive
+            }
+
+            var messageBuffer = new byte[length];
+            if (!ReadExact(messageBuffer, length))
+            {
+                return null;
+            }
+
+            var message = new PeerMessage
+            {
+                Type = (PeerMessageType)messageBuffer[0]
+            };
+
+            if (length > 1)
+            {
+                message.Payload = new byte[length - 1];
+                Array.Copy(messageBuffer, 1, message.Payload, 0, length - 1);
+            }
+
+            LastActivity = DateTime.UtcNow;
+            return message;
+        }
+        catch (IOException ex) when (ex.InnerException is SocketException { SocketErrorCode: SocketError.TimedOut })
         {
             return null;
         }
-
-        var length = (lengthBuffer[0] << 24) | (lengthBuffer[1] << 16) |
-            (lengthBuffer[2] << 8) | lengthBuffer[3];
-
-        if (length == 0)
-        {
-            return null; // keep-alive
-        }
-
-        var messageBuffer = new byte[length];
-        if (!ReadExact(messageBuffer, length))
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
         {
             return null;
         }
-
-        var message = new PeerMessage
-        {
-            Type = (PeerMessageType)messageBuffer[0]
-        };
-
-        if (length > 1)
-        {
-            message.Payload = new byte[length - 1];
-            Array.Copy(messageBuffer, 1, message.Payload, 0, length - 1);
-        }
-
-        LastActivity = DateTime.UtcNow;
-        return message;
     }
 
     public void SendBitfield(int pieceCount)
