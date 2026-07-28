@@ -104,11 +104,11 @@ function ScheduleModal({
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
             <label style={{ flex: 1 }}>
-              <span className="status-label">Max Upload (KB/s, 0=unlimited)</span>
+              <span className="status-label">Max Upload (KB/s, 0=global)</span>
               <input className="form-input" type="number" min={0} value={form.maxUploadSpeed / 1024} onChange={(e) => setForm({ ...form, maxUploadSpeed: Math.round(Number(e.target.value) * 1024) })} />
             </label>
             <label style={{ flex: 1 }}>
-              <span className="status-label">Max Download (KB/s, 0=unlimited)</span>
+              <span className="status-label">Max Download (KB/s, 0=global)</span>
               <input className="form-input" type="number" min={0} value={form.maxDownloadSpeed / 1024} onChange={(e) => setForm({ ...form, maxDownloadSpeed: Math.round(Number(e.target.value) * 1024) })} />
             </label>
           </div>
@@ -229,13 +229,13 @@ function SpeedSchedule() {
           <div className="status-row">
             <span className="status-label">Upload Limit</span>
             <span className="status-value">
-              {activeLimits.maxUploadSpeed > 0 ? formatSpeed(activeLimits.maxUploadSpeed) : 'Unlimited'}
+              {activeLimits.maxUploadSpeed > 0 ? formatSpeed(activeLimits.maxUploadSpeed) : 'Global'}
             </span>
           </div>
           <div className="status-row">
             <span className="status-label">Download Limit</span>
             <span className="status-value">
-              {activeLimits.maxDownloadSpeed > 0 ? formatSpeed(activeLimits.maxDownloadSpeed) : 'Unlimited'}
+              {activeLimits.maxDownloadSpeed > 0 ? formatSpeed(activeLimits.maxDownloadSpeed) : 'Global'}
             </span>
           </div>
         </div>
@@ -280,8 +280,8 @@ function SpeedSchedule() {
                       <td>{s.name}</td>
                       <td>{daysToLabels(s.days)}</td>
                       <td>{s.startTime} - {s.endTime}</td>
-                      <td>{s.maxUploadSpeed > 0 ? formatSpeed(s.maxUploadSpeed) : 'Unlimited'}</td>
-                      <td>{s.maxDownloadSpeed > 0 ? formatSpeed(s.maxDownloadSpeed) : 'Unlimited'}</td>
+                      <td>{s.maxUploadSpeed > 0 ? formatSpeed(s.maxUploadSpeed) : 'Global'}</td>
+                      <td>{s.maxDownloadSpeed > 0 ? formatSpeed(s.maxDownloadSpeed) : 'Global'}</td>
                       <td>{s.priority}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 4 }}>

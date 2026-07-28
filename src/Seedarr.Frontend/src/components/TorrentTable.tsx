@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { Link } from 'react-router';
 import {
   useTorrents,
   useStartSeeding,
@@ -206,7 +205,7 @@ function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, o
   function renderCell(t: Torrent, key: ColumnKey, index: number) {
     switch (key) {
       case '#': return index + 1;
-      case 'name': return <Link to={`/torrents/${t.id}`} className="torrent-link">{t.name}</Link>;
+      case 'name': return t.name;
       case 'status': return <span className={`badge badge-${t.status.toLowerCase()}`}>{t.status}</span>;
       case 'totalSize': return formatBytes(t.totalSize);
       case 'uploaded': return formatBytes(t.uploaded);
@@ -240,8 +239,8 @@ function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, o
       case 'isPrivate': return t.isPrivate ? 'Yes' : 'No';
       case 'infoHash': return <span className="mono" style={{ fontSize: '0.75rem' }}>{t.infoHash}</span>;
       case 'priority': return priorityLabel(t.priority);
-      case 'uploadLimit': return t.uploadLimit > 0 ? `${t.uploadLimit} KB/s` : 'Unlimited';
-      case 'downloadLimit': return t.downloadLimit > 0 ? `${t.downloadLimit} KB/s` : 'Unlimited';
+      case 'uploadLimit': return t.uploadLimit > 0 ? `${t.uploadLimit} KB/s` : 'Global';
+      case 'downloadLimit': return t.downloadLimit > 0 ? `${t.downloadLimit} KB/s` : 'Global';
       case 'superSeeding': return t.superSeeding ? 'Yes' : 'No';
       case 'sequentialDownload': return t.sequentialDownload ? 'Yes' : 'No';
       case 'forceStart': return t.forceStart ? 'Yes' : 'No';
