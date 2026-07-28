@@ -26,15 +26,15 @@ public class SpeedSchedulerTest
     }
 
     [Test]
-    public void GetLimitsAt_should_return_defaults_when_no_schedules_and_scheduler_disabled()
+    public void GetLimitsAt_should_return_unlimited_when_no_schedules_and_scheduler_disabled()
     {
         _repository.GetEnabled().Returns(Enumerable.Empty<SpeedSchedule>());
         _configService.SchedulerEnabled.Returns(false);
 
         var limits = _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
 
-        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(1_048_576L));
-        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(1_048_576L));
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
         Assert.That(limits.IsScheduleActive, Is.False);
     }
 
@@ -92,7 +92,7 @@ public class SpeedSchedulerTest
     }
 
     [Test]
-    public void GetLimitsAt_should_use_default_alt_speed_when_alt_speed_is_zero()
+    public void GetLimitsAt_should_use_unlimited_when_alt_speed_is_zero()
     {
         _repository.GetEnabled().Returns(Enumerable.Empty<SpeedSchedule>());
         _configService.SchedulerEnabled.Returns(true);
@@ -107,8 +107,8 @@ public class SpeedSchedulerTest
         var monday12pm = new DateTime(2026, 8, 10, 12, 0, 0, DateTimeKind.Utc);
         var limits = _scheduler.GetLimitsAt(monday12pm);
 
-        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(1_048_576L));
-        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(1_048_576L));
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
     }
 
     [Test]
@@ -156,7 +156,7 @@ public class SpeedSchedulerTest
         var limits = _scheduler.GetLimitsAt(tuesday12pm);
 
         Assert.That(limits.IsScheduleActive, Is.False);
-        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(1_048_576L));
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
     }
 
     [Test]

@@ -134,13 +134,13 @@ function Dashboard() {
             <div className="status-row">
               <span className="status-label">Upload Limit</span>
               <span className="status-value">
-                {activeLimits.maxUploadSpeed > 0 ? formatSpeed(activeLimits.maxUploadSpeed) : 'Unlimited'}
+                {activeLimits.maxUploadSpeed > 0 ? formatSpeed(activeLimits.maxUploadSpeed) : 'Global'}
               </span>
             </div>
             <div className="status-row">
               <span className="status-label">Download Limit</span>
               <span className="status-value">
-                {activeLimits.maxDownloadSpeed > 0 ? formatSpeed(activeLimits.maxDownloadSpeed) : 'Unlimited'}
+                {activeLimits.maxDownloadSpeed > 0 ? formatSpeed(activeLimits.maxDownloadSpeed) : 'Global'}
               </span>
             </div>
           </div>

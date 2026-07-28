@@ -108,7 +108,13 @@ function TorrentIndex() {
                   onSelectAll={handleSelectAll}
                 />
               ) : (
-                <TorrentGrid filter={filter} stateFilter={selectedState} trackerFilter={selectedTracker} />
+                <TorrentGrid
+                  filter={filter}
+                  stateFilter={selectedState}
+                  trackerFilter={selectedTracker}
+                  selectedTorrentId={selectedTorrentId}
+                  onSelectTorrent={setSelectedTorrentId}
+                />
               )}
             </div>
             {selectedTorrentId != null && (

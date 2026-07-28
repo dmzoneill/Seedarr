@@ -52,8 +52,9 @@ export function useTorrentIndexState() {
   const adjustSpeed = useCallback(
     (field: "maxUploadSpeedKbps" | "maxDownloadSpeedKbps", factor: number) => {
       if (!seedingConfig) return;
-      const current = seedingConfig[field];
-      if (current === 0) return; // 0 means unlimited; adjusting would silently cap to 1 KB/s
+      const fallbacks = { maxUploadSpeedKbps: 625, maxDownloadSpeedKbps: 1250 };
+      const current =
+        seedingConfig[field] > 0 ? seedingConfig[field] : fallbacks[field];
       saveSeedingConfig.mutate({
         ...seedingConfig,
         [field]: Math.max(1, Math.round(current * factor)),

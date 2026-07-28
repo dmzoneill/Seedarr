@@ -281,6 +281,13 @@ public class ConfigService : IConfigService
         return defaultValue;
     }
 
+    // Speed limits are always finite: a stored value of 0 (legacy "unlimited") resolves to the default.
+    private int GetPositiveSpeedKbps(string key, int defaultValue)
+    {
+        var value = GetValueInt(key, defaultValue);
+        return value > 0 ? value : defaultValue;
+    }
+
     // General
     public bool AutoStart => GetValueBoolean("AutoStart", true);
     public string ThemeStyle => GetValue("ThemeStyle", "system");
@@ -320,11 +327,14 @@ public class ConfigService : IConfigService
     public int ScrapeIntervalSeconds => GetValueInt("ScrapeIntervalSeconds", 900);
 
     // Speed
-    public int MaxUploadSpeedKbps => GetValueInt("MaxUploadSpeedKbps", 0);
-    public int MaxDownloadSpeedKbps => GetValueInt("MaxDownloadSpeedKbps", 0);
+    public const int DefaultMaxUploadSpeedKbps = 625;
+    public const int DefaultMaxDownloadSpeedKbps = 1250;
+
+    public int MaxUploadSpeedKbps => GetPositiveSpeedKbps("MaxUploadSpeedKbps", DefaultMaxUploadSpeedKbps);
+    public int MaxDownloadSpeedKbps => GetPositiveSpeedKbps("MaxDownloadSpeedKbps", DefaultMaxDownloadSpeedKbps);
     public bool AlternativeSpeedEnabled => GetValueBoolean("AlternativeSpeedEnabled", false);
-    public int AltUploadSpeedKbps => GetValueInt("AltUploadSpeedKbps", 50);
-    public int AltDownloadSpeedKbps => GetValueInt("AltDownloadSpeedKbps", 100);
+    public int AltUploadSpeedKbps => GetPositiveSpeedKbps("AltUploadSpeedKbps", 50);
+    public int AltDownloadSpeedKbps => GetPositiveSpeedKbps("AltDownloadSpeedKbps", 100);
     public double GlobalSeedRatioLimit => GetValueDouble("GlobalSeedRatioLimit", 0.0);
 
     // Speed Distribution

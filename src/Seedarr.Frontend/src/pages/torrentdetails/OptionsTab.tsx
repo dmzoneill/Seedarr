@@ -66,7 +66,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
       <div className="form-group">
         <label className="form-label">
           Upload Speed Limit
-          <span className="form-hint">KB/s, 0 = unlimited</span>
+          <span className="form-hint">KB/s, 0 = use global limit</span>
         </label>
         <input
           type="number"
@@ -79,7 +79,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
       <div className="form-group">
         <label className="form-label">
           Download Speed Limit
-          <span className="form-hint">KB/s, 0 = unlimited</span>
+          <span className="form-hint">KB/s, 0 = use global limit</span>
         </label>
         <input
           type="number"

@@ -143,22 +143,7 @@ public class SeedingEngine : BackgroundService
             ? _configService.AltDownloadSpeedKbps
             : _configService.MaxDownloadSpeedKbps;
 
-        var configUploadBps = (long)configUploadSpeedKbps * 1024;
-        var configDownloadBps = (long)configDownloadSpeedKbps * 1024;
-
-        if (configUploadBps > 0)
-        {
-            limits.MaxUploadSpeed = limits.MaxUploadSpeed == SpeedLimits.Unlimited
-                ? configUploadBps
-                : Math.Min(limits.MaxUploadSpeed, configUploadBps);
-        }
-
-        if (configDownloadBps > 0)
-        {
-            limits.MaxDownloadSpeed = limits.MaxDownloadSpeed == SpeedLimits.Unlimited
-                ? configDownloadBps
-                : Math.Min(limits.MaxDownloadSpeed, configDownloadBps);
-        }
+        SpeedLimitMerger.Apply(limits, (long)configUploadSpeedKbps * 1024, (long)configDownloadSpeedKbps * 1024);
 
         var variationMin = _configService.SpeedVariationMin;
         var variationMax = _configService.SpeedVariationMax;
