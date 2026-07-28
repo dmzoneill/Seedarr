@@ -14,6 +14,21 @@ namespace NzbDrone.Integration.Test;
 [Category("IntegrationTest")]
 public class TorrentControllerTests : IntegrationTestBase
 {
+    [SetUp]
+    public async Task CleanupTorrents()
+    {
+        var response = await GetAsync("/api/v1/torrent");
+        response.EnsureSuccessStatusCode();
+
+        var json = await response.Content.ReadAsStringAsync();
+        var torrents = Deserialize<List<Dictionary<string, object>>>(json);
+
+        foreach (var torrent in torrents ?? [])
+        {
+            await DeleteAsync($"/api/v1/torrent/{torrent["id"]}");
+        }
+    }
+
     [Test]
     public async Task GetTorrents_returns_200_and_array()
     {

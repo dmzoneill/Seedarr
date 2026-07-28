@@ -49,9 +49,11 @@ public class ArrConnectionController : Controller
     [HttpPost]
     public ActionResult<ArrConnectionDefinition> Create([FromBody] ArrConnectionDefinition definition)
     {
+        // Connectivity problems are not fatal on create: the arr instance may be
+        // temporarily offline. Use the test-connection endpoint to validate.
         if (!_arrSyncService.TestConnectionDirect(definition))
         {
-            return BadRequest(new { message = $"Cannot connect to {definition.ArrType} at {definition.Url}" });
+            _logger.Warn("Connection test failed for '{0}' at {1}; creating connection anyway", definition.Name, definition.Url);
         }
 
         var created = _connectionFactory.Create(definition);
