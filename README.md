@@ -2,6 +2,8 @@
 
 <p align="center">
   <img src="logo/seedarr-skull.svg" alt="Seedarr" width="200"/>
+  <br/>
+  <img src="logo/seedarr-text.svg" alt="Seedarr" width="200"/>
 </p>
 
 <p align="center">
