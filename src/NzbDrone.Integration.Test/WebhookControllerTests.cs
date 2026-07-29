@@ -36,13 +36,7 @@ public class WebhookControllerTests : IntegrationTestBase
 
     private async Task<string> GetApiKeyAsync()
     {
-        var response = await GetAsync("/api/v1/config/general");
-        var json = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(json);
-
-        return doc.RootElement.TryGetProperty("apiKey", out var apiKey)
-            ? apiKey.GetString() ?? string.Empty
-            : string.Empty;
+        return ApiKey;
     }
 
     private async Task<(HttpStatusCode Status, Dictionary<string, object> Body)> PostWebhookAsync(object payload)
