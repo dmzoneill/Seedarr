@@ -12,6 +12,8 @@ public abstract class IntegrationTestBase
 {
     protected HttpClient Client => GlobalSetup.Factory.Client;
 
+    protected string ApiKey => GlobalSetup.Factory.ApiKey;
+
     protected async Task<T> GetJsonAsync<T>(string path)
     {
         var response = await Client.GetAsync(path);
