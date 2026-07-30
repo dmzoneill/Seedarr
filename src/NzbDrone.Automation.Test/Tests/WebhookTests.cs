@@ -67,6 +67,11 @@ public class WebhookTests : ApiTestBase
         {
             Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
         };
+        if (!string.IsNullOrEmpty(_apiKey))
+        {
+            request.Headers.Add("X-Api-Key", _apiKey);
+        }
+
         var response = await Client.SendAsync(request);
         return await response.Content.ReadAsStringAsync();
     }
