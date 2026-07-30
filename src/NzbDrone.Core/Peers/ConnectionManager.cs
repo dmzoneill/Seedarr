@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
@@ -24,6 +25,7 @@ public class ConnectionManager : IConnectionManager
     private readonly IConfigService _configService;
     private readonly IPeerConnectionLogService _connectionLogService;
     private readonly ITorrentService _torrentService;
+    private readonly IFastExtensionHandler _fastExtensionHandler;
     private readonly List<PeerConnection> _connections = new();
     private readonly object _lock = new();
     private readonly Logger _logger;
@@ -39,11 +41,12 @@ public class ConnectionManager : IConnectionManager
         }
     }
 
-    public ConnectionManager(IConfigService configService, IPeerConnectionLogService connectionLogService, ITorrentService torrentService)
+    public ConnectionManager(IConfigService configService, IPeerConnectionLogService connectionLogService, ITorrentService torrentService, IFastExtensionHandler fastExtensionHandler)
     {
         _configService = configService;
         _connectionLogService = connectionLogService;
         _torrentService = torrentService;
+        _fastExtensionHandler = fastExtensionHandler;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -58,6 +61,7 @@ public class ConnectionManager : IConnectionManager
                 var oldest = _connections.OrderBy(c => c.LastActivity).First();
                 _logger.Debug("Evicting peer {0} (LRU, global limit {1})", oldest.RemoteIp, maxGlobal);
                 LogDisconnect(oldest);
+                _fastExtensionHandler.UnregisterPeer(oldest);
                 oldest.Dispose();
                 _connections.Remove(oldest);
             }
@@ -75,6 +79,8 @@ public class ConnectionManager : IConnectionManager
             _connections.Remove(connection);
         }
 
+        _fastExtensionHandler.UnregisterPeer(connection);
+        connection.Dispose();
         LogDisconnect(connection);
     }
 
@@ -127,6 +133,7 @@ public class ConnectionManager : IConnectionManager
                     conn.RemoteIp,
                     dropoutProbability);
                 LogDisconnect(conn);
+                _fastExtensionHandler.UnregisterPeer(conn);
                 conn.Dispose();
                 _connections.Remove(conn);
             }
@@ -159,6 +166,7 @@ public class ConnectionManager : IConnectionManager
                     conn.RemoteIp,
                     rotationPct);
                 LogDisconnect(conn);
+                _fastExtensionHandler.UnregisterPeer(conn);
                 conn.Dispose();
                 _connections.Remove(conn);
             }

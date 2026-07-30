@@ -17,7 +17,10 @@ public interface IArrWebhookRegistration
 
 public class ArrWebhookRegistration : IArrWebhookRegistration
 {
-    private static readonly HttpClient Client = new();
+    private static readonly HttpClient Client = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+    });
     private static readonly ResiliencePipeline Policy = ResiliencePolicies.GetArrApiPolicy();
 
     private readonly IConfigFileProvider _configFileProvider;
@@ -71,12 +74,12 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
             return Policy.Execute(ct =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Post,
+                using var request = new HttpRequestMessage(HttpMethod.Post,
                     $"{connection.Url}/api/{apiVersion}/notification");
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
                 request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var response = Client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.Info("Registered Seedarr webhook in {0} at {1}", connection.ArrType, connection.Url);
@@ -110,11 +113,11 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
             return Policy.Execute(ct =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Delete,
+                using var request = new HttpRequestMessage(HttpMethod.Delete,
                     $"{connection.Url}/api/{apiVersion}/notification/{existingId.Value}");
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
 
-                var response = Client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (response.IsSuccessStatusCode)
                 {
                     _logger.Info("Unregistered Seedarr webhook from {0}", connection.ArrType);
@@ -138,18 +141,18 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
         {
             return Policy.Execute(ct =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Get,
+                using var request = new HttpRequestMessage(HttpMethod.Get,
                     $"{connection.Url}/api/{apiVersion}/notification");
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
 
-                var response = Client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     return (int?)null;
                 }
 
                 var json = response.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult();
-                var doc = JsonDocument.Parse(json);
+                using var doc = JsonDocument.Parse(json);
 
                 foreach (var notification in doc.RootElement.EnumerateArray())
                 {

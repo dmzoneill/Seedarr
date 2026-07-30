@@ -27,7 +27,10 @@ public class ArrWebhookResult
 
 public class ArrWebhookService : IArrWebhookService
 {
-    private static readonly HttpClient Client = new();
+    private static readonly HttpClient Client = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+    });
     private static readonly ResiliencePipeline Policy = ResiliencePolicies.GetArrApiPolicy();
 
     private readonly IArrConnectionFactory _connectionFactory;
@@ -89,19 +92,19 @@ public class ArrWebhookService : IArrWebhookService
         var connection = FindConnection(payload);
         if (connection != null)
         {
-            Task.Run(() => EnrichTorrentFromHistory(torrent.Id, infoHash, downloadId, connection, payload.InstanceName));
+            _ = EnrichTorrentFromHistoryAsync(torrent.Id, infoHash, downloadId, connection, payload.InstanceName, CancellationToken.None);
         }
 
         return new ArrWebhookResult { Success = true, Message = "Added with basic metadata", InfoHash = infoHash };
     }
 
-    private void EnrichTorrentFromHistory(int torrentId, string infoHash, string downloadId, ArrConnectionDefinition connection, string instanceName)
+    private async Task EnrichTorrentFromHistoryAsync(int torrentId, string infoHash, string downloadId, ArrConnectionDefinition connection, string instanceName, CancellationToken cancellationToken)
     {
         try
         {
-            Thread.Sleep(5000);
+            await Task.Delay(5000, cancellationToken);
 
-            var downloadUrl = GetDownloadUrlFromHistory(connection, downloadId);
+            var downloadUrl = await GetDownloadUrlFromHistoryAsync(connection, downloadId, cancellationToken);
             if (string.IsNullOrEmpty(downloadUrl))
             {
                 _logger.Warn("Enrich: could not find downloadUrl in {0} history for {1}", connection.ArrType, downloadId);
@@ -138,6 +141,10 @@ public class ArrWebhookService : IArrWebhookService
                 torrent.Name,
                 torrent.InfoHash,
                 instanceName);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.Debug("Enrich: cancelled for torrent {0}", infoHash);
         }
         catch (Exception ex)
         {
@@ -176,7 +183,7 @@ public class ArrWebhookService : IArrWebhookService
         return definitions.FirstOrDefault(d => d.Enable);
     }
 
-    private string GetDownloadUrlFromHistory(ArrConnectionDefinition connection, string downloadId)
+    private async Task<string> GetDownloadUrlFromHistoryAsync(ArrConnectionDefinition connection, string downloadId, CancellationToken cancellationToken)
     {
         var apiVersion = connection.ArrType == "Lidarr" ? "v1" : "v3";
         var variants = new[] { downloadId, downloadId.ToUpperInvariant() };
@@ -185,7 +192,7 @@ public class ArrWebhookService : IArrWebhookService
         {
             if (attempt > 0)
             {
-                Thread.Sleep(2000);
+                await Task.Delay(2000, cancellationToken);
                 _logger.Debug("Retrying history query for {0}, attempt {1}", downloadId, attempt + 1);
             }
 
@@ -209,11 +216,11 @@ public class ArrWebhookService : IArrWebhookService
         {
             return Policy.Execute(ct =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Get,
+                using var request = new HttpRequestMessage(HttpMethod.Get,
                     $"{connection.Url}/api/{apiVersion}/history?downloadId={downloadId}&pageSize=1");
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
 
-                var response = Client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.Warn("Failed to query {0} history: {1}", connection.ArrType, response.StatusCode);
@@ -221,7 +228,7 @@ public class ArrWebhookService : IArrWebhookService
                 }
 
                 var json = response.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult();
-                var doc = JsonDocument.Parse(json);
+                using var doc = JsonDocument.Parse(json);
 
                 if (!doc.RootElement.TryGetProperty("records", out var records))
                 {
@@ -253,10 +260,10 @@ public class ArrWebhookService : IArrWebhookService
         {
             return Policy.Execute(ct =>
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
+                using var request = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/x-bittorrent"));
 
-                var response = Client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.Warn("Failed to fetch .torrent from {0}: {1}", downloadUrl, response.StatusCode);

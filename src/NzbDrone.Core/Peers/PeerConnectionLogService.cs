@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using NLog;
 
 namespace NzbDrone.Core.Peers;
@@ -13,15 +14,31 @@ public interface IPeerConnectionLogService
     void Purge(DateTime before);
 }
 
-public class PeerConnectionLogService : IPeerConnectionLogService
+public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable
 {
     private readonly IPeerConnectionLogRepository _repository;
     private readonly Logger _logger;
+    private readonly Timer _purgeTimer;
 
     public PeerConnectionLogService(IPeerConnectionLogRepository repository)
     {
         _repository = repository;
         _logger = LogManager.GetCurrentClassLogger();
+        _purgeTimer = new Timer(
+            _ =>
+            {
+                try
+                {
+                    Purge(DateTime.UtcNow.AddDays(-7));
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Error during automatic peer connection log purge");
+                }
+            },
+            null,
+            TimeSpan.FromHours(1),
+            TimeSpan.FromHours(24));
     }
 
     public void LogConnected(PeerConnection connection, string torrentName)
@@ -66,5 +83,10 @@ public class PeerConnectionLogService : IPeerConnectionLogService
     {
         _repository.Purge(before);
         _logger.Info("Purged peer connection logs before {0}", before);
+    }
+
+    public void Dispose()
+    {
+        _purgeTimer?.Dispose();
     }
 }
