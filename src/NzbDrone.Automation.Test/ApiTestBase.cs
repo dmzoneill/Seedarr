@@ -80,15 +80,15 @@ public abstract class ApiTestBase
 
     protected async Task<string> GetApiKeyAsync(string baseUrl)
     {
-        try
+        // The Makefile injects the instance key from the container's config.xml;
+        // the app does not serve an initialize.json endpoint.
+        if (baseUrl == SeedarrUrl)
         {
-            var json = await GetJsonAsync($"{baseUrl}/initialize.json");
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("apiKey", out var apiKeyElement))
-                return apiKeyElement.GetString() ?? string.Empty;
-        }
-        catch
-        {
+            var fromEnv = Environment.GetEnvironmentVariable("SEEDARR_API_KEY");
+            if (!string.IsNullOrWhiteSpace(fromEnv))
+            {
+                return fromEnv.Trim();
+            }
         }
 
         return string.Empty;
