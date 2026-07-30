@@ -165,6 +165,28 @@ public class SpeedDistributionManagerTest
     }
 
     [Test]
+    public void DistributeUploadSpeeds_fixed_mode_should_return_cached_array_when_inputs_unchanged()
+    {
+        _configService.UploadRedistributionMode.Returns("fixed");
+
+        var first = _manager.DistributeUploadSpeeds(3, 500_000L);
+        var second = _manager.DistributeUploadSpeeds(3, 500_000L);
+
+        Assert.That(second, Is.SameAs(first));
+    }
+
+    [Test]
+    public void DistributeUploadSpeeds_fixed_mode_should_return_new_array_when_inputs_change()
+    {
+        _configService.UploadRedistributionMode.Returns("fixed");
+
+        var first = _manager.DistributeUploadSpeeds(3, 500_000L);
+        var second = _manager.DistributeUploadSpeeds(4, 500_000L);
+
+        Assert.That(second, Is.Not.SameAs(first));
+    }
+
+    [Test]
     public void DistributeUploadSpeeds_should_redistribute_when_count_changes()
     {
         _configService.UploadRedistributionMode.Returns("fixed");
@@ -220,6 +242,28 @@ public class SpeedDistributionManagerTest
         _manager.DistributeDownloadSpeeds(3, 500_000L);
 
         _equalDistributor.Received(1).Distribute(Arg.Any<long>(), 3);
+    }
+
+    [Test]
+    public void DistributeDownloadSpeeds_fixed_mode_should_return_cached_array_when_inputs_unchanged()
+    {
+        _configService.DownloadRedistributionMode.Returns("fixed");
+
+        var first = _manager.DistributeDownloadSpeeds(3, 500_000L);
+        var second = _manager.DistributeDownloadSpeeds(3, 500_000L);
+
+        Assert.That(second, Is.SameAs(first));
+    }
+
+    [Test]
+    public void DistributeDownloadSpeeds_fixed_mode_should_return_new_array_when_inputs_change()
+    {
+        _configService.DownloadRedistributionMode.Returns("fixed");
+
+        var first = _manager.DistributeDownloadSpeeds(3, 500_000L);
+        var second = _manager.DistributeDownloadSpeeds(3, 600_000L);
+
+        Assert.That(second, Is.Not.SameAs(first));
     }
 
     [Test]
@@ -289,4 +333,10 @@ public class SpeedDistributionManagerTest
 
         _equalDistributor.Received(1).Distribute(Arg.Any<long>(), 3);
     }
+
+    // The elapsed-interval branch of "interval" mode depends on DateTime.UtcNow, which is not
+    // injectable; asserting a redistribution after the boundary would require either a flaky
+    // real-time sleep or restructuring the manager around a clock abstraction. The cache-identity
+    // tests above cover the redistribution decision indirectly (cached array returned when the
+    // gate suppresses redistribution), so only the pre-boundary case is asserted here.
 }
