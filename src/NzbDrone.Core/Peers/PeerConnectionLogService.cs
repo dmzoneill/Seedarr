@@ -26,23 +26,15 @@ public class PeerConnectionLogService : IPeerConnectionLogService
 
     public void LogConnected(PeerConnection connection, string torrentName)
     {
-        var log = new PeerConnectionLog
-        {
-            InfoHash = connection.InfoHash ?? string.Empty,
-            TorrentName = torrentName,
-            RemoteIp = connection.RemoteIp,
-            RemotePort = connection.RemotePort,
-            PeerId = connection.PeerId,
-            IsEncrypted = connection.IsEncrypted,
-            EventType = "Connected",
-            Timestamp = DateTime.UtcNow,
-        };
-
-        _repository.Insert(log);
-        _logger.Trace("Logged peer connected: {0}:{1} for {2}", connection.RemoteIp, connection.RemotePort, connection.InfoHash);
+        LogEvent(connection, torrentName, "Connected");
     }
 
     public void LogDisconnected(PeerConnection connection, string torrentName)
+    {
+        LogEvent(connection, torrentName, "Disconnected");
+    }
+
+    private void LogEvent(PeerConnection connection, string torrentName, string eventType)
     {
         var log = new PeerConnectionLog
         {
@@ -52,12 +44,12 @@ public class PeerConnectionLogService : IPeerConnectionLogService
             RemotePort = connection.RemotePort,
             PeerId = connection.PeerId,
             IsEncrypted = connection.IsEncrypted,
-            EventType = "Disconnected",
+            EventType = eventType,
             Timestamp = DateTime.UtcNow,
         };
 
         _repository.Insert(log);
-        _logger.Trace("Logged peer disconnected: {0}:{1} for {2}", connection.RemoteIp, connection.RemotePort, connection.InfoHash);
+        _logger.Trace("Logged peer {0}: {1}:{2} for {3}", eventType.ToLowerInvariant(), connection.RemoteIp, connection.RemotePort, connection.InfoHash);
     }
 
     public List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end)
