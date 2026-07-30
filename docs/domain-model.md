@@ -11,12 +11,38 @@ erDiagram
         long TotalSize
         int PieceLength
         int PieceCount
-        string Source
-        datetime Added
+        string Comment
+        string CreatedBy
+        datetime CreationDate
+        bool IsPrivate
         string Status
         long Uploaded
         long Downloaded
         float Ratio
+        int Seeders
+        int Leechers
+        string TrackerUrl
+        string SourcePath
+        datetime DateAdded
+        datetime LastActive
+        int Priority
+        int UploadLimit
+        int DownloadLimit
+        bool SuperSeeding
+        bool ForceStart
+        bool ForceCompleted
+        string Label
+        float Progress
+        bool SequentialDownload
+        int AnnounceInterval
+        long SessionUploaded
+        long SessionDownloaded
+        long UploadSpeed
+        long DownloadSpeed
+        bool Active
+        float Availability
+        long Eta
+        int SortOrder
     }
 
     TorrentFile {
@@ -24,64 +50,131 @@ erDiagram
         int TorrentId FK
         string Path
         long Size
-        int FirstPiece
-        int LastPiece
+        int PieceOffset
+        int PieceCount
     }
 
-    TrackerProvider {
-        int Id PK
-        string Name
-        string Implementation
-        string ConfigContract
-        string Settings
-        bool EnableHttp
-        bool EnableUdp
-    }
-
-    TorrentTracker {
+    TrackerEntry {
         int Id PK
         int TorrentId FK
-        int TrackerProviderId FK
-        string AnnounceUrl
+        string Url
+        int Tier
         string Status
+        bool Enabled
         int Seeders
         int Leechers
+        int Downloaded
+        int TotalAnnounces
+        int SuccessfulAnnounces
+        int ConsecutiveFailures
+        long LastResponseTime
+        long AverageResponseTime
+        int AnnounceInterval
+        int MinAnnounceInterval
         datetime LastAnnounce
+        datetime LastScrape
         datetime NextAnnounce
+        string ErrorMessage
+        string WarningMessage
     }
 
-    ClientProfile {
+    TrackerProviderDefinition {
         int Id PK
         string Name
         string Implementation
         string ConfigContract
         string Settings
-        string PeerIdPrefix
-        string UserAgent
+        bool Enable
+        int Priority
     }
 
-    ArrConnection {
+    ClientProfileDefinition {
         int Id PK
         string Name
         string Implementation
         string ConfigContract
         string Settings
-        string BaseUrl
+        bool Enable
+        int Priority
+    }
+
+    ArrConnectionDefinition {
+        int Id PK
+        string Name
+        string Implementation
+        string ConfigContract
+        string Settings
+        bool Enable
+        string Url
         string ApiKey
+        string ArrType
         int SyncIntervalMinutes
+        bool SyncEnabled
+        bool EnableAutomaticAdd
+        bool WebhookEnabled
+    }
+
+    DownloadClientDefinition {
+        int Id PK
+        string Name
+        string Implementation
+        string ConfigContract
+        string Settings
+        bool Enable
+        string ClientType
+        string Host
+        int Port
+        bool UseSsl
+        string Username
+        string Password
+        string Category
+    }
+
+    IndexerDefinition {
+        int Id PK
+        string Name
+        string Implementation
+        string ConfigContract
+        string Settings
+        bool Enable
+        string IndexerType
+        string Url
+        string ApiKey
+        string ApiPath
+        bool EnableRss
+        bool EnableSearch
+        string Categories
+        int DownloadClientId
+    }
+
+    NotificationDefinition {
+        int Id PK
+        string Name
+        string Implementation
+        string ConfigContract
+        string Settings
+        bool Enable
+        bool OnTorrentAdded
+        bool OnSeedingStarted
+        bool OnSeedingStopped
+        bool OnHealthIssue
+    }
+
+    SpeedSchedule {
+        int Id PK
+        string Name
+        int Days
+        string StartTime
+        string EndTime
+        int MaxUploadSpeed
+        int MaxDownloadSpeed
+        bool IsEnabled
+        int Priority
     }
 
     Tag {
         int Id PK
         string Label
-    }
-
-    Notification {
-        int Id PK
-        string Name
-        string Implementation
-        string ConfigContract
-        string Settings
     }
 
     Config {
@@ -98,25 +191,41 @@ erDiagram
         datetime LastStartTime
     }
 
+    CommandModel {
+        int Id PK
+        string Name
+        string Body
+        string Status
+        datetime QueuedAt
+        datetime StartedAt
+        datetime EndedAt
+        string Message
+        int Priority
+        string Trigger
+    }
+
     Torrent ||--o{ TorrentFile : "has files"
-    Torrent ||--o{ TorrentTracker : "announces to"
-    TrackerProvider ||--o{ TorrentTracker : "provides"
+    Torrent ||--o{ TrackerEntry : "announces to"
     Torrent }o--o{ Tag : "tagged with"
-    TrackerProvider }o--o{ Tag : "tagged with"
-    ClientProfile }o--o{ Tag : "tagged with"
-    ArrConnection }o--o{ Tag : "tagged with"
 ```
+
+## Torrent Status Enum
+
+| Value | Description |
+|-------|-------------|
+| `Stopped` | Not seeding |
+| `Seeding` | Actively simulating upload |
+| `Paused` | Temporarily paused |
+| `Error` | Tracker/network failure |
+| `Queued` | Waiting to start |
+| `Downloading` | Simulating download |
 
 ## Torrent Lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Added: Upload .torrent / Watch folder / *arr sync
-    Added --> Parsing: TorrentFileParser
-    Parsing --> Ready: Metadata extracted
-    Ready --> Seeding: Start command
-    Seeding --> Announcing: Tracker announce cycle
-    Announcing --> Seeding: Announce success
+    [*] --> Queued: Upload .torrent / Magnet / *arr webhook / sync
+    Queued --> Seeding: Start command
     Seeding --> Paused: Pause command
     Paused --> Seeding: Resume command
     Seeding --> Stopped: Stop command
@@ -125,6 +234,15 @@ stateDiagram-v2
     Error --> Seeding: Retry / backoff
     Stopped --> [*]: Remove command
 ```
+
+## In-Memory Models (Not Persisted)
+
+These exist only at runtime, not in the database:
+
+- **PeerConnection** (`NzbDrone.Core/Peers/PeerConnection.cs`) — active TCP peer connection with handshake state, message framing, encryption
+- **DhtNode** (`NzbDrone.Core/Dht/`) — DHT routing table node
+- **DhtPeerStore** — in-memory peer store with 30-minute TTL
+- **TrackerServerPeerDatabase** — built-in tracker's peer registry (ConcurrentDictionary with TTL)
 
 ## Seeding Simulation Flow
 
@@ -159,7 +277,7 @@ flowchart TD
 
 ## ThingiProvider Pattern
 
-Used for pluggable components (Trackers, ClientProfiles, ArrConnections, Notifications).
+Used for pluggable components (TrackerProviders, ClientProfiles, ArrConnections, DownloadClients, Indexers, Notifications).
 
 ```mermaid
 classDiagram
@@ -176,6 +294,7 @@ classDiagram
         +string ConfigContract
         +ProviderSettings Settings
         +bool Enable
+        +int Priority
     }
 
     class ProviderFactory~TProvider, TDefinition~ {
@@ -194,10 +313,37 @@ classDiagram
     IProvider <|-- TrackerProvider
     IProvider <|-- ClientProfile
     IProvider <|-- ArrConnection
+    IProvider <|-- DownloadClient
+    IProvider <|-- Indexer
     IProvider <|-- Notification
     ProviderDefinition <|-- TrackerProviderDefinition
     ProviderDefinition <|-- ClientProfileDefinition
+    ProviderDefinition <|-- ArrConnectionDefinition
+    ProviderDefinition <|-- DownloadClientDefinition
+    ProviderDefinition <|-- IndexerDefinition
+    ProviderDefinition <|-- NotificationDefinition
     ProviderFactory --> ProviderDefinition
     ProviderFactory --> ProviderRepository
     ProviderFactory --> IProvider
 ```
+
+## Table Registration
+
+Entity-to-table mapping defined in `NzbDrone.Core/Datastore/TableRegistration.cs`:
+
+| Entity Class | Table Name |
+|-------------|------------|
+| Torrent | Torrents |
+| TorrentFile | TorrentFiles |
+| TrackerEntry | TrackerEntries |
+| TrackerProviderDefinition | TrackerProviderDefinitions |
+| ClientProfileDefinition | ClientProfileDefinitions |
+| ArrConnectionDefinition | ArrConnectionDefinitions |
+| DownloadClientDefinition | DownloadClientDefinitions |
+| IndexerDefinition | IndexerDefinitions |
+| NotificationDefinition | NotificationDefinitions |
+| SpeedSchedule | SpeedSchedules |
+| Tag | Tags |
+| ConfigModel | Config |
+| ScheduledTask | ScheduledTasks |
+| CommandModel | Commands |

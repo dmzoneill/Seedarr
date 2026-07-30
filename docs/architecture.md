@@ -37,7 +37,7 @@ graph TB
         TR[BitTorrent Trackers<br/>HTTP + UDP]
         PE[Peers<br/>TCP + uTP]
         DHT_NET[DHT Network]
-        ARR[Sonarr / Radarr<br/>API v3]
+        ARR[Sonarr / Radarr / Lidarr<br/>API v3]
     end
 
     UI <-->|HTTP + WebSocket| API
@@ -76,7 +76,7 @@ graph LR
 | Seedarr.Core | `NzbDrone.Core/` | All domain logic: torrents, seeding, trackers, peers, protocols, simulation |
 | Seedarr.SignalR | `NzbDrone.SignalR/` | Single SignalR hub for real-time browser updates |
 | Seedarr.Http | `Seedarr.Http/` | REST framework, middleware, auth, versioned routing |
-| Seedarr.Api.V1 | `Seedarr.Api.V1/` | API controllers (one per resource) |
+| Seedarr.Api.V1 | `Seedarr.Api.V1/` | API controllers (19 files, 24 controller classes, ~75 endpoints) |
 | Seedarr.Host | `NzbDrone.Host/` | Kestrel web server, startup pipeline, middleware registration |
 | Seedarr.Console | `NzbDrone.Console/` | Console entry point, restart loop |
 | Seedarr.Frontend | `Seedarr.Frontend/` | React SPA |
@@ -172,6 +172,8 @@ Auto-registration rules:
 
 ## Database Layer
 
+14 tables across 17 migrations. All models extend `ModelBase` (int Id) or `ProviderDefinition` (adds Name, Implementation, ConfigContract, Settings, Enable, Priority).
+
 ```mermaid
 graph TD
     subgraph "ORM Stack"
@@ -181,16 +183,33 @@ graph TD
         CONN --> PG[PostgreSQL]
     end
 
-    subgraph "Migration"
+    subgraph "Migration (17 total)"
         FM[FluentMigrator] --> MIG1["001_initial_setup"]
-        FM --> MIG2["002_add_tracker_fields"]
-        FM --> MIGN["NNN_description"]
+        FM --> MIG2["002_add_torrents"]
+        FM --> MIG3["003-017..."]
     end
 
-    subgraph "Models"
+    subgraph "Core Models (ModelBase)"
         MB[ModelBase<br/>int Id] --> TORRENT[Torrent]
         MB --> TF[TorrentFile]
-        MB --> PEER[Peer]
-        MB --> TP[TrackerProvider]
+        MB --> TE[TrackerEntry]
+        MB --> SS[SpeedSchedule]
+        MB --> TAG[Tag]
+    end
+
+    subgraph "Provider Models (ProviderDefinition)"
+        PD[ProviderDefinition] --> TPD[TrackerProviderDefinition]
+        PD --> CPD[ClientProfileDefinition]
+        PD --> ACD[ArrConnectionDefinition]
+        PD --> DCD[DownloadClientDefinition]
+        PD --> ID[IndexerDefinition]
+        PD --> ND[NotificationDefinition]
     end
 ```
+
+## Code Analysis
+
+- **StyleCop.Analyzers** enforced on all projects (`TreatWarningsAsErrors=true`)
+- `EnforceCodeStyleInBuild=true`
+- **Polly 8** resilience pipelines for external API calls (retry + circuit breaker)
+- **FluentValidation** for API request validation
