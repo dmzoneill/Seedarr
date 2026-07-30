@@ -40,6 +40,8 @@
   <PropertyGroup Condition="'$(SeedarrProject)'=='true'">
     <Product>Seedarr</Product>
     <Company>seedarr</Company>
+    <PackageProjectUrl>https://www.seedarr.net</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/dmzoneill/Seedarr</RepositoryUrl>
     <AssemblyVersion>1.0.0.*</AssemblyVersion>
     <AssemblyConfiguration>$(Configuration)-dev</AssemblyConfiguration>
     <NeutralLanguage>en</NeutralLanguage>

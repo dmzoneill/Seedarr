@@ -152,8 +152,8 @@ function SystemStatus() {
             <tr>
               <td className="status-label-cell">Home Page</td>
               <td>
-                <a href="https://github.com/dmzoneill/Seedarr" target="_blank" rel="noopener noreferrer">
-                  github.com/dmzoneill/Seedarr
+                <a href="https://www.seedarr.net" target="_blank" rel="noopener noreferrer">
+                  www.seedarr.net
                 </a>
               </td>
             </tr>
