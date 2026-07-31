@@ -8,10 +8,10 @@
   --bg-hover-elevated: #4a4438;
   --border: #3a352e;
   --border-light: #302c24;
-  --text-primary: #e8dcc8;
-  --text-secondary: #b0a48e;
-  --text-muted: #7a7060;
-  --text-dim: #5a5248;
+  --text-primary: #f8f6f0;
+  --text-secondary: #d4ccbe;
+  --text-muted: #9c9484;
+  --text-dim: #7a7264;
   --accent: #c8a84e;
   --accent-bg: rgb(200 168 78 / 15%);
   --accent-bg-subtle: rgb(200 168 78 / 6%);
@@ -42,8 +42,8 @@
   --overlay: rgb(0 0 0 / 60%);
   --shadow-toast: rgb(0 0 0 / 40%);
   --table-scroll-fade: rgb(34 32 24 / 80%);
-  --table-row-alt: rgb(200 168 78 / 2%);
-  --table-row-hover: rgb(200 168 78 / 6%);
+  --table-row-alt: rgb(200 168 78 / 4%);
+  --table-row-hover: rgb(200 168 78 / 10%);
 }
 
 [data-theme="light"] {
@@ -199,7 +199,7 @@ body {
   align-items: center;
   gap: 0.6rem;
   padding: 0.6rem 1.25rem;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-decoration: none;
   font-size: 0.9rem;
   transition:
@@ -647,7 +647,7 @@ body {
   text-align: left;
   padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--border);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   font-size: 0.8rem;
   font-weight: 500;
   text-transform: none;
@@ -724,7 +724,7 @@ body {
 
 .torrent-table-index {
   text-align: right;
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   min-width: 2.5rem;
 }
