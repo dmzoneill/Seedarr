@@ -46,15 +46,51 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         SharedValidator = torrentResourceValidator;
     }
 
+    private TorrentResource MapTorrentToResource(Torrent torrent)
+    {
+        var trackers = _trackerEntryService.GetByTorrentId(torrent.Id);
+        return MapTorrentToResource(torrent, trackers);
+    }
+
+    private TorrentResource MapTorrentToResource(Torrent torrent, List<TrackerEntry> trackers)
+    {
+        var resource = TorrentResourceMapper.ToResource(torrent);
+        var torrentTrackers = trackers.Where(t => t.TorrentId == torrent.Id).ToList();
+
+        if (torrentTrackers.Any())
+        {
+            var mainTracker = torrentTrackers.OrderBy(tr => tr.Tier).First();
+            resource.AnnounceInterval = mainTracker.AnnounceInterval;
+
+            if (mainTracker.NextAnnounce.HasValue && mainTracker.NextAnnounce.Value > DateTime.UtcNow)
+            {
+                resource.NextUpdate = (int)(mainTracker.NextAnnounce.Value - DateTime.UtcNow).TotalSeconds;
+            }
+            else
+            {
+                resource.NextUpdate = 0;
+            }
+        }
+        else
+        {
+            resource.AnnounceInterval = _configService.AnnounceIntervalSeconds;
+            resource.NextUpdate = 0;
+        }
+
+        return resource;
+    }
+
     protected override TorrentResource GetResourceById(Torrent model)
     {
-        return TorrentResourceMapper.ToResource(model);
+        return MapTorrentToResource(model);
     }
 
     [HttpGet]
     public List<TorrentResource> GetAll()
     {
-        return _torrentService.GetAll().Select(TorrentResourceMapper.ToResource).ToList();
+        var torrents = _torrentService.GetAll();
+        var trackers = _trackerEntryService.All();
+        return torrents.Select(t => MapTorrentToResource(t, trackers)).ToList();
     }
 
     [HttpGet("{id:int}")]
@@ -66,7 +102,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
-        return TorrentResourceMapper.ToResource(torrent);
+        return MapTorrentToResource(torrent);
     }
 
     [HttpGet("{torrentId:int}/files")]
@@ -204,7 +240,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         torrent.DownloadSpeed = existing.DownloadSpeed;
 
         var updated = _torrentService.Update(torrent);
-        return TorrentResourceMapper.ToResource(updated);
+        return MapTorrentToResource(updated);
     }
 
     [HttpPost("{id:int}/announce")]
