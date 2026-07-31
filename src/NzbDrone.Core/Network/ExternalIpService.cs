@@ -25,7 +25,8 @@ public class ExternalIpService : IExternalIpService
     private static readonly HttpClient Client = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10)
-    }) { Timeout = TimeSpan.FromSeconds(5) };
+    })
+    { Timeout = TimeSpan.FromSeconds(5) };
 
     private readonly Logger _logger;
     private string _cachedIp = "";
