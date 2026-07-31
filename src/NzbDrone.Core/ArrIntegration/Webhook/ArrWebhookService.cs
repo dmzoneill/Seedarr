@@ -28,12 +28,14 @@ public class ArrWebhookResult
 
 public class ArrWebhookService : IArrWebhookService
 {
-    private static readonly HttpClient Client = new(new SocketsHttpHandler
+    private static readonly HttpClient SharedClient = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10)
     });
-    private static readonly ResiliencePipeline Policy = ResiliencePolicies.GetArrApiPolicy();
+    private static readonly ResiliencePipeline SharedPolicy = ResiliencePolicies.GetArrApiPolicy();
 
+    private readonly HttpClient _client;
+    private readonly ResiliencePipeline _policy;
     private readonly IArrConnectionFactory _connectionFactory;
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileParser _torrentFileParser;
@@ -42,12 +44,16 @@ public class ArrWebhookService : IArrWebhookService
     public ArrWebhookService(
         IArrConnectionFactory connectionFactory,
         ITorrentService torrentService,
-        ITorrentFileParser torrentFileParser)
+        ITorrentFileParser torrentFileParser,
+        HttpClient client = null,
+        ResiliencePipeline policy = null)
     {
         _connectionFactory = connectionFactory;
         _torrentService = torrentService;
         _torrentFileParser = torrentFileParser;
         _logger = LogManager.GetCurrentClassLogger();
+        _client = client ?? SharedClient;
+        _policy = policy ?? SharedPolicy;
     }
 
     public ArrWebhookResult ProcessWebhook(ArrWebhookPayload payload)
@@ -215,13 +221,13 @@ public class ArrWebhookService : IArrWebhookService
     {
         try
         {
-            return Policy.Execute(ct =>
+            return _policy.Execute(ct =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get,
                     $"{connection.Url}/api/{apiVersion}/history?downloadId={downloadId}&pageSize=1");
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
 
-                using var response = Client.Send(request, ct);
+                using var response = _client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.Warn("Failed to query {0} history: {1}", connection.ArrType, response.StatusCode);
@@ -265,12 +271,12 @@ public class ArrWebhookService : IArrWebhookService
 
         try
         {
-            return Policy.Execute(ct =>
+            return _policy.Execute(ct =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/x-bittorrent"));
 
-                using var response = Client.Send(request, ct);
+                using var response = _client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.Warn("Failed to fetch .torrent from {0}: {1}", downloadUrl, response.StatusCode);

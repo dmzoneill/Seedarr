@@ -9,11 +9,12 @@ public class PushoverNotification : INotificationService
 {
     private const string PushoverApiUrl = "https://api.pushover.net/1/messages.json";
 
-    private static readonly HttpClient HttpClient = new(new SocketsHttpHandler
+    private static readonly HttpClient SharedHttpClient = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10)
     });
 
+    private readonly HttpClient _httpClient;
     private readonly Logger _logger;
 
     public string Name => "Pushover";
@@ -23,6 +24,13 @@ public class PushoverNotification : INotificationService
     public PushoverNotification()
     {
         _logger = LogManager.GetCurrentClassLogger();
+        _httpClient = SharedHttpClient;
+    }
+
+    public PushoverNotification(HttpClient httpClient)
+    {
+        _logger = LogManager.GetCurrentClassLogger();
+        _httpClient = httpClient;
     }
 
     public void OnTorrentAdded(string torrentName) => SendMessage("Torrent Added", torrentName);
@@ -49,7 +57,7 @@ public class PushoverNotification : INotificationService
                 new KeyValuePair<string, string>("timestamp", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
             });
 
-            using var response = HttpClient.PostAsync(PushoverApiUrl, formData).GetAwaiter().GetResult();
+            using var response = _httpClient.PostAsync(PushoverApiUrl, formData).GetAwaiter().GetResult();
             _logger.Debug("Pushover notification sent, status: {0}", response.StatusCode);
         }
         catch (Exception ex)

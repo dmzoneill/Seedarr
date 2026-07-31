@@ -42,7 +42,7 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
         }
 
         var apiKey = Request.Headers[Options.HeaderName].FirstOrDefault()
-                     ?? Request.Query["apikey"].FirstOrDefault();
+            ?? Request.Query["apikey"].FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
