@@ -28,11 +28,13 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
     private readonly HttpClient _client;
     private readonly ResiliencePipeline _policy;
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
 
-    public ArrWebhookRegistration(IConfigFileProvider configFileProvider, HttpClient client = null, ResiliencePipeline policy = null)
+    public ArrWebhookRegistration(IConfigFileProvider configFileProvider, IConfigService configService, HttpClient client = null, ResiliencePipeline policy = null)
     {
         _configFileProvider = configFileProvider;
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
         _client = client ?? SharedClient;
         _policy = policy ?? SharedPolicy;
@@ -48,7 +50,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
         try
         {
             var apiVersion = connection.ArrType == "Lidarr" ? "v1" : "v3";
-            var seedarrUrl = GetSeedarrBaseUrl();
+            var seedarrUrl = GetSeedarrBaseUrl(connection);
             var webhookUrl = $"{seedarrUrl}/api/v1/webhook/arr";
 
             var existingId = FindExistingWebhook(connection, apiVersion, webhookUrl);
@@ -121,7 +123,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
         try
         {
             var apiVersion = connection.ArrType == "Lidarr" ? "v1" : "v3";
-            var seedarrUrl = GetSeedarrBaseUrl();
+            var seedarrUrl = GetSeedarrBaseUrl(connection);
             var webhookUrl = $"{seedarrUrl}/api/v1/webhook/arr";
 
             var existingId = FindExistingWebhook(connection, apiVersion, webhookUrl);
@@ -205,15 +207,28 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
         }
     }
 
-    private string GetSeedarrBaseUrl()
+    private string GetSeedarrBaseUrl(ArrConnectionDefinition connection)
     {
         var bindAddress = _configFileProvider.BindAddress;
         var port = _configFileProvider.Port;
         var urlBase = _configFileProvider.UrlBase ?? "";
 
-        if (bindAddress == "*" || bindAddress == "0.0.0.0")
+        var connectionHost = connection?.WebhookHost;
+        if (!string.IsNullOrWhiteSpace(connectionHost))
         {
-            bindAddress = Dns.GetHostName();
+            bindAddress = connectionHost;
+        }
+        else if (bindAddress == "*" || bindAddress == "0.0.0.0")
+        {
+            var envHost = Environment.GetEnvironmentVariable("SEEDARR_HOST");
+            if (!string.IsNullOrWhiteSpace(envHost))
+            {
+                bindAddress = envHost;
+            }
+            else
+            {
+                bindAddress = Dns.GetHostName();
+            }
         }
 
         var scheme = _configFileProvider.EnableSsl ? "https" : "http";

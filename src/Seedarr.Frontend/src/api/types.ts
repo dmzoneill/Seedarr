@@ -334,6 +334,7 @@ export interface ArrConnection {
   syncEnabled: boolean;
   enableAutomaticAdd: boolean;
   webhookEnabled: boolean;
+  webhookHost: string;
   implementation: string;
   configContract: string;
 }

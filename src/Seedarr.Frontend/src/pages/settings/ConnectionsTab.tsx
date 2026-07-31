@@ -136,6 +136,9 @@ export function ConnectionsTab() {
             <Toggle label="Sync Enabled" checked={editing.syncEnabled ?? true} onChange={(v) => setEditing({ ...editing, syncEnabled: v })} />
             <Toggle label="Auto Add" checked={editing.enableAutomaticAdd ?? true} onChange={(v) => setEditing({ ...editing, enableAutomaticAdd: v })} />
             <Toggle label="Webhook" checked={editing.webhookEnabled ?? true} onChange={(v) => setEditing({ ...editing, webhookEnabled: v })} />
+            {editing.webhookEnabled !== false && (
+              <TextInput label="Webhook Host" value={editing.webhookHost || ''} onChange={(v) => setEditing({ ...editing, webhookHost: v })} placeholder="seedarr.local" hint="Overrides default container IP" />
+            )}
             {(createMutation.isError || updateMutation.isError) && (
               <div className="modal-error">{(createMutation.error || updateMutation.error)?.message}</div>
             )}

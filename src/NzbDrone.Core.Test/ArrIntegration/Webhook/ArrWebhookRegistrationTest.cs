@@ -15,16 +15,18 @@ namespace NzbDrone.Core.Test.ArrIntegration.Webhook;
 public class ArrWebhookRegistrationTest
 {
     private IConfigFileProvider _configFileProvider;
+    private IConfigService _configService;
     private ArrWebhookRegistration _registration;
 
     [SetUp]
     public void Setup()
     {
         _configFileProvider = Substitute.For<IConfigFileProvider>();
+        _configService = Substitute.For<IConfigService>();
         _configFileProvider.BindAddress.Returns("localhost");
         _configFileProvider.Port.Returns(9898);
         _configFileProvider.UrlBase.Returns("");
-        _registration = new ArrWebhookRegistration(_configFileProvider);
+        _registration = new ArrWebhookRegistration(_configFileProvider, _configService);
     }
 
     [Test]
@@ -46,7 +48,8 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         Assert.That(result, Is.EqualTo("http://myhost:8080"));
     }
@@ -60,7 +63,8 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         var expectedHost = Dns.GetHostName();
         Assert.That(result, Is.EqualTo($"http://{expectedHost}:9898"));
@@ -75,10 +79,58 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         var expectedHost = Dns.GetHostName();
         Assert.That(result, Is.EqualTo($"http://{expectedHost}:9898"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_use_env_host_when_available()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(9898);
+        _configFileProvider.UrlBase.Returns("");
+
+        System.Environment.SetEnvironmentVariable("SEEDARR_HOST", "my-custom-host");
+        try
+        {
+            var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            var connection = new ArrConnectionDefinition();
+            var result = (string)method.Invoke(_registration, new object[] { connection });
+
+            Assert.That(result, Is.EqualTo("http://my-custom-host:9898"));
+        }
+        finally
+        {
+            System.Environment.SetEnvironmentVariable("SEEDARR_HOST", null);
+        }
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_use_webhook_host_from_connection_when_available()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(9898);
+        _configFileProvider.UrlBase.Returns("");
+        var connection = new ArrConnectionDefinition { WebhookHost = "config-external-host" };
+
+        // The external host should override the env variable
+        System.Environment.SetEnvironmentVariable("SEEDARR_HOST", "my-env-host");
+        try
+        {
+            var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            var result = (string)method.Invoke(_registration, new object[] { connection });
+
+            Assert.That(result, Is.EqualTo("http://config-external-host:9898"));
+        }
+        finally
+        {
+            System.Environment.SetEnvironmentVariable("SEEDARR_HOST", null);
+        }
     }
 
     [Test]
@@ -90,7 +142,8 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         Assert.That(result, Is.EqualTo("http://localhost:9898/seedarr"));
     }
@@ -104,7 +157,8 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         Assert.That(result, Is.EqualTo("http://localhost:9898"));
     }
@@ -118,7 +172,8 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         Assert.That(result, Is.EqualTo("http://192.168.1.100:9090"));
     }
@@ -245,7 +300,8 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         Assert.That(result, Is.EqualTo("http://myserver:1234/base"));
     }
@@ -291,7 +347,7 @@ public class ArrWebhookRegistrationTest
         _configFileProvider.Port.Returns(9898);
         _configFileProvider.UrlBase.Returns("/seedarr");
 
-        var registration = new ArrWebhookRegistration(_configFileProvider);
+        var registration = new ArrWebhookRegistration(_configFileProvider, _configService);
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
@@ -383,7 +439,8 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         Assert.That(result, Is.EqualTo("http://localhost:80"));
     }
@@ -397,7 +454,8 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         Assert.That(result, Is.EqualTo("http://localhost:443"));
     }
@@ -411,7 +469,8 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         Assert.That(result, Is.EqualTo("http://localhost:9898/app/seedarr"));
     }
@@ -481,7 +540,7 @@ public class ArrWebhookRegistrationTest
         _configFileProvider.Port.Returns(9898);
         _configFileProvider.UrlBase.Returns("");
 
-        var registration = new ArrWebhookRegistration(_configFileProvider);
+        var registration = new ArrWebhookRegistration(_configFileProvider, _configService);
         var connection = new ArrConnectionDefinition
         {
             WebhookEnabled = true,
@@ -505,7 +564,8 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (string)method.Invoke(_registration, null);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
 
         var expectedHost = Dns.GetHostName();
         Assert.That(result, Is.EqualTo($"http://{expectedHost}:9898/seedarr"));
@@ -517,7 +577,7 @@ public class ArrWebhookRegistrationTest
     {
         var httpClient = new HttpClient(handler);
         var policy = new ResiliencePipelineBuilder().Build();
-        return new ArrWebhookRegistration(_configFileProvider, httpClient, policy);
+        return new ArrWebhookRegistration(_configFileProvider, _configService, httpClient, policy);
     }
 
     [Test]
