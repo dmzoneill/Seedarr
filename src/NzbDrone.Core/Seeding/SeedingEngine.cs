@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -77,9 +78,10 @@ public class SeedingEngine : BackgroundService
 
         var prefix = _configService.PeerIdPrefix;
         var suffix = new char[20 - prefix.Length];
+        var suffixBytes = RandomNumberGenerator.GetBytes(suffix.Length);
         for (var i = 0; i < suffix.Length; i++)
         {
-            suffix[i] = (char)('A' + Random.Shared.Next(26));
+            suffix[i] = (char)('A' + (suffixBytes[i] % 26));
         }
 
         _localPeerId = prefix + new string(suffix);

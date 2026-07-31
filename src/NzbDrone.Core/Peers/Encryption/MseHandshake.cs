@@ -103,6 +103,11 @@ public class MseHandshake
         _inCipher.ProcessInPlace(padDLenBytes, 0, 2);
         var padDLen = ReadUint16(padDLenBytes);
 
+        if (padDLen > MaxPadLength)
+        {
+            throw new InvalidOperationException("MSE padding length exceeds maximum");
+        }
+
         if (padDLen > 0)
         {
             var padD = ReadExact(stream, padDLen);
@@ -175,6 +180,11 @@ public class MseHandshake
         _inCipher.ProcessInPlace(padCLenBytes, 0, 2);
         var padCLen = ReadUint16(padCLenBytes);
 
+        if (padCLen > MaxPadLength)
+        {
+            throw new InvalidOperationException("MSE padding length exceeds maximum");
+        }
+
         if (padCLen > 0)
         {
             var padC = ReadExact(stream, padCLen);
@@ -184,6 +194,11 @@ public class MseHandshake
         var iaLenBytes = ReadExact(stream, 2);
         _inCipher.ProcessInPlace(iaLenBytes, 0, 2);
         var iaLen = ReadUint16(iaLenBytes);
+
+        if (iaLen > MaxPadLength)
+        {
+            throw new InvalidOperationException("MSE padding length exceeds maximum");
+        }
 
         byte[] initialPayload = null;
         if (iaLen > 0)
@@ -373,15 +388,7 @@ public class MseHandshake
             return false;
         }
 
-        for (var i = 0; i < a.Length; i++)
-        {
-            if (a[i] != b[i])
-            {
-                return false;
-            }
-        }
-
-        return true;
+        return CryptographicOperations.FixedTimeEquals(a, b);
     }
 
     private static byte[] ReadExact(Stream stream, int count)

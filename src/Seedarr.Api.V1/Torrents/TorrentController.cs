@@ -210,8 +210,26 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             resource.ForceCompleted = true;
         }
 
+        var existing = _torrentService.Get(id);
+        if (existing == null)
+        {
+            return NotFound();
+        }
+
         var torrent = ToModel(resource);
         torrent.Id = id;
+
+        // Preserve internal statistics fields — not settable via API
+        torrent.Uploaded = existing.Uploaded;
+        torrent.Downloaded = existing.Downloaded;
+        torrent.Ratio = existing.Ratio;
+        torrent.Seeders = existing.Seeders;
+        torrent.Leechers = existing.Leechers;
+        torrent.SessionUploaded = existing.SessionUploaded;
+        torrent.SessionDownloaded = existing.SessionDownloaded;
+        torrent.UploadSpeed = existing.UploadSpeed;
+        torrent.DownloadSpeed = existing.DownloadSpeed;
+
         var updated = _torrentService.Update(torrent);
         return ToResource(updated);
     }
