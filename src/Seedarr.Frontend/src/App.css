@@ -477,20 +477,21 @@ body {
 .status-bar {
   background-color: var(--sidebar-bg);
   border-top: 1px solid var(--border-light);
-  padding: 0.4rem 1rem;
+  padding: 0.6rem 1.5rem;
 }
 
 .status-bar-content {
   display: flex;
   gap: 2rem;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .status-bar-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  color: var(--text-dim);
+  gap: 0.4rem;
+  color: var(--text-color);
 }
 
 .status-bar-upload {
