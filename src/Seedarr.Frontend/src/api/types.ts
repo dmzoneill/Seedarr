@@ -40,6 +40,7 @@ export interface Torrent {
   eta: number;
   sortOrder: number;
   forceCompleted: boolean;
+  seedingTime: number;
 }
 
 export interface TorrentFileInfo {
@@ -513,4 +514,10 @@ export interface TorrentEventLogEntry {
   level: string;
   source: string;
   message: string;
+}
+
+export interface SyncResult {
+  added: number;
+  skipped: number;
+  failed: number;
 }

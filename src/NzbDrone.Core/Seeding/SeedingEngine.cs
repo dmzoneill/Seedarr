@@ -21,7 +21,7 @@ public class SeedingEngine : BackgroundService
     private const int LocalPeerPort = 6881;
     private const double SuperSeedingBoost = 1.5;
 
-    private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(5);
+    private TimeSpan TickInterval => TimeSpan.FromSeconds(Math.Max(1, _configService.UiRefreshRateSec));
 
     private readonly ITorrentService _torrentService;
     private readonly ISpeedDistributionManager _distributionManager;
@@ -264,6 +264,7 @@ public class SeedingEngine : BackgroundService
 
             torrent.Active = true;
             torrent.LastActive = DateTime.UtcNow;
+            torrent.SeedingTime += (long)tickSeconds;
 
             if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed > 0 && torrent.TotalSize > 0)
             {

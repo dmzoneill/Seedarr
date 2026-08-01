@@ -1,5 +1,5 @@
 import { Torrent } from '../../api/types';
-import { formatBytes, formatDate, formatRatio } from '../../utils/formatters';
+import { formatBytes, formatDate, formatRatio, formatSeconds } from '../../utils/formatters';
 import { StatusRow } from './shared';
 
 export function GeneralTab({ torrent }: { torrent: Torrent }) {
@@ -26,6 +26,7 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
         <StatusRow label="Uploaded">{formatBytes(torrent.uploaded)}</StatusRow>
         <StatusRow label="Downloaded">{formatBytes(torrent.downloaded)}</StatusRow>
         <StatusRow label="Ratio">{formatRatio(torrent.ratio)}</StatusRow>
+        <StatusRow label="Seeding Time">{formatSeconds(torrent.seedingTime)}</StatusRow>
         <StatusRow label="Seeders">{torrent.seeders}</StatusRow>
         <StatusRow label="Leechers">{torrent.leechers}</StatusRow>
         <StatusRow label="Added">{formatDate(torrent.dateAdded)}</StatusRow>

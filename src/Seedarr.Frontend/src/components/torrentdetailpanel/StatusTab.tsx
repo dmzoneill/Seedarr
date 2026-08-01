@@ -1,4 +1,4 @@
-import { formatBytes, formatDate, formatRatio } from '../../utils/formatters';
+import { formatBytes, formatDate, formatRatio, formatSeconds } from '../../utils/formatters';
 import type { Torrent } from '../../api/types';
 import { InfoRow } from './shared';
 
@@ -9,6 +9,7 @@ export function StatusTab({ torrent }: { torrent: Torrent }) {
     ['Uploaded', formatBytes(torrent.uploaded)],
     ['Downloaded', formatBytes(torrent.downloaded)],
     ['Ratio', formatRatio(torrent.ratio)],
+    ['Seeding Time', formatSeconds(torrent.seedingTime)],
     ['Seeders', String(torrent.seeders)],
     ['Leechers', String(torrent.leechers)],
     ['Upload Limit', torrent.uploadLimit > 0 ? `${torrent.uploadLimit} KB/s` : 'Global'],
