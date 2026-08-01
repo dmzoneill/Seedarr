@@ -49,7 +49,8 @@ public static class TorrentResourceMapper
             Availability = model.Availability,
             Eta = model.Eta,
             SortOrder = model.SortOrder,
-            ForceCompleted = model.ForceCompleted
+            ForceCompleted = model.ForceCompleted,
+            SeedingTime = model.SeedingTime
         };
     }
 
@@ -96,7 +97,8 @@ public static class TorrentResourceMapper
             Availability = resource.Availability,
             Eta = resource.Eta,
             SortOrder = resource.SortOrder,
-            ForceCompleted = resource.ForceCompleted
+            ForceCompleted = resource.ForceCompleted,
+            SeedingTime = resource.SeedingTime
         };
     }
 
