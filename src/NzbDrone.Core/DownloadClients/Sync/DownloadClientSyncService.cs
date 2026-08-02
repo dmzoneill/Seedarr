@@ -133,12 +133,17 @@ public class DownloadClientSyncService : IDownloadClientSyncService
         {
             try
             {
-                // In a full implementation, the IIndexer would have a strategy for .FetchTorrent(infoHash)
-                // For now, we simulate the framework hook where it would attempt to query prowlarr.
                 _logger.Debug("Querying indexer {0} for hash {1}", indexerDef.Name, infoHash);
 
-                // byte[] result = indexer.FetchTorrent(infoHash);
-                // if (result != null) return result;
+                var provider = CreateIndexer(indexerDef);
+                if (provider != null)
+                {
+                    var result = provider.FetchTorrentByHash(indexerDef, infoHash);
+                    if (result != null && result.Length > 0)
+                    {
+                        return result;
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -147,6 +152,17 @@ public class DownloadClientSyncService : IDownloadClientSyncService
         }
 
         return null;
+    }
+
+    private IIndexer CreateIndexer(IndexerDefinition definition)
+    {
+        return definition.IndexerType switch
+        {
+            "Prowlarr" => new NzbDrone.Core.Indexers.Prowlarr.ProwlarrIndexer(),
+            "Torznab" => new NzbDrone.Core.Indexers.Torznab.TorznabIndexer(),
+            "Newznab" => new NzbDrone.Core.Indexers.Newznab.NewznabIndexer(),
+            _ => null
+        };
     }
 
     private IDownloadClient CreateClient(DownloadClientDefinition definition)

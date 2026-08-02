@@ -6,4 +6,5 @@ public interface IIndexer : IProvider
 {
     string IndexerType { get; }
     bool TestConnection(IndexerDefinition definition);
+    byte[] FetchTorrentByHash(IndexerDefinition definition, string infoHash);
 }

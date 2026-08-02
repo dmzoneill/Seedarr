@@ -35,4 +35,11 @@ public class NewznabIndexer : IIndexer
             return false;
         }
     }
+
+    public byte[] FetchTorrentByHash(IndexerDefinition definition, string infoHash)
+    {
+        // Newznab is typically Usenet and doesn't support infohash searches,
+        // so we just return null to fallback/skip.
+        return null;
+    }
 }
