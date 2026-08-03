@@ -25,6 +25,8 @@ import type {
   SchedulerConfig,
   AdvancedConfig,
   ArrConnection,
+  ArrTestResult,
+  SyncResult,
   IndexerDefinition,
   DownloadClientDefinition,
   DiskSpaceInfo,
@@ -303,15 +305,18 @@ export function usePeers(torrentId: number) {
 
 export function useArrSync() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<SyncResult, Error>({
     mutationFn: () => apiClient.post("/arrsync/sync"),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["torrents"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["arrconnections"] });
+    },
   });
 }
 
 export function useDownloadClientSync() {
   const queryClient = useQueryClient();
-  return useMutation({
+  return useMutation<SyncResult, Error>({
     mutationFn: () => apiClient.post("/downloadclientsync/sync"),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["torrents"] }),
   });
@@ -467,8 +472,14 @@ export function useDeleteArrConnection() {
 }
 
 export function useTestArrConnection() {
-  return useMutation<{ success: boolean }, Error, number>({
+  return useMutation<ArrTestResult, Error, number>({
     mutationFn: (id) => apiClient.post(`/arrconnections/${id}/test`),
+  });
+}
+
+export function useTestDirectArrConnection() {
+  return useMutation<ArrTestResult, Error, Partial<ArrConnection>>({
+    mutationFn: (connection) => apiClient.post("/arrconnections/test", connection),
   });
 }
 
