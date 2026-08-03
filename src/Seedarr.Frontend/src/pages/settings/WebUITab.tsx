@@ -1,7 +1,13 @@
-import { useState, useEffect } from 'react';
-import { useGeneralConfig, useSaveGeneralConfig } from '../../api/hooks';
-import type { GeneralConfig } from '../../api/types';
-import { SaveBar, Toggle, TextInput, NumberInput, SectionTitle } from './shared';
+import { useState, useEffect } from "react";
+import { useGeneralConfig, useSaveGeneralConfig } from "../../api/hooks";
+import type { GeneralConfig } from "../../api/types";
+import {
+  SaveBar,
+  Toggle,
+  TextInput,
+  NumberInput,
+  SectionTitle,
+} from "./shared";
 
 export function WebUITab() {
   const { data: config, isLoading } = useGeneralConfig();
@@ -9,18 +15,18 @@ export function WebUITab() {
   const [form, setForm] = useState<GeneralConfig>({
     id: 1,
     autoStart: false,
-    themeStyle: 'system',
-    colorScheme: 'auto',
+    themeStyle: "system",
+    colorScheme: "auto",
     watchFolderEnabled: false,
-    watchFolderPath: '',
+    watchFolderPath: "",
     watchFolderScanIntervalSeconds: 10,
     watchFolderAutoStartTorrents: true,
     watchFolderDeleteAddedTorrents: false,
     port: 9898,
-    bindAddress: '0.0.0.0',
-    urlBase: '',
+    bindAddress: "0.0.0.0",
+    urlBase: "",
     authenticationEnabled: false,
-    apiKey: '',
+    apiKey: "",
   });
   const [dirty, setDirty] = useState(false);
 
@@ -31,7 +37,10 @@ export function WebUITab() {
     }
   }, [config]);
 
-  const set = <K extends keyof GeneralConfig>(key: K, value: GeneralConfig[K]) => {
+  const set = <K extends keyof GeneralConfig>(
+    key: K,
+    value: GeneralConfig[K],
+  ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
@@ -40,16 +49,37 @@ export function WebUITab() {
 
   return (
     <div>
-      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+      <SaveBar
+        dirty={dirty}
+        isPending={save.isPending}
+        isError={save.isError}
+        isSuccess={save.isSuccess}
+        error={save.error}
+        onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
+      />
       <div className="card">
+        <SectionTitle>Connection</SectionTitle>
+        <NumberInput
+          label="Port"
+          value={form.port}
+          onChange={(v) => set("port", v)}
+          min={1}
+          max={65535}
+        />
+        <TextInput
+          label="Bind Address"
+          value={form.bindAddress}
+          onChange={(v) => set("bindAddress", v)}
+          placeholder="0.0.0.0"
+        />
 
-      <SectionTitle>Connection</SectionTitle>
-      <NumberInput label="Port" value={form.port} onChange={(v) => set('port', v)} min={1} max={65535} />
-      <TextInput label="Bind Address" value={form.bindAddress} onChange={(v) => set('bindAddress', v)} placeholder="0.0.0.0" />
-
-      <SectionTitle>Authentication</SectionTitle>
-      <Toggle label="Authentication Enabled" checked={form.authenticationEnabled} onChange={(v) => set('authenticationEnabled', v)} hint="Require login" />
-
+        <SectionTitle>Authentication</SectionTitle>
+        <Toggle
+          label="Authentication Enabled"
+          checked={form.authenticationEnabled}
+          onChange={(v) => set("authenticationEnabled", v)}
+          hint="Require login"
+        />
       </div>
     </div>
   );

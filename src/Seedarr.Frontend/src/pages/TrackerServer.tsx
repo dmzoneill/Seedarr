@@ -3,13 +3,14 @@ import {
   useTrackerServerTorrents,
   useTrackerServerConfig,
   useSaveTrackerServerConfig,
-} from '../api/hooks';
-import { formatBytes, formatDate, formatUptime } from '../utils/formatters';
-import type { TrackerServerConfig } from '../api/types';
+} from "../api/hooks";
+import { formatBytes, formatDate, formatUptime } from "../utils/formatters";
+import type { TrackerServerConfig } from "../api/types";
 
 function TrackerServer() {
   const { data: stats, isLoading: statsLoading } = useTrackerServerStats();
-  const { data: torrents, isLoading: torrentsLoading } = useTrackerServerTorrents();
+  const { data: torrents, isLoading: torrentsLoading } =
+    useTrackerServerTorrents();
   const { data: config } = useTrackerServerConfig();
   const saveConfig = useSaveTrackerServerConfig();
 
@@ -28,11 +29,11 @@ function TrackerServer() {
         <h1 className="page-heading">Tracker Server</h1>
         {config && (
           <button
-            className={`btn ${config.trackerServerEnabled ? 'btn-danger' : 'btn-success'}`}
+            className={`btn ${config.trackerServerEnabled ? "btn-danger" : "btn-success"}`}
             onClick={handleToggleEnabled}
             disabled={saveConfig.isPending}
           >
-            {config.trackerServerEnabled ? 'Disable Tracker' : 'Enable Tracker'}
+            {config.trackerServerEnabled ? "Disable Tracker" : "Enable Tracker"}
           </button>
         )}
       </div>
@@ -41,31 +42,33 @@ function TrackerServer() {
         <div className="card tracker-stat-card">
           <div className="tracker-stat-label">Total Torrents</div>
           <div className="tracker-stat-value">
-            {statsLoading ? '-' : (stats?.totalTorrents ?? 0).toLocaleString()}
+            {statsLoading ? "-" : (stats?.totalTorrents ?? 0).toLocaleString()}
           </div>
         </div>
         <div className="card tracker-stat-card">
           <div className="tracker-stat-label">Internal (Seedarr)</div>
           <div className="tracker-stat-value">
-            {statsLoading ? '-' : (stats?.internalTorrents ?? 0).toLocaleString()}
+            {statsLoading
+              ? "-"
+              : (stats?.internalTorrents ?? 0).toLocaleString()}
           </div>
         </div>
         <div className="card tracker-stat-card">
           <div className="tracker-stat-label">Total Peers</div>
           <div className="tracker-stat-value">
-            {statsLoading ? '-' : (stats?.totalPeers ?? 0).toLocaleString()}
+            {statsLoading ? "-" : (stats?.totalPeers ?? 0).toLocaleString()}
           </div>
         </div>
         <div className="card tracker-stat-card">
           <div className="tracker-stat-label">Total Announces</div>
           <div className="tracker-stat-value">
-            {statsLoading ? '-' : (stats?.totalAnnounces ?? 0).toLocaleString()}
+            {statsLoading ? "-" : (stats?.totalAnnounces ?? 0).toLocaleString()}
           </div>
         </div>
         <div className="card tracker-stat-card">
           <div className="tracker-stat-label">Uptime</div>
           <div className="tracker-stat-value">
-            {statsLoading ? '-' : formatUptime(stats?.uptime ?? 0)}
+            {statsLoading ? "-" : formatUptime(stats?.uptime ?? 0)}
           </div>
         </div>
       </div>
@@ -75,26 +78,30 @@ function TrackerServer() {
           <div className="status-row">
             <span className="status-label">Status</span>
             <span className="status-value">
-              <span className={`badge badge-${config.trackerServerEnabled ? 'seeding' : 'stopped'}`}>
-                {config.trackerServerEnabled ? 'Enabled' : 'Disabled'}
+              <span
+                className={`badge badge-${config.trackerServerEnabled ? "seeding" : "stopped"}`}
+              >
+                {config.trackerServerEnabled ? "Enabled" : "Disabled"}
               </span>
             </span>
           </div>
           <div className="status-row">
             <span className="status-label">HTTP Port</span>
             <span className="status-value">
-              {config.trackerHttpEnabled ? config.trackerHttpPort : 'Disabled'}
+              {config.trackerHttpEnabled ? config.trackerHttpPort : "Disabled"}
             </span>
           </div>
           <div className="status-row">
             <span className="status-label">UDP Port</span>
             <span className="status-value">
-              {config.trackerUdpEnabled ? config.trackerUdpPort : 'Disabled'}
+              {config.trackerUdpEnabled ? config.trackerUdpPort : "Disabled"}
             </span>
           </div>
           <div className="status-row">
             <span className="status-label">Announce Interval</span>
-            <span className="status-value">{config.trackerAnnounceInterval}s</span>
+            <span className="status-value">
+              {config.trackerAnnounceInterval}s
+            </span>
           </div>
         </div>
       )}
@@ -131,8 +138,10 @@ function TrackerServer() {
                   (torrents ?? []).map((t) => (
                     <tr key={t.infoHash} className="torrent-table-row">
                       <td>
-                        <span className={`badge ${t.isInternal ? 'badge-seeding' : 'badge-warning'}`}>
-                          {t.isInternal ? 'Internal' : 'External'}
+                        <span
+                          className={`badge ${t.isInternal ? "badge-seeding" : "badge-warning"}`}
+                        >
+                          {t.isInternal ? "Internal" : "External"}
                         </span>
                       </td>
                       <td>{t.name}</td>
@@ -143,7 +152,9 @@ function TrackerServer() {
                       <td>{t.completed}</td>
                       <td>{t.peerCount}</td>
                       <td>{formatDate(t.lastActivity)}</td>
-                      <td><code className="info-hash">{t.infoHash}</code></td>
+                      <td>
+                        <code className="info-hash">{t.infoHash}</code>
+                      </td>
                     </tr>
                   ))
                 )}
