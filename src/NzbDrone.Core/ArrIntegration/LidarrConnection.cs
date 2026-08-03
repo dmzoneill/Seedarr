@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading.Tasks;
 using NLog;
 using Polly;
 
@@ -104,22 +105,52 @@ public class LidarrConnection : IArrConnection
         }
     }
 
-    public bool TestConnection()
+    public bool TestConnection() => TestConnectionDetailed().Success;
+
+    public ArrTestResult TestConnectionDetailed()
     {
+        if (string.IsNullOrWhiteSpace(Url))
+        {
+            return ArrTestResult.Fail("URL cannot be empty");
+        }
+
         try
         {
-            return _policy.Execute(ct =>
+            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v1/system/status");
+            request.Headers.Add("X-Api-Key", ApiKey ?? "");
+            using var response = _client.Send(request, cts.Token);
+            if (response.IsSuccessStatusCode)
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v1/system/status");
-                request.Headers.Add("X-Api-Key", ApiKey);
-                using var response = _client.Send(request, ct);
-                return response.IsSuccessStatusCode;
-            });
+                return ArrTestResult.Ok($"Successfully connected to Lidarr at {Url}");
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                return ArrTestResult.Fail("Authentication failed (HTTP 401 Unauthorized). Please check your API key.");
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return ArrTestResult.Fail($"Endpoint not found (HTTP 404 Not Found) at {Url}. Verify the URL and port.");
+            }
+
+            return ArrTestResult.Fail($"Lidarr returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.Error(ex, "Lidarr connection test failed: {0}", ex.Message);
+            return ArrTestResult.Fail($"Network error: {ex.Message}");
+        }
+        catch (TaskCanceledException)
+        {
+            _logger.Error("Lidarr connection test timed out");
+            return ArrTestResult.Fail($"Connection timed out connecting to {Url} (exceeded 10s)");
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Lidarr connection test failed");
-            return false;
+            return ArrTestResult.Fail($"Connection failed: {ex.Message}");
         }
     }
 }

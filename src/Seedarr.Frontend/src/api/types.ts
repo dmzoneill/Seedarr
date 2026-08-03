@@ -326,12 +326,18 @@ export interface NotificationSettings {
   showError: boolean;
 }
 
+export interface ArrTestResult {
+  success: boolean;
+  message?: string;
+}
+
 export interface ArrConnection {
   id: number;
   name: string;
   arrType: string;
   url: string;
   apiKey: string;
+  enable?: boolean;
   syncEnabled: boolean;
   enableAutomaticAdd: boolean;
   webhookEnabled: boolean;

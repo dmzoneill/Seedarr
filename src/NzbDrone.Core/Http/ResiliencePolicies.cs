@@ -27,7 +27,7 @@ public static class ResiliencePolicies
     public static ResiliencePipeline GetTrackerPolicy() => TrackerPipeline.Value;
 
     /// <summary>
-    /// Retry 2x with 2s fixed backoff, circuit breaker (3 failures in 2 min = 60s break).
+    /// Retry 2x with 2s fixed backoff, 15s timeout per attempt.
     /// </summary>
     public static ResiliencePipeline GetArrApiPolicy() => ArrApiPipeline.Value;
 
@@ -99,23 +99,12 @@ public static class ResiliencePolicies
                     return ValueTask.CompletedTask;
                 }
             })
-            .AddCircuitBreaker(new CircuitBreakerStrategyOptions
+            .AddTimeout(new TimeoutStrategyOptions
             {
-                FailureRatio = 0.8,
-                SamplingDuration = TimeSpan.FromMinutes(2),
-                MinimumThroughput = 3,
-                BreakDuration = TimeSpan.FromSeconds(60),
-                ShouldHandle = new PredicateBuilder()
-                    .Handle<HttpRequestException>()
-                    .Handle<TaskCanceledException>(),
-                OnOpened = args =>
+                Timeout = TimeSpan.FromSeconds(15),
+                OnTimeout = args =>
                 {
-                    Log.Warn("Arr API circuit breaker opened for {0}", args.BreakDuration);
-                    return ValueTask.CompletedTask;
-                },
-                OnClosed = _ =>
-                {
-                    Log.Info("Arr API circuit breaker closed");
+                    Log.Warn("Arr API call timed out after {0}", args.Timeout);
                     return ValueTask.CompletedTask;
                 }
             })

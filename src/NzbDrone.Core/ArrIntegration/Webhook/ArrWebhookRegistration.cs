@@ -209,6 +209,12 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
     private string GetSeedarrBaseUrl(ArrConnectionDefinition connection)
     {
+        var envUrl = Environment.GetEnvironmentVariable("SEEDARR_URL");
+        if (!string.IsNullOrWhiteSpace(envUrl))
+        {
+            return envUrl.TrimEnd('/');
+        }
+
         var bindAddress = _configFileProvider.BindAddress;
         var port = _configFileProvider.Port;
         var urlBase = _configFileProvider.UrlBase ?? "";
@@ -228,6 +234,14 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             else
             {
                 bindAddress = Dns.GetHostName();
+            }
+        }
+        else
+        {
+            var envHost = Environment.GetEnvironmentVariable("SEEDARR_HOST");
+            if (!string.IsNullOrWhiteSpace(envHost))
+            {
+                bindAddress = envHost;
             }
         }
 

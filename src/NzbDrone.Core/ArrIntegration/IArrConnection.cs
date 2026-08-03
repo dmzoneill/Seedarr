@@ -3,6 +3,15 @@ using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.ArrIntegration;
 
+public class ArrTestResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; }
+
+    public static ArrTestResult Ok(string message = "Connection successful") => new() { Success = true, Message = message };
+    public static ArrTestResult Fail(string message) => new() { Success = false, Message = message };
+}
+
 public interface IArrConnection : IProvider
 {
     string ArrType { get; }
@@ -10,4 +19,5 @@ public interface IArrConnection : IProvider
     string ApiKey { get; set; }
     List<ArrDownloadRecord> GetDownloadHistory();
     bool TestConnection();
+    ArrTestResult TestConnectionDetailed();
 }

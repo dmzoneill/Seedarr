@@ -49,6 +49,11 @@ public class ArrConnectionController : Controller
     [HttpPost]
     public ActionResult<ArrConnectionDefinition> Create([FromBody] ArrConnectionDefinition definition)
     {
+        if (string.IsNullOrWhiteSpace(definition.Name))
+        {
+            definition.Name = definition.ArrType ?? "ArrConnection";
+        }
+
         // Connectivity problems are not fatal on create: the arr instance may be
         // temporarily offline. Use the test-connection endpoint to validate.
         if (!_arrSyncService.TestConnectionDirect(definition))
@@ -75,6 +80,11 @@ public class ArrConnectionController : Controller
         if (existing == null)
         {
             return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.Name))
+        {
+            definition.Name = existing.Name ?? definition.ArrType ?? "ArrConnection";
         }
 
         if (definition.ApiKey != null)
@@ -113,10 +123,26 @@ public class ArrConnectionController : Controller
     }
 
     [HttpPost("{id}/test")]
-    public ActionResult<object> TestConnection(int id)
+    public ActionResult<ArrTestResult> TestConnection(int id)
     {
-        var success = _arrSyncService.TestConnection(id);
-        return Ok(new { success });
+        var result = _arrSyncService.TestConnectionDetailed(id);
+        return Ok(result);
+    }
+
+    [HttpPost("test")]
+    public ActionResult<ArrTestResult> TestDirect([FromBody] ArrConnectionDefinition definition)
+    {
+        if (definition.Id > 0 && definition.ApiKey != null && definition.ApiKey.Contains('*'))
+        {
+            var existing = _connectionFactory.Get(definition.Id);
+            if (existing != null)
+            {
+                definition.ApiKey = existing.ApiKey;
+            }
+        }
+
+        var result = _arrSyncService.TestConnectionDetailedDirect(definition);
+        return Ok(result);
     }
 
     [HttpPost("sync")]
