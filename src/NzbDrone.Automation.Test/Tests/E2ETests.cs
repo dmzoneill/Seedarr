@@ -54,7 +54,8 @@ public class E2ETests : ApiTestBase
         if (!matrixExists)
             Assert.Ignore("The Matrix (tmdbId=603) not in Radarr library");
 
-        var torrentUrl = $"{SeedarrUrl}/fixtures/test.torrent";
+        var seedarrInternalUrl = Environment.GetEnvironmentVariable("SEEDARR_INTERNAL_URL") ?? "http://seedarr.local:9898";
+        var torrentUrl = $"{seedarrInternalUrl}/fixtures/test.torrent";
         var pushBody = new
         {
             title = "The.Matrix.1999.1080p.BluRay.x264-TestGroup",
