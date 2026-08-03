@@ -32,13 +32,13 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 
 ### Why Seedarr?
 
-| Problem | Seedarr Solution |
-|---------|-----------------|
-| Ratio requirements on private trackers | Simulates realistic upload traffic patterns |
-| Need to keep rare torrents alive | Announces to trackers and responds to peers |
-| Running a real client wastes bandwidth | Zero actual data transfer |
-| Manual ratio management is tedious | Automated scheduling, distribution, and profiles |
-| Want integration with Sonarr/Radarr/Lidarr | Native \*arr API integration for auto-seeding |
+| Problem                                    | Seedarr Solution                                 |
+| ------------------------------------------ | ------------------------------------------------ |
+| Ratio requirements on private trackers     | Simulates realistic upload traffic patterns      |
+| Need to keep rare torrents alive           | Announces to trackers and responds to peers      |
+| Running a real client wastes bandwidth     | Zero actual data transfer                        |
+| Manual ratio management is tedious         | Automated scheduling, distribution, and profiles |
+| Want integration with Sonarr/Radarr/Lidarr | Native \*arr API integration for auto-seeding    |
 
 ---
 
@@ -49,6 +49,7 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 <td width="50%" valign="top">
 
 ### Core Simulation
+
 - Load `.torrent` files or magnet links
 - Configurable upload/download speed simulation
 - Multiple speed distribution algorithms (Pareto, Power Law, Log-Normal, Equal)
@@ -60,6 +61,7 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 - Force start and force complete support
 
 ### Protocol Support
+
 - HTTP & UDP tracker announce/scrape (BEP 3, BEP 15)
 - Multi-tracker failover with tier support (BEP 12)
 - TCP peer connections with full handshake
@@ -75,6 +77,7 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 <td width="50%" valign="top">
 
 ### Web Interface
+
 - Sonarr-style UI with chunky card layouts
 - Real-time dashboard with aggregate speed display
 - Torrent management (table & grid views)
@@ -87,6 +90,7 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 - SignalR real-time updates
 
 ### Infrastructure
+
 - Built-in HTTP + UDP tracker server
 - Download client integration (qBittorrent, Transmission, Deluge)
 - Sonarr/Radarr/Lidarr integration (auto-seed downloads)
@@ -181,22 +185,22 @@ cd src/Seedarr.Frontend && npm install && npm start
 
 Seedarr provides 14 settings tabs with 120+ configurable properties:
 
-| Tab | Key Settings |
-|-----|-------------|
-| **General** | Auto-start, theme, color scheme, log level |
-| **Seeding** | Max upload/download speed, global ratio limit, speed variation, activity probability |
-| **BitTorrent** | Peer ID prefix, client key, user agent, protocol features |
-| **Network** | External IP, UPnP, proxy (HTTP/SOCKS), DNS |
-| **Peer Protocol** | Max connections, request pipeline, idle timeout, encryption |
-| **Protocols** | DHT, PEX, metadata exchange, fast extension, LPD, uTP |
-| **Simulation** | Swarm analysis, traffic patterns, seeding profiles |
-| **Tracker Server** | Built-in HTTP/UDP tracker, scrape, announce intervals, rate limiting |
-| **Scheduler** | Time-of-day speed schedules, alternative speeds, day-of-week |
-| **Advanced** | Download threshold, stopped percentages, force settings |
-| **Connections** | Sonarr/Radarr/Lidarr integration with sync and auto-add |
-| **Download Clients** | qBittorrent, Transmission, Deluge with test and status |
-| **Notifications** | Webhook, email, Discord with event triggers |
-| **Web UI** | Refresh interval, items per page, date/time format |
+| Tab                  | Key Settings                                                                         |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| **General**          | Auto-start, theme, color scheme, log level                                           |
+| **Seeding**          | Max upload/download speed, global ratio limit, speed variation, activity probability |
+| **BitTorrent**       | Peer ID prefix, client key, user agent, protocol features                            |
+| **Network**          | External IP, UPnP, proxy (HTTP/SOCKS), DNS                                           |
+| **Peer Protocol**    | Max connections, request pipeline, idle timeout, encryption                          |
+| **Protocols**        | DHT, PEX, metadata exchange, fast extension, LPD, uTP                                |
+| **Simulation**       | Swarm analysis, traffic patterns, seeding profiles                                   |
+| **Tracker Server**   | Built-in HTTP/UDP tracker, scrape, announce intervals, rate limiting                 |
+| **Scheduler**        | Time-of-day speed schedules, alternative speeds, day-of-week                         |
+| **Advanced**         | Download threshold, stopped percentages, force settings                              |
+| **Connections**      | Sonarr/Radarr/Lidarr integration with sync and auto-add                              |
+| **Download Clients** | qBittorrent, Transmission, Deluge with test and status                               |
+| **Notifications**    | Webhook, email, Discord with event triggers                                          |
+| **Web UI**           | Refresh interval, items per page, date/time format                                   |
 
 ---
 
@@ -204,23 +208,23 @@ Seedarr provides 14 settings tabs with 120+ configurable properties:
 
 ### Volumes
 
-| Path | Purpose |
-|------|---------|
+| Path      | Purpose                              |
+| --------- | ------------------------------------ |
 | `/config` | Application database, settings, logs |
-| `/data` | Torrent files and watch folder |
+| `/data`   | Torrent files and watch folder       |
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
+| Variable            | Default   | Description           |
+| ------------------- | --------- | --------------------- |
 | `SEEDARR__APP_DATA` | `/config` | Config/data directory |
-| `TZ` | `UTC` | Container timezone |
+| `TZ`                | `UTC`     | Container timezone    |
 
 ### Ports
 
-| Port | Protocol | Purpose |
-|------|----------|---------|
-| `9898` | TCP | Web UI + API |
+| Port   | Protocol | Purpose      |
+| ------ | -------- | ------------ |
+| `9898` | TCP      | Web UI + API |
 
 ---
 
@@ -291,20 +295,20 @@ Seedarr.Console          Entry point (Kestrel host)
 
 ### Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| **Runtime** | .NET 10 / ASP.NET Core |
-| **Frontend** | React 18, TypeScript 5, webpack 5 |
-| **Real-time** | ASP.NET SignalR |
-| **Database** | SQLite (default) / PostgreSQL |
-| **ORM** | Dapper + FluentMigrator |
-| **DI** | DryIoc |
-| **Validation** | FluentValidation |
-| **Resilience** | Polly 8 (retry + circuit breaker) |
-| **Logging** | NLog |
-| **Encryption** | BouncyCastle (RC4/DH for MSE/PE) |
-| **Torrent Parsing** | BencodeNET |
-| **Container** | Podman / Docker |
+| Layer               | Technology                        |
+| ------------------- | --------------------------------- |
+| **Runtime**         | .NET 10 / ASP.NET Core            |
+| **Frontend**        | React 18, TypeScript 5, webpack 5 |
+| **Real-time**       | ASP.NET SignalR                   |
+| **Database**        | SQLite (default) / PostgreSQL     |
+| **ORM**             | Dapper + FluentMigrator           |
+| **DI**              | DryIoc                            |
+| **Validation**      | FluentValidation                  |
+| **Resilience**      | Polly 8 (retry + circuit breaker) |
+| **Logging**         | NLog                              |
+| **Encryption**      | BouncyCastle (RC4/DH for MSE/PE)  |
+| **Torrent Parsing** | BencodeNET                        |
+| **Container**       | Podman / Docker                   |
 
 ---
 
@@ -312,13 +316,13 @@ Seedarr.Console          Entry point (Kestrel host)
 
 Seedarr can impersonate multiple BitTorrent clients, generating authentic peer IDs, user agents, and protocol behavior:
 
-| Client | Peer ID Prefix | Version |
-|--------|---------------|---------|
-| qBittorrent | `-qB4420-` | 4.4.2 |
-| Deluge | `-DE2030-` | 2.0.3 |
-| Transmission | `-TR3000-` | 3.00 |
-| uTorrent | `-UT3550-` | 3.5.5 |
-| BiglyBT | `-BG2700-` | 2.7.0.0 |
+| Client       | Peer ID Prefix | Version |
+| ------------ | -------------- | ------- |
+| qBittorrent  | `-qB4420-`     | 4.4.2   |
+| Deluge       | `-DE2030-`     | 2.0.3   |
+| Transmission | `-TR3000-`     | 3.00    |
+| uTorrent     | `-UT3550-`     | 3.5.5   |
+| BiglyBT      | `-BG2700-`     | 2.7.0.0 |
 
 ---
 
@@ -326,12 +330,12 @@ Seedarr can impersonate multiple BitTorrent clients, generating authentic peer I
 
 Choose how upload bandwidth is distributed across torrents:
 
-| Algorithm | Behavior |
-|-----------|----------|
-| **Pareto** | 80/20 rule &mdash; most bandwidth to a few torrents |
-| **Power Law** | Heavy-tailed &mdash; gradual falloff |
-| **Log-Normal** | Bell curve with right skew |
-| **Equal** | Even split across all active torrents |
+| Algorithm      | Behavior                                            |
+| -------------- | --------------------------------------------------- |
+| **Pareto**     | 80/20 rule &mdash; most bandwidth to a few torrents |
+| **Power Law**  | Heavy-tailed &mdash; gradual falloff                |
+| **Log-Normal** | Bell curve with right skew                          |
+| **Equal**      | Even split across all active torrents               |
 
 ---
 
@@ -349,14 +353,14 @@ Seedarr can connect to your existing Sonarr, Radarr, and Lidarr instances to aut
 
 ## System Pages
 
-| Page | Description |
-|------|-------------|
-| **Status** | Health checks, disk space with progress bars, app info |
-| **Tasks** | Scheduled tasks with last/next execution, command queue |
-| **Backup** | Create/restore/download database backups |
-| **Updates** | Version changelog with installed version badge |
-| **Events** | Structured event log with severity-colored icons |
-| **Log Files** | Log file listing with download links |
+| Page          | Description                                             |
+| ------------- | ------------------------------------------------------- |
+| **Status**    | Health checks, disk space with progress bars, app info  |
+| **Tasks**     | Scheduled tasks with last/next execution, command queue |
+| **Backup**    | Create/restore/download database backups                |
+| **Updates**   | Version changelog with installed version badge          |
+| **Events**    | Structured event log with severity-colored icons        |
+| **Log Files** | Log file listing with download links                    |
 
 ---
 

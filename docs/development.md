@@ -118,11 +118,11 @@ make test-integration-only
 
 ### Existing Test Files
 
-| Test File | What it covers |
-|-----------|---------------|
-| `Torrents/InfoHashCalculatorTest.cs` | SHA-1 info hash calculation (7 tests) |
+| Test File                                        | What it covers                                           |
+| ------------------------------------------------ | -------------------------------------------------------- |
+| `Torrents/InfoHashCalculatorTest.cs`             | SHA-1 info hash calculation (7 tests)                    |
 | `Simulation/ClientBehavior/ClientProfileTest.cs` | Peer ID generation for qBittorrent, Deluge, Transmission |
-| `Seeding/Distribution/SpeedDistributorTest.cs` | EqualDistributor and ParetoDistributor behavior |
+| `Seeding/Distribution/SpeedDistributorTest.cs`   | EqualDistributor and ParetoDistributor behavior          |
 
 ## Database Migrations
 
@@ -152,25 +152,25 @@ public class AddTorrents : NzbDroneMigrationBase
 
 ### Migration History
 
-| # | Migration | Tables/Columns |
-|---|-----------|---------------|
-| 001 | `initial_setup` | Config, ScheduledTasks, Commands, Tags |
-| 002 | `add_torrents` | Torrents, TorrentFiles |
-| 003 | `add_tracker_providers` | TrackerProviderDefinitions |
-| 004 | `add_client_profiles` | ClientProfileDefinitions |
-| 005 | `add_arr_connections` | ArrConnectionDefinitions |
-| 006 | `add_notification_definitions` | NotificationDefinitions |
-| 007 | `add_speed_schedules` | SpeedSchedules |
-| 008 | `add_download_clients` | DownloadClientDefinitions |
-| 009 | `add_torrent_options` | +Priority, UploadLimit, DownloadLimit, SuperSeeding, ForceStart, Label |
-| 010 | `add_download_progress` | +Progress |
-| 011 | `add_tracker_entries` | TrackerEntries (announce stats, response times) |
-| 012 | `add_torrent_runtime_fields` | +SequentialDownload, AnnounceInterval, speeds, Eta, etc. |
-| 013 | `add_arr_connection_sync_flags` | +SyncEnabled, EnableAutomaticAdd |
-| 014 | `add_torrent_sort_order` | +SortOrder |
-| 015 | `add_force_completed` | +ForceCompleted |
-| 016 | `add_webhook_enabled` | +WebhookEnabled |
-| 017 | `add_indexer_definitions` | IndexerDefinitions |
+| #   | Migration                       | Tables/Columns                                                         |
+| --- | ------------------------------- | ---------------------------------------------------------------------- |
+| 001 | `initial_setup`                 | Config, ScheduledTasks, Commands, Tags                                 |
+| 002 | `add_torrents`                  | Torrents, TorrentFiles                                                 |
+| 003 | `add_tracker_providers`         | TrackerProviderDefinitions                                             |
+| 004 | `add_client_profiles`           | ClientProfileDefinitions                                               |
+| 005 | `add_arr_connections`           | ArrConnectionDefinitions                                               |
+| 006 | `add_notification_definitions`  | NotificationDefinitions                                                |
+| 007 | `add_speed_schedules`           | SpeedSchedules                                                         |
+| 008 | `add_download_clients`          | DownloadClientDefinitions                                              |
+| 009 | `add_torrent_options`           | +Priority, UploadLimit, DownloadLimit, SuperSeeding, ForceStart, Label |
+| 010 | `add_download_progress`         | +Progress                                                              |
+| 011 | `add_tracker_entries`           | TrackerEntries (announce stats, response times)                        |
+| 012 | `add_torrent_runtime_fields`    | +SequentialDownload, AnnounceInterval, speeds, Eta, etc.               |
+| 013 | `add_arr_connection_sync_flags` | +SyncEnabled, EnableAutomaticAdd                                       |
+| 014 | `add_torrent_sort_order`        | +SortOrder                                                             |
+| 015 | `add_force_completed`           | +ForceCompleted                                                        |
+| 016 | `add_webhook_enabled`           | +WebhookEnabled                                                        |
+| 017 | `add_indexer_definitions`       | IndexerDefinitions                                                     |
 
 ## Configuration
 

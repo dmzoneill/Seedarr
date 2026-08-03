@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
-import { Torrent } from '../../api/types';
-import { formatBytes, formatSpeed, formatRatio } from '../../utils/formatters';
-import LineChart from '../../components/LineChart';
-import { StatusRow } from './shared';
+import { useState, useEffect, useRef } from "react";
+import { Torrent } from "../../api/types";
+import { formatBytes, formatSpeed, formatRatio } from "../../utils/formatters";
+import LineChart from "../../components/LineChart";
+import { StatusRow } from "./shared";
 
 export function MonitoringTab({ torrent }: { torrent: Torrent }) {
-  const historyRef = useRef<{ uploadSpeed: number[]; downloadSpeed: number[] }>({
-    uploadSpeed: [],
-    downloadSpeed: [],
-  });
+  const historyRef = useRef<{ uploadSpeed: number[]; downloadSpeed: number[] }>(
+    {
+      uploadSpeed: [],
+      downloadSpeed: [],
+    },
+  );
 
   const prevRef = useRef<{
     uploaded: number;
@@ -27,8 +29,14 @@ export function MonitoringTab({ torrent }: { torrent: Torrent }) {
     if (prev) {
       const timeDelta = (now - prev.timestamp) / 1000;
       if (timeDelta >= 1) {
-        const upSpeed = Math.max(0, (torrent.uploaded - prev.uploaded) / timeDelta);
-        const downSpeed = Math.max(0, (torrent.downloaded - prev.downloaded) / timeDelta);
+        const upSpeed = Math.max(
+          0,
+          (torrent.uploaded - prev.uploaded) / timeDelta,
+        );
+        const downSpeed = Math.max(
+          0,
+          (torrent.downloaded - prev.downloaded) / timeDelta,
+        );
 
         const push = (arr: number[], val: number) => {
           const next = [...arr, val];
@@ -50,13 +58,20 @@ export function MonitoringTab({ torrent }: { torrent: Torrent }) {
   }, [torrent.uploaded, torrent.downloaded]);
 
   const h = historyRef.current;
-  const currentUpload = h.uploadSpeed.length > 0 ? h.uploadSpeed[h.uploadSpeed.length - 1] : 0;
-  const currentDownload = h.downloadSpeed.length > 0 ? h.downloadSpeed[h.downloadSpeed.length - 1] : 0;
+  const currentUpload =
+    h.uploadSpeed.length > 0 ? h.uploadSpeed[h.uploadSpeed.length - 1] : 0;
+  const currentDownload =
+    h.downloadSpeed.length > 0
+      ? h.downloadSpeed[h.downloadSpeed.length - 1]
+      : 0;
 
   return (
     <div className="card">
       <h3>Monitoring</h3>
-      <div className="monitoring-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+      <div
+        className="monitoring-grid"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))" }}
+      >
         <LineChart
           title="Upload Speed"
           value={formatSpeed(currentUpload)}
@@ -72,9 +87,13 @@ export function MonitoringTab({ torrent }: { torrent: Torrent }) {
           maxPoints={60}
         />
       </div>
-      <div className="detail-grid" style={{ marginTop: '1rem' }}>
-        <StatusRow label="Total Uploaded">{formatBytes(torrent.uploaded)}</StatusRow>
-        <StatusRow label="Total Downloaded">{formatBytes(torrent.downloaded)}</StatusRow>
+      <div className="detail-grid" style={{ marginTop: "1rem" }}>
+        <StatusRow label="Total Uploaded">
+          {formatBytes(torrent.uploaded)}
+        </StatusRow>
+        <StatusRow label="Total Downloaded">
+          {formatBytes(torrent.downloaded)}
+        </StatusRow>
         <StatusRow label="Ratio">{formatRatio(torrent.ratio)}</StatusRow>
       </div>
     </div>

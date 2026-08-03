@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create } from "zustand";
 
 interface AppState {
   apiKey: string;
@@ -8,7 +8,7 @@ interface AppState {
 }
 
 export const useAppStore = create<AppState>((set) => ({
-  apiKey: '',
+  apiKey: "",
   isConnected: false,
   setApiKey: (key: string) => set({ apiKey: key }),
   setConnected: (connected: boolean) => set({ isConnected: connected }),

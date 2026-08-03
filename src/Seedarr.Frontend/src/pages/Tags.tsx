@@ -1,6 +1,12 @@
-import { useState, useMemo } from 'react';
-import { useTags, useCreateTag, useUpdateTag, useDeleteTag, useTorrents } from '../api/hooks';
-import type { Tag } from '../api/types';
+import { useState, useMemo } from "react";
+import {
+  useTags,
+  useCreateTag,
+  useUpdateTag,
+  useDeleteTag,
+  useTorrents,
+} from "../api/hooks";
+import type { Tag } from "../api/types";
 
 function Tags() {
   const { data: tags, isLoading, isError } = useTags();
@@ -10,7 +16,7 @@ function Tags() {
   const deleteTag = useDeleteTag();
 
   const [editing, setEditing] = useState<Tag | null>(null);
-  const [newLabel, setNewLabel] = useState('');
+  const [newLabel, setNewLabel] = useState("");
   const [showAdd, setShowAdd] = useState(false);
 
   const tagUsageCounts = useMemo(() => {
@@ -25,12 +31,15 @@ function Tags() {
 
   function handleCreate() {
     if (!newLabel.trim()) return;
-    createTag.mutate({ label: newLabel.trim() }, {
-      onSuccess: () => {
-        setNewLabel('');
-        setShowAdd(false);
+    createTag.mutate(
+      { label: newLabel.trim() },
+      {
+        onSuccess: () => {
+          setNewLabel("");
+          setShowAdd(false);
+        },
       },
-    });
+    );
   }
 
   function handleUpdate() {
@@ -55,20 +64,30 @@ function Tags() {
 
       {showAdd && (
         <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <input
               type="text"
               className="form-input"
               placeholder="Tag name"
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               autoFocus
             />
-            <button className="btn btn-primary" onClick={handleCreate} disabled={createTag.isPending}>
+            <button
+              className="btn btn-primary"
+              onClick={handleCreate}
+              disabled={createTag.isPending}
+            >
               Save
             </button>
-            <button className="btn btn-default" onClick={() => { setShowAdd(false); setNewLabel(''); }}>
+            <button
+              className="btn btn-default"
+              onClick={() => {
+                setShowAdd(false);
+                setNewLabel("");
+              }}
+            >
               Cancel
             </button>
           </div>
@@ -93,7 +112,9 @@ function Tags() {
               <tbody>
                 {(tags ?? []).length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="torrent-table-empty">No tags defined</td>
+                    <td colSpan={3} className="torrent-table-empty">
+                      No tags defined
+                    </td>
                   </tr>
                 ) : (
                   (tags ?? []).map((tag) => (
@@ -104,8 +125,12 @@ function Tags() {
                             type="text"
                             className="form-input"
                             value={editing.label}
-                            onChange={(e) => setEditing({ ...editing, label: e.target.value })}
-                            onKeyDown={(e) => e.key === 'Enter' && handleUpdate()}
+                            onChange={(e) =>
+                              setEditing({ ...editing, label: e.target.value })
+                            }
+                            onKeyDown={(e) =>
+                              e.key === "Enter" && handleUpdate()
+                            }
                             autoFocus
                           />
                         ) : (
@@ -115,14 +140,34 @@ function Tags() {
                       <td>{tagUsageCounts[tag.label] ?? 0}</td>
                       <td>
                         {editing?.id === tag.id ? (
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button className="btn btn-sm btn-primary" onClick={handleUpdate}>Save</button>
-                            <button className="btn btn-sm btn-default" onClick={() => setEditing(null)}>Cancel</button>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button
+                              className="btn btn-sm btn-primary"
+                              onClick={handleUpdate}
+                            >
+                              Save
+                            </button>
+                            <button
+                              className="btn btn-sm btn-default"
+                              onClick={() => setEditing(null)}
+                            >
+                              Cancel
+                            </button>
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            <button className="btn btn-sm btn-default" onClick={() => setEditing({ ...tag })}>Edit</button>
-                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(tag.id)}>Delete</button>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <button
+                              className="btn btn-sm btn-default"
+                              onClick={() => setEditing({ ...tag })}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="btn btn-sm btn-danger"
+                              onClick={() => handleDelete(tag.id)}
+                            >
+                              Delete
+                            </button>
                           </div>
                         )}
                       </td>

@@ -59,22 +59,22 @@ podman-compose up -d
 
 ## Volumes
 
-| Path | Purpose |
-|------|---------|
-| `/config` | Database, settings, logs |
-| `/data` | Torrent files, watch folder |
+| Path      | Purpose                     |
+| --------- | --------------------------- |
+| `/config` | Database, settings, logs    |
+| `/data`   | Torrent files, watch folder |
 
 ## Environment
 
-| Variable | Default | Description |
-|----------|---------|-------------|
+| Variable            | Default   | Description      |
+| ------------------- | --------- | ---------------- |
 | `SEEDARR__APP_DATA` | `/config` | Config directory |
-| `TZ` | `UTC` | Timezone |
+| `TZ`                | `UTC`     | Timezone         |
 
 ## Ports
 
-| Port | Purpose |
-|------|---------|
+| Port   | Purpose           |
+| ------ | ----------------- |
 | `9898` | Web UI + REST API |
 
 ## Features

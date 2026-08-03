@@ -1,1 +1,1 @@
-export type ViewMode = 'table' | 'grid';
+export type ViewMode = "table" | "grid";

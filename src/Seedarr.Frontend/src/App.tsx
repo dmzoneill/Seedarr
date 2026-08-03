@@ -1,81 +1,103 @@
-import { useState } from 'react';
-import { Routes, Route, NavLink, useLocation, useNavigate } from 'react-router';
-import Dashboard from './pages/Dashboard';
-import TorrentIndex from './pages/TorrentIndex';
-import TorrentDetails from './pages/TorrentDetails';
-import Activity from './pages/Activity';
-import TrackerServer from './pages/TrackerServer';
-import Settings from './pages/Settings';
-import SystemStatus from './pages/SystemStatus';
-import SystemTasks from './pages/SystemTasks';
-import SystemLogs from './pages/SystemLogs';
-import SystemBackup from './pages/SystemBackup';
-import SystemUpdates from './pages/SystemUpdates';
-import SystemEvents from './pages/SystemEvents';
-import SystemLogFiles from './pages/SystemLogFiles';
-import PeerMap from './pages/PeerMap';
-import SpeedSchedule from './pages/SpeedSchedule';
-import Statistics from './pages/Statistics';
-import History from './pages/History';
-import Tags from './pages/Tags';
-import SystemNetwork from './pages/SystemNetwork';
-import StatusBar from './components/StatusBar';
-import ToastContainer from './components/Toast';
-import ErrorBoundary from './components/ErrorBoundary';
-import SignalRProvider from './components/SignalRProvider';
-import SeedarrLogo from './components/icons/SeedarrLogo';
-import SeedarrText from './components/icons/SeedarrText';
-import { DashboardIcon, TorrentIcon, SettingsIcon, SystemIcon } from './components/icons/NavIcons';
-import { ActivityIcon } from './components/icons/UIIcons';
-import { TrackerIcon, SunIcon, MoonIcon, HeartIcon, UserIcon, PeerMapIcon, ScheduleIcon, StatsIcon, HistoryIcon, SearchIcon, KeyIcon } from './components/icons/AppIcons';
-import { useTheme } from './context/ThemeContext';
-import { apiClient } from './api/client';
-import { useGeneralConfig } from './api/hooks';
+import { useState } from "react";
+import { Routes, Route, NavLink, useLocation, useNavigate } from "react-router";
+import Dashboard from "./pages/Dashboard";
+import TorrentIndex from "./pages/TorrentIndex";
+import TorrentDetails from "./pages/TorrentDetails";
+import Activity from "./pages/Activity";
+import TrackerServer from "./pages/TrackerServer";
+import Settings from "./pages/Settings";
+import SystemStatus from "./pages/SystemStatus";
+import SystemTasks from "./pages/SystemTasks";
+import SystemLogs from "./pages/SystemLogs";
+import SystemBackup from "./pages/SystemBackup";
+import SystemUpdates from "./pages/SystemUpdates";
+import SystemEvents from "./pages/SystemEvents";
+import SystemLogFiles from "./pages/SystemLogFiles";
+import PeerMap from "./pages/PeerMap";
+import SpeedSchedule from "./pages/SpeedSchedule";
+import Statistics from "./pages/Statistics";
+import History from "./pages/History";
+import Tags from "./pages/Tags";
+import SystemNetwork from "./pages/SystemNetwork";
+import StatusBar from "./components/StatusBar";
+import ToastContainer from "./components/Toast";
+import ErrorBoundary from "./components/ErrorBoundary";
+import SignalRProvider from "./components/SignalRProvider";
+import SeedarrLogo from "./components/icons/SeedarrLogo";
+import SeedarrText from "./components/icons/SeedarrText";
+import {
+  DashboardIcon,
+  TorrentIcon,
+  SettingsIcon,
+  SystemIcon,
+} from "./components/icons/NavIcons";
+import { ActivityIcon } from "./components/icons/UIIcons";
+import {
+  TrackerIcon,
+  SunIcon,
+  MoonIcon,
+  HeartIcon,
+  UserIcon,
+  PeerMapIcon,
+  ScheduleIcon,
+  StatsIcon,
+  HistoryIcon,
+  SearchIcon,
+  KeyIcon,
+} from "./components/icons/AppIcons";
+import { useTheme } from "./context/ThemeContext";
+import { apiClient } from "./api/client";
+import { useGeneralConfig } from "./api/hooks";
 
 const systemSubItems = [
-  { path: '/system/status', label: 'Status' },
-  { path: '/system/tasks', label: 'Tasks' },
-  { path: '/system/backup', label: 'Backup' },
-  { path: '/system/updates', label: 'Updates' },
-  { path: '/system/events', label: 'Events' },
-  { path: '/system/logfiles', label: 'Log Files' },
-  { path: '/system/network', label: 'Network' },
+  { path: "/system/status", label: "Status" },
+  { path: "/system/tasks", label: "Tasks" },
+  { path: "/system/backup", label: "Backup" },
+  { path: "/system/updates", label: "Updates" },
+  { path: "/system/events", label: "Events" },
+  { path: "/system/logfiles", label: "Log Files" },
+  { path: "/system/network", label: "Network" },
 ];
 
 const settingsSubItems = [
-  { path: '/settings/general', label: 'General' },
-  { path: '/settings/webui', label: 'Web UI' },
-  { path: '/settings/notifications', label: 'Notifications' },
-  { path: '/settings/seeding', label: 'Seeding' },
-  { path: '/settings/bittorrent', label: 'BitTorrent' },
-  { path: '/settings/network', label: 'Network' },
-  { path: '/settings/peer-protocol', label: 'Peer Protocol' },
-  { path: '/settings/protocols', label: 'Protocols' },
-  { path: '/settings/simulation', label: 'Simulation' },
-  { path: '/settings/tracker-server', label: 'Tracker Server' },
-  { path: '/settings/scheduler', label: 'Scheduler' },
-  { path: '/settings/indexers', label: 'Indexers' },
-  { path: '/settings/connections', label: 'Connections' },
-  { path: '/settings/download-clients', label: 'Download Clients' },
-  { path: '/settings/tags', label: 'Tags' },
-  { path: '/settings/advanced', label: 'Advanced' },
+  { path: "/settings/general", label: "General" },
+  { path: "/settings/webui", label: "Web UI" },
+  { path: "/settings/notifications", label: "Notifications" },
+  { path: "/settings/seeding", label: "Seeding" },
+  { path: "/settings/bittorrent", label: "BitTorrent" },
+  { path: "/settings/network", label: "Network" },
+  { path: "/settings/peer-protocol", label: "Peer Protocol" },
+  { path: "/settings/protocols", label: "Protocols" },
+  { path: "/settings/simulation", label: "Simulation" },
+  { path: "/settings/tracker-server", label: "Tracker Server" },
+  { path: "/settings/scheduler", label: "Scheduler" },
+  { path: "/settings/indexers", label: "Indexers" },
+  { path: "/settings/connections", label: "Connections" },
+  { path: "/settings/download-clients", label: "Download Clients" },
+  { path: "/settings/tags", label: "Tags" },
+  { path: "/settings/advanced", label: "Advanced" },
 ];
 
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [showActionsMenu, setShowActionsMenu] = useState(false);
-  const isSettingsRoute = location.pathname.startsWith('/settings');
-  const isSystemRoute = location.pathname.startsWith('/system');
+  const isSettingsRoute = location.pathname.startsWith("/settings");
+  const isSystemRoute = location.pathname.startsWith("/system");
   const { data: generalConfig } = useGeneralConfig();
   const [showApiKey, setShowApiKey] = useState(false);
 
   return (
     <div className="app">
       <aside className="sidebar">
-        <a href="https://www.seedarr.net" target="_blank" rel="noopener noreferrer" className="sidebar-logo">
+        <a
+          href="https://www.seedarr.net"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="sidebar-logo"
+        >
           <SeedarrLogo size={96} />
           <SeedarrText width={140} />
         </a>
@@ -106,31 +128,36 @@ function App() {
           </NavLink>
           <NavLink
             to="/settings/general"
-            className={`sidebar-nav-item ${isSettingsRoute ? 'active' : ''}`}
+            className={`sidebar-nav-item ${isSettingsRoute ? "active" : ""}`}
           >
             <SettingsIcon /> <span>Settings</span>
           </NavLink>
-          {isSettingsRoute && settingsSubItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className="sidebar-nav-item sidebar-nav-sub"
-            >
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
-          <NavLink to="/system/status" className={`sidebar-nav-item ${isSystemRoute ? 'active' : ''}`}>
+          {isSettingsRoute &&
+            settingsSubItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className="sidebar-nav-item sidebar-nav-sub"
+              >
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
+          <NavLink
+            to="/system/status"
+            className={`sidebar-nav-item ${isSystemRoute ? "active" : ""}`}
+          >
             <SystemIcon /> <span>System</span>
           </NavLink>
-          {isSystemRoute && systemSubItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className="sidebar-nav-item sidebar-nav-sub"
-            >
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          {isSystemRoute &&
+            systemSubItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className="sidebar-nav-item sidebar-nav-sub"
+              >
+                <span>{item.label}</span>
+              </NavLink>
+            ))}
         </nav>
       </aside>
 
@@ -145,9 +172,11 @@ function App() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && searchTerm.trim()) {
-                  navigate(`/torrents?q=${encodeURIComponent(searchTerm.trim())}`);
-                  setSearchTerm('');
+                if (e.key === "Enter" && searchTerm.trim()) {
+                  navigate(
+                    `/torrents?q=${encodeURIComponent(searchTerm.trim())}`,
+                  );
+                  setSearchTerm("");
                 }
               }}
             />
@@ -157,22 +186,22 @@ function App() {
               <div
                 className="topbar-api-key"
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  marginRight: '1rem',
-                  color: 'var(--text-dim)',
-                  fontSize: '0.85rem'
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginRight: "1rem",
+                  color: "var(--text-dim)",
+                  fontSize: "0.85rem",
                 }}
               >
                 <KeyIcon size={14} />
                 <code
                   style={{
-                    background: 'var(--bg-lighter)',
-                    padding: '0.2rem 0.5rem',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    userSelect: 'none'
+                    background: "var(--bg-lighter)",
+                    padding: "0.2rem 0.5rem",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    userSelect: "none",
                   }}
                   onClick={() => {
                     navigator.clipboard.writeText(generalConfig.apiKey);
@@ -181,41 +210,84 @@ function App() {
                   onMouseLeave={() => setShowApiKey(false)}
                   title="Click to copy API Key"
                 >
-                  {showApiKey ? generalConfig.apiKey : '••••••••••••••••••••••••••••••••'}
+                  {showApiKey
+                    ? generalConfig.apiKey
+                    : "••••••••••••••••••••••••••••••••"}
                 </code>
               </div>
             )}
-            <button className="topbar-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
-              {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+            <button
+              className="topbar-btn"
+              onClick={toggleTheme}
+              title={
+                theme === "dark"
+                  ? "Switch to light theme"
+                  : "Switch to dark theme"
+              }
+            >
+              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
             </button>
-            <a className="topbar-btn topbar-heart" href="https://github.com/sponsors/dmzoneill" target="_blank" rel="noopener noreferrer" title="Support Seedarr">
+            <a
+              className="topbar-btn topbar-heart"
+              href="https://github.com/sponsors/dmzoneill"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Support Seedarr"
+            >
               <HeartIcon />
             </a>
-            <div style={{ position: 'relative' }}>
-              <button className="topbar-btn" onClick={() => setShowActionsMenu(!showActionsMenu)} title="Actions">
+            <div style={{ position: "relative" }}>
+              <button
+                className="topbar-btn"
+                onClick={() => setShowActionsMenu(!showActionsMenu)}
+                title="Actions"
+              >
                 <UserIcon />
               </button>
               {showActionsMenu && (
-                <div className="topbar-dropdown" onClick={() => setShowActionsMenu(false)}>
-                  <button className="topbar-dropdown-item" onClick={() => navigate('/system/status')}>
+                <div
+                  className="topbar-dropdown"
+                  onClick={() => setShowActionsMenu(false)}
+                >
+                  <button
+                    className="topbar-dropdown-item"
+                    onClick={() => navigate("/system/status")}
+                  >
                     System Status
                   </button>
-                  <button className="topbar-dropdown-item" onClick={() => navigate('/settings/general')}>
+                  <button
+                    className="topbar-dropdown-item"
+                    onClick={() => navigate("/settings/general")}
+                  >
                     Settings
                   </button>
                   <div className="topbar-dropdown-separator" />
-                  <button className="topbar-dropdown-item" onClick={() => {
-                    if (confirm('Restart Seedarr?')) {
-                      apiClient.post('/system/restart').catch((err) => console.error('System action failed:', err));
-                    }
-                  }}>
+                  <button
+                    className="topbar-dropdown-item"
+                    onClick={() => {
+                      if (confirm("Restart Seedarr?")) {
+                        apiClient
+                          .post("/system/restart")
+                          .catch((err) =>
+                            console.error("System action failed:", err),
+                          );
+                      }
+                    }}
+                  >
                     Restart
                   </button>
-                  <button className="topbar-dropdown-item topbar-dropdown-danger" onClick={() => {
-                    if (confirm('Shut down Seedarr?')) {
-                      apiClient.post('/system/shutdown').catch((err) => console.error('System action failed:', err));
-                    }
-                  }}>
+                  <button
+                    className="topbar-dropdown-item topbar-dropdown-danger"
+                    onClick={() => {
+                      if (confirm("Shut down Seedarr?")) {
+                        apiClient
+                          .post("/system/shutdown")
+                          .catch((err) =>
+                            console.error("System action failed:", err),
+                          );
+                      }
+                    }}
+                  >
                     Shutdown
                   </button>
                 </div>

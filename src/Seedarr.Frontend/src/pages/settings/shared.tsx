@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router';
+import { useState, useEffect, useRef } from "react";
+import { useLocation } from "react-router";
 
 export function SaveFeedback({
   isPending,
@@ -17,12 +17,21 @@ export function SaveFeedback({
   return (
     <>
       {isError && (
-        <span className="error" style={{ marginLeft: '0.75rem', fontSize: '0.85rem' }}>
+        <span
+          className="error"
+          style={{ marginLeft: "0.75rem", fontSize: "0.85rem" }}
+        >
           Failed to save: {error?.message}
         </span>
       )}
       {isSuccess && !dirty && (
-        <span style={{ marginLeft: '0.75rem', fontSize: '0.85rem', color: 'var(--success)' }}>
+        <span
+          style={{
+            marginLeft: "0.75rem",
+            fontSize: "0.85rem",
+            color: "var(--success)",
+          }}
+        >
           Saved
         </span>
       )}
@@ -30,18 +39,41 @@ export function SaveFeedback({
   );
 }
 
-export function PendingChangesModal({ onSave, onDiscard, onCancel }: { onSave: () => void; onDiscard: () => void; onCancel: () => void }) {
+export function PendingChangesModal({
+  onSave,
+  onDiscard,
+  onCancel,
+}: {
+  onSave: () => void;
+  onDiscard: () => void;
+  onCancel: () => void;
+}) {
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+      <div
+        className="modal"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 400 }}
+      >
         <h2>Unsaved Changes</h2>
-        <p style={{ margin: '12px 0 20px', color: 'var(--color-text-muted, #aaa)' }}>
+        <p
+          style={{
+            margin: "12px 0 20px",
+            color: "var(--color-text-muted, #aaa)",
+          }}
+        >
           You have unsaved changes. What would you like to do?
         </p>
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-          <button className="btn btn-default" onClick={onCancel}>Stay</button>
-          <button className="btn btn-danger" onClick={onDiscard}>Discard</button>
-          <button className="btn btn-success" onClick={onSave}>Save</button>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="btn btn-default" onClick={onCancel}>
+            Stay
+          </button>
+          <button className="btn btn-danger" onClick={onDiscard}>
+            Discard
+          </button>
+          <button className="btn btn-success" onClick={onSave}>
+            Save
+          </button>
         </div>
       </div>
     </div>
@@ -55,9 +87,11 @@ export function useUnsavedGuard(dirty: boolean) {
 
   useEffect(() => {
     if (!dirty) return;
-    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
-    window.addEventListener('beforeunload', handler);
-    return () => window.removeEventListener('beforeunload', handler);
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
   useEffect(() => {
@@ -92,8 +126,12 @@ export function SaveBar({
   return (
     <>
       <div className="settings-toolbar">
-        <button className="btn btn-success" onClick={onSave} disabled={!dirty || isPending}>
-          {isPending ? 'Saving...' : dirty ? 'Save Changes' : 'No Changes'}
+        <button
+          className="btn btn-success"
+          onClick={onSave}
+          disabled={!dirty || isPending}
+        >
+          {isPending ? "Saving..." : dirty ? "Save Changes" : "No Changes"}
         </button>
         <SaveFeedback
           isPending={isPending}
@@ -105,7 +143,10 @@ export function SaveBar({
       </div>
       {guard.blocked && (
         <PendingChangesModal
-          onSave={() => { onSave(); guard.dismiss(); }}
+          onSave={() => {
+            onSave();
+            guard.dismiss();
+          }}
           onDiscard={guard.dismiss}
           onCancel={guard.dismiss}
         />
@@ -140,7 +181,13 @@ export function NumberInput({
       type="number"
       className="form-input"
       value={value}
-      onChange={(e) => onChange(step && step < 1 ? parseFloat(e.target.value) || 0 : parseInt(e.target.value, 10) || 0)}
+      onChange={(e) =>
+        onChange(
+          step && step < 1
+            ? parseFloat(e.target.value) || 0
+            : parseInt(e.target.value, 10) || 0,
+        )
+      }
       min={min}
       max={max}
       step={step}
@@ -188,7 +235,7 @@ export function TextInput({
       <label className="form-label">{label}</label>
       <div className="form-input-wrapper">
         <input
-          type={type || 'text'}
+          type={type || "text"}
           className="form-input"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -218,7 +265,11 @@ export function Toggle({
       <div className="form-input-wrapper">
         <div className="form-toggle-row">
           <label className="toggle-switch">
-            <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={checked}
+              onChange={(e) => onChange(e.target.checked)}
+            />
             <span className="toggle-slider" />
           </label>
           {hint && <span className="form-toggle-description">{hint}</span>}

@@ -1,7 +1,10 @@
 export function formatBytes(bytes: number): string {
-  if (bytes <= 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
-  const i = Math.max(0, Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024))));
+  if (bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+  const i = Math.max(
+    0,
+    Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024))),
+  );
   const val = bytes / Math.pow(1024, i);
   return `${val.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
@@ -15,7 +18,7 @@ export function formatRatio(ratio: number): string {
 }
 
 export function formatDate(dateString: string | null): string {
-  if (!dateString) return '-';
+  if (!dateString) return "-";
   return new Date(dateString).toLocaleString();
 }
 
@@ -32,7 +35,7 @@ export function formatDuration(startDate: string): string {
 }
 
 export function formatSeconds(seconds: number): string {
-  if (seconds <= 0) return '-';
+  if (seconds <= 0) return "-";
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
@@ -51,11 +54,11 @@ export function formatUptime(seconds: number): string {
 }
 
 export function extractTrackerDomain(url: string | null): string {
-  if (!url) return 'Unknown';
+  if (!url) return "Unknown";
   try {
     const parsed = new URL(url);
     return parsed.hostname;
   } catch {
-    return 'Unknown';
+    return "Unknown";
   }
 }

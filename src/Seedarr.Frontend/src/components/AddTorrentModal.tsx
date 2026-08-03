@@ -1,16 +1,16 @@
-import { useState, useRef, useCallback } from 'react';
-import { useAddTorrent, AddTorrentResult } from '../api/hooks';
+import { useState, useRef, useCallback } from "react";
+import { useAddTorrent, AddTorrentResult } from "../api/hooks";
 
 interface AddTorrentModalProps {
   onClose: () => void;
 }
 
-type InputMode = 'file' | 'magnet';
+type InputMode = "file" | "magnet";
 
 function AddTorrentModal({ onClose }: AddTorrentModalProps) {
-  const [mode, setMode] = useState<InputMode>('file');
+  const [mode, setMode] = useState<InputMode>("file");
   const [files, setFiles] = useState<File[]>([]);
-  const [magnetLink, setMagnetLink] = useState('');
+  const [magnetLink, setMagnetLink] = useState("");
   const [isDragOver, setIsDragOver] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -24,7 +24,7 @@ function AddTorrentModal({ onClose }: AddTorrentModalProps) {
 
   const addFiles = useCallback((incoming: FileList | File[]) => {
     const torrentFiles = Array.from(incoming).filter((f) =>
-      f.name.endsWith('.torrent')
+      f.name.endsWith(".torrent"),
     );
     if (torrentFiles.length === 0) return;
     setFiles((prev) => {
@@ -60,18 +60,18 @@ function AddTorrentModal({ onClose }: AddTorrentModalProps) {
       setIsDragOver(false);
       addFiles(e.dataTransfer.files);
     },
-    [addFiles]
+    [addFiles],
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       addFiles(e.target.files);
     }
-    e.target.value = '';
+    e.target.value = "";
   };
 
   const handleSubmit = () => {
-    if (mode === 'file' && files.length > 0) {
+    if (mode === "file" && files.length > 0) {
       setResultMessage(null);
       addTorrent.mutate(
         { files },
@@ -81,29 +81,27 @@ function AddTorrentModal({ onClose }: AddTorrentModalProps) {
               onClose();
               return;
             }
-            const failedNames = new Set(
-              result.failed.map((f) => f.fileName)
-            );
+            const failedNames = new Set(result.failed.map((f) => f.fileName));
             setFiles((prev) => prev.filter((f) => failedNames.has(f.name)));
             setResultMessage(
               `${result.added.length} added, ${result.failed.length} skipped: ${result.failed
                 .map((f) => `${f.fileName} (${f.reason})`)
-                .join('; ')}`
+                .join("; ")}`,
             );
           },
-        }
+        },
       );
-    } else if (mode === 'magnet' && magnetLink.trim()) {
+    } else if (mode === "magnet" && magnetLink.trim()) {
       addTorrent.mutate(
         { magnetLink: magnetLink.trim() },
-        { onSuccess: () => onClose() }
+        { onSuccess: () => onClose() },
       );
     }
   };
 
   const canSubmit =
-    (mode === 'file' && files.length > 0) ||
-    (mode === 'magnet' && magnetLink.trim().startsWith('magnet:?'));
+    (mode === "file" && files.length > 0) ||
+    (mode === "magnet" && magnetLink.trim().startsWith("magnet:?"));
 
   return (
     <div className="modal-overlay" onClick={handleBackdropClick}>
@@ -112,23 +110,23 @@ function AddTorrentModal({ onClose }: AddTorrentModalProps) {
 
         <div className="tab-nav">
           <button
-            className={`tab-btn ${mode === 'file' ? 'tab-btn-active' : ''}`}
-            onClick={() => setMode('file')}
+            className={`tab-btn ${mode === "file" ? "tab-btn-active" : ""}`}
+            onClick={() => setMode("file")}
           >
             Torrent File
           </button>
           <button
-            className={`tab-btn ${mode === 'magnet' ? 'tab-btn-active' : ''}`}
-            onClick={() => setMode('magnet')}
+            className={`tab-btn ${mode === "magnet" ? "tab-btn-active" : ""}`}
+            onClick={() => setMode("magnet")}
           >
             Magnet Link
           </button>
         </div>
 
-        {mode === 'file' && (
+        {mode === "file" && (
           <>
             <div
-              className={`drop-zone ${isDragOver ? 'drop-zone-active' : ''} ${files.length > 0 ? 'drop-zone-has-file' : ''}`}
+              className={`drop-zone ${isDragOver ? "drop-zone-active" : ""} ${files.length > 0 ? "drop-zone-has-file" : ""}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -170,12 +168,12 @@ function AddTorrentModal({ onClose }: AddTorrentModalProps) {
               accept=".torrent"
               multiple
               onChange={handleFileChange}
-              style={{ display: 'none' }}
+              style={{ display: "none" }}
             />
           </>
         )}
 
-        {mode === 'magnet' && (
+        {mode === "magnet" && (
           <input
             type="text"
             className="search-input modal-magnet-input"
@@ -191,13 +189,17 @@ function AddTorrentModal({ onClose }: AddTorrentModalProps) {
             {addTorrent.isError
               ? addTorrent.error instanceof Error
                 ? addTorrent.error.message
-                : 'Failed to add torrent'
+                : "Failed to add torrent"
               : resultMessage}
           </div>
         )}
 
         <div className="modal-actions">
-          <button className="btn" onClick={onClose} disabled={addTorrent.isPending}>
+          <button
+            className="btn"
+            onClick={onClose}
+            disabled={addTorrent.isPending}
+          >
             Cancel
           </button>
           <button
@@ -205,7 +207,7 @@ function AddTorrentModal({ onClose }: AddTorrentModalProps) {
             onClick={handleSubmit}
             disabled={!canSubmit || addTorrent.isPending}
           >
-            {addTorrent.isPending ? 'Adding...' : 'Add'}
+            {addTorrent.isPending ? "Adding..." : "Add"}
           </button>
         </div>
       </div>

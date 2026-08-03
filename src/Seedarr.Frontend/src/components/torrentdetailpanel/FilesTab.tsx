@@ -1,6 +1,6 @@
-import { useTorrentFiles } from '../../api/hooks';
-import { formatBytes } from '../../utils/formatters';
-import { PanelLoading, PanelEmpty } from './shared';
+import { useTorrentFiles } from "../../api/hooks";
+import { formatBytes } from "../../utils/formatters";
+import { PanelLoading, PanelEmpty } from "./shared";
 
 export function FilesTab({ torrentId }: { torrentId: number }) {
   const { data: files, isLoading, isError } = useTorrentFiles(torrentId);
