@@ -14,6 +14,10 @@ import SystemUpdates from './pages/SystemUpdates';
 import SystemEvents from './pages/SystemEvents';
 import SystemLogFiles from './pages/SystemLogFiles';
 import PeerMap from './pages/PeerMap';
+import SpeedSchedule from './pages/SpeedSchedule';
+import Statistics from './pages/Statistics';
+import History from './pages/History';
+import Tags from './pages/Tags';
 import StatusBar from './components/StatusBar';
 import ToastContainer from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -97,6 +101,35 @@ function PeerMapIcon() {
   );
 }
 
+function ScheduleIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  );
+}
+
+function StatsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10" />
+      <line x1="12" y1="20" x2="12" y2="4" />
+      <line x1="6" y1="20" x2="6" y2="14" />
+    </svg>
+  );
+}
+
+function HistoryIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M1 4v6h6" />
+      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+      <polyline points="12 7 12 12 16.5 14.5" />
+    </svg>
+  );
+}
+
 function SearchIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -130,6 +163,7 @@ const settingsSubItems = [
   { path: '/settings/indexers', label: 'Indexers' },
   { path: '/settings/connections', label: 'Connections' },
   { path: '/settings/download-clients', label: 'Download Clients' },
+  { path: '/settings/tags', label: 'Tags' },
   { path: '/settings/advanced', label: 'Advanced' },
 ];
 
@@ -163,6 +197,15 @@ function App() {
           </NavLink>
           <NavLink to="/peermap" className="sidebar-nav-item">
             <PeerMapIcon /> <span>Peer Map</span>
+          </NavLink>
+          <NavLink to="/schedule" className="sidebar-nav-item">
+            <ScheduleIcon /> <span>Schedule</span>
+          </NavLink>
+          <NavLink to="/statistics" className="sidebar-nav-item">
+            <StatsIcon /> <span>Statistics</span>
+          </NavLink>
+          <NavLink to="/history" className="sidebar-nav-item">
+            <HistoryIcon /> <span>History</span>
           </NavLink>
           <NavLink
             to="/settings/general"
@@ -231,6 +274,10 @@ function App() {
               <Route path="/activity" element={<Activity />} />
               <Route path="/tracker" element={<TrackerServer />} />
               <Route path="/peermap" element={<PeerMap />} />
+              <Route path="/schedule" element={<SpeedSchedule />} />
+              <Route path="/statistics" element={<Statistics />} />
+              <Route path="/history" element={<History />} />
+              <Route path="/settings/tags" element={<Tags />} />
               <Route path="/settings/:section?" element={<Settings />} />
               <Route path="/system/status" element={<SystemStatus />} />
               <Route path="/system/tasks" element={<SystemTasks />} />
