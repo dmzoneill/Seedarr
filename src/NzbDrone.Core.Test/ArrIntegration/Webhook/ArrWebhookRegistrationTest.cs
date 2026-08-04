@@ -922,4 +922,34 @@ public class ArrWebhookRegistrationTest
 
         Assert.That(result, Is.True);
     }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_use_full_url_when_webhook_host_contains_protocol()
+    {
+        _configFileProvider.Port.Returns(9898);
+        _configFileProvider.UrlBase.Returns("");
+        var connection = new ArrConnectionDefinition { WebhookHost = "http://seedarr.tanoki.online" };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("http://seedarr.tanoki.online"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_ignore_hex_container_id_in_bind_address()
+    {
+        _configFileProvider.BindAddress.Returns("43aed7b7e138");
+        _configFileProvider.Port.Returns(9898);
+        _configFileProvider.UrlBase.Returns("");
+        var connection = new ArrConnectionDefinition();
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        var expectedHost = Dns.GetHostName();
+        Assert.That(result, Is.EqualTo($"http://{expectedHost}:9898"));
+    }
 }
