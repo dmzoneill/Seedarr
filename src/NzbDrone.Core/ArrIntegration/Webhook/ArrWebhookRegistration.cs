@@ -301,10 +301,10 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             return false;
         }
 
-        return url.Contains("://localhost", StringComparison.OrdinalIgnoreCase) ||
-               url.Contains("://127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
-               url.Contains("://[::1]", StringComparison.OrdinalIgnoreCase) ||
-               url.Contains("://0.0.0.0", StringComparison.OrdinalIgnoreCase);
+        return url.Contains("://localhost", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("://127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("://[::1]", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("://0.0.0.0", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsHexContainerId(string s)
