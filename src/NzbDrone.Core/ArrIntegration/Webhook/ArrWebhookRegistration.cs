@@ -19,6 +19,8 @@ public interface IArrWebhookRegistration
 
 public class ArrWebhookRegistration : IArrWebhookRegistration
 {
+    private record ExistingWebhookInfo(int Id, string Url, string ApiKey);
+
     private static readonly HttpClient SharedClient = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10)
@@ -52,11 +54,14 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             var apiVersion = connection.ArrType == "Lidarr" ? "v1" : "v3";
             var seedarrUrl = GetSeedarrBaseUrl(connection);
             var webhookUrl = $"{seedarrUrl}/api/v1/webhook/arr";
+            var currentApiKey = _configFileProvider.ApiKey ?? string.Empty;
 
-            var existingId = FindExistingWebhook(connection, apiVersion, webhookUrl);
-            if (existingId.HasValue)
+            var existing = FindExistingWebhook(connection, apiVersion);
+            if (existing != null &&
+                string.Equals(existing.Url, webhookUrl, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(existing.ApiKey, currentApiKey, StringComparison.Ordinal))
             {
-                _logger.Debug("Seedarr webhook already registered in {0} (notification id {1})", connection.ArrType, existingId.Value);
+                _logger.Debug("Seedarr webhook already registered in {0} (notification id {1})", connection.ArrType, existing.Id);
                 return true;
             }
 
@@ -69,16 +74,18 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                     name = "headers",
                     value = (object)new[]
                     {
-                        new { key = "X-Api-Key", value = _configFileProvider.ApiKey }
+                        new { key = "X-Api-Key", value = currentApiKey }
                     }
                 }
             };
 
             // NOTE: Only one "Seedarr" notification is supported per arr app.
             // FindExistingWebhook matches by this name + URL, so a second connection to the
-            // same arr app won't register a separate webhook — the first one is reused.
+            // same arr app won't register a separate webhook — the first one is reused/updated.
+            var isUpdate = existing != null && existing.Id > 0;
             var notificationBody = new
             {
+                id = isUpdate ? existing.Id : 0,
                 name = "Seedarr",
                 implementation = "Webhook",
                 configContract = "WebhookSettings",
@@ -95,19 +102,32 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
             return _policy.Execute(ct =>
             {
-                using var request = new HttpRequestMessage(HttpMethod.Post,
-                    $"{connection.Url}/api/{apiVersion}/notification");
+                var url = isUpdate
+                    ? $"{connection.Url}/api/{apiVersion}/notification/{existing.Id}"
+                    : $"{connection.Url}/api/{apiVersion}/notification";
+                var method = isUpdate ? HttpMethod.Put : HttpMethod.Post;
+
+                using var request = new HttpRequestMessage(method, url);
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
                 request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 using var response = _client.Send(request, ct);
                 if (response.IsSuccessStatusCode)
                 {
-                    _logger.Info("Registered Seedarr webhook in {0} at {1}", connection.ArrType, connection.Url);
+                    _logger.Info(
+                        "{0} Seedarr webhook in {1} at {2} (target: {3})",
+                        isUpdate ? "Updated" : "Registered",
+                        connection.ArrType,
+                        connection.Url,
+                        webhookUrl);
                     return true;
                 }
 
-                _logger.Warn("Failed to register webhook in {0}: {1}", connection.ArrType, response.StatusCode);
+                _logger.Warn(
+                    "Failed to {0} webhook in {1}: {2}",
+                    isUpdate ? "update" : "register",
+                    connection.ArrType,
+                    response.StatusCode);
                 return false;
             });
         }
@@ -123,11 +143,8 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
         try
         {
             var apiVersion = connection.ArrType == "Lidarr" ? "v1" : "v3";
-            var seedarrUrl = GetSeedarrBaseUrl(connection);
-            var webhookUrl = $"{seedarrUrl}/api/v1/webhook/arr";
-
-            var existingId = FindExistingWebhook(connection, apiVersion, webhookUrl);
-            if (!existingId.HasValue)
+            var existing = FindExistingWebhook(connection, apiVersion);
+            if (existing == null)
             {
                 return true;
             }
@@ -135,7 +152,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             return _policy.Execute(ct =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Delete,
-                    $"{connection.Url}/api/{apiVersion}/notification/{existingId.Value}");
+                    $"{connection.Url}/api/{apiVersion}/notification/{existing.Id}");
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
 
                 using var response = _client.Send(request, ct);
@@ -156,7 +173,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
         }
     }
 
-    private int? FindExistingWebhook(ArrConnectionDefinition connection, string apiVersion, string webhookUrl)
+    private ExistingWebhookInfo FindExistingWebhook(ArrConnectionDefinition connection, string apiVersion)
     {
         try
         {
@@ -169,7 +186,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                 using var response = _client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
-                    return (int?)null;
+                    return (ExistingWebhookInfo)null;
                 }
 
                 var json = response.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult();
@@ -178,26 +195,43 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                 foreach (var notification in doc.RootElement.EnumerateArray())
                 {
                     var name = notification.TryGetProperty("name", out var n) ? n.GetString() : null;
-                    if (name != "Seedarr")
-                    {
-                        continue;
-                    }
+
+                    string url = null;
+                    string apiKey = null;
 
                     if (notification.TryGetProperty("fields", out var fields))
                     {
                         foreach (var field in fields.EnumerateArray())
                         {
                             var fieldName = field.TryGetProperty("name", out var fn) ? fn.GetString() : null;
-                            var fieldValue = field.TryGetProperty("value", out var fv) ? fv.GetString() : null;
-                            if (fieldName == "url" && fieldValue == webhookUrl)
+                            if (fieldName == "url")
                             {
-                                return notification.GetProperty("id").GetInt32();
+                                url = field.TryGetProperty("value", out var fv) ? fv.GetString() : null;
+                            }
+                            else if (fieldName == "headers" && field.TryGetProperty("value", out var headers))
+                            {
+                                foreach (var h in headers.EnumerateArray())
+                                {
+                                    var hKey = h.TryGetProperty("key", out var hk) ? hk.GetString() : null;
+                                    if (string.Equals(hKey, "X-Api-Key", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        apiKey = h.TryGetProperty("value", out var hv) ? hv.GetString() : null;
+                                    }
+                                }
                             }
                         }
                     }
+
+                    var isSeedarr = string.Equals(name, "Seedarr", StringComparison.OrdinalIgnoreCase) ||
+                                    (url != null && url.Contains("/api/v1/webhook/arr", StringComparison.OrdinalIgnoreCase));
+
+                    if (isSeedarr && notification.TryGetProperty("id", out var idProp))
+                    {
+                        return new ExistingWebhookInfo(idProp.GetInt32(), url, apiKey);
+                    }
                 }
 
-                return (int?)null;
+                return (ExistingWebhookInfo)null;
             });
         }
         catch (Exception ex)
@@ -244,11 +278,32 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             bindAddress == "0.0.0.0" ||
             IsHexContainerId(bindAddress))
         {
-            bindAddress = Dns.GetHostName();
+            if (IsLoopbackOrLocalhost(connection?.Url))
+            {
+                bindAddress = "127.0.0.1";
+            }
+            else
+            {
+                var hostname = Dns.GetHostName();
+                bindAddress = IsHexContainerId(hostname) ? "seedarr" : hostname;
+            }
         }
 
         var schemeDefault = _configFileProvider.EnableSsl ? "https" : "http";
         return $"{schemeDefault}://{bindAddress}:{port}{urlBase}";
+    }
+
+    private static bool IsLoopbackOrLocalhost(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return false;
+        }
+
+        return url.Contains("://localhost", StringComparison.OrdinalIgnoreCase) ||
+               url.Contains("://127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+               url.Contains("://[::1]", StringComparison.OrdinalIgnoreCase) ||
+               url.Contains("://0.0.0.0", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsHexContainerId(string s)
