@@ -13,15 +13,7 @@ public class ProwlarrTests : ApiTestBase
     [OneTimeSetUp]
     public async Task FetchProwlarrApiKey()
     {
-        try
-        {
-            var output = await RunCommandAsync("podman", "exec prowlarr grep -oP '(?<=<ApiKey>)[^<]+' /config/config.xml");
-            _prowlarrApiKey = output.Trim();
-        }
-        catch
-        {
-            _prowlarrApiKey = string.Empty;
-        }
+        _prowlarrApiKey = await GetApiKeyAsync(ProwlarrUrl);
     }
 
     [Test]
