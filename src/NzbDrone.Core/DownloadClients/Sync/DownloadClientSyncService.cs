@@ -154,7 +154,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService
         return null;
     }
 
-    private IIndexer CreateIndexer(IndexerDefinition definition)
+    protected virtual IIndexer CreateIndexer(IndexerDefinition definition)
     {
         return definition.IndexerType switch
         {
@@ -165,7 +165,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService
         };
     }
 
-    private IDownloadClient CreateClient(DownloadClientDefinition definition)
+    protected virtual IDownloadClient CreateClient(DownloadClientDefinition definition)
     {
         return definition.ClientType switch
         {
