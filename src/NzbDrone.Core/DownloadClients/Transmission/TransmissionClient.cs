@@ -178,16 +178,54 @@ public class TransmissionClient : IDownloadClient, IDisposable
 
     public bool TestConnection()
     {
+        return TestConnectionDetailed().Success;
+    }
+
+    public DownloadClientTestResult TestConnectionDetailed()
+    {
+        if (string.IsNullOrWhiteSpace(Host))
+        {
+            return DownloadClientTestResult.Fail("Host cannot be empty");
+        }
+
         try
         {
             using var doc = SendRequest("session-get", new { });
-            return doc.RootElement.TryGetProperty("result", out var result) &&
-                result.GetString() == "success";
+            if (doc.RootElement.TryGetProperty("result", out var result) && result.GetString() == "success")
+            {
+                var version = "";
+                if (doc.RootElement.TryGetProperty("arguments", out var args) &&
+                    args.TryGetProperty("version", out var v))
+                {
+                    version = v.GetString();
+                }
+
+                var verStr = string.IsNullOrEmpty(version) ? "" : $" v{version}";
+                return DownloadClientTestResult.Ok($"Successfully connected to Transmission{verStr} at {RpcUrl}");
+            }
+
+            return DownloadClientTestResult.Fail("Transmission session-get returned unexpected result");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            return DownloadClientTestResult.Fail("Authentication failed (HTTP 401 Unauthorized). Please check username and password.");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return DownloadClientTestResult.Fail($"Endpoint not found (HTTP 404 Not Found) at {RpcUrl}. Please verify the host and port.");
+        }
+        catch (HttpRequestException ex)
+        {
+            return DownloadClientTestResult.Fail($"Network error connecting to {RpcUrl}: {ex.Message}");
+        }
+        catch (TaskCanceledException)
+        {
+            return DownloadClientTestResult.Fail($"Connection timed out connecting to {RpcUrl} (exceeded 10s)");
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Transmission connection test failed");
-            return false;
+            return DownloadClientTestResult.Fail($"Connection failed: {ex.Message}");
         }
     }
 

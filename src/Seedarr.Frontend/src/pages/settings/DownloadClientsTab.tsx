@@ -5,9 +5,13 @@ import {
   useUpdateDownloadClient,
   useDeleteDownloadClient,
   useTestDownloadClient,
+  useTestDirectDownloadClient,
   useDownloadClientSync,
 } from "../../api/hooks";
-import type { DownloadClientDefinition } from "../../api/types";
+import type {
+  DownloadClientDefinition,
+  DownloadClientTestResult,
+} from "../../api/types";
 import { TextInput, SelectInput, Toggle, NumberInput } from "./shared";
 
 export function DownloadClientsTab() {
@@ -16,12 +20,15 @@ export function DownloadClientsTab() {
   const updateMutation = useUpdateDownloadClient();
   const deleteMutation = useDeleteDownloadClient();
   const testMutation = useTestDownloadClient();
+  const testDirectMutation = useTestDirectDownloadClient();
   const syncMutation = useDownloadClientSync();
   const [editing, setEditing] =
     useState<Partial<DownloadClientDefinition> | null>(null);
   const [testResults, setTestResults] = useState<
-    Record<number, boolean | null>
+    Record<number, DownloadClientTestResult | null>
   >({});
+  const [modalTestResult, setModalTestResult] =
+    useState<DownloadClientTestResult | null>(null);
 
   const defaultClient: Partial<DownloadClientDefinition> = {
     name: "",
@@ -41,6 +48,11 @@ export function DownloadClientsTab() {
     Deluge: { port: 8112 },
   };
 
+  const handleOpenModal = (client: Partial<DownloadClientDefinition>) => {
+    setModalTestResult(null);
+    setEditing({ ...client });
+  };
+
   const handleSave = () => {
     if (!editing) return;
     if (editing.id) {
@@ -55,9 +67,25 @@ export function DownloadClientsTab() {
   const handleTest = (id: number) => {
     setTestResults((prev) => ({ ...prev, [id]: null }));
     testMutation.mutate(id, {
-      onSuccess: (data) =>
-        setTestResults((prev) => ({ ...prev, [id]: data.success })),
-      onError: () => setTestResults((prev) => ({ ...prev, [id]: false })),
+      onSuccess: (data) => setTestResults((prev) => ({ ...prev, [id]: data })),
+      onError: (err) =>
+        setTestResults((prev) => ({
+          ...prev,
+          [id]: { success: false, message: err.message },
+        })),
+    });
+  };
+
+  const handleModalTest = () => {
+    if (!editing) return;
+    setModalTestResult(null);
+    testDirectMutation.mutate(editing, {
+      onSuccess: (data) => setModalTestResult(data),
+      onError: (err) =>
+        setModalTestResult({
+          success: false,
+          message: err.message || "Connection test failed",
+        }),
     });
   };
 
@@ -97,7 +125,7 @@ export function DownloadClientsTab() {
             <div
               key={client.id}
               className="provider-card"
-              onClick={() => setEditing({ ...client })}
+              onClick={() => handleOpenModal(client)}
             >
               <div className="provider-card-actions">
                 <button
@@ -145,13 +173,16 @@ export function DownloadClientsTab() {
               <div className="provider-card-info">
                 {client.host}:{client.port}
               </div>
-              {testResults[client.id] === true && (
+              {testResults[client.id]?.success === true && (
                 <div className="provider-card-test provider-card-test-ok">
                   Test passed
                 </div>
               )}
-              {testResults[client.id] === false && (
-                <div className="provider-card-test provider-card-test-fail">
+              {testResults[client.id]?.success === false && (
+                <div
+                  className="provider-card-test provider-card-test-fail"
+                  title={testResults[client.id]?.message}
+                >
                   Test failed
                 </div>
               )}
@@ -164,7 +195,7 @@ export function DownloadClientsTab() {
           ))}
           <div
             className="provider-card-add"
-            onClick={() => setEditing({ ...defaultClient })}
+            onClick={() => handleOpenModal(defaultClient)}
           >
             <span className="provider-card-add-icon">+</span>
           </div>
@@ -180,19 +211,23 @@ export function DownloadClientsTab() {
             <TextInput
               label="Name"
               value={editing.name || ""}
-              onChange={(v) => setEditing({ ...editing, name: v })}
+              onChange={(v) => {
+                setModalTestResult(null);
+                setEditing({ ...editing, name: v });
+              }}
               placeholder="My qBittorrent"
             />
             <SelectInput
               label="Client Type"
               value={editing.clientType || "QBitTorrent"}
-              onChange={(v) =>
+              onChange={(v) => {
+                setModalTestResult(null);
                 setEditing({
                   ...editing,
                   clientType: v,
                   port: clientDefaults[v]?.port || editing.port || 8080,
-                })
-              }
+                });
+              }}
               options={[
                 { value: "QBitTorrent", label: "qBittorrent" },
                 { value: "Transmission", label: "Transmission" },
@@ -202,61 +237,180 @@ export function DownloadClientsTab() {
             <TextInput
               label="Host"
               value={editing.host || ""}
-              onChange={(v) => setEditing({ ...editing, host: v })}
+              onChange={(v) => {
+                setModalTestResult(null);
+                setEditing({ ...editing, host: v });
+              }}
               placeholder="localhost"
             />
             <NumberInput
               label="Port"
               value={editing.port || 8080}
-              onChange={(v) => setEditing({ ...editing, port: v })}
+              onChange={(v) => {
+                setModalTestResult(null);
+                setEditing({ ...editing, port: v });
+              }}
               min={1}
               max={65535}
             />
             <Toggle
               label="Use SSL"
               checked={editing.useSsl ?? false}
-              onChange={(v) => setEditing({ ...editing, useSsl: v })}
+              onChange={(v) => {
+                setModalTestResult(null);
+                setEditing({ ...editing, useSsl: v });
+              }}
             />
             <TextInput
               label="Username"
               value={editing.username || ""}
-              onChange={(v) => setEditing({ ...editing, username: v })}
+              onChange={(v) => {
+                setModalTestResult(null);
+                setEditing({ ...editing, username: v });
+              }}
             />
             <TextInput
               label="Password"
               value={editing.password || ""}
-              onChange={(v) => setEditing({ ...editing, password: v })}
+              onChange={(v) => {
+                setModalTestResult(null);
+                setEditing({ ...editing, password: v });
+              }}
               type="password"
             />
             <TextInput
               label="Category"
               value={editing.category || ""}
-              onChange={(v) => setEditing({ ...editing, category: v })}
+              onChange={(v) => {
+                setModalTestResult(null);
+                setEditing({ ...editing, category: v });
+              }}
               hint="Filter by category"
             />
             <Toggle
               label="Enabled"
               checked={editing.enable ?? true}
-              onChange={(v) => setEditing({ ...editing, enable: v })}
+              onChange={(v) => {
+                setModalTestResult(null);
+                setEditing({ ...editing, enable: v });
+              }}
             />
+
+            {testDirectMutation.isPending && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  backgroundColor: "rgba(0, 123, 255, 0.12)",
+                  color: "var(--primary, #007bff)",
+                  border: "1px solid rgba(0, 123, 255, 0.35)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <span>
+                  Testing connection to {editing.host || "localhost"}:
+                  {editing.port || 8080}...
+                </span>
+              </div>
+            )}
+
+            {modalTestResult && !testDirectMutation.isPending && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  lineHeight: "1.4",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.65rem",
+                  backgroundColor: modalTestResult.success
+                    ? "rgba(40, 167, 69, 0.15)"
+                    : "rgba(220, 53, 69, 0.15)",
+                  color: modalTestResult.success
+                    ? "var(--success, #28a745)"
+                    : "var(--danger, #dc3545)",
+                  border: `1px solid ${
+                    modalTestResult.success
+                      ? "rgba(40, 167, 69, 0.35)"
+                      : "rgba(220, 53, 69, 0.35)"
+                  }`,
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: "bold",
+                    fontSize: "1.1rem",
+                    lineHeight: "1",
+                  }}
+                >
+                  {modalTestResult.success ? "✓" : "✕"}
+                </span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600 }}>
+                    {modalTestResult.success
+                      ? "Connection Successful"
+                      : "Connection Failed"}
+                  </div>
+                  {modalTestResult.message && (
+                    <div
+                      style={{
+                        marginTop: "0.25rem",
+                        opacity: 0.95,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {modalTestResult.message}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {(createMutation.isError || updateMutation.isError) && (
               <div className="modal-error">
                 {(createMutation.error || updateMutation.error)?.message}
               </div>
             )}
-            <div className="modal-actions">
-              <button className="btn" onClick={() => setEditing(null)}>
-                Cancel
-              </button>
+            <div
+              className="modal-actions"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
               <button
-                className="btn btn-success"
-                onClick={handleSave}
-                disabled={createMutation.isPending || updateMutation.isPending}
+                type="button"
+                className="btn"
+                onClick={handleModalTest}
+                disabled={testDirectMutation.isPending}
               >
-                {createMutation.isPending || updateMutation.isPending
-                  ? "Saving..."
-                  : "Save"}
+                {testDirectMutation.isPending
+                  ? "Testing..."
+                  : "Test Connection"}
               </button>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button className="btn" onClick={() => setEditing(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-success"
+                  onClick={handleSave}
+                  disabled={
+                    createMutation.isPending || updateMutation.isPending
+                  }
+                >
+                  {createMutation.isPending || updateMutation.isPending
+                    ? "Saving..."
+                    : "Save"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
