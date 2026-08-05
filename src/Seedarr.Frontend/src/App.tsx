@@ -18,6 +18,7 @@ import SpeedSchedule from './pages/SpeedSchedule';
 import Statistics from './pages/Statistics';
 import History from './pages/History';
 import Tags from './pages/Tags';
+import SystemNetwork from './pages/SystemNetwork';
 import StatusBar from './components/StatusBar';
 import ToastContainer from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -146,6 +147,7 @@ const systemSubItems = [
   { path: '/system/updates', label: 'Updates' },
   { path: '/system/events', label: 'Events' },
   { path: '/system/logfiles', label: 'Log Files' },
+  { path: '/system/network', label: 'Network' },
 ];
 
 const settingsSubItems = [
@@ -286,6 +288,7 @@ function App() {
               <Route path="/system/updates" element={<SystemUpdates />} />
               <Route path="/system/events" element={<SystemEvents />} />
               <Route path="/system/logfiles" element={<SystemLogFiles />} />
+              <Route path="/system/network" element={<SystemNetwork />} />
             </Routes>
           </ErrorBoundary>
         </main>
