@@ -86,7 +86,7 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id}/test")]
-    public ActionResult<object> TestConnection(int id)
+    public ActionResult<DownloadClientTestResult> TestConnection(int id)
     {
         var definition = _downloadClientFactory.Get(id);
         if (definition == null)
@@ -104,8 +104,34 @@ public class DownloadClientController : Controller
             return BadRequest(new { message = ex.Message });
         }
 
-        var success = client.TestConnection();
-        return Ok(new { success });
+        var result = client.TestConnectionDetailed();
+        return Ok(result);
+    }
+
+    [HttpPost("test")]
+    public ActionResult<DownloadClientTestResult> TestDirect([FromBody] DownloadClientDefinition definition)
+    {
+        if (definition.Id > 0 && definition.Password == PasswordMask)
+        {
+            var existing = _downloadClientFactory.Get(definition.Id);
+            if (existing != null)
+            {
+                definition.Password = existing.Password;
+            }
+        }
+
+        IDownloadClient client;
+        try
+        {
+            client = CreateClient(definition);
+        }
+        catch (ArgumentException ex)
+        {
+            return Ok(DownloadClientTestResult.Fail($"Invalid configuration: {ex.Message}"));
+        }
+
+        var result = client.TestConnectionDetailed();
+        return Ok(result);
     }
 
     private static DownloadClientDefinition MaskPassword(DownloadClientDefinition definition)

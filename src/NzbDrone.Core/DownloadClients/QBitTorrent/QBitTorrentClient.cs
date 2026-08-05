@@ -137,20 +137,63 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
     public bool TestConnection()
     {
+        return TestConnectionDetailed().Success;
+    }
+
+    public DownloadClientTestResult TestConnectionDetailed()
+    {
+        if (string.IsNullOrWhiteSpace(Host))
+        {
+            return DownloadClientTestResult.Fail("Host cannot be empty");
+        }
+
         try
         {
-            var response = Task.Run(() => _client.GetAsync($"{BaseUrl}/api/v2/app/version")).GetAwaiter().GetResult();
-            if (!response.IsSuccessStatusCode)
+            var versionResp = Task.Run(() => _client.GetAsync($"{BaseUrl}/api/v2/app/version")).GetAwaiter().GetResult();
+            if (versionResp.IsSuccessStatusCode)
             {
-                return Authenticate();
+                var version = Task.Run(() => versionResp.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
+                var verStr = string.IsNullOrWhiteSpace(version) ? "" : $" {version.Trim()}";
+                return DownloadClientTestResult.Ok($"Successfully connected to qBittorrent{verStr} at {BaseUrl}");
             }
 
-            return true;
+            using var content = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("username", Username),
+                new KeyValuePair<string, string>("password", Password),
+            });
+
+            var response = Task.Run(() => _client.PostAsync($"{BaseUrl}/api/v2/auth/login", content)).GetAwaiter().GetResult();
+            if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                return DownloadClientTestResult.Fail($"Authentication failed (HTTP {(int)response.StatusCode} {response.ReasonPhrase}). Please check username and password.");
+            }
+
+            var body = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
+            if (response.IsSuccessStatusCode && body.Contains("Ok"))
+            {
+                return DownloadClientTestResult.Ok($"Successfully connected to qBittorrent at {BaseUrl}");
+            }
+
+            if (body.Contains("Fails"))
+            {
+                return DownloadClientTestResult.Fail("Authentication failed. Invalid username or password.");
+            }
+
+            return DownloadClientTestResult.Fail($"qBittorrent returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+        }
+        catch (HttpRequestException ex)
+        {
+            return DownloadClientTestResult.Fail($"Network error connecting to {BaseUrl}: {ex.Message}");
+        }
+        catch (TaskCanceledException)
+        {
+            return DownloadClientTestResult.Fail($"Connection timed out connecting to {BaseUrl} (exceeded 10s)");
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "qBittorrent connection test failed");
-            return false;
+            return DownloadClientTestResult.Fail($"Connection failed: {ex.Message}");
         }
     }
 

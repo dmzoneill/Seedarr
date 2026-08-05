@@ -137,20 +137,60 @@ public class DelugeClient : IDownloadClient, IDisposable
 
     public bool TestConnection()
     {
+        return TestConnectionDetailed().Success;
+    }
+
+    public DownloadClientTestResult TestConnectionDetailed()
+    {
+        if (string.IsNullOrWhiteSpace(Host))
+        {
+            return DownloadClientTestResult.Fail("Host cannot be empty");
+        }
+
         try
         {
             if (!Authenticate())
             {
-                return false;
+                return DownloadClientTestResult.Fail("Authentication failed. Invalid Deluge web password.");
             }
 
             using var doc = SendRequest("daemon.get_method_list", Array.Empty<object>());
-            return doc.RootElement.TryGetProperty("result", out _);
+            if (doc.RootElement.TryGetProperty("result", out _))
+            {
+                try
+                {
+                    using var verDoc = SendRequest("web.get_api_version", Array.Empty<object>());
+                    if (verDoc.RootElement.TryGetProperty("result", out var ver) && ver.ValueKind == JsonValueKind.String)
+                    {
+                        return DownloadClientTestResult.Ok($"Successfully connected to Deluge (Web API {ver.GetString()}) at {JsonUrl}");
+                    }
+                }
+                catch
+                {
+                    // Ignore extra version fetch failure
+                }
+
+                return DownloadClientTestResult.Ok($"Successfully connected to Deluge at {JsonUrl}");
+            }
+
+            return DownloadClientTestResult.Fail("Deluge daemon.get_method_list returned unexpected result");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return DownloadClientTestResult.Fail($"Endpoint not found (HTTP 404 Not Found) at {JsonUrl}. Please verify the host and port.");
+        }
+        catch (HttpRequestException ex)
+        {
+            return DownloadClientTestResult.Fail($"Network error connecting to {JsonUrl}: {ex.Message}");
+        }
+        catch (TaskCanceledException)
+        {
+            return DownloadClientTestResult.Fail($"Connection timed out connecting to {JsonUrl} (exceeded 10s)");
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Deluge connection test failed");
-            return false;
+            return DownloadClientTestResult.Fail($"Connection failed: {ex.Message}");
         }
     }
 

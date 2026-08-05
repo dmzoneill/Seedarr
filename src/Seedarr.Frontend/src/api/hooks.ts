@@ -26,6 +26,7 @@ import type {
   AdvancedConfig,
   ArrConnection,
   ArrTestResult,
+  DownloadClientTestResult,
   SyncResult,
   IndexerDefinition,
   DownloadClientDefinition,
@@ -525,8 +526,18 @@ export function useDeleteDownloadClient() {
 }
 
 export function useTestDownloadClient() {
-  return useMutation<{ success: boolean }, Error, number>({
+  return useMutation<DownloadClientTestResult, Error, number>({
     mutationFn: (id) => apiClient.post(`/downloadclients/${id}/test`),
+  });
+}
+
+export function useTestDirectDownloadClient() {
+  return useMutation<
+    DownloadClientTestResult,
+    Error,
+    Partial<DownloadClientDefinition>
+  >({
+    mutationFn: (client) => apiClient.post("/downloadclients/test", client),
   });
 }
 
