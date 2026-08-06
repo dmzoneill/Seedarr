@@ -1010,7 +1010,7 @@ public class PeerConnectionTest
         ReadFull(stream, lengthBuf, 4);
 
         var length = (lengthBuf[0] << 24) | (lengthBuf[1] << 16) |
-                     (lengthBuf[2] << 8) | lengthBuf[3];
+            (lengthBuf[2] << 8) | lengthBuf[3];
 
         Assert.That(length, Is.EqualTo(1001)); // 1 (type) + 1000 (payload)
     }

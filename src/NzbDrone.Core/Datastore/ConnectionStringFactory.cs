@@ -42,9 +42,9 @@ public class ConnectionStringFactory : IConnectionStringFactory
     private string BuildPostgresConnectionString()
     {
         return $"Host={_configFileProvider.PostgresHost};" +
-               $"Port={_configFileProvider.PostgresPort};" +
-               $"Database={_configFileProvider.PostgresMainDb};" +
-               $"Username={_configFileProvider.PostgresUser};" +
-               $"Password={_configFileProvider.PostgresPassword}";
+            $"Port={_configFileProvider.PostgresPort};" +
+            $"Database={_configFileProvider.PostgresMainDb};" +
+            $"Username={_configFileProvider.PostgresUser};" +
+            $"Password={_configFileProvider.PostgresPassword}";
     }
 }

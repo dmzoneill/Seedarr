@@ -571,13 +571,13 @@ public class UpdateServiceTest
     {
         var json = """
             [
-              {
-                "tag_name": "v1.2.3",
-                "draft": false,
-                "published_at": "2024-01-15T10:00:00Z",
-                "body": "Release notes here",
-                "html_url": "https://github.com/test/releases/tag/v1.2.3"
-              }
+                {
+                    "tag_name": "v1.2.3",
+                    "draft": false,
+                    "published_at": "2024-01-15T10:00:00Z",
+                    "body": "Release notes here",
+                    "html_url": "https://github.com/test/releases/tag/v1.2.3"
+                }
             ]
             """;
         var handler = new MockHttpMessageHandler();
@@ -597,13 +597,13 @@ public class UpdateServiceTest
     {
         var json = """
             [
-              {
-                "tag_name": "v4.5.6",
-                "draft": false,
-                "published_at": "2024-01-01T00:00:00Z",
-                "body": "test",
-                "html_url": "https://github.com/test/releases/tag/v4.5.6"
-              }
+                {
+                    "tag_name": "v4.5.6",
+                    "draft": false,
+                    "published_at": "2024-01-01T00:00:00Z",
+                    "body": "test",
+                    "html_url": "https://github.com/test/releases/tag/v4.5.6"
+                }
             ]
             """;
         var handler = new MockHttpMessageHandler();
@@ -621,13 +621,13 @@ public class UpdateServiceTest
     {
         var json = """
             [
-              {
-                "tag_name": "v2.0.0",
-                "draft": true,
-                "published_at": "2024-02-01T00:00:00Z",
-                "body": "Draft release",
-                "html_url": "https://github.com/test/releases/tag/v2.0.0"
-              }
+                {
+                    "tag_name": "v2.0.0",
+                    "draft": true,
+                    "published_at": "2024-02-01T00:00:00Z",
+                    "body": "Draft release",
+                    "html_url": "https://github.com/test/releases/tag/v2.0.0"
+                }
             ]
             """;
         var handler = new MockHttpMessageHandler();
@@ -645,13 +645,13 @@ public class UpdateServiceTest
     {
         var json = """
             [
-              {
-                "tag_name": "not-a-version",
-                "draft": false,
-                "published_at": "2024-01-01T00:00:00Z",
-                "body": "Bad tag",
-                "html_url": "https://github.com/test/releases/tag/bad"
-              }
+                {
+                    "tag_name": "not-a-version",
+                    "draft": false,
+                    "published_at": "2024-01-01T00:00:00Z",
+                    "body": "Bad tag",
+                    "html_url": "https://github.com/test/releases/tag/bad"
+                }
             ]
             """;
         var handler = new MockHttpMessageHandler();
@@ -668,27 +668,27 @@ public class UpdateServiceTest
     {
         var json = """
             [
-              {
-                "tag_name": "v1.0.0",
-                "draft": false,
-                "published_at": "2024-01-01T00:00:00Z",
-                "body": "First",
-                "html_url": "https://github.com/test/releases/tag/v1.0.0"
-              },
-              {
-                "tag_name": "v3.0.0",
-                "draft": false,
-                "published_at": "2024-03-01T00:00:00Z",
-                "body": "Third",
-                "html_url": "https://github.com/test/releases/tag/v3.0.0"
-              },
-              {
-                "tag_name": "v2.0.0",
-                "draft": false,
-                "published_at": "2024-02-01T00:00:00Z",
-                "body": "Second",
-                "html_url": "https://github.com/test/releases/tag/v2.0.0"
-              }
+                {
+                    "tag_name": "v1.0.0",
+                    "draft": false,
+                    "published_at": "2024-01-01T00:00:00Z",
+                    "body": "First",
+                    "html_url": "https://github.com/test/releases/tag/v1.0.0"
+                },
+                {
+                    "tag_name": "v3.0.0",
+                    "draft": false,
+                    "published_at": "2024-03-01T00:00:00Z",
+                    "body": "Third",
+                    "html_url": "https://github.com/test/releases/tag/v3.0.0"
+                },
+                {
+                    "tag_name": "v2.0.0",
+                    "draft": false,
+                    "published_at": "2024-02-01T00:00:00Z",
+                    "body": "Second",
+                    "html_url": "https://github.com/test/releases/tag/v2.0.0"
+                }
             ]
             """;
         var handler = new MockHttpMessageHandler();
@@ -707,13 +707,13 @@ public class UpdateServiceTest
         // Version 999.0.0 is guaranteed to be newer than the assembly/test version.
         var json = """
             [
-              {
-                "tag_name": "v999.0.0",
-                "draft": false,
-                "published_at": "2024-01-01T00:00:00Z",
-                "body": "Future release",
-                "html_url": "https://github.com/test/releases/tag/v999.0.0"
-              }
+                {
+                    "tag_name": "v999.0.0",
+                    "draft": false,
+                    "published_at": "2024-01-01T00:00:00Z",
+                    "body": "Future release",
+                    "html_url": "https://github.com/test/releases/tag/v999.0.0"
+                }
             ]
             """;
         var handler = new MockHttpMessageHandler();
@@ -731,13 +731,13 @@ public class UpdateServiceTest
     {
         var json = """
             [
-              {
-                "tag_name": "v1.5.0",
-                "draft": false,
-                "published_at": "2024-06-15T12:30:00Z",
-                "body": "Test release",
-                "html_url": "https://github.com/test/releases/tag/v1.5.0"
-              }
+                {
+                    "tag_name": "v1.5.0",
+                    "draft": false,
+                    "published_at": "2024-06-15T12:30:00Z",
+                    "body": "Test release",
+                    "html_url": "https://github.com/test/releases/tag/v1.5.0"
+                }
             ]
             """;
         var handler = new MockHttpMessageHandler();
@@ -780,27 +780,27 @@ public class UpdateServiceTest
     {
         var json = """
             [
-              {
-                "tag_name": "v1.0.0",
-                "draft": false,
-                "published_at": "2024-01-01T00:00:00Z",
-                "body": "Valid",
-                "html_url": "https://github.com/test/releases/tag/v1.0.0"
-              },
-              {
-                "tag_name": "bad-tag",
-                "draft": false,
-                "published_at": "2024-01-02T00:00:00Z",
-                "body": "Invalid tag",
-                "html_url": "https://github.com/test/releases/tag/bad"
-              },
-              {
-                "tag_name": "v2.0.0",
-                "draft": true,
-                "published_at": "2024-01-03T00:00:00Z",
-                "body": "Draft",
-                "html_url": "https://github.com/test/releases/tag/v2.0.0"
-              }
+                {
+                    "tag_name": "v1.0.0",
+                    "draft": false,
+                    "published_at": "2024-01-01T00:00:00Z",
+                    "body": "Valid",
+                    "html_url": "https://github.com/test/releases/tag/v1.0.0"
+                },
+                {
+                    "tag_name": "bad-tag",
+                    "draft": false,
+                    "published_at": "2024-01-02T00:00:00Z",
+                    "body": "Invalid tag",
+                    "html_url": "https://github.com/test/releases/tag/bad"
+                },
+                {
+                    "tag_name": "v2.0.0",
+                    "draft": true,
+                    "published_at": "2024-01-03T00:00:00Z",
+                    "body": "Draft",
+                    "html_url": "https://github.com/test/releases/tag/v2.0.0"
+                }
             ]
             """;
         var handler = new MockHttpMessageHandler();

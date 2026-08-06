@@ -49,7 +49,7 @@ public static class TableMapping
     {
         return PropertyCache.GetOrAdd(type, static t =>
             t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-             .Where(p => p.Name != "Id" && p.CanRead && p.CanWrite)
-             .ToArray());
+                .Where(p => p.Name != "Id" && p.CanRead && p.CanWrite)
+                .ToArray());
     }
 }
