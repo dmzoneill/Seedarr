@@ -285,4 +285,170 @@ public class DownloadClientSyncServiceTest
         Assert.That(result.Skipped, Is.EqualTo(0));
         Assert.That(result.Failed, Is.EqualTo(1));
     }
+
+    [Test]
+    public void GetClientItems_should_return_enriched_items_with_library_status()
+    {
+        var existingHash = "aaaa111122223333444455556666777788889999";
+        var missingHash = "bbbb111122223333444455556666777788889999";
+
+        _torrentService.GetAll().Returns(new List<Torrent>
+        {
+            new() { Id = 42, InfoHash = existingHash, Name = "Existing Show" }
+        });
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                DownloadId = "dl-1",
+                Title = "Existing Show",
+                InfoHash = existingHash,
+                TotalSize = 1000,
+                RemainingSize = 0,
+                Status = "seeding",
+                Category = "tv",
+                OutputPath = "/downloads/tv"
+            },
+            new()
+            {
+                DownloadId = "dl-2",
+                Title = "New Movie",
+                InfoHash = missingHash,
+                TotalSize = 2000,
+                RemainingSize = 1000,
+                Status = "downloading",
+                Category = "movies",
+                OutputPath = "/downloads/movies"
+            }
+        });
+
+        _service.InjectedClient = mockClient;
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var items = _service.GetClientItems(1);
+
+        Assert.That(items, Has.Count.EqualTo(2));
+
+        var first = items[0];
+        Assert.That(first.Title, Is.EqualTo("Existing Show"));
+        Assert.That(first.IsInLibrary, Is.True);
+        Assert.That(first.LibraryTorrentId, Is.EqualTo(42));
+        Assert.That(first.Progress, Is.EqualTo(100.0));
+
+        var second = items[1];
+        Assert.That(second.Title, Is.EqualTo("New Movie"));
+        Assert.That(second.IsInLibrary, Is.False);
+        Assert.That(second.LibraryTorrentId, Is.Null);
+        Assert.That(second.Progress, Is.EqualTo(50.0));
+    }
+
+    [Test]
+    public void GetClientItems_should_throw_when_client_not_found()
+    {
+        _downloadClientFactory.Get(99).Returns((DownloadClientDefinition)null);
+
+        Assert.Throws<ArgumentException>(() => _service.GetClientItems(99));
+    }
+
+    [Test]
+    public void ImportTorrent_should_add_torrent_and_return_instance()
+    {
+        var hash = "cccc111122223333444455556666777788889999";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Imported Torrent",
+            TotalSize = 5000,
+            PieceCount = 25,
+            PieceLength = 200
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var torrent = _service.ImportTorrent(1, hash);
+
+        Assert.That(torrent, Is.Not.Null);
+        Assert.That(torrent.Name, Is.EqualTo("Imported Torrent"));
+        Assert.That(torrent.InfoHash, Is.EqualTo(hash));
+        Assert.That(torrent.TotalSize, Is.EqualTo(5000));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == hash));
+    }
+
+    [Test]
+    public void ImportTorrent_should_return_existing_if_already_in_library()
+    {
+        var hash = "dddd111122223333444455556666777788889999";
+        var existingTorrent = new Torrent { Id = 10, InfoHash = hash, Name = "Already Exists" };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var result = _service.ImportTorrent(1, hash);
+
+        Assert.That(result, Is.SameAs(existingTorrent));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ImportTorrents_should_import_multiple_hashes_and_aggregate_results()
+    {
+        var hash1 = "eeee111122223333444455556666777788889999";
+        var hash2 = "ffff111122223333444455556666777788889999";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash1).Returns(rawBytes);
+        mockClient.GetTorrentFile(hash2).Returns((byte[])null);
+
+        _indexerFactory.All().Returns(new List<IndexerDefinition>());
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Imported 1",
+            TotalSize = 1000,
+            PieceCount = 10,
+            PieceLength = 100
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var result = _service.ImportTorrents(1, new List<string> { hash1, hash2 });
+
+        Assert.That(result.Added, Is.EqualTo(1));
+        Assert.That(result.Failed, Is.EqualTo(1));
+    }
 }
