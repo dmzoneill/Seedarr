@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useParams, useBlocker } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useParams, useLocation } from 'react-router-dom';
 import {
   useNetworkStatus,
   useTrackerServerConfig,
@@ -112,7 +112,7 @@ function SaveBar({
   error: Error | null;
   onSave: () => void;
 }) {
-  const guard = useUnsavedGuard(dirty, onSave);
+  const guard = useUnsavedGuard(dirty);
 
   return (
     <>
@@ -130,9 +130,9 @@ function SaveBar({
       </div>
       {guard.blocked && (
         <PendingChangesModal
-          onSave={guard.save}
-          onDiscard={guard.proceed}
-          onCancel={guard.reset}
+          onSave={() => { onSave(); guard.dismiss(); }}
+          onDiscard={guard.dismiss}
+          onCancel={guard.dismiss}
         />
       )}
     </>
@@ -157,12 +157,10 @@ function PendingChangesModal({ onSave, onDiscard, onCancel }: { onSave: () => vo
   );
 }
 
-function useUnsavedGuard(dirty: boolean, onSave?: () => void) {
-  const blocker = useBlocker(
-    useCallback(({ currentLocation, nextLocation }: { currentLocation: { pathname: string }; nextLocation: { pathname: string } }) =>
-      dirty && currentLocation.pathname !== nextLocation.pathname,
-    [dirty])
-  );
+function useUnsavedGuard(dirty: boolean) {
+  const location = useLocation();
+  const [pendingNav, setPendingNav] = useState(false);
+  const prevPathRef = useState(location.pathname)[0];
 
   useEffect(() => {
     if (!dirty) return;
@@ -171,14 +169,15 @@ function useUnsavedGuard(dirty: boolean, onSave?: () => void) {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
+  useEffect(() => {
+    if (dirty && location.pathname !== prevPathRef) {
+      setPendingNav(true);
+    }
+  }, [dirty, location.pathname, prevPathRef]);
+
   return {
-    blocked: blocker.state === 'blocked',
-    proceed: () => blocker.state === 'blocked' && blocker.proceed(),
-    reset: () => blocker.state === 'blocked' && blocker.reset(),
-    save: () => {
-      onSave?.();
-      if (blocker.state === 'blocked') blocker.proceed();
-    },
+    blocked: pendingNav,
+    dismiss: () => setPendingNav(false),
   };
 }
 
