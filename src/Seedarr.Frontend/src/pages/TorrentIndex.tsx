@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import TorrentTable from '../components/TorrentTable';
 import TorrentGrid from '../components/TorrentGrid';
 import TorrentDetailPanel from '../components/TorrentDetailPanel';
