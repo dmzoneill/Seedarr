@@ -54,6 +54,7 @@ public class DownloadClientController : Controller
         {
             definition.Implementation = $"{definition.ClientType}Client";
         }
+
         if (string.IsNullOrWhiteSpace(definition.ConfigContract))
         {
             definition.ConfigContract = $"{definition.ClientType}Settings";
@@ -81,6 +82,7 @@ public class DownloadClientController : Controller
         {
             definition.Implementation = $"{definition.ClientType}Client";
         }
+
         if (string.IsNullOrWhiteSpace(definition.ConfigContract))
         {
             definition.ConfigContract = $"{definition.ClientType}Settings";
