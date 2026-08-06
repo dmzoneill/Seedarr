@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.DownloadClients.Sync;
 using Seedarr.Http;
 

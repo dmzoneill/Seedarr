@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.DownloadClients.Deluge;
 using NzbDrone.Core.DownloadClients.QBitTorrent;
 using NzbDrone.Core.DownloadClients.Transmission;
+using NzbDrone.Core.Torrents;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.DownloadClients;
@@ -16,10 +18,14 @@ public class DownloadClientController : Controller
     private const string PasswordMask = "********";
 
     private readonly IDownloadClientFactory _downloadClientFactory;
+    private readonly NzbDrone.Core.DownloadClients.Sync.IDownloadClientSyncService _syncService;
 
-    public DownloadClientController(IDownloadClientFactory downloadClientFactory)
+    public DownloadClientController(
+        IDownloadClientFactory downloadClientFactory,
+        NzbDrone.Core.DownloadClients.Sync.IDownloadClientSyncService syncService)
     {
         _downloadClientFactory = downloadClientFactory;
+        _syncService = syncService;
     }
 
     [HttpGet]
@@ -132,6 +138,64 @@ public class DownloadClientController : Controller
 
         var result = client.TestConnectionDetailed();
         return Ok(result);
+    }
+
+    [HttpGet("{id}/items")]
+    public ActionResult<List<DownloadClientRemoteItem>> GetItems(int id)
+    {
+        try
+        {
+            var items = _syncService.GetClientItems(id);
+            return Ok(items);
+        }
+        catch (ArgumentException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"Failed to fetch items from download client: {ex.Message}" });
+        }
+    }
+
+    [HttpPost("{id}/import/{infoHash}")]
+    public ActionResult<Torrent> ImportTorrent(int id, string infoHash)
+    {
+        try
+        {
+            var torrent = _syncService.ImportTorrent(id, infoHash);
+            return Ok(torrent);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"Failed to import torrent: {ex.Message}" });
+        }
+    }
+
+    [HttpPost("{id}/import")]
+    public ActionResult<SyncResult> ImportTorrents(int id, [FromBody] DownloadClientImportRequest request)
+    {
+        try
+        {
+            var result = _syncService.ImportTorrents(id, request?.InfoHashes ?? new List<string>());
+            return Ok(result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = $"Failed to import torrents: {ex.Message}" });
+        }
     }
 
     private static DownloadClientDefinition MaskPassword(DownloadClientDefinition definition)

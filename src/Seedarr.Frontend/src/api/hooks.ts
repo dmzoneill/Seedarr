@@ -30,6 +30,7 @@ import type {
   SyncResult,
   IndexerDefinition,
   DownloadClientDefinition,
+  DownloadClientRemoteItem,
   DiskSpaceInfo,
   Backup,
   UpdateEntry,
@@ -538,6 +539,44 @@ export function useTestDirectDownloadClient() {
     Partial<DownloadClientDefinition>
   >({
     mutationFn: (client) => apiClient.post("/downloadclients/test", client),
+  });
+}
+
+export function useDownloadClientItems(clientId: number) {
+  const interval = useRefetchInterval();
+  return useQuery<DownloadClientRemoteItem[]>({
+    queryKey: ["downloadclients", clientId, "items"],
+    queryFn: () => apiClient.get(`/downloadclients/${clientId}/items`),
+    enabled: clientId > 0,
+    refetchInterval: interval,
+  });
+}
+
+export function useImportDownloadClientTorrent(clientId: number) {
+  const queryClient = useQueryClient();
+  return useMutation<Torrent, Error, string>({
+    mutationFn: (infoHash) =>
+      apiClient.post(`/downloadclients/${clientId}/import/${infoHash}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["downloadclients", clientId, "items"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
+export function useImportDownloadClientTorrents(clientId: number) {
+  const queryClient = useQueryClient();
+  return useMutation<SyncResult, Error, string[]>({
+    mutationFn: (infoHashes) =>
+      apiClient.post(`/downloadclients/${clientId}/import`, { infoHashes }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["downloadclients", clientId, "items"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
   });
 }
 
