@@ -27,21 +27,25 @@ export function IndexersTab() {
     useState<IndexerTestResult | null>(null);
 
   const defaultIndexer: Partial<IndexerDefinition> = {
-    name: "",
+    name: "Prowlarr",
     indexerType: "Prowlarr",
-    url: "http://localhost:9696",
+    url: "http://prowlarr:9696",
     apiKey: "",
     apiPath: "/api",
     enableRss: true,
     enableSearch: true,
     categories: "",
     downloadClientId: 0,
+    enable: true,
   };
 
   const handleSave = () => {
     if (!editing) return;
+    const name = editing.name?.trim() || editing.indexerType || "Indexer";
     const payload = {
       ...editing,
+      name,
+      enable: editing.enable ?? true,
       implementation: `${editing.indexerType || "Prowlarr"}Indexer`,
       configContract: "IndexerDefinition",
     };
@@ -252,6 +256,14 @@ export function IndexersTab() {
                 setModalTestResult(null);
               }}
               placeholder="2000,5000"
+            />
+            <Toggle
+              label="Enable"
+              checked={editing.enable ?? true}
+              onChange={(v) => {
+                setEditing({ ...editing, enable: v });
+                setModalTestResult(null);
+              }}
             />
             <Toggle
               label="RSS"

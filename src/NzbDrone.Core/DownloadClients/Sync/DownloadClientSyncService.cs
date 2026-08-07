@@ -213,6 +213,17 @@ public class DownloadClientSyncService : IDownloadClientSyncService
             return existing;
         }
 
+        DownloadClientItem matchingItem = null;
+        try
+        {
+            var items = provider.GetItems();
+            matchingItem = items.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
+        }
+
         byte[] torrentBytes = null;
         try
         {
@@ -228,42 +239,34 @@ public class DownloadClientSyncService : IDownloadClientSyncService
             torrentBytes = SearchIndexersForTorrent(normalizedHash);
         }
 
-        if (torrentBytes == null || torrentBytes.Length == 0)
+        Torrent torrent;
+        if (torrentBytes != null && torrentBytes.Length > 0)
         {
-            throw new InvalidOperationException($"Could not fetch torrent metadata for hash {normalizedHash} from download client or indexers.");
-        }
+            using var ms = new System.IO.MemoryStream(torrentBytes);
+            var parsed = _torrentFileParser.Parse(ms);
 
-        using var ms = new System.IO.MemoryStream(torrentBytes);
-        var parsed = _torrentFileParser.Parse(ms);
-
-        var title = parsed.Name;
-        if (string.IsNullOrEmpty(title))
-        {
-            try
+            torrent = new Torrent
             {
-                var items = provider.GetItems();
-                var matchingItem = items.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
-                if (matchingItem != null)
-                {
-                    title = matchingItem.Title;
-                }
-            }
-            catch
-            {
-                // Ignore item lookup error
-            }
+                Name = matchingItem?.Title ?? parsed.Name ?? normalizedHash,
+                InfoHash = normalizedHash,
+                TotalSize = parsed.TotalSize > 0 ? parsed.TotalSize : (matchingItem?.TotalSize ?? 0),
+                PieceCount = parsed.PieceCount,
+                PieceLength = parsed.PieceLength,
+                DateAdded = DateTime.UtcNow,
+                Status = TorrentStatus.Stopped
+            };
         }
-
-        var torrent = new Torrent
+        else
         {
-            Name = title ?? parsed.Name ?? normalizedHash,
-            InfoHash = normalizedHash,
-            TotalSize = parsed.TotalSize,
-            PieceCount = parsed.PieceCount,
-            PieceLength = parsed.PieceLength,
-            DateAdded = DateTime.UtcNow,
-            Status = TorrentStatus.Stopped
-        };
+            torrent = new Torrent
+            {
+                Name = matchingItem?.Title ?? normalizedHash,
+                InfoHash = normalizedHash,
+                TotalSize = matchingItem?.TotalSize ?? 0,
+                DateAdded = DateTime.UtcNow,
+                Status = TorrentStatus.Stopped
+            };
+        }
 
         _torrentService.Add(torrent);
         _logger.Info("Imported torrent {0} from download client {1}", torrent.Name, definition.Name);
