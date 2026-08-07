@@ -15,6 +15,22 @@ public class NavigationTests : AutomationTestBase
     }
 
     [Test]
+    public void Torrents_nav_expands_subitems()
+    {
+        NavigateTo("/torrents");
+        var subItems = Driver.FindElements(By.CssSelector(".sidebar-nav-sub"));
+        Assert.That(subItems.Count, Is.GreaterThanOrEqualTo(2));
+    }
+
+    [Test]
+    public void Activity_nav_expands_subitems()
+    {
+        NavigateTo("/activity/torrents");
+        var subItems = Driver.FindElements(By.CssSelector(".sidebar-nav-sub"));
+        Assert.That(subItems.Count, Is.GreaterThanOrEqualTo(2));
+    }
+
+    [Test]
     public void Clicking_Settings_nav_navigates_to_settings()
     {
         NavigateTo("/");
