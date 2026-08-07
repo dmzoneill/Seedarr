@@ -1,4 +1,3 @@
-/* eslint-disable n/no-missing-import, n/no-unsupported-features/node-builtins */
 import { useState, useMemo, useCallback, useEffect } from "react";
 import { useSearchParams } from "react-router";
 import {

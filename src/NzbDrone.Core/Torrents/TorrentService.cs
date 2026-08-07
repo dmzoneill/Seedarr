@@ -99,7 +99,7 @@ public class TorrentService : ITorrentService
         _torrentFileService.DeleteByTorrentId(id);
         _trackerEntryService.DeleteByTorrentId(id);
         _repository.Delete(id);
-        _eventAggregator.PublishEvent(new TorrentDeletedEvent(id));
+        _eventAggregator.PublishEvent(new TorrentDeletedEvent(id, torrent));
 
         if (torrent != null)
         {

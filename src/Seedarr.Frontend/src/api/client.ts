@@ -1,4 +1,3 @@
-/* eslint-disable n/no-unsupported-features/node-builtins */
 const BASE_URL = "/api/v1";
 
 class ApiClient {

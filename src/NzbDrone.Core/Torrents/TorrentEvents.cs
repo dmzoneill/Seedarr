@@ -15,9 +15,11 @@ public class TorrentAddedEvent : IEvent
 public class TorrentDeletedEvent : IEvent
 {
     public int TorrentId { get; }
+    public Torrent Torrent { get; }
 
-    public TorrentDeletedEvent(int torrentId)
+    public TorrentDeletedEvent(int torrentId, Torrent torrent = null)
     {
         TorrentId = torrentId;
+        Torrent = torrent;
     }
 }
