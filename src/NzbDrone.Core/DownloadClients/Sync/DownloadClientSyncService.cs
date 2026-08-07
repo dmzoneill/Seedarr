@@ -256,16 +256,20 @@ public class DownloadClientSyncService : IDownloadClientSyncService
                 Status = TorrentStatus.Stopped
             };
         }
-        else
+        else if (matchingItem != null)
         {
             torrent = new Torrent
             {
-                Name = matchingItem?.Title ?? normalizedHash,
+                Name = !string.IsNullOrEmpty(matchingItem.Title) ? matchingItem.Title : normalizedHash,
                 InfoHash = normalizedHash,
-                TotalSize = matchingItem?.TotalSize ?? 0,
+                TotalSize = matchingItem.TotalSize,
                 DateAdded = DateTime.UtcNow,
                 Status = TorrentStatus.Stopped
             };
+        }
+        else
+        {
+            throw new InvalidOperationException($"Could not fetch torrent metadata for hash {normalizedHash} from download client or indexers.");
         }
 
         _torrentService.Add(torrent);
