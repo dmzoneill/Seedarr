@@ -43,18 +43,35 @@ namespace NzbDrone.Core.Test.Indexers.Prowlarr
         }
 
         [Test]
-        public void TestConnection_should_return_false_when_url_is_null()
+        public void TestConnectionDetailed_should_return_error_when_url_is_null_or_empty()
         {
             var definition = new IndexerDefinition
             {
-                Url = null,
+                Url = "",
                 ApiKey = "test-key",
                 ApiPath = "/api"
             };
 
-            var result = _subject.TestConnection(definition);
+            var result = _subject.TestConnectionDetailed(definition);
 
-            Assert.That(result, Is.False);
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Message, Does.Contain("URL is required"));
+        }
+
+        [Test]
+        public void TestConnectionDetailed_should_return_error_when_connection_fails()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://127.0.0.1:59999",
+                ApiKey = "test-key",
+                ApiPath = "/api"
+            };
+
+            var result = _subject.TestConnectionDetailed(definition);
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Message, Does.Contain("Unable to connect to Prowlarr"));
         }
     }
 }

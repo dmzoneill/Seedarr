@@ -27,6 +27,7 @@ import type {
   ArrConnection,
   ArrTestResult,
   DownloadClientTestResult,
+  IndexerTestResult,
   SyncResult,
   IndexerDefinition,
   DownloadClientDefinition,
@@ -612,8 +613,14 @@ export function useDeleteIndexer() {
 }
 
 export function useTestIndexer() {
-  return useMutation<{ success: boolean }, Error, number>({
+  return useMutation<IndexerTestResult, Error, number>({
     mutationFn: (id) => apiClient.post(`/indexers/${id}/test`),
+  });
+}
+
+export function useTestDirectIndexer() {
+  return useMutation<IndexerTestResult, Error, Partial<IndexerDefinition>>({
+    mutationFn: (indexer) => apiClient.post("/indexers/test", indexer),
   });
 }
 
