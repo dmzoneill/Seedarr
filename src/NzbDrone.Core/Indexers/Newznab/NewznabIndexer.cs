@@ -84,4 +84,9 @@ public class NewznabIndexer : IIndexer
         // so we just return null to fallback/skip.
         return null;
     }
+
+    public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null)
+    {
+        return new System.Collections.Generic.List<ReleaseInfo>();
+    }
 }

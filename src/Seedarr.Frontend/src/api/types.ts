@@ -551,3 +551,52 @@ export interface SyncResult {
   skipped: number;
   failed: number;
 }
+
+export interface DownloadHistoryEntry {
+  id: number;
+  torrentId: number | null;
+  title: string;
+  infoHash: string;
+  totalSize: number;
+  dateAdded: string;
+  dateCompleted: string | null;
+  dateRemoved: string | null;
+  uploaded: number;
+  downloaded: number;
+  ratio: number;
+  seedingTime: number;
+  primaryTracker: string | null;
+  indexerName: string | null;
+  source: string | null;
+  magnetUrl: string | null;
+  downloadUrl: string | null;
+  status: string;
+  removalReason: string | null;
+  dataJson: string | null;
+}
+
+export interface ReleaseInfo {
+  guid?: string;
+  title: string;
+  indexerId?: number;
+  indexer?: string;
+  size: number;
+  seeders?: number | null;
+  leechers?: number | null;
+  publishDate?: string | null;
+  downloadUrl?: string | null;
+  magnetUrl?: string | null;
+  infoHash?: string | null;
+  categories?: string[];
+  protocol?: string;
+}
+
+export interface DownloadReleaseRequest {
+  title?: string;
+  downloadUrl?: string;
+  magnetUrl?: string;
+  infoHash?: string;
+  indexerId?: number;
+  indexerName?: string;
+}
+
