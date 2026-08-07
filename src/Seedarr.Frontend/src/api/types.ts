@@ -396,6 +396,11 @@ export interface IndexerDefinition {
   enable: boolean;
 }
 
+export interface IndexerTestResult {
+  success: boolean;
+  message?: string;
+}
+
 export interface TrackerEntry {
   id: number;
   torrentId: number;

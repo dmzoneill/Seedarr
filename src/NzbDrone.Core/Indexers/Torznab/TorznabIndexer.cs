@@ -19,20 +19,62 @@ public class TorznabIndexer : IIndexer
 
     public bool TestConnection(IndexerDefinition definition)
     {
+        return TestConnectionDetailed(definition).Success;
+    }
+
+    public IndexerTestResult TestConnectionDetailed(IndexerDefinition definition)
+    {
+        if (definition == null || string.IsNullOrWhiteSpace(definition.Url))
+        {
+            return new IndexerTestResult { Success = false, Message = "URL is required." };
+        }
+
         try
         {
             var apiPath = string.IsNullOrEmpty(definition.ApiPath) ? "/api" : definition.ApiPath;
             var url = $"{definition.Url.TrimEnd('/')}{apiPath}?t=caps";
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("X-Api-Key", definition.ApiKey);
+            if (!string.IsNullOrWhiteSpace(definition.ApiKey))
+            {
+                request.Headers.Add("X-Api-Key", definition.ApiKey);
+            }
+
             using var response = Client.Send(request);
-            return response.IsSuccessStatusCode;
+
+            if (response.IsSuccessStatusCode)
+            {
+                return new IndexerTestResult
+                {
+                    Success = true,
+                    Message = $"Successfully connected to Torznab indexer at {definition.Url}"
+                };
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized ||
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                return new IndexerTestResult
+                {
+                    Success = false,
+                    Message = "Authentication failed: Invalid API Key."
+                };
+            }
+
+            return new IndexerTestResult
+            {
+                Success = false,
+                Message = $"Torznab returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase})."
+            };
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to test Torznab connection at {0}", definition.Url);
-            return false;
+            return new IndexerTestResult
+            {
+                Success = false,
+                Message = $"Unable to connect to Torznab at {definition.Url}: {ex.Message}"
+            };
         }
     }
 
