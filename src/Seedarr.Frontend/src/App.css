@@ -325,7 +325,7 @@ body {
   background: var(--bg-card, #252118);
   border: 1px solid var(--color-border, #3a352e);
   border-radius: 4px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
   z-index: 100;
   padding: 4px 0;
 }
