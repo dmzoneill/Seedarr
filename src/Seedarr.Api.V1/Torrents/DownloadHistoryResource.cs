@@ -1,4 +1,5 @@
 using System;
+using NzbDrone.Core.ArrIntegration;
 using Seedarr.Http.REST;
 
 namespace Seedarr.Api.V1.Torrents;
@@ -24,4 +25,5 @@ public class DownloadHistoryResource : RestResource
     public string Status { get; set; }
     public string RemovalReason { get; set; }
     public string DataJson { get; set; }
+    public MediaMetadata Metadata { get; set; }
 }

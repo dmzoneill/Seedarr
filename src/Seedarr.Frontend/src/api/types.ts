@@ -552,6 +552,30 @@ export interface SyncResult {
   failed: number;
 }
 
+export interface MediaActor {
+  name: string;
+  character?: string | null;
+  imageUrl?: string | null;
+}
+
+export interface MediaMetadata {
+  mediaType?: string | null;
+  mediaId?: number | null;
+  title?: string | null;
+  year?: number | null;
+  overview?: string | null;
+  posterUrl?: string | null;
+  fanartUrl?: string | null;
+  bannerUrl?: string | null;
+  genres?: string[];
+  actors?: MediaActor[];
+  studioOrNetwork?: string | null;
+  rating?: number | null;
+  imdbId?: string | null;
+  tmdbId?: number | null;
+  tvdbId?: number | null;
+}
+
 export interface DownloadHistoryEntry {
   id: number;
   torrentId: number | null;
@@ -573,6 +597,7 @@ export interface DownloadHistoryEntry {
   status: string;
   removalReason: string | null;
   dataJson: string | null;
+  metadata?: MediaMetadata | null;
 }
 
 export interface ReleaseInfo {

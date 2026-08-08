@@ -34,7 +34,7 @@ public class LidarrConnection : IArrConnection
         {
             var result = _policy.Execute(ct =>
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v1/history?pageSize=50&sortKey=date&sortDirection=descending");
+                using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v1/history?pageSize=50&sortKey=date&sortDirection=descending");
                 request.Headers.Add("X-Api-Key", ApiKey);
 
                 using var response = _client.Send(request, ct);
@@ -77,8 +77,20 @@ public class LidarrConnection : IArrConnection
                     {
                         Title = record.TryGetProperty("sourceTitle", out var title) ? title.GetString() : "",
                         DownloadId = record.TryGetProperty("downloadId", out var dlId) ? dlId.GetString() : "",
-                        Date = record.TryGetProperty("date", out var date) ? date.GetDateTime() : DateTime.UtcNow
+                        Date = record.TryGetProperty("date", out var date) ? date.GetDateTime() : DateTime.UtcNow,
+                        MediaType = "album"
                     };
+
+                    if (record.TryGetProperty("albumId", out var aId) && aId.TryGetInt32(out var albumIdVal))
+                    {
+                        downloadRecord.MediaId = albumIdVal;
+                        downloadRecord.MediaType = "album";
+                    }
+                    else if (record.TryGetProperty("artistId", out var arId) && arId.TryGetInt32(out var artistIdVal))
+                    {
+                        downloadRecord.MediaId = artistIdVal;
+                        downloadRecord.MediaType = "artist";
+                    }
 
                     if (record.TryGetProperty("data", out var data))
                     {
@@ -102,6 +114,95 @@ public class LidarrConnection : IArrConnection
         {
             _logger.Error(ex, "Failed to fetch Lidarr history");
             return new List<ArrDownloadRecord>();
+        }
+    }
+
+    public MediaMetadata GetMediaDetails(int mediaId)
+    {
+        try
+        {
+            var result = _policy.Execute(ct =>
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v1/album/{mediaId}");
+                request.Headers.Add("X-Api-Key", ApiKey ?? "");
+                using var response = _client.Send(request, ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return (string)null;
+                }
+
+                using var stream = response.Content.ReadAsStream(ct);
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            });
+
+            if (result == null)
+            {
+                return null;
+            }
+
+            using var doc = JsonDocument.Parse(result);
+            var root = doc.RootElement;
+            var metadata = new MediaMetadata
+            {
+                MediaType = "album",
+                MediaId = mediaId,
+                Title = root.TryGetProperty("title", out var title) ? title.GetString() : null,
+                Overview = root.TryGetProperty("overview", out var ov) ? ov.GetString() : null
+            };
+
+            if (root.TryGetProperty("artist", out var artistElem))
+            {
+                metadata.StudioOrNetwork = artistElem.TryGetProperty("artistName", out var an) ? an.GetString() : null;
+            }
+
+            if (root.TryGetProperty("releaseDate", out var rd) && rd.TryGetDateTime(out var rdVal))
+            {
+                metadata.Year = rdVal.Year;
+            }
+
+            if (root.TryGetProperty("genres", out var genresArray))
+            {
+                foreach (var g in genresArray.EnumerateArray())
+                {
+                    var gStr = g.GetString();
+                    if (!string.IsNullOrEmpty(gStr))
+                    {
+                        metadata.Genres.Add(gStr);
+                    }
+                }
+            }
+
+            if (root.TryGetProperty("images", out var imagesArray))
+            {
+                foreach (var img in imagesArray.EnumerateArray())
+                {
+                    var coverType = img.TryGetProperty("coverType", out var ct) ? ct.GetString() : "";
+                    var remoteUrl = img.TryGetProperty("remoteUrl", out var ru) ? ru.GetString() : null;
+                    var localUrl = img.TryGetProperty("url", out var lu) ? lu.GetString() : null;
+                    var imgUrl = !string.IsNullOrEmpty(remoteUrl) ? remoteUrl : localUrl;
+
+                    if (coverType.Equals("cover", StringComparison.OrdinalIgnoreCase) || coverType.Equals("poster", StringComparison.OrdinalIgnoreCase))
+                    {
+                        metadata.PosterUrl = imgUrl;
+                    }
+                    else if (coverType.Equals("fanart", StringComparison.OrdinalIgnoreCase))
+                    {
+                        metadata.FanartUrl = imgUrl;
+                    }
+                    else if (coverType.Equals("banner", StringComparison.OrdinalIgnoreCase))
+                    {
+                        metadata.BannerUrl = imgUrl;
+                    }
+                }
+            }
+
+            return metadata;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to get album media details for id {0}", mediaId);
+            return null;
         }
     }
 

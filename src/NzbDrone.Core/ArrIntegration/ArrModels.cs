@@ -33,4 +33,7 @@ public class ArrDownloadRecord
     public string DownloadClient { get; set; }
     public string OutputPath { get; set; }
     public string DownloadUrl { get; set; }
+    public int? MediaId { get; set; }
+    public string MediaType { get; set; }
+    public MediaMetadata Metadata { get; set; }
 }

@@ -26,14 +26,20 @@ public class ArrSyncService : IArrSyncService
 {
     private readonly IArrConnectionFactory _connectionFactory;
     private readonly ITorrentService _torrentService;
+    private readonly IDownloadHistoryService _downloadHistoryService;
+    private readonly IArrMetadataEnricherService _metadataEnricherService;
     private readonly Logger _logger;
 
     public ArrSyncService(
         IArrConnectionFactory connectionFactory,
-        ITorrentService torrentService)
+        ITorrentService torrentService,
+        IDownloadHistoryService downloadHistoryService = null,
+        IArrMetadataEnricherService metadataEnricherService = null)
     {
         _connectionFactory = connectionFactory;
         _torrentService = torrentService;
+        _downloadHistoryService = downloadHistoryService;
+        _metadataEnricherService = metadataEnricherService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -94,6 +100,28 @@ public class ArrSyncService : IArrSyncService
                     existingHashes.Add(torrent.InfoHash);
                     result.Added++;
                     _logger.Info("Synced from {0}: {1}", provider.Name, record.Title);
+
+                    if (_metadataEnricherService != null && record.MediaId.HasValue && _downloadHistoryService != null)
+                    {
+                        try
+                        {
+                            var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition);
+                            if (meta != null)
+                            {
+                                var hist = _downloadHistoryService.GetByInfoHash(torrent.InfoHash);
+                                if (hist != null)
+                                {
+                                    hist.DataJson = System.Text.Json.JsonSerializer.Serialize(meta);
+                                    hist.Source = definition.ArrType;
+                                    _downloadHistoryService.Update(hist);
+                                }
+                            }
+                        }
+                        catch (Exception enrichEx)
+                        {
+                            _logger.Warn(enrichEx, "Could not enrich metadata for {0}", record.Title);
+                        }
+                    }
                 }
             }
             catch (Exception ex)
