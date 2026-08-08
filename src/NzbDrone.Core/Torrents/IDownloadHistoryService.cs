@@ -13,4 +13,5 @@ public interface IDownloadHistoryService
     void RecordTorrentUpdated(Torrent torrent);
     void RecordTorrentRemoved(Torrent torrent, string reason = "Deleted from library");
     Torrent ReAdd(int historyId);
+    void Update(DownloadHistory history);
 }

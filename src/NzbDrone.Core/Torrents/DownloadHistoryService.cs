@@ -249,6 +249,14 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
         return added;
     }
 
+    public void Update(DownloadHistory history)
+    {
+        if (history != null)
+        {
+            _historyRepository.Update(history);
+        }
+    }
+
     public void Handle(TorrentAddedEvent message)
     {
         if (message?.Torrent == null)
