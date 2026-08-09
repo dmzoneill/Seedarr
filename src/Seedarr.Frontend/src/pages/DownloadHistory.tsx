@@ -459,7 +459,7 @@ export default function DownloadHistory() {
                       className="btn btn-outline"
                       style={{ flex: 1, fontSize: "0.75rem", padding: "0.25rem 0.4rem" }}
                       onClick={() => setSearchModalQuery(item.title)}
-                      title="Search again on Prowlarr"
+                      title="Search again on Indexers"
                     >
                       🔍 Search
                     </button>
@@ -643,7 +643,7 @@ export default function DownloadHistory() {
                             className="btn btn-outline"
                             style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
                             onClick={() => setSearchModalQuery(item.title)}
-                            title="Search for this release again on Prowlarr"
+                            title="Search for this release again on configured indexers"
                           >
                             🔍 Search
                           </button>
@@ -953,7 +953,7 @@ export default function DownloadHistory() {
                       setSelectedDetailItem(null);
                     }}
                   >
-                    🔍 Search on Prowlarr
+                    🔍 Search Indexers
                   </button>
                   <button
                     className="btn btn-primary"
