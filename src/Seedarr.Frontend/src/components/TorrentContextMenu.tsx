@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
+import { useArrConnections, useDownloadHistory } from "../api/hooks";
+import { getMediaDeepLink } from "../utils/arrLinks";
 import type { Torrent } from "../api/types";
 
 export interface TorrentContextMenuProps {
@@ -19,6 +22,7 @@ export interface TorrentContextMenuProps {
     id: number;
     position: "top" | "up" | "down" | "bottom";
   }) => void;
+  onSearchIndexers?: (query: string) => void;
 }
 
 function buildMagnetLink(t: Torrent): string {
@@ -42,8 +46,13 @@ function TorrentContextMenu({
   onRecheck,
   onDelete,
   onMoveQueue,
+  onSearchIndexers,
 }: TorrentContextMenuProps) {
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const { data: history } = useDownloadHistory();
+  const { data: arrConnections } = useArrConnections();
 
   useEffect(() => {
     const handleClick = () => onClose();
@@ -67,6 +76,16 @@ function TorrentContextMenu({
 
   const ct = torrent;
 
+  const historyMatch = ct
+    ? history?.find(
+        (h) =>
+          (ct.infoHash && h.infoHash?.toLowerCase() === ct.infoHash.toLowerCase()) ||
+          h.title?.toLowerCase() === ct.name?.toLowerCase(),
+      )
+    : null;
+
+  const arrLink = historyMatch ? getMediaDeepLink(historyMatch, arrConnections) : null;
+
   return (
     <div
       className="context-menu"
@@ -75,6 +94,20 @@ function TorrentContextMenu({
     >
       {ct ? (
         <>
+          {/* Arr Direct Jump Link */}
+          {arrLink && (
+            <button
+              className="context-menu-item"
+              style={{ fontWeight: 600, color: "var(--accent)" }}
+              onClick={() => {
+                window.open(arrLink.url, "_blank", "noopener,noreferrer");
+                onClose();
+              }}
+            >
+              🔗 {arrLink.label} ↗
+            </button>
+          )}
+
           {/* Pause / Resume */}
           {ct.active ? (
             <button
@@ -135,6 +168,31 @@ function TorrentContextMenu({
               Force Complete
             </button>
           )}
+
+          <div className="context-menu-separator" />
+
+          {/* Usability & Navigation Actions */}
+          <button
+            className="context-menu-item"
+            onClick={() => {
+              if (onSearchIndexers) {
+                onSearchIndexers(ct.name);
+              }
+              onClose();
+            }}
+          >
+            🔍 Search on Indexers
+          </button>
+
+          <button
+            className="context-menu-item"
+            onClick={() => {
+              navigate("/peermap");
+              onClose();
+            }}
+          >
+            🗺️ Track in Peer Map
+          </button>
 
           <div className="context-menu-separator" />
 
@@ -215,24 +273,27 @@ function TorrentContextMenu({
             )}
           </div>
 
-          {/* Speed Limits submenu */}
+          {/* Speed Limit submenu */}
           <div
             className="context-menu-item context-menu-submenu-trigger"
             onMouseEnter={() => setOpenSubmenu("speed")}
             onMouseLeave={() => setOpenSubmenu(null)}
           >
-            Speed Limits ▶
+            Speed Limit ▶
             {openSubmenu === "speed" && (
               <div className="context-menu context-menu-submenu">
                 <button
                   className="context-menu-item"
                   onClick={() => {
-                    const v = window.prompt(
-                      "Upload limit (KB/s, 0=global):",
-                      String(ct.uploadLimit),
+                    const limit = window.prompt(
+                      "Upload limit in KB/s (0 = unlimited):",
+                      String(ct.uploadLimit || 0),
                     );
-                    if (v !== null)
-                      onUpdate({ ...ct, uploadLimit: parseInt(v, 10) || 0 });
+                    if (limit !== null) {
+                      const val = parseInt(limit, 10);
+                      if (!isNaN(val) && val >= 0)
+                        onUpdate({ ...ct, uploadLimit: val });
+                    }
                     onClose();
                   }}
                 >
@@ -241,12 +302,15 @@ function TorrentContextMenu({
                 <button
                   className="context-menu-item"
                   onClick={() => {
-                    const v = window.prompt(
-                      "Download limit (KB/s, 0=global):",
-                      String(ct.downloadLimit),
+                    const limit = window.prompt(
+                      "Download limit in KB/s (0 = unlimited):",
+                      String(ct.downloadLimit || 0),
                     );
-                    if (v !== null)
-                      onUpdate({ ...ct, downloadLimit: parseInt(v, 10) || 0 });
+                    if (limit !== null) {
+                      const val = parseInt(limit, 10);
+                      if (!isNaN(val) && val >= 0)
+                        onUpdate({ ...ct, downloadLimit: val });
+                    }
                     onClose();
                   }}
                 >

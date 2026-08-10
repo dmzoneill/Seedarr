@@ -1,10 +1,13 @@
+import { Link } from "react-router";
 import {
   useTrackerServerStats,
   useTrackerServerTorrents,
   useTrackerServerConfig,
   useSaveTrackerServerConfig,
+  useNetworkStatus,
 } from "../api/hooks";
 import { formatBytes, formatDate, formatUptime } from "../utils/formatters";
+import { useToast } from "../context/ToastContext";
 import type { TrackerServerConfig } from "../api/types";
 
 function TrackerServer() {
@@ -12,7 +15,17 @@ function TrackerServer() {
   const { data: torrents, isLoading: torrentsLoading } =
     useTrackerServerTorrents();
   const { data: config } = useTrackerServerConfig();
+  const { data: network } = useNetworkStatus();
   const saveConfig = useSaveTrackerServerConfig();
+  const { showToast } = useToast();
+
+  const host = network?.externalIp || window.location.hostname || "localhost";
+  const httpAnnounceUrl = config?.trackerHttpPort
+    ? `http://${host}:${config.trackerHttpPort}/announce`
+    : null;
+  const udpAnnounceUrl = config?.trackerUdpPort
+    ? `udp://${host}:${config.trackerUdpPort}/announce`
+    : null;
 
   function handleToggleEnabled() {
     if (!config) return;
@@ -22,6 +35,11 @@ function TrackerServer() {
     };
     saveConfig.mutate(updated);
   }
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    showToast(`Copied ${label} announce URL to clipboard`, "success");
+  };
 
   return (
     <div>
@@ -72,6 +90,81 @@ function TrackerServer() {
           </div>
         </div>
       </div>
+
+      {/* Announce Endpoints Quick-Copy Banner */}
+      {config?.trackerServerEnabled && (
+        <div
+          className="card"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: "1rem",
+            marginBottom: "1rem",
+          }}
+        >
+          {config.trackerHttpEnabled && httpAnnounceUrl && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.75rem",
+                backgroundColor: "var(--bg-primary)",
+                borderRadius: "4px",
+                border: "1px solid var(--border-light)",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600 }}>
+                  HTTP ANNOUNCE URL
+                </div>
+                <code style={{ fontSize: "0.85rem", color: "var(--accent)" }}>
+                  {httpAnnounceUrl}
+                </code>
+              </div>
+              <button
+                className="btn btn-small btn-outline"
+                onClick={() => copyToClipboard(httpAnnounceUrl, "HTTP")}
+                title="Copy HTTP Announce URL"
+              >
+                📋 Copy
+              </button>
+            </div>
+          )}
+
+          {config.trackerUdpEnabled && udpAnnounceUrl && (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.75rem",
+                backgroundColor: "var(--bg-primary)",
+                borderRadius: "4px",
+                border: "1px solid var(--border-light)",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600 }}>
+                  UDP ANNOUNCE URL
+                </div>
+                <code style={{ fontSize: "0.85rem", color: "var(--accent)" }}>
+                  {udpAnnounceUrl}
+                </code>
+              </div>
+              <button
+                className="btn btn-small btn-outline"
+                onClick={() => copyToClipboard(udpAnnounceUrl, "UDP")}
+                title="Copy UDP Announce URL"
+              >
+                📋 Copy
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {config && (
         <div className="card tracker-info-card">
@@ -144,7 +237,19 @@ function TrackerServer() {
                           {t.isInternal ? "Internal" : "External"}
                         </span>
                       </td>
-                      <td>{t.name}</td>
+                      <td>
+                        {t.isInternal ? (
+                          <Link
+                            to="/torrents"
+                            style={{ color: "inherit", textDecoration: "none", fontWeight: 500 }}
+                            title="Jump to active torrent in library"
+                          >
+                            {t.name} ↗
+                          </Link>
+                        ) : (
+                          t.name
+                        )}
+                      </td>
                       <td>{t.seeders}</td>
                       <td>{t.leechers}</td>
                       <td>{formatBytes(t.uploaded)}</td>
