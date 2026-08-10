@@ -128,6 +128,19 @@ export function DownloadClientsTab() {
               onClick={() => handleOpenModal(client)}
             >
               <div className="provider-card-actions">
+                {client.host && (
+                  <a
+                    href={`${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="provider-card-action"
+                    title={`Open ${client.name} Web UI`}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ textDecoration: "none", color: "inherit" }}
+                  >
+                    ↗
+                  </a>
+                )}
                 <button
                   className="provider-card-action"
                   title="Test"

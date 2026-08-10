@@ -118,6 +118,19 @@ export function ConnectionsTab() {
               onClick={() => handleOpenModal(conn)}
             >
               <div className="provider-card-actions">
+                {conn.url && (
+                  <a
+                    href={conn.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="provider-card-action"
+                    title={`Open ${conn.name} Web UI (${conn.url})`}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ textDecoration: "none", color: "inherit" }}
+                  >
+                    ↗
+                  </a>
+                )}
                 <button
                   className="provider-card-action"
                   title="Test"

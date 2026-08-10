@@ -170,13 +170,24 @@ export default function DownloadClientTorrents() {
         </div>
 
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          {client?.host && (
+            <a
+              href={`${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-outline"
+              style={{ fontSize: "0.85rem", textDecoration: "none" }}
+              title={`Open ${client.name} Web UI`}
+            >
+              Open Web UI ↗
+            </a>
+          )}
           <button
             className="btn btn-outline"
             onClick={() => refetch()}
             disabled={isFetching}
-            title="Refresh torrents from client"
           >
-            {isFetching ? "Refreshing..." : "Refresh"}
+            {isFetching ? "Refreshing..." : "↻ Refresh"}
           </button>
           <button
             className="btn btn-primary"
