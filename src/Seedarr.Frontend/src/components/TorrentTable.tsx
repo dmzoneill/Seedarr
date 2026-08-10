@@ -20,6 +20,7 @@ import {
   extractTrackerDomain,
 } from "../utils/formatters";
 import { getMediaDeepLink } from "../utils/arrLinks";
+import { getTorrentBadges } from "../utils/milestones";
 import { SkeletonTableRow } from "./Skeleton";
 import TorrentContextMenu from "./TorrentContextMenu";
 import AddTorrentModal from "./AddTorrentModal";
@@ -323,6 +324,8 @@ function TorrentTable({
         const meta = historyMatch?.metadata;
         const arrLink = historyMatch ? getMediaDeepLink(historyMatch, arrConnections) : null;
 
+        const badges = getTorrentBadges(t);
+
         return (
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
             {meta?.posterUrl && (
@@ -335,6 +338,20 @@ function TorrentTable({
             <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {meta?.title || t.name} {meta?.year ? `(${meta.year})` : ""}
             </span>
+            {badges.map((b, i) => (
+              <span
+                key={i}
+                title={b.title}
+                style={{
+                  fontSize: "0.75rem",
+                  cursor: "help",
+                  display: "inline-flex",
+                  alignItems: "center",
+                }}
+              >
+                {b.icon}
+              </span>
+            ))}
             {arrLink && (
               <a
                 href={arrLink.url}
@@ -378,7 +395,11 @@ function TorrentTable({
       case "downloadSpeed":
         return formatSpeed(t.downloadSpeed);
       case "ratio":
-        return formatRatio(t.ratio);
+        return (
+          <span className={`badge ${t.ratio >= 2.0 ? "badge-success" : t.ratio >= 1.0 ? "badge-primary" : "badge-secondary"}`}>
+            {formatRatio(t.ratio)}
+          </span>
+        );
       case "progress": {
         const pct = Math.min(t.progress * 100, 100);
         return (

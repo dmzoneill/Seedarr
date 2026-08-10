@@ -16,6 +16,10 @@ import {
   formatDate,
 } from "../utils/formatters";
 import { getMediaDeepLink } from "../utils/arrLinks";
+import {
+  calculateAchievements,
+  calculateHnrStatus,
+} from "../utils/milestones";
 import HealthAlerts from "../components/HealthAlerts";
 import SpeedGraph from "../components/SpeedGraph";
 import { SkeletonGrid, SkeletonLine } from "../components/Skeleton";
@@ -119,6 +123,15 @@ function Dashboard() {
   const { data: downloadClients } = useDownloadClients();
   const { data: history } = useDownloadHistory();
 
+  const achievements = useMemo(
+    () => calculateAchievements(torrents, stats),
+    [torrents, stats],
+  );
+
+  const hnrPendingCount = useMemo(() => {
+    return (torrents ?? []).filter((t) => !calculateHnrStatus(t).isCleared).length;
+  }, [torrents]);
+
   const totalSize = (torrents ?? []).reduce((sum, t) => sum + t.totalSize, 0);
   const recent = [...(torrents ?? [])]
     .sort(
@@ -156,6 +169,50 @@ function Dashboard() {
       <h1 className="page-heading">Dashboard</h1>
 
       <HealthAlerts />
+
+      {/* Gamification / Seeding Mastery Header Widget */}
+      <div
+        className="card"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem",
+          marginBottom: 16,
+          background: "linear-gradient(90deg, rgba(200, 168, 78, 0.15) 0%, rgba(30, 30, 30, 0.8) 100%)",
+          borderLeft: "4px solid var(--accent)",
+          padding: "1rem 1.25rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <div style={{ fontSize: "2rem" }}>🏆</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: "1.05rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span>Level {achievements.overallLevel}: {achievements.rankTitle}</span>
+              <span className="badge badge-primary" style={{ fontSize: "0.75rem" }}>
+                {achievements.unlockedCount}/{achievements.totalCount} Badges
+              </span>
+            </div>
+            <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+              {achievements.totalSwarmGuardians.length > 0 && (
+                <span style={{ color: "#e67e22", fontWeight: 600 }}>
+                  🛡️ Keeping {achievements.totalSwarmGuardians.length} rare swarms alive •{" "}
+                </span>
+              )}
+              <span>{hnrPendingCount} torrents working towards minimum seed time</span>
+            </div>
+          </div>
+        </div>
+
+        <Link
+          to="/statistics"
+          className="btn btn-outline"
+          style={{ fontSize: "0.85rem", textDecoration: "none" }}
+        >
+          Hall of Fame & Buffers →
+        </Link>
+      </div>
 
       {statsLoading ? (
         <SkeletonGrid count={4} />

@@ -12,6 +12,10 @@ import {
   getTmdbUrl,
   getProwlarrUrl,
 } from "../../utils/arrLinks";
+import {
+  getTorrentBadges,
+  calculateHnrStatus,
+} from "../../utils/milestones";
 import { StatusRow } from "./shared";
 
 export function GeneralTab({ torrent }: { torrent: Torrent }) {
@@ -30,6 +34,9 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
   const imdbUrl = getImdbUrl(meta?.imdbId, meta?.title || torrent.name);
   const tmdbUrl = getTmdbUrl(meta?.tmdbId, meta?.mediaType);
   const prowlarrUrl = getProwlarrUrl(indexers, meta?.title || torrent.name);
+
+  const badges = getTorrentBadges(torrent);
+  const hnr = calculateHnrStatus(torrent);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
@@ -131,6 +138,69 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
         </div>
       )}
 
+      {/* Gamification & HNR Seeding Status Card */}
+      <div
+        className="card"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem",
+          padding: "1rem",
+          background: "rgba(25, 25, 25, 0.6)",
+          border: "1px solid var(--border-light)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+            Milestones Earned:
+          </span>
+          {badges.length === 0 ? (
+            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+              Seeding towards 1.0x Ratio...
+            </span>
+          ) : (
+            badges.map((b, i) => (
+              <span
+                key={i}
+                className="badge"
+                style={{
+                  backgroundColor: b.color,
+                  color: "#fff",
+                  fontSize: "0.75rem",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.25rem",
+                }}
+                title={b.title}
+              >
+                <span>{b.icon}</span>
+                <span>{b.label}</span>
+              </span>
+            ))
+          )}
+        </div>
+
+        {/* HNR Seeding Minimum Requirement Meter */}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            HNR Requirement:
+          </span>
+          <span
+            className={`badge ${hnr.isCleared ? "badge-success" : "badge-warning"}`}
+            style={{ fontSize: "0.75rem" }}
+            title={
+              hnr.isCleared
+                ? "Safe to remove or pause without private tracker penalties"
+                : `Need ${formatSeconds(hnr.remainingSeconds)} more seed time or reach 1.0 ratio`
+            }
+          >
+            {hnr.label}
+          </span>
+        </div>
+      </div>
+
       <div className="detail-grid">
         <div className="card">
           <h3>Info</h3>
@@ -172,7 +242,11 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
           <StatusRow label="Downloaded">
             {formatBytes(torrent.downloaded)}
           </StatusRow>
-          <StatusRow label="Ratio">{formatRatio(torrent.ratio)}</StatusRow>
+          <StatusRow label="Ratio">
+            <span className={`badge ${torrent.ratio >= 2.0 ? "badge-success" : torrent.ratio >= 1.0 ? "badge-primary" : "badge-secondary"}`}>
+              {formatRatio(torrent.ratio)}
+            </span>
+          </StatusRow>
           <StatusRow label="Seeding Time">
             {formatSeconds(torrent.seedingTime)}
           </StatusRow>
