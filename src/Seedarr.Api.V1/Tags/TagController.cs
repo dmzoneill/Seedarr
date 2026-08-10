@@ -2,20 +2,28 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Tags;
+using NzbDrone.SignalR;
 using Seedarr.Http;
+using Seedarr.Http.REST;
 
 namespace Seedarr.Api.V1.Tags;
 
 [V1ApiController("tag")]
-public class TagController : Controller
+public class TagController : RestControllerWithSignalR<TagResource, Tag>
 {
     private readonly ITagService _tagService;
     private readonly TagResourceValidator _validator;
 
-    public TagController(ITagService tagService, TagResourceValidator validator)
+    public TagController(ITagService tagService, TagResourceValidator validator, IBroadcastSignalRMessage signalRBroadcaster)
+        : base(signalRBroadcaster)
     {
         _tagService = tagService;
         _validator = validator;
+    }
+
+    protected override TagResource GetResourceById(Tag model)
+    {
+        return ToResource(model);
     }
 
     [HttpGet]

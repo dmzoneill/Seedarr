@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Tags;
@@ -34,7 +36,7 @@ public class TagService : ITagService
     {
         _logger.Info("Adding tag: {0}", tag.Label);
         var result = _repo.Insert(tag);
-        _eventAggregator.PublishEvent(new TagsUpdatedEvent());
+        _eventAggregator.PublishEvent(new ModelEvent<Tag>(result, ModelAction.Created));
         return result;
     }
 
@@ -42,18 +44,19 @@ public class TagService : ITagService
     {
         _logger.Info("Updating tag: {0}", tag.Label);
         _repo.Update(tag);
-        _eventAggregator.PublishEvent(new TagsUpdatedEvent());
+        _eventAggregator.PublishEvent(new ModelEvent<Tag>(tag, ModelAction.Updated));
         return tag;
     }
 
     public void Delete(int id)
     {
+        var tag = _repo.Get(id);
         _logger.Info("Deleting tag: {0}", id);
         _repo.Delete(id);
-        _eventAggregator.PublishEvent(new TagsUpdatedEvent());
-    }
-}
 
-public class TagsUpdatedEvent : IEvent
-{
+        if (tag != null)
+        {
+            _eventAggregator.PublishEvent(new ModelEvent<Tag>(tag, ModelAction.Deleted));
+        }
+    }
 }
