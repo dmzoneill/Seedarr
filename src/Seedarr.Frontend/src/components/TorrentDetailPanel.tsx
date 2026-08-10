@@ -81,9 +81,10 @@ function DetailsTab({ torrent }: { torrent: Torrent }) {
 }
 
 function FilesTab({ torrentId }: { torrentId: number }) {
-  const { data: files, isLoading } = useTorrentFiles(torrentId);
+  const { data: files, isLoading, isError } = useTorrentFiles(torrentId);
 
   if (isLoading) return <div className="detail-panel-loading">Loading files...</div>;
+  if (isError) return <div className="detail-panel-empty">Failed to load files.</div>;
   if (!files || files.length === 0) return <div className="detail-panel-empty">No files</div>;
 
   return (
@@ -109,9 +110,10 @@ function FilesTab({ torrentId }: { torrentId: number }) {
 }
 
 function PeersTab({ torrentId }: { torrentId: number }) {
-  const { data: peers, isLoading } = usePeers(torrentId);
+  const { data: peers, isLoading, isError } = usePeers(torrentId);
 
   if (isLoading) return <div className="detail-panel-loading">Loading peers...</div>;
+  if (isError) return <div className="detail-panel-empty">Failed to load peers.</div>;
   if (!peers || peers.length === 0) return <div className="detail-panel-empty">No peers connected</div>;
 
   return (
@@ -159,9 +161,10 @@ function trackerBadgeClass(status: string): string {
 }
 
 function TrackersTab({ torrentId }: { torrentId: number }) {
-  const { data: trackers, isLoading } = useTorrentTrackers(torrentId);
+  const { data: trackers, isLoading, isError } = useTorrentTrackers(torrentId);
 
   if (isLoading) return <div className="detail-panel-loading">Loading trackers...</div>;
+  if (isError) return <div className="detail-panel-empty">Failed to load trackers.</div>;
   if (!trackers || trackers.length === 0) return <div className="detail-panel-empty">No trackers</div>;
 
   return (
@@ -492,7 +495,7 @@ const DETAIL_TABS: { key: DetailTab; label: string }[] = [
 ];
 
 function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
-  const { data: torrent, isLoading } = useTorrent(torrentId);
+  const { data: torrent, isLoading, isError } = useTorrent(torrentId);
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
   const [tab, setTab] = useState<DetailTab>('status');
@@ -550,6 +553,7 @@ function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {
   }, [panelHeight]);
 
   if (isLoading) return <div className="detail-panel" style={{ height: panelHeight }}><div className="detail-panel-loading">Loading...</div></div>;
+  if (isError) return <div className="detail-panel" style={{ height: panelHeight }}><div className="detail-panel-empty">Failed to load torrent.</div></div>;
   if (!torrent) return <div className="detail-panel" style={{ height: panelHeight }}><div className="detail-panel-empty">Torrent not found</div></div>;
 
   const isSeeding = torrent.status === 'Seeding';

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using NzbDrone.Common.EnvironmentInfo;
@@ -147,6 +148,31 @@ public class SystemController : ControllerBase
                 Message = c.Message
             };
         }).ToList());
+    }
+
+    [HttpPost("command")]
+    public ActionResult<CommandResource> PushCommand([FromBody] JsonElement body)
+    {
+        if (!body.TryGetProperty("name", out var nameProp) || nameProp.ValueKind != JsonValueKind.String)
+        {
+            return BadRequest(new { message = "Command 'name' is required" });
+        }
+
+        var name = nameProp.GetString();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return BadRequest(new { message = "Command 'name' must not be empty" });
+        }
+
+        var model = _commandQueueManager.PushRaw(name, body.GetRawText());
+
+        return Ok(new CommandResource
+        {
+            Id = model.Id,
+            Name = model.Name,
+            Status = model.Status.ToString().ToLowerInvariant(),
+            QueuedAt = model.QueuedAt
+        });
     }
 
     [HttpPost("restart")]
