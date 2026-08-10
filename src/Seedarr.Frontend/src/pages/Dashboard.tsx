@@ -1,8 +1,13 @@
 import { useMemo } from "react";
+import { Link } from "react-router";
 import {
   useTorrents,
   useSeedingStats,
   useActiveSpeedLimits,
+  useArrConnections,
+  useIndexers,
+  useDownloadClients,
+  useDownloadHistory,
 } from "../api/hooks";
 import {
   formatBytes,
@@ -10,6 +15,7 @@ import {
   formatRatio,
   formatDate,
 } from "../utils/formatters";
+import { getMediaDeepLink } from "../utils/arrLinks";
 import HealthAlerts from "../components/HealthAlerts";
 import SpeedGraph from "../components/SpeedGraph";
 import { SkeletonGrid, SkeletonLine } from "../components/Skeleton";
@@ -108,6 +114,10 @@ function Dashboard() {
     isError: statsError,
   } = useSeedingStats();
   const { data: activeLimits } = useActiveSpeedLimits();
+  const { data: arrConnections } = useArrConnections();
+  const { data: indexers } = useIndexers();
+  const { data: downloadClients } = useDownloadClients();
+  const { data: history } = useDownloadHistory();
 
   const totalSize = (torrents ?? []).reduce((sum, t) => sum + t.totalSize, 0);
   const recent = [...(torrents ?? [])]
@@ -115,7 +125,7 @@ function Dashboard() {
       (a, b) =>
         new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime(),
     )
-    .slice(0, 5);
+    .slice(0, 6);
 
   const statusCounts: Record<string, number> = {};
   (torrents ?? []).forEach((t) => {
@@ -176,6 +186,163 @@ function Dashboard() {
         </div>
       )}
 
+      {/* Arr & Client Ecosystem Integration Bar */}
+      {((arrConnections && arrConnections.length > 0) ||
+        (indexers && indexers.length > 0) ||
+        (downloadClients && downloadClients.length > 0)) && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16,
+            padding: "1rem",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.75rem",
+            }}
+          >
+            <h3 style={{ margin: 0 }}>Connected Ecosystem</h3>
+            <Link
+              to="/settings/connections"
+              style={{ fontSize: "0.8rem", color: "var(--accent)" }}
+            >
+              Manage Connections ⚙️
+            </Link>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
+              gap: "0.75rem",
+            }}
+          >
+            {arrConnections?.map((conn) => (
+              <div
+                key={`arr-${conn.id}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.5rem 0.75rem",
+                  backgroundColor: "var(--bg-primary)",
+                  borderRadius: "4px",
+                  border: "1px solid var(--border-light)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ fontSize: "1.1rem" }}>
+                    {conn.arrType === "Sonarr"
+                      ? "📺"
+                      : conn.arrType === "Radarr"
+                      ? "🎬"
+                      : conn.arrType === "Lidarr"
+                      ? "🎵"
+                      : "📦"}
+                  </span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>{conn.name}</div>
+                    <div style={{ fontSize: "0.7rem", color: conn.enable ? "var(--success)" : "var(--text-muted)" }}>
+                      {conn.enable ? "● Connected" : "○ Disabled"}
+                    </div>
+                  </div>
+                </div>
+                {conn.url && (
+                  <a
+                    href={conn.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-small btn-outline"
+                    style={{ fontSize: "0.75rem", padding: "0.15rem 0.4rem", textDecoration: "none" }}
+                    title={`Open ${conn.name} Web UI`}
+                  >
+                    ↗
+                  </a>
+                )}
+              </div>
+            ))}
+
+            {indexers?.filter((i) => i.enable).slice(0, 3).map((idx) => (
+              <div
+                key={`idx-${idx.id}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.5rem 0.75rem",
+                  backgroundColor: "var(--bg-primary)",
+                  borderRadius: "4px",
+                  border: "1px solid var(--border-light)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ fontSize: "1.1rem" }}>🔍</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>{idx.name}</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--success)" }}>
+                      ● {idx.indexerType}
+                    </div>
+                  </div>
+                </div>
+                {idx.url && (
+                  <a
+                    href={idx.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-small btn-outline"
+                    style={{ fontSize: "0.75rem", padding: "0.15rem 0.4rem", textDecoration: "none" }}
+                    title={`Open ${idx.name} Web UI`}
+                  >
+                    ↗
+                  </a>
+                )}
+              </div>
+            ))}
+
+            {downloadClients?.filter((c) => c.enable).map((client) => (
+              <div
+                key={`client-${client.id}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.5rem 0.75rem",
+                  backgroundColor: "var(--bg-primary)",
+                  borderRadius: "4px",
+                  border: "1px solid var(--border-light)",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ fontSize: "1.1rem" }}>⚡</span>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>{client.name}</div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--success)" }}>
+                      ● {client.clientType}
+                    </div>
+                  </div>
+                </div>
+                {client.host && (
+                  <a
+                    href={`${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-small btn-outline"
+                    style={{ fontSize: "0.75rem", padding: "0.15rem 0.4rem", textDecoration: "none" }}
+                    title={`Open ${client.name} Web UI`}
+                  >
+                    ↗
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div
         style={{
           display: "grid",
@@ -225,9 +392,14 @@ function Dashboard() {
             <h3 style={{ marginBottom: 8 }}>Top Trackers</h3>
             {topTrackers.map(([domain, count]) => (
               <div key={domain} className="status-row">
-                <span className="status-label" style={{ fontSize: 13 }}>
-                  {domain}
-                </span>
+                <Link
+                  to={`/torrents?tracker=${encodeURIComponent(domain)}`}
+                  className="status-label"
+                  style={{ fontSize: 13, textDecoration: "none", color: "inherit" }}
+                  title="Filter torrents by tracker"
+                >
+                  {domain} ↗
+                </Link>
                 <span className="status-value">{count}</span>
               </div>
             ))}
@@ -237,8 +409,15 @@ function Dashboard() {
 
       <SpeedGraph />
 
+      {/* Recent Torrents with Media Metadata & Arr Links */}
       <div className="card">
-        <h3>Recent Torrents</h3>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+          <h3 style={{ margin: 0 }}>Recent Torrents</h3>
+          <Link to="/torrents" style={{ fontSize: "0.8rem", color: "var(--accent)" }}>
+            View All Torrents →
+          </Link>
+        </div>
+
         {isLoading && (
           <>
             {[0, 1, 2].map((i) => (
@@ -253,19 +432,80 @@ function Dashboard() {
         {!isLoading && !isError && recent.length === 0 && (
           <p className="loading">No torrents added yet.</p>
         )}
-        {recent.map((t) => (
-          <div key={t.id} className="status-row">
-            <span className="status-label">{t.name}</span>
-            <span className="status-value">
-              <span
-                className={`badge badge-${(t.status ?? "unknown").toLowerCase()}`}
-              >
-                {t.status}
-              </span>{" "}
-              {formatDate(t.dateAdded)}
-            </span>
-          </div>
-        ))}
+        {recent.map((t) => {
+          const match = history?.find(
+            (h) =>
+              (t.infoHash && h.infoHash?.toLowerCase() === t.infoHash.toLowerCase()) ||
+              h.title?.toLowerCase() === t.name?.toLowerCase(),
+          );
+          const meta = match?.metadata;
+          const arrLink = match ? getMediaDeepLink(match, arrConnections) : null;
+
+          return (
+            <div
+              key={t.id}
+              className="status-row"
+              style={{ alignItems: "center", padding: "0.5rem 0" }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: 1 }}>
+                {meta?.posterUrl ? (
+                  <img
+                    src={meta.posterUrl}
+                    alt=""
+                    style={{ width: "28px", height: "40px", objectFit: "cover", borderRadius: "3px", flexShrink: 0 }}
+                  />
+                ) : (
+                  <span style={{ fontSize: "1.2rem", flexShrink: 0 }}>📦</span>
+                )}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <Link
+                    to="/torrents"
+                    style={{
+                      fontWeight: 500,
+                      fontSize: "0.85rem",
+                      textDecoration: "none",
+                      color: "inherit",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                      display: "block",
+                    }}
+                    title={t.name}
+                  >
+                    {meta?.title || t.name} {meta?.year ? `(${meta.year})` : ""}
+                  </Link>
+                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "flex", gap: "0.5rem" }}>
+                    <span>{formatBytes(t.totalSize)}</span>
+                    {t.trackerUrl && <span>• {new URL(t.trackerUrl).hostname}</span>}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+                {arrLink && (
+                  <a
+                    href={arrLink.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="badge badge-secondary"
+                    style={{ fontSize: "0.7rem", padding: "0.1rem 0.35rem", textDecoration: "none", color: "inherit" }}
+                    title={arrLink.label}
+                  >
+                    {arrLink.appName} ↗
+                  </a>
+                )}
+                <span
+                  className={`badge badge-${(t.status ?? "unknown").toLowerCase()}`}
+                >
+                  {t.status}
+                </span>
+                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                  {formatDate(t.dateAdded)}
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

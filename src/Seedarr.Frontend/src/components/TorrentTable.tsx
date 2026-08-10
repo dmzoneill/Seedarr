@@ -8,6 +8,8 @@ import {
   useAnnounceTorrent,
   useRecheckTorrent,
   useMoveTorrentQueue,
+  useDownloadHistory,
+  useArrConnections,
 } from "../api/hooks";
 import {
   formatBytes,
@@ -17,8 +19,10 @@ import {
   formatSeconds,
   extractTrackerDomain,
 } from "../utils/formatters";
+import { getMediaDeepLink } from "../utils/arrLinks";
 import { SkeletonTableRow } from "./Skeleton";
 import TorrentContextMenu from "./TorrentContextMenu";
+import AddTorrentModal from "./AddTorrentModal";
 import type { Torrent } from "../api/types";
 
 type ColumnKey =
@@ -181,8 +185,12 @@ function TorrentTable({
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] =
     useState<Set<string>>(loadVisibleColumns);
+
+  const { data: history } = useDownloadHistory();
+  const { data: arrConnections } = useArrConnections();
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
@@ -306,8 +314,49 @@ function TorrentTable({
     switch (key) {
       case "#":
         return index + 1;
-      case "name":
-        return t.name;
+      case "name": {
+        const historyMatch = history?.find(
+          (h) =>
+            (t.infoHash && h.infoHash?.toLowerCase() === t.infoHash.toLowerCase()) ||
+            h.title?.toLowerCase() === t.name?.toLowerCase(),
+        );
+        const meta = historyMatch?.metadata;
+        const arrLink = historyMatch ? getMediaDeepLink(historyMatch, arrConnections) : null;
+
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+            {meta?.posterUrl && (
+              <img
+                src={meta.posterUrl}
+                alt=""
+                style={{ width: "20px", height: "28px", objectFit: "cover", borderRadius: "2px", flexShrink: 0 }}
+              />
+            )}
+            <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {meta?.title || t.name} {meta?.year ? `(${meta.year})` : ""}
+            </span>
+            {arrLink && (
+              <a
+                href={arrLink.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="badge badge-secondary"
+                style={{
+                  fontSize: "0.65rem",
+                  padding: "0.05rem 0.35rem",
+                  textDecoration: "none",
+                  color: "inherit",
+                  flexShrink: 0,
+                }}
+                title={arrLink.label}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {arrLink.appName} ↗
+              </a>
+            )}
+          </div>
+        );
+      }
       case "status":
         return (
           <span className={`badge badge-${t.status.toLowerCase()}`}>
@@ -489,6 +538,15 @@ function TorrentTable({
           onRecheck={(id) => recheckTorrent.mutate(id)}
           onDelete={(payload) => deleteTorrent.mutate(payload)}
           onMoveQueue={(payload) => moveTorrentQueue.mutate(payload)}
+          onSearchIndexers={(q) => setSearchModalQuery(q)}
+        />
+      )}
+
+      {searchModalQuery && (
+        <AddTorrentModal
+          initialMode="search"
+          initialQuery={searchModalQuery}
+          onClose={() => setSearchModalQuery(null)}
         />
       )}
     </div>
