@@ -23,7 +23,7 @@ namespace NzbDrone.Core.ArrIntegration
         public ArrMetadataEnricherService(
             IArrConnectionFactory connectionFactory,
             IDownloadHistoryRepository downloadHistoryRepository,
-            ITorrentRepository torrentRepository)
+            ITorrentRepository torrentRepository = null)
         {
             _connectionFactory = connectionFactory;
             _downloadHistoryRepository = downloadHistoryRepository;

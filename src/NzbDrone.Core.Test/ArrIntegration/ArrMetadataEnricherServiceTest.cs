@@ -60,5 +60,32 @@ namespace NzbDrone.Core.Test.ArrIntegration
             _downloadHistoryRepository.Received(1).Get(1);
             _downloadHistoryRepository.DidNotReceive().Get(2);
         }
+
+        [TestCase("Severance.S01E01.1080p.WEB-DL.x265-FLUX.mkv", "Severance")]
+        [TestCase("Dune.Part.Two.2024.2160p.UHD.Remux.mkv", "Dune Part Two 2024")]
+        [TestCase("The.Penguin.S01.720p.HDTV.x264-SPARKS", "The Penguin")]
+        public void CleanReleaseTitle_should_clean_scene_tags(string raw, string expected)
+        {
+            var cleaned = ArrMetadataEnricherService.CleanReleaseTitle(raw);
+            Assert.That(cleaned, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void ReconcileAndEnrichAll_should_backfill_missing_torrents()
+        {
+            var torrentRepo = Substitute.For<ITorrentRepository>();
+            var torrents = new List<Torrent>
+            {
+                new() { Id = 10, Name = "Test Torrent", InfoHash = "abc12345", TotalSize = 1024 }
+            };
+            torrentRepo.All().Returns(torrents);
+            _downloadHistoryRepository.FindByInfoHash("abc12345").Returns((DownloadHistory)null);
+
+            var subjectWithRepo = new ArrMetadataEnricherService(_connectionFactory, _downloadHistoryRepository, torrentRepo);
+            var result = subjectWithRepo.ReconcileAndEnrichAll();
+
+            Assert.That(result, Is.GreaterThanOrEqualTo(1));
+            _downloadHistoryRepository.Received(1).Insert(Arg.Is<DownloadHistory>(h => h.InfoHash == "abc12345"));
+        }
     }
 }
