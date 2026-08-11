@@ -929,6 +929,17 @@ export function useInspectTorrentTrackers(torrentId: number, enabled = true) {
   });
 }
 
+export function useInspectHashTrackers(infoHash: string, name = "", enabled = true) {
+  return useQuery<TorrentTrackerInspectionResult>({
+    queryKey: ["downloadplusplus", "check-hash", infoHash],
+    queryFn: () => {
+      const search = name ? `?name=${encodeURIComponent(name)}` : "";
+      return apiClient.get(`/downloadplusplus/check-hash/${infoHash}${search}`);
+    },
+    enabled: enabled && Boolean(infoHash),
+  });
+}
+
 export function useScanDownloadPlusPlusTrackers() {
   const queryClient = useQueryClient();
   return useMutation<{ success: boolean; testedCount: number }, Error, void>({
@@ -972,15 +983,34 @@ export function useBoostTorrent() {
   });
 }
 
+export function useBoostHash() {
+  const queryClient = useQueryClient();
+  return useMutation<SwarmBoostResult, Error, { infoHash: string; name?: string }>({
+    mutationFn: (vars) => {
+      const search = vars.name ? `?name=${encodeURIComponent(vars.name)}` : "";
+      return apiClient.post(`/downloadplusplus/boost-hash/${vars.infoHash}${search}`);
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus", "check-hash", vars.infoHash] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
 export function useInjectTrackerToTorrent() {
   const queryClient = useQueryClient();
-  return useMutation<SwarmBoostResult, Error, { torrentId: number; trackerUrl: string }>({
+  return useMutation<SwarmBoostResult, Error, { torrentId?: number; infoHash?: string; trackerUrl: string }>({
     mutationFn: (payload) => apiClient.post("/downloadplusplus/inject", payload),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
-      queryClient.invalidateQueries({ queryKey: ["downloadplusplus", "check", vars.torrentId] });
+      if (vars.torrentId) {
+        queryClient.invalidateQueries({ queryKey: ["downloadplusplus", "check", vars.torrentId] });
+      }
+      if (vars.infoHash) {
+        queryClient.invalidateQueries({ queryKey: ["downloadplusplus", "check-hash", vars.infoHash] });
+      }
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
-      queryClient.invalidateQueries({ queryKey: ["trackers", vars.torrentId] });
     },
   });
 }

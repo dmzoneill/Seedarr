@@ -176,6 +176,32 @@ public class TransmissionClient : IDownloadClient, IDisposable
         return null;
     }
 
+    public bool AddTrackers(string infoHash, IEnumerable<string> trackers)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash) || trackers == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var trackerArray = new List<string>(trackers).ToArray();
+            var args = new
+            {
+                ids = new[] { infoHash },
+                trackerAdd = trackerArray
+            };
+
+            using var doc = SendRequest("torrent-set", args);
+            return doc.RootElement.TryGetProperty("result", out var res) && res.GetString() == "success";
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to add trackers to Transmission for torrent {0}", infoHash);
+            return false;
+        }
+    }
+
     public bool TestConnection()
     {
         return TestConnectionDetailed().Success;

@@ -10,6 +10,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Torrents;
 
@@ -26,8 +27,11 @@ public interface IDownloadPlusPlusService
     Task<int> HarvestFromCuratedListsAsync();
     Task<int> ProbeTrackerHealthAsync();
     Task<TorrentTrackerInspectionResult> InspectTorrentTrackersAsync(int torrentId);
+    Task<TorrentTrackerInspectionResult> InspectHashTrackersAsync(string infoHash, string name = "");
     Task<SwarmBoostResult> BoostTorrentAsync(int torrentId);
+    Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "");
     Task<SwarmBoostResult> InjectTrackerToTorrentAsync(int torrentId, string trackerUrl);
+    Task<SwarmBoostResult> InjectTrackerToHashAsync(string infoHash, string trackerUrl);
     Task<List<SwarmBoostResult>> BoostAllTorrentsAsync();
 }
 
@@ -54,6 +58,7 @@ public class DownloadPlusPlusService : IDownloadPlusPlusService
     private readonly ITorrentService _torrentService;
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly IIndexerRepository _indexerRepository;
+    private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly Logger _logger;
 
     private static DateTime? _lastScanTime;
@@ -65,12 +70,14 @@ public class DownloadPlusPlusService : IDownloadPlusPlusService
         IDownloadPlusPlusTrackerRepository trackerRepository,
         ITorrentService torrentService,
         ITrackerEntryService trackerEntryService,
-        IIndexerRepository indexerRepository)
+        IIndexerRepository indexerRepository,
+        IDownloadClientFactory downloadClientFactory)
     {
         _trackerRepository = trackerRepository;
         _torrentService = torrentService;
         _trackerEntryService = trackerEntryService;
         _indexerRepository = indexerRepository;
+        _downloadClientFactory = downloadClientFactory;
         _logger = LogManager.GetCurrentClassLogger();
 
         EnsureDefaultTrackersBootstrapped();
@@ -258,17 +265,19 @@ public class DownloadPlusPlusService : IDownloadPlusPlusService
                     {
                         foreach (var field in fieldsProp.EnumerateArray())
                         {
-                            if (field.TryGetProperty("name", out var fnProp) &&
-                                (fnProp.GetString()?.Contains("tracker", StringComparison.OrdinalIgnoreCase) == true ||
-                                 fnProp.GetString()?.Contains("announce", StringComparison.OrdinalIgnoreCase) == true))
+                            if (field.TryGetProperty("name", out var fnProp))
                             {
-                                if (field.TryGetProperty("value", out var fvProp) && fvProp.ValueKind == JsonValueKind.String)
+                                var fn = fnProp.GetString() ?? string.Empty;
+                                if (fn.Contains("tracker", StringComparison.OrdinalIgnoreCase) || fn.Contains("announce", StringComparison.OrdinalIgnoreCase))
                                 {
-                                    var trackerVal = fvProp.GetString();
-                                    if (!string.IsNullOrWhiteSpace(trackerVal) && (trackerVal.StartsWith("udp://") || trackerVal.StartsWith("http://") || trackerVal.StartsWith("https://")))
+                                    if (field.TryGetProperty("value", out var fvProp) && fvProp.ValueKind == JsonValueKind.String)
                                     {
-                                        AddTrackerInternal(trackerVal, TrackerSourceType.Prowlarr, $"Prowlarr ({indexerName})");
-                                        harvestedCount++;
+                                        var trackerVal = fvProp.GetString();
+                                        if (!string.IsNullOrWhiteSpace(trackerVal) && (trackerVal.StartsWith("udp://") || trackerVal.StartsWith("http://") || trackerVal.StartsWith("https://")))
+                                        {
+                                            AddTrackerInternal(trackerVal, TrackerSourceType.Prowlarr, $"Prowlarr ({indexerName})");
+                                            harvestedCount++;
+                                        }
                                     }
                                 }
                             }
@@ -527,6 +536,52 @@ public class DownloadPlusPlusService : IDownloadPlusPlusService
         });
     }
 
+    public async Task<TorrentTrackerInspectionResult> InspectHashTrackersAsync(string infoHash, string name = "")
+    {
+        var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+        if (torrent != null)
+        {
+            return await InspectTorrentTrackersAsync(torrent.Id);
+        }
+
+        var allKnownTrackers = _trackerRepository.All().Where(t => t.Enabled).ToList();
+        var detections = new List<TorrentTrackerDetection>();
+
+        foreach (var tracker in allKnownTrackers)
+        {
+            var detection = new TorrentTrackerDetection
+            {
+                TrackerId = tracker.Id,
+                TrackerUrl = tracker.Url,
+                TrackerHost = tracker.Host,
+                Protocol = tracker.Protocol,
+                Source = tracker.Source,
+                SourceName = tracker.SourceName,
+                IsAttached = false,
+                LatencyMs = tracker.LatencyMs,
+                HealthStatus = tracker.Status,
+                IsDetected = tracker.Status == TrackerHealthStatus.Alive,
+                DetectionStatus = tracker.Status == TrackerHealthStatus.Alive ? "Available to Inject" : "Offline"
+            };
+
+            detections.Add(detection);
+        }
+
+        return await Task.FromResult(new TorrentTrackerInspectionResult
+        {
+            TorrentId = 0,
+            TorrentName = !string.IsNullOrWhiteSpace(name) ? name : infoHash,
+            InfoHash = infoHash,
+            IsPrivate = false,
+            TotalTrackersChecked = detections.Count,
+            AttachedTrackersCount = 0,
+            DetectedTrackersCount = detections.Count(d => d.IsDetected),
+            Detections = detections.OrderByDescending(d => d.IsDetected)
+                .ThenBy(d => d.LatencyMs > 0 ? d.LatencyMs : 9999)
+                .ToList()
+        });
+    }
+
     public async Task<SwarmBoostResult> InjectTrackerToTorrentAsync(int torrentId, string trackerUrl)
     {
         var torrent = _torrentService.Get(torrentId);
@@ -552,33 +607,26 @@ public class DownloadPlusPlusService : IDownloadPlusPlusService
         var existing = _trackerEntryService.GetByTorrentId(torrentId)
             .Any(t => (t.Url ?? string.Empty).Trim().ToLowerInvariant() == clean);
 
-        if (existing)
+        if (!existing)
         {
-            return new SwarmBoostResult
+            var entry = new TrackerEntry
             {
                 TorrentId = torrentId,
-                TorrentName = torrent.Name,
-                InfoHash = torrent.InfoHash,
-                Boosted = false,
-                Message = "Tracker already attached to this torrent."
+                Url = trackerUrl.Trim(),
+                Tier = 1,
+                Status = TrackerStatus.Unknown,
+                Enabled = true,
+                Seeders = 0,
+                Leechers = 0,
+                AnnounceInterval = 1800,
+                MinAnnounceInterval = 900
             };
+            _trackerEntryService.Add(entry);
+            _totalTrackersInjected++;
         }
 
-        var entry = new TrackerEntry
-        {
-            TorrentId = torrentId,
-            Url = trackerUrl.Trim(),
-            Tier = 1,
-            Status = TrackerStatus.Unknown,
-            Enabled = true,
-            Seeders = 0,
-            Leechers = 0,
-            AnnounceInterval = 1800,
-            MinAnnounceInterval = 900
-        };
-
-        _trackerEntryService.Add(entry);
-        _totalTrackersInjected++;
+        // Also inject into real download clients if present
+        InjectIntoDownloadClients(torrent.InfoHash, new[] { trackerUrl.Trim() });
 
         return await Task.FromResult(new SwarmBoostResult
         {
@@ -588,7 +636,28 @@ public class DownloadPlusPlusService : IDownloadPlusPlusService
             Boosted = true,
             AddedTrackersCount = 1,
             AddedTrackers = new List<string> { trackerUrl.Trim() },
-            Message = $"Injected {trackerUrl} into swarm."
+            Message = $"Injected {trackerUrl} into Seedarr & active download agents."
+        });
+    }
+
+    public async Task<SwarmBoostResult> InjectTrackerToHashAsync(string infoHash, string trackerUrl)
+    {
+        var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+        if (torrent != null)
+        {
+            return await InjectTrackerToTorrentAsync(torrent.Id, trackerUrl);
+        }
+
+        var injected = InjectIntoDownloadClients(infoHash, new[] { trackerUrl.Trim() });
+        return await Task.FromResult(new SwarmBoostResult
+        {
+            TorrentId = 0,
+            TorrentName = infoHash,
+            InfoHash = infoHash,
+            Boosted = injected > 0,
+            AddedTrackersCount = injected > 0 ? 1 : 0,
+            AddedTrackers = new List<string> { trackerUrl.Trim() },
+            Message = injected > 0 ? $"Injected tracker into {injected} download client(s)." : "Injected tracker."
         });
     }
 
@@ -653,8 +722,12 @@ public class DownloadPlusPlusService : IDownloadPlusPlusService
         _totalTorrentsBoosted++;
         _totalTrackersInjected += addedList.Count;
 
-        _logger.Info("Boosted torrent {0} ({1}) with {2} new alive trackers", torrent.Name, torrent.InfoHash, addedList.Count);
+        // Also inject into real download agents (qBittorrent / Transmission / Deluge)
+        var clientCount = InjectIntoDownloadClients(torrent.InfoHash, addedList);
 
+        _logger.Info("Boosted torrent {0} ({1}) with {2} new alive trackers (and {3} download clients)", torrent.Name, torrent.InfoHash, addedList.Count, clientCount);
+
+        var clientMsg = clientCount > 0 ? $" and {clientCount} active download agent(s)" : "";
         return await Task.FromResult(new SwarmBoostResult
         {
             TorrentId = torrentId,
@@ -665,22 +738,160 @@ public class DownloadPlusPlusService : IDownloadPlusPlusService
             AddedTrackersCount = addedList.Count,
             AddedTrackers = addedList,
             Message = addedList.Count > 0
-                ? $"Successfully injected {addedList.Count} verified alive trackers into swarm."
+                ? $"Successfully injected {addedList.Count} verified alive trackers into Seedarr{clientMsg}."
                 : "Swarm already has all optimal trackers attached."
+        });
+    }
+
+    public async Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "")
+    {
+        var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+        if (torrent != null)
+        {
+            return await BoostTorrentAsync(torrent.Id);
+        }
+
+        var aliveTrackers = _trackerRepository.GetAliveTrackers();
+        if (aliveTrackers.Count == 0)
+        {
+            aliveTrackers = _trackerRepository.All().Where(t => t.Enabled).Take(15).ToList();
+        }
+
+        var trackerUrls = aliveTrackers.Select(t => t.Url).Take(8).ToList();
+        var clientCount = InjectIntoDownloadClients(infoHash, trackerUrls);
+
+        return await Task.FromResult(new SwarmBoostResult
+        {
+            TorrentId = 0,
+            TorrentName = !string.IsNullOrWhiteSpace(name) ? name : infoHash,
+            InfoHash = infoHash,
+            Boosted = clientCount > 0,
+            AddedTrackersCount = trackerUrls.Count,
+            AddedTrackers = trackerUrls,
+            Message = $"Injected {trackerUrls.Count} alive trackers into {clientCount} active download client(s)."
         });
     }
 
     public async Task<List<SwarmBoostResult>> BoostAllTorrentsAsync()
     {
-        var torrents = _torrentService.GetAll().Where(t => !t.IsPrivate).ToList();
         var results = new List<SwarmBoostResult>();
 
+        // 1. Boost all Seedarr torrents
+        var torrents = _torrentService.GetAll().Where(t => !t.IsPrivate).ToList();
         foreach (var t in torrents)
         {
             var res = await BoostTorrentAsync(t.Id);
             results.Add(res);
         }
 
+        // 2. Also boost all real downloads in connected download clients
+        try
+        {
+            var alive = _trackerRepository.GetAliveTrackers().Select(t => t.Url).Take(8).ToList();
+            if (alive.Count > 0)
+            {
+                var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+                foreach (var clientDef in clients)
+                {
+                    try
+                    {
+                        var provider = CreateDownloadClient(clientDef);
+                        if (provider == null)
+                        {
+                            continue;
+                        }
+
+                        var items = provider.GetItems();
+                        foreach (var item in items)
+                        {
+                            if (!string.IsNullOrWhiteSpace(item.InfoHash))
+                            {
+                                provider.AddTrackers(item.InfoHash, alive);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to boost items for client {0}", clientDef.Name);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to boost download client swarms");
+        }
+
         return results;
+    }
+
+    private int InjectIntoDownloadClients(string infoHash, IEnumerable<string> trackers)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash) || trackers == null)
+        {
+            return 0;
+        }
+
+        var count = 0;
+        try
+        {
+            var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+            foreach (var clientDef in clients)
+            {
+                try
+                {
+                    var provider = CreateDownloadClient(clientDef);
+                    if (provider != null && provider.AddTrackers(infoHash, trackers))
+                    {
+                        count++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to add trackers to client {0} for {1}", clientDef.Name, infoHash);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to inject trackers into download clients for {0}", infoHash);
+        }
+
+        return count;
+    }
+
+    private static IDownloadClient CreateDownloadClient(DownloadClientDefinition definition)
+    {
+        return definition.ClientType switch
+        {
+            "QBitTorrent" => new NzbDrone.Core.DownloadClients.QBitTorrent.QBitTorrentClient
+            {
+                Host = definition.Host,
+                Port = definition.Port,
+                UseSsl = definition.UseSsl,
+                Username = definition.Username,
+                Password = definition.Password,
+                Category = definition.Category,
+            },
+            "Transmission" => new NzbDrone.Core.DownloadClients.Transmission.TransmissionClient
+            {
+                Host = definition.Host,
+                Port = definition.Port,
+                UseSsl = definition.UseSsl,
+                Username = definition.Username,
+                Password = definition.Password,
+                Category = definition.Category,
+            },
+            "Deluge" => new NzbDrone.Core.DownloadClients.Deluge.DelugeClient
+            {
+                Host = definition.Host,
+                Port = definition.Port,
+                UseSsl = definition.UseSsl,
+                Username = definition.Username,
+                Password = definition.Password,
+                Category = definition.Category,
+            },
+            _ => null
+        };
     }
 }
