@@ -135,6 +135,37 @@ public class DelugeClient : IDownloadClient, IDisposable
         return null;
     }
 
+    public bool AddTrackers(string infoHash, IEnumerable<string> trackers)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash) || trackers == null)
+        {
+            return false;
+        }
+
+        if (!Authenticate())
+        {
+            return false;
+        }
+
+        try
+        {
+            var trackerObjects = new List<object>();
+            var tier = 0;
+            foreach (var t in trackers)
+            {
+                trackerObjects.Add(new { tier = tier++, url = t });
+            }
+
+            using var doc = SendRequest("core.set_torrent_trackers", new object[] { infoHash, trackerObjects.ToArray() });
+            return doc.RootElement.TryGetProperty("result", out var res) && res.ValueKind != JsonValueKind.Null;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to add trackers to Deluge for torrent {0}", infoHash);
+            return false;
+        }
+    }
+
     public bool TestConnection()
     {
         return TestConnectionDetailed().Success;

@@ -1,13 +1,16 @@
 import { useState, useMemo } from "react";
 import {
   useTorrents,
+  useDownloadClients,
   useDownloadPlusPlusStatus,
   useDownloadPlusPlusTrackers,
   useInspectTorrentTrackers,
+  useInspectHashTrackers,
   useScanDownloadPlusPlusTrackers,
   useHarvestProwlarrTrackers,
   useHarvestFeedTrackers,
   useBoostTorrent,
+  useBoostHash,
   useInjectTrackerToTorrent,
   useBoostAllTorrents,
   useAddDownloadPlusPlusTracker,
@@ -17,40 +20,93 @@ import {
 import { formatBytes, formatRatio } from "../utils/formatters";
 import { useToast } from "../context/ToastContext";
 
+interface UnifiedDownloadItem {
+  key: string;
+  id?: number;
+  infoHash: string;
+  name: string;
+  totalSize: number;
+  ratio: number;
+  seeders: number;
+  isPrivate: boolean;
+  sourceType: "real_client" | "seedarr";
+  clientName: string;
+}
+
 function DownloadPlusPlus() {
   const { data: torrents, isLoading: torrentsLoading } = useTorrents();
+  const { data: downloadClients } = useDownloadClients();
   const { data: status } = useDownloadPlusPlusStatus();
   const { data: trackers, isLoading: trackersLoading } = useDownloadPlusPlusTrackers();
   const { data: history } = useDownloadHistory();
   const { showToast } = useToast();
 
   const [activeTab, setActiveTab] = useState<"booster" | "radar" | "settings">("booster");
-  const [selectedTorrentId, setSelectedTorrentId] = useState<number | null>(null);
+  const [downloadFilter, setDownloadFilter] = useState<"all" | "real" | "seedarr">("all");
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [trackerSearch, setTrackerSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [newTrackerUrl, setNewTrackerUrl] = useState("");
   const [isAddingTracker, setIsAddingTracker] = useState(false);
 
-  // Auto-select first torrent if none selected
-  const activeTorrentList = useMemo(() => {
-    return (torrents ?? []).filter((t) => !t.isPrivate);
+  // Build unified items list
+  const unifiedItems = useMemo<UnifiedDownloadItem[]>(() => {
+    const list: UnifiedDownloadItem[] = [];
+
+    // Seedarr library torrents
+    (torrents ?? []).forEach((t) => {
+      list.push({
+        key: `seedarr-${t.id}`,
+        id: t.id,
+        infoHash: t.infoHash || "",
+        name: t.name,
+        totalSize: t.totalSize,
+        ratio: t.ratio,
+        seeders: t.seeders,
+        isPrivate: t.isPrivate,
+        sourceType: "seedarr",
+        clientName: "Seedarr Seeder",
+      });
+    });
+
+    return list;
   }, [torrents]);
 
-  const effectiveTorrentId = selectedTorrentId ?? activeTorrentList[0]?.id ?? 0;
-  const selectedTorrent = useMemo(() => {
-    return torrents?.find((t) => t.id === effectiveTorrentId);
-  }, [torrents, effectiveTorrentId]);
+  const filteredDownloads = useMemo(() => {
+    return unifiedItems.filter((item) => {
+      if (item.isPrivate) return false;
+      if (downloadFilter === "real" && item.sourceType !== "real_client") return false;
+      if (downloadFilter === "seedarr" && item.sourceType !== "seedarr") return false;
+      return true;
+    });
+  }, [unifiedItems, downloadFilter]);
 
-  const { data: inspection, isLoading: inspectionLoading } = useInspectTorrentTrackers(
-    effectiveTorrentId,
-    effectiveTorrentId > 0,
+  const activeSelectedKey = selectedKey ?? filteredDownloads[0]?.key ?? "";
+  const selectedItem = useMemo(() => {
+    return filteredDownloads.find((i) => i.key === activeSelectedKey);
+  }, [filteredDownloads, activeSelectedKey]);
+
+  // Inspection hooks
+  const { data: torrentInspection, isLoading: torrentInspectLoading } = useInspectTorrentTrackers(
+    selectedItem?.id ?? 0,
+    Boolean(selectedItem?.id && selectedItem.id > 0),
   );
+
+  const { data: hashInspection, isLoading: hashInspectLoading } = useInspectHashTrackers(
+    selectedItem?.infoHash ?? "",
+    selectedItem?.name ?? "",
+    Boolean(!selectedItem?.id && selectedItem?.infoHash),
+  );
+
+  const inspection = selectedItem?.id ? torrentInspection : hashInspection;
+  const inspectionLoading = selectedItem?.id ? torrentInspectLoading : hashInspectLoading;
 
   const scanTrackers = useScanDownloadPlusPlusTrackers();
   const harvestProwlarr = useHarvestProwlarrTrackers();
   const harvestFeeds = useHarvestFeedTrackers();
   const boostTorrent = useBoostTorrent();
+  const boostHash = useBoostHash();
   const injectTracker = useInjectTrackerToTorrent();
   const boostAll = useBoostAllTorrents();
   const addTracker = useAddDownloadPlusPlusTracker();
@@ -89,24 +145,42 @@ function DownloadPlusPlus() {
     });
   };
 
-  const handleBoostTorrent = (id: number) => {
-    boostTorrent.mutate(id, {
-      onSuccess: (res) => {
-        if (res.boosted) {
-          showToast(res.message, "success");
-        } else {
-          showToast(res.message, "info");
-        }
-      },
-      onError: (err) => {
-        showToast(`Failed to boost torrent: ${err.message}`, "error");
-      },
-    });
+  const handleBoostSelectedItem = () => {
+    if (!selectedItem) return;
+
+    if (selectedItem.id && selectedItem.id > 0) {
+      boostTorrent.mutate(selectedItem.id, {
+        onSuccess: (res) => {
+          showToast(res.message, res.boosted ? "success" : "info");
+        },
+        onError: (err) => {
+          showToast(`Failed to boost: ${err.message}`, "error");
+        },
+      });
+    } else if (selectedItem.infoHash) {
+      boostHash.mutate(
+        { infoHash: selectedItem.infoHash, name: selectedItem.name },
+        {
+          onSuccess: (res) => {
+            showToast(res.message, res.boosted ? "success" : "info");
+          },
+          onError: (err) => {
+            showToast(`Failed to boost: ${err.message}`, "error");
+          },
+        },
+      );
+    }
   };
 
-  const handleInjectSingle = (torrentId: number, trackerUrl: string) => {
+  const handleInjectSingle = (trackerUrl: string) => {
+    if (!selectedItem) return;
+
     injectTracker.mutate(
-      { torrentId, trackerUrl },
+      {
+        torrentId: selectedItem.id,
+        infoHash: selectedItem.infoHash,
+        trackerUrl,
+      },
       {
         onSuccess: (res) => {
           showToast(res.message, "success");
@@ -122,10 +196,13 @@ function DownloadPlusPlus() {
     boostAll.mutate(undefined, {
       onSuccess: (resList) => {
         const totalAdded = resList.reduce((sum, r) => sum + r.addedTrackersCount, 0);
-        showToast(`Boosted swarms across ${resList.length} torrents (+${totalAdded} trackers injected)`, "success");
+        showToast(
+          `Boosted swarms across ${resList.length} downloads (+${totalAdded} trackers injected into Seedarr & download clients)`,
+          "success",
+        );
       },
       onError: (err) => {
-        showToast(`Failed to boost torrents: ${err.message}`, "error");
+        showToast(`Failed to boost downloads: ${err.message}`, "error");
       },
     });
   };
@@ -152,7 +229,11 @@ function DownloadPlusPlus() {
     return (trackers ?? []).filter((t) => {
       if (trackerSearch.trim()) {
         const q = trackerSearch.toLowerCase();
-        if (!t.url.toLowerCase().includes(q) && !t.host.toLowerCase().includes(q) && !t.sourceName.toLowerCase().includes(q)) {
+        if (
+          !t.url.toLowerCase().includes(q) &&
+          !t.host.toLowerCase().includes(q) &&
+          !t.sourceName.toLowerCase().includes(q)
+        ) {
           return false;
         }
       }
@@ -171,6 +252,10 @@ function DownloadPlusPlus() {
     });
   }, [trackers, trackerSearch, sourceFilter, healthFilter]);
 
+  const enabledClientsCount = useMemo(() => {
+    return (downloadClients ?? []).filter((c) => c.enable).length;
+  }, [downloadClients]);
+
   return (
     <div>
       {/* Top Header Row */}
@@ -187,11 +272,13 @@ function DownloadPlusPlus() {
       >
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <h1 className="page-heading" style={{ margin: 0 }}>⚡ Download++</h1>
-            <span className="badge badge-primary">Swarm Booster & Tracker Radar</span>
+            <h1 className="page-heading" style={{ margin: 0 }}>
+              ⚡ Download++
+            </h1>
+            <span className="badge badge-primary">Real & Simulated Swarm Booster</span>
           </div>
           <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-            Real-time tracker health matrix, Prowlarr indexer discovery, and intelligent swarm expansion
+            Detects trackers on live swarms and accelerates real downloads in qBittorrent, Transmission & Deluge
           </div>
         </div>
 
@@ -238,7 +325,7 @@ function DownloadPlusPlus() {
         </div>
         <div className="stat-card">
           <div className="stat-value">{status?.torrentsBoostedCount ?? 0}</div>
-          <div className="stat-label">Torrents Boosted</div>
+          <div className="stat-label">Swarms Boosted</div>
         </div>
       </div>
 
@@ -262,10 +349,10 @@ function DownloadPlusPlus() {
               <button
                 className="btn btn-primary"
                 onClick={handleBoostAll}
-                disabled={boostAll.isPending || activeTorrentList.length === 0}
-                title="Inject optimal verified alive trackers into all non-private active swarms"
+                disabled={boostAll.isPending || filteredDownloads.length === 0}
+                title="Inject optimal verified alive trackers into real download agents and Seedarr"
               >
-                {boostAll.isPending ? "Boosting Swarms..." : "⚡ Boost All Torrents"}
+                {boostAll.isPending ? "Boosting All Swarms..." : "⚡ Boost All Downloads"}
               </button>
 
               <button
@@ -287,8 +374,10 @@ function DownloadPlusPlus() {
               </button>
             </div>
 
-            <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              {activeTorrentList.length} Active Public Torrents Eligible
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+              <span>🔗 {enabledClientsCount} Download Agent(s) Connected</span>
+              <span>•</span>
+              <span>{filteredDownloads.length} Public Downloads Eligible</span>
             </div>
           </div>
 
@@ -303,25 +392,52 @@ function DownloadPlusPlus() {
           >
             {/* Left Master List: Torrents */}
             <div className="card" style={{ padding: "0.75rem", maxHeight: "calc(100vh - 280px)", overflow: "auto" }}>
-              <h3 style={{ margin: "0.25rem 0.5rem 0.75rem" }}>Select Torrent to Inspect</h3>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0.25rem 0.5rem 0.75rem" }}>
+                <h3 style={{ margin: 0, fontSize: "1rem" }}>Select Download</h3>
+                <div style={{ display: "flex", gap: "0.25rem" }}>
+                  <button
+                    className={`btn btn-small ${downloadFilter === "all" ? "btn-primary" : "btn-outline"}`}
+                    style={{ fontSize: "0.7rem", padding: "0.15rem 0.4rem" }}
+                    onClick={() => setDownloadFilter("all")}
+                  >
+                    All
+                  </button>
+                  <button
+                    className={`btn btn-small ${downloadFilter === "real" ? "btn-primary" : "btn-outline"}`}
+                    style={{ fontSize: "0.7rem", padding: "0.15rem 0.4rem" }}
+                    onClick={() => setDownloadFilter("real")}
+                  >
+                    Clients
+                  </button>
+                  <button
+                    className={`btn btn-small ${downloadFilter === "seedarr" ? "btn-primary" : "btn-outline"}`}
+                    style={{ fontSize: "0.7rem", padding: "0.15rem 0.4rem" }}
+                    onClick={() => setDownloadFilter("seedarr")}
+                  >
+                    Seedarr
+                  </button>
+                </div>
+              </div>
 
-              {torrentsLoading && <p className="loading">Loading torrents...</p>}
-              {!torrentsLoading && activeTorrentList.length === 0 && (
-                <p className="loading">No active non-private torrents available.</p>
+              {torrentsLoading && <p className="loading">Loading downloads...</p>}
+              {!torrentsLoading && filteredDownloads.length === 0 && (
+                <p className="loading">No active non-private downloads available.</p>
               )}
 
               <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                {activeTorrentList.map((t) => {
-                  const isSelected = t.id === effectiveTorrentId;
+                {filteredDownloads.map((item) => {
+                  const isSelected = item.key === activeSelectedKey;
                   const match = history?.find(
-                    (h) => (t.infoHash && h.infoHash?.toLowerCase() === t.infoHash.toLowerCase()) || h.title === t.name,
+                    (h) =>
+                      (item.infoHash && h.infoHash?.toLowerCase() === item.infoHash.toLowerCase()) ||
+                      h.title === item.name,
                   );
                   const meta = match?.metadata;
 
                   return (
                     <div
-                      key={t.id}
-                      onClick={() => setSelectedTorrentId(t.id)}
+                      key={item.key}
+                      onClick={() => setSelectedKey(item.key)}
                       style={{
                         padding: "0.6rem 0.75rem",
                         borderRadius: "6px",
@@ -337,10 +453,18 @@ function DownloadPlusPlus() {
                         <img
                           src={meta.posterUrl}
                           alt=""
-                          style={{ width: "26px", height: "38px", objectFit: "cover", borderRadius: "3px", flexShrink: 0 }}
+                          style={{
+                            width: "26px",
+                            height: "38px",
+                            objectFit: "cover",
+                            borderRadius: "3px",
+                            flexShrink: 0,
+                          }}
                         />
                       ) : (
-                        <span style={{ fontSize: "1.2rem", flexShrink: 0 }}>📦</span>
+                        <span style={{ fontSize: "1.2rem", flexShrink: 0 }}>
+                          {item.sourceType === "real_client" ? "⚡" : "📦"}
+                        </span>
                       )}
 
                       <div style={{ minWidth: 0, flex: 1 }}>
@@ -353,13 +477,31 @@ function DownloadPlusPlus() {
                             whiteSpace: "nowrap",
                           }}
                         >
-                          {meta?.title || t.name}
+                          {meta?.title || item.name}
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
-                          <span>{formatBytes(t.totalSize)}</span>
-                          <span>Ratio: {formatRatio(t.ratio)}</span>
-                          <span style={{ color: t.seeders <= 2 ? "var(--warning)" : "inherit" }}>
-                            {t.seeders} Seeders
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            fontSize: "0.75rem",
+                            color: "var(--text-muted)",
+                            marginTop: "0.2rem",
+                          }}
+                        >
+                          <span>{formatBytes(item.totalSize)}</span>
+                          <span>Ratio: {formatRatio(item.ratio)}</span>
+                          <span style={{ color: item.seeders <= 2 ? "var(--warning)" : "inherit" }}>
+                            {item.seeders} Seeders
+                          </span>
+                        </div>
+                        <div style={{ marginTop: "0.25rem" }}>
+                          <span
+                            className={`badge ${
+                              item.sourceType === "real_client" ? "badge-primary" : "badge-secondary"
+                            }`}
+                            style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem" }}
+                          >
+                            {item.clientName}
                           </span>
                         </div>
                       </div>
@@ -371,7 +513,7 @@ function DownloadPlusPlus() {
 
             {/* Right Detail: Per-Torrent Tracker Detection Matrix */}
             <div className="card" style={{ padding: "1rem" }}>
-              {selectedTorrent ? (
+              {selectedItem ? (
                 <div>
                   {/* Torrent Header Info & Actions */}
                   <div
@@ -387,19 +529,24 @@ function DownloadPlusPlus() {
                     }}
                   >
                     <div>
-                      <h2 style={{ margin: 0, fontSize: "1.2rem" }}>{selectedTorrent.name}</h2>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <h2 style={{ margin: 0, fontSize: "1.2rem" }}>{selectedItem.name}</h2>
+                        <span className="badge badge-primary" style={{ fontSize: "0.7rem" }}>
+                          {selectedItem.clientName}
+                        </span>
+                      </div>
                       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.3rem" }}>
-                        <code>{selectedTorrent.infoHash}</code> • {formatBytes(selectedTorrent.totalSize)}
+                        <code>{selectedItem.infoHash}</code> • {formatBytes(selectedItem.totalSize)}
                       </div>
                     </div>
 
                     <button
                       className="btn btn-primary"
-                      onClick={() => handleBoostTorrent(selectedTorrent.id)}
-                      disabled={boostTorrent.isPending}
-                      title="Auto-inject top verified alive trackers into this torrent"
+                      onClick={handleBoostSelectedItem}
+                      disabled={boostTorrent.isPending || boostHash.isPending}
+                      title="Auto-inject top verified alive trackers into this swarm across Seedarr & download clients"
                     >
-                      {boostTorrent.isPending ? "Injecting..." : "⚡ Boost This Swarm"}
+                      {boostTorrent.isPending || boostHash.isPending ? "Injecting..." : "⚡ Boost This Swarm"}
                     </button>
                   </div>
 
@@ -520,9 +667,9 @@ function DownloadPlusPlus() {
                                     <button
                                       className="btn btn-small btn-outline"
                                       style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
-                                      onClick={() => handleInjectSingle(selectedTorrent.id, det.trackerUrl)}
+                                      onClick={() => handleInjectSingle(det.trackerUrl)}
                                       disabled={injectTracker.isPending}
-                                      title="Inject this tracker into the torrent swarm"
+                                      title="Inject this tracker into Seedarr and connected download client"
                                     >
                                       ⚡ Inject
                                     </button>
@@ -537,7 +684,7 @@ function DownloadPlusPlus() {
                   ) : null}
                 </div>
               ) : (
-                <p className="loading">Select a torrent on the left to inspect its tracker detection matrix.</p>
+                <p className="loading">Select a download on the left to inspect its tracker detection matrix.</p>
               )}
             </div>
           </div>
@@ -572,7 +719,13 @@ function DownloadPlusPlus() {
               <select
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
-                style={{ padding: "0.35rem 0.6rem", borderRadius: "4px", backgroundColor: "var(--bg-secondary)", color: "inherit", border: "1px solid var(--border)" }}
+                style={{
+                  padding: "0.35rem 0.6rem",
+                  borderRadius: "4px",
+                  backgroundColor: "var(--bg-secondary)",
+                  color: "inherit",
+                  border: "1px solid var(--border)",
+                }}
               >
                 <option value="all">All Sources</option>
                 <option value="prowlarr">Prowlarr Indexers</option>
@@ -583,7 +736,13 @@ function DownloadPlusPlus() {
               <select
                 value={healthFilter}
                 onChange={(e) => setHealthFilter(e.target.value)}
-                style={{ padding: "0.35rem 0.6rem", borderRadius: "4px", backgroundColor: "var(--bg-secondary)", color: "inherit", border: "1px solid var(--border)" }}
+                style={{
+                  padding: "0.35rem 0.6rem",
+                  borderRadius: "4px",
+                  backgroundColor: "var(--bg-secondary)",
+                  color: "inherit",
+                  border: "1px solid var(--border)",
+                }}
               >
                 <option value="all">All Health States</option>
                 <option value="alive">🟢 Alive</option>
@@ -613,7 +772,11 @@ function DownloadPlusPlus() {
 
           {/* Add Tracker Form */}
           {isAddingTracker && (
-            <form onSubmit={handleAddCustomTracker} className="card" style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+            <form
+              onSubmit={handleAddCustomTracker}
+              className="card"
+              style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}
+            >
               <input
                 type="text"
                 className="input"
@@ -631,7 +794,9 @@ function DownloadPlusPlus() {
           {/* Trackers Table */}
           <div className="card" style={{ padding: 0, overflow: "hidden" }}>
             {trackersLoading ? (
-              <p className="loading" style={{ padding: "1rem" }}>Loading trackers...</p>
+              <p className="loading" style={{ padding: "1rem" }}>
+                Loading trackers...
+              </p>
             ) : (
               <div className="torrent-table-wrapper" style={{ maxHeight: "calc(100vh - 340px)", overflow: "auto" }}>
                 <table className="torrent-table">
@@ -645,7 +810,9 @@ function DownloadPlusPlus() {
                       <th className="torrent-table-th">Successful Probes</th>
                       <th className="torrent-table-th">Failed Probes</th>
                       <th className="torrent-table-th">Swarms Found</th>
-                      <th className="torrent-table-th" style={{ textAlign: "right" }}>Actions</th>
+                      <th className="torrent-table-th" style={{ textAlign: "right" }}>
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -689,7 +856,15 @@ function DownloadPlusPlus() {
                               }`}
                               style={{ fontSize: "0.7rem" }}
                             >
-                              {t.status === 1 ? "Alive" : t.status === 2 ? "Slow" : t.status === 3 ? "Offline" : t.status === 0 ? "Untested" : t.status}
+                              {t.status === 1
+                                ? "Alive"
+                                : t.status === 2
+                                ? "Slow"
+                                : t.status === 3
+                                ? "Offline"
+                                : t.status === 0
+                                ? "Untested"
+                                : t.status}
                             </span>
                           </td>
                           <td>{t.latencyMs > 0 ? `${t.latencyMs} ms` : "-"}</td>
@@ -721,6 +896,28 @@ function DownloadPlusPlus() {
       {/* TAB 3: SOURCES & AUTOMATION SETTINGS */}
       {activeTab === "settings" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div className="card" style={{ padding: "1.25rem" }}>
+            <h3 style={{ margin: "0 0 0.5rem 0" }}>Connected Download Agents</h3>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 1rem 0" }}>
+              Download++ dynamically coordinates with your configured download clients (qBittorrent, Transmission, Deluge)
+              to inject alive trackers into your active physical downloads.
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              {(downloadClients ?? [])
+                .filter((c) => c.enable)
+                .map((client) => (
+                  <span key={client.id} className="badge badge-primary" style={{ padding: "0.4rem 0.75rem", fontSize: "0.85rem" }}>
+                    ⚡ {client.name} ({client.clientType})
+                  </span>
+                ))}
+              {enabledClientsCount === 0 && (
+                <span style={{ fontSize: "0.85rem", color: "var(--warning)" }}>
+                  No download agents currently configured. Add qBittorrent or Transmission in Settings ⚙️ to boost real downloads.
+                </span>
+              )}
+            </div>
+          </div>
+
           <div className="card" style={{ padding: "1.25rem" }}>
             <h3 style={{ margin: "0 0 0.5rem 0" }}>Prowlarr Tracker Harvesting</h3>
             <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 1rem 0" }}>
