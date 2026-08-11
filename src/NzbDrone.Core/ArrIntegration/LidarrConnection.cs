@@ -206,6 +206,91 @@ public class LidarrConnection : IArrConnection
         }
     }
 
+    public MediaMetadata LookupMedia(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(Url))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var searchUrl = $"{Url.TrimEnd('/')}/api/v1/search?term={Uri.EscapeDataString(title.Trim())}";
+            using var request = new HttpRequestMessage(HttpMethod.Get, searchUrl);
+            request.Headers.Add("X-Api-Key", ApiKey ?? "");
+            using var response = _client.Send(request, cts.Token);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            using var stream = response.Content.ReadAsStream(cts.Token);
+            using var reader = new StreamReader(stream);
+            var result = reader.ReadToEnd();
+
+            if (string.IsNullOrWhiteSpace(result))
+            {
+                return null;
+            }
+
+            using var doc = JsonDocument.Parse(result);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            foreach (var item in doc.RootElement.EnumerateArray())
+            {
+                var foreignElem = item.TryGetProperty("foreignAlbumId", out _) || item.TryGetProperty("album", out _)
+                    ? (item.TryGetProperty("album", out var alb) ? alb : item)
+                    : item;
+
+                var id = foreignElem.TryGetProperty("id", out var idProp) && idProp.TryGetInt32(out var idVal) ? idVal : 0;
+                var metadata = new MediaMetadata
+                {
+                    MediaType = "album",
+                    MediaId = id,
+                    Title = foreignElem.TryGetProperty("title", out var tProp) ? tProp.GetString() : title,
+                    Overview = foreignElem.TryGetProperty("overview", out var ov) ? ov.GetString() : null,
+                    StudioOrNetwork = foreignElem.TryGetProperty("artist", out var art) && art.TryGetProperty("artistName", out var an) ? an.GetString() : null
+                };
+
+                if (foreignElem.TryGetProperty("images", out var imagesArray))
+                {
+                    foreach (var imgElem in imagesArray.EnumerateArray())
+                    {
+                        var coverType = imgElem.TryGetProperty("coverType", out var ctProp) ? ctProp.GetString() ?? "" : "";
+                        var imgUrl = imgElem.TryGetProperty("remoteUrl", out var ruProp) ? ruProp.GetString() : (imgElem.TryGetProperty("url", out var luProp) ? luProp.GetString() : null);
+
+                        if (string.IsNullOrEmpty(imgUrl))
+                        {
+                            continue;
+                        }
+
+                        if (coverType.Equals("cover", StringComparison.OrdinalIgnoreCase) || coverType.Equals("poster", StringComparison.OrdinalIgnoreCase))
+                        {
+                            metadata.PosterUrl = imgUrl;
+                        }
+                        else if (coverType.Equals("fanart", StringComparison.OrdinalIgnoreCase))
+                        {
+                            metadata.FanartUrl = imgUrl;
+                        }
+                    }
+                }
+
+                return metadata;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to lookup album by term '{0}' on Lidarr", title);
+            return null;
+        }
+    }
+
     public bool TestConnection() => TestConnectionDetailed().Success;
 
     public ArrTestResult TestConnectionDetailed()

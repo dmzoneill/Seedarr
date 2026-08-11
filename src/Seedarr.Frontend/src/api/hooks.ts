@@ -875,6 +875,17 @@ export function useEnrichAllHistory() {
   });
 }
 
+export function useReconcileDownloadHistory() {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean; processedCount: number }, Error, void>({
+    mutationFn: () => apiClient.post("/downloadhistory/reconcile"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadhistory"] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
 export function useIndexerSearch(
   params: { query: string; category?: string; indexerId?: number },
   enabled = true,

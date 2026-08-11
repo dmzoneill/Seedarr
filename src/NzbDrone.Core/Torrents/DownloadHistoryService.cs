@@ -257,6 +257,56 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
         }
     }
 
+    public int ReconcileAllTorrents()
+    {
+        var allTorrents = _torrentRepository.All().ToList();
+        var backfilled = 0;
+
+        foreach (var torrent in allTorrents)
+        {
+            if (string.IsNullOrWhiteSpace(torrent.InfoHash))
+            {
+                continue;
+            }
+
+            var existing = _historyRepository.FindByInfoHash(torrent.InfoHash);
+            if (existing == null)
+            {
+                var entry = new DownloadHistory
+                {
+                    TorrentId = torrent.Id,
+                    Title = torrent.Name ?? torrent.InfoHash,
+                    InfoHash = torrent.InfoHash.ToLowerInvariant(),
+                    TotalSize = torrent.TotalSize,
+                    DateAdded = torrent.DateAdded != default ? torrent.DateAdded : DateTime.UtcNow,
+                    Uploaded = torrent.Uploaded,
+                    Downloaded = torrent.Downloaded,
+                    Ratio = torrent.Ratio,
+                    PrimaryTracker = torrent.TrackerUrl,
+                    Status = "Active",
+                    SeedingTime = torrent.SeedingTime,
+                    Source = torrent.IsPrivate ? "Private Tracker" : "Public Tracker"
+                };
+
+                _historyRepository.Insert(entry);
+                backfilled++;
+            }
+            else if (existing.TorrentId == null || existing.TorrentId == 0)
+            {
+                existing.TorrentId = torrent.Id;
+                existing.Status = "Active";
+                _historyRepository.Update(existing);
+            }
+        }
+
+        if (backfilled > 0)
+        {
+            _logger.Info("Reconciled and backfilled {0} missing torrents into Download History", backfilled);
+        }
+
+        return backfilled;
+    }
+
     public void Handle(TorrentAddedEvent message)
     {
         if (message?.Torrent == null)

@@ -6,6 +6,7 @@ import {
   useClearDownloadHistory,
   useEnrichHistoryTorrent,
   useEnrichAllHistory,
+  useReconcileDownloadHistory,
   useArrConnections,
   useIndexers,
 } from "../api/hooks";
@@ -58,6 +59,7 @@ export default function DownloadHistory() {
   const clearMutation = useClearDownloadHistory();
   const enrichMutation = useEnrichHistoryTorrent();
   const enrichAllMutation = useEnrichAllHistory();
+  const reconcileMutation = useReconcileDownloadHistory();
 
   const handleReAdd = (id: number, title: string) => {
     reAddMutation.mutate(id, {
@@ -109,6 +111,17 @@ export default function DownloadHistory() {
       },
       onError: (err) => {
         showToast(`Failed to start enrichment: ${err.message}`, "error");
+      },
+    });
+  };
+
+  const handleReconcile = () => {
+    reconcileMutation.mutate(undefined, {
+      onSuccess: (res) => {
+        showToast(`Reconciled library and enriched metadata (${res.processedCount} processed)`, "success");
+      },
+      onError: (err) => {
+        showToast(`Failed to reconcile library: ${err.message}`, "error");
       },
     });
   };
@@ -172,6 +185,16 @@ export default function DownloadHistory() {
               📋 Table
             </button>
           </div>
+
+          <button
+            className="btn btn-primary"
+            onClick={handleReconcile}
+            disabled={reconcileMutation.isPending}
+            title="Scan all active downloads, ensure all torrents are accounted for in history, and fetch metadata from Sonarr/Radarr/Lidarr"
+            style={{ fontSize: "0.85rem" }}
+          >
+            {reconcileMutation.isPending ? "Reconciling..." : "🔄 Reconcile & Sync Arrs"}
+          </button>
 
           <button
             className="btn btn-outline"
