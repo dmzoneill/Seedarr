@@ -84,6 +84,30 @@ public class ArrSyncService : IArrSyncService
                     if (existingHashes.Contains(record.InfoHash.ToLowerInvariant()))
                     {
                         result.Skipped++;
+
+                        // Ensure existing skipped torrent is in history and has metadata
+                        if (_downloadHistoryService != null)
+                        {
+                            var hist = _downloadHistoryService.GetByInfoHash(record.InfoHash);
+                            if (hist != null && string.IsNullOrEmpty(hist.DataJson) && _metadataEnricherService != null && record.MediaId.HasValue)
+                            {
+                                try
+                                {
+                                    var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition);
+                                    if (meta != null)
+                                    {
+                                        hist.DataJson = System.Text.Json.JsonSerializer.Serialize(meta);
+                                        hist.Source = definition.ArrType;
+                                        _downloadHistoryService.Update(hist);
+                                    }
+                                }
+                                catch (Exception enrichEx)
+                                {
+                                    _logger.Debug(enrichEx, "Could not enrich metadata for existing record {0}", record.Title);
+                                }
+                            }
+                        }
+
                         continue;
                     }
 
