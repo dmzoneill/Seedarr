@@ -1,8 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
-import { useSpeedHistory } from '../api/hooks';
-import type { SeedingStats } from '../api/types';
+import { useSpeedHistory, useSeedingStats } from '../api/hooks';
 import { formatSpeed } from '../utils/formatters';
 
 interface SpeedDataPoint {
@@ -38,12 +35,7 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
   } | null>(null);
 
   const { data: serverHistory } = useSpeedHistory();
-
-  const { data: stats } = useQuery<SeedingStats>({
-    queryKey: ['seeding', 'stats'],
-    queryFn: () => apiClient.get('/seeding/stats'),
-    refetchInterval: 1000,
-  });
+  const { data: stats } = useSeedingStats();
 
   useEffect(() => {
     if (!serverHistory || seededRef.current) return;

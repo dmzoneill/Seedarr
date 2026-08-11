@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation } from 'react-router';
 import {
   useNetworkStatus,
@@ -150,7 +150,7 @@ function PendingChangesModal({ onSave, onDiscard, onCancel }: { onSave: () => vo
 function useUnsavedGuard(dirty: boolean) {
   const location = useLocation();
   const [pendingNav, setPendingNav] = useState(false);
-  const prevPathRef = useState(location.pathname)[0];
+  const prevPathRef = useRef(location.pathname);
 
   useEffect(() => {
     if (!dirty) return;
@@ -160,10 +160,10 @@ function useUnsavedGuard(dirty: boolean) {
   }, [dirty]);
 
   useEffect(() => {
-    if (dirty && location.pathname !== prevPathRef) {
+    if (dirty && location.pathname !== prevPathRef.current) {
       setPendingNav(true);
     }
-  }, [dirty, location.pathname, prevPathRef]);
+  }, [dirty, location.pathname]);
 
   return {
     blocked: pendingNav,
