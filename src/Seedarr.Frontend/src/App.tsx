@@ -17,6 +17,7 @@ import PeerMap from "./pages/PeerMap";
 import SpeedSchedule from "./pages/SpeedSchedule";
 import Statistics from "./pages/Statistics";
 import DownloadHistory from "./pages/DownloadHistory";
+import DownloadPlusPlus from "./pages/DownloadPlusPlus";
 import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
@@ -187,6 +188,9 @@ function App() {
             </>
           )}
 
+          <NavLink to="/downloadplusplus" className="sidebar-nav-item">
+            <span style={{ fontSize: "1.1rem" }}>⚡</span> <span>Download++</span>
+          </NavLink>
           <NavLink to="/tracker" className="sidebar-nav-item">
             <TrackerIcon /> <span>Tracker</span>
           </NavLink>
@@ -390,6 +394,8 @@ function App() {
               />
               <Route path="/activity" element={<Activity />} />
               <Route path="/activity/metrics" element={<Activity />} />
+              <Route path="/downloadplusplus" element={<DownloadPlusPlus />} />
+              <Route path="/download++" element={<DownloadPlusPlus />} />
               <Route path="/tracker" element={<TrackerServer />} />
               <Route path="/peermap" element={<PeerMap />} />
               <Route path="/schedule" element={<SpeedSchedule />} />

@@ -45,6 +45,10 @@ import type {
   DownloadHistoryEntry,
   ReleaseInfo,
   DownloadReleaseRequest,
+  DownloadPlusPlusTracker,
+  DownloadPlusPlusStatusSummary,
+  SwarmBoostResult,
+  TorrentTrackerInspectionResult,
 } from "./types";
 
 const DEFAULT_REFETCH_MS = 5000;
@@ -899,4 +903,117 @@ export function useDownloadIndexerRelease() {
     },
   });
 }
+
+// Download++ (Seedarr++) Hooks
+
+export function useDownloadPlusPlusStatus() {
+  return useQuery<DownloadPlusPlusStatusSummary>({
+    queryKey: ["downloadplusplus", "status"],
+    queryFn: () => apiClient.get("/downloadplusplus/status"),
+    refetchInterval: 10_000,
+  });
+}
+
+export function useDownloadPlusPlusTrackers() {
+  return useQuery<DownloadPlusPlusTracker[]>({
+    queryKey: ["downloadplusplus", "trackers"],
+    queryFn: () => apiClient.get("/downloadplusplus/trackers"),
+  });
+}
+
+export function useInspectTorrentTrackers(torrentId: number, enabled = true) {
+  return useQuery<TorrentTrackerInspectionResult>({
+    queryKey: ["downloadplusplus", "check", torrentId],
+    queryFn: () => apiClient.get(`/downloadplusplus/check/${torrentId}`),
+    enabled: enabled && torrentId > 0,
+  });
+}
+
+export function useScanDownloadPlusPlusTrackers() {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean; testedCount: number }, Error, void>({
+    mutationFn: () => apiClient.post("/downloadplusplus/scan"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+    },
+  });
+}
+
+export function useHarvestProwlarrTrackers() {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean; harvestedCount: number }, Error, void>({
+    mutationFn: () => apiClient.post("/downloadplusplus/harvest/prowlarr"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+    },
+  });
+}
+
+export function useHarvestFeedTrackers() {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean; harvestedCount: number }, Error, void>({
+    mutationFn: () => apiClient.post("/downloadplusplus/harvest/feeds"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+    },
+  });
+}
+
+export function useBoostTorrent() {
+  const queryClient = useQueryClient();
+  return useMutation<SwarmBoostResult, Error, number>({
+    mutationFn: (torrentId) => apiClient.post(`/downloadplusplus/boost/${torrentId}`),
+    onSuccess: (_, torrentId) => {
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus", "check", torrentId] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["trackers", torrentId] });
+    },
+  });
+}
+
+export function useInjectTrackerToTorrent() {
+  const queryClient = useQueryClient();
+  return useMutation<SwarmBoostResult, Error, { torrentId: number; trackerUrl: string }>({
+    mutationFn: (payload) => apiClient.post("/downloadplusplus/inject", payload),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus", "check", vars.torrentId] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["trackers", vars.torrentId] });
+    },
+  });
+}
+
+export function useBoostAllTorrents() {
+  const queryClient = useQueryClient();
+  return useMutation<SwarmBoostResult[], Error, void>({
+    mutationFn: () => apiClient.post("/downloadplusplus/boost-all"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
+export function useAddDownloadPlusPlusTracker() {
+  const queryClient = useQueryClient();
+  return useMutation<DownloadPlusPlusTracker, Error, { url: string }>({
+    mutationFn: (payload) => apiClient.post("/downloadplusplus/trackers", payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+    },
+  });
+}
+
+export function useDeleteDownloadPlusPlusTracker() {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean }, Error, number>({
+    mutationFn: (id) => apiClient.delete(`/downloadplusplus/trackers/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+    },
+  });
+}
+
 
