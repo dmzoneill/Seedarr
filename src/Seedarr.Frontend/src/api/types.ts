@@ -41,6 +41,15 @@ export interface Torrent {
   sortOrder: number;
   forceCompleted: boolean;
   seedingTime: number;
+  posterUrl?: string | null;
+  fanartUrl?: string | null;
+  bannerUrl?: string | null;
+  mediaTitle?: string | null;
+  year?: number | null;
+  overview?: string | null;
+  rating?: number | null;
+  genres?: string[];
+  source?: string | null;
 }
 
 export interface TorrentFileInfo {
@@ -436,6 +445,15 @@ export interface TrackerServerTorrent {
   downloaded: number;
   isInternal: boolean;
   lastActivity: string | null;
+  posterUrl?: string | null;
+  fanartUrl?: string | null;
+  mediaTitle?: string | null;
+  year?: number | null;
+  rating?: number | null;
+  genres?: string[];
+  source?: string | null;
+  totalSize?: number;
+  ratio?: number;
 }
 
 export interface UpdateChanges {
