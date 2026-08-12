@@ -44,7 +44,14 @@ function StatusDonut({
   return (
     <div
       className="card"
-      style={{ display: "flex", alignItems: "center", gap: 24 }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 24,
+        borderRadius: "8px",
+        boxShadow:
+          "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+      }}
     >
       <svg width={100} height={100} viewBox="0 0 100 100">
         {entries.map(([status, count]) => {
@@ -164,7 +171,19 @@ function Dashboard() {
 
   return (
     <div>
-      <h1 className="page-heading">Dashboard</h1>
+      <div
+        className="page-heading-row"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1rem",
+        }}
+      >
+        <h1 className="page-heading" style={{ margin: 0 }}>
+          Dashboard
+        </h1>
+      </div>
 
       <HealthAlerts />
 
@@ -177,11 +196,14 @@ function Dashboard() {
           alignItems: "center",
           flexWrap: "wrap",
           gap: "1rem",
-          marginBottom: 16,
+          marginBottom: "1.25rem",
           background:
             "linear-gradient(90deg, rgba(200, 168, 78, 0.15) 0%, rgba(30, 30, 30, 0.8) 100%)",
           borderLeft: "4px solid var(--accent)",
           padding: "1rem 1.25rem",
+          borderRadius: "8px",
+          boxShadow:
+            "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
         }}
       >
         <div
@@ -278,8 +300,11 @@ function Dashboard() {
         <div
           className="card"
           style={{
-            marginBottom: 16,
-            padding: "1rem",
+            marginBottom: "1.25rem",
+            padding: "1.1rem 1.25rem",
+            borderRadius: "8px",
+            boxShadow:
+              "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
           }}
         >
           <div
@@ -287,13 +312,20 @@ function Dashboard() {
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              marginBottom: "0.75rem",
+              marginBottom: "0.85rem",
             }}
           >
-            <h3 style={{ margin: 0 }}>Connected Ecosystem</h3>
+            <h3 style={{ margin: 0, border: "none", padding: 0 }}>
+              Connected Ecosystem
+            </h3>
             <Link
               to="/settings/connections"
-              style={{ fontSize: "0.8rem", color: "var(--accent)" }}
+              style={{
+                fontSize: "0.82rem",
+                color: "var(--accent)",
+                textDecoration: "none",
+                fontWeight: 500,
+              }}
             >
               Manage Connections ⚙️
             </Link>
@@ -313,10 +345,11 @@ function Dashboard() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "0.5rem 0.75rem",
+                  padding: "0.6rem 0.85rem",
                   backgroundColor: "var(--bg-primary)",
-                  borderRadius: "4px",
+                  borderRadius: "6px",
                   border: "1px solid var(--border-light)",
+                  boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
                 }}
               >
                 <div
@@ -326,7 +359,7 @@ function Dashboard() {
                     gap: "0.5rem",
                   }}
                 >
-                  <span style={{ fontSize: "1.1rem" }}>
+                  <span style={{ fontSize: "1.2rem" }}>
                     {conn.arrType === "Sonarr"
                       ? "📺"
                       : conn.arrType === "Radarr"
@@ -359,8 +392,9 @@ function Dashboard() {
                     className="btn btn-small btn-outline"
                     style={{
                       fontSize: "0.75rem",
-                      padding: "0.15rem 0.4rem",
+                      padding: "0.2rem 0.45rem",
                       textDecoration: "none",
+                      borderRadius: "4px",
                     }}
                     title={`Open ${conn.name} Web UI`}
                   >
@@ -380,10 +414,11 @@ function Dashboard() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "0.5rem 0.75rem",
+                    padding: "0.6rem 0.85rem",
                     backgroundColor: "var(--bg-primary)",
-                    borderRadius: "4px",
+                    borderRadius: "6px",
                     border: "1px solid var(--border-light)",
+                    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
                   }}
                 >
                   <div
@@ -393,7 +428,7 @@ function Dashboard() {
                       gap: "0.5rem",
                     }}
                   >
-                    <span style={{ fontSize: "1.1rem" }}>🔍</span>
+                    <span style={{ fontSize: "1.2rem" }}>🔍</span>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
                         {idx.name}
@@ -413,8 +448,9 @@ function Dashboard() {
                       className="btn btn-small btn-outline"
                       style={{
                         fontSize: "0.75rem",
-                        padding: "0.15rem 0.4rem",
+                        padding: "0.2rem 0.45rem",
                         textDecoration: "none",
+                        borderRadius: "4px",
                       }}
                       title={`Open ${idx.name} Web UI`}
                     >
@@ -433,10 +469,11 @@ function Dashboard() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "0.5rem 0.75rem",
+                    padding: "0.6rem 0.85rem",
                     backgroundColor: "var(--bg-primary)",
-                    borderRadius: "4px",
+                    borderRadius: "6px",
                     border: "1px solid var(--border-light)",
+                    boxShadow: "0 2px 6px rgba(0, 0, 0, 0.2)",
                   }}
                 >
                   <div
@@ -446,7 +483,7 @@ function Dashboard() {
                       gap: "0.5rem",
                     }}
                   >
-                    <span style={{ fontSize: "1.1rem" }}>⚡</span>
+                    <span style={{ fontSize: "1.2rem" }}>⚡</span>
                     <div>
                       <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
                         {client.name}
@@ -466,8 +503,9 @@ function Dashboard() {
                       className="btn btn-small btn-outline"
                       style={{
                         fontSize: "0.75rem",
-                        padding: "0.15rem 0.4rem",
+                        padding: "0.2rem 0.45rem",
                         textDecoration: "none",
+                        borderRadius: "4px",
                       }}
                       title={`Open ${client.name} Web UI`}
                     >
@@ -484,15 +522,24 @@ function Dashboard() {
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-          gap: 16,
-          marginBottom: 16,
+          gap: "1rem",
+          marginBottom: "1.25rem",
         }}
       >
         <StatusDonut counts={statusCounts} total={torrents?.length ?? 0} />
 
         {activeLimits && (
-          <div className="card">
-            <h3 style={{ marginBottom: 8 }}>Speed Schedule</h3>
+          <div
+            className="card"
+            style={{
+              borderRadius: "8px",
+              boxShadow:
+                "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+            }}
+          >
+            <h3 style={{ marginBottom: "0.75rem", border: "none", padding: 0 }}>
+              Speed Schedule
+            </h3>
             <div className="status-row">
               <span className="status-label">Active</span>
               <span className="status-value">
@@ -525,23 +572,35 @@ function Dashboard() {
         )}
 
         {topTrackers.length > 0 && (
-          <div className="card">
-            <h3 style={{ marginBottom: 8 }}>Top Trackers</h3>
+          <div
+            className="card"
+            style={{
+              borderRadius: "8px",
+              boxShadow:
+                "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+            }}
+          >
+            <h3 style={{ marginBottom: "0.75rem", border: "none", padding: 0 }}>
+              Top Trackers
+            </h3>
             {topTrackers.map(([domain, count]) => (
               <div key={domain} className="status-row">
                 <Link
                   to={`/torrents?tracker=${encodeURIComponent(domain)}`}
                   className="status-label"
                   style={{
-                    fontSize: 13,
+                    fontSize: "0.82rem",
                     textDecoration: "none",
                     color: "inherit",
+                    fontWeight: 500,
                   }}
                   title="Filter torrents by tracker"
                 >
                   {domain} ↗
                 </Link>
-                <span className="status-value">{count}</span>
+                <span className="status-value" style={{ fontWeight: 600 }}>
+                  {count}
+                </span>
               </div>
             ))}
           </div>
@@ -551,7 +610,15 @@ function Dashboard() {
       <SpeedGraph />
 
       {/* Recent Torrents with Media Metadata & Arr Links */}
-      <div className="card">
+      <div
+        className="card"
+        style={{
+          marginTop: "1.25rem",
+          borderRadius: "8px",
+          boxShadow:
+            "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+        }}
+      >
         <div
           style={{
             display: "flex",
@@ -560,10 +627,17 @@ function Dashboard() {
             marginBottom: "0.75rem",
           }}
         >
-          <h3 style={{ margin: 0 }}>Recent Torrents</h3>
+          <h3 style={{ margin: 0, border: "none", padding: 0 }}>
+            Recent Torrents
+          </h3>
           <Link
             to="/torrents"
-            style={{ fontSize: "0.8rem", color: "var(--accent)" }}
+            style={{
+              fontSize: "0.82rem",
+              color: "var(--accent)",
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
           >
             View All Torrents →
           </Link>
@@ -615,15 +689,16 @@ function Dashboard() {
                     src={meta.posterUrl}
                     alt=""
                     style={{
-                      width: "28px",
-                      height: "40px",
+                      width: "32px",
+                      height: "46px",
                       objectFit: "cover",
-                      borderRadius: "3px",
+                      borderRadius: "4px",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
                       flexShrink: 0,
                     }}
                   />
                 ) : (
-                  <span style={{ fontSize: "1.2rem", flexShrink: 0 }}>📦</span>
+                  <span style={{ fontSize: "1.4rem", flexShrink: 0 }}>📦</span>
                 )}
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <Link
@@ -674,9 +749,10 @@ function Dashboard() {
                     className="badge badge-secondary"
                     style={{
                       fontSize: "0.7rem",
-                      padding: "0.1rem 0.35rem",
+                      padding: "0.15rem 0.4rem",
                       textDecoration: "none",
                       color: "inherit",
+                      borderRadius: "4px",
                     }}
                     title={arrLink.label}
                   >
@@ -685,6 +761,7 @@ function Dashboard() {
                 )}
                 <span
                   className={`badge badge-${(t.status ?? "unknown").toLowerCase()}`}
+                  style={{ borderRadius: "4px" }}
                 >
                   {t.status}
                 </span>
