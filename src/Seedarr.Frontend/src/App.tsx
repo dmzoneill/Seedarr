@@ -90,7 +90,8 @@ function App() {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showAddTorrentModal, setShowAddTorrentModal] = useState(false);
   const isTorrentsRoute =
-    location.pathname.startsWith("/torrents") || location.pathname === "/history";
+    location.pathname.startsWith("/torrents") ||
+    location.pathname === "/history";
   const isActivityRoute = location.pathname.startsWith("/activity");
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const isSystemRoute = location.pathname.startsWith("/system");
@@ -189,7 +190,8 @@ function App() {
           )}
 
           <NavLink to="/downloadplusplus" className="sidebar-nav-item">
-            <span style={{ fontSize: "1.1rem" }}>⚡</span> <span>Download++</span>
+            <span style={{ fontSize: "1.1rem" }}>⚡</span>{" "}
+            <span>Download++</span>
           </NavLink>
           <NavLink to="/tracker" className="sidebar-nav-item">
             <TrackerIcon /> <span>Tracker</span>
@@ -383,7 +385,10 @@ function App() {
               <Route path="/activity/torrents" element={<TorrentIndex />} />
               <Route path="/torrents" element={<DownloadHistory />} />
               <Route path="/torrents/:id" element={<TorrentDetails />} />
-              <Route path="/activity/torrents/:id" element={<TorrentDetails />} />
+              <Route
+                path="/activity/torrents/:id"
+                element={<TorrentDetails />}
+              />
               <Route
                 path="/activity/client/:id"
                 element={<DownloadClientTorrents />}

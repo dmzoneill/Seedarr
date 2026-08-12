@@ -16,10 +16,7 @@ import {
   formatDate,
 } from "../utils/formatters";
 import { getMediaDeepLink } from "../utils/arrLinks";
-import {
-  calculateAchievements,
-  calculateHnrStatus,
-} from "../utils/milestones";
+import { calculateAchievements, calculateHnrStatus } from "../utils/milestones";
 import HealthAlerts from "../components/HealthAlerts";
 import SpeedGraph from "../components/SpeedGraph";
 import { SkeletonGrid, SkeletonLine } from "../components/Skeleton";
@@ -129,7 +126,8 @@ function Dashboard() {
   );
 
   const hnrPendingCount = useMemo(() => {
-    return (torrents ?? []).filter((t) => !calculateHnrStatus(t).isCleared).length;
+    return (torrents ?? []).filter((t) => !calculateHnrStatus(t).isCleared)
+      .length;
   }, [torrents]);
 
   const totalSize = (torrents ?? []).reduce((sum, t) => sum + t.totalSize, 0);
@@ -180,27 +178,57 @@ function Dashboard() {
           flexWrap: "wrap",
           gap: "1rem",
           marginBottom: 16,
-          background: "linear-gradient(90deg, rgba(200, 168, 78, 0.15) 0%, rgba(30, 30, 30, 0.8) 100%)",
+          background:
+            "linear-gradient(90deg, rgba(200, 168, 78, 0.15) 0%, rgba(30, 30, 30, 0.8) 100%)",
           borderLeft: "4px solid var(--accent)",
           padding: "1rem 1.25rem",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
           <div style={{ fontSize: "2rem" }}>🏆</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: "1.05rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span>Level {achievements.overallLevel}: {achievements.rankTitle}</span>
-              <span className="badge badge-primary" style={{ fontSize: "0.75rem" }}>
+            <div
+              style={{
+                fontWeight: 700,
+                fontSize: "1.05rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <span>
+                Level {achievements.overallLevel}: {achievements.rankTitle}
+              </span>
+              <span
+                className="badge badge-primary"
+                style={{ fontSize: "0.75rem" }}
+              >
                 {achievements.unlockedCount}/{achievements.totalCount} Badges
               </span>
             </div>
-            <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+            <div
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-muted)",
+                marginTop: "0.2rem",
+              }}
+            >
               {achievements.totalSwarmGuardians.length > 0 && (
                 <span style={{ color: "#e67e22", fontWeight: 600 }}>
-                  🛡️ Keeping {achievements.totalSwarmGuardians.length} rare swarms alive •{" "}
+                  🛡️ Keeping {achievements.totalSwarmGuardians.length} rare
+                  swarms alive •{" "}
                 </span>
               )}
-              <span>{hnrPendingCount} torrents working towards minimum seed time</span>
+              <span>
+                {hnrPendingCount} torrents working towards minimum seed time
+              </span>
             </div>
           </div>
         </div>
@@ -291,19 +319,34 @@ function Dashboard() {
                   border: "1px solid var(--border-light)",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
                   <span style={{ fontSize: "1.1rem" }}>
                     {conn.arrType === "Sonarr"
                       ? "📺"
                       : conn.arrType === "Radarr"
-                      ? "🎬"
-                      : conn.arrType === "Lidarr"
-                      ? "🎵"
-                      : "📦"}
+                        ? "🎬"
+                        : conn.arrType === "Lidarr"
+                          ? "🎵"
+                          : "📦"}
                   </span>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>{conn.name}</div>
-                    <div style={{ fontSize: "0.7rem", color: conn.enable ? "var(--success)" : "var(--text-muted)" }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
+                      {conn.name}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "0.7rem",
+                        color: conn.enable
+                          ? "var(--success)"
+                          : "var(--text-muted)",
+                      }}
+                    >
                       {conn.enable ? "● Connected" : "○ Disabled"}
                     </div>
                   </div>
@@ -314,7 +357,11 @@ function Dashboard() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-small btn-outline"
-                    style={{ fontSize: "0.75rem", padding: "0.15rem 0.4rem", textDecoration: "none" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      padding: "0.15rem 0.4rem",
+                      textDecoration: "none",
+                    }}
                     title={`Open ${conn.name} Web UI`}
                   >
                     ↗
@@ -323,79 +370,112 @@ function Dashboard() {
               </div>
             ))}
 
-            {indexers?.filter((i) => i.enable).slice(0, 3).map((idx) => (
-              <div
-                key={`idx-${idx.id}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "0.5rem 0.75rem",
-                  backgroundColor: "var(--bg-primary)",
-                  borderRadius: "4px",
-                  border: "1px solid var(--border-light)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <span style={{ fontSize: "1.1rem" }}>🔍</span>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>{idx.name}</div>
-                    <div style={{ fontSize: "0.7rem", color: "var(--success)" }}>
-                      ● {idx.indexerType}
+            {indexers
+              ?.filter((i) => i.enable)
+              .slice(0, 3)
+              .map((idx) => (
+                <div
+                  key={`idx-${idx.id}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.5rem 0.75rem",
+                    backgroundColor: "var(--bg-primary)",
+                    borderRadius: "4px",
+                    border: "1px solid var(--border-light)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <span style={{ fontSize: "1.1rem" }}>🔍</span>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
+                        {idx.name}
+                      </div>
+                      <div
+                        style={{ fontSize: "0.7rem", color: "var(--success)" }}
+                      >
+                        ● {idx.indexerType}
+                      </div>
                     </div>
                   </div>
+                  {idx.url && (
+                    <a
+                      href={idx.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-small btn-outline"
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "0.15rem 0.4rem",
+                        textDecoration: "none",
+                      }}
+                      title={`Open ${idx.name} Web UI`}
+                    >
+                      ↗
+                    </a>
+                  )}
                 </div>
-                {idx.url && (
-                  <a
-                    href={idx.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-small btn-outline"
-                    style={{ fontSize: "0.75rem", padding: "0.15rem 0.4rem", textDecoration: "none" }}
-                    title={`Open ${idx.name} Web UI`}
-                  >
-                    ↗
-                  </a>
-                )}
-              </div>
-            ))}
+              ))}
 
-            {downloadClients?.filter((c) => c.enable).map((client) => (
-              <div
-                key={`client-${client.id}`}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "0.5rem 0.75rem",
-                  backgroundColor: "var(--bg-primary)",
-                  borderRadius: "4px",
-                  border: "1px solid var(--border-light)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <span style={{ fontSize: "1.1rem" }}>⚡</span>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>{client.name}</div>
-                    <div style={{ fontSize: "0.7rem", color: "var(--success)" }}>
-                      ● {client.clientType}
+            {downloadClients
+              ?.filter((c) => c.enable)
+              .map((client) => (
+                <div
+                  key={`client-${client.id}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "0.5rem 0.75rem",
+                    backgroundColor: "var(--bg-primary)",
+                    borderRadius: "4px",
+                    border: "1px solid var(--border-light)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <span style={{ fontSize: "1.1rem" }}>⚡</span>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
+                        {client.name}
+                      </div>
+                      <div
+                        style={{ fontSize: "0.7rem", color: "var(--success)" }}
+                      >
+                        ● {client.clientType}
+                      </div>
                     </div>
                   </div>
+                  {client.host && (
+                    <a
+                      href={`${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn btn-small btn-outline"
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "0.15rem 0.4rem",
+                        textDecoration: "none",
+                      }}
+                      title={`Open ${client.name} Web UI`}
+                    >
+                      ↗
+                    </a>
+                  )}
                 </div>
-                {client.host && (
-                  <a
-                    href={`${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn btn-small btn-outline"
-                    style={{ fontSize: "0.75rem", padding: "0.15rem 0.4rem", textDecoration: "none" }}
-                    title={`Open ${client.name} Web UI`}
-                  >
-                    ↗
-                  </a>
-                )}
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}
@@ -452,7 +532,11 @@ function Dashboard() {
                 <Link
                   to={`/torrents?tracker=${encodeURIComponent(domain)}`}
                   className="status-label"
-                  style={{ fontSize: 13, textDecoration: "none", color: "inherit" }}
+                  style={{
+                    fontSize: 13,
+                    textDecoration: "none",
+                    color: "inherit",
+                  }}
                   title="Filter torrents by tracker"
                 >
                   {domain} ↗
@@ -468,9 +552,19 @@ function Dashboard() {
 
       {/* Recent Torrents with Media Metadata & Arr Links */}
       <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "0.75rem",
+          }}
+        >
           <h3 style={{ margin: 0 }}>Recent Torrents</h3>
-          <Link to="/torrents" style={{ fontSize: "0.8rem", color: "var(--accent)" }}>
+          <Link
+            to="/torrents"
+            style={{ fontSize: "0.8rem", color: "var(--accent)" }}
+          >
             View All Torrents →
           </Link>
         </div>
@@ -492,11 +586,14 @@ function Dashboard() {
         {recent.map((t) => {
           const match = history?.find(
             (h) =>
-              (t.infoHash && h.infoHash?.toLowerCase() === t.infoHash.toLowerCase()) ||
+              (t.infoHash &&
+                h.infoHash?.toLowerCase() === t.infoHash.toLowerCase()) ||
               h.title?.toLowerCase() === t.name?.toLowerCase(),
           );
           const meta = match?.metadata;
-          const arrLink = match ? getMediaDeepLink(match, arrConnections) : null;
+          const arrLink = match
+            ? getMediaDeepLink(match, arrConnections)
+            : null;
 
           return (
             <div
@@ -504,12 +601,26 @@ function Dashboard() {
               className="status-row"
               style={{ alignItems: "center", padding: "0.5rem 0" }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  minWidth: 0,
+                  flex: 1,
+                }}
+              >
                 {meta?.posterUrl ? (
                   <img
                     src={meta.posterUrl}
                     alt=""
-                    style={{ width: "28px", height: "40px", objectFit: "cover", borderRadius: "3px", flexShrink: 0 }}
+                    style={{
+                      width: "28px",
+                      height: "40px",
+                      objectFit: "cover",
+                      borderRadius: "3px",
+                      flexShrink: 0,
+                    }}
                   />
                 ) : (
                   <span style={{ fontSize: "1.2rem", flexShrink: 0 }}>📦</span>
@@ -531,21 +642,42 @@ function Dashboard() {
                   >
                     {meta?.title || t.name} {meta?.year ? `(${meta.year})` : ""}
                   </Link>
-                  <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "flex", gap: "0.5rem" }}>
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "var(--text-muted)",
+                      display: "flex",
+                      gap: "0.5rem",
+                    }}
+                  >
                     <span>{formatBytes(t.totalSize)}</span>
-                    {t.trackerUrl && <span>• {new URL(t.trackerUrl).hostname}</span>}
+                    {t.trackerUrl && (
+                      <span>• {new URL(t.trackerUrl).hostname}</span>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  flexShrink: 0,
+                }}
+              >
                 {arrLink && (
                   <a
                     href={arrLink.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="badge badge-secondary"
-                    style={{ fontSize: "0.7rem", padding: "0.1rem 0.35rem", textDecoration: "none", color: "inherit" }}
+                    style={{
+                      fontSize: "0.7rem",
+                      padding: "0.1rem 0.35rem",
+                      textDecoration: "none",
+                      color: "inherit",
+                    }}
                     title={arrLink.label}
                   >
                     {arrLink.appName} ↗
@@ -556,7 +688,9 @@ function Dashboard() {
                 >
                   {t.status}
                 </span>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                <span
+                  style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}
+                >
                   {formatDate(t.dateAdded)}
                 </span>
               </div>

@@ -60,9 +60,22 @@ function TorrentGrid({
               className="skeleton"
               style={{ width: "100%", paddingTop: "140%" }}
             />
-            <div style={{ padding: "0.75rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-              <span className="skeleton skeleton-line" style={{ width: "85%", height: "1rem" }} />
-              <span className="skeleton skeleton-line" style={{ width: "50%", height: "0.8rem" }} />
+            <div
+              style={{
+                padding: "0.75rem",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+              }}
+            >
+              <span
+                className="skeleton skeleton-line"
+                style={{ width: "85%", height: "1rem" }}
+              />
+              <span
+                className="skeleton skeleton-line"
+                style={{ width: "50%", height: "0.8rem" }}
+              />
             </div>
           </div>
         ))}
@@ -103,8 +116,12 @@ function TorrentGrid({
         const isSelected = selectedTorrentId === t.id;
         const isSeeding = t.status === "Seeding";
         const arrLink = getMediaDeepLink(
-          { source: t.source, metadata: { title: t.mediaTitle, mediaId: 0 } as any, title: t.name },
-          arrConnections
+          {
+            source: t.source,
+            metadata: { title: t.mediaTitle, mediaId: 0 } as any,
+            title: t.name,
+          },
+          arrConnections,
         );
 
         return (
@@ -117,12 +134,17 @@ function TorrentGrid({
               display: "flex",
               flexDirection: "column",
               borderRadius: "8px",
-              border: isSelected ? "1px solid var(--accent)" : "1px solid rgba(255, 255, 255, 0.08)",
-              backgroundColor: isSelected ? "var(--bg-hover-elevated)" : "var(--bg-secondary)",
+              border: isSelected
+                ? "1px solid var(--accent)"
+                : "1px solid rgba(255, 255, 255, 0.08)",
+              backgroundColor: isSelected
+                ? "var(--bg-hover-elevated)"
+                : "var(--bg-secondary)",
               boxShadow: isSelected
                 ? "0 8px 24px rgba(200, 168, 78, 0.25), 0 2px 6px rgba(0, 0, 0, 0.3)"
                 : "0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2)",
-              transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
+              transition:
+                "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
               cursor: "pointer",
             }}
             onClick={() => onSelectTorrent?.(isSelected ? null : t.id)}
@@ -165,11 +187,18 @@ function TorrentGrid({
                     justifyContent: "center",
                     padding: "1rem",
                     textAlign: "center",
-                    background: "linear-gradient(180deg, #2a2620 0%, #151412 100%)",
+                    background:
+                      "linear-gradient(180deg, #2a2620 0%, #151412 100%)",
                   }}
                 >
                   <span style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>
-                    {t.source === "Radarr" ? "🎬" : t.source === "Sonarr" ? "📺" : t.source === "Lidarr" ? "🎵" : "📦"}
+                    {t.source === "Radarr"
+                      ? "🎬"
+                      : t.source === "Sonarr"
+                        ? "📺"
+                        : t.source === "Lidarr"
+                          ? "🎵"
+                          : "📦"}
                   </span>
                   <div
                     style={{
@@ -216,7 +245,9 @@ function TorrentGrid({
                       gap: "0.25rem",
                       borderRadius: "4px",
                     }}
-                    title={arrLink ? `${arrLink.label} (${arrLink.url})` : t.source}
+                    title={
+                      arrLink ? `${arrLink.label} (${arrLink.url})` : t.source
+                    }
                   >
                     {t.source} {arrLink ? "↗" : ""}
                   </span>
@@ -241,8 +272,8 @@ function TorrentGrid({
                     t.ratio >= 2.0
                       ? "badge-success"
                       : t.ratio >= 1.0
-                      ? "badge-primary"
-                      : "badge-secondary"
+                        ? "badge-primary"
+                        : "badge-secondary"
                   }`}
                   style={{
                     fontSize: "0.72rem",
@@ -324,7 +355,9 @@ function TorrentGrid({
 
               {/* Genres chips */}
               {t.genres && t.genres.length > 0 && (
-                <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+                <div
+                  style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}
+                >
                   {t.genres.slice(0, 2).map((g) => (
                     <span
                       key={g}
@@ -358,25 +391,33 @@ function TorrentGrid({
               >
                 <div>
                   <span style={{ color: "var(--text-dim)" }}>Size: </span>
-                  <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>
+                  <span
+                    style={{ color: "var(--text-secondary)", fontWeight: 500 }}
+                  >
                     {formatBytes(t.totalSize)}
                   </span>
                 </div>
                 <div>
                   <span style={{ color: "var(--text-dim)" }}>Up: </span>
-                  <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>
+                  <span
+                    style={{ color: "var(--text-secondary)", fontWeight: 500 }}
+                  >
                     {formatBytes(t.uploaded)}
                   </span>
                 </div>
                 <div>
                   <span style={{ color: "var(--text-dim)" }}>Ratio: </span>
-                  <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>
+                  <span
+                    style={{ color: "var(--text-secondary)", fontWeight: 500 }}
+                  >
                     {formatRatio(t.ratio)}
                   </span>
                 </div>
                 <div>
                   <span style={{ color: "var(--text-dim)" }}>Added: </span>
-                  <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>
+                  <span
+                    style={{ color: "var(--text-secondary)", fontWeight: 500 }}
+                  >
                     {formatDate(t.dateAdded).split(" ")[0]}
                   </span>
                 </div>

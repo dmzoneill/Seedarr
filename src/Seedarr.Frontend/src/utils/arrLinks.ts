@@ -1,4 +1,9 @@
-import type { ArrConnection, IndexerDefinition, DownloadHistoryEntry, MediaMetadata } from "../api/types";
+import type {
+  ArrConnection,
+  IndexerDefinition,
+  DownloadHistoryEntry,
+  MediaMetadata,
+} from "../api/types";
 
 export function getArrInstanceUrl(
   source: string | null | undefined,
@@ -20,7 +25,13 @@ export function getArrInstanceUrl(
 }
 
 export function getMediaDeepLink(
-  item: DownloadHistoryEntry | { source?: string | null; metadata?: MediaMetadata | null; title?: string },
+  item:
+    | DownloadHistoryEntry
+    | {
+        source?: string | null;
+        metadata?: MediaMetadata | null;
+        title?: string;
+      },
   connections: ArrConnection[] | undefined,
 ): { url: string; label: string; appName: string } | null {
   const instanceUrl = getArrInstanceUrl(item.source, connections);
@@ -32,7 +43,9 @@ export function getMediaDeepLink(
 
   if (mediaType.includes("sonarr") || mediaType === "series") {
     return {
-      url: mediaId ? `${instanceUrl}/series/${mediaId}` : `${instanceUrl}/activity/history`,
+      url: mediaId
+        ? `${instanceUrl}/series/${mediaId}`
+        : `${instanceUrl}/activity/history`,
       label: "Open in Sonarr",
       appName: "Sonarr",
     };
@@ -40,15 +53,23 @@ export function getMediaDeepLink(
 
   if (mediaType.includes("radarr") || mediaType === "movie") {
     return {
-      url: mediaId ? `${instanceUrl}/movie/${mediaId}` : `${instanceUrl}/activity/history`,
+      url: mediaId
+        ? `${instanceUrl}/movie/${mediaId}`
+        : `${instanceUrl}/activity/history`,
       label: "Open in Radarr",
       appName: "Radarr",
     };
   }
 
-  if (mediaType.includes("lidarr") || mediaType === "album" || mediaType === "artist") {
+  if (
+    mediaType.includes("lidarr") ||
+    mediaType === "album" ||
+    mediaType === "artist"
+  ) {
     return {
-      url: mediaId ? `${instanceUrl}/album/${mediaId}` : `${instanceUrl}/activity/history`,
+      url: mediaId
+        ? `${instanceUrl}/album/${mediaId}`
+        : `${instanceUrl}/activity/history`,
       label: "Open in Lidarr",
       appName: "Lidarr",
     };
@@ -61,10 +82,16 @@ export function getMediaDeepLink(
   };
 }
 
-export function getProwlarrUrl(indexers: IndexerDefinition[] | undefined, query?: string): string | null {
+export function getProwlarrUrl(
+  indexers: IndexerDefinition[] | undefined,
+  query?: string,
+): string | null {
   if (!indexers) return null;
   const prowlarr = indexers.find(
-    (i) => i.enable && (i.indexerType?.toLowerCase() === "prowlarr" || i.name?.toLowerCase().includes("prowlarr")),
+    (i) =>
+      i.enable &&
+      (i.indexerType?.toLowerCase() === "prowlarr" ||
+        i.name?.toLowerCase().includes("prowlarr")),
   );
   if (!prowlarr?.url) return null;
 
@@ -72,7 +99,10 @@ export function getProwlarrUrl(indexers: IndexerDefinition[] | undefined, query?
   return query ? `${base}/search?query=${encodeURIComponent(query)}` : base;
 }
 
-export function getImdbUrl(imdbId?: string | null, fallbackTitle?: string | null): string {
+export function getImdbUrl(
+  imdbId?: string | null,
+  fallbackTitle?: string | null,
+): string {
   if (imdbId) {
     const cleanId = imdbId.startsWith("tt") ? imdbId : `tt${imdbId}`;
     return `https://www.imdb.com/title/${cleanId}/`;
@@ -80,7 +110,10 @@ export function getImdbUrl(imdbId?: string | null, fallbackTitle?: string | null
   return `https://www.imdb.com/find?q=${encodeURIComponent(fallbackTitle || "")}&s=tt`;
 }
 
-export function getTmdbUrl(tmdbId?: number | null, mediaType?: string | null): string | null {
+export function getTmdbUrl(
+  tmdbId?: number | null,
+  mediaType?: string | null,
+): string | null {
   if (!tmdbId) return null;
   const type = mediaType === "movie" ? "movie" : "tv";
   return `https://www.themoviedb.org/${type}/${tmdbId}`;

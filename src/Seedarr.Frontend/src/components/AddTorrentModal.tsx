@@ -37,7 +37,9 @@ function AddTorrentModal({
   // Indexer Search State
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [activeSearchTerm, setActiveSearchTerm] = useState(initialQuery);
-  const [selectedIndexerId, setSelectedIndexerId] = useState<number | undefined>(undefined);
+  const [selectedIndexerId, setSelectedIndexerId] = useState<
+    number | undefined
+  >(undefined);
   const [downloadingGuid, setDownloadingGuid] = useState<string | null>(null);
 
   const { data: indexers } = useIndexers();
@@ -177,7 +179,10 @@ function AddTorrentModal({
       {
         onSuccess: () => {
           setDownloadingGuid(null);
-          showToast(`Added "${release.title}" to active seeding library`, "success");
+          showToast(
+            `Added "${release.title}" to active seeding library`,
+            "success",
+          );
         },
         onError: (err) => {
           setDownloadingGuid(null);
@@ -198,10 +203,21 @@ function AddTorrentModal({
     <div className="modal-overlay" onClick={handleBackdropClick}>
       <div
         className="modal"
-        style={mode === "search" ? { maxWidth: "820px", width: "90%" } : undefined}
+        style={
+          mode === "search" ? { maxWidth: "820px", width: "90%" } : undefined
+        }
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h2 className="modal-title" style={{ margin: 0 }}>Add Torrent</h2>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1rem",
+          }}
+        >
+          <h2 className="modal-title" style={{ margin: 0 }}>
+            Add Torrent
+          </h2>
           <button
             type="button"
             className="btn btn-outline"
@@ -295,7 +311,9 @@ function AddTorrentModal({
         )}
 
         {mode === "search" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+          >
             {enabledIndexers.length === 0 ? (
               <div
                 style={{
@@ -306,11 +324,26 @@ function AddTorrentModal({
                   border: "1px solid var(--border-color, #333)",
                 }}
               >
-                <div style={{ fontSize: "1.05rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+                <div
+                  style={{
+                    fontSize: "1.05rem",
+                    fontWeight: 600,
+                    marginBottom: "0.5rem",
+                  }}
+                >
                   No Indexers Configured
                 </div>
-                <p style={{ color: "var(--text-muted, #888)", fontSize: "0.85rem", maxWidth: "480px", margin: "0 auto 1rem auto" }}>
-                  To search and download torrent releases directly, configure a <strong>Prowlarr</strong> or <strong>Torznab / Newznab</strong> indexer in Settings.
+                <p
+                  style={{
+                    color: "var(--text-muted, #888)",
+                    fontSize: "0.85rem",
+                    maxWidth: "480px",
+                    margin: "0 auto 1rem auto",
+                  }}
+                >
+                  To search and download torrent releases directly, configure a{" "}
+                  <strong>Prowlarr</strong> or{" "}
+                  <strong>Torznab / Newznab</strong> indexer in Settings.
                 </p>
                 <button
                   type="button"
@@ -355,7 +388,9 @@ function AddTorrentModal({
                         padding: "0.4rem 0.6rem",
                       }}
                     >
-                      <option value="">All Indexers ({enabledIndexers.length})</option>
+                      <option value="">
+                        All Indexers ({enabledIndexers.length})
+                      </option>
                       {enabledIndexers.map((idx) => (
                         <option key={idx.id} value={idx.id}>
                           {idx.name} ({idx.indexerType})
@@ -384,13 +419,23 @@ function AddTorrentModal({
                 >
                   {searchResults.isFetching && (
                     <div style={{ padding: "2rem", textAlign: "center" }}>
-                      <div className="loading">Searching configured indexers...</div>
+                      <div className="loading">
+                        Searching configured indexers...
+                      </div>
                     </div>
                   )}
 
                   {searchResults.isError && (
-                    <div style={{ padding: "1.5rem", color: "var(--danger, #dc3545)", textAlign: "center" }}>
-                      Search failed: {(searchResults.error as Error)?.message || "Check indexer connection"}
+                    <div
+                      style={{
+                        padding: "1.5rem",
+                        color: "var(--danger, #dc3545)",
+                        textAlign: "center",
+                      }}
+                    >
+                      Search failed:{" "}
+                      {(searchResults.error as Error)?.message ||
+                        "Check indexer connection"}
                     </div>
                   )}
 
@@ -398,64 +443,147 @@ function AddTorrentModal({
                     !searchResults.isError &&
                     activeSearchTerm &&
                     (searchResults.data?.length ?? 0) === 0 && (
-                      <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted, #888)" }}>
-                        No releases found for "{activeSearchTerm}". Try different keywords or indexer.
+                      <div
+                        style={{
+                          padding: "2rem",
+                          textAlign: "center",
+                          color: "var(--text-muted, #888)",
+                        }}
+                      >
+                        No releases found for "{activeSearchTerm}". Try
+                        different keywords or indexer.
                       </div>
                     )}
 
                   {!searchResults.isFetching && !activeSearchTerm && (
-                    <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted, #888)" }}>
-                      Type a keyword above to search across your configured indexers ({enabledIndexers.map((i) => i.name).join(", ")}).
+                    <div
+                      style={{
+                        padding: "2rem",
+                        textAlign: "center",
+                        color: "var(--text-muted, #888)",
+                      }}
+                    >
+                      Type a keyword above to search across your configured
+                      indexers ({enabledIndexers.map((i) => i.name).join(", ")}
+                      ).
                     </div>
                   )}
 
                   {!searchResults.isFetching &&
                     (searchResults.data?.length ?? 0) > 0 && (
-                      <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <table
+                        className="table"
+                        style={{ width: "100%", borderCollapse: "collapse" }}
+                      >
                         <thead>
-                          <tr style={{ borderBottom: "1px solid var(--border-color, #333)", textAlign: "left", fontSize: "0.8rem" }}>
+                          <tr
+                            style={{
+                              borderBottom:
+                                "1px solid var(--border-color, #333)",
+                              textAlign: "left",
+                              fontSize: "0.8rem",
+                            }}
+                          >
                             <th style={{ padding: "0.6rem 0.8rem" }}>Title</th>
-                            <th style={{ padding: "0.6rem 0.8rem", width: "110px" }}>Indexer</th>
-                            <th style={{ padding: "0.6rem 0.8rem", width: "90px" }}>Size</th>
-                            <th style={{ padding: "0.6rem 0.8rem", width: "80px" }}>Peers</th>
-                            <th style={{ padding: "0.6rem 0.8rem", width: "90px" }}>Date</th>
-                            <th style={{ padding: "0.6rem 0.8rem", width: "90px", textAlign: "right" }}>Action</th>
+                            <th
+                              style={{
+                                padding: "0.6rem 0.8rem",
+                                width: "110px",
+                              }}
+                            >
+                              Indexer
+                            </th>
+                            <th
+                              style={{
+                                padding: "0.6rem 0.8rem",
+                                width: "90px",
+                              }}
+                            >
+                              Size
+                            </th>
+                            <th
+                              style={{
+                                padding: "0.6rem 0.8rem",
+                                width: "80px",
+                              }}
+                            >
+                              Peers
+                            </th>
+                            <th
+                              style={{
+                                padding: "0.6rem 0.8rem",
+                                width: "90px",
+                              }}
+                            >
+                              Date
+                            </th>
+                            <th
+                              style={{
+                                padding: "0.6rem 0.8rem",
+                                width: "90px",
+                                textAlign: "right",
+                              }}
+                            >
+                              Action
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           {searchResults.data?.map((rel) => {
-                            const itemKey = rel.guid || rel.infoHash || rel.title;
+                            const itemKey =
+                              rel.guid || rel.infoHash || rel.title;
                             const isDownloading = downloadingGuid === itemKey;
 
                             return (
                               <tr
                                 key={itemKey}
                                 style={{
-                                  borderBottom: "1px solid var(--border-color, #222)",
+                                  borderBottom:
+                                    "1px solid var(--border-color, #222)",
                                   fontSize: "0.85rem",
                                 }}
                               >
                                 <td style={{ padding: "0.6rem 0.8rem" }}>
-                                  <div style={{ fontWeight: 500, wordBreak: "break-word" }}>
+                                  <div
+                                    style={{
+                                      fontWeight: 500,
+                                      wordBreak: "break-word",
+                                    }}
+                                  >
                                     {rel.title}
                                   </div>
-                                  {rel.categories && rel.categories.length > 0 && (
-                                    <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.2rem" }}>
-                                      {rel.categories.slice(0, 3).map((c, i) => (
-                                        <span
-                                          key={i}
-                                          className="badge badge-secondary"
-                                          style={{ fontSize: "0.65rem", padding: "0.1rem 0.3rem" }}
-                                        >
-                                          {c}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
+                                  {rel.categories &&
+                                    rel.categories.length > 0 && (
+                                      <div
+                                        style={{
+                                          display: "flex",
+                                          gap: "0.3rem",
+                                          marginTop: "0.2rem",
+                                        }}
+                                      >
+                                        {rel.categories
+                                          .slice(0, 3)
+                                          .map((c, i) => (
+                                            <span
+                                              key={i}
+                                              className="badge badge-secondary"
+                                              style={{
+                                                fontSize: "0.65rem",
+                                                padding: "0.1rem 0.3rem",
+                                              }}
+                                            >
+                                              {c}
+                                            </span>
+                                          ))}
+                                      </div>
+                                    )}
                                 </td>
 
                                 <td style={{ padding: "0.6rem 0.8rem" }}>
-                                  <span className="badge badge-primary" style={{ fontSize: "0.75rem" }}>
+                                  <span
+                                    className="badge badge-primary"
+                                    style={{ fontSize: "0.75rem" }}
+                                  >
                                     {rel.indexer || "Indexer"}
                                   </span>
                                 </td>
@@ -465,22 +593,45 @@ function AddTorrentModal({
                                 </td>
 
                                 <td style={{ padding: "0.6rem 0.8rem" }}>
-                                  <span style={{ color: "var(--success, #28a745)", fontWeight: 600 }}>
+                                  <span
+                                    style={{
+                                      color: "var(--success, #28a745)",
+                                      fontWeight: 600,
+                                    }}
+                                  >
                                     ↑{rel.seeders ?? 0}
                                   </span>{" "}
-                                  <span style={{ color: "var(--text-muted, #888)" }}>
+                                  <span
+                                    style={{ color: "var(--text-muted, #888)" }}
+                                  >
                                     ↓{rel.leechers ?? 0}
                                   </span>
                                 </td>
 
-                                <td style={{ padding: "0.6rem 0.8rem", fontSize: "0.8rem", color: "var(--text-muted, #888)" }}>
-                                  {rel.publishDate ? formatDate(rel.publishDate) : "-"}
+                                <td
+                                  style={{
+                                    padding: "0.6rem 0.8rem",
+                                    fontSize: "0.8rem",
+                                    color: "var(--text-muted, #888)",
+                                  }}
+                                >
+                                  {rel.publishDate
+                                    ? formatDate(rel.publishDate)
+                                    : "-"}
                                 </td>
 
-                                <td style={{ padding: "0.6rem 0.8rem", textAlign: "right" }}>
+                                <td
+                                  style={{
+                                    padding: "0.6rem 0.8rem",
+                                    textAlign: "right",
+                                  }}
+                                >
                                   <button
                                     className="btn btn-success"
-                                    style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem" }}
+                                    style={{
+                                      fontSize: "0.75rem",
+                                      padding: "0.25rem 0.6rem",
+                                    }}
                                     onClick={() => handleAddRelease(rel)}
                                     disabled={isDownloading}
                                   >

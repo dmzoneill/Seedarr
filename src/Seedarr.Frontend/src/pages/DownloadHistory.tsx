@@ -39,7 +39,8 @@ export default function DownloadHistory() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
-  const [selectedDetailItem, setSelectedDetailItem] = useState<DownloadHistoryEntry | null>(null);
+  const [selectedDetailItem, setSelectedDetailItem] =
+    useState<DownloadHistoryEntry | null>(null);
   const { showToast } = useToast();
 
   const { data: arrConnections } = useArrConnections();
@@ -107,7 +108,10 @@ export default function DownloadHistory() {
   const handleEnrichAll = () => {
     enrichAllMutation.mutate(undefined, {
       onSuccess: () => {
-        showToast("Started metadata enrichment from connected Arr instances", "info");
+        showToast(
+          "Started metadata enrichment from connected Arr instances",
+          "info",
+        );
       },
       onError: (err) => {
         showToast(`Failed to start enrichment: ${err.message}`, "error");
@@ -118,7 +122,10 @@ export default function DownloadHistory() {
   const handleReconcile = () => {
     reconcileMutation.mutate(undefined, {
       onSuccess: (res) => {
-        showToast(`Reconciled library and enriched metadata (${res.processedCount} processed)`, "success");
+        showToast(
+          `Reconciled library and enriched metadata (${res.processedCount} processed)`,
+          "success",
+        );
       },
       onError: (err) => {
         showToast(`Failed to reconcile library: ${err.message}`, "error");
@@ -161,11 +168,20 @@ export default function DownloadHistory() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <h1 className="page-heading" style={{ margin: 0 }}>Historical Downloads</h1>
+          <h1 className="page-heading" style={{ margin: 0 }}>
+            Historical Downloads
+          </h1>
           <span className="badge badge-secondary">{totalCount} items</span>
         </div>
 
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           {/* View mode toggle */}
           <div className="tab-nav" style={{ margin: 0 }}>
             <button
@@ -193,7 +209,9 @@ export default function DownloadHistory() {
             title="Scan all active downloads, ensure all torrents are accounted for in history, and fetch metadata from Sonarr/Radarr/Lidarr"
             style={{ fontSize: "0.85rem" }}
           >
-            {reconcileMutation.isPending ? "Reconciling..." : "🔄 Reconcile & Sync Arrs"}
+            {reconcileMutation.isPending
+              ? "Reconciling..."
+              : "🔄 Reconcile & Sync Arrs"}
           </button>
 
           <button
@@ -230,10 +248,18 @@ export default function DownloadHistory() {
           marginBottom: "1.25rem",
           padding: "0.75rem 1rem",
           borderRadius: "8px",
-          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          boxShadow:
+            "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
         }}
       >
-        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.4rem",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           {(["all", "Active", "Completed", "Removed"] as const).map((st) => (
             <button
               key={st}
@@ -251,7 +277,16 @@ export default function DownloadHistory() {
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", minWidth: "260px", flex: "1", maxWidth: "450px" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            alignItems: "center",
+            minWidth: "260px",
+            flex: "1",
+            maxWidth: "450px",
+          }}
+        >
           <input
             type="text"
             className="form-control"
@@ -272,7 +307,11 @@ export default function DownloadHistory() {
             <button
               className="btn btn-outline"
               onClick={() => setSearchTerm("")}
-              style={{ fontSize: "0.75rem", padding: "0.35rem 0.5rem", borderRadius: "6px" }}
+              style={{
+                fontSize: "0.75rem",
+                padding: "0.35rem 0.5rem",
+                borderRadius: "6px",
+              }}
               title="Clear search filter"
             >
               ✕
@@ -283,23 +322,57 @@ export default function DownloadHistory() {
 
       {/* Loading & Error States */}
       {isLoading && (
-        <div className="card" style={{ padding: "3rem", textAlign: "center", borderRadius: "8px" }}>
-          <div className="loading">Loading download history & rich metadata...</div>
+        <div
+          className="card"
+          style={{ padding: "3rem", textAlign: "center", borderRadius: "8px" }}
+        >
+          <div className="loading">
+            Loading download history & rich metadata...
+          </div>
         </div>
       )}
 
       {isError && (
-        <div className="card" style={{ padding: "2rem", textAlign: "center", color: "var(--danger, #dc3545)", borderRadius: "8px" }}>
+        <div
+          className="card"
+          style={{
+            padding: "2rem",
+            textAlign: "center",
+            color: "var(--danger, #dc3545)",
+            borderRadius: "8px",
+          }}
+        >
           Failed to load download history.
         </div>
       )}
 
       {!isLoading && !isError && totalCount === 0 && (
-        <div className="card empty-state" style={{ padding: "3.5rem 1rem", textAlign: "center", borderRadius: "8px" }}>
-          <div className="empty-state-title" style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+        <div
+          className="card empty-state"
+          style={{
+            padding: "3.5rem 1rem",
+            textAlign: "center",
+            borderRadius: "8px",
+          }}
+        >
+          <div
+            className="empty-state-title"
+            style={{
+              fontSize: "1.25rem",
+              fontWeight: 600,
+              marginBottom: "0.5rem",
+            }}
+          >
             No Historical Downloads
           </div>
-          <div className="empty-state-text" style={{ color: "var(--text-muted, #888)", maxWidth: "500px", margin: "0 auto" }}>
+          <div
+            className="empty-state-text"
+            style={{
+              color: "var(--text-muted, #888)",
+              maxWidth: "500px",
+              margin: "0 auto",
+            }}
+          >
             {searchTerm || statusFilter !== "all"
               ? "No history records match the current search or status filter."
               : "Downloads and seeded torrents will be permanently captured and enriched with Arr media posters, actors, and stats here."}
@@ -334,8 +407,10 @@ export default function DownloadHistory() {
                   borderRadius: "8px",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                   backgroundColor: "var(--bg-secondary)",
-                  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2)",
-                  transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
+                  boxShadow:
+                    "0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2)",
+                  transition:
+                    "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
                   cursor: "pointer",
                 }}
                 onClick={() => setSelectedDetailItem(item)}
@@ -378,13 +453,29 @@ export default function DownloadHistory() {
                         justifyContent: "center",
                         padding: "1rem",
                         textAlign: "center",
-                        background: "linear-gradient(180deg, #2a2a2a 0%, #151515 100%)",
+                        background:
+                          "linear-gradient(180deg, #2a2a2a 0%, #151515 100%)",
                       }}
                     >
-                      <span style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>
-                        {item.source === "Radarr" ? "🎬" : item.source === "Sonarr" ? "📺" : item.source === "Lidarr" ? "🎵" : "📦"}
+                      <span
+                        style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}
+                      >
+                        {item.source === "Radarr"
+                          ? "🎬"
+                          : item.source === "Sonarr"
+                            ? "📺"
+                            : item.source === "Lidarr"
+                              ? "🎵"
+                              : "📦"}
                       </span>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 600, wordBreak: "break-word", color: "#ccc" }}>
+                      <div
+                        style={{
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          wordBreak: "break-word",
+                          color: "#ccc",
+                        }}
+                      >
                         {displayTitle}
                       </div>
                     </div>
@@ -402,7 +493,11 @@ export default function DownloadHistory() {
                       onClick={(e) => {
                         if (arrLink) {
                           e.stopPropagation();
-                          window.open(arrLink.url, "_blank", "noopener,noreferrer");
+                          window.open(
+                            arrLink.url,
+                            "_blank",
+                            "noopener,noreferrer",
+                          );
                         }
                       }}
                     >
@@ -420,7 +515,11 @@ export default function DownloadHistory() {
                           alignItems: "center",
                           gap: "0.25rem",
                         }}
-                        title={arrLink ? `${arrLink.label} (${arrLink.url})` : item.source}
+                        title={
+                          arrLink
+                            ? `${arrLink.label} (${arrLink.url})`
+                            : item.source
+                        }
                       >
                         {item.source} {arrLink ? "↗" : ""}
                       </span>
@@ -441,8 +540,8 @@ export default function DownloadHistory() {
                         item.ratio >= 2.0
                           ? "badge-success"
                           : item.ratio >= 1.0
-                          ? "badge-primary"
-                          : "badge-secondary"
+                            ? "badge-primary"
+                            : "badge-secondary"
                       }`}
                       style={{
                         fontSize: "0.75rem",
@@ -462,7 +561,8 @@ export default function DownloadHistory() {
                       left: 0,
                       right: 0,
                       padding: "0.4rem 0.6rem",
-                      background: "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.85) 40%, rgba(0,0,0,0.95) 100%)",
+                      background:
+                        "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.85) 40%, rgba(0,0,0,0.95) 100%)",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
@@ -471,12 +571,22 @@ export default function DownloadHistory() {
                     }}
                   >
                     <span>↑ {formatBytes(item.uploaded)}</span>
-                    <span style={{ color: "var(--text-muted, #aaa)" }}>⏱ {formatDuration(item.seedingTime)}</span>
+                    <span style={{ color: "var(--text-muted, #aaa)" }}>
+                      ⏱ {formatDuration(item.seedingTime)}
+                    </span>
                   </div>
                 </div>
 
                 {/* Card Info Body */}
-                <div style={{ padding: "0.75rem", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                <div
+                  style={{
+                    padding: "0.75rem",
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                  }}
+                >
                   <div>
                     <div
                       style={{
@@ -491,17 +601,38 @@ export default function DownloadHistory() {
                       }}
                       title={displayTitle}
                     >
-                      {displayTitle} {meta?.year ? <span style={{ color: "var(--text-muted, #888)", fontWeight: 400 }}>({meta.year})</span> : null}
+                      {displayTitle}{" "}
+                      {meta?.year ? (
+                        <span
+                          style={{
+                            color: "var(--text-muted, #888)",
+                            fontWeight: 400,
+                          }}
+                        >
+                          ({meta.year})
+                        </span>
+                      ) : null}
                     </div>
 
                     {/* Genres (Clickable to Filter) */}
                     {meta?.genres && meta.genres.length > 0 && (
-                      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", margin: "0.35rem 0" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "0.25rem",
+                          flexWrap: "wrap",
+                          margin: "0.35rem 0",
+                        }}
+                      >
                         {meta.genres.slice(0, 2).map((g, i) => (
                           <span
                             key={i}
                             className="badge badge-secondary"
-                            style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem", cursor: "pointer" }}
+                            style={{
+                              fontSize: "0.65rem",
+                              padding: "0.1rem 0.35rem",
+                              cursor: "pointer",
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSearchTerm(g);
@@ -528,7 +659,11 @@ export default function DownloadHistory() {
                   >
                     <button
                       className="btn btn-outline"
-                      style={{ flex: 1, fontSize: "0.75rem", padding: "0.25rem 0.4rem" }}
+                      style={{
+                        flex: 1,
+                        fontSize: "0.75rem",
+                        padding: "0.25rem 0.4rem",
+                      }}
                       onClick={() => setSearchModalQuery(item.title)}
                       title="Search again on Indexers"
                     >
@@ -536,10 +671,20 @@ export default function DownloadHistory() {
                     </button>
                     <button
                       className="btn btn-primary"
-                      style={{ flex: 1, fontSize: "0.75rem", padding: "0.25rem 0.4rem" }}
+                      style={{
+                        flex: 1,
+                        fontSize: "0.75rem",
+                        padding: "0.25rem 0.4rem",
+                      }}
                       onClick={() => handleReAdd(item.id, item.title)}
-                      disabled={reAddMutation.isPending || item.status === "Active"}
-                      title={item.status === "Active" ? "Already in library" : "Re-add to active queue"}
+                      disabled={
+                        reAddMutation.isPending || item.status === "Active"
+                      }
+                      title={
+                        item.status === "Active"
+                          ? "Already in library"
+                          : "Re-add to active queue"
+                      }
                     >
                       🔄 Re-add
                     </button>
@@ -563,17 +708,45 @@ export default function DownloadHistory() {
       {!isLoading && !isError && totalCount > 0 && viewMode === "table" && (
         <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
-            <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table
+              className="table"
+              style={{ width: "100%", borderCollapse: "collapse" }}
+            >
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-color, #333)", textAlign: "left" }}>
+                <tr
+                  style={{
+                    borderBottom: "1px solid var(--border-color, #333)",
+                    textAlign: "left",
+                  }}
+                >
                   <th style={{ padding: "0.75rem 1rem" }}>Release & Media</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "100px" }}>Size</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "120px" }}>Uploaded</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "90px" }}>Ratio</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "100px" }}>Seed Time</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "130px" }}>Date Added</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "100px" }}>Status</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "210px", textAlign: "right" }}>Actions</th>
+                  <th style={{ padding: "0.75rem 1rem", width: "100px" }}>
+                    Size
+                  </th>
+                  <th style={{ padding: "0.75rem 1rem", width: "120px" }}>
+                    Uploaded
+                  </th>
+                  <th style={{ padding: "0.75rem 1rem", width: "90px" }}>
+                    Ratio
+                  </th>
+                  <th style={{ padding: "0.75rem 1rem", width: "100px" }}>
+                    Seed Time
+                  </th>
+                  <th style={{ padding: "0.75rem 1rem", width: "130px" }}>
+                    Date Added
+                  </th>
+                  <th style={{ padding: "0.75rem 1rem", width: "100px" }}>
+                    Status
+                  </th>
+                  <th
+                    style={{
+                      padding: "0.75rem 1rem",
+                      width: "210px",
+                      textAlign: "right",
+                    }}
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -591,7 +764,13 @@ export default function DownloadHistory() {
                       }}
                     >
                       <td style={{ padding: "0.75rem 1rem" }}>
-                        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.75rem",
+                            alignItems: "center",
+                          }}
+                        >
                           {meta?.posterUrl ? (
                             <img
                               src={meta.posterUrl}
@@ -629,10 +808,24 @@ export default function DownloadHistory() {
 
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div
-                              style={{ fontWeight: 600, wordBreak: "break-word", cursor: "pointer" }}
+                              style={{
+                                fontWeight: 600,
+                                wordBreak: "break-word",
+                                cursor: "pointer",
+                              }}
                               onClick={() => setSelectedDetailItem(item)}
                             >
-                              {displayTitle} {meta?.year ? <span style={{ color: "var(--text-muted, #888)", fontWeight: 400 }}>({meta.year})</span> : null}
+                              {displayTitle}{" "}
+                              {meta?.year ? (
+                                <span
+                                  style={{
+                                    color: "var(--text-muted, #888)",
+                                    fontWeight: 400,
+                                  }}
+                                >
+                                  ({meta.year})
+                                </span>
+                              ) : null}
                             </div>
                             <div
                               style={{
@@ -647,29 +840,44 @@ export default function DownloadHistory() {
                               }}
                             >
                               <span>{item.infoHash}</span>
-                              {item.source && (
-                                arrLink ? (
+                              {item.source &&
+                                (arrLink ? (
                                   <a
                                     href={arrLink.url}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className="badge badge-secondary"
-                                    style={{ fontSize: "0.7rem", padding: "0.1rem 0.4rem", textDecoration: "none", color: "inherit" }}
+                                    style={{
+                                      fontSize: "0.7rem",
+                                      padding: "0.1rem 0.4rem",
+                                      textDecoration: "none",
+                                      color: "inherit",
+                                    }}
                                     title={arrLink.label}
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     {item.source} ↗
                                   </a>
                                 ) : (
-                                  <span className="badge badge-secondary" style={{ fontSize: "0.7rem", padding: "0.1rem 0.4rem" }}>
+                                  <span
+                                    className="badge badge-secondary"
+                                    style={{
+                                      fontSize: "0.7rem",
+                                      padding: "0.1rem 0.4rem",
+                                    }}
+                                  >
                                     {item.source}
                                   </span>
-                                )
-                              )}
+                                ))}
                               {item.primaryTracker && (
                                 <span
-                                  style={{ color: "var(--text-dim, #999)", cursor: "pointer" }}
-                                  onClick={() => setSearchTerm(item.primaryTracker || "")}
+                                  style={{
+                                    color: "var(--text-dim, #999)",
+                                    cursor: "pointer",
+                                  }}
+                                  onClick={() =>
+                                    setSearchTerm(item.primaryTracker || "")
+                                  }
                                   title="Filter by tracker"
                                 >
                                   • {item.primaryTracker}
@@ -680,18 +888,24 @@ export default function DownloadHistory() {
                         </div>
                       </td>
 
-                      <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
+                      <td
+                        style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}
+                      >
                         {formatBytes(item.totalSize)}
                       </td>
 
-                      <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
+                      <td
+                        style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}
+                      >
                         {formatBytes(item.uploaded)}
                       </td>
 
                       <td style={{ padding: "0.75rem 1rem" }}>
                         <span
                           className={`badge ${
-                            item.ratio >= 1.0 ? "badge-success" : "badge-secondary"
+                            item.ratio >= 1.0
+                              ? "badge-success"
+                              : "badge-secondary"
                           }`}
                           style={{ fontSize: "0.8rem" }}
                         >
@@ -699,14 +913,23 @@ export default function DownloadHistory() {
                         </span>
                       </td>
 
-                      <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
+                      <td
+                        style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}
+                      >
                         {formatDuration(item.seedingTime)}
                       </td>
 
-                      <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
+                      <td
+                        style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}
+                      >
                         <div>{formatDate(item.dateAdded)}</div>
                         {item.dateRemoved && (
-                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #777)" }}>
+                          <div
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "var(--text-muted, #777)",
+                            }}
+                          >
                             Removed {formatDate(item.dateRemoved)}
                           </div>
                         )}
@@ -718,19 +941,24 @@ export default function DownloadHistory() {
                             item.status === "Active"
                               ? "badge-success"
                               : item.status === "Completed"
-                              ? "badge-primary"
-                              : "badge-stopped"
+                                ? "badge-primary"
+                                : "badge-stopped"
                           }`}
                         >
                           {item.status}
                         </span>
                       </td>
 
-                      <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
+                      <td
+                        style={{ padding: "0.75rem 1rem", textAlign: "right" }}
+                      >
                         <div style={{ display: "inline-flex", gap: "0.3rem" }}>
                           <button
                             className="btn btn-outline"
-                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                            style={{
+                              fontSize: "0.75rem",
+                              padding: "0.25rem 0.5rem",
+                            }}
                             onClick={() => setSelectedDetailItem(item)}
                             title="View synopsis, actors, and Arr links"
                           >
@@ -738,7 +966,10 @@ export default function DownloadHistory() {
                           </button>
                           <button
                             className="btn btn-outline"
-                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                            style={{
+                              fontSize: "0.75rem",
+                              padding: "0.25rem 0.5rem",
+                            }}
                             onClick={() => setSearchModalQuery(item.title)}
                             title="Search for this release again on configured indexers"
                           >
@@ -746,16 +977,30 @@ export default function DownloadHistory() {
                           </button>
                           <button
                             className="btn btn-primary"
-                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                            style={{
+                              fontSize: "0.75rem",
+                              padding: "0.25rem 0.5rem",
+                            }}
                             onClick={() => handleReAdd(item.id, item.title)}
-                            disabled={reAddMutation.isPending || item.status === "Active"}
-                            title={item.status === "Active" ? "Already in library" : "Re-add to active seeding library"}
+                            disabled={
+                              reAddMutation.isPending ||
+                              item.status === "Active"
+                            }
+                            title={
+                              item.status === "Active"
+                                ? "Already in library"
+                                : "Re-add to active seeding library"
+                            }
                           >
                             🔄 Re-add
                           </button>
                           <button
                             className="btn btn-outline"
-                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.45rem", color: "var(--danger, #dc3545)" }}
+                            style={{
+                              fontSize: "0.75rem",
+                              padding: "0.25rem 0.45rem",
+                              color: "var(--danger, #dc3545)",
+                            }}
                             onClick={() => handleDelete(item.id, item.title)}
                             title="Delete historical record"
                           >
@@ -774,7 +1019,10 @@ export default function DownloadHistory() {
 
       {/* RICH MEDIA DETAILS MODAL WITH DEEP-LINK INTEGRATIONS */}
       {selectedDetailItem && (
-        <div className="modal-overlay" onClick={() => setSelectedDetailItem(null)}>
+        <div
+          className="modal-overlay"
+          onClick={() => setSelectedDetailItem(null)}
+        >
           <div
             className="modal"
             style={{
@@ -807,7 +1055,8 @@ export default function DownloadHistory() {
                 style={{
                   position: "absolute",
                   inset: 0,
-                  background: "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(20,20,20,0.96) 100%)",
+                  background:
+                    "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(20,20,20,0.96) 100%)",
                 }}
               />
 
@@ -830,7 +1079,16 @@ export default function DownloadHistory() {
                 ✕
               </button>
 
-              <div style={{ position: "relative", zIndex: 2, display: "flex", gap: "1.5rem", alignItems: "flex-end", width: "100%" }}>
+              <div
+                style={{
+                  position: "relative",
+                  zIndex: 2,
+                  display: "flex",
+                  gap: "1.5rem",
+                  alignItems: "flex-end",
+                  width: "100%",
+                }}
+              >
                 {selectedDetailItem.metadata?.posterUrl && (
                   <img
                     src={selectedDetailItem.metadata.posterUrl}
@@ -848,19 +1106,44 @@ export default function DownloadHistory() {
                 )}
 
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <h2 style={{ margin: "0 0 0.35rem 0", fontSize: "1.55rem", fontWeight: 700, wordBreak: "break-word" }}>
-                    {selectedDetailItem.metadata?.title || selectedDetailItem.title}
+                  <h2
+                    style={{
+                      margin: "0 0 0.35rem 0",
+                      fontSize: "1.55rem",
+                      fontWeight: 700,
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {selectedDetailItem.metadata?.title ||
+                      selectedDetailItem.title}
                     {selectedDetailItem.metadata?.year && (
-                      <span style={{ color: "var(--text-muted, #aaa)", fontWeight: 400, fontSize: "1.1rem", marginLeft: "0.5rem" }}>
+                      <span
+                        style={{
+                          color: "var(--text-muted, #aaa)",
+                          fontWeight: 400,
+                          fontSize: "1.1rem",
+                          marginLeft: "0.5rem",
+                        }}
+                      >
                         ({selectedDetailItem.metadata.year})
                       </span>
                     )}
                   </h2>
 
                   {/* Arr & External Database Links Bar */}
-                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
                     {(() => {
-                      const arrLink = getMediaDeepLink(selectedDetailItem, arrConnections);
+                      const arrLink = getMediaDeepLink(
+                        selectedDetailItem,
+                        arrConnections,
+                      );
                       if (arrLink) {
                         return (
                           <a
@@ -883,14 +1166,22 @@ export default function DownloadHistory() {
                         );
                       }
                       if (selectedDetailItem.source) {
-                        return <span className="badge badge-primary">{selectedDetailItem.source}</span>;
+                        return (
+                          <span className="badge badge-primary">
+                            {selectedDetailItem.source}
+                          </span>
+                        );
                       }
                       return null;
                     })()}
 
                     {/* IMDb link */}
                     <a
-                      href={getImdbUrl(selectedDetailItem.metadata?.imdbId, selectedDetailItem.metadata?.title || selectedDetailItem.title)}
+                      href={getImdbUrl(
+                        selectedDetailItem.metadata?.imdbId,
+                        selectedDetailItem.metadata?.title ||
+                          selectedDetailItem.title,
+                      )}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="badge"
@@ -910,7 +1201,12 @@ export default function DownloadHistory() {
                     {/* TMDb link */}
                     {selectedDetailItem.metadata?.tmdbId && (
                       <a
-                        href={getTmdbUrl(selectedDetailItem.metadata.tmdbId, selectedDetailItem.metadata.mediaType) || "#"}
+                        href={
+                          getTmdbUrl(
+                            selectedDetailItem.metadata.tmdbId,
+                            selectedDetailItem.metadata.mediaType,
+                          ) || "#"
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="badge"
@@ -931,7 +1227,9 @@ export default function DownloadHistory() {
                     {/* TheTVDB link */}
                     {selectedDetailItem.metadata?.tvdbId && (
                       <a
-                        href={getTvdbUrl(selectedDetailItem.metadata.tvdbId) || "#"}
+                        href={
+                          getTvdbUrl(selectedDetailItem.metadata.tvdbId) || "#"
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="badge"
@@ -950,13 +1248,27 @@ export default function DownloadHistory() {
                     )}
 
                     {/* Prowlarr Deep Link if configured */}
-                    {getProwlarrUrl(indexers, selectedDetailItem.metadata?.title || selectedDetailItem.title) && (
+                    {getProwlarrUrl(
+                      indexers,
+                      selectedDetailItem.metadata?.title ||
+                        selectedDetailItem.title,
+                    ) && (
                       <a
-                        href={getProwlarrUrl(indexers, selectedDetailItem.metadata?.title || selectedDetailItem.title) || "#"}
+                        href={
+                          getProwlarrUrl(
+                            indexers,
+                            selectedDetailItem.metadata?.title ||
+                              selectedDetailItem.title,
+                          ) || "#"
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="badge badge-secondary"
-                        style={{ textDecoration: "none", fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                        style={{
+                          textDecoration: "none",
+                          fontSize: "0.75rem",
+                          padding: "0.25rem 0.5rem",
+                        }}
                         title="Search in Prowlarr Web UI"
                       >
                         Prowlarr ↗
@@ -964,13 +1276,21 @@ export default function DownloadHistory() {
                     )}
 
                     {selectedDetailItem.metadata?.studioOrNetwork && (
-                      <span style={{ color: "var(--text-muted, #bbb)", fontSize: "0.85rem", marginLeft: "0.25rem" }}>
+                      <span
+                        style={{
+                          color: "var(--text-muted, #bbb)",
+                          fontSize: "0.85rem",
+                          marginLeft: "0.25rem",
+                        }}
+                      >
                         {selectedDetailItem.metadata.studioOrNetwork}
                       </span>
                     )}
 
                     {selectedDetailItem.metadata?.rating && (
-                      <span className="badge badge-success">⭐ {selectedDetailItem.metadata.rating}</span>
+                      <span className="badge badge-success">
+                        ⭐ {selectedDetailItem.metadata.rating}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -980,143 +1300,194 @@ export default function DownloadHistory() {
             {/* Modal Body */}
             <div style={{ padding: "2rem 1.5rem 1.5rem 1.5rem" }}>
               {/* Genres (Click to filter in Seedarr) */}
-              {selectedDetailItem.metadata?.genres && selectedDetailItem.metadata.genres.length > 0 && (
-                <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Genres:</span>
-                  {selectedDetailItem.metadata.genres.map((g, i) => (
+              {selectedDetailItem.metadata?.genres &&
+                selectedDetailItem.metadata.genres.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.4rem",
+                      marginBottom: "1rem",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
                     <span
-                      key={i}
-                      className="badge badge-secondary"
-                      style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem", cursor: "pointer" }}
-                      onClick={() => {
-                        setSearchTerm(g);
-                        setSelectedDetailItem(null);
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "var(--text-muted, #888)",
                       }}
-                      title={`Filter history by genre "${g}"`}
                     >
-                      {g}
+                      Genres:
                     </span>
-                  ))}
-                </div>
-              )}
+                    {selectedDetailItem.metadata.genres.map((g, i) => (
+                      <span
+                        key={i}
+                        className="badge badge-secondary"
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "0.2rem 0.5rem",
+                          cursor: "pointer",
+                        }}
+                        onClick={() => {
+                          setSearchTerm(g);
+                          setSelectedDetailItem(null);
+                        }}
+                        title={`Filter history by genre "${g}"`}
+                      >
+                        {g}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
               {/* Overview / Synopsis */}
               {selectedDetailItem.metadata?.overview && (
                 <div style={{ marginBottom: "1.5rem" }}>
-                  <h4 style={{ margin: "0 0 0.4rem 0", fontSize: "0.95rem", color: "var(--text-muted, #aaa)" }}>
+                  <h4
+                    style={{
+                      margin: "0 0 0.4rem 0",
+                      fontSize: "0.95rem",
+                      color: "var(--text-muted, #aaa)",
+                    }}
+                  >
                     Overview
                   </h4>
-                  <p style={{ margin: 0, fontSize: "0.9rem", lineHeight: "1.5", color: "var(--text-normal, #ddd)" }}>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.9rem",
+                      lineHeight: "1.5",
+                      color: "var(--text-normal, #ddd)",
+                    }}
+                  >
                     {selectedDetailItem.metadata.overview}
                   </p>
                 </div>
               )}
 
               {/* Cast & Actors with Click-to-Search and Profile links */}
-              {selectedDetailItem.metadata?.actors && selectedDetailItem.metadata.actors.length > 0 && (
-                <div style={{ marginBottom: "1.5rem" }}>
-                  <h4 style={{ margin: "0 0 0.6rem 0", fontSize: "0.95rem", color: "var(--text-muted, #aaa)" }}>
-                    Cast & Actors
-                  </h4>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))",
-                      gap: "0.75rem",
-                      maxHeight: "190px",
-                      overflowY: "auto",
-                      paddingRight: "0.5rem",
-                    }}
-                  >
-                    {selectedDetailItem.metadata.actors.slice(0, 12).map((actor, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          display: "flex",
-                          gap: "0.5rem",
-                          alignItems: "center",
-                          backgroundColor: "var(--bg-secondary, #222)",
-                          padding: "0.4rem",
-                          borderRadius: "4px",
-                          border: "1px solid var(--border-color, #333)",
-                          position: "relative",
-                        }}
-                      >
-                        {actor.imageUrl ? (
-                          <img
-                            src={actor.imageUrl}
-                            alt=""
-                            style={{
-                              width: "38px",
-                              height: "38px",
-                              borderRadius: "50%",
-                              objectFit: "cover",
-                              flexShrink: 0,
-                            }}
-                            loading="lazy"
-                          />
-                        ) : (
+              {selectedDetailItem.metadata?.actors &&
+                selectedDetailItem.metadata.actors.length > 0 && (
+                  <div style={{ marginBottom: "1.5rem" }}>
+                    <h4
+                      style={{
+                        margin: "0 0 0.6rem 0",
+                        fontSize: "0.95rem",
+                        color: "var(--text-muted, #aaa)",
+                      }}
+                    >
+                      Cast & Actors
+                    </h4>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(auto-fill, minmax(170px, 1fr))",
+                        gap: "0.75rem",
+                        maxHeight: "190px",
+                        overflowY: "auto",
+                        paddingRight: "0.5rem",
+                      }}
+                    >
+                      {selectedDetailItem.metadata.actors
+                        .slice(0, 12)
+                        .map((actor, idx) => (
                           <div
+                            key={idx}
                             style={{
-                              width: "38px",
-                              height: "38px",
-                              borderRadius: "50%",
-                              backgroundColor: "#333",
                               display: "flex",
+                              gap: "0.5rem",
                               alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "0.9rem",
-                              flexShrink: 0,
+                              backgroundColor: "var(--bg-secondary, #222)",
+                              padding: "0.4rem",
+                              borderRadius: "4px",
+                              border: "1px solid var(--border-color, #333)",
+                              position: "relative",
                             }}
                           >
-                            👤
-                          </div>
-                        )}
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div
-                            style={{
-                              fontSize: "0.8rem",
-                              fontWeight: 600,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                              cursor: "pointer",
-                            }}
-                            onClick={() => {
-                              setSearchTerm(actor.name);
-                              setSelectedDetailItem(null);
-                            }}
-                            title={`Click to filter Seedarr history by "${actor.name}"`}
-                          >
-                            {actor.name}
-                          </div>
-                          {actor.character && (
-                            <div style={{ fontSize: "0.7rem", color: "var(--text-muted, #888)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {actor.character}
+                            {actor.imageUrl ? (
+                              <img
+                                src={actor.imageUrl}
+                                alt=""
+                                style={{
+                                  width: "38px",
+                                  height: "38px",
+                                  borderRadius: "50%",
+                                  objectFit: "cover",
+                                  flexShrink: 0,
+                                }}
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  width: "38px",
+                                  height: "38px",
+                                  borderRadius: "50%",
+                                  backgroundColor: "#333",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontSize: "0.9rem",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                👤
+                              </div>
+                            )}
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div
+                                style={{
+                                  fontSize: "0.8rem",
+                                  fontWeight: 600,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                  cursor: "pointer",
+                                }}
+                                onClick={() => {
+                                  setSearchTerm(actor.name);
+                                  setSelectedDetailItem(null);
+                                }}
+                                title={`Click to filter Seedarr history by "${actor.name}"`}
+                              >
+                                {actor.name}
+                              </div>
+                              {actor.character && (
+                                <div
+                                  style={{
+                                    fontSize: "0.7rem",
+                                    color: "var(--text-muted, #888)",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {actor.character}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
 
-                        {/* External TMDb actor link */}
-                        <a
-                          href={getActorSearchUrl(actor.name)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "var(--text-dim, #777)",
-                            textDecoration: "none",
-                            padding: "0.2rem",
-                          }}
-                          title={`View ${actor.name} on TMDb`}
-                        >
-                          ↗
-                        </a>
-                      </div>
-                    ))}
+                            {/* External TMDb actor link */}
+                            <a
+                              href={getActorSearchUrl(actor.name)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "var(--text-dim, #777)",
+                                textDecoration: "none",
+                                padding: "0.2rem",
+                              }}
+                              title={`View ${actor.name} on TMDb`}
+                            >
+                              ↗
+                            </a>
+                          </div>
+                        ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
               {/* BitTorrent Performance Stats Grid */}
               <div
@@ -1132,51 +1503,112 @@ export default function DownloadHistory() {
                 }}
               >
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Final Ratio</div>
-                  <div style={{ fontSize: "1.1rem", fontWeight: 700, color: selectedDetailItem.ratio >= 1.0 ? "var(--success, #28a745)" : "inherit" }}>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "var(--text-muted, #888)",
+                    }}
+                  >
+                    Final Ratio
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "1.1rem",
+                      fontWeight: 700,
+                      color:
+                        selectedDetailItem.ratio >= 1.0
+                          ? "var(--success, #28a745)"
+                          : "inherit",
+                    }}
+                  >
                     {formatRatio(selectedDetailItem.ratio)}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Total Uploaded</div>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "var(--text-muted, #888)",
+                    }}
+                  >
+                    Total Uploaded
+                  </div>
                   <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>
                     {formatBytes(selectedDetailItem.uploaded)}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Total Size</div>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "var(--text-muted, #888)",
+                    }}
+                  >
+                    Total Size
+                  </div>
                   <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>
                     {formatBytes(selectedDetailItem.totalSize)}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Seeding Duration</div>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "var(--text-muted, #888)",
+                    }}
+                  >
+                    Seeding Duration
+                  </div>
                   <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>
                     {formatDuration(selectedDetailItem.seedingTime)}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Primary Tracker</div>
                   <div
-                    style={{ fontSize: "0.85rem", wordBreak: "break-all", cursor: selectedDetailItem.primaryTracker ? "pointer" : "default" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "var(--text-muted, #888)",
+                    }}
+                  >
+                    Primary Tracker
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "0.85rem",
+                      wordBreak: "break-all",
+                      cursor: selectedDetailItem.primaryTracker
+                        ? "pointer"
+                        : "default",
+                    }}
                     onClick={() => {
                       if (selectedDetailItem.primaryTracker) {
                         setSearchTerm(selectedDetailItem.primaryTracker);
                         setSelectedDetailItem(null);
                       }
                     }}
-                    title={selectedDetailItem.primaryTracker ? "Click to filter by tracker" : undefined}
+                    title={
+                      selectedDetailItem.primaryTracker
+                        ? "Click to filter by tracker"
+                        : undefined
+                    }
                   >
                     {selectedDetailItem.primaryTracker || "None"}
                   </div>
                 </div>
 
                 <div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Added Date</div>
+                  <div
+                    style={{
+                      fontSize: "0.75rem",
+                      color: "var(--text-muted, #888)",
+                    }}
+                  >
+                    Added Date
+                  </div>
                   <div style={{ fontSize: "0.85rem" }}>
                     {formatDate(selectedDetailItem.dateAdded)}
                   </div>
@@ -1184,7 +1616,15 @@ export default function DownloadHistory() {
               </div>
 
               {/* Modal Actions */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "0.5rem",
+                }}
+              >
                 <button
                   className="btn btn-outline"
                   onClick={() => handleEnrich(selectedDetailItem)}
@@ -1207,8 +1647,16 @@ export default function DownloadHistory() {
                   </button>
                   <button
                     className="btn btn-primary"
-                    onClick={() => handleReAdd(selectedDetailItem.id, selectedDetailItem.title)}
-                    disabled={reAddMutation.isPending || selectedDetailItem.status === "Active"}
+                    onClick={() =>
+                      handleReAdd(
+                        selectedDetailItem.id,
+                        selectedDetailItem.title,
+                      )
+                    }
+                    disabled={
+                      reAddMutation.isPending ||
+                      selectedDetailItem.status === "Active"
+                    }
                   >
                     🔄 Re-add Torrent
                   </button>

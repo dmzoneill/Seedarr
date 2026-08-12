@@ -318,24 +318,47 @@ function TorrentTable({
       case "name": {
         const historyMatch = history?.find(
           (h) =>
-            (t.infoHash && h.infoHash?.toLowerCase() === t.infoHash.toLowerCase()) ||
+            (t.infoHash &&
+              h.infoHash?.toLowerCase() === t.infoHash.toLowerCase()) ||
             h.title?.toLowerCase() === t.name?.toLowerCase(),
         );
         const meta = historyMatch?.metadata;
-        const arrLink = historyMatch ? getMediaDeepLink(historyMatch, arrConnections) : null;
+        const arrLink = historyMatch
+          ? getMediaDeepLink(historyMatch, arrConnections)
+          : null;
 
         const badges = getTorrentBadges(t);
 
         return (
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              minWidth: 0,
+            }}
+          >
             {meta?.posterUrl && (
               <img
                 src={meta.posterUrl}
                 alt=""
-                style={{ width: "20px", height: "28px", objectFit: "cover", borderRadius: "2px", flexShrink: 0 }}
+                style={{
+                  width: "20px",
+                  height: "28px",
+                  objectFit: "cover",
+                  borderRadius: "2px",
+                  flexShrink: 0,
+                }}
               />
             )}
-            <span style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span
+              style={{
+                fontWeight: 500,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
               {meta?.title || t.name} {meta?.year ? `(${meta.year})` : ""}
             </span>
             {badges.map((b, i) => (
@@ -396,7 +419,9 @@ function TorrentTable({
         return formatSpeed(t.downloadSpeed);
       case "ratio":
         return (
-          <span className={`badge ${t.ratio >= 2.0 ? "badge-success" : t.ratio >= 1.0 ? "badge-primary" : "badge-secondary"}`}>
+          <span
+            className={`badge ${t.ratio >= 2.0 ? "badge-success" : t.ratio >= 1.0 ? "badge-primary" : "badge-secondary"}`}
+          >
             {formatRatio(t.ratio)}
           </span>
         );
