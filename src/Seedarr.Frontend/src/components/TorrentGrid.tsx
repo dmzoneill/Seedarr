@@ -102,7 +102,7 @@ function TorrentGrid({
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))",
+        gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
         gap: "1.25rem",
         padding: "1rem",
         overflowY: "auto",

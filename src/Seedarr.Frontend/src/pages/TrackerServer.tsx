@@ -69,7 +69,7 @@ function TrackerServer() {
     <div className="content-area">
       {/* Header Row */}
       <div
-        className="page-heading-row"
+        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -79,16 +79,14 @@ function TrackerServer() {
           gap: "0.75rem",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+        <div className="page-header-group">
           <h1 className="page-heading" style={{ margin: 0 }}>
-            Tracker Server
+            Tracker Server ({statsLoading ? "-" : (stats?.totalTorrents ?? 0)})
           </h1>
-          <span className="badge badge-secondary">
-            {statsLoading ? "-" : `${stats?.totalTorrents ?? 0} tracked`}
-          </span>
         </div>
 
         <div
+          className="page-header-actions"
           style={{
             display: "flex",
             gap: "0.5rem",
@@ -97,18 +95,16 @@ function TrackerServer() {
           }}
         >
           {/* View Mode Toggle */}
-          <div className="tab-nav" style={{ margin: 0 }}>
+          <div className="view-toggle">
             <button
-              className={`tab-btn ${viewMode === "grid" ? "tab-btn-active" : ""}`}
-              style={{ padding: "0.35rem 0.75rem", fontSize: "0.82rem" }}
+              className={`view-toggle-btn ${viewMode === "grid" ? "active" : ""}`}
               onClick={() => setViewMode("grid")}
               title="Poster Card Grid View"
             >
               🎬 Posters
             </button>
             <button
-              className={`tab-btn ${viewMode === "table" ? "tab-btn-active" : ""}`}
-              style={{ padding: "0.35rem 0.75rem", fontSize: "0.82rem" }}
+              className={`view-toggle-btn ${viewMode === "table" ? "active" : ""}`}
               onClick={() => setViewMode("table")}
               title="Detailed Table View"
             >
@@ -379,7 +375,7 @@ function TrackerServer() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
             gap: "1.25rem",
           }}
         >
