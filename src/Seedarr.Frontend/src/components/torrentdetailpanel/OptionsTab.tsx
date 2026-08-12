@@ -31,6 +31,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
+    if (dirty) return;
     setPriority(String(torrent.priority));
     setUploadLimit(torrent.uploadLimit);
     setDownloadLimit(torrent.downloadLimit);
@@ -49,8 +50,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
     setDownloaded(torrent.downloaded);
     setSessionUploaded(torrent.sessionUploaded);
     setSessionDownloaded(torrent.sessionDownloaded);
-    setDirty(false);
-  }, [torrent]);
+  }, [torrent, dirty]);
 
   const handleSave = () => {
     updateTorrent.mutate(

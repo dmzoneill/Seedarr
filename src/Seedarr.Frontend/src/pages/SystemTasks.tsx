@@ -105,7 +105,7 @@ function statusClass(status: string): string {
   switch (status) {
     case 'queued': return 'badge badge-queued';
     case 'started': return 'badge badge-seeding';
-    case 'completed': return 'badge badge-seeding';
+    case 'completed': return 'badge badge-success';
     case 'failed': return 'badge badge-error';
     case 'cancelled': return 'badge badge-stopped';
     default: return 'badge';
