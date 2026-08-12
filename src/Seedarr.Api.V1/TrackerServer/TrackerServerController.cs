@@ -1,8 +1,10 @@
-using global::System;
-using global::System.Collections.Generic;
-using global::System.Linq;
-using global::System.Threading;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using System.Threading;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerServer;
@@ -16,15 +18,21 @@ public class TrackerServerController : Controller
     private readonly IPeerDatabase _peerDatabase;
     private readonly ITorrentService _torrentService;
     private readonly IConfigService _configService;
+    private readonly IDownloadHistoryRepository _downloadHistoryRepository;
     private static readonly DateTime StartTime = DateTime.UtcNow;
     private static long _totalAnnounces;
     private static long _totalScrapes;
 
-    public TrackerServerController(IPeerDatabase peerDatabase, ITorrentService torrentService, IConfigService configService)
+    public TrackerServerController(
+        IPeerDatabase peerDatabase,
+        ITorrentService torrentService,
+        IConfigService configService,
+        IDownloadHistoryRepository downloadHistoryRepository = null)
     {
         _peerDatabase = peerDatabase;
         _torrentService = torrentService;
         _configService = configService;
+        _downloadHistoryRepository = downloadHistoryRepository;
     }
 
     [HttpGet("stats")]
@@ -78,18 +86,67 @@ public class TrackerServerController : Controller
 
             torrentsByHash.TryGetValue(hash, out var torrent);
 
+            string posterUrl = null;
+            string fanartUrl = null;
+            string mediaTitle = null;
+            int? year = null;
+            double? rating = null;
+            var genres = new List<string>();
+            var source = torrent != null ? (torrent.IsPrivate ? "Private Tracker" : "Public Tracker") : "External";
+
+            if (_downloadHistoryRepository != null)
+            {
+                try
+                {
+                    var hist = _downloadHistoryRepository.FindByInfoHash(hash);
+                    if (hist != null)
+                    {
+                        source = hist.Source ?? source;
+                        if (!string.IsNullOrEmpty(hist.DataJson))
+                        {
+                            var meta = JsonSerializer.Deserialize<MediaMetadata>(
+                                hist.DataJson,
+                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                            if (meta != null)
+                            {
+                                posterUrl = meta.PosterUrl;
+                                fanartUrl = meta.FanartUrl;
+                                mediaTitle = meta.Title;
+                                year = meta.Year;
+                                rating = meta.Rating;
+                                genres = meta.Genres ?? new();
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // Graceful fallback
+                }
+            }
+
             return new
             {
                 infoHash = hash,
-                name = torrent?.Name ?? hash,
+                name = torrent?.Name ?? mediaTitle ?? hash,
                 peerCount = peers.Count,
                 seeders = stats.Complete,
                 leechers = stats.Incomplete,
                 completed = stats.Downloaded,
                 uploaded = torrent?.Uploaded ?? 0L,
                 downloaded = torrent?.Downloaded ?? 0L,
+                totalSize = torrent?.TotalSize ?? 0L,
+                ratio = torrent?.Ratio ?? 0.0,
                 isInternal = torrent != null,
-                lastActivity = lastAnnounce
+                lastActivity = lastAnnounce,
+                posterUrl,
+                fanartUrl,
+                mediaTitle,
+                year,
+                rating,
+                genres,
+                source
             };
         }).ToList();
 

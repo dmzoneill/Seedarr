@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Seedarr.Http.REST;
 
 namespace Seedarr.Api.V1.Torrents;
@@ -46,4 +47,13 @@ public class TorrentResource : RestResource
     public bool ForceCompleted { get; set; }
     public long SeedingTime { get; set; }
     public string MagnetLink { get; set; }
+    public string PosterUrl { get; set; }
+    public string FanartUrl { get; set; }
+    public string BannerUrl { get; set; }
+    public string MediaTitle { get; set; }
+    public int? Year { get; set; }
+    public string Overview { get; set; }
+    public double? Rating { get; set; }
+    public List<string> Genres { get; set; } = new();
+    public string Source { get; set; }
 }
