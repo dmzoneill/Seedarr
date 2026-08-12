@@ -8,12 +8,16 @@ interface PeerListProps {
 
 function getClientBadge(client: string): { label: string; color: string } {
   const c = (client || "").toLowerCase();
-  if (c.includes("qbittorrent") || c.includes("qbit")) return { label: "qBittorrent", color: "#3498db" };
-  if (c.includes("transmission")) return { label: "Transmission", color: "#e74c3c" };
+  if (c.includes("qbittorrent") || c.includes("qbit"))
+    return { label: "qBittorrent", color: "#3498db" };
+  if (c.includes("transmission"))
+    return { label: "Transmission", color: "#e74c3c" };
   if (c.includes("deluge")) return { label: "Deluge", color: "#34495e" };
-  if (c.includes("rtorrent") || c.includes("libtorrent")) return { label: "rTorrent / libtorrent", color: "#27ae60" };
+  if (c.includes("rtorrent") || c.includes("libtorrent"))
+    return { label: "rTorrent / libtorrent", color: "#27ae60" };
   if (c.includes("utorrent")) return { label: "uTorrent", color: "#2ecc71" };
-  if (c.includes("seedarr")) return { label: "Seedarr", color: "var(--accent)" };
+  if (c.includes("seedarr"))
+    return { label: "Seedarr", color: "var(--accent)" };
   return { label: client || "Unknown", color: "#666" };
 }
 
@@ -31,9 +35,18 @@ function PeerList({ torrentId }: PeerListProps) {
 
   return (
     <div className="card">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "0.5rem",
+        }}
+      >
         <h3 style={{ margin: 0 }}>Connected Swarm Peers</h3>
-        <span className="badge badge-secondary">{peers?.length || 0} Peers</span>
+        <span className="badge badge-secondary">
+          {peers?.length || 0} Peers
+        </span>
       </div>
 
       {!peers || peers.length === 0 ? (
@@ -61,7 +74,13 @@ function PeerList({ torrentId }: PeerListProps) {
                 return (
                   <tr key={peer.id} className="peer-table-row">
                     <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                        }}
+                      >
                         <code className="mono" style={{ fontSize: "0.8rem" }}>
                           {ipPort}
                         </code>
@@ -108,12 +127,26 @@ function PeerList({ torrentId }: PeerListProps) {
                       </div>
                     </td>
                     <td>
-                      <span style={{ fontWeight: peer.uploadSpeed > 0 ? 600 : "inherit", color: peer.uploadSpeed > 0 ? "var(--success)" : "inherit" }}>
+                      <span
+                        style={{
+                          fontWeight: peer.uploadSpeed > 0 ? 600 : "inherit",
+                          color:
+                            peer.uploadSpeed > 0 ? "var(--success)" : "inherit",
+                        }}
+                      >
                         {formatSpeed(peer.uploadSpeed)}
                       </span>
                     </td>
                     <td>
-                      <span style={{ fontWeight: peer.downloadSpeed > 0 ? 600 : "inherit", color: peer.downloadSpeed > 0 ? "var(--accent)" : "inherit" }}>
+                      <span
+                        style={{
+                          fontWeight: peer.downloadSpeed > 0 ? 600 : "inherit",
+                          color:
+                            peer.downloadSpeed > 0
+                              ? "var(--accent)"
+                              : "inherit",
+                        }}
+                      >
                         {formatSpeed(peer.downloadSpeed)}
                       </span>
                     </td>

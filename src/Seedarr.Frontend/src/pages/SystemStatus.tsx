@@ -42,14 +42,27 @@ function SystemStatus() {
               if (check.type === "Error")
                 alertClass = "health-alert health-alert-error";
               return (
-                <div key={i} className={alertClass} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div
+                  key={i}
+                  className={alertClass}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
                   <span>
-                    <strong>{check.source}</strong>: {check.message || check.type}
+                    <strong>{check.source}</strong>:{" "}
+                    {check.message || check.type}
                   </span>
                   <Link
                     to="/settings/general"
                     className="btn btn-small btn-outline"
-                    style={{ fontSize: "0.75rem", textDecoration: "none", marginLeft: "1rem" }}
+                    style={{
+                      fontSize: "0.75rem",
+                      textDecoration: "none",
+                      marginLeft: "1rem",
+                    }}
                   >
                     Fix in Settings ⚙️
                   </Link>
@@ -65,9 +78,18 @@ function SystemStatus() {
         (downloadClients && downloadClients.length > 0) ||
         (indexers && indexers.length > 0)) && (
         <div className="system-status-section">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
             <h2>Ecosystem & Integration Endpoints</h2>
-            <Link to="/settings/connections" style={{ fontSize: "0.85rem", color: "var(--accent)" }}>
+            <Link
+              to="/settings/connections"
+              style={{ fontSize: "0.85rem", color: "var(--accent)" }}
+            >
               Manage in Settings →
             </Link>
           </div>
@@ -95,12 +117,16 @@ function SystemStatus() {
                     <code>{conn.url}</code>
                   </td>
                   <td>
-                    <span className={`badge ${conn.enable ? "badge-seeding" : "badge-stopped"}`}>
+                    <span
+                      className={`badge ${conn.enable ? "badge-seeding" : "badge-stopped"}`}
+                    >
                       {conn.enable ? "Enabled" : "Disabled"}
                     </span>
                   </td>
                   <td>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    <span
+                      style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}
+                    >
                       {[
                         conn.syncEnabled && "Sync",
                         conn.enableAutomaticAdd && "Auto-Add",
@@ -133,18 +159,26 @@ function SystemStatus() {
                     <strong>{client.name}</strong>
                   </td>
                   <td>
-                    <span className="badge badge-secondary">{client.clientType}</span>
+                    <span className="badge badge-secondary">
+                      {client.clientType}
+                    </span>
                   </td>
                   <td>
-                    <code>{client.host}:{client.port}</code>
+                    <code>
+                      {client.host}:{client.port}
+                    </code>
                   </td>
                   <td>
-                    <span className={`badge ${client.enable ? "badge-seeding" : "badge-stopped"}`}>
+                    <span
+                      className={`badge ${client.enable ? "badge-seeding" : "badge-stopped"}`}
+                    >
                       {client.enable ? "Enabled" : "Disabled"}
                     </span>
                   </td>
                   <td>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    <span
+                      style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}
+                    >
                       Download Agent Client
                     </span>
                   </td>
@@ -171,18 +205,24 @@ function SystemStatus() {
                     <strong>{idx.name}</strong>
                   </td>
                   <td>
-                    <span className="badge badge-secondary">{idx.indexerType}</span>
+                    <span className="badge badge-secondary">
+                      {idx.indexerType}
+                    </span>
                   </td>
                   <td>
                     <code>{idx.url || "-"}</code>
                   </td>
                   <td>
-                    <span className={`badge ${idx.enable ? "badge-seeding" : "badge-stopped"}`}>
+                    <span
+                      className={`badge ${idx.enable ? "badge-seeding" : "badge-stopped"}`}
+                    >
                       {idx.enable ? "Enabled" : "Disabled"}
                     </span>
                   </td>
                   <td>
-                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+                    <span
+                      style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}
+                    >
                       {[idx.enableRss && "RSS", idx.enableSearch && "Search"]
                         .filter(Boolean)
                         .join(" • ") || "Indexer"}

@@ -1,4 +1,8 @@
-import { useDownloadHistory, useArrConnections, useIndexers } from "../../api/hooks";
+import {
+  useDownloadHistory,
+  useArrConnections,
+  useIndexers,
+} from "../../api/hooks";
 import { Torrent } from "../../api/types";
 import {
   formatBytes,
@@ -12,10 +16,7 @@ import {
   getTmdbUrl,
   getProwlarrUrl,
 } from "../../utils/arrLinks";
-import {
-  getTorrentBadges,
-  calculateHnrStatus,
-} from "../../utils/milestones";
+import { getTorrentBadges, calculateHnrStatus } from "../../utils/milestones";
 import { StatusRow } from "./shared";
 
 export function GeneralTab({ torrent }: { torrent: Torrent }) {
@@ -25,12 +26,15 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
 
   const historyMatch = history?.find(
     (h) =>
-      (torrent.infoHash && h.infoHash?.toLowerCase() === torrent.infoHash.toLowerCase()) ||
+      (torrent.infoHash &&
+        h.infoHash?.toLowerCase() === torrent.infoHash.toLowerCase()) ||
       h.title?.toLowerCase() === torrent.name?.toLowerCase(),
   );
 
   const meta = historyMatch?.metadata;
-  const arrLink = historyMatch ? getMediaDeepLink(historyMatch, arrConnections) : null;
+  const arrLink = historyMatch
+    ? getMediaDeepLink(historyMatch, arrConnections)
+    : null;
   const imdbUrl = getImdbUrl(meta?.imdbId, meta?.title || torrent.name);
   const tmdbUrl = getTmdbUrl(meta?.tmdbId, meta?.mediaType);
   const prowlarrUrl = getProwlarrUrl(indexers, meta?.title || torrent.name);
@@ -58,22 +62,41 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
               <img
                 src={meta.posterUrl}
                 alt=""
-                style={{ width: "42px", height: "60px", objectFit: "cover", borderRadius: "4px" }}
+                style={{
+                  width: "42px",
+                  height: "60px",
+                  objectFit: "cover",
+                  borderRadius: "4px",
+                }}
               />
             )}
             <div>
               <div style={{ fontWeight: 600, fontSize: "1rem" }}>
-                {meta?.title || torrent.name} {meta?.year ? `(${meta.year})` : ""}
+                {meta?.title || torrent.name}{" "}
+                {meta?.year ? `(${meta.year})` : ""}
               </div>
               {meta?.genres && (
-                <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)", marginTop: "0.2rem" }}>
+                <div
+                  style={{
+                    fontSize: "0.75rem",
+                    color: "var(--text-muted, #888)",
+                    marginTop: "0.2rem",
+                  }}
+                >
                   {meta.genres.join(", ")}
                 </div>
               )}
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
             {arrLink && (
               <a
                 href={arrLink.url}
@@ -128,7 +151,11 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="badge badge-secondary"
-                style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem", textDecoration: "none" }}
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "0.25rem 0.5rem",
+                  textDecoration: "none",
+                }}
                 title="Search on Prowlarr"
               >
                 Prowlarr ↗
@@ -152,8 +179,21 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
           border: "1px solid var(--border-light)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-          <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.75rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <span
+            style={{
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              color: "var(--text-secondary)",
+            }}
+          >
             Milestones Earned:
           </span>
           {badges.length === 0 ? (
@@ -238,12 +278,16 @@ export function GeneralTab({ torrent }: { torrent: Torrent }) {
               {torrent.status}
             </span>
           </StatusRow>
-          <StatusRow label="Uploaded">{formatBytes(torrent.uploaded)}</StatusRow>
+          <StatusRow label="Uploaded">
+            {formatBytes(torrent.uploaded)}
+          </StatusRow>
           <StatusRow label="Downloaded">
             {formatBytes(torrent.downloaded)}
           </StatusRow>
           <StatusRow label="Ratio">
-            <span className={`badge ${torrent.ratio >= 2.0 ? "badge-success" : torrent.ratio >= 1.0 ? "badge-primary" : "badge-secondary"}`}>
+            <span
+              className={`badge ${torrent.ratio >= 2.0 ? "badge-success" : torrent.ratio >= 1.0 ? "badge-primary" : "badge-secondary"}`}
+            >
               {formatRatio(torrent.ratio)}
             </span>
           </StatusRow>

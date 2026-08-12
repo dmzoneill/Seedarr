@@ -819,7 +819,8 @@ export function useDownloadHistory(params?: {
 
   return useQuery<DownloadHistoryEntry[]>({
     queryKey: ["downloadhistory", params?.query, params?.status, params?.limit],
-    queryFn: () => apiClient.get(`/downloadhistory${queryString ? `?${queryString}` : ""}`),
+    queryFn: () =>
+      apiClient.get(`/downloadhistory${queryString ? `?${queryString}` : ""}`),
     refetchInterval: interval,
   });
 }
@@ -877,13 +878,15 @@ export function useEnrichAllHistory() {
 
 export function useReconcileDownloadHistory() {
   const queryClient = useQueryClient();
-  return useMutation<{ success: boolean; processedCount: number }, Error, void>({
-    mutationFn: () => apiClient.post("/downloadhistory/reconcile"),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["downloadhistory"] });
-      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+  return useMutation<{ success: boolean; processedCount: number }, Error, void>(
+    {
+      mutationFn: () => apiClient.post("/downloadhistory/reconcile"),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["downloadhistory"] });
+        queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      },
     },
-  });
+  );
 }
 
 export function useIndexerSearch(
@@ -897,7 +900,13 @@ export function useIndexerSearch(
   const queryString = searchParams.toString();
 
   return useQuery<ReleaseInfo[]>({
-    queryKey: ["indexers", "search", params.query, params.category, params.indexerId],
+    queryKey: [
+      "indexers",
+      "search",
+      params.query,
+      params.category,
+      params.indexerId,
+    ],
     queryFn: () => apiClient.get(`/indexers/search?${queryString}`),
     enabled: enabled && Boolean(params.query?.trim()),
     staleTime: 30_000,
@@ -940,7 +949,11 @@ export function useInspectTorrentTrackers(torrentId: number, enabled = true) {
   });
 }
 
-export function useInspectHashTrackers(infoHash: string, name = "", enabled = true) {
+export function useInspectHashTrackers(
+  infoHash: string,
+  name = "",
+  enabled = true,
+) {
   return useQuery<TorrentTrackerInspectionResult>({
     queryKey: ["downloadplusplus", "check-hash", infoHash],
     queryFn: () => {
@@ -963,31 +976,38 @@ export function useScanDownloadPlusPlusTrackers() {
 
 export function useHarvestProwlarrTrackers() {
   const queryClient = useQueryClient();
-  return useMutation<{ success: boolean; harvestedCount: number }, Error, void>({
-    mutationFn: () => apiClient.post("/downloadplusplus/harvest/prowlarr"),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+  return useMutation<{ success: boolean; harvestedCount: number }, Error, void>(
+    {
+      mutationFn: () => apiClient.post("/downloadplusplus/harvest/prowlarr"),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+      },
     },
-  });
+  );
 }
 
 export function useHarvestFeedTrackers() {
   const queryClient = useQueryClient();
-  return useMutation<{ success: boolean; harvestedCount: number }, Error, void>({
-    mutationFn: () => apiClient.post("/downloadplusplus/harvest/feeds"),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+  return useMutation<{ success: boolean; harvestedCount: number }, Error, void>(
+    {
+      mutationFn: () => apiClient.post("/downloadplusplus/harvest/feeds"),
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
+      },
     },
-  });
+  );
 }
 
 export function useBoostTorrent() {
   const queryClient = useQueryClient();
   return useMutation<SwarmBoostResult, Error, number>({
-    mutationFn: (torrentId) => apiClient.post(`/downloadplusplus/boost/${torrentId}`),
+    mutationFn: (torrentId) =>
+      apiClient.post(`/downloadplusplus/boost/${torrentId}`),
     onSuccess: (_, torrentId) => {
       queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
-      queryClient.invalidateQueries({ queryKey: ["downloadplusplus", "check", torrentId] });
+      queryClient.invalidateQueries({
+        queryKey: ["downloadplusplus", "check", torrentId],
+      });
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
       queryClient.invalidateQueries({ queryKey: ["trackers", torrentId] });
     },
@@ -996,14 +1016,22 @@ export function useBoostTorrent() {
 
 export function useBoostHash() {
   const queryClient = useQueryClient();
-  return useMutation<SwarmBoostResult, Error, { infoHash: string; name?: string }>({
+  return useMutation<
+    SwarmBoostResult,
+    Error,
+    { infoHash: string; name?: string }
+  >({
     mutationFn: (vars) => {
       const search = vars.name ? `?name=${encodeURIComponent(vars.name)}` : "";
-      return apiClient.post(`/downloadplusplus/boost-hash/${vars.infoHash}${search}`);
+      return apiClient.post(
+        `/downloadplusplus/boost-hash/${vars.infoHash}${search}`,
+      );
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
-      queryClient.invalidateQueries({ queryKey: ["downloadplusplus", "check-hash", vars.infoHash] });
+      queryClient.invalidateQueries({
+        queryKey: ["downloadplusplus", "check-hash", vars.infoHash],
+      });
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
     },
   });
@@ -1011,15 +1039,24 @@ export function useBoostHash() {
 
 export function useInjectTrackerToTorrent() {
   const queryClient = useQueryClient();
-  return useMutation<SwarmBoostResult, Error, { torrentId?: number; infoHash?: string; trackerUrl: string }>({
-    mutationFn: (payload) => apiClient.post("/downloadplusplus/inject", payload),
+  return useMutation<
+    SwarmBoostResult,
+    Error,
+    { torrentId?: number; infoHash?: string; trackerUrl: string }
+  >({
+    mutationFn: (payload) =>
+      apiClient.post("/downloadplusplus/inject", payload),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
       if (vars.torrentId) {
-        queryClient.invalidateQueries({ queryKey: ["downloadplusplus", "check", vars.torrentId] });
+        queryClient.invalidateQueries({
+          queryKey: ["downloadplusplus", "check", vars.torrentId],
+        });
       }
       if (vars.infoHash) {
-        queryClient.invalidateQueries({ queryKey: ["downloadplusplus", "check-hash", vars.infoHash] });
+        queryClient.invalidateQueries({
+          queryKey: ["downloadplusplus", "check-hash", vars.infoHash],
+        });
       }
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
     },
@@ -1040,7 +1077,8 @@ export function useBoostAllTorrents() {
 export function useAddDownloadPlusPlusTracker() {
   const queryClient = useQueryClient();
   return useMutation<DownloadPlusPlusTracker, Error, { url: string }>({
-    mutationFn: (payload) => apiClient.post("/downloadplusplus/trackers", payload),
+    mutationFn: (payload) =>
+      apiClient.post("/downloadplusplus/trackers", payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["downloadplusplus"] });
     },
@@ -1056,5 +1094,3 @@ export function useDeleteDownloadPlusPlusTracker() {
     },
   });
 }
-
-
