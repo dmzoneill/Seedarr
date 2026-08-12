@@ -22,9 +22,10 @@ public class NewznabIndexer : IIndexer
         try
         {
             var apiPath = string.IsNullOrEmpty(definition.ApiPath) ? "/api" : definition.ApiPath;
-            var url = $"{definition.Url.TrimEnd('/')}{apiPath}?t=caps&apikey={definition.ApiKey}";
+            var url = $"{definition.Url.TrimEnd('/')}{apiPath}?t=caps";
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("X-Api-Key", definition.ApiKey);
             using var response = Client.Send(request);
             return response.IsSuccessStatusCode;
         }

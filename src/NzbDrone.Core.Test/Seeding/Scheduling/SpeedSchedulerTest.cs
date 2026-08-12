@@ -278,8 +278,8 @@ public class SpeedSchedulerTest
         var limits = _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
 
         Assert.That(limits.IsScheduleActive, Is.True);
-        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(0));
-        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(0));
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
     }
 
     [Test]

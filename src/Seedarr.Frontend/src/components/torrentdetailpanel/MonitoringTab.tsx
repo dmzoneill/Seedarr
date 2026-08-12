@@ -40,6 +40,7 @@ export function MonitoringTab({ torrent }: { torrent: Torrent }) {
   const histRef = useRef<{ up: number[]; down: number[] }>({ up: [], down: [] });
   const seededRef = useRef(false);
   const prevRef = useRef<{ uploaded: number; downloaded: number; ts: number } | null>(null);
+  const prevIdRef = useRef<number | null>(null);
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -53,7 +54,9 @@ export function MonitoringTab({ torrent }: { torrent: Torrent }) {
   useEffect(() => {
     const now = Date.now();
     const prev = prevRef.current;
-    if (prev) {
+    const idChanged = prevIdRef.current !== torrent.id;
+    prevIdRef.current = torrent.id;
+    if (prev && !idChanged) {
       const dt = (now - prev.ts) / 1000;
       if (dt >= 1) {
         const push = (arr: number[], val: number) => {
@@ -66,7 +69,7 @@ export function MonitoringTab({ torrent }: { torrent: Torrent }) {
       }
     }
     prevRef.current = { uploaded: torrent.uploaded, downloaded: torrent.downloaded, ts: now };
-  }, [torrent.uploaded, torrent.downloaded]);
+  }, [torrent.id, torrent.uploaded, torrent.downloaded]);
 
   const h = histRef.current;
   const curUp = h.up.length > 0 ? h.up[h.up.length - 1] : 0;
