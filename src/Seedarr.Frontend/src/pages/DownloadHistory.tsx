@@ -157,7 +157,7 @@ export default function DownloadHistory() {
   return (
     <div className="content-area">
       <div
-        className="page-heading-row"
+        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -167,14 +167,14 @@ export default function DownloadHistory() {
           gap: "0.75rem",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+        <div className="page-header-group">
           <h1 className="page-heading" style={{ margin: 0 }}>
-            Historical Downloads
+            Historical Downloads ({totalCount})
           </h1>
-          <span className="badge badge-secondary">{totalCount} items</span>
         </div>
 
         <div
+          className="page-header-actions"
           style={{
             display: "flex",
             gap: "0.5rem",
@@ -183,18 +183,16 @@ export default function DownloadHistory() {
           }}
         >
           {/* View mode toggle */}
-          <div className="tab-nav" style={{ margin: 0 }}>
+          <div className="view-toggle">
             <button
-              className={`tab-btn ${viewMode === "grid" ? "tab-btn-active" : ""}`}
-              style={{ padding: "0.35rem 0.75rem", fontSize: "0.85rem" }}
+              className={`view-toggle-btn ${viewMode === "grid" ? "active" : ""}`}
               onClick={() => setViewMode("grid")}
-              title="Poster Card Grid View (Sonarr / Radarr style)"
+              title="Poster Card Grid View"
             >
               🎬 Posters
             </button>
             <button
-              className={`tab-btn ${viewMode === "table" ? "tab-btn-active" : ""}`}
-              style={{ padding: "0.35rem 0.75rem", fontSize: "0.85rem" }}
+              className={`view-toggle-btn ${viewMode === "table" ? "active" : ""}`}
               onClick={() => setViewMode("table")}
               title="Detailed Table View"
             >
@@ -203,11 +201,10 @@ export default function DownloadHistory() {
           </div>
 
           <button
-            className="btn btn-primary"
+            className="btn btn-success"
             onClick={handleReconcile}
             disabled={reconcileMutation.isPending}
             title="Scan all active downloads, ensure all torrents are accounted for in history, and fetch metadata from Sonarr/Radarr/Lidarr"
-            style={{ fontSize: "0.85rem" }}
           >
             {reconcileMutation.isPending
               ? "Reconciling..."
@@ -219,7 +216,6 @@ export default function DownloadHistory() {
             onClick={handleEnrichAll}
             disabled={enrichAllMutation.isPending || totalCount === 0}
             title="Fetch and update rich media metadata and posters from connected Sonarr/Radarr/Lidarr instances"
-            style={{ fontSize: "0.85rem" }}
           >
             ⚡ Sync Arr Metadata
           </button>
@@ -229,7 +225,6 @@ export default function DownloadHistory() {
             onClick={handleClearAll}
             disabled={clearMutation.isPending || totalCount === 0}
             title="Clear all history entries"
-            style={{ fontSize: "0.85rem" }}
           >
             Clear History
           </button>
@@ -290,7 +285,7 @@ export default function DownloadHistory() {
           <input
             type="text"
             className="form-control"
-            placeholder="Search title, actor, genre, hash, tracker..."
+            placeholder="Filter history by title, actor, genre, hash..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -385,7 +380,7 @@ export default function DownloadHistory() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
             gap: "1.25rem",
           }}
         >
