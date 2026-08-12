@@ -203,17 +203,14 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             }
             else if (path.StartsWith("/scrape"))
             {
-                string responseBody;
                 if (!_configService.TrackerEnableScrape)
                 {
-                    responseBody = "d14:failure reason15:Scrape disablede";
+                    bodyBytes = Encoding.ASCII.GetBytes("d14:failure reason15:Scrape disablede");
                 }
                 else
                 {
-                    responseBody = HandleScrape(path);
+                    bodyBytes = HandleScrape(path);
                 }
-
-                bodyBytes = Encoding.ASCII.GetBytes(responseBody);
             }
             else
             {
@@ -337,22 +334,53 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         return dict.EncodeAsBytes();
     }
 
-    private string HandleScrape(string path)
+    private byte[] HandleScrape(string path)
     {
         var (parameters, error) = ParseRequest(path);
         if (error != null)
         {
-            return error;
+            return Encoding.ASCII.GetBytes(error);
         }
 
         if (!parameters.TryGetValue("info_hash", out var infoHash))
         {
-            return "d14:failure reason18:Missing info_hashe";
+            return Encoding.ASCII.GetBytes("d14:failure reason18:Missing info_hashe");
+        }
+
+        if (infoHash.Length != 20)
+        {
+            return Encoding.ASCII.GetBytes("d14:failure reason15:Invalid info_hashe");
+        }
+
+        // Uri.UnescapeDataString maps each %XX to the Unicode code point equal to
+        // the byte value, so casting char → byte recovers the original raw bytes
+        // without the ASCII-encoding truncation that corrupts values > 0x7F.
+        var infoHashBytes = new byte[20];
+        for (var i = 0; i < 20; i++)
+        {
+            infoHashBytes[i] = (byte)infoHash[i];
         }
 
         var stats = _peerDatabase.GetStats(infoHash);
         var scrapeInterval = _configService.ScrapeIntervalSeconds;
-        return $"d5:filesd{infoHash.Length}:{infoHash}d8:completei{stats.Complete}e10:downloadedi{stats.Downloaded}e10:incompletei{stats.Incomplete}eee20:min_request_intervali{scrapeInterval}ee";
+
+        var fileDict = new BDictionary
+        {
+            ["complete"] = new BNumber(stats.Complete),
+            ["downloaded"] = new BNumber(stats.Downloaded),
+            ["incomplete"] = new BNumber(stats.Incomplete),
+        };
+
+        var files = new BDictionary();
+        files.Add(new BString(infoHashBytes), fileDict);
+
+        var response = new BDictionary
+        {
+            ["files"] = files,
+            ["min_request_interval"] = new BNumber(scrapeInterval),
+        };
+
+        return response.EncodeAsBytes();
     }
 
     private static byte[] BuildCompactPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
