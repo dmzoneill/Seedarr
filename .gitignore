@@ -1,0 +1,36 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.sln.docstates
+*.userprefs
+.vs/
+TestResults/
+
+# Frontend
+node_modules/
+dist/
+.cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Seedarr data
+*.db
+*.db-shm
+*.db-wal
+config.xml
+logs/
+MediaCover/
+Backups/
+
+# Secrets
+*.env
