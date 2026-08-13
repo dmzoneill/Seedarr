@@ -2508,31 +2508,45 @@ body {
 
 .monitoring-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 0;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 1.25rem;
   padding: 0;
+  margin-bottom: 1.5rem;
 }
 
 .monitoring-tile {
   background-color: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-light);
-  border-right: 1px solid var(--border-light);
-  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 1.25rem 1.25rem 1rem;
+  box-shadow:
+    0 4px 14px rgba(0, 0, 0, 0.32),
+    0 1px 3px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.monitoring-tile:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transform: translateY(-2px);
 }
 
 .monitoring-tile-title {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.2rem;
 }
 
 .monitoring-tile-value {
-  font-size: 1.4rem;
-  font-weight: 600;
-  margin-bottom: 0.4rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
 }
 
 /* Tracker Server Page */

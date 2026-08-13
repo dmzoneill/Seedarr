@@ -124,8 +124,33 @@ function Activity() {
   const currentNetwork = currentUpload + currentDownload;
 
   return (
-    <div>
-      <h1 className="page-heading">Activity</h1>
+    <div className="content-area">
+      <div
+        className="page-header"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1rem",
+        }}
+      >
+        <div className="page-header-group">
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
+            <h1 className="page-heading" style={{ margin: 0 }}>
+              Activity Metrics
+            </h1>
+            <span
+              className="badge badge-success"
+              style={{ fontSize: "0.75rem", borderRadius: "4px" }}
+            >
+              ● Live (1s)
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="monitoring-grid">
         <LineChart
           title="Upload Speed"
@@ -145,7 +170,7 @@ function Activity() {
           title="Active Torrents"
           value={String(currentActive)}
           data={h.activeTorrents}
-          color="#8a9a3a"
+          color="#27ae60"
           maxPoints={MAX_POINTS}
         />
         <LineChart
@@ -159,14 +184,14 @@ function Activity() {
           title="Upload/Download Ratio"
           value={formatRatio(currentRatio)}
           data={h.ratio}
-          color="#9a8a5a"
+          color="#3498db"
           maxPoints={MAX_POINTS}
         />
         <LineChart
           title="Network Activity"
           value={formatSpeed(currentNetwork)}
           data={h.networkActivity}
-          color="#7a9a6a"
+          color="#9b59b6"
           maxPoints={MAX_POINTS}
         />
       </div>
