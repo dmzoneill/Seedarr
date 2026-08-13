@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
 using Dapper;
@@ -52,6 +53,7 @@ public class DbFactory : IDbFactory
         {
             SqlMapper.AddTypeHandler(new SqliteDoubleTypeHandler());
             SqlMapper.AddTypeHandler(new TimeOnlyTypeHandler());
+            SqlMapper.AddTypeHandler(new EmbeddedDocumentConverter<List<int>>());
             _typeHandlersRegistered = true;
         }
 

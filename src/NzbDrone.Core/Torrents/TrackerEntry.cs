@@ -12,7 +12,7 @@ public class TrackerEntry : ModelBase
     public bool Enabled { get; set; }
     public int Seeders { get; set; }
     public int Leechers { get; set; }
-    public int Downloaded { get; set; }
+    public long Downloaded { get; set; }
     public int TotalAnnounces { get; set; }
     public int SuccessfulAnnounces { get; set; }
     public int ConsecutiveFailures { get; set; }
