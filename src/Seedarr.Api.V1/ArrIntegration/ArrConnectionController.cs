@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
@@ -50,11 +49,6 @@ public class ArrConnectionController : Controller
     [HttpPost]
     public ActionResult<ArrConnectionDefinition> Create([FromBody] ArrConnectionDefinition definition)
     {
-        if (string.IsNullOrEmpty(definition.WebhookSecret))
-        {
-            definition.WebhookSecret = Guid.NewGuid().ToString("N");
-        }
-
         var created = _connectionFactory.Create(definition);
 
         if (!_webhookRegistration.RegisterWebhook(created))
