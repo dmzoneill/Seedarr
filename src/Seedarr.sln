@@ -1,0 +1,55 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seedarr.Common", "NzbDrone.Common\Seedarr.Common.csproj", "{F2BE0FDF-6E47-4827-A420-DD4EF82407F8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seedarr.Core", "NzbDrone.Core\Seedarr.Core.csproj", "{FF5EE3B6-913B-47CE-9CEB-11C51B4E1205}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seedarr.SignalR", "NzbDrone.SignalR\Seedarr.SignalR.csproj", "{7C2CC69F-5CA0-4E5C-85CB-983F9F6C3B36}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seedarr.Http", "Seedarr.Http\Seedarr.Http.csproj", "{5370BFF7-1BD7-46BC-AF06-7D9EA5CDA1D6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seedarr.Api.V1", "Seedarr.Api.V1\Seedarr.Api.V1.csproj", "{7140FF1F-79BE-492F-9188-B21A050BF708}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seedarr.Host", "NzbDrone.Host\Seedarr.Host.csproj", "{95C11A9E-56ED-456A-8447-2C89C1139266}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seedarr.Console", "NzbDrone.Console\Seedarr.Console.csproj", "{3DCA7B58-B8B3-49AC-9D9E-56F4A0460976}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F2BE0FDF-6E47-4827-A420-DD4EF82407F8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2BE0FDF-6E47-4827-A420-DD4EF82407F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2BE0FDF-6E47-4827-A420-DD4EF82407F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2BE0FDF-6E47-4827-A420-DD4EF82407F8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FF5EE3B6-913B-47CE-9CEB-11C51B4E1205}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FF5EE3B6-913B-47CE-9CEB-11C51B4E1205}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FF5EE3B6-913B-47CE-9CEB-11C51B4E1205}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FF5EE3B6-913B-47CE-9CEB-11C51B4E1205}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7C2CC69F-5CA0-4E5C-85CB-983F9F6C3B36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7C2CC69F-5CA0-4E5C-85CB-983F9F6C3B36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7C2CC69F-5CA0-4E5C-85CB-983F9F6C3B36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7C2CC69F-5CA0-4E5C-85CB-983F9F6C3B36}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5370BFF7-1BD7-46BC-AF06-7D9EA5CDA1D6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5370BFF7-1BD7-46BC-AF06-7D9EA5CDA1D6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5370BFF7-1BD7-46BC-AF06-7D9EA5CDA1D6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5370BFF7-1BD7-46BC-AF06-7D9EA5CDA1D6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7140FF1F-79BE-492F-9188-B21A050BF708}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7140FF1F-79BE-492F-9188-B21A050BF708}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7140FF1F-79BE-492F-9188-B21A050BF708}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7140FF1F-79BE-492F-9188-B21A050BF708}.Release|Any CPU.Build.0 = Release|Any CPU
+		{95C11A9E-56ED-456A-8447-2C89C1139266}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{95C11A9E-56ED-456A-8447-2C89C1139266}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{95C11A9E-56ED-456A-8447-2C89C1139266}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{95C11A9E-56ED-456A-8447-2C89C1139266}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3DCA7B58-B8B3-49AC-9D9E-56F4A0460976}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3DCA7B58-B8B3-49AC-9D9E-56F4A0460976}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3DCA7B58-B8B3-49AC-9D9E-56F4A0460976}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3DCA7B58-B8B3-49AC-9D9E-56F4A0460976}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
