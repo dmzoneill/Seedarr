@@ -26,6 +26,7 @@ import ToastContainer from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SignalRProvider from "./components/SignalRProvider";
 import AddTorrentModal from "./components/AddTorrentModal";
+import AddTorrentPage from "./pages/AddTorrentPage";
 import SeedarrLogo from "./components/icons/SeedarrLogo";
 import SeedarrText from "./components/icons/SeedarrText";
 import {
@@ -131,26 +132,13 @@ function App() {
               >
                 <HistoryIcon /> <span>History</span>
               </NavLink>
-              <button
-                type="button"
+              <NavLink
+                to="/torrents/add"
                 className="sidebar-nav-item sidebar-nav-sub"
-                onClick={() => setShowAddTorrentModal(true)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  width: "100%",
-                  textAlign: "left",
-                  cursor: "pointer",
-                  color: "inherit",
-                  font: "inherit",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                }}
               >
                 <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>+</span>{" "}
                 <span>Add Torrent</span>
-              </button>
+              </NavLink>
             </>
           )}
 
@@ -380,6 +368,8 @@ function App() {
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/torrents/add" element={<AddTorrentPage />} />
+              <Route path="/add-torrent" element={<AddTorrentPage />} />
               <Route path="/torrents/history" element={<DownloadHistory />} />
               <Route path="/history" element={<DownloadHistory />} />
               <Route path="/activity/torrents" element={<TorrentIndex />} />
