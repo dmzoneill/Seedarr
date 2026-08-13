@@ -1,0 +1,64 @@
+using System;
+using System.Data;
+using System.Reflection;
+using FluentMigrator.Runner;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
+using NLog;
+using Npgsql;
+
+namespace NzbDrone.Core.Datastore;
+
+public interface IDbFactory
+{
+    IDatabase Create(DatabaseType dbType, string connectionString);
+}
+
+public class DbFactory : IDbFactory
+{
+    private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
+    public IDatabase Create(DatabaseType dbType, string connectionString)
+    {
+        _logger.Info("Creating {0} database: {1}", dbType, connectionString);
+
+        RunMigrations(dbType, connectionString);
+
+        Func<IDbConnection> factory = dbType switch
+        {
+            DatabaseType.PostgreSQL => () => new NpgsqlConnection(connectionString),
+            _ => () => new SqliteConnection(connectionString)
+        };
+
+        return new Database(factory, dbType);
+    }
+
+    private void RunMigrations(DatabaseType dbType, string connectionString)
+    {
+        var services = new ServiceCollection();
+
+        services.AddFluentMigratorCore()
+            .ConfigureRunner(rb =>
+            {
+                if (dbType == DatabaseType.PostgreSQL)
+                {
+                    rb.AddPostgres();
+                }
+                else
+                {
+                    rb.AddSQLite();
+                }
+
+                rb.WithGlobalConnectionString(connectionString)
+                    .ScanIn(Assembly.GetExecutingAssembly()).For.Migrations();
+            })
+            .AddLogging(lb => lb.AddFluentMigratorConsole());
+
+        using var serviceProvider = services.BuildServiceProvider();
+        using var scope = serviceProvider.CreateScope();
+        var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
+        runner.MigrateUp();
+
+        _logger.Info("Database migrations complete");
+    }
+}
