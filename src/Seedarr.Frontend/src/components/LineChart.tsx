@@ -1,8 +1,9 @@
+import { useId } from "react";
 import { formatSpeed } from "../utils/formatters";
 
-const CHART_WIDTH = 480;
-const CHART_HEIGHT = 160;
-const PADDING = { top: 8, right: 12, bottom: 20, left: 55 };
+const CHART_WIDTH = 600;
+const CHART_HEIGHT = 170;
+const PADDING = { top: 10, right: 16, bottom: 24, left: 70 };
 
 function getNiceMax(value: number): number {
   if (value <= 0) return 1;
@@ -46,6 +47,7 @@ export default function LineChart({
   isSpeed,
   isRatio,
 }: LineChartProps) {
+  const gradId = useId().replace(/:/g, "_");
   const chartW = CHART_WIDTH - PADDING.left - PADDING.right;
   const chartH = CHART_HEIGHT - PADDING.top - PADDING.bottom;
 
@@ -107,9 +109,17 @@ export default function LineChart({
       </div>
       <svg
         width="100%"
+        height="100%"
         viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
-        preserveAspectRatio="xMidYMid meet"
+        preserveAspectRatio="none"
       >
+        <defs>
+          <linearGradient id={`grad_${gradId}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity={0.25} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.0} />
+          </linearGradient>
+        </defs>
+
         {gridLines.map(({ value: val, y }, i) => (
           <g key={i}>
             <line
@@ -117,55 +127,61 @@ export default function LineChart({
               y1={y}
               x2={CHART_WIDTH - PADDING.right}
               y2={y}
-              stroke="var(--border-light)"
-              strokeWidth={0.5}
+              stroke="rgba(255, 255, 255, 0.08)"
+              strokeWidth={1}
+              strokeDasharray={i === 0 ? "none" : "3 3"}
             />
             <text
-              x={PADDING.left - 4}
-              y={y + 3}
+              x={PADDING.left - 8}
+              y={y + 3.5}
               textAnchor="end"
               fill="var(--text-dim)"
-              fontSize={8}
+              fontSize={10}
               fontFamily="inherit"
             >
               {formatYLabel(val, autoSpeed, autoRatio)}
             </text>
           </g>
         ))}
+
         <text
           x={PADDING.left}
-          y={CHART_HEIGHT - 4}
+          y={CHART_HEIGHT - 6}
           fill="var(--text-dim)"
-          fontSize={8}
+          fontSize={10}
           textAnchor="start"
         >
-          5m ago
+          {maxPoints}s ago
         </text>
         <text
           x={CHART_WIDTH - PADDING.right}
-          y={CHART_HEIGHT - 4}
+          y={CHART_HEIGHT - 6}
           fill="var(--text-dim)"
-          fontSize={8}
+          fontSize={10}
           textAnchor="end"
         >
           now
         </text>
+
         <rect
           x={PADDING.left}
           y={PADDING.top}
           width={chartW}
           height={chartH}
-          fill="none"
-          stroke="var(--border-light)"
-          strokeWidth={0.5}
+          fill="rgba(255, 255, 255, 0.01)"
+          stroke="rgba(255, 255, 255, 0.08)"
+          strokeWidth={1}
+          rx={3}
         />
-        {areaPath && <path d={areaPath} fill={color} opacity={0.1} />}
+
+        {areaPath && <path d={areaPath} fill={`url(#grad_${gradId})`} />}
+
         {points && (
           <polyline
             points={points}
             fill="none"
             stroke={color}
-            strokeWidth={1.5}
+            strokeWidth={2}
             strokeLinejoin="round"
             strokeLinecap="round"
           />
