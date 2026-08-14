@@ -1,6 +1,8 @@
 import { useParams, Link } from 'react-router-dom';
 import { useTorrent, useStartSeeding, useStopSeeding } from '../api/hooks';
 import { formatBytes, formatRatio, formatDate } from '../utils/formatters';
+import { SkeletonLine } from '../components/Skeleton';
+import PeerList from '../components/PeerList';
 
 function TorrentDetails() {
   const { id } = useParams<{ id: string }>();
@@ -9,7 +11,34 @@ function TorrentDetails() {
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
 
-  if (isLoading) return <p className="loading">Loading...</p>;
+  if (isLoading) {
+    return (
+      <div>
+        <Link to="/torrents" className="back-link">Back to Torrents</Link>
+        <SkeletonLine width="40%" height="1.5rem" />
+        <div className="detail-grid" style={{ marginTop: '1.5rem' }}>
+          <div className="card">
+            <SkeletonLine width="30%" height="1rem" />
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div key={i} className="status-row">
+                <SkeletonLine width="25%" height="0.85rem" />
+                <SkeletonLine width="40%" height="0.85rem" />
+              </div>
+            ))}
+          </div>
+          <div className="card">
+            <SkeletonLine width="30%" height="1rem" />
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="status-row">
+                <SkeletonLine width="25%" height="0.85rem" />
+                <SkeletonLine width="40%" height="0.85rem" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (error || !torrent) {
     return (
       <div>
@@ -113,6 +142,8 @@ function TorrentDetails() {
           </button>
         )}
       </div>
+
+      <PeerList torrentId={torrent.id} />
     </div>
   );
 }

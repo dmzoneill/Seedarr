@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seedarr.Host", "NzbDrone.Ho
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seedarr.Console", "NzbDrone.Console\Seedarr.Console.csproj", "{3DCA7B58-B8B3-49AC-9D9E-56F4A0460976}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seedarr.Core.Test", "NzbDrone.Core.Test\Seedarr.Core.Test.csproj", "{D41EEFE8-57E3-4614-88BF-D82D9B1D0FA6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,5 +53,9 @@ Global
 		{3DCA7B58-B8B3-49AC-9D9E-56F4A0460976}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{3DCA7B58-B8B3-49AC-9D9E-56F4A0460976}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{3DCA7B58-B8B3-49AC-9D9E-56F4A0460976}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D41EEFE8-57E3-4614-88BF-D82D9B1D0FA6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D41EEFE8-57E3-4614-88BF-D82D9B1D0FA6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D41EEFE8-57E3-4614-88BF-D82D9B1D0FA6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D41EEFE8-57E3-4614-88BF-D82D9B1D0FA6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
