@@ -7,11 +7,17 @@ import type {
   HealthCheckResult,
   NetworkStatus,
   Peer,
-  TrackerServerConfig,
-  TrackerServerStats,
   GeneralConfig,
   SeedingConfig,
   NetworkConfig,
+  BitTorrentConfig,
+  PeerProtocolConfig,
+  ProtocolsConfig,
+  SimulationConfig,
+  TrackerServerConfig,
+  TrackerServerStats,
+  SchedulerConfig,
+  AdvancedConfig,
 } from './types';
 
 type AddTorrentInput =
@@ -155,19 +161,83 @@ export function useArrSync() {
   });
 }
 
-export function useTrackerServerConfig() {
-  return useQuery<TrackerServerConfig>({
-    queryKey: ['trackerserver', 'config'],
-    queryFn: () => apiClient.get('/trackerserver/config'),
+function useConfigQuery<T>(section: string) {
+  return useQuery<T>({
+    queryKey: ['config', section],
+    queryFn: () => apiClient.get(`/config/${section}`),
   });
 }
 
-export function useUpdateTrackerServerConfig() {
+function useConfigMutation<T>(section: string) {
   const queryClient = useQueryClient();
-  return useMutation<TrackerServerConfig, Error, TrackerServerConfig>({
-    mutationFn: (config) => apiClient.put('/trackerserver/config', config),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trackerserver', 'config'] }),
+  return useMutation<T, Error, T>({
+    mutationFn: (config) => apiClient.put(`/config/${section}`, config),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', section] }),
   });
+}
+
+export function useGeneralConfig() {
+  return useConfigQuery<GeneralConfig>('general');
+}
+
+export function useSaveGeneralConfig() {
+  return useConfigMutation<GeneralConfig>('general');
+}
+
+export function useSeedingConfig() {
+  return useConfigQuery<SeedingConfig>('seeding');
+}
+
+export function useSaveSeedingConfig() {
+  return useConfigMutation<SeedingConfig>('seeding');
+}
+
+export function useNetworkConfig() {
+  return useConfigQuery<NetworkConfig>('network');
+}
+
+export function useSaveNetworkConfig() {
+  return useConfigMutation<NetworkConfig>('network');
+}
+
+export function useBitTorrentConfig() {
+  return useConfigQuery<BitTorrentConfig>('bittorrent');
+}
+
+export function useSaveBitTorrentConfig() {
+  return useConfigMutation<BitTorrentConfig>('bittorrent');
+}
+
+export function usePeerProtocolConfig() {
+  return useConfigQuery<PeerProtocolConfig>('peerprotocol');
+}
+
+export function useSavePeerProtocolConfig() {
+  return useConfigMutation<PeerProtocolConfig>('peerprotocol');
+}
+
+export function useProtocolsConfig() {
+  return useConfigQuery<ProtocolsConfig>('protocols');
+}
+
+export function useSaveProtocolsConfig() {
+  return useConfigMutation<ProtocolsConfig>('protocols');
+}
+
+export function useSimulationConfig() {
+  return useConfigQuery<SimulationConfig>('simulation');
+}
+
+export function useSaveSimulationConfig() {
+  return useConfigMutation<SimulationConfig>('simulation');
+}
+
+export function useTrackerServerConfig() {
+  return useConfigQuery<TrackerServerConfig>('trackerserver');
+}
+
+export function useSaveTrackerServerConfig() {
+  return useConfigMutation<TrackerServerConfig>('trackerserver');
 }
 
 export function useTrackerServerStats() {
@@ -178,47 +248,18 @@ export function useTrackerServerStats() {
   });
 }
 
-export function useGeneralConfig() {
-  return useQuery<GeneralConfig>({
-    queryKey: ['config', 'general'],
-    queryFn: () => apiClient.get('/config/general'),
-  });
+export function useSchedulerConfig() {
+  return useConfigQuery<SchedulerConfig>('scheduler');
 }
 
-export function useSaveGeneralConfig() {
-  const queryClient = useQueryClient();
-  return useMutation<GeneralConfig, Error, GeneralConfig>({
-    mutationFn: (config) => apiClient.put('/config/general', config),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', 'general'] }),
-  });
+export function useSaveSchedulerConfig() {
+  return useConfigMutation<SchedulerConfig>('scheduler');
 }
 
-export function useSeedingConfig() {
-  return useQuery<SeedingConfig>({
-    queryKey: ['config', 'seeding'],
-    queryFn: () => apiClient.get('/config/seeding'),
-  });
+export function useAdvancedConfig() {
+  return useConfigQuery<AdvancedConfig>('advanced');
 }
 
-export function useSaveSeedingConfig() {
-  const queryClient = useQueryClient();
-  return useMutation<SeedingConfig, Error, SeedingConfig>({
-    mutationFn: (config) => apiClient.put('/config/seeding', config),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', 'seeding'] }),
-  });
-}
-
-export function useNetworkConfig() {
-  return useQuery<NetworkConfig>({
-    queryKey: ['config', 'network'],
-    queryFn: () => apiClient.get('/config/network'),
-  });
-}
-
-export function useSaveNetworkConfig() {
-  const queryClient = useQueryClient();
-  return useMutation<NetworkConfig, Error, NetworkConfig>({
-    mutationFn: (config) => apiClient.put('/config/network', config),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['config', 'network'] }),
-  });
+export function useSaveAdvancedConfig() {
+  return useConfigMutation<AdvancedConfig>('advanced');
 }
