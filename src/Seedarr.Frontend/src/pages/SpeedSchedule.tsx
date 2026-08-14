@@ -20,9 +20,9 @@ const DAY_FLAGS = [
 ];
 
 const BLOCK_COLORS = [
-  "var(--color-primary, #3498db)",
-  "var(--color-success, #27ae60)",
-  "var(--color-warning, #f39c12)",
+  "var(--accent, #c8a84e)",
+  "#27ae60",
+  "#3498db",
   "#9b59b6",
   "#e67e22",
   "#1abc9c",
@@ -32,9 +32,11 @@ function daysToLabels(days: number): string {
   if (days === 127) return "Every day";
   if (days === 31) return "Weekdays";
   if (days === 96) return "Weekends";
-  return DAY_FLAGS.filter((d) => days & d.value)
-    .map((d) => d.label)
-    .join(", ");
+  return (
+    DAY_FLAGS.filter((d) => days & d.value)
+      .map((d) => d.label)
+      .join(", ") || "None"
+  );
 }
 
 function timeToHour(time: string): number {
@@ -75,37 +77,79 @@ function ScheduleModal({
       <div
         className="modal"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 480 }}
+        style={{
+          maxWidth: 520,
+          borderRadius: "8px",
+          boxShadow: "0 16px 40px rgba(0, 0, 0, 0.7)",
+          border: "1px solid rgba(255, 255, 255, 0.12)",
+        }}
       >
-        <h2>{schedule.id ? "Edit Schedule" : "Add Schedule"}</h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <h2 style={{ margin: "0 0 1.25rem", fontSize: "1.25rem" }}>
+          {schedule.id ? "Edit Speed Schedule" : "Add Speed Schedule"}
+        </h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <label>
-            <span className="status-label">Name</span>
+            <span
+              className="status-label"
+              style={{
+                display: "block",
+                marginBottom: "0.25rem",
+                fontWeight: 600,
+                fontSize: "0.82rem",
+              }}
+            >
+              Schedule Name
+            </span>
             <input
               className="form-input"
               type="text"
+              placeholder="e.g. Night Seeding Boost"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
+              style={{ width: "100%", borderRadius: "6px" }}
             />
           </label>
+
           <div>
-            <span className="status-label">Days</span>
-            <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+            <span
+              className="status-label"
+              style={{
+                display: "block",
+                marginBottom: "0.4rem",
+                fontWeight: 600,
+                fontSize: "0.82rem",
+              }}
+            >
+              Active Days
+            </span>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {DAY_FLAGS.map((d) => (
                 <button
                   key={d.value}
-                  className={`btn btn-sm ${form.days & d.value ? "btn-primary" : "btn-default"}`}
+                  className={`btn btn-small ${form.days & d.value ? "btn-primary" : "btn-outline"}`}
                   onClick={() => toggleDay(d.value)}
                   type="button"
+                  style={{ minWidth: "42px", borderRadius: "4px" }}
                 >
                   {d.label}
                 </button>
               ))}
             </div>
           </div>
+
           <div style={{ display: "flex", gap: 12 }}>
             <label style={{ flex: 1 }}>
-              <span className="status-label">Start Time</span>
+              <span
+                className="status-label"
+                style={{
+                  display: "block",
+                  marginBottom: "0.25rem",
+                  fontWeight: 600,
+                  fontSize: "0.82rem",
+                }}
+              >
+                Start Time
+              </span>
               <input
                 className="form-input"
                 type="time"
@@ -113,21 +157,44 @@ function ScheduleModal({
                 onChange={(e) =>
                   setForm({ ...form, startTime: e.target.value })
                 }
+                style={{ width: "100%", borderRadius: "6px" }}
               />
             </label>
             <label style={{ flex: 1 }}>
-              <span className="status-label">End Time</span>
+              <span
+                className="status-label"
+                style={{
+                  display: "block",
+                  marginBottom: "0.25rem",
+                  fontWeight: 600,
+                  fontSize: "0.82rem",
+                }}
+              >
+                End Time
+              </span>
               <input
                 className="form-input"
                 type="time"
                 value={form.endTime}
                 onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                style={{ width: "100%", borderRadius: "6px" }}
               />
             </label>
           </div>
+
           <div style={{ display: "flex", gap: 12 }}>
             <label style={{ flex: 1 }}>
-              <span className="status-label">Max Upload (KB/s, 0=global)</span>
+              <span
+                className="status-label"
+                style={{
+                  display: "block",
+                  marginBottom: "0.25rem",
+                  fontWeight: 600,
+                  fontSize: "0.82rem",
+                }}
+              >
+                Max Upload (KB/s, 0 = unlimited)
+              </span>
               <input
                 className="form-input"
                 type="number"
@@ -139,11 +206,20 @@ function ScheduleModal({
                     maxUploadSpeed: Math.round(Number(e.target.value) * 1024),
                   })
                 }
+                style={{ width: "100%", borderRadius: "6px" }}
               />
             </label>
             <label style={{ flex: 1 }}>
-              <span className="status-label">
-                Max Download (KB/s, 0=global)
+              <span
+                className="status-label"
+                style={{
+                  display: "block",
+                  marginBottom: "0.25rem",
+                  fontWeight: 600,
+                  fontSize: "0.82rem",
+                }}
+              >
+                Max Download (KB/s, 0 = unlimited)
               </span>
               <input
                 className="form-input"
@@ -156,12 +232,24 @@ function ScheduleModal({
                     maxDownloadSpeed: Math.round(Number(e.target.value) * 1024),
                   })
                 }
+                style={{ width: "100%", borderRadius: "6px" }}
               />
             </label>
           </div>
-          <div style={{ display: "flex", gap: 12 }}>
+
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <label style={{ flex: 1 }}>
-              <span className="status-label">Priority</span>
+              <span
+                className="status-label"
+                style={{
+                  display: "block",
+                  marginBottom: "0.25rem",
+                  fontWeight: 600,
+                  fontSize: "0.82rem",
+                }}
+              >
+                Priority
+              </span>
               <input
                 className="form-input"
                 type="number"
@@ -169,6 +257,7 @@ function ScheduleModal({
                 onChange={(e) =>
                   setForm({ ...form, priority: Number(e.target.value) })
                 }
+                style={{ width: "100%", borderRadius: "6px" }}
               />
             </label>
             <label
@@ -177,7 +266,8 @@ function ScheduleModal({
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                paddingTop: 20,
+                paddingTop: 18,
+                cursor: "pointer",
               }}
             >
               <input
@@ -187,26 +277,36 @@ function ScheduleModal({
                   setForm({ ...form, isEnabled: e.target.checked })
                 }
               />
-              <span>Enabled</span>
+              <span style={{ fontWeight: 600, fontSize: "0.85rem" }}>
+                Schedule Enabled
+              </span>
             </label>
           </div>
+
           <div
             style={{
               display: "flex",
               gap: 8,
               justifyContent: "flex-end",
-              marginTop: 8,
+              marginTop: 10,
+              paddingTop: 12,
+              borderTop: "1px solid var(--border-light)",
             }}
           >
-            <button className="btn btn-default" onClick={onCancel}>
+            <button
+              className="btn btn-outline btn-small"
+              onClick={onCancel}
+              type="button"
+            >
               Cancel
             </button>
             <button
-              className="btn btn-primary"
+              className="btn btn-primary btn-small"
               onClick={() => onSave(form)}
               disabled={isPending || !form.name.trim()}
+              type="button"
             >
-              {isPending ? "Saving..." : "Save"}
+              {isPending ? "Saving..." : "Save Schedule"}
             </button>
           </div>
         </div>
@@ -219,25 +319,56 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
   const hours = Array.from({ length: 24 }, (_, i) => i);
 
   return (
-    <div className="card" style={{ overflowX: "auto" }}>
-      <h3>Weekly View</h3>
+    <div
+      className="card"
+      style={{
+        overflowX: "auto",
+        marginBottom: "1.25rem",
+        borderRadius: "8px",
+        boxShadow:
+          "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+        border: "1px solid rgba(255, 255, 255, 0.08)",
+        padding: "1.25rem",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1rem",
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: "1.05rem" }}>Weekly Schedule View</h3>
+        <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+          24-Hour Time Matrix
+        </span>
+      </div>
+
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "50px repeat(7, 1fr)",
+          gridTemplateColumns: "55px repeat(7, 1fr)",
           gap: 0,
-          minWidth: 600,
+          minWidth: 640,
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          borderRadius: "6px",
+          overflow: "hidden",
         }}
       >
-        <div />
+        <div style={{ backgroundColor: "var(--bg-secondary)" }} />
         {DAY_FLAGS.map((d) => (
           <div
             key={d.value}
             style={{
               textAlign: "center",
               fontWeight: 600,
-              padding: "4px 0",
-              borderBottom: "1px solid var(--color-border, #333)",
+              fontSize: "0.82rem",
+              padding: "6px 0",
+              backgroundColor: "var(--bg-secondary)",
+              borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+              borderLeft: "1px solid rgba(255, 255, 255, 0.08)",
+              color: "var(--accent, #c8a84e)",
             }}
           >
             {d.label}
@@ -247,12 +378,14 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
           <React.Fragment key={hour}>
             <div
               style={{
-                fontSize: 11,
-                color: "var(--color-text-muted, #888)",
+                fontSize: "0.72rem",
+                color: "var(--text-muted)",
                 textAlign: "right",
-                paddingRight: 6,
-                paddingTop: 2,
-                borderTop: "1px solid var(--color-border, #333)",
+                paddingRight: 8,
+                paddingTop: 3,
+                borderTop: "1px solid rgba(255, 255, 255, 0.04)",
+                backgroundColor: "var(--bg-secondary)",
+                fontFamily: "monospace",
               }}
             >
               {String(hour).padStart(2, "0")}:00
@@ -270,20 +403,21 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
                 <div
                   key={`${hour}-${day.value}`}
                   style={{
-                    height: 20,
-                    borderTop: "1px solid var(--color-border, #333)",
-                    borderLeft: "1px solid var(--color-border, #333)",
+                    height: 22,
+                    borderTop: "1px solid rgba(255, 255, 255, 0.04)",
+                    borderLeft: "1px solid rgba(255, 255, 255, 0.04)",
                     backgroundColor: top
                       ? BLOCK_COLORS[
                           schedules.indexOf(top) % BLOCK_COLORS.length
                         ]
                       : "transparent",
-                    opacity: top ? 0.7 : 1,
+                    opacity: top ? 0.85 : 1,
+                    transition: "all 0.15s ease",
                   }}
                   title={
                     top
                       ? `${top.name}: ${formatSpeed(top.maxUploadSpeed)} up / ${formatSpeed(top.maxDownloadSpeed)} down`
-                      : ""
+                      : "Unthrottled"
                   }
                 />
               );
@@ -291,9 +425,10 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
           </React.Fragment>
         ))}
       </div>
+
       {schedules.length > 0 && (
         <div
-          style={{ display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }}
+          style={{ display: "flex", gap: 16, marginTop: 14, flexWrap: "wrap" }}
         >
           {schedules.map((s, i) => (
             <div
@@ -304,12 +439,16 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
                 style={{
                   width: 12,
                   height: 12,
-                  borderRadius: 2,
+                  borderRadius: 3,
                   backgroundColor: BLOCK_COLORS[i % BLOCK_COLORS.length],
-                  opacity: s.isEnabled ? 0.7 : 0.3,
+                  opacity: s.isEnabled ? 0.9 : 0.3,
                 }}
               />
-              <span style={{ opacity: s.isEnabled ? 1 : 0.5 }}>{s.name}</span>
+              <span
+                style={{ fontSize: "0.82rem", opacity: s.isEnabled ? 1 : 0.5 }}
+              >
+                {s.name} ({s.startTime} - {s.endTime})
+              </span>
             </div>
           ))}
         </div>
@@ -337,79 +476,290 @@ function SpeedSchedule() {
     }
   }
 
-  return (
-    <div>
-      <div className="page-heading-row">
-        <h1 className="page-heading">Speed Schedule</h1>
-        <button
-          className="btn btn-primary"
-          onClick={() => setModal({ ...EMPTY_SCHEDULE })}
-        >
-          Add Schedule
-        </button>
-      </div>
+  const scheduleCount = schedules?.length ?? 0;
 
-      {activeLimits && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div className="status-row">
-            <span className="status-label">Active Schedule</span>
-            <span className="status-value">
-              {activeLimits.isScheduleActive ? (
-                <span className="badge badge-seeding">
-                  {activeLimits.activeScheduleName}
-                </span>
-              ) : (
-                <span className="badge badge-stopped">None</span>
-              )}
-            </span>
+  return (
+    <div className="content-area">
+      {/* Header */}
+      <div
+        className="page-header"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1.25rem",
+        }}
+      >
+        <div className="page-header-group">
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
+            <h1 className="page-heading" style={{ margin: 0 }}>
+              Speed Schedule ({scheduleCount})
+            </h1>
+            <span className="badge badge-primary">Bandwidth Rules</span>
           </div>
-          <div className="status-row">
-            <span className="status-label">Upload Limit</span>
-            <span className="status-value">
-              {activeLimits.maxUploadSpeed > 0
-                ? formatSpeed(activeLimits.maxUploadSpeed)
-                : "Global"}
-            </span>
-          </div>
-          <div className="status-row">
-            <span className="status-label">Download Limit</span>
-            <span className="status-value">
-              {activeLimits.maxDownloadSpeed > 0
-                ? formatSpeed(activeLimits.maxDownloadSpeed)
-                : "Global"}
-            </span>
+          <div
+            style={{
+              fontSize: "0.8rem",
+              color: "var(--text-muted)",
+              marginTop: "0.2rem",
+            }}
+          >
+            Manage time-based upload and download speed throttles and seeding
+            priorities
           </div>
         </div>
-      )}
 
+        <div className="page-header-actions">
+          <button
+            className="btn btn-primary"
+            onClick={() => setModal({ ...EMPTY_SCHEDULE })}
+          >
+            + Add Schedule
+          </button>
+        </div>
+      </div>
+
+      {/* Active Rate Limits Stat Cards */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: "1rem",
+          marginBottom: "1.25rem",
+        }}
+      >
+        <div
+          className="card"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            padding: "1rem 1.25rem",
+            borderRadius: "8px",
+            boxShadow:
+              "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              color: "var(--text-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Active Schedule
+          </div>
+          <div
+            style={{
+              fontSize: "1.3rem",
+              fontWeight: 700,
+              color: "var(--text-primary)",
+              margin: "0.35rem 0",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            {activeLimits?.isScheduleActive ? (
+              <span
+                className="badge badge-primary"
+                style={{ fontSize: "0.85rem" }}
+              >
+                ⚡ {activeLimits.activeScheduleName}
+              </span>
+            ) : (
+              <span style={{ color: "var(--text-muted)", fontSize: "1.05rem" }}>
+                None (Global Rate)
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+            {activeLimits?.isScheduleActive
+              ? "Time-based scheduled rate is enforced"
+              : "Standard global rate configuration"}
+          </div>
+        </div>
+
+        <div
+          className="card"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            padding: "1rem 1.25rem",
+            borderRadius: "8px",
+            boxShadow:
+              "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              color: "var(--text-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Active Upload Limit
+          </div>
+          <div
+            style={{
+              fontSize: "1.3rem",
+              fontWeight: 700,
+              color: "var(--accent, #c8a84e)",
+              margin: "0.35rem 0",
+            }}
+          >
+            {activeLimits && activeLimits.maxUploadSpeed > 0
+              ? formatSpeed(activeLimits.maxUploadSpeed)
+              : "Unlimited"}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+            {activeLimits && activeLimits.maxUploadSpeed > 0
+              ? "Enforced rate throttle across active torrents"
+              : "No upload bandwidth restriction"}
+          </div>
+        </div>
+
+        <div
+          className="card"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            padding: "1rem 1.25rem",
+            borderRadius: "8px",
+            boxShadow:
+              "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "0.75rem",
+              fontWeight: 600,
+              color: "var(--text-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Active Download Limit
+          </div>
+          <div
+            style={{
+              fontSize: "1.3rem",
+              fontWeight: 700,
+              color: "var(--accent, #c8a84e)",
+              margin: "0.35rem 0",
+            }}
+          >
+            {activeLimits && activeLimits.maxDownloadSpeed > 0
+              ? formatSpeed(activeLimits.maxDownloadSpeed)
+              : "Unlimited"}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+            {activeLimits && activeLimits.maxDownloadSpeed > 0
+              ? "Enforced rate throttle across downloads"
+              : "No download bandwidth restriction"}
+          </div>
+        </div>
+      </div>
+
+      {/* Weekly View */}
       {!isLoading && !isError && <WeeklyCalendar schedules={schedules ?? []} />}
 
-      <div className="card">
-        <h3>Schedules</h3>
+      {/* Schedules Table */}
+      <div
+        className="card"
+        style={{
+          borderRadius: "8px",
+          boxShadow:
+            "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          padding: "1.25rem",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1rem",
+          }}
+        >
+          <h3 style={{ margin: 0, fontSize: "1.05rem" }}>
+            Configured Schedules ({scheduleCount})
+          </h3>
+        </div>
+
         {isLoading ? (
           <p className="loading">Loading schedules...</p>
         ) : isError ? (
-          <p className="error">Failed to load data.</p>
+          <p className="error">Failed to load schedule data.</p>
         ) : (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">
               <thead>
                 <tr>
-                  <th className="torrent-table-th">Enabled</th>
+                  <th className="torrent-table-th">Status</th>
                   <th className="torrent-table-th">Name</th>
                   <th className="torrent-table-th">Days</th>
-                  <th className="torrent-table-th">Time</th>
+                  <th className="torrent-table-th">Time Window</th>
                   <th className="torrent-table-th">Upload Limit</th>
                   <th className="torrent-table-th">Download Limit</th>
                   <th className="torrent-table-th">Priority</th>
-                  <th className="torrent-table-th">Actions</th>
+                  <th
+                    className="torrent-table-th"
+                    style={{ textAlign: "right" }}
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {(schedules ?? []).length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="torrent-table-empty">
-                      No speed schedules configured
+                    <td
+                      colSpan={8}
+                      style={{ textAlign: "center", padding: "2.5rem 1rem" }}
+                    >
+                      <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>
+                        ⏱️
+                      </div>
+                      <div
+                        style={{
+                          fontWeight: 600,
+                          fontSize: "1rem",
+                          color: "var(--text-secondary)",
+                          marginBottom: "0.25rem",
+                        }}
+                      >
+                        No speed schedules configured
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.85rem",
+                          color: "var(--text-muted)",
+                          maxWidth: "440px",
+                          margin: "0 auto 1.25rem",
+                        }}
+                      >
+                        Create scheduled speed rules to throttle bandwidth or
+                        prioritize seeding during specific hours of the day.
+                      </div>
+                      <button
+                        className="btn btn-primary btn-small"
+                        onClick={() => setModal({ ...EMPTY_SCHEDULE })}
+                      >
+                        + Add First Schedule
+                      </button>
                     </td>
                   </tr>
                 ) : (
@@ -417,37 +767,71 @@ function SpeedSchedule() {
                     <tr key={s.id} className="torrent-table-row">
                       <td>
                         <span
-                          className={`badge ${s.isEnabled ? "badge-seeding" : "badge-stopped"}`}
+                          className={`badge ${s.isEnabled ? "badge-primary" : "badge-secondary"}`}
+                          style={{ fontSize: "0.75rem" }}
                         >
-                          {s.isEnabled ? "On" : "Off"}
+                          {s.isEnabled ? "Enabled" : "Disabled"}
                         </span>
                       </td>
-                      <td>{s.name}</td>
-                      <td>{daysToLabels(s.days)}</td>
+                      <td style={{ fontWeight: 600 }}>{s.name}</td>
                       <td>
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: "var(--bg-secondary)",
+                            border: "1px solid var(--border-light)",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          {daysToLabels(s.days)}
+                        </span>
+                      </td>
+                      <td
+                        style={{ fontFamily: "monospace", fontSize: "0.85rem" }}
+                      >
                         {s.startTime} - {s.endTime}
                       </td>
-                      <td>
+                      <td
+                        style={{
+                          color: "var(--accent, #c8a84e)",
+                          fontWeight: 600,
+                        }}
+                      >
                         {s.maxUploadSpeed > 0
                           ? formatSpeed(s.maxUploadSpeed)
-                          : "Global"}
+                          : "Unlimited"}
                       </td>
-                      <td>
+                      <td
+                        style={{
+                          color: "var(--accent, #c8a84e)",
+                          fontWeight: 600,
+                        }}
+                      >
                         {s.maxDownloadSpeed > 0
                           ? formatSpeed(s.maxDownloadSpeed)
-                          : "Global"}
+                          : "Unlimited"}
                       </td>
-                      <td>{s.priority}</td>
                       <td>
-                        <div style={{ display: "flex", gap: 4 }}>
+                        <span
+                          className="badge"
+                          style={{
+                            backgroundColor: "var(--bg-secondary)",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          P{s.priority}
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", gap: 6 }}>
                           <button
-                            className="btn btn-sm btn-default"
+                            className="btn btn-small btn-outline"
                             onClick={() => setModal({ ...s })}
                           >
                             Edit
                           </button>
                           <button
-                            className="btn btn-sm btn-danger"
+                            className="btn btn-small btn-danger"
                             onClick={() => deleteSchedule.mutate(s.id)}
                           >
                             Delete
