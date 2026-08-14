@@ -209,7 +209,7 @@ public class PeerConnection : IDisposable
         }
 
         var length = (lengthBuffer[0] << 24) | (lengthBuffer[1] << 16) |
-                     (lengthBuffer[2] << 8) | lengthBuffer[3];
+            (lengthBuffer[2] << 8) | lengthBuffer[3];
 
         if (length == 0)
         {
