@@ -68,7 +68,7 @@ public class TrackerServer : BackgroundService
             }
 
             var path = parts[1];
-            var remoteEndpoint = (IPEndPoint)client.Client.RemoteEndPoint!;
+            var remoteEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
 
             string responseBody;
 
