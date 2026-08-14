@@ -405,7 +405,7 @@ public class MseHandshake
     private static uint ReadUint32(byte[] bytes)
     {
         return ((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) |
-               ((uint)bytes[2] << 8) | bytes[3];
+            ((uint)bytes[2] << 8) | bytes[3];
     }
 
     private static int ReadUint16(byte[] bytes)
