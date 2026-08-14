@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -213,7 +214,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
         if (bindAddress == "*" || bindAddress == "0.0.0.0")
         {
-            bindAddress = "localhost";
+            bindAddress = Dns.GetHostName();
         }
 
         var scheme = _configFileProvider.EnableSsl ? "https" : "http";
