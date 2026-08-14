@@ -93,7 +93,7 @@ public class FastExtensionHandler : IFastExtensionHandler
             {
                 var offset = i * 4;
                 var index = ((x[offset] << 24) | (x[offset + 1] << 16) |
-                             (x[offset + 2] << 8) | x[offset + 3]) & 0x7FFFFFFF;
+                    (x[offset + 2] << 8) | x[offset + 3]) & 0x7FFFFFFF;
                 var pieceIndex = index % pieceCount;
                 allowedSet.Add(pieceIndex);
             }
@@ -375,7 +375,7 @@ public class FastExtensionHandler : IFastExtensionHandler
     private static int ReadInt32BigEndian(byte[] buffer, int offset)
     {
         return (buffer[offset] << 24) | (buffer[offset + 1] << 16) |
-               (buffer[offset + 2] << 8) | buffer[offset + 3];
+            (buffer[offset + 2] << 8) | buffer[offset + 3];
     }
 
     private static string PeerKey(PeerConnection connection)
