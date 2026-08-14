@@ -13,12 +13,42 @@ export interface Torrent {
   uploaded: number;
   downloaded: number;
   ratio: number;
+  progress: number;
   seeders: number;
   leechers: number;
   trackerUrl: string | null;
   sourcePath: string | null;
   dateAdded: string;
   lastActive: string | null;
+  priority: number;
+  uploadLimit: number;
+  downloadLimit: number;
+  superSeeding: boolean;
+  forceStart: boolean;
+  label: string | null;
+  sequentialDownload: boolean;
+  announceInterval: number;
+  nextUpdate: number;
+  sessionUploaded: number;
+  sessionDownloaded: number;
+  smallTorrentLimit: number;
+  threshold: number;
+  uploadSpeed: number;
+  downloadSpeed: number;
+  active: boolean;
+  availability: number;
+  eta: number;
+  sortOrder: number;
+  forceCompleted: boolean;
+}
+
+export interface TorrentFileInfo {
+  id: number;
+  torrentId: number;
+  path: string;
+  size: number;
+  pieceOffset: number;
+  pieceCount: number;
 }
 
 export interface SeedingStats {
@@ -26,6 +56,23 @@ export interface SeedingStats {
   totalUploaded: number;
   totalDownloaded: number;
   averageRatio: number;
+}
+
+export interface SpeedSnapshot {
+  timestamp: string;
+  uploadSpeed: number;
+  downloadSpeed: number;
+  activeTorrents: number;
+  totalPeers: number;
+  averageRatio: number;
+  totalUploaded: number;
+  totalDownloaded: number;
+}
+
+export interface TorrentSpeedSnapshot {
+  timestamp: string;
+  uploadSpeed: number;
+  downloadSpeed: number;
 }
 
 export interface SystemStatus {
@@ -41,6 +88,18 @@ export interface SystemStatus {
   runtimeName: string;
   isDocker: boolean;
   branch: string;
+  startupPath: string;
+  appDataPath: string;
+  databaseVersion: string;
+  databaseMigration: string;
+  uptimeSeconds: number;
+}
+
+export interface DiskSpaceInfo {
+  path: string;
+  label: string;
+  freeSpace: number;
+  totalSpace: number;
 }
 
 export interface HealthCheckResult {
@@ -80,6 +139,7 @@ export interface Peer {
 
 export interface TrackerServerStats {
   totalTorrents: number;
+  internalTorrents: number;
   totalPeers: number;
   totalAnnounces: number;
   totalScrapes: number;
@@ -100,6 +160,11 @@ export interface GeneralConfig {
   urlBase: string;
   authenticationEnabled: boolean;
   apiKey: string;
+  httpsEnabled: boolean;
+  username: string;
+  password: string;
+  sessionTimeoutMinutes: number;
+  localhostOnly: boolean;
 }
 
 export interface SeedingConfig {
@@ -241,4 +306,104 @@ export interface AdvancedConfig {
   fileLogLevel: string;
   debugMode: boolean;
   uiRefreshRateSec: number;
+}
+
+export interface NotificationSettings {
+  enabled: boolean;
+  position: string;
+  autoDismissSeconds: number;
+  showInfo: boolean;
+  showSuccess: boolean;
+  showWarning: boolean;
+  showError: boolean;
+}
+
+export interface ArrConnection {
+  id: number;
+  name: string;
+  arrType: string;
+  url: string;
+  apiKey: string;
+  syncEnabled: boolean;
+  enableAutomaticAdd: boolean;
+  implementation: string;
+  configContract: string;
+}
+
+export interface DownloadClientDefinition {
+  id: number;
+  name: string;
+  clientType: string;
+  host: string;
+  port: number;
+  useSsl: boolean;
+  username: string;
+  password: string;
+  category: string;
+  implementation: string;
+  configContract: string;
+  enable: boolean;
+}
+
+export interface TrackerEntry {
+  id: number;
+  torrentId: number;
+  url: string;
+  tier: number;
+  status: string;
+  enabled: boolean;
+  seeders: number;
+  leechers: number;
+  downloaded: number;
+  totalAnnounces: number;
+  successfulAnnounces: number;
+  consecutiveFailures: number;
+  lastResponseTime: number;
+  averageResponseTime: number;
+  announceInterval: number;
+  minAnnounceInterval: number;
+  lastAnnounce: string | null;
+  lastScrape: string | null;
+  nextAnnounce: string | null;
+  errorMessage: string | null;
+  warningMessage: string | null;
+}
+
+export interface TrackerServerTorrent {
+  infoHash: string;
+  name: string;
+  peerCount: number;
+  seeders: number;
+  leechers: number;
+  completed: number;
+  uploaded: number;
+  downloaded: number;
+  isInternal: boolean;
+  lastActivity: string | null;
+}
+
+export interface UpdateChanges {
+  new: string[];
+  fixed: string[];
+}
+
+export interface UpdateEntry {
+  version: string;
+  releaseDate: string;
+  installed: boolean;
+  latest: boolean;
+  changes: UpdateChanges;
+}
+
+export interface LogFile {
+  filename: string;
+  lastWriteTime: string;
+  size: number;
+}
+
+export interface Backup {
+  id: number;
+  name: string;
+  size: number;
+  time: string;
 }

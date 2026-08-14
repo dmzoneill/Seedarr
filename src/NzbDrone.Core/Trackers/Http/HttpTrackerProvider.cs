@@ -6,6 +6,7 @@ using System.Web;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NLog;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Http;
 using Polly;
 
@@ -13,15 +14,22 @@ namespace NzbDrone.Core.Trackers.Http;
 
 public class HttpTrackerProvider : ITrackerProvider
 {
-    private static readonly HttpClient Client = new();
     private static readonly ResiliencePipeline Policy = ResiliencePolicies.GetTrackerPolicy();
 
+    private readonly IConfigService _configService;
+    private readonly HttpClient _client;
     private readonly Logger _logger;
 
     public string Name => "HTTP";
 
-    public HttpTrackerProvider()
+    public HttpTrackerProvider(IConfigService configService)
     {
+        _configService = configService;
+        _client = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(configService.HttpTrackerTimeoutSeconds)
+        };
+        _client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", configService.BitTorrentUserAgent);
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -32,7 +40,7 @@ public class HttpTrackerProvider : ITrackerProvider
             var url = BuildAnnounceUrl(request);
             _logger.Debug("HTTP announce: {0}", url);
 
-            var responseBytes = Policy.Execute(ct => Client.GetByteArrayAsync(url, ct).GetAwaiter().GetResult());
+            var responseBytes = Policy.Execute(ct => _client.GetByteArrayAsync(url, ct).GetAwaiter().GetResult());
             var parser = new BencodeParser();
             var dict = parser.Parse<BDictionary>(responseBytes);
 
@@ -112,7 +120,7 @@ public class HttpTrackerProvider : ITrackerProvider
 
             _logger.Debug("HTTP scrape: {0}", scrapeUrl);
 
-            var responseBytes = Policy.Execute(ct => Client.GetByteArrayAsync(scrapeUrl, ct).GetAwaiter().GetResult());
+            var responseBytes = Policy.Execute(ct => _client.GetByteArrayAsync(scrapeUrl, ct).GetAwaiter().GetResult());
             var parser = new BencodeParser();
             var dict = parser.Parse<BDictionary>(responseBytes);
 

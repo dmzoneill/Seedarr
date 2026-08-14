@@ -47,7 +47,7 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
         if (_database.DatabaseType == DatabaseType.SQLite)
         {
             var id = connection.ExecuteScalar<int>(
-                TableMapping.GetInsertSql(_table, model),
+                TableMapping.GetInsertSql(_table, model) + "; SELECT last_insert_rowid()",
                 model);
             model.Id = id;
         }

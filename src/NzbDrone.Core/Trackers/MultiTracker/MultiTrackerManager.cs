@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Trackers.MultiTracker;
 
@@ -15,48 +17,77 @@ public class MultiTrackerManager : IMultiTrackerManager
 {
     private readonly ITrackerProvider _httpTracker;
     private readonly ITrackerProvider _udpTracker;
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
+    private readonly ConcurrentDictionary<string, TrackerFailureState> _failureStates = new();
 
     public MultiTrackerManager(
-        IEnumerable<ITrackerProvider> trackerProviders)
+        IEnumerable<ITrackerProvider> trackerProviders,
+        IConfigService configService)
     {
         var providers = trackerProviders.ToList();
         _httpTracker = providers.FirstOrDefault(p => p.Name == "HTTP");
         _udpTracker = providers.FirstOrDefault(p => p.Name == "UDP");
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList)
     {
+        if (!_configService.MultiTrackerEnabled)
+        {
+            var firstTracker = announceList.FirstOrDefault()?.FirstOrDefault();
+            if (firstTracker == null)
+            {
+                return new TrackerAnnounceResponse { Success = false, FailureReason = "No trackers available" };
+            }
+
+            return AnnounceToTracker(request, firstTracker);
+        }
+
+        var announceToAllTiers = _configService.AnnounceToAllTiers;
+        var announceToAllInTier = _configService.AnnounceToAllInTier;
+        TrackerAnnounceResponse bestResponse = null;
+
         foreach (var tier in announceList)
         {
             foreach (var trackerUrl in tier)
             {
-                try
+                if (IsTrackerBackedOff(trackerUrl))
                 {
-                    request.TrackerUrl = trackerUrl;
-                    var provider = GetProvider(trackerUrl);
-                    if (provider == null)
+                    _logger.Debug("Tracker {0} is in backoff, skipping", trackerUrl);
+                    continue;
+                }
+
+                var response = AnnounceToTracker(request, trackerUrl);
+
+                if (response.Success)
+                {
+                    ResetFailureState(trackerUrl);
+
+                    if (bestResponse == null)
                     {
-                        continue;
+                        bestResponse = response;
                     }
 
-                    var response = provider.Announce(request);
-                    if (response.Success)
+                    if (!announceToAllInTier)
                     {
-                        return response;
+                        break;
                     }
-
-                    _logger.Warn("Tracker {0} failed: {1}", trackerUrl, response.FailureReason);
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger.Warn(ex, "Tracker {0} error", trackerUrl);
+                    RecordFailure(trackerUrl);
                 }
+            }
+
+            if (bestResponse != null && !announceToAllTiers)
+            {
+                return bestResponse;
             }
         }
 
-        return new TrackerAnnounceResponse
+        return bestResponse ?? new TrackerAnnounceResponse
         {
             Success = false,
             FailureReason = "All trackers failed"
@@ -65,36 +96,159 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     public TrackerScrapeResponse Scrape(string infoHash, List<List<string>> announceList)
     {
+        if (!_configService.MultiTrackerEnabled)
+        {
+            var firstTracker = announceList.FirstOrDefault()?.FirstOrDefault();
+            if (firstTracker == null)
+            {
+                return new TrackerScrapeResponse { Success = false, FailureReason = "No trackers available" };
+            }
+
+            return ScrapeTracker(infoHash, firstTracker);
+        }
+
+        var announceToAllTiers = _configService.AnnounceToAllTiers;
+        var announceToAllInTier = _configService.AnnounceToAllInTier;
+        TrackerScrapeResponse bestResponse = null;
+
         foreach (var tier in announceList)
         {
             foreach (var trackerUrl in tier)
             {
-                try
+                if (IsTrackerBackedOff(trackerUrl))
                 {
-                    var provider = GetProvider(trackerUrl);
-                    if (provider == null)
+                    continue;
+                }
+
+                var response = ScrapeTracker(infoHash, trackerUrl);
+
+                if (response.Success)
+                {
+                    ResetFailureState(trackerUrl);
+
+                    if (bestResponse == null)
                     {
-                        continue;
+                        bestResponse = response;
                     }
 
-                    var response = provider.Scrape(infoHash, trackerUrl);
-                    if (response.Success)
+                    if (!announceToAllInTier)
                     {
-                        return response;
+                        break;
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger.Warn(ex, "Scrape {0} error", trackerUrl);
+                    RecordFailure(trackerUrl);
                 }
+            }
+
+            if (bestResponse != null && !announceToAllTiers)
+            {
+                return bestResponse;
             }
         }
 
-        return new TrackerScrapeResponse
+        return bestResponse ?? new TrackerScrapeResponse
         {
             Success = false,
             FailureReason = "All trackers failed"
         };
+    }
+
+    private TrackerAnnounceResponse AnnounceToTracker(TrackerAnnounceRequest request, string trackerUrl)
+    {
+        try
+        {
+            request.TrackerUrl = trackerUrl;
+            var provider = GetProvider(trackerUrl);
+            if (provider == null)
+            {
+                return new TrackerAnnounceResponse { Success = false, FailureReason = "Unknown tracker protocol" };
+            }
+
+            var response = provider.Announce(request);
+            if (!response.Success)
+            {
+                _logger.Warn("Tracker {0} failed: {1}", trackerUrl, response.FailureReason);
+            }
+
+            return response;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Tracker {0} error", trackerUrl);
+            return new TrackerAnnounceResponse { Success = false, FailureReason = ex.Message };
+        }
+    }
+
+    private TrackerScrapeResponse ScrapeTracker(string infoHash, string trackerUrl)
+    {
+        try
+        {
+            var provider = GetProvider(trackerUrl);
+            if (provider == null)
+            {
+                return new TrackerScrapeResponse { Success = false, FailureReason = "Unknown tracker protocol" };
+            }
+
+            return provider.Scrape(infoHash, trackerUrl);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Scrape {0} error", trackerUrl);
+            return new TrackerScrapeResponse { Success = false, FailureReason = ex.Message };
+        }
+    }
+
+    private bool IsTrackerBackedOff(string trackerUrl)
+    {
+        if (!_configService.MultiTrackerFailoverEnabled)
+        {
+            return false;
+        }
+
+        if (!_failureStates.TryGetValue(trackerUrl, out var state))
+        {
+            return false;
+        }
+
+        if (state.ConsecutiveFailures < _configService.FailoverMaxConsecutiveFailures)
+        {
+            return false;
+        }
+
+        return DateTime.UtcNow < state.BackoffUntil;
+    }
+
+    private void RecordFailure(string trackerUrl)
+    {
+        if (!_configService.MultiTrackerFailoverEnabled)
+        {
+            return;
+        }
+
+        var state = _failureStates.GetOrAdd(trackerUrl, _ => new TrackerFailureState());
+        state.ConsecutiveFailures++;
+
+        var maxFailures = _configService.FailoverMaxConsecutiveFailures;
+        if (state.ConsecutiveFailures >= maxFailures)
+        {
+            var baseSeconds = _configService.FailoverBackoffBaseSeconds;
+            var maxBackoffSeconds = _configService.FailoverMaxBackoffSeconds;
+            var exponent = Math.Min(state.ConsecutiveFailures - maxFailures, 10);
+            var backoffSeconds = Math.Min(baseSeconds * Math.Pow(2, exponent), maxBackoffSeconds);
+            state.BackoffUntil = DateTime.UtcNow.AddSeconds(backoffSeconds);
+            _logger.Warn(
+                "Tracker {0} disabled for {1:F0}s after {2} consecutive failures",
+                trackerUrl,
+                backoffSeconds,
+                state.ConsecutiveFailures);
+        }
+    }
+
+    private void ResetFailureState(string trackerUrl)
+    {
+        _failureStates.TryRemove(trackerUrl, out _);
     }
 
     private ITrackerProvider GetProvider(string url)
@@ -112,5 +266,11 @@ public class MultiTrackerManager : IMultiTrackerManager
 
         _logger.Warn("Unknown tracker protocol: {0}", url);
         return null;
+    }
+
+    private class TrackerFailureState
+    {
+        public int ConsecutiveFailures { get; set; }
+        public DateTime BackoffUntil { get; set; }
     }
 }
