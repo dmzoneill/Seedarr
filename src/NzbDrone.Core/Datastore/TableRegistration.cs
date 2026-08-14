@@ -3,6 +3,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Notifications;
+using NzbDrone.Core.Seeding.Scheduling;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
@@ -24,5 +25,6 @@ public static class TableRegistration
         TableMapping.Register<ArrConnectionDefinition>("ArrConnectionDefinitions");
         TableMapping.Register<NotificationDefinition>("NotificationDefinitions");
         TableMapping.Register<Tag>("Tags");
+        TableMapping.Register<SpeedSchedule>("SpeedSchedules");
     }
 }

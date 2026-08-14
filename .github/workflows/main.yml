@@ -17,3 +17,6 @@ jobs:
     uses: dmzoneill/dmzoneill/.github/workflows/dispatch.yaml@main
     with:
       basic: "true"
+      test-ready: "true"
+      dotnet: "true"
+      dotnet-version: "10.0.x"

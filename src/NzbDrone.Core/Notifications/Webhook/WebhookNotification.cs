@@ -3,12 +3,15 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using NLog;
+using NzbDrone.Core.Http;
+using Polly;
 
 namespace NzbDrone.Core.Notifications.Webhook;
 
 public class WebhookNotification : INotificationService
 {
     private static readonly HttpClient HttpClient = new();
+    private static readonly ResiliencePipeline Policy = ResiliencePolicies.GetWebhookPolicy();
 
     private readonly Logger _logger;
 
@@ -50,10 +53,13 @@ public class WebhookNotification : INotificationService
 
         try
         {
-            var json = JsonSerializer.Serialize(payload);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
-            var response = HttpClient.PostAsync(WebhookUrl, content).GetAwaiter().GetResult();
-            _logger.Debug("Webhook sent to {0}, status: {1}", WebhookUrl, response.StatusCode);
+            Policy.Execute(ct =>
+            {
+                var json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                var response = HttpClient.PostAsync(WebhookUrl, content, ct).GetAwaiter().GetResult();
+                _logger.Debug("Webhook sent to {0}, status: {1}", WebhookUrl, response.StatusCode);
+            });
         }
         catch (Exception ex)
         {

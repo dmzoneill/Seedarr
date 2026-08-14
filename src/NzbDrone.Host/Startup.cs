@@ -2,6 +2,7 @@ using DryIoc;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.OpenApi.Models;
 using NzbDrone.Common.Serializer;
 using NzbDrone.SignalR;
 using Seedarr.Http.Authentication;
@@ -40,7 +41,15 @@ public class Startup
         services.AddAuthorization();
 
         services.AddEndpointsApiExplorer();
-        services.AddSwaggerGen();
+        services.AddSwaggerGen(c =>
+        {
+            c.SwaggerDoc("v1", new OpenApiInfo
+            {
+                Title = "Seedarr API",
+                Version = "v1",
+                Description = "BitTorrent Seeding Simulator API"
+            });
+        });
 
         services.AddCors(options =>
         {
@@ -68,7 +77,7 @@ public class Startup
         app.UseAuthorization();
 
         app.UseSwagger();
-        app.UseSwaggerUI();
+        app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Seedarr API V1"));
 
         app.MapControllers();
         app.MapHub<MessageHub>("/signalr/messages");
