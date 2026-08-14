@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Torrents;
+using NzbDrone.Core.TrackerServer;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Peers;
@@ -12,11 +14,19 @@ public class PeerConnectionLogController : Controller
 {
     private readonly IPeerConnectionLogService _logService;
     private readonly IConnectionManager _connectionManager;
+    private readonly ITorrentService _torrentService;
+    private readonly IPeerDatabase _peerDatabase;
 
-    public PeerConnectionLogController(IPeerConnectionLogService logService, IConnectionManager connectionManager)
+    public PeerConnectionLogController(
+        IPeerConnectionLogService logService,
+        IConnectionManager connectionManager,
+        ITorrentService torrentService = null,
+        IPeerDatabase peerDatabase = null)
     {
         _logService = logService;
         _connectionManager = connectionManager;
+        _torrentService = torrentService;
+        _peerDatabase = peerDatabase;
     }
 
     [HttpGet]
@@ -78,8 +88,8 @@ public class PeerConnectionLogController : Controller
 
         var nodes = new List<PeerGraphNode>();
         var links = new List<PeerGraphLink>();
-        var seenTorrents = new HashSet<string>();
-        var seenPeers = new HashSet<string>();
+        var seenTorrents = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seenPeers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         nodes.Add(new PeerGraphNode
         {
@@ -88,6 +98,7 @@ public class PeerConnectionLogController : Controller
             Type = "center",
         });
 
+        // 1. Process explicit connection logs in the time window
         foreach (var log in logs.Where(l => l.EventType == "Connected"))
         {
             if (!string.IsNullOrEmpty(log.InfoHash) && seenTorrents.Add(log.InfoHash))
@@ -129,6 +140,136 @@ public class PeerConnectionLogController : Controller
                     Target = $"peer:{peerId}:{log.InfoHash}",
                     Type = log.IsEncrypted ? "encrypted" : "plain",
                 });
+            }
+        }
+
+        // 2. Include live torrents and tracked peers if active
+        if (_torrentService != null)
+        {
+            var allTorrents = _torrentService.GetAll();
+            foreach (var torrent in allTorrents.Where(t => !string.IsNullOrEmpty(t.InfoHash)))
+            {
+                var hash = torrent.InfoHash;
+                if (seenTorrents.Add(hash))
+                {
+                    nodes.Add(new PeerGraphNode
+                    {
+                        Id = $"torrent:{hash}",
+                        Label = torrent.Name ?? hash[..8],
+                        Type = "torrent",
+                        InfoHash = hash,
+                    });
+
+                    links.Add(new PeerGraphLink
+                    {
+                        Source = "seedarr",
+                        Target = $"torrent:{hash}",
+                        Type = "seeds",
+                    });
+                }
+
+                // Add tracker database peers
+                if (_peerDatabase != null)
+                {
+                    var trackerPeers = _peerDatabase.GetPeers(hash);
+                    foreach (var peer in trackerPeers)
+                    {
+                        var peerKey = $"{peer.Ip}:{peer.Port}";
+                        if (seenPeers.Add($"{peerKey}:{hash}"))
+                        {
+                            nodes.Add(new PeerGraphNode
+                            {
+                                Id = $"peer:{peerKey}:{hash}",
+                                Label = peer.Ip,
+                                Type = "peer",
+                                IsEncrypted = false,
+                            });
+
+                            links.Add(new PeerGraphLink
+                            {
+                                Source = $"torrent:{hash}",
+                                Target = $"peer:{peerKey}:{hash}",
+                                Type = "plain",
+                            });
+                        }
+                    }
+                }
+
+                // Add in-memory connection manager peers
+                if (_connectionManager != null)
+                {
+                    var conns = _connectionManager.GetConnections(hash);
+                    foreach (var conn in conns)
+                    {
+                        var peerKey = $"{conn.RemoteIp}:{conn.RemotePort}";
+                        if (seenPeers.Add($"{peerKey}:{hash}"))
+                        {
+                            nodes.Add(new PeerGraphNode
+                            {
+                                Id = $"peer:{peerKey}:{hash}",
+                                Label = conn.RemoteIp,
+                                Type = "peer",
+                                IsEncrypted = conn.IsEncrypted,
+                            });
+
+                            links.Add(new PeerGraphLink
+                            {
+                                Source = $"torrent:{hash}",
+                                Target = $"peer:{peerKey}:{hash}",
+                                Type = conn.IsEncrypted ? "encrypted" : "plain",
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Include any additional tracker database infohashes
+        if (_peerDatabase != null)
+        {
+            var trackedHashes = _peerDatabase.GetAllInfoHashes();
+            foreach (var hash in trackedHashes)
+            {
+                if (seenTorrents.Add(hash))
+                {
+                    nodes.Add(new PeerGraphNode
+                    {
+                        Id = $"torrent:{hash}",
+                        Label = hash.Length > 8 ? hash[..8] : hash,
+                        Type = "torrent",
+                        InfoHash = hash,
+                    });
+
+                    links.Add(new PeerGraphLink
+                    {
+                        Source = "seedarr",
+                        Target = $"torrent:{hash}",
+                        Type = "seeds",
+                    });
+                }
+
+                var trackerPeers = _peerDatabase.GetPeers(hash);
+                foreach (var peer in trackerPeers)
+                {
+                    var peerKey = $"{peer.Ip}:{peer.Port}";
+                    if (seenPeers.Add($"{peerKey}:{hash}"))
+                    {
+                        nodes.Add(new PeerGraphNode
+                        {
+                            Id = $"peer:{peerKey}:{hash}",
+                            Label = peer.Ip,
+                            Type = "peer",
+                            IsEncrypted = false,
+                        });
+
+                        links.Add(new PeerGraphLink
+                        {
+                            Source = $"torrent:{hash}",
+                            Target = $"peer:{peerKey}:{hash}",
+                            Type = "plain",
+                        });
+                    }
+                }
             }
         }
 
