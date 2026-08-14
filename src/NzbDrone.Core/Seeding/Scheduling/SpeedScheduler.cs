@@ -29,8 +29,15 @@ public interface ISpeedScheduler
 
 public class SpeedScheduler : ISpeedScheduler
 {
-    private const long DefaultUploadSpeed = 1_048_576;
-    private const long DefaultDownloadSpeed = 1_048_576;
+    // When no schedule is active the scheduler imposes no constraint; the global
+    // MaxUpload/MaxDownload config limits are merged in by SeedingEngine.
+    // Returns a fresh instance because callers mutate the result.
+    private static SpeedLimits NoConstraint() => new SpeedLimits
+    {
+        MaxUploadSpeed = SpeedLimits.Unlimited,
+        MaxDownloadSpeed = SpeedLimits.Unlimited,
+        IsScheduleActive = false
+    };
 
     private readonly ISpeedScheduleRepository _repository;
     private readonly IConfigService _configService;
@@ -62,12 +69,7 @@ public class SpeedScheduler : ISpeedScheduler
 
         if (activeSchedules.Count == 0)
         {
-            return new SpeedLimits
-            {
-                MaxUploadSpeed = DefaultUploadSpeed,
-                MaxDownloadSpeed = DefaultDownloadSpeed,
-                IsScheduleActive = false
-            };
+            return NoConstraint();
         }
 
         return ResolveLimits(activeSchedules);
@@ -77,24 +79,14 @@ public class SpeedScheduler : ISpeedScheduler
     {
         if (!_configService.SchedulerEnabled)
         {
-            return new SpeedLimits
-            {
-                MaxUploadSpeed = DefaultUploadSpeed,
-                MaxDownloadSpeed = DefaultDownloadSpeed,
-                IsScheduleActive = false
-            };
+            return NoConstraint();
         }
 
         var dayOfWeek = utcTime.DayOfWeek;
 
         if (!IsDayEnabledInGlobalConfig(dayOfWeek))
         {
-            return new SpeedLimits
-            {
-                MaxUploadSpeed = DefaultUploadSpeed,
-                MaxDownloadSpeed = DefaultDownloadSpeed,
-                IsScheduleActive = false
-            };
+            return NoConstraint();
         }
 
         var startTime = new TimeOnly(_configService.SchedulerStartHour, _configService.SchedulerStartMinute);
@@ -103,13 +95,14 @@ public class SpeedScheduler : ISpeedScheduler
 
         if (IsTimeInRange(currentTime, startTime, endTime))
         {
-            // Global scheduler is active: use alternative speed limits from config
+            // Global scheduler is active: use alternative speed limits from config.
+            // 0 means unlimited for alt speeds as well.
             var altUpload = _configService.AltUploadSpeedKbps > 0
                 ? (long)_configService.AltUploadSpeedKbps * 1024
-                : DefaultUploadSpeed;
+                : SpeedLimits.Unlimited;
             var altDownload = _configService.AltDownloadSpeedKbps > 0
                 ? (long)_configService.AltDownloadSpeedKbps * 1024
-                : DefaultDownloadSpeed;
+                : SpeedLimits.Unlimited;
 
             _logger.Debug("Global scheduler active: alt speeds upload={0} download={1}", altUpload, altDownload);
 
@@ -122,12 +115,7 @@ public class SpeedScheduler : ISpeedScheduler
             };
         }
 
-        return new SpeedLimits
-        {
-            MaxUploadSpeed = DefaultUploadSpeed,
-            MaxDownloadSpeed = DefaultDownloadSpeed,
-            IsScheduleActive = false
-        };
+        return NoConstraint();
     }
 
     private bool IsDayEnabledInGlobalConfig(DayOfWeek dayOfWeek)

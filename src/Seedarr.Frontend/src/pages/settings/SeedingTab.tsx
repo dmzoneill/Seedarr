@@ -8,8 +8,8 @@ export function SeedingTab() {
   const save = useSaveSeedingConfig();
   const [form, setForm] = useState<SeedingConfig>({
     id: 1,
-    maxUploadSpeedKbps: 0,
-    maxDownloadSpeedKbps: 0,
+    maxUploadSpeedKbps: 625,
+    maxDownloadSpeedKbps: 1250,
     alternativeSpeedEnabled: false,
     altUploadSpeedKbps: 50,
     altDownloadSpeedKbps: 100,
@@ -85,8 +85,8 @@ export function SeedingTab() {
           onClick={() => {
             setForm((prev) => ({
               ...prev,
-              maxUploadSpeedKbps: 500,
-              maxDownloadSpeedKbps: 1000,
+              maxUploadSpeedKbps: 625,
+              maxDownloadSpeedKbps: 1250,
               uploadDistributionAlgorithm: 'Pareto',
               uploadDistributionSpreadPercentage: 50,
               downloadDistributionAlgorithm: 'Pareto',
@@ -103,8 +103,8 @@ export function SeedingTab() {
           onClick={() => {
             setForm((prev) => ({
               ...prev,
-              maxUploadSpeedKbps: 0,
-              maxDownloadSpeedKbps: 0,
+              maxUploadSpeedKbps: 2500,
+              maxDownloadSpeedKbps: 5000,
               uploadDistributionAlgorithm: 'PowerLaw',
               uploadDistributionSpreadPercentage: 80,
               downloadDistributionAlgorithm: 'PowerLaw',
@@ -119,19 +119,19 @@ export function SeedingTab() {
       </div>
       <div className="form-hint" style={{ marginBottom: '1rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
         Conservative: low speeds, equal distribution, 1.5 ratio limit.
-        Balanced: medium speeds, Pareto distribution, 2.0 ratio limit.
-        Aggressive: unlimited speeds, power law distribution, no ratio limit.
+        Balanced: default speeds (5/10 Mbit), Pareto distribution, 2.0 ratio limit.
+        Aggressive: high speed caps (20/40 Mbit), power law distribution, no ratio limit.
       </div>
 
       <SectionTitle>Speed Limits</SectionTitle>
-      <NumberInput label="Max Upload Speed" value={form.maxUploadSpeedKbps} onChange={(v) => set('maxUploadSpeedKbps', v)} min={0} suffix="KB/s" hint="Set to 0 for unlimited speed" />
-      <NumberInput label="Max Download Speed" value={form.maxDownloadSpeedKbps} onChange={(v) => set('maxDownloadSpeedKbps', v)} min={0} suffix="KB/s" hint="Set to 0 for unlimited speed" />
+      <NumberInput label="Max Upload Speed" value={form.maxUploadSpeedKbps} onChange={(v) => set('maxUploadSpeedKbps', v)} min={1} suffix="KB/s" hint="Default 625 KB/s (5 Mbit/s). Minimum 1 KB/s." />
+      <NumberInput label="Max Download Speed" value={form.maxDownloadSpeedKbps} onChange={(v) => set('maxDownloadSpeedKbps', v)} min={1} suffix="KB/s" hint="Default 1250 KB/s (10 Mbit/s). Minimum 1 KB/s." />
       <NumberInput label="Global Seed Ratio Limit" value={form.globalSeedRatioLimit} onChange={(v) => set('globalSeedRatioLimit', v)} min={0} step={0.1} hint="Stop seeding when ratio reaches this value. Set to 0 to disable." />
 
       <SectionTitle>Alternative Speeds</SectionTitle>
       <Toggle label="Enable Alt Speeds" checked={form.alternativeSpeedEnabled} onChange={(v) => set('alternativeSpeedEnabled', v)} />
-      <NumberInput label="Alt Upload Speed" value={form.altUploadSpeedKbps} onChange={(v) => set('altUploadSpeedKbps', v)} min={0} suffix="KB/s" disabled={!form.alternativeSpeedEnabled} />
-      <NumberInput label="Alt Download Speed" value={form.altDownloadSpeedKbps} onChange={(v) => set('altDownloadSpeedKbps', v)} min={0} suffix="KB/s" disabled={!form.alternativeSpeedEnabled} />
+      <NumberInput label="Alt Upload Speed" value={form.altUploadSpeedKbps} onChange={(v) => set('altUploadSpeedKbps', v)} min={1} suffix="KB/s" disabled={!form.alternativeSpeedEnabled} />
+      <NumberInput label="Alt Download Speed" value={form.altDownloadSpeedKbps} onChange={(v) => set('altDownloadSpeedKbps', v)} min={1} suffix="KB/s" disabled={!form.alternativeSpeedEnabled} />
 
       <SectionTitle>Upload Distribution</SectionTitle>
       <SelectInput label="Algorithm" value={form.uploadDistributionAlgorithm} onChange={(v) => set('uploadDistributionAlgorithm', v)} options={distOptions} />

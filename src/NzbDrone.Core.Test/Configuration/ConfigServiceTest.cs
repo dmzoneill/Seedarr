@@ -844,19 +844,30 @@ namespace NzbDrone.Core.Test.Configuration
         // ---- Property defaults (Speed) ----
 
         [Test]
-        public void MaxUploadSpeedKbps_should_default_to_0()
+        public void MaxUploadSpeedKbps_should_default_to_625()
         {
             _repository.All().Returns(new List<ConfigModel>().AsQueryable());
 
-            Assert.That(_subject.MaxUploadSpeedKbps, Is.EqualTo(0));
+            Assert.That(_subject.MaxUploadSpeedKbps, Is.EqualTo(625));
         }
 
         [Test]
-        public void MaxDownloadSpeedKbps_should_default_to_0()
+        public void MaxDownloadSpeedKbps_should_default_to_1250()
         {
             _repository.All().Returns(new List<ConfigModel>().AsQueryable());
 
-            Assert.That(_subject.MaxDownloadSpeedKbps, Is.EqualTo(0));
+            Assert.That(_subject.MaxDownloadSpeedKbps, Is.EqualTo(1250));
+        }
+
+        [Test]
+        public void MaxUploadSpeedKbps_should_resolve_stored_zero_to_default()
+        {
+            _repository.All().Returns(new List<ConfigModel>
+            {
+                new ConfigModel { Key = "MaxUploadSpeedKbps", Value = "0" }
+            }.AsQueryable());
+
+            Assert.That(_subject.MaxUploadSpeedKbps, Is.EqualTo(ConfigService.DefaultMaxUploadSpeedKbps));
         }
 
         [Test]
