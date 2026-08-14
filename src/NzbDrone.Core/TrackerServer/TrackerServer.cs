@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -9,52 +10,156 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
+using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.TrackerServer;
 
-public class TrackerServer : BackgroundService
+public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 {
-    private const int TrackerPort = 9696;
-
-    private readonly PeerDatabase _peerDatabase;
+    private readonly IPeerDatabase _peerDatabase;
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
+    private readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
+    private readonly object _listenerLock = new();
 
-    public TrackerServer(PeerDatabase peerDatabase)
+    private TcpListener _listener;
+    private CancellationTokenSource _listenerCts;
+    private bool _wasEnabled;
+
+    public TrackerServer(IPeerDatabase peerDatabase, IConfigService configService)
     {
         _peerDatabase = peerDatabase;
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public void Handle(ConfigSavedEvent message)
+    {
+        var isEnabled = _configService.TrackerServerEnabled && _configService.TrackerHttpEnabled;
+
+        lock (_listenerLock)
+        {
+            if (isEnabled && !_wasEnabled)
+            {
+                _logger.Info("Tracker server enabled via config change, starting listener");
+                StartListener();
+            }
+            else if (!isEnabled && _wasEnabled)
+            {
+                _logger.Info("Tracker server disabled via config change, stopping listener");
+                StopListener();
+            }
+        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var listener = new TcpListener(IPAddress.Any, TrackerPort);
+        var isEnabled = _configService.TrackerServerEnabled && _configService.TrackerHttpEnabled;
 
-        try
+        lock (_listenerLock)
         {
-            listener.Start();
-        }
-        catch (SocketException ex)
-        {
-            _logger.Warn(ex, "Built-in tracker failed to bind port {0}, skipping", TrackerPort);
-            return;
+            _wasEnabled = isEnabled;
         }
 
-        _logger.Info("Built-in tracker listening on port {0}", TrackerPort);
+        if (isEnabled)
+        {
+            StartListener();
+        }
+        else
+        {
+            _logger.Debug("Built-in tracker is disabled, waiting for config change");
+        }
 
+        // Keep the BackgroundService alive until application shutdown
         try
         {
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                var client = await listener.AcceptTcpClientAsync(stoppingToken);
-                _ = Task.Run(() => HandleRequest(client), stoppingToken);
-            }
+            await Task.Delay(Timeout.Infinite, stoppingToken);
         }
         catch (OperationCanceledException)
         {
         }
         finally
         {
-            listener.Stop();
+            StopListener();
+        }
+    }
+
+    private void StartListener()
+    {
+        lock (_listenerLock)
+        {
+            if (_listener != null)
+            {
+                return;
+            }
+
+            var port = _configService.TrackerHttpPort;
+            var bindAddress = IPAddress.Parse(_configService.TrackerBindAddress);
+            var listener = new TcpListener(bindAddress, port);
+
+            try
+            {
+                listener.Start();
+            }
+            catch (SocketException ex)
+            {
+                _logger.Warn(ex, "Built-in HTTP tracker failed to bind {0}:{1}, skipping", bindAddress, port);
+                return;
+            }
+
+            _listener = listener;
+            _wasEnabled = true;
+            _listenerCts = new CancellationTokenSource();
+            _logger.Info("Built-in HTTP tracker listening on {0}:{1}", bindAddress, port);
+
+            _ = Task.Run(() => AcceptLoop(_listener, _listenerCts.Token));
+        }
+    }
+
+    private void StopListener()
+    {
+        lock (_listenerLock)
+        {
+            _wasEnabled = false;
+
+            if (_listenerCts != null)
+            {
+                _listenerCts.Cancel();
+                _listenerCts.Dispose();
+                _listenerCts = null;
+            }
+
+            if (_listener != null)
+            {
+                _listener.Stop();
+                _listener = null;
+                _logger.Info("Built-in HTTP tracker stopped");
+            }
+        }
+    }
+
+    private async Task AcceptLoop(TcpListener listener, CancellationToken ct)
+    {
+        var cleanupTimer = new Timer(_ => PurgeExpiredRateLimits(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var client = await listener.AcceptTcpClientAsync(ct);
+                _ = Task.Run(() => HandleRequest(client), ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        finally
+        {
+            await cleanupTimer.DisposeAsync();
         }
     }
 
@@ -62,7 +167,19 @@ public class TrackerServer : BackgroundService
     {
         try
         {
+            var remoteEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
+            var clientIp = remoteEndpoint.Address.ToString();
+
             using var stream = client.GetStream();
+
+            if (IsRateLimited(clientIp))
+            {
+                var rateLimitResponse = "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                var rateLimitBytes = Encoding.ASCII.GetBytes(rateLimitResponse);
+                stream.Write(rateLimitBytes, 0, rateLimitBytes.Length);
+                return;
+            }
+
             using var reader = new StreamReader(stream, Encoding.ASCII);
 
             var requestLine = reader.ReadLine();
@@ -78,7 +195,6 @@ public class TrackerServer : BackgroundService
             }
 
             var path = parts[1];
-            var remoteEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
 
             string responseBody;
 
@@ -88,7 +204,14 @@ public class TrackerServer : BackgroundService
             }
             else if (path.StartsWith("/scrape"))
             {
-                responseBody = HandleScrape(path);
+                if (!_configService.TrackerEnableScrape)
+                {
+                    responseBody = "d14:failure reason15:Scrape disablede";
+                }
+                else
+                {
+                    responseBody = HandleScrape(path);
+                }
             }
             else
             {
@@ -109,16 +232,25 @@ public class TrackerServer : BackgroundService
         }
     }
 
-    private string HandleAnnounce(string path, IPEndPoint remoteEndpoint)
+    private (Dictionary<string, string> Parameters, string Error) ParseRequest(string path)
     {
         var queryIndex = path.IndexOf('?');
         if (queryIndex < 0)
         {
-            return "d14:failure reason20:Missing query stringe";
+            return (null, "d14:failure reason20:Missing query stringe");
         }
 
         var query = path[(queryIndex + 1)..];
-        var parameters = ParseQueryString(query);
+        return (ParseQueryString(query), null);
+    }
+
+    private string HandleAnnounce(string path, IPEndPoint remoteEndpoint)
+    {
+        var (parameters, error) = ParseRequest(path);
+        if (error != null)
+        {
+            return error;
+        }
 
         if (!parameters.TryGetValue("info_hash", out var infoHash) ||
             !parameters.TryGetValue("port", out var portStr))
@@ -142,22 +274,41 @@ public class TrackerServer : BackgroundService
         }
 
         var peers = _peerDatabase.GetPeers(infoHash);
-        var interval = 1800;
-        var compactPeers = BuildCompactPeers(peers, peerIp, port);
+        var interval = _configService.TrackerAnnounceInterval;
+        var maxPeers = _configService.TrackerMaxPeersPerAnnounce;
+        var compactPeers = BuildCompactPeers(peers, peerIp, port, maxPeers);
 
-        return $"d8:intervali{interval}e5:peers{compactPeers.Length}:{Encoding.Latin1.GetString(compactPeers)}e";
+        if (_configService.TrackerLogAnnounces)
+        {
+            _logger.Info(
+                "HTTP announce for {0} from {1}:{2}, event={3}, returning {4} peers",
+                infoHash,
+                peerIp,
+                port,
+                eventType ?? "",
+                compactPeers.Length / 6);
+        }
+
+        var minInterval = _configService.MinAnnounceIntervalSeconds;
+        var response = $"d8:intervali{interval}e12:min intervali{minInterval}e5:peers{compactPeers.Length}:{Encoding.Latin1.GetString(compactPeers)}";
+
+        if (_configService.TrackerPrivateMode)
+        {
+            response += "7:privatei1e";
+        }
+
+        response += "e";
+
+        return response;
     }
 
     private string HandleScrape(string path)
     {
-        var queryIndex = path.IndexOf('?');
-        if (queryIndex < 0)
+        var (parameters, error) = ParseRequest(path);
+        if (error != null)
         {
-            return "d14:failure reason20:Missing query stringe";
+            return error;
         }
-
-        var query = path[(queryIndex + 1)..];
-        var parameters = ParseQueryString(query);
 
         if (!parameters.TryGetValue("info_hash", out var infoHash))
         {
@@ -165,12 +316,13 @@ public class TrackerServer : BackgroundService
         }
 
         var stats = _peerDatabase.GetStats(infoHash);
-        return $"d5:filesd{infoHash.Length}:{infoHash}d8:completei{stats.Complete}e10:downloadedi{stats.Downloaded}e10:incompletei{stats.Incomplete}eeee";
+        var scrapeInterval = _configService.ScrapeIntervalSeconds;
+        return $"d5:filesd{infoHash.Length}:{infoHash}d8:completei{stats.Complete}e10:downloadedi{stats.Downloaded}e10:incompletei{stats.Incomplete}eee20:min_request_intervali{scrapeInterval}ee";
     }
 
-    private static byte[] BuildCompactPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort)
+    private static byte[] BuildCompactPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
     {
-        var filtered = peers.Where(p => p.Ip != excludeIp || p.Port != excludePort).ToList();
+        var filtered = peers.Where(p => p.Ip != excludeIp || p.Port != excludePort).Take(maxPeers).ToList();
         var data = new byte[filtered.Count * 6];
         for (var i = 0; i < filtered.Count; i++)
         {
@@ -201,5 +353,51 @@ public class TrackerServer : BackgroundService
         }
 
         return result;
+    }
+
+    private bool IsRateLimited(string ip)
+    {
+        var rateLimit = _configService.TrackerRateLimitPerMinute;
+
+        if (rateLimit <= 0)
+        {
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        var entry = _rateLimits.AddOrUpdate(
+            ip,
+            _ => new RateLimitEntry { Count = 1, WindowStart = now },
+            (_, existing) =>
+            {
+                if ((now - existing.WindowStart).TotalMinutes >= 1)
+                {
+                    return new RateLimitEntry { Count = 1, WindowStart = now };
+                }
+
+                return new RateLimitEntry { Count = existing.Count + 1, WindowStart = existing.WindowStart };
+            });
+
+        return entry.Count > rateLimit;
+    }
+
+    private void PurgeExpiredRateLimits()
+    {
+        var now = DateTime.UtcNow;
+        var expired = _rateLimits
+            .Where(kvp => (now - kvp.Value.WindowStart).TotalMinutes >= 2)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in expired)
+        {
+            _rateLimits.TryRemove(key, out _);
+        }
+    }
+
+    private sealed class RateLimitEntry
+    {
+        public int Count { get; init; }
+        public DateTime WindowStart { get; init; }
     }
 }

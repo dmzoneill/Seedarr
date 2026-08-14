@@ -5,14 +5,16 @@ import {
   useStopSeeding,
   useDeleteTorrent,
 } from '../api/hooks';
-import { formatBytes, formatRatio, formatDate } from '../utils/formatters';
+import { formatBytes, formatRatio, formatDate, extractTrackerDomain } from '../utils/formatters';
 import type { Torrent } from '../api/types';
 
 interface TorrentGridProps {
   filter?: string;
+  stateFilter?: string;
+  trackerFilter?: string;
 }
 
-function TorrentGrid({ filter }: TorrentGridProps) {
+function TorrentGrid({ filter, stateFilter, trackerFilter }: TorrentGridProps) {
   const { data: torrents, isLoading } = useTorrents();
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
@@ -46,9 +48,14 @@ function TorrentGrid({ filter }: TorrentGridProps) {
     );
   }
 
-  const filtered = (torrents ?? []).filter(
-    (t) => !filter || t.name.toLowerCase().includes(filter.toLowerCase())
-  );
+  const filtered = (torrents ?? []).filter((t) => {
+    if (filter && !t.name.toLowerCase().includes(filter.toLowerCase())) return false;
+    if (stateFilter && stateFilter !== 'All' && t.status !== stateFilter) return false;
+    if (trackerFilter && trackerFilter !== 'All') {
+      if (extractTrackerDomain(t.trackerUrl) !== trackerFilter) return false;
+    }
+    return true;
+  });
 
   function statusBadge(status: string) {
     const cls = `badge badge-${status.toLowerCase()}`;
@@ -78,7 +85,7 @@ function TorrentGrid({ filter }: TorrentGridProps) {
           className="btn btn-small btn-danger"
           onClick={() => {
             if (confirm(`Delete "${torrent.name}"?`)) {
-              deleteTorrent.mutate(torrent.id);
+              deleteTorrent.mutate({ id: torrent.id });
             }
           }}
         >

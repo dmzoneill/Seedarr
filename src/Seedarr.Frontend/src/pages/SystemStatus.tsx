@@ -1,41 +1,32 @@
-import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
+import { useSystemStatus, useHealthChecks, useDiskSpace } from '../api/hooks';
 
-interface SystemStatusResponse {
-  appName: string;
-  version: string;
-  buildTime: string;
-  isDebug: boolean;
-  isProduction: boolean;
-  isAdmin: boolean;
-  isUserInteractive: boolean;
-  startupPath: string;
-  appData: string;
-  osName: string;
-  osVersion: string;
-  isDocker: boolean;
-  isLinux: boolean;
-  isOsx: boolean;
-  isWindows: boolean;
-  branch: string;
-  runtimeVersion: string;
-  runtimeName: string;
-  startTime: string;
-  packageVersion: string;
-  packageAuthor: string;
-  packageUpdateMechanism: string;
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  const idx = Math.min(i, units.length - 1);
+  return `${(bytes / Math.pow(1024, idx)).toFixed(1)} ${units[idx]}`;
+}
+
+function formatUptime(seconds: number): string {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const parts: string[] = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(' ');
 }
 
 function SystemStatus() {
-  const {
-    data: status,
-    isLoading,
-    error,
-  } = useQuery<SystemStatusResponse>({
-    queryKey: ['system', 'status'],
-    queryFn: () => apiClient.get('/system/status'),
-  });
+  const { data: status, isLoading: statusLoading } = useSystemStatus();
+  const { data: health, isLoading: healthLoading } = useHealthChecks();
+  const { data: diskSpace, isLoading: diskLoading } = useDiskSpace();
+
+  const isLoading = statusLoading || healthLoading || diskLoading;
 
   return (
     <div>
@@ -43,81 +34,148 @@ function SystemStatus() {
 
       {isLoading && <p className="loading">Loading system status...</p>}
 
-      {error && (
-        <div className="card">
-          <p className="error">Failed to load system status.</p>
+      {/* Health Section */}
+      <div className="system-status-section">
+        <h2>Health</h2>
+        {health && health.length === 0 && (
+          <div className="health-ok-message">No issues with your configuration</div>
+        )}
+        {health && health.length > 0 && (
+          <div className="health-alerts">
+            {health.map((check, i) => {
+              let alertClass = 'health-alert health-alert-notice';
+              if (check.type === 'Warning') alertClass = 'health-alert health-alert-warning';
+              if (check.type === 'Error') alertClass = 'health-alert health-alert-error';
+              return (
+                <div key={i} className={alertClass}>
+                  <span>{check.source}: {check.message || check.type}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Disk Space Section */}
+      <div className="system-status-section">
+        <h2>Disk Space</h2>
+        {diskSpace && diskSpace.length > 0 && (
+          <table className="system-status-table">
+            <thead>
+              <tr>
+                <th>Location</th>
+                <th>Free Space</th>
+                <th>Total Space</th>
+                <th style={{ width: '30%' }}>Usage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {diskSpace.map((d, i) => {
+                const usedPercent = d.totalSpace > 0
+                  ? ((d.totalSpace - d.freeSpace) / d.totalSpace) * 100
+                  : 0;
+                let barClass = 'disk-progress-bar';
+                if (usedPercent >= 90) barClass += ' disk-progress-bar-danger';
+                else if (usedPercent >= 75) barClass += ' disk-progress-bar-warning';
+                return (
+                  <tr key={i}>
+                    <td>{d.label} ({d.path})</td>
+                    <td>{formatBytes(d.freeSpace)}</td>
+                    <td>{formatBytes(d.totalSpace)}</td>
+                    <td>
+                      <div className="disk-progress">
+                        <div className={barClass} style={{ width: `${usedPercent}%` }} />
+                        <span className="disk-progress-text">
+                          {usedPercent.toFixed(1)}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* About Section */}
+      {status && (
+        <div className="system-status-section">
+          <h2>About</h2>
+          <table className="system-status-table">
+            <tbody>
+              <tr>
+                <td className="status-label-cell">Version</td>
+                <td>{status.version}</td>
+              </tr>
+              <tr>
+                <td className="status-label-cell">.NET</td>
+                <td>{status.runtimeName} ({status.runtimeVersion})</td>
+              </tr>
+              <tr>
+                <td className="status-label-cell">Database</td>
+                <td>{status.databaseVersion}</td>
+              </tr>
+              <tr>
+                <td className="status-label-cell">Database Migration</td>
+                <td>{status.databaseMigration}</td>
+              </tr>
+              <tr>
+                <td className="status-label-cell">AppData Directory</td>
+                <td>{status.appDataPath}</td>
+              </tr>
+              <tr>
+                <td className="status-label-cell">Startup Directory</td>
+                <td>{status.startupPath}</td>
+              </tr>
+              <tr>
+                <td className="status-label-cell">Mode</td>
+                <td>
+                  {status.isDocker ? 'Docker' : 'Console'}
+                  {status.isDebug ? ' (Debug)' : ''}
+                </td>
+              </tr>
+              <tr>
+                <td className="status-label-cell">Uptime</td>
+                <td>{formatUptime(status.uptimeSeconds)}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       )}
 
-      {status && (
-        <>
-          <div className="card">
-            <h3>About</h3>
-            <div className="status-row">
-              <span className="status-label">Application</span>
-              <span className="status-value">{status.appName}</span>
-            </div>
-            <div className="status-row">
-              <span className="status-label">Version</span>
-              <span className="status-value">{status.version}</span>
-            </div>
-            <div className="status-row">
-              <span className="status-label">Branch</span>
-              <span className="status-value">{status.branch}</span>
-            </div>
-            <div className="status-row">
-              <span className="status-label">Start Time</span>
-              <span className="status-value">
-                {new Date(status.startTime).toLocaleString()}
-              </span>
-            </div>
-          </div>
-
-          <div className="card">
-            <h3>Environment</h3>
-            <div className="status-row">
-              <span className="status-label">OS</span>
-              <span className="status-value">
-                {status.osName} {status.osVersion}
-              </span>
-            </div>
-            <div className="status-row">
-              <span className="status-label">Runtime</span>
-              <span className="status-value">
-                {status.runtimeName} {status.runtimeVersion}
-              </span>
-            </div>
-            <div className="status-row">
-              <span className="status-label">Docker</span>
-              <span className="status-value">
-                {status.isDocker ? 'Yes' : 'No'}
-              </span>
-            </div>
-            <div className="status-row">
-              <span className="status-label">Debug</span>
-              <span className="status-value">
-                {status.isDebug ? 'Yes' : 'No'}
-              </span>
-            </div>
-          </div>
-
-          <div className="card">
-            <h3>Paths</h3>
-            <div className="status-row">
-              <span className="status-label">Startup Path</span>
-              <span className="status-value">{status.startupPath}</span>
-            </div>
-            <div className="status-row">
-              <span className="status-label">App Data</span>
-              <span className="status-value">{status.appData}</span>
-            </div>
-          </div>
-
-          <div className="card">
-            <Link to="/system/tasks">View Scheduled Tasks</Link>
-          </div>
-        </>
-      )}
+      {/* More Info Section */}
+      <div className="system-status-section">
+        <h2>More Info</h2>
+        <table className="system-status-table">
+          <tbody>
+            <tr>
+              <td className="status-label-cell">Home Page</td>
+              <td>
+                <a href="https://github.com/dmzoneill/Seedarr" target="_blank" rel="noopener noreferrer">
+                  github.com/dmzoneill/Seedarr
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td className="status-label-cell">Source</td>
+              <td>
+                <a href="https://github.com/dmzoneill/Seedarr" target="_blank" rel="noopener noreferrer">
+                  github.com/dmzoneill/Seedarr
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td className="status-label-cell">Feature Requests</td>
+              <td>
+                <a href="https://github.com/dmzoneill/Seedarr/issues" target="_blank" rel="noopener noreferrer">
+                  github.com/dmzoneill/Seedarr/issues
+                </a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSignalR } from '../api/signalr';
+import { useToast } from '../context/ToastContext';
 
 const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
   TorrentAdded: [['torrents']],
@@ -14,12 +15,29 @@ const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
 export default function SignalRProvider() {
   const queryClient = useQueryClient();
   const { connection, status } = useSignalR(queryClient);
+  const { showToast } = useToast();
+  const showToastRef = useRef(showToast);
+  showToastRef.current = showToast;
 
   useEffect(() => {
     for (const [event, queryKeys] of Object.entries(EVENT_INVALIDATION_MAP)) {
-      connection.on(event, () => {
+      connection.on(event, (data?: unknown) => {
         for (const key of queryKeys) {
           queryClient.invalidateQueries({ queryKey: key });
+        }
+
+        // Fire toast notifications for key events
+        if (event === 'TorrentAdded') {
+          const name =
+            data && typeof data === 'object' && 'name' in data
+              ? String((data as Record<string, unknown>).name)
+              : undefined;
+          showToastRef.current(
+            name ? `Torrent added: ${name}` : 'Torrent added',
+            'success'
+          );
+        } else if (event === 'TorrentDeleted') {
+          showToastRef.current('Torrent removed', 'info');
         }
       });
     }

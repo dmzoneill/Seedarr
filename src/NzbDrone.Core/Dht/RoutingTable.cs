@@ -6,8 +6,6 @@ namespace NzbDrone.Core.Dht;
 
 public class RoutingTable
 {
-    private const int K = 8;
-    private const int IdBits = 160;
     private static readonly IComparer<byte[]> _byteComparer = Comparer<byte[]>.Create((a, b) =>
     {
         for (var i = 0; i < a.Length && i < b.Length; i++)
@@ -21,12 +19,20 @@ public class RoutingTable
 
         return a.Length.CompareTo(b.Length);
     });
+
+    private readonly int _bucketSize;
+    private readonly int _idBits;
+    private readonly int _maxNodes;
     private readonly List<List<DhtNode>> _buckets;
 
-    public RoutingTable()
+    public RoutingTable(int bucketSize = 8, int idBits = 160, int maxNodes = 0)
     {
+        _bucketSize = bucketSize;
+        _idBits = idBits;
+        _maxNodes = maxNodes;
+
         _buckets = new List<List<DhtNode>>();
-        for (var i = 0; i < IdBits; i++)
+        for (var i = 0; i < _idBits; i++)
         {
             _buckets.Add(new List<DhtNode>());
         }
@@ -45,7 +51,13 @@ public class RoutingTable
             return;
         }
 
-        if (bucket.Count < K)
+        // Check max nodes cap
+        if (_maxNodes > 0 && NodeCount >= _maxNodes)
+        {
+            return;
+        }
+
+        if (bucket.Count < _bucketSize)
         {
             bucket.Add(node);
             return;
@@ -60,18 +72,19 @@ public class RoutingTable
         }
     }
 
-    public List<DhtNode> GetClosestNodes(byte[] targetId, int count = K)
+    public List<DhtNode> GetClosestNodes(byte[] targetId, int count = 0)
     {
+        var take = count > 0 ? count : _bucketSize;
         return _buckets.SelectMany(b => b)
             .Where(n => n.IsGood)
             .OrderBy(n => Distance(n.NodeId, targetId), _byteComparer)
-            .Take(count)
+            .Take(take)
             .ToList();
     }
 
     public int NodeCount => _buckets.Sum(b => b.Count);
 
-    private static int GetBucketIndex(byte[] nodeId)
+    private int GetBucketIndex(byte[] nodeId)
     {
         // Find highest differing bit
         for (var i = 0; i < nodeId.Length; i++)
@@ -82,13 +95,14 @@ public class RoutingTable
                 {
                     if ((nodeId[i] & (1 << bit)) != 0)
                     {
-                        return (i * 8) + (7 - bit);
+                        var index = (i * 8) + (7 - bit);
+                        return Math.Min(index, _idBits - 1);
                     }
                 }
             }
         }
 
-        return IdBits - 1;
+        return _idBits - 1;
     }
 
     private static byte[] Distance(byte[] a, byte[] b)

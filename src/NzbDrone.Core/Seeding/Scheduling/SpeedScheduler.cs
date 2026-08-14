@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Seeding.Scheduling;
 
@@ -32,11 +33,13 @@ public class SpeedScheduler : ISpeedScheduler
     private const long DefaultDownloadSpeed = 1_048_576;
 
     private readonly ISpeedScheduleRepository _repository;
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
 
-    public SpeedScheduler(ISpeedScheduleRepository repository)
+    public SpeedScheduler(ISpeedScheduleRepository repository, IConfigService configService)
     {
         _repository = repository;
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -51,12 +54,8 @@ public class SpeedScheduler : ISpeedScheduler
 
         if (schedules.Count == 0)
         {
-            return new SpeedLimits
-            {
-                MaxUploadSpeed = DefaultUploadSpeed,
-                MaxDownloadSpeed = DefaultDownloadSpeed,
-                IsScheduleActive = false
-            };
+            // No SpeedSchedule entities exist; fall back to global scheduler config
+            return GetLimitsFromGlobalConfig(utcTime);
         }
 
         var activeSchedules = GetActiveSchedules(schedules, utcTime);
@@ -72,6 +71,78 @@ public class SpeedScheduler : ISpeedScheduler
         }
 
         return ResolveLimits(activeSchedules);
+    }
+
+    private SpeedLimits GetLimitsFromGlobalConfig(DateTime utcTime)
+    {
+        if (!_configService.SchedulerEnabled)
+        {
+            return new SpeedLimits
+            {
+                MaxUploadSpeed = DefaultUploadSpeed,
+                MaxDownloadSpeed = DefaultDownloadSpeed,
+                IsScheduleActive = false
+            };
+        }
+
+        var dayOfWeek = utcTime.DayOfWeek;
+
+        if (!IsDayEnabledInGlobalConfig(dayOfWeek))
+        {
+            return new SpeedLimits
+            {
+                MaxUploadSpeed = DefaultUploadSpeed,
+                MaxDownloadSpeed = DefaultDownloadSpeed,
+                IsScheduleActive = false
+            };
+        }
+
+        var startTime = new TimeOnly(_configService.SchedulerStartHour, _configService.SchedulerStartMinute);
+        var endTime = new TimeOnly(_configService.SchedulerEndHour, _configService.SchedulerEndMinute);
+        var currentTime = TimeOnly.FromDateTime(utcTime);
+
+        if (IsTimeInRange(currentTime, startTime, endTime))
+        {
+            // Global scheduler is active: use alternative speed limits from config
+            var altUpload = _configService.AltUploadSpeedKbps > 0
+                ? (long)_configService.AltUploadSpeedKbps * 1024
+                : DefaultUploadSpeed;
+            var altDownload = _configService.AltDownloadSpeedKbps > 0
+                ? (long)_configService.AltDownloadSpeedKbps * 1024
+                : DefaultDownloadSpeed;
+
+            _logger.Debug("Global scheduler active: alt speeds upload={0} download={1}", altUpload, altDownload);
+
+            return new SpeedLimits
+            {
+                MaxUploadSpeed = altUpload,
+                MaxDownloadSpeed = altDownload,
+                IsScheduleActive = true,
+                ActiveScheduleName = "Global Scheduler"
+            };
+        }
+
+        return new SpeedLimits
+        {
+            MaxUploadSpeed = DefaultUploadSpeed,
+            MaxDownloadSpeed = DefaultDownloadSpeed,
+            IsScheduleActive = false
+        };
+    }
+
+    private bool IsDayEnabledInGlobalConfig(DayOfWeek dayOfWeek)
+    {
+        return dayOfWeek switch
+        {
+            DayOfWeek.Monday => _configService.SchedulerMonday,
+            DayOfWeek.Tuesday => _configService.SchedulerTuesday,
+            DayOfWeek.Wednesday => _configService.SchedulerWednesday,
+            DayOfWeek.Thursday => _configService.SchedulerThursday,
+            DayOfWeek.Friday => _configService.SchedulerFriday,
+            DayOfWeek.Saturday => _configService.SchedulerSaturday,
+            DayOfWeek.Sunday => _configService.SchedulerSunday,
+            _ => false
+        };
     }
 
     public List<SpeedSchedule> GetAll()

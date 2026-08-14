@@ -1,6 +1,7 @@
 import { useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../api/client';
+import { useSpeedHistory } from '../api/hooks';
 import type { SeedingStats } from '../api/types';
 import { formatSpeed } from '../utils/formatters';
 
@@ -29,17 +30,40 @@ function getNiceMax(value: number): number {
 
 function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphProps) {
   const historyRef = useRef<SpeedDataPoint[]>([]);
+  const seededRef = useRef(false);
   const prevRef = useRef<{
     totalUploaded: number;
     totalDownloaded: number;
     timestamp: number;
   } | null>(null);
 
+  const { data: serverHistory } = useSpeedHistory();
+
   const { data: stats } = useQuery<SeedingStats>({
     queryKey: ['seeding', 'stats'],
     queryFn: () => apiClient.get('/seeding/stats'),
     refetchInterval: 1000,
   });
+
+  useEffect(() => {
+    if (!serverHistory || seededRef.current) return;
+    seededRef.current = true;
+
+    const points: SpeedDataPoint[] = serverHistory.slice(-maxPoints).map((s) => ({
+      uploadSpeed: s.uploadSpeed,
+      downloadSpeed: s.downloadSpeed,
+    }));
+    historyRef.current = points;
+
+    if (serverHistory.length > 0) {
+      const last = serverHistory[serverHistory.length - 1];
+      prevRef.current = {
+        totalUploaded: last.totalUploaded,
+        totalDownloaded: last.totalDownloaded,
+        timestamp: new Date(last.timestamp).getTime(),
+      };
+    }
+  }, [serverHistory, maxPoints]);
 
   useEffect(() => {
     if (!stats) return;
@@ -79,14 +103,12 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
-  // Auto-scale Y axis based on max speed in current window
   let maxSpeed = 0;
   for (const point of history) {
     maxSpeed = Math.max(maxSpeed, point.uploadSpeed, point.downloadSpeed);
   }
   const niceMax = getNiceMax(maxSpeed > 0 ? maxSpeed * 1.1 : 1024);
 
-  // Grid lines (5 horizontal lines including 0)
   const gridLineCount = 4;
   const gridLines = Array.from({ length: gridLineCount + 1 }, (_, i) => {
     const value = (niceMax / gridLineCount) * i;
@@ -94,7 +116,6 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
     return { value, y };
   });
 
-  // Build polyline points string
   const toPoints = (
     data: SpeedDataPoint[],
     key: 'uploadSpeed' | 'downloadSpeed'
@@ -128,14 +149,14 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
         <span className="speed-graph-legend-item">
           <span
             className="speed-graph-indicator"
-            style={{ backgroundColor: '#35c5f4' }}
+            style={{ backgroundColor: '#c8a84e' }}
           />
           Upload: {formatSpeed(currentUpload)}
         </span>
         <span className="speed-graph-legend-item">
           <span
             className="speed-graph-indicator"
-            style={{ backgroundColor: '#f44336' }}
+            style={{ backgroundColor: '#b5443a' }}
           />
           Download: {formatSpeed(currentDownload)}
         </span>
@@ -147,7 +168,6 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
           viewBox={`0 0 ${width} ${height}`}
           preserveAspectRatio="xMidYMid meet"
         >
-          {/* Grid lines and Y-axis labels */}
           {gridLines.map(({ value, y }, i) => (
             <g key={i}>
               <line
@@ -155,14 +175,14 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
                 y1={y}
                 x2={width - padding.right}
                 y2={y}
-                stroke="#3a3f4b"
+                stroke="#3a352e"
                 strokeWidth={1}
               />
               <text
                 x={padding.left - 8}
                 y={y + 4}
                 textAnchor="end"
-                fill="#999"
+                fill="#7a7060"
                 fontSize={11}
                 fontFamily="inherit"
               >
@@ -171,11 +191,10 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
             </g>
           ))}
 
-          {/* X-axis labels */}
           <text
             x={padding.left}
             y={height - 5}
-            fill="#999"
+            fill="#7a7060"
             fontSize={11}
             textAnchor="start"
           >
@@ -184,7 +203,7 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
           <text
             x={padding.left + chartWidth / 2}
             y={height - 5}
-            fill="#999"
+            fill="#7a7060"
             fontSize={11}
             textAnchor="middle"
           >
@@ -193,42 +212,39 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
           <text
             x={width - padding.right}
             y={height - 5}
-            fill="#999"
+            fill="#7a7060"
             fontSize={11}
             textAnchor="end"
           >
             now
           </text>
 
-          {/* Chart area border */}
           <rect
             x={padding.left}
             y={padding.top}
             width={chartWidth}
             height={chartHeight}
             fill="none"
-            stroke="#3a3f4b"
+            stroke="#3a352e"
             strokeWidth={1}
           />
 
-          {/* Upload speed line (cyan) */}
           {uploadPoints && (
             <polyline
               points={uploadPoints}
               fill="none"
-              stroke="#35c5f4"
+              stroke="#c8a84e"
               strokeWidth={2}
               strokeLinejoin="round"
               strokeLinecap="round"
             />
           )}
 
-          {/* Download speed line (red) */}
           {downloadPoints && (
             <polyline
               points={downloadPoints}
               fill="none"
-              stroke="#f44336"
+              stroke="#b5443a"
               strokeWidth={2}
               strokeLinejoin="round"
               strokeLinecap="round"
