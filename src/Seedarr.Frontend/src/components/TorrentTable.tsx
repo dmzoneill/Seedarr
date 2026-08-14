@@ -7,6 +7,7 @@ import {
   useDeleteTorrent,
 } from '../api/hooks';
 import { formatBytes, formatRatio, formatDate } from '../utils/formatters';
+import { SkeletonTableRow } from './Skeleton';
 import type { Torrent } from '../api/types';
 
 type SortKey = 'name' | 'totalSize' | 'status' | 'uploaded' | 'ratio' | 'dateAdded';
@@ -23,7 +24,36 @@ function TorrentTable({ filter }: TorrentTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortAsc, setSortAsc] = useState(true);
 
-  if (isLoading) return <p className="loading">Loading torrents...</p>;
+  const columns: { key: SortKey; label: string }[] = [
+    { key: 'name', label: 'Name' },
+    { key: 'totalSize', label: 'Size' },
+    { key: 'status', label: 'Status' },
+    { key: 'uploaded', label: 'Uploaded' },
+    { key: 'ratio', label: 'Ratio' },
+    { key: 'dateAdded', label: 'Added' },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="torrent-table-wrapper">
+        <table className="torrent-table">
+          <thead>
+            <tr>
+              {columns.map((col) => (
+                <th key={col.key} className="torrent-table-th">{col.label}</th>
+              ))}
+              <th className="torrent-table-th">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <SkeletonTableRow key={i} columns={7} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
 
   const filtered = (torrents ?? []).filter(
     (t) => !filter || t.name.toLowerCase().includes(filter.toLowerCase())
@@ -85,15 +115,6 @@ function TorrentTable({ filter }: TorrentTableProps) {
       </div>
     );
   }
-
-  const columns: { key: SortKey; label: string }[] = [
-    { key: 'name', label: 'Name' },
-    { key: 'totalSize', label: 'Size' },
-    { key: 'status', label: 'Status' },
-    { key: 'uploaded', label: 'Uploaded' },
-    { key: 'ratio', label: 'Ratio' },
-    { key: 'dateAdded', label: 'Added' },
-  ];
 
   return (
     <div className="torrent-table-wrapper">
