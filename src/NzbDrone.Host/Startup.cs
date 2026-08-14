@@ -1,3 +1,4 @@
+using System.Reflection;
 using DryIoc;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -20,7 +21,12 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
+        var apiAssembly = Assembly.Load("Seedarr.Api.V1");
+        var httpAssembly = Assembly.Load("Seedarr.Http");
+
         services.AddControllers()
+            .AddApplicationPart(apiAssembly)
+            .AddApplicationPart(httpAssembly)
             .AddJsonOptions(options =>
             {
                 var settings = STJson.GetSerializerSettings();
@@ -71,6 +77,9 @@ public class Startup
 
         app.UseCors();
 
+        app.UseDefaultFiles();
+        app.UseStaticFiles();
+
         app.UseRouting();
 
         app.UseAuthentication();
@@ -81,5 +90,7 @@ public class Startup
 
         app.MapControllers();
         app.MapHub<MessageHub>("/signalr/messages");
+
+        app.MapFallbackToFile("index.html");
     }
 }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   useNetworkStatus,
   useTrackerServerConfig,
-  useUpdateTrackerServerConfig,
+  useSaveTrackerServerConfig,
   useTrackerServerStats,
   useGeneralConfig,
   useSaveGeneralConfig,
@@ -10,10 +10,43 @@ import {
   useSaveSeedingConfig,
   useNetworkConfig,
   useSaveNetworkConfig,
+  useBitTorrentConfig,
+  useSaveBitTorrentConfig,
+  usePeerProtocolConfig,
+  useSavePeerProtocolConfig,
+  useProtocolsConfig,
+  useSaveProtocolsConfig,
+  useSimulationConfig,
+  useSaveSimulationConfig,
+  useSchedulerConfig,
+  useSaveSchedulerConfig,
+  useAdvancedConfig,
+  useSaveAdvancedConfig,
 } from '../api/hooks';
-import type { TrackerServerConfig, GeneralConfig, SeedingConfig, NetworkConfig } from '../api/types';
+import type {
+  GeneralConfig,
+  SeedingConfig,
+  NetworkConfig,
+  BitTorrentConfig,
+  PeerProtocolConfig,
+  ProtocolsConfig,
+  SimulationConfig,
+  TrackerServerConfig,
+  SchedulerConfig,
+  AdvancedConfig,
+} from '../api/types';
 
-type SettingsTab = 'general' | 'seeding' | 'network' | 'tracker-server';
+type SettingsTab =
+  | 'general'
+  | 'seeding'
+  | 'bittorrent'
+  | 'network'
+  | 'peer-protocol'
+  | 'protocols'
+  | 'simulation'
+  | 'tracker-server'
+  | 'scheduler'
+  | 'advanced';
 
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
@@ -55,17 +88,195 @@ function SaveFeedback({
   );
 }
 
+function SaveBar({
+  dirty,
+  isPending,
+  isError,
+  isSuccess,
+  error,
+  onSave,
+}: {
+  dirty: boolean;
+  isPending: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  error: Error | null;
+  onSave: () => void;
+}) {
+  return (
+    <div className="form-actions">
+      <button className="btn btn-success" onClick={onSave} disabled={!dirty || isPending}>
+        {isPending ? 'Saving...' : 'Save'}
+      </button>
+      <SaveFeedback
+        isPending={isPending}
+        isError={isError}
+        isSuccess={isSuccess}
+        error={error}
+        dirty={dirty}
+      />
+    </div>
+  );
+}
+
+function NumberInput({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  step,
+  hint,
+  disabled,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  hint?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="form-group">
+      <label className="form-label">
+        {label}
+        {hint && <span className="form-hint">{hint}</span>}
+      </label>
+      <input
+        type="number"
+        className="form-input"
+        value={value}
+        onChange={(e) => onChange(step && step < 1 ? parseFloat(e.target.value) || 0 : parseInt(e.target.value, 10) || 0)}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+function TextInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  hint,
+  disabled,
+  type,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  hint?: string;
+  disabled?: boolean;
+  type?: string;
+}) {
+  return (
+    <div className="form-group">
+      <label className="form-label">
+        {label}
+        {hint && <span className="form-hint">{hint}</span>}
+      </label>
+      <input
+        type={type || 'text'}
+        className="form-input"
+        style={{ width: '200px', textAlign: 'left' }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+function Toggle({
+  label,
+  checked,
+  onChange,
+  hint,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  hint?: string;
+}) {
+  return (
+    <div className="form-group">
+      <label className="form-label">
+        {label}
+        {hint && <span className="form-hint">{hint}</span>}
+      </label>
+      <label className="toggle-switch">
+        <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+        <span className="toggle-slider" />
+      </label>
+    </div>
+  );
+}
+
+function SelectInput({
+  label,
+  value,
+  onChange,
+  options,
+  hint,
+  disabled,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  hint?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="form-group">
+      <label className="form-label">
+        {label}
+        {hint && <span className="form-hint">{hint}</span>}
+      </label>
+      <select
+        className="form-select"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <div className="form-section-title">{children}</div>;
+}
+
 function GeneralTab() {
   const { data: config, isLoading } = useGeneralConfig();
-  const saveConfig = useSaveGeneralConfig();
-
+  const save = useSaveGeneralConfig();
   const [form, setForm] = useState<GeneralConfig>({
-    instanceName: '',
+    autoStart: false,
+    themeStyle: 'system',
+    colorScheme: 'auto',
+    watchFolderEnabled: false,
+    watchFolderPath: '',
+    watchFolderScanIntervalSeconds: 10,
+    watchFolderAutoStartTorrents: true,
+    watchFolderDeleteAddedTorrents: false,
     port: 9898,
+    bindAddress: '0.0.0.0',
     urlBase: '',
-    authEnabled: false,
-    username: '',
-    password: '',
+    authenticationEnabled: false,
+    apiKey: '',
   });
   const [dirty, setDirty] = useState(false);
 
@@ -76,233 +287,221 @@ function GeneralTab() {
     }
   }, [config]);
 
-  const updateField = <K extends keyof GeneralConfig>(key: K, value: GeneralConfig[K]) => {
+  const set = <K extends keyof GeneralConfig>(key: K, value: GeneralConfig[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
 
-  const handleSave = () => {
-    saveConfig.mutate(form, {
-      onSuccess: () => setDirty(false),
-    });
-  };
-
-  if (isLoading) {
-    return <div className="loading">Loading general configuration...</div>;
-  }
+  if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
     <div className="card">
       <h3>General Settings</h3>
 
-      <div className="form-group">
-        <label className="form-label">Instance Name</label>
-        <input
-          type="text"
-          className="form-input"
-          style={{ width: '200px', textAlign: 'left' }}
-          value={form.instanceName}
-          onChange={(e) => updateField('instanceName', e.target.value)}
-          placeholder="Seedarr"
-        />
-      </div>
+      <SectionTitle>Application</SectionTitle>
+      <Toggle label="Auto Start" checked={form.autoStart} onChange={(v) => set('autoStart', v)} hint="Start seeding on launch" />
+      <SelectInput
+        label="Theme"
+        value={form.themeStyle}
+        onChange={(v) => set('themeStyle', v)}
+        options={[
+          { value: 'system', label: 'System' },
+          { value: 'light', label: 'Light' },
+          { value: 'dark', label: 'Dark' },
+        ]}
+      />
+      <SelectInput
+        label="Color Scheme"
+        value={form.colorScheme}
+        onChange={(v) => set('colorScheme', v)}
+        options={[
+          { value: 'auto', label: 'Auto' },
+          { value: 'blue', label: 'Blue' },
+          { value: 'green', label: 'Green' },
+          { value: 'purple', label: 'Purple' },
+        ]}
+      />
 
-      <div className="form-group">
-        <label className="form-label">Port</label>
-        <input
-          type="number"
-          className="form-input"
-          value={form.port}
-          onChange={(e) => updateField('port', parseInt(e.target.value, 10) || 0)}
-          min={1}
-          max={65535}
-        />
-      </div>
+      <SectionTitle>Host</SectionTitle>
+      <NumberInput label="Port" value={form.port} onChange={(v) => set('port', v)} min={1} max={65535} />
+      <TextInput label="Bind Address" value={form.bindAddress} onChange={(v) => set('bindAddress', v)} placeholder="0.0.0.0" />
+      <TextInput label="URL Base" value={form.urlBase} onChange={(v) => set('urlBase', v)} placeholder="/seedarr" />
+      <Toggle label="Authentication" checked={form.authenticationEnabled} onChange={(v) => set('authenticationEnabled', v)} />
+      <TextInput label="API Key" value={form.apiKey} onChange={(v) => set('apiKey', v)} hint="For external access" />
 
-      <div className="form-group">
-        <label className="form-label">URL Base</label>
-        <input
-          type="text"
-          className="form-input"
-          style={{ width: '200px', textAlign: 'left' }}
-          value={form.urlBase}
-          onChange={(e) => updateField('urlBase', e.target.value)}
-          placeholder="/seedarr"
-        />
-      </div>
+      <SectionTitle>Watch Folder</SectionTitle>
+      <Toggle label="Enabled" checked={form.watchFolderEnabled} onChange={(v) => set('watchFolderEnabled', v)} hint="Auto-add .torrent files" />
+      <TextInput
+        label="Path"
+        value={form.watchFolderPath}
+        onChange={(v) => set('watchFolderPath', v)}
+        placeholder="/watch"
+        disabled={!form.watchFolderEnabled}
+      />
+      <NumberInput
+        label="Scan Interval"
+        value={form.watchFolderScanIntervalSeconds}
+        onChange={(v) => set('watchFolderScanIntervalSeconds', v)}
+        min={1}
+        hint="seconds"
+        disabled={!form.watchFolderEnabled}
+      />
+      <Toggle
+        label="Auto Start Torrents"
+        checked={form.watchFolderAutoStartTorrents}
+        onChange={(v) => set('watchFolderAutoStartTorrents', v)}
+      />
+      <Toggle
+        label="Delete After Adding"
+        checked={form.watchFolderDeleteAddedTorrents}
+        onChange={(v) => set('watchFolderDeleteAddedTorrents', v)}
+      />
 
-      <div className="form-group">
-        <label className="form-label">Authentication</label>
-        <label className="toggle-switch">
-          <input
-            type="checkbox"
-            checked={form.authEnabled}
-            onChange={(e) => updateField('authEnabled', e.target.checked)}
-          />
-          <span className="toggle-slider" />
-        </label>
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">Username</label>
-        <input
-          type="text"
-          className="form-input"
-          style={{ width: '200px', textAlign: 'left' }}
-          value={form.username}
-          onChange={(e) => updateField('username', e.target.value)}
-          disabled={!form.authEnabled}
-          placeholder="admin"
-        />
-      </div>
-
-      <div className="form-group">
-        <label className="form-label">Password</label>
-        <input
-          type="password"
-          className="form-input"
-          style={{ width: '200px', textAlign: 'left' }}
-          value={form.password}
-          onChange={(e) => updateField('password', e.target.value)}
-          disabled={!form.authEnabled}
-        />
-      </div>
-
-      <div className="form-actions">
-        <button
-          className="btn btn-success"
-          onClick={handleSave}
-          disabled={!dirty || saveConfig.isPending}
-        >
-          {saveConfig.isPending ? 'Saving...' : 'Save'}
-        </button>
-        <SaveFeedback
-          isPending={saveConfig.isPending}
-          isError={saveConfig.isError}
-          isSuccess={saveConfig.isSuccess}
-          error={saveConfig.error}
-          dirty={dirty}
-        />
-      </div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
     </div>
   );
 }
 
 function SeedingTab() {
   const { data: config, isLoading } = useSeedingConfig();
-  const saveConfig = useSaveSeedingConfig();
-
+  const save = useSaveSeedingConfig();
   const [form, setForm] = useState<SeedingConfig>({
-    maxUploadSpeed: 0,
-    maxDownloadSpeed: 0,
-    distributionType: 'Equal',
+    maxUploadSpeedKbps: 0,
+    maxDownloadSpeedKbps: 0,
+    alternativeSpeedEnabled: false,
+    altUploadSpeedKbps: 50,
+    altDownloadSpeedKbps: 100,
     globalSeedRatioLimit: 0,
-    listenPort: 6881,
+    uploadDistributionAlgorithm: 'Equal',
+    uploadDistributionSpreadPercentage: 50,
+    uploadRedistributionMode: 'tick',
+    uploadCustomIntervalMinutes: 5,
+    uploadStoppedMinPercentage: 20,
+    uploadStoppedMaxPercentage: 40,
+    downloadDistributionAlgorithm: 'Equal',
+    downloadDistributionSpreadPercentage: 50,
+    downloadRedistributionMode: 'tick',
+    downloadCustomIntervalMinutes: 5,
+    downloadStoppedMinPercentage: 20,
+    downloadStoppedMaxPercentage: 40,
   });
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    if (config) {
-      setForm(config);
-      setDirty(false);
-    }
+    if (config) { setForm(config); setDirty(false); }
   }, [config]);
 
-  const updateField = <K extends keyof SeedingConfig>(key: K, value: SeedingConfig[K]) => {
+  const set = <K extends keyof SeedingConfig>(key: K, value: SeedingConfig[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
 
-  const handleSave = () => {
-    saveConfig.mutate(form, {
-      onSuccess: () => setDirty(false),
-    });
-  };
+  const distOptions = [
+    { value: 'Equal', label: 'Equal' },
+    { value: 'Pareto', label: 'Pareto' },
+    { value: 'PowerLaw', label: 'Power Law' },
+    { value: 'LogNormal', label: 'Log Normal' },
+  ];
 
-  if (isLoading) {
-    return <div className="loading">Loading seeding configuration...</div>;
-  }
+  const redistOptions = [
+    { value: 'tick', label: 'Every Tick' },
+    { value: 'custom', label: 'Custom Interval' },
+    { value: 'never', label: 'Never' },
+  ];
+
+  if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
     <div className="card">
-      <h3>Seeding Configuration</h3>
+      <h3>Speed &amp; Distribution</h3>
 
-      <div className="form-group">
-        <label className="form-label">Max Upload Speed (KB/s)</label>
-        <input
-          type="number"
-          className="form-input"
-          value={form.maxUploadSpeed}
-          onChange={(e) => updateField('maxUploadSpeed', parseInt(e.target.value, 10) || 0)}
-          min={0}
-        />
-      </div>
+      <SectionTitle>Speed Limits</SectionTitle>
+      <NumberInput label="Max Upload Speed" value={form.maxUploadSpeedKbps} onChange={(v) => set('maxUploadSpeedKbps', v)} min={0} hint="KB/s, 0 = unlimited" />
+      <NumberInput label="Max Download Speed" value={form.maxDownloadSpeedKbps} onChange={(v) => set('maxDownloadSpeedKbps', v)} min={0} hint="KB/s, 0 = unlimited" />
+      <NumberInput label="Global Seed Ratio Limit" value={form.globalSeedRatioLimit} onChange={(v) => set('globalSeedRatioLimit', v)} min={0} step={0.1} hint="0 = no limit" />
 
-      <div className="form-group">
-        <label className="form-label">Max Download Speed (KB/s)</label>
-        <input
-          type="number"
-          className="form-input"
-          value={form.maxDownloadSpeed}
-          onChange={(e) => updateField('maxDownloadSpeed', parseInt(e.target.value, 10) || 0)}
-          min={0}
-        />
-      </div>
+      <SectionTitle>Alternative Speeds</SectionTitle>
+      <Toggle label="Enable Alt Speeds" checked={form.alternativeSpeedEnabled} onChange={(v) => set('alternativeSpeedEnabled', v)} />
+      <NumberInput label="Alt Upload Speed" value={form.altUploadSpeedKbps} onChange={(v) => set('altUploadSpeedKbps', v)} min={0} hint="KB/s" disabled={!form.alternativeSpeedEnabled} />
+      <NumberInput label="Alt Download Speed" value={form.altDownloadSpeedKbps} onChange={(v) => set('altDownloadSpeedKbps', v)} min={0} hint="KB/s" disabled={!form.alternativeSpeedEnabled} />
 
-      <div className="form-group">
-        <label className="form-label">Distribution Type</label>
-        <select
-          className="form-select"
-          value={form.distributionType}
-          onChange={(e) => updateField('distributionType', e.target.value)}
-        >
-          <option value="Pareto">Pareto</option>
-          <option value="PowerLaw">Power Law</option>
-          <option value="LogNormal">Log Normal</option>
-          <option value="Equal">Equal</option>
-        </select>
-      </div>
+      <SectionTitle>Upload Distribution</SectionTitle>
+      <SelectInput label="Algorithm" value={form.uploadDistributionAlgorithm} onChange={(v) => set('uploadDistributionAlgorithm', v)} options={distOptions} />
+      <NumberInput label="Spread %" value={form.uploadDistributionSpreadPercentage} onChange={(v) => set('uploadDistributionSpreadPercentage', v)} min={0} max={100} />
+      <SelectInput label="Redistribution" value={form.uploadRedistributionMode} onChange={(v) => set('uploadRedistributionMode', v)} options={redistOptions} />
+      <NumberInput label="Custom Interval" value={form.uploadCustomIntervalMinutes} onChange={(v) => set('uploadCustomIntervalMinutes', v)} min={1} hint="minutes" disabled={form.uploadRedistributionMode !== 'custom'} />
+      <NumberInput label="Stopped Min %" value={form.uploadStoppedMinPercentage} onChange={(v) => set('uploadStoppedMinPercentage', v)} min={0} max={100} />
+      <NumberInput label="Stopped Max %" value={form.uploadStoppedMaxPercentage} onChange={(v) => set('uploadStoppedMaxPercentage', v)} min={0} max={100} />
 
-      <div className="form-group">
-        <label className="form-label">Global Seed Ratio Limit</label>
-        <input
-          type="number"
-          className="form-input"
-          value={form.globalSeedRatioLimit}
-          onChange={(e) => updateField('globalSeedRatioLimit', parseFloat(e.target.value) || 0)}
-          min={0}
-          step={0.1}
-        />
-      </div>
+      <SectionTitle>Download Distribution</SectionTitle>
+      <SelectInput label="Algorithm" value={form.downloadDistributionAlgorithm} onChange={(v) => set('downloadDistributionAlgorithm', v)} options={distOptions} />
+      <NumberInput label="Spread %" value={form.downloadDistributionSpreadPercentage} onChange={(v) => set('downloadDistributionSpreadPercentage', v)} min={0} max={100} />
+      <SelectInput label="Redistribution" value={form.downloadRedistributionMode} onChange={(v) => set('downloadRedistributionMode', v)} options={redistOptions} />
+      <NumberInput label="Custom Interval" value={form.downloadCustomIntervalMinutes} onChange={(v) => set('downloadCustomIntervalMinutes', v)} min={1} hint="minutes" disabled={form.downloadRedistributionMode !== 'custom'} />
+      <NumberInput label="Stopped Min %" value={form.downloadStoppedMinPercentage} onChange={(v) => set('downloadStoppedMinPercentage', v)} min={0} max={100} />
+      <NumberInput label="Stopped Max %" value={form.downloadStoppedMaxPercentage} onChange={(v) => set('downloadStoppedMaxPercentage', v)} min={0} max={100} />
 
-      <div className="form-group">
-        <label className="form-label">Listen Port</label>
-        <input
-          type="number"
-          className="form-input"
-          value={form.listenPort}
-          onChange={(e) => updateField('listenPort', parseInt(e.target.value, 10) || 0)}
-          min={1}
-          max={65535}
-        />
-      </div>
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+    </div>
+  );
+}
 
-      <div className="form-actions">
-        <button
-          className="btn btn-success"
-          onClick={handleSave}
-          disabled={!dirty || saveConfig.isPending}
-        >
-          {saveConfig.isPending ? 'Saving...' : 'Save'}
-        </button>
-        <SaveFeedback
-          isPending={saveConfig.isPending}
-          isError={saveConfig.isError}
-          isSuccess={saveConfig.isSuccess}
-          error={saveConfig.error}
-          dirty={dirty}
-        />
-      </div>
+function BitTorrentTab() {
+  const { data: config, isLoading } = useBitTorrentConfig();
+  const save = useSaveBitTorrentConfig();
+  const [form, setForm] = useState<BitTorrentConfig>({
+    enableDht: true,
+    enablePex: true,
+    enableLpd: true,
+    encryptionMode: 'enabled',
+    bitTorrentUserAgent: 'qBittorrent/4.4.2',
+    peerIdPrefix: '-qB4420-',
+    announceIntervalSeconds: 1800,
+    minAnnounceIntervalSeconds: 300,
+    scrapeIntervalSeconds: 900,
+  });
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (config) { setForm(config); setDirty(false); }
+  }, [config]);
+
+  const set = <K extends keyof BitTorrentConfig>(key: K, value: BitTorrentConfig[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+
+  if (isLoading) return <div className="loading">Loading...</div>;
+
+  return (
+    <div className="card">
+      <h3>BitTorrent Settings</h3>
+
+      <SectionTitle>Protocol Features</SectionTitle>
+      <Toggle label="DHT" checked={form.enableDht} onChange={(v) => set('enableDht', v)} hint="Distributed Hash Table" />
+      <Toggle label="PEX" checked={form.enablePex} onChange={(v) => set('enablePex', v)} hint="Peer Exchange" />
+      <Toggle label="LPD" checked={form.enableLpd} onChange={(v) => set('enableLpd', v)} hint="Local Peer Discovery" />
+      <SelectInput
+        label="Encryption"
+        value={form.encryptionMode}
+        onChange={(v) => set('encryptionMode', v)}
+        options={[
+          { value: 'disabled', label: 'Disabled' },
+          { value: 'enabled', label: 'Enabled' },
+          { value: 'forced', label: 'Forced' },
+        ]}
+      />
+
+      <SectionTitle>Client Identity</SectionTitle>
+      <TextInput label="User Agent" value={form.bitTorrentUserAgent} onChange={(v) => set('bitTorrentUserAgent', v)} hint="HTTP tracker header" />
+      <TextInput label="Peer ID Prefix" value={form.peerIdPrefix} onChange={(v) => set('peerIdPrefix', v)} hint="8-char Azureus-style" />
+
+      <SectionTitle>Tracker Timing</SectionTitle>
+      <NumberInput label="Announce Interval" value={form.announceIntervalSeconds} onChange={(v) => set('announceIntervalSeconds', v)} min={60} hint="seconds" />
+      <NumberInput label="Min Announce Interval" value={form.minAnnounceIntervalSeconds} onChange={(v) => set('minAnnounceIntervalSeconds', v)} min={30} hint="seconds" />
+      <NumberInput label="Scrape Interval" value={form.scrapeIntervalSeconds} onChange={(v) => set('scrapeIntervalSeconds', v)} min={60} hint="seconds" />
+
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
     </div>
   );
 }
@@ -310,40 +509,32 @@ function SeedingTab() {
 function NetworkTab() {
   const { data: status } = useNetworkStatus();
   const { data: config, isLoading } = useNetworkConfig();
-  const saveConfig = useSaveNetworkConfig();
-
+  const save = useSaveNetworkConfig();
   const [form, setForm] = useState<NetworkConfig>({
-    proxyEnabled: false,
-    proxyType: 'HTTP',
+    listeningPort: 6881,
+    upnpEnabled: true,
+    maxGlobalConnections: 200,
+    maxPerTorrentConnections: 50,
+    maxUploadSlots: 4,
+    proxyType: 'none',
     proxyHost: '',
     proxyPort: 8080,
+    proxyAuthEnabled: false,
     proxyUsername: '',
     proxyPassword: '',
-    upnpEnabled: false,
   });
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    if (config) {
-      setForm(config);
-      setDirty(false);
-    }
+    if (config) { setForm(config); setDirty(false); }
   }, [config]);
 
-  const updateField = <K extends keyof NetworkConfig>(key: K, value: NetworkConfig[K]) => {
+  const set = <K extends keyof NetworkConfig>(key: K, value: NetworkConfig[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
 
-  const handleSave = () => {
-    saveConfig.mutate(form, {
-      onSuccess: () => setDirty(false),
-    });
-  };
-
-  if (isLoading) {
-    return <div className="loading">Loading network configuration...</div>;
-  }
+  if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
     <>
@@ -360,255 +551,321 @@ function NetworkTab() {
       </div>
 
       <div className="card">
-        <h3>Network Configuration</h3>
+        <h3>Connection Settings</h3>
 
-        <div className="form-group">
-          <label className="form-label">UPnP</label>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              checked={form.upnpEnabled}
-              onChange={(e) => updateField('upnpEnabled', e.target.checked)}
-            />
-            <span className="toggle-slider" />
-          </label>
-        </div>
+        <SectionTitle>Listening</SectionTitle>
+        <NumberInput label="Port" value={form.listeningPort} onChange={(v) => set('listeningPort', v)} min={1} max={65535} />
+        <Toggle label="UPnP" checked={form.upnpEnabled} onChange={(v) => set('upnpEnabled', v)} hint="Auto port mapping" />
 
-        <div className="form-group">
-          <label className="form-label">Proxy</label>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              checked={form.proxyEnabled}
-              onChange={(e) => updateField('proxyEnabled', e.target.checked)}
-            />
-            <span className="toggle-slider" />
-          </label>
-        </div>
+        <SectionTitle>Limits</SectionTitle>
+        <NumberInput label="Max Global Connections" value={form.maxGlobalConnections} onChange={(v) => set('maxGlobalConnections', v)} min={1} />
+        <NumberInput label="Max Per Torrent" value={form.maxPerTorrentConnections} onChange={(v) => set('maxPerTorrentConnections', v)} min={1} />
+        <NumberInput label="Max Upload Slots" value={form.maxUploadSlots} onChange={(v) => set('maxUploadSlots', v)} min={1} />
 
-        <div className="form-group">
-          <label className="form-label">Proxy Type</label>
-          <select
-            className="form-select"
-            value={form.proxyType}
-            onChange={(e) => updateField('proxyType', e.target.value)}
-            disabled={!form.proxyEnabled}
-          >
-            <option value="HTTP">HTTP</option>
-            <option value="HTTPS">HTTPS</option>
-            <option value="SOCKS4">SOCKS4</option>
-            <option value="SOCKS5">SOCKS5</option>
-          </select>
-        </div>
+        <SectionTitle>Proxy</SectionTitle>
+        <SelectInput
+          label="Type"
+          value={form.proxyType}
+          onChange={(v) => set('proxyType', v)}
+          options={[
+            { value: 'none', label: 'None' },
+            { value: 'http', label: 'HTTP' },
+            { value: 'socks4', label: 'SOCKS4' },
+            { value: 'socks5', label: 'SOCKS5' },
+          ]}
+        />
+        <TextInput label="Host" value={form.proxyHost} onChange={(v) => set('proxyHost', v)} placeholder="proxy.example.com" disabled={form.proxyType === 'none'} />
+        <NumberInput label="Port" value={form.proxyPort} onChange={(v) => set('proxyPort', v)} min={1} max={65535} disabled={form.proxyType === 'none'} />
+        <Toggle label="Proxy Auth" checked={form.proxyAuthEnabled} onChange={(v) => set('proxyAuthEnabled', v)} />
+        <TextInput label="Username" value={form.proxyUsername} onChange={(v) => set('proxyUsername', v)} disabled={!form.proxyAuthEnabled} />
+        <TextInput label="Password" value={form.proxyPassword} onChange={(v) => set('proxyPassword', v)} type="password" disabled={!form.proxyAuthEnabled} />
 
-        <div className="form-group">
-          <label className="form-label">Proxy Host</label>
-          <input
-            type="text"
-            className="form-input"
-            style={{ width: '200px', textAlign: 'left' }}
-            value={form.proxyHost}
-            onChange={(e) => updateField('proxyHost', e.target.value)}
-            disabled={!form.proxyEnabled}
-            placeholder="proxy.example.com"
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Proxy Port</label>
-          <input
-            type="number"
-            className="form-input"
-            value={form.proxyPort}
-            onChange={(e) => updateField('proxyPort', parseInt(e.target.value, 10) || 0)}
-            disabled={!form.proxyEnabled}
-            min={1}
-            max={65535}
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Proxy Username</label>
-          <input
-            type="text"
-            className="form-input"
-            style={{ width: '200px', textAlign: 'left' }}
-            value={form.proxyUsername}
-            onChange={(e) => updateField('proxyUsername', e.target.value)}
-            disabled={!form.proxyEnabled}
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Proxy Password</label>
-          <input
-            type="password"
-            className="form-input"
-            style={{ width: '200px', textAlign: 'left' }}
-            value={form.proxyPassword}
-            onChange={(e) => updateField('proxyPassword', e.target.value)}
-            disabled={!form.proxyEnabled}
-          />
-        </div>
-
-        <div className="form-actions">
-          <button
-            className="btn btn-success"
-            onClick={handleSave}
-            disabled={!dirty || saveConfig.isPending}
-          >
-            {saveConfig.isPending ? 'Saving...' : 'Save'}
-          </button>
-          <SaveFeedback
-            isPending={saveConfig.isPending}
-            isError={saveConfig.isError}
-            isSuccess={saveConfig.isSuccess}
-            error={saveConfig.error}
-            dirty={dirty}
-          />
-        </div>
+        <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
       </div>
     </>
+  );
+}
+
+function PeerProtocolTab() {
+  const { data: config, isLoading } = usePeerProtocolConfig();
+  const save = useSavePeerProtocolConfig();
+  const [form, setForm] = useState<PeerProtocolConfig>({
+    handshakeTimeoutSeconds: 30,
+    messageReadTimeoutSeconds: 60,
+    keepAliveIntervalSeconds: 120,
+    peerContactIntervalSeconds: 300,
+    udpTrackerTimeoutSeconds: 5,
+    httpTrackerTimeoutSeconds: 10,
+    peerRequestCount: 200,
+    seederUploadActivityProbability: 0.3,
+    peerIdleChance: 0.3,
+    peerDropoutProbability: 0.1,
+    connectionRotationPercentage: 0.25,
+  });
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (config) { setForm(config); setDirty(false); }
+  }, [config]);
+
+  const set = <K extends keyof PeerProtocolConfig>(key: K, value: PeerProtocolConfig[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+
+  if (isLoading) return <div className="loading">Loading...</div>;
+
+  return (
+    <div className="card">
+      <h3>Peer Protocol</h3>
+
+      <SectionTitle>Timeouts</SectionTitle>
+      <NumberInput label="Handshake Timeout" value={form.handshakeTimeoutSeconds} onChange={(v) => set('handshakeTimeoutSeconds', v)} min={1} hint="seconds" />
+      <NumberInput label="Message Read Timeout" value={form.messageReadTimeoutSeconds} onChange={(v) => set('messageReadTimeoutSeconds', v)} min={1} hint="seconds" />
+      <NumberInput label="Keep Alive Interval" value={form.keepAliveIntervalSeconds} onChange={(v) => set('keepAliveIntervalSeconds', v)} min={1} hint="seconds" />
+      <NumberInput label="Peer Contact Interval" value={form.peerContactIntervalSeconds} onChange={(v) => set('peerContactIntervalSeconds', v)} min={1} hint="seconds" />
+      <NumberInput label="UDP Tracker Timeout" value={form.udpTrackerTimeoutSeconds} onChange={(v) => set('udpTrackerTimeoutSeconds', v)} min={1} hint="seconds" />
+      <NumberInput label="HTTP Tracker Timeout" value={form.httpTrackerTimeoutSeconds} onChange={(v) => set('httpTrackerTimeoutSeconds', v)} min={1} hint="seconds" />
+      <NumberInput label="Peer Request Count" value={form.peerRequestCount} onChange={(v) => set('peerRequestCount', v)} min={1} hint="peers to contact" />
+
+      <SectionTitle>Peer Behavior</SectionTitle>
+      <NumberInput label="Upload Activity Probability" value={form.seederUploadActivityProbability} onChange={(v) => set('seederUploadActivityProbability', v)} min={0} max={1} step={0.05} hint="0.0 - 1.0" />
+      <NumberInput label="Idle Chance" value={form.peerIdleChance} onChange={(v) => set('peerIdleChance', v)} min={0} max={1} step={0.05} hint="0.0 - 1.0" />
+      <NumberInput label="Dropout Probability" value={form.peerDropoutProbability} onChange={(v) => set('peerDropoutProbability', v)} min={0} max={1} step={0.05} hint="0.0 - 1.0" />
+      <NumberInput label="Connection Rotation" value={form.connectionRotationPercentage} onChange={(v) => set('connectionRotationPercentage', v)} min={0} max={1} step={0.05} hint="0.0 - 1.0" />
+
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+    </div>
+  );
+}
+
+function ProtocolsTab() {
+  const { data: config, isLoading } = useProtocolsConfig();
+  const save = useSaveProtocolsConfig();
+  const [form, setForm] = useState<ProtocolsConfig>({
+    extensionUtMetadata: true,
+    extensionUtPex: true,
+    extensionLtDontHave: true,
+    extensionFastExtension: true,
+    utpEnabled: false,
+    tcpFallback: true,
+    transportConnectionTimeoutSeconds: 30,
+    pexInterval: 60,
+    pexMaxPeersPerMessage: 50,
+    multiTrackerEnabled: true,
+    multiTrackerFailoverEnabled: true,
+    announceToAllTiers: false,
+    announceToAllInTier: false,
+    failoverMaxConsecutiveFailures: 5,
+    failoverBackoffBaseSeconds: 60,
+    failoverMaxBackoffSeconds: 3600,
+    dhtRoutingTableSize: 160,
+    dhtAnnouncementInterval: 1800,
+    dhtBootstrapTimeout: 30,
+    dhtQueryTimeout: 10,
+    dhtMaxNodes: 1000,
+    dhtBucketSize: 8,
+    dhtConcurrentQueries: 3,
+    dhtAutoBootstrap: true,
+    dhtRateLimitEnabled: true,
+    dhtMaxQueriesPerSecond: 10,
+  });
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (config) { setForm(config); setDirty(false); }
+  }, [config]);
+
+  const set = <K extends keyof ProtocolsConfig>(key: K, value: ProtocolsConfig[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+
+  if (isLoading) return <div className="loading">Loading...</div>;
+
+  return (
+    <div className="card">
+      <h3>Protocol Extensions</h3>
+
+      <SectionTitle>BEP Extensions</SectionTitle>
+      <Toggle label="ut_metadata" checked={form.extensionUtMetadata} onChange={(v) => set('extensionUtMetadata', v)} hint="BEP 9" />
+      <Toggle label="ut_pex" checked={form.extensionUtPex} onChange={(v) => set('extensionUtPex', v)} hint="BEP 11" />
+      <Toggle label="lt_donthave" checked={form.extensionLtDontHave} onChange={(v) => set('extensionLtDontHave', v)} />
+      <Toggle label="Fast Extension" checked={form.extensionFastExtension} onChange={(v) => set('extensionFastExtension', v)} hint="BEP 6" />
+
+      <SectionTitle>Transport</SectionTitle>
+      <Toggle label="uTP" checked={form.utpEnabled} onChange={(v) => set('utpEnabled', v)} hint="BEP 29, LEDBAT" />
+      <Toggle label="TCP Fallback" checked={form.tcpFallback} onChange={(v) => set('tcpFallback', v)} />
+      <NumberInput label="Connection Timeout" value={form.transportConnectionTimeoutSeconds} onChange={(v) => set('transportConnectionTimeoutSeconds', v)} min={1} hint="seconds" />
+
+      <SectionTitle>PEX</SectionTitle>
+      <NumberInput label="PEX Interval" value={form.pexInterval} onChange={(v) => set('pexInterval', v)} min={10} hint="seconds" />
+      <NumberInput label="Max Peers Per Message" value={form.pexMaxPeersPerMessage} onChange={(v) => set('pexMaxPeersPerMessage', v)} min={1} />
+
+      <SectionTitle>Multi-Tracker</SectionTitle>
+      <Toggle label="Enabled" checked={form.multiTrackerEnabled} onChange={(v) => set('multiTrackerEnabled', v)} hint="BEP 12" />
+      <Toggle label="Failover" checked={form.multiTrackerFailoverEnabled} onChange={(v) => set('multiTrackerFailoverEnabled', v)} />
+      <Toggle label="Announce to All Tiers" checked={form.announceToAllTiers} onChange={(v) => set('announceToAllTiers', v)} />
+      <Toggle label="Announce to All in Tier" checked={form.announceToAllInTier} onChange={(v) => set('announceToAllInTier', v)} />
+      <NumberInput label="Max Consecutive Failures" value={form.failoverMaxConsecutiveFailures} onChange={(v) => set('failoverMaxConsecutiveFailures', v)} min={1} />
+      <NumberInput label="Backoff Base" value={form.failoverBackoffBaseSeconds} onChange={(v) => set('failoverBackoffBaseSeconds', v)} min={1} hint="seconds" />
+      <NumberInput label="Max Backoff" value={form.failoverMaxBackoffSeconds} onChange={(v) => set('failoverMaxBackoffSeconds', v)} min={1} hint="seconds" />
+
+      <SectionTitle>DHT</SectionTitle>
+      <Toggle label="Auto Bootstrap" checked={form.dhtAutoBootstrap} onChange={(v) => set('dhtAutoBootstrap', v)} />
+      <Toggle label="Rate Limiting" checked={form.dhtRateLimitEnabled} onChange={(v) => set('dhtRateLimitEnabled', v)} />
+      <NumberInput label="Max Queries/sec" value={form.dhtMaxQueriesPerSecond} onChange={(v) => set('dhtMaxQueriesPerSecond', v)} min={1} disabled={!form.dhtRateLimitEnabled} />
+      <NumberInput label="Routing Table Size" value={form.dhtRoutingTableSize} onChange={(v) => set('dhtRoutingTableSize', v)} min={1} />
+      <NumberInput label="Announcement Interval" value={form.dhtAnnouncementInterval} onChange={(v) => set('dhtAnnouncementInterval', v)} min={60} hint="seconds" />
+      <NumberInput label="Bootstrap Timeout" value={form.dhtBootstrapTimeout} onChange={(v) => set('dhtBootstrapTimeout', v)} min={1} hint="seconds" />
+      <NumberInput label="Query Timeout" value={form.dhtQueryTimeout} onChange={(v) => set('dhtQueryTimeout', v)} min={1} hint="seconds" />
+      <NumberInput label="Max Nodes" value={form.dhtMaxNodes} onChange={(v) => set('dhtMaxNodes', v)} min={1} />
+      <NumberInput label="Bucket Size (K)" value={form.dhtBucketSize} onChange={(v) => set('dhtBucketSize', v)} min={1} />
+      <NumberInput label="Concurrent Queries" value={form.dhtConcurrentQueries} onChange={(v) => set('dhtConcurrentQueries', v)} min={1} />
+
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+    </div>
+  );
+}
+
+function SimulationTab() {
+  const { data: config, isLoading } = useSimulationConfig();
+  const save = useSaveSimulationConfig();
+  const [form, setForm] = useState<SimulationConfig>({
+    clientBehaviorEngineEnabled: true,
+    primaryClient: 'qBittorrent',
+    behaviorVariation: 0.3,
+    clientProfileSwitching: true,
+    switchClientProbability: 0.05,
+    trafficPatternProfile: 'balanced',
+    realisticVariations: true,
+    timeBasedPatterns: true,
+    swarmIntelligenceEnabled: true,
+    swarmAdaptationRate: 0.5,
+    swarmPeerAnalysisDepth: 10,
+  });
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (config) { setForm(config); setDirty(false); }
+  }, [config]);
+
+  const set = <K extends keyof SimulationConfig>(key: K, value: SimulationConfig[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+
+  if (isLoading) return <div className="loading">Loading...</div>;
+
+  return (
+    <div className="card">
+      <h3>Client Simulation</h3>
+
+      <SectionTitle>Behavior Engine</SectionTitle>
+      <Toggle label="Enabled" checked={form.clientBehaviorEngineEnabled} onChange={(v) => set('clientBehaviorEngineEnabled', v)} />
+      <SelectInput
+        label="Primary Client"
+        value={form.primaryClient}
+        onChange={(v) => set('primaryClient', v)}
+        options={[
+          { value: 'qBittorrent', label: 'qBittorrent' },
+          { value: 'Deluge', label: 'Deluge' },
+          { value: 'Transmission', label: 'Transmission' },
+          { value: 'uTorrent', label: 'uTorrent' },
+          { value: 'BiglyBT', label: 'BiglyBT' },
+        ]}
+        disabled={!form.clientBehaviorEngineEnabled}
+      />
+      <NumberInput label="Behavior Variation" value={form.behaviorVariation} onChange={(v) => set('behaviorVariation', v)} min={0} max={1} step={0.05} hint="0.0 - 1.0" disabled={!form.clientBehaviorEngineEnabled} />
+
+      <SectionTitle>Profile Switching</SectionTitle>
+      <Toggle label="Client Switching" checked={form.clientProfileSwitching} onChange={(v) => set('clientProfileSwitching', v)} hint="Rotate client identity" />
+      <NumberInput label="Switch Probability" value={form.switchClientProbability} onChange={(v) => set('switchClientProbability', v)} min={0} max={1} step={0.01} hint="per announce" disabled={!form.clientProfileSwitching} />
+
+      <SectionTitle>Traffic Patterns</SectionTitle>
+      <SelectInput
+        label="Profile"
+        value={form.trafficPatternProfile}
+        onChange={(v) => set('trafficPatternProfile', v)}
+        options={[
+          { value: 'conservative', label: 'Conservative' },
+          { value: 'balanced', label: 'Balanced' },
+          { value: 'aggressive', label: 'Aggressive' },
+        ]}
+      />
+      <Toggle label="Realistic Variations" checked={form.realisticVariations} onChange={(v) => set('realisticVariations', v)} />
+      <Toggle label="Time-Based Patterns" checked={form.timeBasedPatterns} onChange={(v) => set('timeBasedPatterns', v)} hint="Vary by time of day" />
+
+      <SectionTitle>Swarm Intelligence</SectionTitle>
+      <Toggle label="Enabled" checked={form.swarmIntelligenceEnabled} onChange={(v) => set('swarmIntelligenceEnabled', v)} />
+      <NumberInput label="Adaptation Rate" value={form.swarmAdaptationRate} onChange={(v) => set('swarmAdaptationRate', v)} min={0} max={1} step={0.1} disabled={!form.swarmIntelligenceEnabled} />
+      <NumberInput label="Peer Analysis Depth" value={form.swarmPeerAnalysisDepth} onChange={(v) => set('swarmPeerAnalysisDepth', v)} min={1} disabled={!form.swarmIntelligenceEnabled} />
+
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+    </div>
   );
 }
 
 function TrackerServerTab() {
   const { data: config, isLoading: configLoading } = useTrackerServerConfig();
   const { data: stats, isLoading: statsLoading } = useTrackerServerStats();
-  const updateConfig = useUpdateTrackerServerConfig();
-
+  const save = useSaveTrackerServerConfig();
   const [form, setForm] = useState<TrackerServerConfig>({
-    httpEnabled: false,
-    httpPort: 8080,
-    udpEnabled: false,
-    udpPort: 8081,
-    maxPeersPerTorrent: 200,
-    announceInterval: 1800,
+    trackerServerEnabled: false,
+    trackerHttpEnabled: true,
+    trackerHttpPort: 9696,
+    trackerUdpEnabled: true,
+    trackerUdpPort: 6969,
+    trackerBindAddress: '0.0.0.0',
+    trackerAnnounceInterval: 1800,
+    trackerMaxPeersPerAnnounce: 50,
+    trackerEnableScrape: true,
+    trackerPrivateMode: false,
+    trackerLogAnnounces: false,
+    trackerRateLimitPerMinute: 60,
   });
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
-    if (config) {
-      setForm(config);
-      setDirty(false);
-    }
+    if (config) { setForm(config); setDirty(false); }
   }, [config]);
 
-  const updateField = <K extends keyof TrackerServerConfig>(
-    key: K,
-    value: TrackerServerConfig[K]
-  ) => {
+  const set = <K extends keyof TrackerServerConfig>(key: K, value: TrackerServerConfig[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
 
-  const handleSave = () => {
-    updateConfig.mutate(form, {
-      onSuccess: () => setDirty(false),
-    });
-  };
-
-  if (configLoading) {
-    return <div className="loading">Loading tracker server configuration...</div>;
-  }
+  if (configLoading) return <div className="loading">Loading...</div>;
 
   return (
     <>
       <div className="card">
-        <h3>Tracker Server Configuration</h3>
+        <h3>Tracker Server</h3>
 
-        <div className="form-group">
-          <label className="form-label">HTTP Enabled</label>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              checked={form.httpEnabled}
-              onChange={(e) => updateField('httpEnabled', e.target.checked)}
-            />
-            <span className="toggle-slider" />
-          </label>
-        </div>
+        <Toggle label="Enabled" checked={form.trackerServerEnabled} onChange={(v) => set('trackerServerEnabled', v)} hint="Built-in tracker" />
+        <TextInput label="Bind Address" value={form.trackerBindAddress} onChange={(v) => set('trackerBindAddress', v)} placeholder="0.0.0.0" disabled={!form.trackerServerEnabled} />
 
-        <div className="form-group">
-          <label className="form-label">HTTP Port</label>
-          <input
-            type="number"
-            className="form-input"
-            value={form.httpPort}
-            onChange={(e) => updateField('httpPort', parseInt(e.target.value, 10) || 0)}
-            disabled={!form.httpEnabled}
-            min={1}
-            max={65535}
-          />
-        </div>
+        <SectionTitle>HTTP Tracker</SectionTitle>
+        <Toggle label="HTTP Enabled" checked={form.trackerHttpEnabled} onChange={(v) => set('trackerHttpEnabled', v)} />
+        <NumberInput label="HTTP Port" value={form.trackerHttpPort} onChange={(v) => set('trackerHttpPort', v)} min={1} max={65535} disabled={!form.trackerHttpEnabled} />
 
-        <div className="form-group">
-          <label className="form-label">UDP Enabled</label>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              checked={form.udpEnabled}
-              onChange={(e) => updateField('udpEnabled', e.target.checked)}
-            />
-            <span className="toggle-slider" />
-          </label>
-        </div>
+        <SectionTitle>UDP Tracker</SectionTitle>
+        <Toggle label="UDP Enabled" checked={form.trackerUdpEnabled} onChange={(v) => set('trackerUdpEnabled', v)} />
+        <NumberInput label="UDP Port" value={form.trackerUdpPort} onChange={(v) => set('trackerUdpPort', v)} min={1} max={65535} disabled={!form.trackerUdpEnabled} />
 
-        <div className="form-group">
-          <label className="form-label">UDP Port</label>
-          <input
-            type="number"
-            className="form-input"
-            value={form.udpPort}
-            onChange={(e) => updateField('udpPort', parseInt(e.target.value, 10) || 0)}
-            disabled={!form.udpEnabled}
-            min={1}
-            max={65535}
-          />
-        </div>
+        <SectionTitle>Behavior</SectionTitle>
+        <NumberInput label="Announce Interval" value={form.trackerAnnounceInterval} onChange={(v) => set('trackerAnnounceInterval', v)} min={60} hint="seconds" />
+        <NumberInput label="Max Peers Per Announce" value={form.trackerMaxPeersPerAnnounce} onChange={(v) => set('trackerMaxPeersPerAnnounce', v)} min={1} />
+        <Toggle label="Enable Scrape" checked={form.trackerEnableScrape} onChange={(v) => set('trackerEnableScrape', v)} />
+        <Toggle label="Private Mode" checked={form.trackerPrivateMode} onChange={(v) => set('trackerPrivateMode', v)} />
+        <Toggle label="Log Announces" checked={form.trackerLogAnnounces} onChange={(v) => set('trackerLogAnnounces', v)} />
+        <NumberInput label="Rate Limit" value={form.trackerRateLimitPerMinute} onChange={(v) => set('trackerRateLimitPerMinute', v)} min={1} hint="per minute" />
 
-        <div className="form-group">
-          <label className="form-label">Max Peers Per Torrent</label>
-          <input
-            type="number"
-            className="form-input"
-            value={form.maxPeersPerTorrent}
-            onChange={(e) => updateField('maxPeersPerTorrent', parseInt(e.target.value, 10) || 0)}
-            min={1}
-          />
-        </div>
-
-        <div className="form-group">
-          <label className="form-label">Announce Interval (seconds)</label>
-          <input
-            type="number"
-            className="form-input"
-            value={form.announceInterval}
-            onChange={(e) => updateField('announceInterval', parseInt(e.target.value, 10) || 0)}
-            min={60}
-          />
-        </div>
-
-        <div className="form-actions">
-          <button
-            className="btn btn-success"
-            onClick={handleSave}
-            disabled={!dirty || updateConfig.isPending}
-          >
-            {updateConfig.isPending ? 'Saving...' : 'Save'}
-          </button>
-          <SaveFeedback
-            isPending={updateConfig.isPending}
-            isError={updateConfig.isError}
-            isSuccess={updateConfig.isSuccess}
-            error={updateConfig.error}
-            dirty={dirty}
-          />
-        </div>
+        <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
       </div>
 
       <div className="card">
-        <h3>Tracker Server Statistics</h3>
+        <h3>Tracker Statistics</h3>
         {statsLoading ? (
           <div className="loading">Loading stats...</div>
         ) : stats ? (
@@ -644,14 +901,138 @@ function TrackerServerTab() {
   );
 }
 
+function SchedulerTab() {
+  const { data: config, isLoading } = useSchedulerConfig();
+  const save = useSaveSchedulerConfig();
+  const [form, setForm] = useState<SchedulerConfig>({
+    schedulerEnabled: false,
+    schedulerStartHour: 22,
+    schedulerStartMinute: 0,
+    schedulerEndHour: 6,
+    schedulerEndMinute: 0,
+    schedulerMonday: true,
+    schedulerTuesday: true,
+    schedulerWednesday: true,
+    schedulerThursday: true,
+    schedulerFriday: true,
+    schedulerSaturday: true,
+    schedulerSunday: true,
+  });
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (config) { setForm(config); setDirty(false); }
+  }, [config]);
+
+  const set = <K extends keyof SchedulerConfig>(key: K, value: SchedulerConfig[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+
+  if (isLoading) return <div className="loading">Loading...</div>;
+
+  const days: { key: keyof SchedulerConfig; label: string }[] = [
+    { key: 'schedulerMonday', label: 'Monday' },
+    { key: 'schedulerTuesday', label: 'Tuesday' },
+    { key: 'schedulerWednesday', label: 'Wednesday' },
+    { key: 'schedulerThursday', label: 'Thursday' },
+    { key: 'schedulerFriday', label: 'Friday' },
+    { key: 'schedulerSaturday', label: 'Saturday' },
+    { key: 'schedulerSunday', label: 'Sunday' },
+  ];
+
+  return (
+    <div className="card">
+      <h3>Speed Scheduler</h3>
+
+      <Toggle label="Enabled" checked={form.schedulerEnabled} onChange={(v) => set('schedulerEnabled', v)} hint="Use alt speeds on schedule" />
+
+      <SectionTitle>Time Window</SectionTitle>
+      <NumberInput label="Start Hour" value={form.schedulerStartHour} onChange={(v) => set('schedulerStartHour', v)} min={0} max={23} disabled={!form.schedulerEnabled} />
+      <NumberInput label="Start Minute" value={form.schedulerStartMinute} onChange={(v) => set('schedulerStartMinute', v)} min={0} max={59} disabled={!form.schedulerEnabled} />
+      <NumberInput label="End Hour" value={form.schedulerEndHour} onChange={(v) => set('schedulerEndHour', v)} min={0} max={23} disabled={!form.schedulerEnabled} />
+      <NumberInput label="End Minute" value={form.schedulerEndMinute} onChange={(v) => set('schedulerEndMinute', v)} min={0} max={59} disabled={!form.schedulerEnabled} />
+
+      <SectionTitle>Active Days</SectionTitle>
+      {days.map((day) => (
+        <Toggle
+          key={day.key}
+          label={day.label}
+          checked={form[day.key] as boolean}
+          onChange={(v) => set(day.key, v as never)}
+        />
+      ))}
+
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+    </div>
+  );
+}
+
+function AdvancedTab() {
+  const { data: config, isLoading } = useAdvancedConfig();
+  const save = useSaveAdvancedConfig();
+  const [form, setForm] = useState<AdvancedConfig>({
+    logToFile: true,
+    fileLogLevel: 'Info',
+    debugMode: false,
+    uiRefreshRateSec: 9,
+  });
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    if (config) { setForm(config); setDirty(false); }
+  }, [config]);
+
+  const set = <K extends keyof AdvancedConfig>(key: K, value: AdvancedConfig[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setDirty(true);
+  };
+
+  if (isLoading) return <div className="loading">Loading...</div>;
+
+  return (
+    <div className="card">
+      <h3>Advanced / Logging</h3>
+
+      <SectionTitle>Logging</SectionTitle>
+      <Toggle label="Log to File" checked={form.logToFile} onChange={(v) => set('logToFile', v)} />
+      <SelectInput
+        label="Log Level"
+        value={form.fileLogLevel}
+        onChange={(v) => set('fileLogLevel', v)}
+        options={[
+          { value: 'Trace', label: 'Trace' },
+          { value: 'Debug', label: 'Debug' },
+          { value: 'Info', label: 'Info' },
+          { value: 'Warn', label: 'Warn' },
+          { value: 'Error', label: 'Error' },
+        ]}
+        disabled={!form.logToFile}
+      />
+      <Toggle label="Debug Mode" checked={form.debugMode} onChange={(v) => set('debugMode', v)} />
+
+      <SectionTitle>UI</SectionTitle>
+      <NumberInput label="Refresh Rate" value={form.uiRefreshRateSec} onChange={(v) => set('uiRefreshRateSec', v)} min={1} max={60} hint="seconds" />
+
+      <SaveBar dirty={dirty} isPending={save.isPending} isError={save.isError} isSuccess={save.isSuccess} error={save.error} onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })} />
+    </div>
+  );
+}
+
 function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
 
   const tabs: { key: SettingsTab; label: string }[] = [
     { key: 'general', label: 'General' },
     { key: 'seeding', label: 'Seeding' },
+    { key: 'bittorrent', label: 'BitTorrent' },
     { key: 'network', label: 'Network' },
+    { key: 'peer-protocol', label: 'Peer Protocol' },
+    { key: 'protocols', label: 'Protocols' },
+    { key: 'simulation', label: 'Simulation' },
     { key: 'tracker-server', label: 'Tracker Server' },
+    { key: 'scheduler', label: 'Scheduler' },
+    { key: 'advanced', label: 'Advanced' },
   ];
 
   return (
@@ -672,8 +1053,14 @@ function Settings() {
 
       {activeTab === 'general' && <GeneralTab />}
       {activeTab === 'seeding' && <SeedingTab />}
+      {activeTab === 'bittorrent' && <BitTorrentTab />}
       {activeTab === 'network' && <NetworkTab />}
+      {activeTab === 'peer-protocol' && <PeerProtocolTab />}
+      {activeTab === 'protocols' && <ProtocolsTab />}
+      {activeTab === 'simulation' && <SimulationTab />}
       {activeTab === 'tracker-server' && <TrackerServerTab />}
+      {activeTab === 'scheduler' && <SchedulerTab />}
+      {activeTab === 'advanced' && <AdvancedTab />}
     </div>
   );
 }
