@@ -1,7 +1,9 @@
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
+using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Datastore;
 
@@ -14,5 +16,7 @@ public static class TableRegistration
         TableMapping.Register<ScheduledTask>("ScheduledTasks");
         TableMapping.Register<Torrent>("Torrents");
         TableMapping.Register<TorrentFile>("TorrentFiles");
+        TableMapping.Register<ClientProfileDefinition>("ClientProfileDefinitions");
+        TableMapping.Register<TrackerProviderDefinition>("TrackerProviderDefinitions");
     }
 }
