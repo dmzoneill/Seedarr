@@ -35,7 +35,7 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 | Need to keep rare torrents alive | Announces to trackers and responds to peers |
 | Running a real client wastes bandwidth | Zero actual data transfer |
 | Manual ratio management is tedious | Automated scheduling, distribution, and profiles |
-| Want integration with Sonarr/Radarr | Native \*arr API integration for auto-seeding |
+| Want integration with Sonarr/Radarr/Lidarr | Native \*arr API integration for auto-seeding |
 
 ---
 
@@ -50,8 +50,11 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 - Configurable upload/download speed simulation
 - Multiple speed distribution algorithms (Pareto, Power Law, Log-Normal, Equal)
 - Time-of-day speed scheduling with day-of-week support
-- Client behavior profiles (qBittorrent, Deluge, Transmission)
+- Client behavior profiles (qBittorrent, Deluge, Transmission, uTorrent, BiglyBT)
 - Traffic pattern simulation (burst/idle states, congestion modeling)
+- Per-torrent speed limits, priority weighting, super-seeding boost
+- Global and per-torrent seed ratio limits
+- Force start and force complete support
 
 ### Protocol Support
 - HTTP & UDP tracker announce/scrape (BEP 3, BEP 15)
@@ -69,17 +72,22 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 <td width="50%" valign="top">
 
 ### Web Interface
-- Real-time dashboard with speed graphs
+- Sonarr-style UI with chunky card layouts
+- Real-time dashboard with aggregate speed display
 - Torrent management (table & grid views)
-- Peer list with connection details
+- Detailed torrent panel (Status, Details, Files, Peers, Trackers, Options, Monitoring, Log)
+- Context menus: update tracker, force recheck, queue position, remove with/without data
+- Provider card tiles for connections and download clients
 - Drag-and-drop torrent upload
-- Dark/light theme with system detection
+- Dark/light theme with system detection and custom scrollbars
 - Responsive design (desktop, tablet, mobile)
 - SignalR real-time updates
 
 ### Infrastructure
 - Built-in HTTP + UDP tracker server
-- Sonarr/Radarr integration (auto-seed downloads)
+- Download client integration (qBittorrent, Transmission, Deluge)
+- Sonarr/Radarr/Lidarr integration (auto-seed downloads)
+- System pages: Status, Tasks, Backup, Updates, Events, Log Files
 - Swagger/OpenAPI documentation
 - Health monitoring system
 - Notification system (webhook, email, Discord)
@@ -166,6 +174,29 @@ cd src/Seedarr.Frontend && npm install && npm start
 
 ---
 
+## Settings
+
+Seedarr provides 14 settings tabs with 120+ configurable properties:
+
+| Tab | Key Settings |
+|-----|-------------|
+| **General** | Auto-start, theme, color scheme, log level |
+| **Seeding** | Max upload/download speed, global ratio limit, speed variation, activity probability |
+| **BitTorrent** | Peer ID prefix, client key, user agent, protocol features |
+| **Network** | External IP, UPnP, proxy (HTTP/SOCKS), DNS |
+| **Peer Protocol** | Max connections, request pipeline, idle timeout, encryption |
+| **Protocols** | DHT, PEX, metadata exchange, fast extension, LPD, uTP |
+| **Simulation** | Swarm analysis, traffic patterns, seeding profiles |
+| **Tracker Server** | Built-in HTTP/UDP tracker, scrape, announce intervals, rate limiting |
+| **Scheduler** | Time-of-day speed schedules, alternative speeds, day-of-week |
+| **Advanced** | Download threshold, stopped percentages, force settings |
+| **Connections** | Sonarr/Radarr/Lidarr integration with sync and auto-add |
+| **Download Clients** | qBittorrent, Transmission, Deluge with test and status |
+| **Notifications** | Webhook, email, Discord with event triggers |
+| **Web UI** | Refresh interval, items per page, date/time format |
+
+---
+
 ## Configuration
 
 ### Volumes
@@ -197,17 +228,27 @@ Seedarr exposes a full REST API at `/api/v1/`. Interactive documentation is avai
 ### Key Endpoints
 
 ```text
-GET    /api/v1/system/status     # System info
-GET    /api/v1/torrent           # List torrents
-POST   /api/v1/torrent           # Add torrent
-GET    /api/v1/torrent/{id}      # Torrent details
-DELETE /api/v1/torrent/{id}      # Remove torrent
-GET    /api/v1/torrent/{id}/peer # List peers
-GET    /api/v1/update            # Check for updates
-GET    /api/v1/speedschedule     # Speed schedules
-POST   /api/v1/speedschedule     # Create schedule
-GET    /api/v1/health            # Health checks
-GET    /api/v1/tag               # List tags
+GET    /api/v1/system/status          # System info
+GET    /api/v1/system/task            # Scheduled tasks
+GET    /api/v1/system/command         # Command queue
+GET    /api/v1/torrent                # List torrents
+POST   /api/v1/torrent                # Add torrent (.torrent or magnet)
+GET    /api/v1/torrent/{id}           # Torrent details
+PUT    /api/v1/torrent/{id}           # Update torrent
+DELETE /api/v1/torrent/{id}           # Remove torrent
+GET    /api/v1/torrent/{id}/peer      # List peers
+POST   /api/v1/torrent/{id}/announce  # Update tracker
+POST   /api/v1/torrent/{id}/recheck   # Force recheck
+GET    /api/v1/config                 # All settings
+PUT    /api/v1/config                 # Save settings
+GET    /api/v1/backup                 # List backups
+POST   /api/v1/backup                 # Create backup
+GET    /api/v1/diskspace              # Disk space info
+GET    /api/v1/update                 # Check for updates
+GET    /api/v1/logfile                # List log files
+GET    /api/v1/speedschedule          # Speed schedules
+GET    /api/v1/health                 # Health checks
+GET    /api/v1/tag                    # List tags
 ```
 
 ### SignalR
@@ -225,21 +266,24 @@ Real-time updates via SignalR at `/signalr/messages`:
 
 ```text
 Seedarr.Console          Entry point (Kestrel host)
-  └── Seedarr.Host       ASP.NET middleware, Swagger, auth
-       ├── Seedarr.Api.V1    REST controllers + SignalR
-       ├── Seedarr.Http      REST framework, middleware
-       ├── Seedarr.SignalR    Real-time messaging hub
-       └── Seedarr.Core      Domain logic
-            ├── Torrents/          Torrent management
-            ├── Seeding/           Simulation engine
-            ├── Trackers/          HTTP/UDP tracker clients
-            ├── Peers/             Peer connections + encryption
-            ├── Simulation/        Client profiles + traffic
-            ├── Dht/               Distributed hash table
-            ├── TrackerServer/     Built-in tracker
-            ├── ArrIntegration/    Sonarr/Radarr sync
-            ├── Notifications/     Webhook, email, Discord
-            └── HealthCheck/       System monitoring
+  +-- Seedarr.Host       ASP.NET middleware, Swagger, auth
+       +-- Seedarr.Api.V1    REST controllers + SignalR
+       +-- Seedarr.Http      REST framework, middleware
+       +-- Seedarr.SignalR    Real-time messaging hub
+       +-- Seedarr.Core      Domain logic
+            +-- Torrents/          Torrent management
+            +-- Seeding/           Simulation engine + distribution
+            +-- Trackers/          HTTP/UDP tracker clients
+            +-- Peers/             Peer connections + encryption
+            +-- Simulation/        Client profiles + traffic
+            +-- Dht/               Distributed hash table
+            +-- TrackerServer/     Built-in tracker
+            +-- ArrIntegration/    Sonarr/Radarr/Lidarr sync
+            +-- DownloadClients/   qBittorrent/Transmission/Deluge
+            +-- DiskSpace/         Disk space monitoring
+            +-- Backup/            Backup/restore system
+            +-- Notifications/     Webhook, email, Discord
+            +-- HealthCheck/       System monitoring
 ```
 
 ### Tech Stack
@@ -270,6 +314,8 @@ Seedarr can impersonate multiple BitTorrent clients, generating authentic peer I
 | qBittorrent | `-qB4420-` | 4.4.2 |
 | Deluge | `-DE2030-` | 2.0.3 |
 | Transmission | `-TR3000-` | 3.00 |
+| uTorrent | `-UT3550-` | 3.5.5 |
+| BiglyBT | `-AZ5900-` | 5.9.0 |
 
 ---
 
@@ -288,11 +334,26 @@ Choose how upload bandwidth is distributed across torrents:
 
 ## Integration with \*arr Apps
 
-Seedarr can connect to your existing Sonarr and Radarr instances to automatically seed torrents from your download history:
+Seedarr can connect to your existing Sonarr, Radarr, and Lidarr instances to automatically seed torrents from your download history:
 
-1. Go to **Settings > Arr Connections**
-2. Add your Sonarr/Radarr URL and API key
-3. Seedarr periodically syncs and begins simulating seeds
+1. Go to **Settings > Connections**
+2. Click the **+** card to add a new connection
+3. Select your \*arr type, enter URL and API key
+4. Enable sync and auto-add
+5. Seedarr periodically syncs and begins simulating seeds
+
+---
+
+## System Pages
+
+| Page | Description |
+|------|-------------|
+| **Status** | Health checks, disk space with progress bars, app info |
+| **Tasks** | Scheduled tasks with last/next execution, command queue |
+| **Backup** | Create/restore/download database backups |
+| **Updates** | Version changelog with installed version badge |
+| **Events** | Structured event log with severity-colored icons |
+| **Log Files** | Log file listing with download links |
 
 ---
 
