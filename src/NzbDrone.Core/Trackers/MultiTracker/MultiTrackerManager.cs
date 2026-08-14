@@ -45,53 +45,11 @@ public class MultiTrackerManager : IMultiTrackerManager
             return AnnounceToTracker(request, firstTracker);
         }
 
-        var announceToAllTiers = _configService.AnnounceToAllTiers;
-        var announceToAllInTier = _configService.AnnounceToAllInTier;
-        TrackerAnnounceResponse bestResponse = null;
-
-        foreach (var tier in announceList)
-        {
-            foreach (var trackerUrl in tier)
-            {
-                if (IsTrackerBackedOff(trackerUrl))
-                {
-                    _logger.Debug("Tracker {0} is in backoff, skipping", trackerUrl);
-                    continue;
-                }
-
-                var response = AnnounceToTracker(request, trackerUrl);
-
-                if (response.Success)
-                {
-                    ResetFailureState(trackerUrl);
-
-                    if (bestResponse == null)
-                    {
-                        bestResponse = response;
-                    }
-
-                    if (!announceToAllInTier)
-                    {
-                        break;
-                    }
-                }
-                else
-                {
-                    RecordFailure(trackerUrl);
-                }
-            }
-
-            if (bestResponse != null && !announceToAllTiers)
-            {
-                return bestResponse;
-            }
-        }
-
-        return bestResponse ?? new TrackerAnnounceResponse
-        {
-            Success = false,
-            FailureReason = "All trackers failed"
-        };
+        return ExecuteTrackerOperation(
+            announceList,
+            trackerUrl => AnnounceToTracker(request, trackerUrl),
+            () => new TrackerAnnounceResponse { Success = false, FailureReason = "All trackers failed" },
+            true);
     }
 
     public TrackerScrapeResponse Scrape(string infoHash, List<List<string>> announceList)
@@ -107,9 +65,23 @@ public class MultiTrackerManager : IMultiTrackerManager
             return ScrapeTracker(infoHash, firstTracker);
         }
 
+        return ExecuteTrackerOperation(
+            announceList,
+            trackerUrl => ScrapeTracker(infoHash, trackerUrl),
+            () => new TrackerScrapeResponse { Success = false, FailureReason = "All trackers failed" },
+            false);
+    }
+
+    private TResponse ExecuteTrackerOperation<TResponse>(
+        List<List<string>> announceList,
+        Func<string, TResponse> operation,
+        Func<TResponse> fallbackResponse,
+        bool logBackoffSkip)
+        where TResponse : class
+    {
         var announceToAllTiers = _configService.AnnounceToAllTiers;
         var announceToAllInTier = _configService.AnnounceToAllInTier;
-        TrackerScrapeResponse bestResponse = null;
+        TResponse bestResponse = null;
 
         foreach (var tier in announceList)
         {
@@ -117,12 +89,18 @@ public class MultiTrackerManager : IMultiTrackerManager
             {
                 if (IsTrackerBackedOff(trackerUrl))
                 {
+                    if (logBackoffSkip)
+                    {
+                        _logger.Debug("Tracker {0} is in backoff, skipping", trackerUrl);
+                    }
+
                     continue;
                 }
 
-                var response = ScrapeTracker(infoHash, trackerUrl);
+                var response = operation(trackerUrl);
+                dynamic dynResponse = response;
 
-                if (response.Success)
+                if (dynResponse.Success)
                 {
                     ResetFailureState(trackerUrl);
 
@@ -148,11 +126,7 @@ public class MultiTrackerManager : IMultiTrackerManager
             }
         }
 
-        return bestResponse ?? new TrackerScrapeResponse
-        {
-            Success = false,
-            FailureReason = "All trackers failed"
-        };
+        return bestResponse ?? fallbackResponse();
     }
 
     private TrackerAnnounceResponse AnnounceToTracker(TrackerAnnounceRequest request, string trackerUrl)
