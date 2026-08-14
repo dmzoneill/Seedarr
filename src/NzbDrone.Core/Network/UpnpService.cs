@@ -170,21 +170,24 @@ public class UpnpService : BackgroundService, IUpnpService
                 return;
             }
 
+            List<PortMapping> snapshot;
             lock (_mappings)
             {
-                foreach (var mapping in _mappings)
+                snapshot = new List<PortMapping>(_mappings);
+            }
+
+            foreach (var mapping in snapshot)
+            {
+                try
                 {
-                    try
-                    {
-                        var natMapping = new Mapping(mapping.Protocol, mapping.InternalPort, mapping.ExternalPort, 0, mapping.Description);
-                        device.DeletePortMapAsync(natMapping).GetAwaiter().GetResult();
-                        mapping.IsActive = false;
-                        _logger.Info("UPnP: removed {0} port {1}", mapping.Protocol, mapping.InternalPort);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Debug(ex, "UPnP: failed to remove mapping {0}:{1}", mapping.Protocol, mapping.InternalPort);
-                    }
+                    var natMapping = new Mapping(mapping.Protocol, mapping.InternalPort, mapping.ExternalPort, 0, mapping.Description);
+                    await device.DeletePortMapAsync(natMapping);
+                    mapping.IsActive = false;
+                    _logger.Info("UPnP: removed {0} port {1}", mapping.Protocol, mapping.InternalPort);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "UPnP: failed to remove mapping {0}:{1}", mapping.Protocol, mapping.InternalPort);
                 }
             }
         }
