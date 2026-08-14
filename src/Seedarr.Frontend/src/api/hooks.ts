@@ -120,7 +120,10 @@ export function useAddTorrent() {
       if (input.files && input.files.length > 0) {
         const formData = new FormData();
         input.files.forEach((file) => formData.append("file", file));
-        return apiClient.postForm<AddTorrentResult>("/torrent/upload", formData);
+        return apiClient.postForm<AddTorrentResult>(
+          "/torrent/upload",
+          formData,
+        );
       }
       return apiClient.post("/torrent", { magnetLink: input.magnetLink });
     },
