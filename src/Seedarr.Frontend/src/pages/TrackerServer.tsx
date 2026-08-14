@@ -80,9 +80,15 @@ function TrackerServer() {
         }}
       >
         <div className="page-header-group">
-          <h1 className="page-heading" style={{ margin: 0 }}>
-            Tracker Server ({statsLoading ? "-" : (stats?.totalTorrents ?? 0)})
-          </h1>
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
+            <h1 className="page-heading" style={{ margin: 0 }}>
+              Tracker Server ({statsLoading ? "-" : (stats?.totalTorrents ?? 0)}
+              )
+            </h1>
+            <span className="badge badge-primary">Inbuilt</span>
+          </div>
         </div>
 
         <div
@@ -172,6 +178,9 @@ function TrackerServer() {
             gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
             gap: "1rem",
             marginBottom: "1.25rem",
+            borderRadius: "8px",
+            boxShadow:
+              "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
           }}
         >
           {config.trackerHttpEnabled && httpAnnounceUrl && (

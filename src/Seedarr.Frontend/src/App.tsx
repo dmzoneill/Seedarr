@@ -94,6 +94,10 @@ function App() {
     location.pathname.startsWith("/torrents") ||
     location.pathname === "/history";
   const isActivityRoute = location.pathname.startsWith("/activity");
+  const isTrackerRoute =
+    location.pathname.startsWith("/tracker") ||
+    location.pathname.startsWith("/download++") ||
+    location.pathname.startsWith("/downloadplusplus");
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const isSystemRoute = location.pathname.startsWith("/system");
   const { data: generalConfig } = useGeneralConfig();
@@ -177,13 +181,40 @@ function App() {
             </>
           )}
 
-          <NavLink to="/downloadplusplus" className="sidebar-nav-item">
-            <span style={{ fontSize: "1.1rem" }}>⚡</span>{" "}
-            <span>Download++</span>
-          </NavLink>
-          <NavLink to="/tracker" className="sidebar-nav-item">
+          {/* Tracker Top-Level with Inbuilt and Boost */}
+          <NavLink
+            to="/tracker"
+            className={`sidebar-nav-item ${isTrackerRoute ? "active" : ""}`}
+          >
             <TrackerIcon /> <span>Tracker</span>
           </NavLink>
+          {isTrackerRoute && (
+            <>
+              <NavLink
+                to="/tracker/inbuilt"
+                className={`sidebar-nav-item sidebar-nav-sub ${
+                  location.pathname === "/tracker" ||
+                  location.pathname === "/tracker/inbuilt"
+                    ? "active"
+                    : ""
+                }`}
+              >
+                <span>Inbuilt</span>
+              </NavLink>
+              <NavLink
+                to="/tracker/boost"
+                className={`sidebar-nav-item sidebar-nav-sub ${
+                  location.pathname === "/tracker/boost" ||
+                  location.pathname === "/download++" ||
+                  location.pathname === "/downloadplusplus"
+                    ? "active"
+                    : ""
+                }`}
+              >
+                <span>Boost</span>
+              </NavLink>
+            </>
+          )}
           <NavLink to="/peermap" className="sidebar-nav-item">
             <PeerMapIcon /> <span>Peer Map</span>
           </NavLink>
@@ -392,6 +423,8 @@ function App() {
               <Route path="/downloadplusplus" element={<DownloadPlusPlus />} />
               <Route path="/download++" element={<DownloadPlusPlus />} />
               <Route path="/tracker" element={<TrackerServer />} />
+              <Route path="/tracker/inbuilt" element={<TrackerServer />} />
+              <Route path="/tracker/boost" element={<DownloadPlusPlus />} />
               <Route path="/peermap" element={<PeerMap />} />
               <Route path="/schedule" element={<SpeedSchedule />} />
               <Route path="/statistics" element={<Statistics />} />
