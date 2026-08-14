@@ -28,6 +28,8 @@ export function ConnectionsTab() {
     syncEnabled: true,
     enableAutomaticAdd: true,
     webhookEnabled: true,
+    implementation: 'SonarrConnection',
+    configContract: 'ArrConnectionDefinition',
   };
 
   const handleSave = () => {
@@ -121,7 +123,7 @@ export function ConnectionsTab() {
               value={editing.arrType || 'Sonarr'}
               onChange={(v) => {
                 const defaults: Record<string, string> = { Sonarr: 'http://localhost:8989', Radarr: 'http://localhost:7878', Lidarr: 'http://localhost:8686' };
-                setEditing({ ...editing, arrType: v, url: defaults[v] || editing.url || '' });
+                setEditing({ ...editing, arrType: v, url: defaults[v] || editing.url || '', implementation: `${v}Connection` });
               }}
               options={[
                 { value: 'Sonarr', label: 'Sonarr' },

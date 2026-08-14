@@ -26,6 +26,7 @@ public class ConnectionManager : IConnectionManager
     private readonly IPeerConnectionLogService _connectionLogService;
     private readonly ITorrentService _torrentService;
     private readonly IFastExtensionHandler _fastExtensionHandler;
+    private readonly ITorrentEventLogService _eventLogService;
     private readonly List<PeerConnection> _connections = new();
     private readonly object _lock = new();
     private readonly Logger _logger;
@@ -41,12 +42,13 @@ public class ConnectionManager : IConnectionManager
         }
     }
 
-    public ConnectionManager(IConfigService configService, IPeerConnectionLogService connectionLogService, ITorrentService torrentService, IFastExtensionHandler fastExtensionHandler)
+    public ConnectionManager(IConfigService configService, IPeerConnectionLogService connectionLogService, ITorrentService torrentService, IFastExtensionHandler fastExtensionHandler, ITorrentEventLogService eventLogService)
     {
         _configService = configService;
         _connectionLogService = connectionLogService;
         _torrentService = torrentService;
         _fastExtensionHandler = fastExtensionHandler;
+        _eventLogService = eventLogService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -190,7 +192,7 @@ public class ConnectionManager : IConnectionManager
         }
     }
 
-    private string ResolveTorrentName(string infoHash)
+    private Torrent ResolveTorrent(string infoHash)
     {
         if (string.IsNullOrEmpty(infoHash))
         {
@@ -200,7 +202,7 @@ public class ConnectionManager : IConnectionManager
         try
         {
             var torrents = _torrentService.GetAll();
-            return torrents.FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase))?.Name;
+            return torrents.FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
         }
         catch
         {
@@ -212,7 +214,16 @@ public class ConnectionManager : IConnectionManager
     {
         try
         {
-            _connectionLogService.LogConnected(connection, ResolveTorrentName(connection.InfoHash));
+            var torrent = ResolveTorrent(connection.InfoHash);
+            _connectionLogService.LogConnected(connection, torrent?.Name);
+
+            if (torrent != null)
+            {
+                _eventLogService.Debug(
+                    torrent.Id,
+                    "Peers",
+                    $"Peer connected {connection.RemoteIp}:{connection.RemotePort}{(connection.IsEncrypted ? " (encrypted)" : string.Empty)}");
+            }
         }
         catch (Exception ex)
         {
@@ -224,7 +235,16 @@ public class ConnectionManager : IConnectionManager
     {
         try
         {
-            _connectionLogService.LogDisconnected(connection, ResolveTorrentName(connection.InfoHash));
+            var torrent = ResolveTorrent(connection.InfoHash);
+            _connectionLogService.LogDisconnected(connection, torrent?.Name);
+
+            if (torrent != null)
+            {
+                _eventLogService.Debug(
+                    torrent.Id,
+                    "Peers",
+                    $"Peer disconnected {connection.RemoteIp}:{connection.RemotePort}");
+            }
         }
         catch (Exception ex)
         {

@@ -36,6 +36,7 @@ import type {
   SpeedLimits,
   Tag,
   PeerConnectionLogEntry,
+  TorrentEventLogEntry,
   NetworkDiagnostics,
 } from "./types";
 
@@ -54,8 +55,18 @@ export function useRefetchInterval(): number {
 }
 
 type AddTorrentInput =
-  | { file: File; magnetLink?: never }
-  | { magnetLink: string; file?: never };
+  | { files: File[]; magnetLink?: never }
+  | { magnetLink: string; files?: never };
+
+export interface TorrentUploadFailure {
+  fileName: string;
+  reason: string;
+}
+
+export interface AddTorrentResult {
+  added: Torrent[];
+  failed: TorrentUploadFailure[];
+}
 
 export function useTorrents() {
   const interval = useRefetchInterval();
@@ -94,20 +105,22 @@ export function useTorrentTrackers(torrentId: number) {
   });
 }
 
+export function useTorrentLogs(torrentId: number) {
+  return useQuery<TorrentEventLogEntry[]>({
+    queryKey: ["torrents", torrentId, "logs"],
+    queryFn: () => apiClient.get(`/torrent/${torrentId}/logs`),
+    enabled: torrentId > 0,
+  });
+}
+
 export function useAddTorrent() {
   const queryClient = useQueryClient();
-  return useMutation<Torrent, Error, AddTorrentInput>({
+  return useMutation<AddTorrentResult, Error, AddTorrentInput>({
     mutationFn: async (input) => {
-      if (input.file) {
+      if (input.files && input.files.length > 0) {
         const formData = new FormData();
-        formData.append("file", input.file);
-        return apiClient
-          .postForm<Torrent>("/torrent/upload", formData)
-          .catch((err: Error) => {
-            if (err.message.startsWith("API error: 409"))
-              throw new Error("Torrent with this info hash already exists");
-            throw err;
-          });
+        input.files.forEach((file) => formData.append("file", file));
+        return apiClient.postForm<AddTorrentResult>("/torrent/upload", formData);
       }
       return apiClient.post("/torrent", { magnetLink: input.magnetLink });
     },

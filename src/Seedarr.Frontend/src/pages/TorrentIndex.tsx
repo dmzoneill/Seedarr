@@ -5,7 +5,6 @@ import TorrentDetailPanel from '../components/TorrentDetailPanel';
 import AddTorrentModal from '../components/AddTorrentModal';
 import { TorrentToolbar } from './torrentindex/TorrentToolbar';
 import { TorrentFilterPanel } from './torrentindex/TorrentFilterPanel';
-import { BulkActionPanel } from './torrentindex/BulkActionPanel';
 import { useTorrentIndexState } from './torrentindex/useTorrentIndexState';
 
 function TorrentIndex() {
@@ -16,7 +15,6 @@ function TorrentIndex() {
     seedingConfig,
     filter, setFilter,
     showAddModal, setShowAddModal,
-    selectMode, setSelectMode,
     selectedIds, setSelectedIds,
     viewMode,
     selectedState, setSelectedState,
@@ -78,8 +76,12 @@ function TorrentIndex() {
         onAddTorrent={() => setShowAddModal(true)}
         onStartAll={() => startAll.mutate()}
         onStopAll={() => stopAll.mutate()}
-        selectMode={selectMode}
-        onToggleSelectMode={() => { setSelectMode(!selectMode); setSelectedIds(new Set()); }}
+        selectedCount={selectedIds.size}
+        bulkPending={bulkPending}
+        onBulkStart={handleBulkStart}
+        onBulkStop={handleBulkStop}
+        onBulkDelete={handleBulkDelete}
+        onBulkClear={() => setSelectedIds(new Set())}
       />
       <div className="torrent-content-layout">
         <TorrentFilterPanel
@@ -101,7 +103,6 @@ function TorrentIndex() {
                   trackerFilter={selectedTracker}
                   selectedTorrentId={selectedTorrentId}
                   onSelectTorrent={setSelectedTorrentId}
-                  selectMode={selectMode}
                   selectedIds={selectedIds}
                   onToggleSelect={handleToggleSelect}
                   onSelectAll={handleSelectAll}
@@ -116,16 +117,6 @@ function TorrentIndex() {
           </div>
         </div>
       </div>
-      {selectMode && selectedIds.size > 0 && (
-        <BulkActionPanel
-          selectedIds={selectedIds}
-          isPending={bulkPending}
-          onStart={handleBulkStart}
-          onStop={handleBulkStop}
-          onDelete={handleBulkDelete}
-          onClear={() => setSelectedIds(new Set())}
-        />
-      )}
       {showAddModal && <AddTorrentModal onClose={() => setShowAddModal(false)} />}
     </div>
   );

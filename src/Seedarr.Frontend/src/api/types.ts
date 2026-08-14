@@ -504,3 +504,12 @@ export interface PeerConnectionLogEntry {
   eventType: string;
   timestamp: string;
 }
+
+export interface TorrentEventLogEntry {
+  id: number;
+  torrentId: number;
+  timeStamp: string;
+  level: string;
+  source: string;
+  message: string;
+}
