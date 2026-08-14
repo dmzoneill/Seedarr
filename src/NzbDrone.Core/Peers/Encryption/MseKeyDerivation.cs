@@ -1,10 +1,8 @@
 using System;
-using System.Numerics;
 using System.Security.Cryptography;
 using Org.BouncyCastle.Crypto.Agreement;
 using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Security;
 
 namespace NzbDrone.Core.Peers.Encryption;
