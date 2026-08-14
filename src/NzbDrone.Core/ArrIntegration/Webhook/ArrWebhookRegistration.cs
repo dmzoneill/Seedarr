@@ -76,6 +76,9 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                 });
             }
 
+            // NOTE: Only one "Seedarr" notification is supported per arr app.
+            // FindExistingWebhook matches by this name + URL, so a second connection to the
+            // same arr app won't register a separate webhook — the first one is reused.
             var notificationBody = new
             {
                 name = "Seedarr",

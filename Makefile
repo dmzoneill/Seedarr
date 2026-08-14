@@ -1,5 +1,5 @@
-.PHONY: setup test-setup test integration build clean restore frontend \
-       stack-up stack-down stack-configure stack-healthy stack-rebuild \
+.PHONY: setup test-setup test integration integration-unsecured integration-secured build clean restore frontend \
+       stack-up stack-down stack-configure stack-configure-secured stack-healthy stack-rebuild \
        test-unit test-integration test-integration-rerun test-integration-only test-all \
        coverage-report
 
@@ -45,16 +45,26 @@ test:
 		--logger "trx;LogFileName=test-results.trx" \
 		--collect:"XPlat Code Coverage"
 
-integration: stack-clean stack-build stack-up stack-healthy stack-configure
+# Webhook secret used for the secured E2E stack (stack 2).
+# Must match WEBHOOK_SECRET env var passed to stack-configure-secured.
+SECURED_WEBHOOK_SECRET ?= seedarr-e2e-secured-secret-abc123xyz789
+
+# integration runs two independent stacks in sequence:
+#   stack 1 (unsecured/deprecated): unauthenticated webhook flow
+#   stack 2 (secured): authenticated webhook flow with X-Seedarr-Secret
+integration: integration-unsecured integration-secured
+
+integration-unsecured: stack-clean stack-build stack-up stack-healthy stack-configure
 	@echo ""
-	@echo "Running .NET integration tests..."
+	@echo "Running .NET integration tests (unsecured stack)..."
 	dotnet test $(INTEGRATION_TEST) --no-build \
 		--logger "trx;LogFileName=integration-test-results.trx" \
 		--collect:"XPlat Code Coverage"
 	@echo ""
-	@echo "Running Selenium automation tests..."
+	@echo "Running automation tests (unsecured E2E)..."
 	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
-		--logger "trx;LogFileName=automation-test-results.trx"
+		--filter "Category!=SecuredE2E" \
+		--logger "trx;LogFileName=automation-unsecured-results.trx"
 	@echo ""
 	@echo "Extracting automation coverage..."
 	@podman stop --time 30 seedarr 2>/dev/null || true
@@ -63,6 +73,19 @@ integration: stack-clean stack-build stack-up stack-healthy stack-configure
 		echo "Automation coverage extracted: coverage-automation.xml" || \
 		echo "Warning: no automation coverage file found (coverage may not have been enabled)"
 	$(MAKE) coverage-report
+
+integration-secured:
+	$(MAKE) stack-clean
+	$(MAKE) stack-up
+	$(MAKE) stack-healthy
+	$(MAKE) stack-configure-secured
+	@echo ""
+	@echo "Running automation tests (secured E2E)..."
+	SEEDARR_URL=http://localhost:9898 WEBHOOK_SECRET=$(SECURED_WEBHOOK_SECRET) \
+		dotnet test $(AUTOMATION_TEST) --no-build \
+		--filter "Category=SecuredE2E" \
+		--logger "trx;LogFileName=automation-secured-results.trx"
+	$(MAKE) stack-clean
 
 test-unit: test
 
@@ -113,7 +136,13 @@ stack-configure:
 	@podman exec radarr mkdir -p /config/movies 2>/dev/null || true
 	@podman exec radarr chown abc:users /config/movies 2>/dev/null || true
 	@$(COMPOSE) rm -f configure 2>/dev/null || true
-	@$(COMPOSE) up --no-deps configure 2>&1 | tail -30
+	@$(COMPOSE) up --no-deps configure 2>&1 | tail -60
+
+stack-configure-secured:
+	@podman exec radarr mkdir -p /config/movies 2>/dev/null || true
+	@podman exec radarr chown abc:users /config/movies 2>/dev/null || true
+	@$(COMPOSE) rm -f configure 2>/dev/null || true
+	@WEBHOOK_SECRET=$(SECURED_WEBHOOK_SECRET) $(COMPOSE) up --no-deps configure 2>&1 | tail -60
 
 # --- Integration tests (requires podman-compose stack) ---
 
@@ -139,12 +168,14 @@ test-integration-rerun: stack-healthy stack-configure
 	dotnet test $(INTEGRATION_TEST) --no-build \
 		--logger "trx;LogFileName=integration-test-results.trx"
 	@echo ""
-	@echo "Running Selenium automation tests..."
+	@echo "Running automation tests (unsecured E2E)..."
 	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
+		--filter "Category!=SecuredE2E" \
 		--logger "trx;LogFileName=automation-test-results.trx"
 
 test-integration-only:
 	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
+		--filter "Category!=SecuredE2E" \
 		--logger "trx;LogFileName=automation-test-results.trx"
 
 # --- Combined ---
