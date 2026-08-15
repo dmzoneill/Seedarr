@@ -166,6 +166,15 @@ public class SpeedHistoryService : BackgroundService, ISpeedHistoryService
                     list.RemoveFirst();
                 }
             }
+
+            var activeIds = new HashSet<int>(active.Select(t => t.Id));
+            var staleIds = _torrentSnapshots.Keys.Where(id => !activeIds.Contains(id)).ToList();
+            foreach (var id in staleIds)
+            {
+                _torrentSnapshots.Remove(id);
+                _prevTorrentUploaded.Remove(id);
+                _prevTorrentDownloaded.Remove(id);
+            }
         }
     }
 

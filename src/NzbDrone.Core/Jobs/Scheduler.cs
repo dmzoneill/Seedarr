@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -9,11 +11,13 @@ namespace NzbDrone.Core.Jobs;
 public class Scheduler : BackgroundService
 {
     private readonly ITaskManager _taskManager;
+    private readonly IEnumerable<IScheduledTask> _scheduledTasks;
     private readonly Logger _logger;
 
-    public Scheduler(ITaskManager taskManager)
+    public Scheduler(ITaskManager taskManager, IEnumerable<IScheduledTask> scheduledTasks)
     {
         _taskManager = taskManager;
+        _scheduledTasks = scheduledTasks;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -33,7 +37,29 @@ public class Scheduler : BackgroundService
 
                     if (dueAt <= DateTime.UtcNow)
                     {
-                        _logger.Trace("Task due: {0}", next.TypeName);
+                        _logger.Debug("Executing scheduled task: {0}", next.TypeName);
+
+                        var taskInstance = _scheduledTasks.FirstOrDefault(t =>
+                            string.Equals(t.GetType().FullName, next.TypeName, StringComparison.OrdinalIgnoreCase));
+
+                        if (taskInstance != null)
+                        {
+                            try
+                            {
+                                taskInstance.Execute();
+                                _logger.Debug("Scheduled task completed: {0}", next.TypeName);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(ex, "Scheduled task failed: {0}", next.TypeName);
+                            }
+
+                            _taskManager.UpdateLastExecution(next.TypeName);
+                        }
+                        else
+                        {
+                            _logger.Warn("No task instance found for scheduled type: {0}", next.TypeName);
+                        }
                     }
                 }
             }

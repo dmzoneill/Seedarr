@@ -54,6 +54,11 @@ public class DhtPeerStore
             }
 
             list.RemoveAll(p => (DateTime.UtcNow - p.LastSeen).TotalMinutes > _peerTtlMinutes);
+
+            if (list.Count == 0)
+            {
+                _peers.Remove(key);
+            }
         }
     }
 
