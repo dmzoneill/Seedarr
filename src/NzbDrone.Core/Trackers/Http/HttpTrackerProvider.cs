@@ -25,7 +25,10 @@ public class HttpTrackerProvider : ITrackerProvider
     public HttpTrackerProvider(IConfigService configService)
     {
         _configService = configService;
-        _client = new HttpClient
+        _client = new HttpClient(new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+        })
         {
             Timeout = TimeSpan.FromSeconds(configService.HttpTrackerTimeoutSeconds)
         };

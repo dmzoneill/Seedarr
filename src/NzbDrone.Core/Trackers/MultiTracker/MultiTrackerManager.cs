@@ -218,6 +218,25 @@ public class MultiTrackerManager : IMultiTrackerManager
                 backoffSeconds,
                 state.ConsecutiveFailures);
         }
+
+        if (_failureStates.Count > 1000)
+        {
+            PurgeExpiredFailureStates();
+        }
+    }
+
+    private void PurgeExpiredFailureStates()
+    {
+        var now = DateTime.UtcNow;
+        var staleKeys = _failureStates
+            .Where(kvp => kvp.Value.ConsecutiveFailures == 0 || kvp.Value.BackoffUntil < now)
+            .Select(kvp => kvp.Key)
+            .ToList();
+
+        foreach (var key in staleKeys)
+        {
+            _failureStates.TryRemove(key, out _);
+        }
     }
 
     private void ResetFailureState(string trackerUrl)

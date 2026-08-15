@@ -9,7 +9,7 @@ using NLog;
 
 namespace NzbDrone.Core.DownloadClients.Transmission;
 
-public class TransmissionClient : IDownloadClient
+public class TransmissionClient : IDownloadClient, IDisposable
 {
     private readonly Logger _logger;
     private HttpClient _client;
@@ -92,7 +92,7 @@ public class TransmissionClient : IDownloadClient
                 fields = new[] { "hashString", "name", "totalSize", "leftUntilDone", "status", "downloadDir", "labels" },
             };
 
-            var doc = SendRequest("torrent-get", arguments);
+            using var doc = SendRequest("torrent-get", arguments);
             var torrents = doc.RootElement
                 .GetProperty("arguments")
                 .GetProperty("torrents");
@@ -147,7 +147,7 @@ public class TransmissionClient : IDownloadClient
                 fields = new[] { "torrentFile" },
             };
 
-            var doc = SendRequest("torrent-get", arguments);
+            using var doc = SendRequest("torrent-get", arguments);
             var torrents = doc.RootElement
                 .GetProperty("arguments")
                 .GetProperty("torrents");
@@ -178,7 +178,7 @@ public class TransmissionClient : IDownloadClient
     {
         try
         {
-            var doc = SendRequest("session-get", new { });
+            using var doc = SendRequest("session-get", new { });
             return doc.RootElement.TryGetProperty("result", out var result) &&
                 result.GetString() == "success";
         }
@@ -187,6 +187,11 @@ public class TransmissionClient : IDownloadClient
             _logger.Error(ex, "Transmission connection test failed");
             return false;
         }
+    }
+
+    public void Dispose()
+    {
+        _client?.Dispose();
     }
 
     private static string MapStatus(int transmissionStatus)

@@ -22,10 +22,10 @@ public class ExternalIpService : IExternalIpService
         "https://checkip.amazonaws.com"
     };
 
-    private static readonly HttpClient Client = new()
+    private static readonly HttpClient Client = new(new SocketsHttpHandler
     {
-        Timeout = TimeSpan.FromSeconds(5)
-    };
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+    }) { Timeout = TimeSpan.FromSeconds(5) };
 
     private readonly Logger _logger;
     private string _cachedIp = "";

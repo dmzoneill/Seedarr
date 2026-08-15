@@ -21,11 +21,11 @@ public class ProwlarrIndexer : IIndexer
     {
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get,
+            using var request = new HttpRequestMessage(HttpMethod.Get,
                 $"{definition.Url.TrimEnd('/')}/api/v1/health");
             request.Headers.Add("X-Api-Key", definition.ApiKey);
 
-            var response = Client.Send(request);
+            using var response = Client.Send(request);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)

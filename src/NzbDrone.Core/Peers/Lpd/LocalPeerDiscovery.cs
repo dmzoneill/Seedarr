@@ -51,14 +51,36 @@ public class LocalPeerDiscovery : BackgroundService
             return;
         }
 
-        using (client)
+        try
         {
             _logger.Info("Local Peer Discovery (BEP 14) started on {0}:{1}", MulticastAddress, MulticastPort);
 
-            var listenTask = ListenForPeers(client, stoppingToken);
-            var announceTask = AnnounceLoop(stoppingToken);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            var listenTask = ListenForPeers(client, linkedCts.Token);
+            var announceTask = AnnounceLoop(linkedCts.Token);
 
             await Task.WhenAny(listenTask, announceTask);
+            await linkedCts.CancelAsync();
+
+            try
+            {
+                await Task.WhenAll(listenTask, announceTask).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+        finally
+        {
+            try
+            {
+                client.DropMulticastGroup(IPAddress.Parse(MulticastAddress));
+            }
+            catch (Exception)
+            {
+            }
+
+            client.Dispose();
         }
     }
 
