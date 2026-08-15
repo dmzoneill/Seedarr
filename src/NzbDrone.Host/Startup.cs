@@ -1,8 +1,10 @@
+using System.IO;
 using System.Reflection;
 using DryIoc;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi.Models;
 using NzbDrone.Common.Serializer;
 using NzbDrone.SignalR;
@@ -79,6 +81,17 @@ public class Startup
 
         app.UseDefaultFiles();
         app.UseStaticFiles();
+
+        var fixturesPath = Path.Combine(System.AppContext.BaseDirectory, "fixtures");
+        if (Directory.Exists(fixturesPath))
+        {
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(fixturesPath),
+                RequestPath = "/fixtures",
+                ServeUnknownFileTypes = true
+            });
+        }
 
         app.UseRouting();
 

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.ArrIntegration;
+using NzbDrone.Core.ArrIntegration.Webhook;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.ArrIntegration;
@@ -10,13 +11,16 @@ public class ArrConnectionController : Controller
 {
     private readonly IArrConnectionFactory _connectionFactory;
     private readonly IArrSyncService _arrSyncService;
+    private readonly IArrWebhookRegistration _webhookRegistration;
 
     public ArrConnectionController(
         IArrConnectionFactory connectionFactory,
-        IArrSyncService arrSyncService)
+        IArrSyncService arrSyncService,
+        IArrWebhookRegistration webhookRegistration)
     {
         _connectionFactory = connectionFactory;
         _arrSyncService = arrSyncService;
+        _webhookRegistration = webhookRegistration;
     }
 
     [HttpGet]
@@ -35,6 +39,7 @@ public class ArrConnectionController : Controller
     public ActionResult<ArrConnectionDefinition> Create([FromBody] ArrConnectionDefinition definition)
     {
         var created = _connectionFactory.Create(definition);
+        _webhookRegistration.RegisterWebhook(created);
         return Ok(created);
     }
 
@@ -43,12 +48,15 @@ public class ArrConnectionController : Controller
     {
         definition.Id = id;
         _connectionFactory.Update(definition);
+        _webhookRegistration.RegisterWebhook(definition);
         return Ok(definition);
     }
 
     [HttpDelete("{id}")]
     public ActionResult Delete(int id)
     {
+        var definition = _connectionFactory.Get(id);
+        _webhookRegistration.UnregisterWebhook(definition);
         _connectionFactory.Delete(id);
         return Ok();
     }

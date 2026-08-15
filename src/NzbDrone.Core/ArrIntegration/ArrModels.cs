@@ -11,6 +11,7 @@ public class ArrConnectionDefinition : ProviderDefinition
     public int SyncIntervalMinutes { get; set; } = 60;
     public bool SyncEnabled { get; set; } = true;
     public bool EnableAutomaticAdd { get; set; } = true;
+    public bool WebhookEnabled { get; set; } = true;
 }
 
 public class ArrDownloadRecord
@@ -23,4 +24,5 @@ public class ArrDownloadRecord
     public DateTime Date { get; set; }
     public string DownloadClient { get; set; }
     public string OutputPath { get; set; }
+    public string DownloadUrl { get; set; }
 }
