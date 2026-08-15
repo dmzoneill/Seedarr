@@ -64,6 +64,10 @@ public class UpdateController : Controller
                     Fixed = new List<string>(),
                 },
             });
+
+            results = results
+                .OrderByDescending(r => Version.TryParse(r.Version, out var v) ? v : new Version(0, 0, 0))
+                .ToList();
         }
 
         return Ok(results);
