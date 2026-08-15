@@ -74,6 +74,8 @@ public class FastExtensionHandler : IFastExtensionHandler
             setSize = DefaultFastSetSize;
         }
 
+        setSize = Math.Min(setSize, pieceCount);
+
         var ipBytes = MaskIpToSubnet(ipAddress);
         if (ipBytes == null)
         {

@@ -10,12 +10,14 @@ namespace NzbDrone.Core.ArrIntegration;
 
 public class LidarrConnection : IArrConnection
 {
-    private static readonly HttpClient Client = new(new SocketsHttpHandler
+    private static readonly HttpClient SharedClient = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(10)
     });
-    private static readonly ResiliencePipeline Policy = ResiliencePolicies.GetArrApiPolicy();
+    private static readonly ResiliencePipeline SharedPolicy = ResiliencePolicies.GetArrApiPolicy();
 
+    private readonly HttpClient _client;
+    private readonly ResiliencePipeline _policy;
     private readonly Logger _logger;
 
     public string Name => "Lidarr";
@@ -24,21 +26,23 @@ public class LidarrConnection : IArrConnection
     public string Url { get; set; } = "http://localhost:8686";
     public string ApiKey { get; set; } = "";
 
-    public LidarrConnection()
+    public LidarrConnection(HttpClient client = null, ResiliencePipeline policy = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
+        _client = client ?? SharedClient;
+        _policy = policy ?? SharedPolicy;
     }
 
     public List<ArrDownloadRecord> GetDownloadHistory()
     {
         try
         {
-            var result = Policy.Execute(ct =>
+            var result = _policy.Execute(ct =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v1/history?pageSize=50&sortKey=date&sortDirection=descending");
                 request.Headers.Add("X-Api-Key", ApiKey);
 
-                using var response = Client.Send(request, ct);
+                using var response = _client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.Warn("Lidarr API returned {0}", response.StatusCode);
@@ -103,11 +107,11 @@ public class LidarrConnection : IArrConnection
     {
         try
         {
-            return Policy.Execute(ct =>
+            return _policy.Execute(ct =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v1/system/status");
                 request.Headers.Add("X-Api-Key", ApiKey);
-                using var response = Client.Send(request, ct);
+                using var response = _client.Send(request, ct);
                 return response.IsSuccessStatusCode;
             });
         }
