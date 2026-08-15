@@ -71,7 +71,7 @@ stack-up:
 		fi; \
 		sleep 1; \
 	done
-	$(COMPOSE) up -d seedarr
+	$(COMPOSE) up --no-deps -d seedarr
 
 stack-down:
 	$(COMPOSE) down 2>/dev/null || true
