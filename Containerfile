@@ -56,6 +56,7 @@ WORKDIR /app
 
 COPY --from=backend /app ./
 COPY --from=frontend /build/src/NzbDrone.Host/wwwroot/ ./wwwroot/
+COPY version ./
 
 ENV SEEDARR__APP_DATA=/config
 
