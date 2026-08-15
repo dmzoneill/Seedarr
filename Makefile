@@ -96,7 +96,7 @@ stack-configure:
 	@podman exec radarr mkdir -p /config/movies 2>/dev/null || true
 	@podman exec radarr chown abc:users /config/movies 2>/dev/null || true
 	@$(COMPOSE) rm -f configure 2>/dev/null || true
-	@$(COMPOSE) up configure 2>&1 | tail -30
+	@$(COMPOSE) up --no-deps configure 2>&1 | tail -30
 
 # --- Integration tests (requires podman-compose stack) ---
 
