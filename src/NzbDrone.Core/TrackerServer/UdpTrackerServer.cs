@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -181,14 +182,12 @@ public class UdpTrackerServer : BackgroundService
         var peerId = Encoding.Latin1.GetString(data, 16 + InfoHashLength, PeerIdLength);
 
         var eventId = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(80, 4));
-        var ipAddress = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(84, 4));
 
         var numWant = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(92, 4));
         var port = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(96, 2));
 
-        var peerIp = ipAddress != 0
-            ? new IPAddress(BinaryPrimitives.ReverseEndianness(ipAddress)).ToString()
-            : remote.Address.ToString();
+        // Always use the remote address; never trust client-specified IP
+        var peerIp = remote.Address.ToString();
 
         var peerPort = port > 0 ? port : remote.Port;
 
@@ -334,12 +333,12 @@ public class UdpTrackerServer : BackgroundService
     private long GenerateConnectionId()
     {
         var buffer = new byte[8];
-        Random.Shared.NextBytes(buffer);
+        RandomNumberGenerator.Fill(buffer);
         var id = BinaryPrimitives.ReadInt64BigEndian(buffer);
 
         while (id == ProtocolMagic || _connectionIds.ContainsKey(id))
         {
-            Random.Shared.NextBytes(buffer);
+            RandomNumberGenerator.Fill(buffer);
             id = BinaryPrimitives.ReadInt64BigEndian(buffer);
         }
 

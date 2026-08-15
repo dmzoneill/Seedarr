@@ -38,7 +38,9 @@ public static class GeneralConfigResourceMapper
             BindAddress = fileProvider.BindAddress,
             UrlBase = fileProvider.UrlBase,
             AuthenticationEnabled = fileProvider.AuthenticationEnabled,
-            ApiKey = fileProvider.ApiKey
+            ApiKey = fileProvider.ApiKey.Length > 4
+                ? new string('*', fileProvider.ApiKey.Length - 4) + fileProvider.ApiKey[^4..]
+                : new string('*', fileProvider.ApiKey.Length)
         };
     }
 }
