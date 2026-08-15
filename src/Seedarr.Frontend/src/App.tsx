@@ -131,10 +131,10 @@ function App() {
   return (
     <div className="app">
       <aside className="sidebar">
-        <div className="sidebar-logo">
+        <a href="https://www.seedarr.net" target="_blank" rel="noopener noreferrer" className="sidebar-logo">
           <SeedarrLogo size={96} />
           <SeedarrText width={140} />
-        </div>
+        </a>
         <nav className="sidebar-nav">
           <NavLink to="/" end className="sidebar-nav-item">
             <DashboardIcon /> <span>Torrents</span>
