@@ -18,11 +18,11 @@ dotnet run --project src/NzbDrone.Console/Seedarr.Console.csproj
 # Run unit tests
 dotnet test src/Seedarr.sln --filter "Category!=IntegrationTest"
 
-# Run integration tests
-dotnet test src/Seedarr.sln --filter "Category=IntegrationTest"
+# Run integration tests (shell-based, requires podman-compose)
+make integration
 
 # Run all tests
-dotnet test src/Seedarr.sln
+make test-all
 
 # Frontend dev server
 cd src/Seedarr.Frontend && npm install && npm start
@@ -63,14 +63,20 @@ src/
 
 ### Domain Entity Mapping (from Sonarr concepts)
 
-| Sonarr Entity   | Seedarr Entity    |
-|-----------------|-------------------|
-| Series          | Torrent           |
-| Episode         | Peer              |
-| EpisodeFile     | TorrentFile       |
-| Indexer         | TrackerProvider   |
-| DownloadClient  | ClientProfile     |
-| ImportList      | ArrConnection     |
+| Sonarr Entity   | Seedarr Entity              |
+|-----------------|-----------------------------|
+| Series          | Torrent                     |
+| EpisodeFile     | TorrentFile                 |
+| (new)           | TrackerEntry                |
+| Indexer         | TrackerProviderDefinition   |
+| DownloadClient  | DownloadClientDefinition    |
+| (new)           | ClientProfileDefinition     |
+| ImportList      | ArrConnectionDefinition     |
+| (new)           | IndexerDefinition           |
+| Notification    | NotificationDefinition      |
+| (new)           | SpeedSchedule               |
+
+Note: Peer connections (`PeerConnection`) are in-memory only, not persisted to DB.
 
 ## Conventions
 
@@ -81,7 +87,9 @@ src/
 - Use `FluentValidation` for all request validation
 - Use `NLog` for logging (inject `Logger` via DryIoc)
 - Use `Polly` for retry/circuit-breaker on external calls
-- Test classes mirror source structure: `NzbDrone.Core.Test/Torrents/TorrentServiceFixture.cs`
+- Test classes mirror source structure: `NzbDrone.Core.Test/Torrents/InfoHashCalculatorTest.cs`
+- Test framework: NUnit 4.6 with built-in assertions (no Moq, no FluentAssertions)
+- Test naming: `{ClassName}Test.cs`
 
 ### Database Migrations
 

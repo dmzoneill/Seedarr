@@ -317,7 +317,7 @@ Seedarr can impersonate multiple BitTorrent clients, generating authentic peer I
 | Deluge | `-DE2030-` | 2.0.3 |
 | Transmission | `-TR3000-` | 3.00 |
 | uTorrent | `-UT3550-` | 3.5.5 |
-| BiglyBT | `-AZ5900-` | 5.9.0 |
+| BiglyBT | `-BG2700-` | 2.7.0.0 |
 
 ---
 
@@ -386,7 +386,7 @@ cd src/Seedarr.Frontend && npm install && npm start
 make setup              # Restore .NET + npm dependencies
 make test-setup         # Build solution
 make test               # Run all tests
-make integration-test   # Integration tests only
+make integration        # Integration tests (podman-compose stack)
 make build              # Build release
 make publish            # Publish release artifacts
 make frontend           # Build frontend production bundle
