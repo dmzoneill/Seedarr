@@ -23,10 +23,12 @@ public class RoutingTable
     private readonly int _bucketSize;
     private readonly int _idBits;
     private readonly int _maxNodes;
+    private readonly byte[] _localNodeId;
     private readonly List<List<DhtNode>> _buckets;
 
-    public RoutingTable(int bucketSize = 8, int idBits = 160, int maxNodes = 0)
+    public RoutingTable(byte[] localNodeId, int bucketSize = 8, int idBits = 160, int maxNodes = 0)
     {
+        _localNodeId = localNodeId ?? throw new ArgumentNullException(nameof(localNodeId));
         _bucketSize = bucketSize;
         _idBits = idBits;
         _maxNodes = maxNodes;
@@ -86,23 +88,19 @@ public class RoutingTable
 
     private int GetBucketIndex(byte[] nodeId)
     {
-        // Find highest differing bit
-        for (var i = 0; i < nodeId.Length; i++)
+        // Compute XOR distance from local node
+        for (var i = 0; i < nodeId.Length && i < _localNodeId.Length; i++)
         {
-            if (nodeId[i] != 0)
+            var xorByte = (byte)(nodeId[i] ^ _localNodeId[i]);
+            if (xorByte != 0)
             {
-                for (var bit = 7; bit >= 0; bit--)
-                {
-                    if ((nodeId[i] & (1 << bit)) != 0)
-                    {
-                        var index = (i * 8) + (7 - bit);
-                        return Math.Min(index, _idBits - 1);
-                    }
-                }
+                var bit = (i * 8) + (7 - (int)Math.Floor(Math.Log2(xorByte)));
+                var bucketIndex = 159 - bit;
+                return Math.Min(bucketIndex, _idBits - 1);
             }
         }
 
-        return _idBits - 1;
+        return 0; // Same as local node
     }
 
     private static byte[] Distance(byte[] a, byte[] b)

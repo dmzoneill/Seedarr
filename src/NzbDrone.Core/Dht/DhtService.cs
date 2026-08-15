@@ -39,12 +39,13 @@ public class DhtService : BackgroundService
     public DhtService(IConfigService configService)
     {
         _configService = configService;
+        _nodeId = RandomNumberGenerator.GetBytes(20);
         _routingTable = new RoutingTable(
+            _nodeId,
             configService.DhtBucketSize,
             configService.DhtRoutingTableSize,
             configService.DhtMaxNodes);
         _logger = LogManager.GetCurrentClassLogger();
-        _nodeId = RandomNumberGenerator.GetBytes(20);
         _peerStore = new DhtPeerStore(PeerTtlMinutes);
 
         _tokenSecret = RandomNumberGenerator.GetBytes(16);

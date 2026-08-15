@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Configuration;
 using Seedarr.Http;
 
@@ -21,6 +22,17 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
     protected override GeneralConfigResource ToResource(IConfigService model)
     {
         return GeneralConfigResourceMapper.ToResource(model, _configFileProvider);
+    }
+
+    public override ActionResult<GeneralConfigResource> SaveConfig([FromBody] GeneralConfigResource resource)
+    {
+        // If the masked API key was sent back, preserve the existing value
+        if (resource.ApiKey != null && resource.ApiKey.Contains('*'))
+        {
+            resource.ApiKey = _configFileProvider.ApiKey;
+        }
+
+        return base.SaveConfig(resource);
     }
 }
 
@@ -83,6 +95,17 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
     protected override NetworkConfigResource ToResource(IConfigService model)
     {
         return NetworkConfigResourceMapper.ToResource(model);
+    }
+
+    public override ActionResult<NetworkConfigResource> SaveConfig([FromBody] NetworkConfigResource resource)
+    {
+        // If the masked proxy password was sent back, preserve the existing value
+        if (resource.ProxyPassword == "********")
+        {
+            resource.ProxyPassword = _configService.ProxyPassword;
+        }
+
+        return base.SaveConfig(resource);
     }
 }
 

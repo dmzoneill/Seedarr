@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.DownloadClients.Deluge;
@@ -12,6 +13,8 @@ namespace Seedarr.Api.V1.DownloadClients;
 [V1ApiController("downloadclients")]
 public class DownloadClientController : Controller
 {
+    private const string PasswordMask = "********";
+
     private readonly IDownloadClientFactory _downloadClientFactory;
 
     public DownloadClientController(IDownloadClientFactory downloadClientFactory)
@@ -22,28 +25,37 @@ public class DownloadClientController : Controller
     [HttpGet]
     public ActionResult<List<DownloadClientDefinition>> GetAll()
     {
-        return Ok(_downloadClientFactory.All());
+        var definitions = _downloadClientFactory.All();
+        return Ok(definitions.Select(MaskPassword).ToList());
     }
 
     [HttpGet("{id}")]
     public ActionResult<DownloadClientDefinition> Get(int id)
     {
-        return Ok(_downloadClientFactory.Get(id));
+        return Ok(MaskPassword(_downloadClientFactory.Get(id)));
     }
 
     [HttpPost]
     public ActionResult<DownloadClientDefinition> Create([FromBody] DownloadClientDefinition definition)
     {
         var created = _downloadClientFactory.Create(definition);
-        return Ok(created);
+        return Ok(MaskPassword(created));
     }
 
     [HttpPut("{id}")]
     public ActionResult Update(int id, [FromBody] DownloadClientDefinition definition)
     {
         definition.Id = id;
+
+        // If the masked password was sent back, preserve the existing value
+        if (definition.Password == PasswordMask)
+        {
+            var existing = _downloadClientFactory.Get(id);
+            definition.Password = existing.Password;
+        }
+
         _downloadClientFactory.Update(definition);
-        return Ok(definition);
+        return Ok(MaskPassword(definition));
     }
 
     [HttpDelete("{id}")]
@@ -60,6 +72,12 @@ public class DownloadClientController : Controller
         var client = CreateClient(definition);
         var success = client.TestConnection();
         return Ok(new { success });
+    }
+
+    private static DownloadClientDefinition MaskPassword(DownloadClientDefinition definition)
+    {
+        definition.Password = string.IsNullOrEmpty(definition.Password) ? "" : PasswordMask;
+        return definition;
     }
 
     private static IDownloadClient CreateClient(DownloadClientDefinition definition)
