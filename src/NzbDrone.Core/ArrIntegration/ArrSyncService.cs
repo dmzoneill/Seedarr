@@ -117,7 +117,7 @@ public class ArrSyncService : IArrSyncService
         return provider.TestConnection();
     }
 
-    private IArrConnection CreateProvider(ArrConnectionDefinition definition)
+    protected virtual IArrConnection CreateProvider(ArrConnectionDefinition definition)
     {
         IArrConnection provider;
 
