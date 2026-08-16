@@ -54,9 +54,6 @@ integration: stack-clean stack-build stack-up stack-healthy stack-configure
 	@echo "Running Selenium automation tests..."
 	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
 		--logger "trx;LogFileName=automation-test-results.trx"
-	@echo ""
-	@echo "Running bash smoke tests..."
-	bash test-integration.sh
 
 test-unit: test
 
@@ -111,16 +108,21 @@ stack-configure:
 
 # --- Integration tests (requires podman-compose stack) ---
 
-test-integration: stack-clean stack-build stack-up stack-healthy stack-configure
-	@echo ""
-	@echo "Running integration tests..."
-	bash test-integration.sh
+test-integration: integration
 
 test-integration-rerun: stack-healthy stack-configure
-	bash test-integration.sh
+	@echo ""
+	@echo "Running .NET integration tests..."
+	dotnet test $(INTEGRATION_TEST) --no-build \
+		--logger "trx;LogFileName=integration-test-results.trx"
+	@echo ""
+	@echo "Running Selenium automation tests..."
+	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
+		--logger "trx;LogFileName=automation-test-results.trx"
 
 test-integration-only:
-	bash test-integration.sh
+	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
+		--logger "trx;LogFileName=automation-test-results.trx"
 
 # --- Combined ---
 
