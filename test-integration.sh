@@ -355,8 +355,8 @@ assert "Prowlarr API reachable from host" \
 	'curl -sf "$PROWLARR_URL/api/v1/health" > /dev/null'
 
 # Verify Prowlarr has the 3 apps configured (Sonarr, Radarr, Lidarr)
-PROWLARR_APPS=$(curl -sf "$PROWLARR_URL/api/v1/applications" \
-	| python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+PROWLARR_APPS=$(curl -sf "$PROWLARR_URL/api/v1/applications" |
+	python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
 assert "Prowlarr has 3 apps configured" '[ "$PROWLARR_APPS" -ge 3 ]'
 
 # ─── Test 13: Fixture serving ────────────────────────────
