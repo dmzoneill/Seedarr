@@ -41,7 +41,6 @@ public abstract class ApiTestBase
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         if (!string.IsNullOrEmpty(apiKey))
             request.Headers.Add("X-Api-Key", apiKey);
-
         var response = await Client.SendAsync(request);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync();
@@ -49,32 +48,26 @@ public abstract class ApiTestBase
 
     protected async Task<string> PostJsonAsync(string url, object body, string apiKey = null)
     {
-        var json = JsonSerializer.Serialize(body);
-        using var request = new HttpRequestMessage(HttpMethod.Post, url)
-        {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
-        if (!string.IsNullOrEmpty(apiKey))
-            request.Headers.Add("X-Api-Key", apiKey);
-
-        var response = await Client.SendAsync(request);
+        var response = await SendWithJsonBodyAsync(HttpMethod.Post, url, JsonSerializer.Serialize(body), apiKey);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsStringAsync();
     }
 
     protected async Task<(int StatusCode, string Body)> PutJsonAsync(string url, object body, string apiKey = null)
     {
-        var json = JsonSerializer.Serialize(body);
-        using var request = new HttpRequestMessage(HttpMethod.Put, url)
+        var response = await SendWithJsonBodyAsync(HttpMethod.Put, url, JsonSerializer.Serialize(body), apiKey);
+        return ((int)response.StatusCode, await response.Content.ReadAsStringAsync());
+    }
+
+    private async Task<HttpResponseMessage> SendWithJsonBodyAsync(HttpMethod method, string url, string json, string apiKey)
+    {
+        using var request = new HttpRequestMessage(method, url)
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
         if (!string.IsNullOrEmpty(apiKey))
             request.Headers.Add("X-Api-Key", apiKey);
-
-        var response = await Client.SendAsync(request);
-        var responseBody = await response.Content.ReadAsStringAsync();
-        return ((int)response.StatusCode, responseBody);
+        return await Client.SendAsync(request);
     }
 
     protected async Task<bool> DeleteAsync(string url)
