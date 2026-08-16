@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.ArrIntegration.Webhook;
 using Seedarr.Http;
@@ -13,6 +14,7 @@ public class ArrConnectionController : Controller
     private readonly IArrConnectionFactory _connectionFactory;
     private readonly IArrSyncService _arrSyncService;
     private readonly IArrWebhookRegistration _webhookRegistration;
+    private readonly Logger _logger;
 
     public ArrConnectionController(
         IArrConnectionFactory connectionFactory,
@@ -22,6 +24,7 @@ public class ArrConnectionController : Controller
         _connectionFactory = connectionFactory;
         _arrSyncService = arrSyncService;
         _webhookRegistration = webhookRegistration;
+        _logger = LogManager.GetCurrentClassLogger();
     }
 
     [HttpGet]
@@ -41,7 +44,12 @@ public class ArrConnectionController : Controller
     public ActionResult<ArrConnectionDefinition> Create([FromBody] ArrConnectionDefinition definition)
     {
         var created = _connectionFactory.Create(definition);
-        _webhookRegistration.RegisterWebhook(created);
+
+        if (!_webhookRegistration.RegisterWebhook(created))
+        {
+            _logger.Warn("Failed to register webhook in {0} at {1} during connection creation", created.ArrType, created.Url);
+        }
+
         return Ok(MaskApiKey(created));
     }
 
@@ -50,7 +58,6 @@ public class ArrConnectionController : Controller
     {
         definition.Id = id;
 
-        // If the masked API key was sent back, preserve the existing value
         if (definition.ApiKey != null && definition.ApiKey.Contains('*'))
         {
             var existing = _connectionFactory.Get(id);
@@ -58,7 +65,12 @@ public class ArrConnectionController : Controller
         }
 
         _connectionFactory.Update(definition);
-        _webhookRegistration.RegisterWebhook(definition);
+
+        if (!_webhookRegistration.RegisterWebhook(definition))
+        {
+            _logger.Warn("Failed to register webhook in {0} at {1} during connection update", definition.ArrType, definition.Url);
+        }
+
         return Ok(MaskApiKey(definition));
     }
 
