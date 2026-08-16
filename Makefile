@@ -4,6 +4,7 @@
 
 SOLUTION := src/Seedarr.sln
 INTEGRATION_TEST := src/NzbDrone.Integration.Test/Seedarr.Integration.Test.csproj
+AUTOMATION_TEST := src/NzbDrone.Automation.Test/Seedarr.Automation.Test.csproj
 CONSOLE := src/NzbDrone.Console/Seedarr.Console.csproj
 FRONTEND := src/Seedarr.Frontend
 COMPOSE := podman-compose
@@ -39,7 +40,7 @@ clean:
 
 test:
 	dotnet test $(SOLUTION) --configuration Release --no-build \
-		--filter "Category!=IntegrationTest" \
+		--filter "Category!=IntegrationTest&Category!=AutomationTest" \
 		--logger "trx;LogFileName=test-results.trx" \
 		--collect:"XPlat Code Coverage"
 
@@ -49,6 +50,10 @@ integration: stack-clean stack-build stack-up stack-healthy stack-configure
 	dotnet test $(INTEGRATION_TEST) --no-build \
 		--logger "trx;LogFileName=integration-test-results.trx" \
 		--collect:"XPlat Code Coverage"
+	@echo ""
+	@echo "Running Selenium automation tests..."
+	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
+		--logger "trx;LogFileName=automation-test-results.trx"
 	@echo ""
 	@echo "Running bash smoke tests..."
 	bash test-integration.sh
