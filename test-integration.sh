@@ -350,12 +350,14 @@ assert "Connection matched by URL" \
 # ─── Test 12: Prowlarr connectivity from Seedarr ────────
 echo ""
 echo "--- Test 12: Prowlarr reachability ---"
-# Auth is disabled on Prowlarr by the configure step — no API key needed
+# Read API key directly from the Prowlarr container (avoids the masked key from Seedarr's API)
+PROWLARR_KEY=$(podman exec prowlarr grep -o '<ApiKey>[^<]*</ApiKey>' /config/config.xml 2>/dev/null |
+	sed 's/<[^>]*>//g' || echo "")
 assert "Prowlarr API reachable from host" \
-	'curl -sf "$PROWLARR_URL/api/v1/health" > /dev/null'
+	'curl -sf "$PROWLARR_URL/api/v1/health" -H "X-Api-Key: $PROWLARR_KEY" > /dev/null'
 
 # Verify Prowlarr has the 3 apps configured (Sonarr, Radarr, Lidarr)
-PROWLARR_APPS=$(curl -sf "$PROWLARR_URL/api/v1/applications" |
+PROWLARR_APPS=$(curl -sf "$PROWLARR_URL/api/v1/applications" -H "X-Api-Key: $PROWLARR_KEY" |
 	python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
 assert "Prowlarr has 3 apps configured" '[ "$PROWLARR_APPS" -ge 3 ]'
 
