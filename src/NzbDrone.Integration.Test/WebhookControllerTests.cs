@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
 using NUnit.Framework;
 
@@ -10,17 +11,19 @@ namespace NzbDrone.Integration.Test;
 [Category("IntegrationTest")]
 public class WebhookControllerTests : IntegrationTestBase
 {
+    private async Task<(HttpStatusCode Status, Dictionary<string, object> Body)> PostWebhookAsync(object payload)
+    {
+        var response = await PostJsonAsync("/api/v1/webhook/arr", payload);
+        var json = await response.Content.ReadAsStringAsync();
+        return (response.StatusCode, Deserialize<Dictionary<string, object>>(json));
+    }
+
     [Test]
     public async Task PostWebhook_with_Download_event_returns_ignored_message()
     {
-        var payload = new { eventType = "Download", instanceName = "Sonarr" };
-        var response = await PostJsonAsync("/api/v1/webhook/arr", payload);
+        var (status, result) = await PostWebhookAsync(new { eventType = "Download", instanceName = "Sonarr" });
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-
-        var json = await response.Content.ReadAsStringAsync();
-        var result = Deserialize<Dictionary<string, object>>(json);
-
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(result["message"].ToString(), Does.Contain("Ignored event type"));
     }
 
@@ -34,13 +37,9 @@ public class WebhookControllerTests : IntegrationTestBase
             release = new { releaseTitle = "Some.Show.S01E01" }
         };
 
-        var response = await PostJsonAsync("/api/v1/webhook/arr", payload);
+        var (status, result) = await PostWebhookAsync(payload);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-
-        var json = await response.Content.ReadAsStringAsync();
-        var result = Deserialize<Dictionary<string, object>>(json);
-
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(result["message"].ToString(), Does.Contain("No downloadId"));
     }
 
@@ -56,13 +55,9 @@ public class WebhookControllerTests : IntegrationTestBase
             release = new { releaseTitle = "Some.Show.S01E01", size = 1073741824L }
         };
 
-        var response = await PostJsonAsync("/api/v1/webhook/arr", payload);
+        var (status, result) = await PostWebhookAsync(payload);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-
-        var json = await response.Content.ReadAsStringAsync();
-        var result = Deserialize<Dictionary<string, object>>(json);
-
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(result["success"].ToString(), Is.EqualTo("True"));
         Assert.That(result.ContainsKey("infoHash"), Is.True);
         Assert.That(result["infoHash"].ToString(), Is.Not.Empty);
@@ -80,17 +75,11 @@ public class WebhookControllerTests : IntegrationTestBase
             release = new { releaseTitle = "Some.Movie.2024", size = 2147483648L }
         };
 
-        // First request - should succeed
-        var first = await PostJsonAsync("/api/v1/webhook/arr", payload);
-        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var (firstStatus, _) = await PostWebhookAsync(payload);
+        Assert.That(firstStatus, Is.EqualTo(HttpStatusCode.OK));
 
-        // Second request - same hash, should say already exists
-        var second = await PostJsonAsync("/api/v1/webhook/arr", payload);
-        Assert.That(second.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-
-        var json = await second.Content.ReadAsStringAsync();
-        var result = Deserialize<Dictionary<string, object>>(json);
-
-        Assert.That(result["message"].ToString(), Does.Contain("already exists"));
+        var (secondStatus, secondResult) = await PostWebhookAsync(payload);
+        Assert.That(secondStatus, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(secondResult["message"].ToString(), Does.Contain("already exists"));
     }
 }
