@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useRef, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 
@@ -105,7 +105,7 @@ function SortArrow({ direction }: { direction: "asc" | "desc" }) {
       height="10"
       viewBox="0 0 10 10"
       fill="currentColor"
-      style={{ marginLeft: "4px", opacity: 0.6 }}
+      style={{ marginLeft: "4px", opacity: 0.8 }}
     >
       {direction === "asc" ? (
         <polygon points="5,2 9,8 1,8" />
@@ -120,125 +120,47 @@ function EventLevelIcon({ level }: { level: LogLevel }) {
   switch (level) {
     case "Info":
       return (
-        <span className="event-level-icon event-level-info" title="Info">
-          <svg width="16" height="16" viewBox="0 0 16 16">
-            <circle cx="8" cy="8" r="7" fill="currentColor" opacity="0.2" />
-            <circle
-              cx="8"
-              cy="8"
-              r="7"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-            <text
-              x="8"
-              y="12"
-              textAnchor="middle"
-              fill="currentColor"
-              fontSize="10"
-              fontWeight="700"
-              fontFamily="sans-serif"
-            >
-              i
-            </text>
-          </svg>
+        <span
+          className="badge badge-primary"
+          style={{ fontSize: "0.75rem", padding: "0.15rem 0.45rem" }}
+        >
+          INFO
         </span>
       );
     case "Warn":
       return (
-        <span className="event-level-icon event-level-warn" title="Warning">
-          <svg width="16" height="16" viewBox="0 0 16 16">
-            <polygon
-              points="8,1 15,15 1,15"
-              fill="currentColor"
-              opacity="0.2"
-            />
-            <polygon
-              points="8,1 15,15 1,15"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.2"
-              strokeLinejoin="round"
-            />
-            <text
-              x="8"
-              y="13"
-              textAnchor="middle"
-              fill="currentColor"
-              fontSize="10"
-              fontWeight="700"
-              fontFamily="sans-serif"
-            >
-              !
-            </text>
-          </svg>
+        <span
+          className="badge badge-queued"
+          style={{ fontSize: "0.75rem", padding: "0.15rem 0.45rem" }}
+        >
+          WARN
         </span>
       );
     case "Error":
       return (
-        <span className="event-level-icon event-level-error" title="Error">
-          <svg width="16" height="16" viewBox="0 0 16 16">
-            <circle cx="8" cy="8" r="7" fill="currentColor" opacity="0.2" />
-            <circle
-              cx="8"
-              cy="8"
-              r="7"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-            <line
-              x1="5"
-              y1="5"
-              x2="11"
-              y2="11"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-            <line
-              x1="11"
-              y1="5"
-              x2="5"
-              y2="11"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
+        <span
+          className="badge badge-error"
+          style={{ fontSize: "0.75rem", padding: "0.15rem 0.45rem" }}
+        >
+          ERROR
         </span>
       );
     case "Debug":
       return (
-        <span className="event-level-icon event-level-debug" title="Debug">
-          <svg width="16" height="16" viewBox="0 0 16 16">
-            <circle cx="8" cy="8" r="7" fill="currentColor" opacity="0.2" />
-            <circle
-              cx="8"
-              cy="8"
-              r="7"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-          </svg>
+        <span
+          className="badge badge-secondary"
+          style={{ fontSize: "0.75rem", padding: "0.15rem 0.45rem" }}
+        >
+          DEBUG
         </span>
       );
     case "Trace":
       return (
-        <span className="event-level-icon event-level-debug" title="Trace">
-          <svg width="16" height="16" viewBox="0 0 16 16">
-            <circle cx="8" cy="8" r="7" fill="currentColor" opacity="0.15" />
-            <circle
-              cx="8"
-              cy="8"
-              r="7"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-            />
-          </svg>
+        <span
+          className="badge badge-secondary"
+          style={{ fontSize: "0.75rem", padding: "0.15rem 0.45rem" }}
+        >
+          TRACE
         </span>
       );
   }
@@ -248,7 +170,6 @@ function SystemEvents() {
   const { data: entries, isLoading, isError } = useEventEntries();
   const queryClient = useQueryClient();
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [autoScroll, setAutoScroll] = useState(true);
   const [cleared, setCleared] = useState(false);
   const tableBodyRef = useRef<HTMLDivElement>(null);
 
@@ -277,83 +198,158 @@ function SystemEvents() {
     setSortDirection((prev) => (prev === "desc" ? "asc" : "desc"));
   }, []);
 
-  // Auto-scroll to bottom when new entries arrive
-  useEffect(() => {
-    if (autoScroll && tableBodyRef.current) {
-      tableBodyRef.current.scrollTop = tableBodyRef.current.scrollHeight;
-    }
-  }, [displayEntries, autoScroll]);
-
   return (
-    <div className="events-page">
-      <h1 className="page-heading">Events</h1>
+    <div className="content-area">
+      {/* Page Header */}
+      <div
+        className="page-header"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1.25rem",
+        }}
+      >
+        <div className="page-header-group">
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
+            <h1 className="page-heading" style={{ margin: 0 }}>
+              System: Events
+            </h1>
+            <span className="badge badge-primary">Audit Log</span>
+          </div>
+          <div
+            style={{
+              fontSize: "0.8rem",
+              color: "var(--text-muted)",
+              marginTop: "0.2rem",
+            }}
+          >
+            Real-time audit log events, application exceptions, and background
+            routine updates
+          </div>
+        </div>
 
-      <div className="events-toolbar">
-        <div className="events-toolbar-actions">
-          <button className="btn btn-toolbar" onClick={handleRefresh}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <button
+            className="btn btn-outline btn-small"
+            onClick={handleRefresh}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+            }}
+          >
             <RefreshIcon />
             <span>Refresh</span>
           </button>
-          <button className="btn btn-toolbar" onClick={handleClear}>
+          <button
+            className="btn btn-outline btn-small"
+            onClick={handleClear}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+            }}
+          >
             <ClearIcon />
             <span>Clear</span>
           </button>
         </div>
       </div>
 
-      <div className="events-table-wrapper" ref={tableBodyRef}>
-        <table className="torrent-table">
-          <thead>
-            <tr>
-              <th className="torrent-table-th" style={{ width: "28px" }}></th>
-              <th
-                className="torrent-table-th events-time-col"
-                onClick={toggleSort}
-                style={{ width: "100px" }}
-              >
-                Time
-                <SortArrow direction={sortDirection} />
-              </th>
-              <th className="torrent-table-th" style={{ width: "180px" }}>
-                Component
-              </th>
-              <th className="torrent-table-th">Message</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading && (
+      {/* Events Table Card */}
+      <div
+        className="card"
+        style={{
+          borderRadius: "8px",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow:
+            "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          padding: 0,
+          overflow: "hidden",
+        }}
+      >
+        <div className="torrent-table-wrapper" ref={tableBodyRef}>
+          <table className="torrent-table">
+            <thead>
               <tr>
-                <td colSpan={4} className="torrent-table-empty">
-                  Loading events...
-                </td>
+                <th className="torrent-table-th" style={{ width: "90px" }}>
+                  Level
+                </th>
+                <th
+                  className="torrent-table-th"
+                  onClick={toggleSort}
+                  style={{
+                    width: "120px",
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                  title="Click to sort by timestamp"
+                >
+                  <span
+                    style={{ display: "inline-flex", alignItems: "center" }}
+                  >
+                    Time <SortArrow direction={sortDirection} />
+                  </span>
+                </th>
+                <th className="torrent-table-th" style={{ width: "200px" }}>
+                  Component / Logger
+                </th>
+                <th className="torrent-table-th">Event Message</th>
               </tr>
-            )}
-            {!isLoading && isError && (
-              <tr>
-                <td colSpan={4} className="torrent-table-empty">
-                  Failed to load events.
-                </td>
-              </tr>
-            )}
-            {!isLoading && !isError && displayEntries.length === 0 && (
-              <tr>
-                <td colSpan={4} className="torrent-table-empty">
-                  No events
-                </td>
-              </tr>
-            )}
-            {displayEntries.map((entry) => (
-              <tr key={entry.id} className="torrent-table-row">
-                <td style={{ textAlign: "center", padding: "0.5rem 0.5rem" }}>
-                  <EventLevelIcon level={entry.level} />
-                </td>
-                <td>{formatEventTime(entry.timestamp)}</td>
-                <td className="events-component">{entry.component}</td>
-                <td className="events-message">{entry.message}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {isLoading && (
+                <tr>
+                  <td colSpan={4} className="torrent-table-empty">
+                    Loading event stream...
+                  </td>
+                </tr>
+              )}
+              {!isLoading && isError && (
+                <tr>
+                  <td colSpan={4} className="torrent-table-empty">
+                    Failed to load events.
+                  </td>
+                </tr>
+              )}
+              {!isLoading && !isError && displayEntries.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="torrent-table-empty">
+                    No recent events logged.
+                  </td>
+                </tr>
+              )}
+              {displayEntries.map((entry) => (
+                <tr key={entry.id} className="torrent-table-row">
+                  <td>
+                    <EventLevelIcon level={entry.level} />
+                  </td>
+                  <td
+                    style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}
+                  >
+                    {formatEventTime(entry.timestamp)}
+                  </td>
+                  <td>
+                    <code
+                      style={{
+                        fontSize: "0.8rem",
+                        color: "var(--accent, #c8a84e)",
+                      }}
+                    >
+                      {entry.component}
+                    </code>
+                  </td>
+                  <td style={{ fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
+                    {entry.message}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

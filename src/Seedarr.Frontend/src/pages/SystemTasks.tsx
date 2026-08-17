@@ -99,7 +99,7 @@ function statusIcon(status: string): string {
     case "completed":
       return "✓";
     case "failed":
-      return "✗";
+      return "✕";
     case "cancelled":
       return "—";
     default:
@@ -148,23 +148,106 @@ function SystemTasks() {
   });
 
   return (
-    <div>
-      <h1 className="page-heading">Tasks</h1>
+    <div className="content-area">
+      {/* Page Header */}
+      <div
+        className="page-header"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1.25rem",
+        }}
+      >
+        <div className="page-header-group">
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
+            <h1 className="page-heading" style={{ margin: 0 }}>
+              System: Tasks
+            </h1>
+            <span className="badge badge-primary">Scheduler</span>
+          </div>
+          <div
+            style={{
+              fontSize: "0.8rem",
+              color: "var(--text-muted)",
+              marginTop: "0.2rem",
+            }}
+          >
+            Scheduled background maintenance jobs, integration sync intervals,
+            and command execution queue
+          </div>
+        </div>
 
-      {/* Scheduled Tasks Section */}
-      <div className="card">
-        <h3>Scheduled</h3>
-        {tasksLoading && <p className="loading">Loading tasks...</p>}
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <span
+            className="badge badge-primary"
+            style={{ padding: "0.3rem 0.65rem", fontSize: "0.82rem" }}
+          >
+            Active Jobs: {tasks?.length ?? 0}
+          </span>
+        </div>
+      </div>
+
+      {/* Scheduled Tasks Section Card */}
+      <div
+        className="card"
+        style={{
+          marginBottom: "1.25rem",
+          borderRadius: "8px",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow:
+            "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          padding: 0,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "1.1rem 1.25rem 0.85rem",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "1.05rem",
+              fontWeight: 600,
+              color: "var(--accent, #c8a84e)",
+              margin: 0,
+            }}
+          >
+            Scheduled Background Tasks
+          </h2>
+          <div
+            style={{
+              fontSize: "0.8rem",
+              color: "var(--text-muted)",
+              marginTop: "0.2rem",
+            }}
+          >
+            Periodic routines maintaining torrent swarm state, webhook sync, and
+            system cleanup
+          </div>
+        </div>
+
+        {tasksLoading && (
+          <p className="loading" style={{ padding: "1.25rem" }}>
+            Loading tasks...
+          </p>
+        )}
         {!tasksLoading && tasksError && (
-          <p className="error">Failed to load tasks.</p>
+          <p className="error" style={{ padding: "1.25rem" }}>
+            Failed to load tasks.
+          </p>
         )}
         {tasks && tasks.length > 0 && (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">
               <thead>
                 <tr>
-                  <th className="torrent-table-th">Name</th>
-                  <th className="torrent-table-th">Interval</th>
+                  <th className="torrent-table-th">Task Name</th>
+                  <th className="torrent-table-th">Execution Interval</th>
                   <th className="torrent-table-th">Last Execution</th>
                   <th className="torrent-table-th">Last Duration</th>
                   <th className="torrent-table-th">Next Execution</th>
@@ -173,13 +256,31 @@ function SystemTasks() {
               <tbody>
                 {tasks.map((task) => (
                   <tr key={task.typeName} className="torrent-table-row">
-                    <td>{formatTaskName(task.typeName)}</td>
-                    <td>{formatInterval(task.interval)}</td>
+                    <td>
+                      <strong style={{ color: "var(--text-primary)" }}>
+                        {formatTaskName(task.typeName)}
+                      </strong>
+                    </td>
+                    <td>
+                      <span className="badge badge-secondary">
+                        ⏱️ {formatInterval(task.interval)}
+                      </span>
+                    </td>
                     <td title={formatDateTime(task.lastExecution)}>
                       {formatRelativeTime(task.lastExecution)}
                     </td>
-                    <td>{formatDuration(task.lastDuration)}</td>
-                    <td title={formatDateTime(task.nextExecution)}>
+                    <td>
+                      <code style={{ fontSize: "0.8rem" }}>
+                        {formatDuration(task.lastDuration)}
+                      </code>
+                    </td>
+                    <td
+                      title={formatDateTime(task.nextExecution)}
+                      style={{
+                        color: "var(--accent, #c8a84e)",
+                        fontWeight: 500,
+                      }}
+                    >
                       {formatRelativeTime(task.nextExecution)}
                     </td>
                   </tr>
@@ -189,23 +290,67 @@ function SystemTasks() {
           </div>
         )}
         {tasks && tasks.length === 0 && (
-          <p className="torrent-table-empty">No scheduled tasks.</p>
+          <p className="torrent-table-empty" style={{ padding: "1.5rem" }}>
+            No scheduled tasks registered.
+          </p>
         )}
       </div>
 
-      {/* Command Queue Section */}
-      <div className="card">
-        <h3>Queue</h3>
-        {commandsLoading && <p className="loading">Loading commands...</p>}
+      {/* Command Queue Section Card */}
+      <div
+        className="card"
+        style={{
+          borderRadius: "8px",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxShadow:
+            "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          padding: 0,
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: "1.1rem 1.25rem 0.85rem",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+          }}
+        >
+          <h2
+            style={{
+              fontSize: "1.05rem",
+              fontWeight: 600,
+              color: "var(--accent, #c8a84e)",
+              margin: 0,
+            }}
+          >
+            Command Execution Queue
+          </h2>
+          <div
+            style={{
+              fontSize: "0.8rem",
+              color: "var(--text-muted)",
+              marginTop: "0.2rem",
+            }}
+          >
+            History and progress of interactive and scheduled command runs
+          </div>
+        </div>
+
+        {commandsLoading && (
+          <p className="loading" style={{ padding: "1.25rem" }}>
+            Loading command history...
+          </p>
+        )}
         {!commandsLoading && commandsError && (
-          <p className="error">Failed to load commands.</p>
+          <p className="error" style={{ padding: "1.25rem" }}>
+            Failed to load commands.
+          </p>
         )}
         {commands && commands.length > 0 && (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">
               <thead>
                 <tr>
-                  <th className="torrent-table-th">Name</th>
+                  <th className="torrent-table-th">Command / Status</th>
                   <th className="torrent-table-th">Queued</th>
                   <th className="torrent-table-th">Started</th>
                   <th className="torrent-table-th">Ended</th>
@@ -222,7 +367,9 @@ function SystemTasks() {
                       >
                         {statusIcon(cmd.status)} {cmd.status}
                       </span>
-                      {formatTaskName(cmd.name)}
+                      <strong style={{ color: "var(--text-primary)" }}>
+                        {formatTaskName(cmd.name)}
+                      </strong>
                       {cmd.message && (
                         <span
                           className="status-value"
@@ -241,7 +388,11 @@ function SystemTasks() {
                     <td title={formatDateTime(cmd.endedAt)}>
                       {formatRelativeTime(cmd.endedAt)}
                     </td>
-                    <td>{formatDuration(cmd.duration)}</td>
+                    <td>
+                      <code style={{ fontSize: "0.8rem" }}>
+                        {formatDuration(cmd.duration)}
+                      </code>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -249,7 +400,9 @@ function SystemTasks() {
           </div>
         )}
         {commands && commands.length === 0 && (
-          <p className="torrent-table-empty">No recent commands.</p>
+          <p className="torrent-table-empty" style={{ padding: "1.5rem" }}>
+            No recent command executions in queue.
+          </p>
         )}
       </div>
     </div>
