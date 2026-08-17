@@ -335,9 +335,10 @@ public class SeedingEngine : BackgroundService
                     : Math.Round((double)torrent.Downloaded / torrent.TotalSize, 6);
             }
 
-            if (torrent.Progress >= threshold)
+            var effectiveThreshold = torrent.Threshold > 0 ? torrent.Threshold / 100.0 : threshold;
+            if (torrent.Progress >= effectiveThreshold)
             {
-                _logger.Info("Torrent {0} reached download threshold ({1}%), switching to seeding", torrent.Name, (int)(threshold * 100));
+                _logger.Info("Torrent {0} reached download threshold ({1}%), switching to seeding", torrent.Name, (int)(effectiveThreshold * 100));
                 torrent.Status = TorrentStatus.Seeding;
             }
         }
