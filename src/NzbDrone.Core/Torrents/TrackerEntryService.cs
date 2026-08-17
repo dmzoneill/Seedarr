@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NLog;
 
 namespace NzbDrone.Core.Torrents;
 
 public interface ITrackerEntryService
 {
+    List<TrackerEntry> All();
     List<TrackerEntry> GetByTorrentId(int torrentId);
     TrackerEntry Add(TrackerEntry trackerEntry);
     TrackerEntry Update(TrackerEntry trackerEntry);
@@ -22,6 +24,11 @@ public class TrackerEntryService : ITrackerEntryService
     {
         _repository = repository;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public List<TrackerEntry> All()
+    {
+        return _repository.All().ToList();
     }
 
     public List<TrackerEntry> GetByTorrentId(int torrentId)
