@@ -98,79 +98,110 @@ function SystemLogs() {
   }, [filteredEntries, autoScroll]);
 
   return (
-    <div className="log-viewer">
-      <h1 className="page-heading">Logs</h1>
-
-      <div className="log-toolbar">
-        <div className="log-toolbar-filters">
-          {(["All", ...ALL_LEVELS] as const).map((level) => (
-            <button
-              key={level}
-              title={
-                level === "All"
-                  ? "Shows entries at or above the log level configured in Settings > Advanced"
-                  : `Show ${level} entries and above`
-              }
-              className={`btn btn-small ${levelFilter === level ? "log-filter-active" : ""} ${level !== "All" ? `log-filter-${level.toLowerCase()}` : ""}`}
-              onClick={() => {
-                setLevelFilter(level);
-                setCleared(false);
-              }}
-            >
-              {level}
-            </button>
-          ))}
-        </div>
-
-        <div className="log-toolbar-actions">
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Filter logs..."
-            value={searchText}
-            onChange={(e) => {
-              setSearchText(e.target.value);
-              setCleared(false);
+    <div className="content-area">
+      {/* Page Header */}
+      <div
+        className="page-header"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1.25rem",
+        }}
+      >
+        <div className="page-header-group">
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
+            <h1 className="page-heading" style={{ margin: 0 }}>
+              System: Logs
+            </h1>
+            <span className="badge badge-primary">Console</span>
+          </div>
+          <div
+            style={{
+              fontSize: "0.8rem",
+              color: "var(--text-muted)",
+              marginTop: "0.2rem",
             }}
-          />
-          <label className="log-auto-scroll">
-            <input
-              type="checkbox"
-              checked={autoScroll}
-              onChange={(e) => setAutoScroll(e.target.checked)}
-            />
-            <span>Auto-scroll</span>
-          </label>
-          <button className="btn btn-small" onClick={handleClear}>
-            Clear
-          </button>
+          >
+            Real-time server log stream and diagnostic output
+          </div>
         </div>
       </div>
 
-      <div className="log-content" ref={logContentRef}>
-        {isLoading && <p className="loading">Loading logs...</p>}
-        {!isLoading && isError && (
-          <p className="log-empty">Failed to load log entries.</p>
-        )}
-        {!isLoading && !isError && filteredEntries.length === 0 && (
-          <p className="log-empty">No log entries</p>
-        )}
-        {filteredEntries.map((entry) => (
-          <div key={entry.id} className="log-entry">
-            <span className="log-timestamp">
-              {formatTimestamp(entry.timestamp)}
-            </span>
-            <span
-              className={`log-level log-level-${entry.level.toLowerCase()}`}
-            >
-              {entry.level.toUpperCase().padEnd(5)}
-            </span>
-            <span className="log-source">{entry.source}</span>
-            <span className="log-message" style={{ whiteSpace: "pre-wrap" }}>
-              {entry.message}
-            </span>
+      <div className="log-viewer">
+        <div className="log-toolbar">
+          <div className="log-toolbar-filters">
+            {(["All", ...ALL_LEVELS] as const).map((level) => (
+              <button
+                key={level}
+                title={
+                  level === "All"
+                    ? "Shows entries at or above the log level configured in Settings > Advanced"
+                    : `Show ${level} entries and above`
+                }
+                className={`btn btn-small ${levelFilter === level ? "log-filter-active" : ""} ${level !== "All" ? `log-filter-${level.toLowerCase()}` : ""}`}
+                onClick={() => {
+                  setLevelFilter(level);
+                  setCleared(false);
+                }}
+              >
+                {level}
+              </button>
+            ))}
           </div>
-        ))}
+
+          <div className="log-toolbar-actions">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Filter logs..."
+              value={searchText}
+              onChange={(e) => {
+                setSearchText(e.target.value);
+                setCleared(false);
+              }}
+            />
+            <label className="log-auto-scroll">
+              <input
+                type="checkbox"
+                checked={autoScroll}
+                onChange={(e) => setAutoScroll(e.target.checked)}
+              />
+              <span>Auto-scroll</span>
+            </label>
+            <button className="btn btn-small btn-outline" onClick={handleClear}>
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <div className="log-content" ref={logContentRef}>
+          {isLoading && <p className="loading">Loading logs...</p>}
+          {!isLoading && isError && (
+            <p className="log-empty">Failed to load log entries.</p>
+          )}
+          {!isLoading && !isError && filteredEntries.length === 0 && (
+            <p className="log-empty">No log entries</p>
+          )}
+          {filteredEntries.map((entry) => (
+            <div key={entry.id} className="log-entry">
+              <span className="log-timestamp">
+                {formatTimestamp(entry.timestamp)}
+              </span>
+              <span
+                className={`log-level log-level-${entry.level.toLowerCase()}`}
+              >
+                {entry.level.toUpperCase().padEnd(5)}
+              </span>
+              <span className="log-source">{entry.source}</span>
+              <span className="log-message" style={{ whiteSpace: "pre-wrap" }}>
+                {entry.message}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
