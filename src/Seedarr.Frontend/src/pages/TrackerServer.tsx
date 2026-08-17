@@ -4,17 +4,8 @@ import {
   useTrackerServerConfig,
   useSaveTrackerServerConfig,
 } from '../api/hooks';
-import { formatBytes, formatDate } from '../utils/formatters';
+import { formatBytes, formatDate, formatUptime } from '../utils/formatters';
 import type { TrackerServerConfig } from '../api/types';
-
-function formatUptime(seconds: number): string {
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
-  return `${minutes}m`;
-}
 
 function TrackerServer() {
   const { data: stats, isLoading: statsLoading } = useTrackerServerStats();
