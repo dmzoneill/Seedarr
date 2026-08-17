@@ -4,6 +4,7 @@ import { useTorrent, useTorrentFiles, useTorrentTrackers, useStartSeeding, useSt
 import { formatBytes, formatSpeed, formatRatio, formatDate } from '../utils/formatters';
 import { SkeletonLine } from '../components/Skeleton';
 import PeerList from '../components/PeerList';
+import LineChart from '../components/LineChart';
 
 type Tab = 'general' | 'files' | 'trackers' | 'options' | 'peers' | 'monitoring' | 'log';
 
@@ -456,148 +457,6 @@ function OptionsTab({ torrent }: { torrent: import('../api/types').Torrent }) {
   );
 }
 
-const MONITOR_MAX_POINTS = 60;
-const MONITOR_CHART_WIDTH = 480;
-const MONITOR_CHART_HEIGHT = 160;
-const MONITOR_PADDING = { top: 8, right: 12, bottom: 20, left: 55 };
-
-function getMonitorNiceMax(value: number): number {
-  if (value <= 0) return 1;
-  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
-  const normalized = value / magnitude;
-  let nice: number;
-  if (normalized <= 1) nice = 1;
-  else if (normalized <= 2) nice = 2;
-  else if (normalized <= 5) nice = 5;
-  else nice = 10;
-  return nice * magnitude;
-}
-
-interface SpeedChartProps {
-  title: string;
-  value: string;
-  data: number[];
-  color: string;
-}
-
-function SpeedChart({ title, value, data, color }: SpeedChartProps) {
-  const chartW = MONITOR_CHART_WIDTH - MONITOR_PADDING.left - MONITOR_PADDING.right;
-  const chartH = MONITOR_CHART_HEIGHT - MONITOR_PADDING.top - MONITOR_PADDING.bottom;
-
-  let maxVal = 0;
-  for (const v of data) {
-    if (v > maxVal) maxVal = v;
-  }
-  const niceMax = getMonitorNiceMax(maxVal > 0 ? maxVal * 1.1 : 1);
-
-  const gridLineCount = 3;
-  const gridLines = Array.from({ length: gridLineCount + 1 }, (_, i) => {
-    const val = (niceMax / gridLineCount) * i;
-    const y = MONITOR_PADDING.top + chartH - (val / niceMax) * chartH;
-    return { value: val, y };
-  });
-
-  const points = data.length === 0
-    ? ''
-    : data
-        .map((v, i) => {
-          const x = MONITOR_PADDING.left + (i / Math.max(1, MONITOR_MAX_POINTS - 1)) * chartW;
-          const y = MONITOR_PADDING.top + chartH - (v / niceMax) * chartH;
-          return `${x},${y}`;
-        })
-        .join(' ');
-
-  const areaPath = data.length < 2
-    ? ''
-    : (() => {
-        const first = MONITOR_PADDING.left;
-        const last = MONITOR_PADDING.left + ((data.length - 1) / Math.max(1, MONITOR_MAX_POINTS - 1)) * chartW;
-        const bottom = MONITOR_PADDING.top + chartH;
-        const linePoints = data
-          .map((v, i) => {
-            const x = MONITOR_PADDING.left + (i / Math.max(1, MONITOR_MAX_POINTS - 1)) * chartW;
-            const y = MONITOR_PADDING.top + chartH - (v / niceMax) * chartH;
-            return `${x},${y}`;
-          })
-          .join(' ');
-        return `M${first},${bottom} L${linePoints} L${last},${bottom} Z`;
-      })();
-
-  return (
-    <div className="monitoring-tile">
-      <div className="monitoring-tile-title">{title}</div>
-      <div className="monitoring-tile-value" style={{ color }}>{value}</div>
-      <svg
-        width="100%"
-        viewBox={`0 0 ${MONITOR_CHART_WIDTH} ${MONITOR_CHART_HEIGHT}`}
-        preserveAspectRatio="xMidYMid meet"
-      >
-        {gridLines.map(({ value: val, y }, i) => (
-          <g key={i}>
-            <line
-              x1={MONITOR_PADDING.left}
-              y1={y}
-              x2={MONITOR_CHART_WIDTH - MONITOR_PADDING.right}
-              y2={y}
-              stroke="var(--border-light)"
-              strokeWidth={0.5}
-            />
-            <text
-              x={MONITOR_PADDING.left - 4}
-              y={y + 3}
-              textAnchor="end"
-              fill="var(--text-dim)"
-              fontSize={8}
-              fontFamily="inherit"
-            >
-              {formatSpeed(val)}
-            </text>
-          </g>
-        ))}
-        <text
-          x={MONITOR_PADDING.left}
-          y={MONITOR_CHART_HEIGHT - 4}
-          fill="var(--text-dim)"
-          fontSize={8}
-          textAnchor="start"
-        >
-          5m ago
-        </text>
-        <text
-          x={MONITOR_CHART_WIDTH - MONITOR_PADDING.right}
-          y={MONITOR_CHART_HEIGHT - 4}
-          fill="var(--text-dim)"
-          fontSize={8}
-          textAnchor="end"
-        >
-          now
-        </text>
-        <rect
-          x={MONITOR_PADDING.left}
-          y={MONITOR_PADDING.top}
-          width={chartW}
-          height={chartH}
-          fill="none"
-          stroke="var(--border-light)"
-          strokeWidth={0.5}
-        />
-        {areaPath && (
-          <path d={areaPath} fill={color} opacity={0.1} />
-        )}
-        {points && (
-          <polyline
-            points={points}
-            fill="none"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-        )}
-      </svg>
-    </div>
-  );
-}
 
 function MonitoringTab({ torrent }: { torrent: import('../api/types').Torrent }) {
   const historyRef = useRef<{ uploadSpeed: number[]; downloadSpeed: number[] }>({
@@ -627,7 +486,7 @@ function MonitoringTab({ torrent }: { torrent: import('../api/types').Torrent })
 
         const push = (arr: number[], val: number) => {
           const next = [...arr, val];
-          if (next.length > MONITOR_MAX_POINTS) next.splice(0, next.length - MONITOR_MAX_POINTS);
+          if (next.length > 60) next.splice(0, next.length - 60);
           return next;
         };
 
@@ -652,17 +511,19 @@ function MonitoringTab({ torrent }: { torrent: import('../api/types').Torrent })
     <div className="card">
       <h3>Monitoring</h3>
       <div className="monitoring-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
-        <SpeedChart
+        <LineChart
           title="Upload Speed"
           value={formatSpeed(currentUpload)}
           data={h.uploadSpeed}
           color="#c8a84e"
+          maxPoints={60}
         />
-        <SpeedChart
+        <LineChart
           title="Download Speed"
           value={formatSpeed(currentDownload)}
           data={h.downloadSpeed}
           color="#b5443a"
+          maxPoints={60}
         />
       </div>
       <div className="detail-grid" style={{ marginTop: '1rem' }}>
