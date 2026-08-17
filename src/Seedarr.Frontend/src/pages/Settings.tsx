@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams, useBlocker } from 'react-router-dom';
 import {
   useNetworkStatus,
   useTrackerServerConfig,
@@ -112,20 +112,74 @@ function SaveBar({
   error: Error | null;
   onSave: () => void;
 }) {
+  const guard = useUnsavedGuard(dirty, onSave);
+
   return (
-    <div className="settings-toolbar">
-      <button className="btn btn-success" onClick={onSave} disabled={!dirty || isPending}>
-        {isPending ? 'Saving...' : dirty ? 'Save Changes' : 'No Changes'}
-      </button>
-      <SaveFeedback
-        isPending={isPending}
-        isError={isError}
-        isSuccess={isSuccess}
-        error={error}
-        dirty={dirty}
-      />
+    <>
+      <div className="settings-toolbar">
+        <button className="btn btn-success" onClick={onSave} disabled={!dirty || isPending}>
+          {isPending ? 'Saving...' : dirty ? 'Save Changes' : 'No Changes'}
+        </button>
+        <SaveFeedback
+          isPending={isPending}
+          isError={isError}
+          isSuccess={isSuccess}
+          error={error}
+          dirty={dirty}
+        />
+      </div>
+      {guard.blocked && (
+        <PendingChangesModal
+          onSave={guard.save}
+          onDiscard={guard.proceed}
+          onCancel={guard.reset}
+        />
+      )}
+    </>
+  );
+}
+
+function PendingChangesModal({ onSave, onDiscard, onCancel }: { onSave: () => void; onDiscard: () => void; onCancel: () => void }) {
+  return (
+    <div className="modal-overlay" onClick={onCancel}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 400 }}>
+        <h2>Unsaved Changes</h2>
+        <p style={{ margin: '12px 0 20px', color: 'var(--color-text-muted, #aaa)' }}>
+          You have unsaved changes. What would you like to do?
+        </p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn btn-default" onClick={onCancel}>Stay</button>
+          <button className="btn btn-danger" onClick={onDiscard}>Discard</button>
+          <button className="btn btn-success" onClick={onSave}>Save</button>
+        </div>
+      </div>
     </div>
   );
+}
+
+function useUnsavedGuard(dirty: boolean, onSave?: () => void) {
+  const blocker = useBlocker(
+    useCallback(({ currentLocation, nextLocation }: { currentLocation: { pathname: string }; nextLocation: { pathname: string } }) =>
+      dirty && currentLocation.pathname !== nextLocation.pathname,
+    [dirty])
+  );
+
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
+
+  return {
+    blocked: blocker.state === 'blocked',
+    proceed: () => blocker.state === 'blocked' && blocker.proceed(),
+    reset: () => blocker.state === 'blocked' && blocker.reset(),
+    save: () => {
+      onSave?.();
+      if (blocker.state === 'blocked') blocker.proceed();
+    },
+  };
 }
 
 function NumberInput({

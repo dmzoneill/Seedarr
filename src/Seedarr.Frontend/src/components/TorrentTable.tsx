@@ -105,9 +105,13 @@ interface TorrentTableProps {
   trackerFilter?: string;
   selectedTorrentId?: number | null;
   onSelectTorrent?: (id: number | null) => void;
+  selectMode?: boolean;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
+  onSelectAll?: (ids: number[]) => void;
 }
 
-function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, onSelectTorrent }: TorrentTableProps) {
+function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, onSelectTorrent, selectMode, selectedIds, onToggleSelect, onSelectAll }: TorrentTableProps) {
   const { data: torrents, isLoading } = useTorrents();
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
@@ -278,6 +282,15 @@ function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, o
       <table className="torrent-table">
         <thead onContextMenu={(e) => handleContextMenu(e, null)}>
           <tr>
+            {selectMode && (
+              <th className="torrent-table-th" style={{ width: 36 }}>
+                <input
+                  type="checkbox"
+                  checked={sorted.length > 0 && selectedIds?.size === sorted.length}
+                  onChange={() => onSelectAll?.(sorted.map((t) => t.id))}
+                />
+              </th>
+            )}
             {columns.map((col) => (
               <th key={col.key} onClick={() => col.sortable && handleSort(col.key)} className="torrent-table-th">
                 {col.label}{sortKey === col.key && (sortAsc ? ' ▲' : ' ▼')}
@@ -289,15 +302,25 @@ function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, o
           {sorted.map((t) => (
             <tr
               key={t.id}
-              className={`torrent-table-row${selectedTorrentId === t.id ? ' torrent-table-row-selected' : ''}`}
-              onClick={() => onSelectTorrent?.(selectedTorrentId === t.id ? null : t.id)}
+              className={`torrent-table-row${selectedTorrentId === t.id ? ' torrent-table-row-selected' : ''}${selectMode && selectedIds?.has(t.id) ? ' torrent-table-row-selected' : ''}`}
+              onClick={() => selectMode ? onToggleSelect?.(t.id) : onSelectTorrent?.(selectedTorrentId === t.id ? null : t.id)}
               onContextMenu={(e) => handleContextMenu(e, t)}
             >
+              {selectMode && (
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds?.has(t.id) ?? false}
+                    onChange={() => onToggleSelect?.(t.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </td>
+              )}
               {columns.map((col) => <td key={col.key}>{renderCell(t, col.key)}</td>)}
             </tr>
           ))}
           {sorted.length === 0 && (
-            <tr><td colSpan={columns.length} className="torrent-table-empty">No torrents found</td></tr>
+            <tr><td colSpan={columns.length + (selectMode ? 1 : 0)} className="torrent-table-empty">No torrents found</td></tr>
           )}
         </tbody>
       </table>
