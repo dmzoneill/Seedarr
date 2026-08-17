@@ -18,6 +18,8 @@ public sealed class SeedarrWebApplicationFactory : IDisposable
 
     public string BaseUrl { get; }
 
+    public string ApiKey { get; private set; } = string.Empty;
+
     public HttpClient Client { get; }
 
     public SeedarrWebApplicationFactory()
@@ -34,8 +36,29 @@ public sealed class SeedarrWebApplicationFactory : IDisposable
         _app = Bootstrap.CreateApplication(startupContext, new[] { BaseUrl });
         _app.StartAsync().GetAwaiter().GetResult();
 
+        LoadApiKey();
         Client = new HttpClient { BaseAddress = new Uri(BaseUrl) };
         WaitForHealthy();
+    }
+
+    private void LoadApiKey()
+    {
+        try
+        {
+            var configFile = Path.Combine(_tempDir, "config.xml");
+            if (!File.Exists(configFile))
+            {
+                return;
+            }
+
+            using var stream = File.OpenRead(configFile);
+            var doc = System.Xml.Linq.XDocument.Load(stream);
+            ApiKey = doc.Root?.Element("ApiKey")?.Value ?? string.Empty;
+        }
+        catch
+        {
+            // Key stays empty; tests that need it will fail explicitly.
+        }
     }
 
     public HttpClient CreateClient()
