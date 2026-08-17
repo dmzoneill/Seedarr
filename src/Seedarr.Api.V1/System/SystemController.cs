@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
@@ -21,21 +22,18 @@ public class SystemController : ControllerBase
     private readonly ITaskManager _taskManager;
     private readonly IManageCommandQueue _commandQueueManager;
     private readonly IAppFolderInfo _appFolderInfo;
+    private readonly IHostApplicationLifetime _lifetime;
 
-    /// <summary>
-    /// Initializes a new instance of the <see cref="SystemController"/> class.
-    /// </summary>
-    /// <param name="taskManager">Task manager.</param>
-    /// <param name="commandQueueManager">Command queue manager.</param>
-    /// <param name="appFolderInfo">Application folder info.</param>
     public SystemController(
         ITaskManager taskManager,
         IManageCommandQueue commandQueueManager,
-        IAppFolderInfo appFolderInfo)
+        IAppFolderInfo appFolderInfo,
+        IHostApplicationLifetime lifetime)
     {
         _taskManager = taskManager;
         _commandQueueManager = commandQueueManager;
         _appFolderInfo = appFolderInfo;
+        _lifetime = lifetime;
     }
 
     /// <summary>
@@ -149,5 +147,29 @@ public class SystemController : ControllerBase
                 Message = c.Message
             };
         }).ToList());
+    }
+
+    [HttpPost("restart")]
+    public ActionResult Restart()
+    {
+        global::System.Threading.Tasks.Task.Run(async () =>
+        {
+            await global::System.Threading.Tasks.Task.Delay(500);
+            _lifetime.StopApplication();
+        });
+
+        return Ok(new { message = "Restarting..." });
+    }
+
+    [HttpPost("shutdown")]
+    public ActionResult Shutdown()
+    {
+        global::System.Threading.Tasks.Task.Run(async () =>
+        {
+            await global::System.Threading.Tasks.Task.Delay(500);
+            _lifetime.StopApplication();
+        });
+
+        return Ok(new { message = "Shutting down..." });
     }
 }
