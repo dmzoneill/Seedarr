@@ -11,7 +11,7 @@ import {
   SelectInput,
   TextInput,
   NumberInput,
-  SectionTitle,
+  SectionCard,
 } from "./shared";
 
 export function NetworkTab() {
@@ -49,7 +49,7 @@ export function NetworkTab() {
     setDirty(true);
   };
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading">Loading configuration...</div>;
 
   return (
     <div>
@@ -61,101 +61,128 @@ export function NetworkTab() {
         error={save.error}
         onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
       />
-      <div className="card">
-        <h3>Network Status</h3>
-        <div className="status-row">
-          <span className="status-label">Local IP</span>
-          <span className="status-value">{status?.localIp ?? "-"}</span>
-        </div>
-        <div className="status-row">
-          <span className="status-label">External IP</span>
-          <span className="status-value">{status?.externalIp || "-"}</span>
-        </div>
-      </div>
 
-      <div className="card">
-        <SectionTitle>Listening</SectionTitle>
+      <SectionCard
+        title="Network Status"
+        description="Current local and public IP addresses detected for this Seedarr instance"
+      >
+        <div className="status-row">
+          <span className="status-label">Local IP Address</span>
+          <span className="status-value" style={{ fontFamily: "monospace" }}>
+            {status?.localIp ?? "-"}
+          </span>
+        </div>
+        <div className="status-row">
+          <span className="status-label">Public / External IP Address</span>
+          <span
+            className="status-value"
+            style={{ fontFamily: "monospace", color: "var(--accent, #c8a84e)" }}
+          >
+            {status?.externalIp || "-"}
+          </span>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Listening Port & UPnP"
+        description="Port for incoming peer connections and router NAT-PMP/UPnP automatic traversal"
+      >
         <NumberInput
-          label="Port"
+          label="Listening Port"
           value={form.listeningPort}
           onChange={(v) => set("listeningPort", v)}
           min={1}
           max={65535}
-          hint="Port used for incoming peer connections"
+          hint="Port used for incoming peer socket connections (standard 6881-6889)"
         />
         <Toggle
-          label="UPnP"
+          label="UPnP / NAT-PMP"
           checked={form.upnpEnabled}
           onChange={(v) => set("upnpEnabled", v)}
-          hint="Auto port mapping"
+          hint="Automatically request router port forwarding via UPnP / NAT-PMP"
         />
+      </SectionCard>
 
-        <SectionTitle>Limits</SectionTitle>
+      <SectionCard
+        title="Connection Limits & Slots"
+        description="Global socket limits and concurrent upload slot allocation"
+      >
         <NumberInput
           label="Max Global Connections"
           value={form.maxGlobalConnections}
           onChange={(v) => set("maxGlobalConnections", v)}
           min={1}
+          hint="Maximum concurrent peer connections across all swarms"
         />
         <NumberInput
-          label="Max Per Torrent"
+          label="Max Per-Torrent Connections"
           value={form.maxPerTorrentConnections}
           onChange={(v) => set("maxPerTorrentConnections", v)}
           min={1}
+          hint="Maximum peer connections allocated per individual torrent"
         />
         <NumberInput
           label="Max Upload Slots"
           value={form.maxUploadSlots}
           onChange={(v) => set("maxUploadSlots", v)}
           min={1}
+          hint="Number of peers actively unchoked simultaneously per torrent"
         />
+      </SectionCard>
 
-        <SectionTitle>Proxy</SectionTitle>
+      <SectionCard
+        title="Proxy & Privacy Routing"
+        description="Route outgoing tracker announces and peer traffic through SOCKS5/HTTP proxies"
+      >
         <SelectInput
-          label="Type"
+          label="Proxy Type"
           value={form.proxyType}
           onChange={(v) => set("proxyType", v)}
           options={[
-            { value: "none", label: "None" },
-            { value: "http", label: "HTTP" },
-            { value: "socks4", label: "SOCKS4" },
-            { value: "socks5", label: "SOCKS5" },
+            { value: "none", label: "None (Direct Connection)" },
+            { value: "socks5", label: "SOCKS5 Proxy" },
+            { value: "socks4", label: "SOCKS4 Proxy" },
+            { value: "http", label: "HTTP Proxy" },
           ]}
+          hint="Proxy protocol type"
         />
         <TextInput
-          label="Host"
+          label="Proxy Host"
           value={form.proxyHost}
           onChange={(v) => set("proxyHost", v)}
           placeholder="proxy.example.com"
           disabled={form.proxyType === "none"}
+          hint="Proxy server hostname or IP address"
         />
         <NumberInput
-          label="Port"
+          label="Proxy Port"
           value={form.proxyPort}
           onChange={(v) => set("proxyPort", v)}
           min={1}
           max={65535}
           disabled={form.proxyType === "none"}
+          hint="Proxy server port (e.g. 1080 or 8080)"
         />
         <Toggle
-          label="Proxy Auth"
+          label="Proxy Authentication"
           checked={form.proxyAuthEnabled}
           onChange={(v) => set("proxyAuthEnabled", v)}
+          hint="Require username/password authentication for the proxy"
         />
         <TextInput
-          label="Username"
+          label="Proxy Username"
           value={form.proxyUsername}
           onChange={(v) => set("proxyUsername", v)}
           disabled={!form.proxyAuthEnabled}
         />
         <TextInput
-          label="Password"
+          label="Proxy Password"
+          type="password"
           value={form.proxyPassword}
           onChange={(v) => set("proxyPassword", v)}
-          type="password"
           disabled={!form.proxyAuthEnabled}
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }
