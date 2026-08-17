@@ -6,7 +6,7 @@ import {
   Toggle,
   SelectInput,
   NumberInput,
-  SectionTitle,
+  SectionCard,
 } from "./shared";
 
 export function SimulationTab() {
@@ -43,7 +43,7 @@ export function SimulationTab() {
     setDirty(true);
   };
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading">Loading configuration...</div>;
 
   return (
     <div>
@@ -55,25 +55,30 @@ export function SimulationTab() {
         error={save.error}
         onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
       />
-      <div className="card">
-        <SectionTitle>Behavior Engine</SectionTitle>
+
+      <SectionCard
+        title="Client Behavior Simulation Engine"
+        description="Emulates realistic BitTorrent client behaviors and peer negotiation patterns"
+      >
         <Toggle
-          label="Enabled"
+          label="Behavior Engine"
           checked={form.clientBehaviorEngineEnabled}
           onChange={(v) => set("clientBehaviorEngineEnabled", v)}
+          hint="Enable organic peer client simulation"
         />
         <SelectInput
-          label="Primary Client"
+          label="Primary Client Profile"
           value={form.primaryClient}
           onChange={(v) => set("primaryClient", v)}
           options={[
-            { value: "qBittorrent", label: "qBittorrent" },
-            { value: "Deluge", label: "Deluge" },
-            { value: "Transmission", label: "Transmission" },
-            { value: "uTorrent", label: "uTorrent" },
-            { value: "BiglyBT", label: "BiglyBT" },
+            { value: "qBittorrent", label: "qBittorrent (v4.4.2+)" },
+            { value: "Deluge", label: "Deluge (libtorrent 1.2+)" },
+            { value: "Transmission", label: "Transmission (v3.0+)" },
+            { value: "uTorrent", label: "µTorrent (v3.5.5)" },
+            { value: "BiglyBT", label: "BiglyBT (v3.0+)" },
           ]}
           disabled={!form.clientBehaviorEngineEnabled}
+          hint="Default identity template for announce signatures"
         />
         <NumberInput
           label="Behavior Variation"
@@ -82,16 +87,20 @@ export function SimulationTab() {
           min={0}
           max={1}
           step={0.05}
-          hint="0.0 - 1.0"
+          hint="Random variance factor (0.0 - 1.0) applied to packet timing"
           disabled={!form.clientBehaviorEngineEnabled}
         />
+      </SectionCard>
 
-        <SectionTitle>Profile Switching</SectionTitle>
+      <SectionCard
+        title="Dynamic Profile Switching"
+        description="Periodically rotate client identity fingerprints between announce cycles"
+      >
         <Toggle
-          label="Client Switching"
+          label="Client Identity Rotation"
           checked={form.clientProfileSwitching}
           onChange={(v) => set("clientProfileSwitching", v)}
-          hint="Rotate client identity"
+          hint="Allow occasional subtle rotation of client identities"
         />
         <NumberInput
           label="Switch Probability"
@@ -101,38 +110,49 @@ export function SimulationTab() {
           max={1}
           step={0.01}
           suffix="/ announce"
-          hint="0.0 - 1.0"
+          hint="Probability per announce cycle (0.0 - 1.0)"
           disabled={!form.clientProfileSwitching}
         />
+      </SectionCard>
 
-        <SectionTitle>Traffic Patterns</SectionTitle>
+      <SectionCard
+        title="Traffic Patterns & Diurnal Variation"
+        description="Time-of-day traffic modeling and realistic seeding spikes"
+      >
         <SelectInput
-          label="Profile"
+          label="Pattern Profile"
           value={form.trafficPatternProfile}
           onChange={(v) => set("trafficPatternProfile", v)}
           options={[
-            { value: "conservative", label: "Conservative" },
-            { value: "balanced", label: "Balanced" },
-            { value: "aggressive", label: "Aggressive" },
+            { value: "conservative", label: "Conservative (Low Jitter)" },
+            { value: "balanced", label: "Balanced (Natural ISP Curves)" },
+            { value: "aggressive", label: "Aggressive (High Bursting)" },
           ]}
+          hint="Overall traffic envelope shape"
         />
         <Toggle
           label="Realistic Variations"
           checked={form.realisticVariations}
           onChange={(v) => set("realisticVariations", v)}
+          hint="Inject natural noise and micro-bursting into upload streams"
         />
         <Toggle
-          label="Time-Based Patterns"
+          label="Time-Based Diurnal Cycles"
           checked={form.timeBasedPatterns}
           onChange={(v) => set("timeBasedPatterns", v)}
-          hint="Vary by time of day"
+          hint="Automatically dip speed during peak business hours and boost late at night"
         />
+      </SectionCard>
 
-        <SectionTitle>Swarm Intelligence</SectionTitle>
+      <SectionCard
+        title="Swarm Intelligence"
+        description="Adapt upload rate based on swarm seeder/leecher health ratios"
+      >
         <Toggle
-          label="Enabled"
+          label="Swarm Intelligence"
           checked={form.swarmIntelligenceEnabled}
           onChange={(v) => set("swarmIntelligenceEnabled", v)}
+          hint="Dynamically prioritize dying swarms with few seeders"
         />
         <NumberInput
           label="Adaptation Rate"
@@ -141,7 +161,7 @@ export function SimulationTab() {
           min={0}
           max={1}
           step={0.1}
-          hint="0.0 - 1.0"
+          hint="Rate of responsiveness to peer churn (0.0 - 1.0)"
           disabled={!form.swarmIntelligenceEnabled}
         />
         <NumberInput
@@ -149,9 +169,11 @@ export function SimulationTab() {
           value={form.swarmPeerAnalysisDepth}
           onChange={(v) => set("swarmPeerAnalysisDepth", v)}
           min={1}
+          suffix="peers"
+          hint="Number of peers sampled to evaluate swarm health"
           disabled={!form.swarmIntelligenceEnabled}
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }

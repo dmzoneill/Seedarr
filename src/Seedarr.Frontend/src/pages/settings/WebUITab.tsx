@@ -1,13 +1,7 @@
 import { useState, useEffect } from "react";
 import { useGeneralConfig, useSaveGeneralConfig } from "../../api/hooks";
 import type { GeneralConfig } from "../../api/types";
-import {
-  SaveBar,
-  Toggle,
-  TextInput,
-  NumberInput,
-  SectionTitle,
-} from "./shared";
+import { SaveBar, Toggle, TextInput, NumberInput, SectionCard } from "./shared";
 
 export function WebUITab() {
   const { data: config, isLoading } = useGeneralConfig();
@@ -45,7 +39,7 @@ export function WebUITab() {
     setDirty(true);
   };
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading">Loading configuration...</div>;
 
   return (
     <div>
@@ -57,30 +51,39 @@ export function WebUITab() {
         error={save.error}
         onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
       />
-      <div className="card">
-        <SectionTitle>Connection</SectionTitle>
+
+      <SectionCard
+        title="Web Interface Connection"
+        description="Configure HTTP port and network interface bindings for the Web UI"
+      >
         <NumberInput
           label="Port"
           value={form.port}
           onChange={(v) => set("port", v)}
           min={1}
           max={65535}
+          hint="HTTP port to access Seedarr Web UI"
         />
         <TextInput
           label="Bind Address"
           value={form.bindAddress}
           onChange={(v) => set("bindAddress", v)}
           placeholder="0.0.0.0"
+          hint="Network address interface to bind (* or 0.0.0.0 for all)"
         />
+      </SectionCard>
 
-        <SectionTitle>Authentication</SectionTitle>
+      <SectionCard
+        title="Session Security & Authentication"
+        description="Control access permissions and credential requirements"
+      >
         <Toggle
           label="Authentication Enabled"
           checked={form.authenticationEnabled}
           onChange={(v) => set("authenticationEnabled", v)}
-          hint="Require login"
+          hint="Require user login credentials for Web UI access"
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }

@@ -12,7 +12,13 @@ import type {
   DownloadClientDefinition,
   DownloadClientTestResult,
 } from "../../api/types";
-import { TextInput, SelectInput, Toggle, NumberInput } from "./shared";
+import {
+  TextInput,
+  SelectInput,
+  Toggle,
+  NumberInput,
+  SectionCard,
+} from "./shared";
 
 export function DownloadClientsTab() {
   const { data: clients, isLoading } = useDownloadClients();
@@ -89,22 +95,27 @@ export function DownloadClientsTab() {
     });
   };
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading)
+    return <div className="loading">Loading download clients...</div>;
 
   return (
     <>
-      <div className="card">
+      <SectionCard
+        title="BitTorrent Download Clients"
+        description="Connect external download clients (qBittorrent, Transmission, Deluge) to import active seeding state"
+      >
         <div
           style={{
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             marginBottom: "1rem",
+            flexWrap: "wrap",
+            gap: "0.75rem",
           }}
         >
-          <h3 style={{ margin: 0 }}>Download Clients</h3>
           <button
-            className="btn btn-outline"
+            className="btn btn-outline btn-small"
             onClick={() => {
               syncMutation.mutate(undefined, {
                 onSuccess: (res) =>
@@ -116,7 +127,7 @@ export function DownloadClientsTab() {
             disabled={syncMutation.isPending}
             title="Import torrents currently in your download clients"
           >
-            {syncMutation.isPending ? "Syncing..." : "Sync Torrents"}
+            {syncMutation.isPending ? "Syncing..." : "🔄 Sync Torrents"}
           </button>
         </div>
 
@@ -143,7 +154,7 @@ export function DownloadClientsTab() {
                 )}
                 <button
                   className="provider-card-action"
-                  title="Test"
+                  title="Test Connection"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleTest(client.id);
@@ -153,7 +164,7 @@ export function DownloadClientsTab() {
                 </button>
                 <button
                   className="provider-card-action provider-card-action-danger"
-                  title="Delete"
+                  title="Delete Client"
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteMutation.mutate(client.id);
@@ -188,7 +199,7 @@ export function DownloadClientsTab() {
               </div>
               {testResults[client.id]?.success === true && (
                 <div className="provider-card-test provider-card-test-ok">
-                  Test passed
+                  ✓ Connection passed
                 </div>
               )}
               {testResults[client.id]?.success === false && (
@@ -196,7 +207,7 @@ export function DownloadClientsTab() {
                   className="provider-card-test provider-card-test-fail"
                   title={testResults[client.id]?.message}
                 >
-                  Test failed
+                  ✕ Connection failed
                 </div>
               )}
               {testResults[client.id] === null && (
@@ -209,16 +220,29 @@ export function DownloadClientsTab() {
           <div
             className="provider-card-add"
             onClick={() => handleOpenModal(defaultClient)}
+            title="Add Download Client"
           >
             <span className="provider-card-add-icon">+</span>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {editing && (
         <div className="modal-overlay" onClick={() => setEditing(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 520,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+            }}
+          >
+            <div
+              className="modal-title"
+              style={{ fontSize: "1.2rem", marginBottom: "1rem" }}
+            >
               {editing.id ? "Edit Download Client" : "Add Download Client"}
             </div>
             <TextInput
@@ -316,9 +340,9 @@ export function DownloadClientsTab() {
                   padding: "0.75rem 1rem",
                   borderRadius: "6px",
                   fontSize: "0.875rem",
-                  backgroundColor: "rgba(0, 123, 255, 0.12)",
-                  color: "var(--primary, #007bff)",
-                  border: "1px solid rgba(0, 123, 255, 0.35)",
+                  backgroundColor: "rgba(200, 168, 78, 0.12)",
+                  color: "var(--accent, #c8a84e)",
+                  border: "1px solid rgba(200, 168, 78, 0.35)",
                   display: "flex",
                   alignItems: "center",
                   gap: "0.5rem",
@@ -396,11 +420,12 @@ export function DownloadClientsTab() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                marginTop: "1.5rem",
               }}
             >
               <button
                 type="button"
-                className="btn"
+                className="btn btn-outline btn-small"
                 onClick={handleModalTest}
                 disabled={testDirectMutation.isPending}
               >
@@ -409,11 +434,14 @@ export function DownloadClientsTab() {
                   : "Test Connection"}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button className="btn" onClick={() => setEditing(null)}>
+                <button
+                  className="btn btn-outline btn-small"
+                  onClick={() => setEditing(null)}
+                >
                   Cancel
                 </button>
                 <button
-                  className="btn btn-success"
+                  className="btn btn-primary btn-small"
                   onClick={handleSave}
                   disabled={
                     createMutation.isPending || updateMutation.isPending

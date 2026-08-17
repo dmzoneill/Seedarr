@@ -4,7 +4,7 @@ import {
   useSavePeerProtocolConfig,
 } from "../../api/hooks";
 import type { PeerProtocolConfig } from "../../api/types";
-import { SaveBar, NumberInput, SectionTitle } from "./shared";
+import { SaveBar, NumberInput, SectionCard } from "./shared";
 
 export function PeerProtocolTab() {
   const { data: config, isLoading } = usePeerProtocolConfig();
@@ -40,7 +40,7 @@ export function PeerProtocolTab() {
     setDirty(true);
   };
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading">Loading configuration...</div>;
 
   return (
     <div>
@@ -52,14 +52,18 @@ export function PeerProtocolTab() {
         error={save.error}
         onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
       />
-      <div className="card">
-        <SectionTitle>Timeouts</SectionTitle>
+
+      <SectionCard
+        title="Protocol Timeouts & Keepalives"
+        description="Socket message read deadlines, handshake windows, and tracker request timeouts"
+      >
         <NumberInput
           label="Handshake Timeout"
           value={form.handshakeTimeoutSeconds}
           onChange={(v) => set("handshakeTimeoutSeconds", v)}
           min={1}
           suffix="seconds"
+          hint="Maximum time allowed for BitTorrent handshake exchange"
         />
         <NumberInput
           label="Message Read Timeout"
@@ -67,6 +71,7 @@ export function PeerProtocolTab() {
           onChange={(v) => set("messageReadTimeoutSeconds", v)}
           min={1}
           suffix="seconds"
+          hint="Timeout for incoming piece/block message bytes"
         />
         <NumberInput
           label="Keep Alive Interval"
@@ -74,6 +79,7 @@ export function PeerProtocolTab() {
           onChange={(v) => set("keepAliveIntervalSeconds", v)}
           min={1}
           suffix="seconds"
+          hint="Interval to send 0-byte keepalive pings to active peers"
         />
         <NumberInput
           label="Peer Contact Interval"
@@ -81,6 +87,7 @@ export function PeerProtocolTab() {
           onChange={(v) => set("peerContactIntervalSeconds", v)}
           min={1}
           suffix="seconds"
+          hint="Minimum elapsed time before re-contacting an idle peer"
         />
         <NumberInput
           label="UDP Tracker Timeout"
@@ -88,6 +95,7 @@ export function PeerProtocolTab() {
           onChange={(v) => set("udpTrackerTimeoutSeconds", v)}
           min={1}
           suffix="seconds"
+          hint="Timeout for UDP tracker connect/announce transactions"
         />
         <NumberInput
           label="HTTP Tracker Timeout"
@@ -95,6 +103,7 @@ export function PeerProtocolTab() {
           onChange={(v) => set("httpTrackerTimeoutSeconds", v)}
           min={1}
           suffix="seconds"
+          hint="HTTP request timeout for tracker announces"
         />
         <NumberInput
           label="Peer Request Count"
@@ -102,9 +111,14 @@ export function PeerProtocolTab() {
           onChange={(v) => set("peerRequestCount", v)}
           min={1}
           suffix="peers"
+          hint="Number of peers requested in standard announce payload (numwant)"
         />
+      </SectionCard>
 
-        <SectionTitle>Peer Behavior</SectionTitle>
+      <SectionCard
+        title="Peer Behavior & Rotation"
+        description="Probabilistic swarm models and active connection rotation"
+      >
         <NumberInput
           label="Upload Activity Probability"
           value={form.seederUploadActivityProbability}
@@ -112,7 +126,7 @@ export function PeerProtocolTab() {
           min={0}
           max={1}
           step={0.05}
-          hint="0.0 - 1.0"
+          hint="Probability (0.0 - 1.0) that a connected peer actively requests upload"
         />
         <NumberInput
           label="Idle Chance"
@@ -121,7 +135,7 @@ export function PeerProtocolTab() {
           min={0}
           max={1}
           step={0.05}
-          hint="0.0 - 1.0"
+          hint="Probability of peer entering temporary choke / idle state"
         />
         <NumberInput
           label="Dropout Probability"
@@ -130,7 +144,7 @@ export function PeerProtocolTab() {
           min={0}
           max={1}
           step={0.05}
-          hint="0.0 - 1.0"
+          hint="Simulated disconnect probability for rare swarm members"
         />
         <NumberInput
           label="Connection Rotation"
@@ -139,9 +153,9 @@ export function PeerProtocolTab() {
           min={0}
           max={1}
           step={0.05}
-          hint="0.0 - 1.0"
+          hint="Percentage of oldest connections rotated periodically (optimistic unchoking)"
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }

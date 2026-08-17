@@ -6,7 +6,7 @@ import {
   Toggle,
   SelectInput,
   NumberInput,
-  SectionTitle,
+  SectionCard,
 } from "./shared";
 
 export function SeedingTab() {
@@ -53,19 +53,19 @@ export function SeedingTab() {
   };
 
   const distOptions = [
-    { value: "Equal", label: "Equal" },
-    { value: "Pareto", label: "Pareto" },
+    { value: "Equal", label: "Equal Distribution" },
+    { value: "Pareto", label: "Pareto (80/20 Rule)" },
     { value: "PowerLaw", label: "Power Law" },
     { value: "LogNormal", label: "Log Normal" },
   ];
 
   const redistOptions = [
-    { value: "tick", label: "Every Tick" },
+    { value: "tick", label: "Every Tick (Real-Time)" },
     { value: "interval", label: "Custom Interval" },
     { value: "fixed", label: "Fixed" },
   ];
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading">Loading configuration...</div>;
 
   return (
     <div>
@@ -77,11 +77,21 @@ export function SeedingTab() {
         error={save.error}
         onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
       />
-      <div className="card">
-        <SectionTitle>Quick Profiles</SectionTitle>
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+
+      <SectionCard
+        title="Quick Seeding Profiles"
+        description="One-click presets to configure speed limits, distribution algorithms, and ratio rules"
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: "0.75rem",
+            marginBottom: "0.75rem",
+            flexWrap: "wrap",
+          }}
+        >
           <button
-            className="btn"
+            className="btn btn-outline btn-small"
             onClick={() => {
               setForm((prev) => ({
                 ...prev,
@@ -96,10 +106,10 @@ export function SeedingTab() {
               setDirty(true);
             }}
           >
-            Conservative
+            🛡️ Conservative (100 KB/s, 1.5x)
           </button>
           <button
-            className="btn"
+            className="btn btn-primary btn-small"
             onClick={() => {
               setForm((prev) => ({
                 ...prev,
@@ -114,10 +124,10 @@ export function SeedingTab() {
               setDirty(true);
             }}
           >
-            Balanced
+            ⚡ Balanced (625 KB/s, 2.0x)
           </button>
           <button
-            className="btn"
+            className="btn btn-outline btn-small"
             onClick={() => {
               setForm((prev) => ({
                 ...prev,
@@ -132,31 +142,35 @@ export function SeedingTab() {
               setDirty(true);
             }}
           >
-            Aggressive
+            🚀 Aggressive (2.5 MB/s, Unlimited)
           </button>
         </div>
         <div
-          className="form-hint"
           style={{
-            marginBottom: "1rem",
             fontSize: "0.8rem",
             color: "var(--text-muted)",
+            lineHeight: 1.4,
           }}
         >
-          Conservative: low speeds, equal distribution, 1.5 ratio limit.
-          Balanced: default speeds (5/10 Mbit), Pareto distribution, 2.0 ratio
-          limit. Aggressive: high speed caps (20/40 Mbit), power law
-          distribution, no ratio limit.
+          Preset details — <strong>Conservative</strong>: low rate throttle,
+          equal spread, 1.5x ratio goal. <strong>Balanced</strong>: standard
+          default rates (5/10 Mbit), Pareto distribution, 2.0x ratio.{" "}
+          <strong>Aggressive</strong>: high speed caps (20/40 Mbit), power-law
+          curve, no ratio limit.
         </div>
+      </SectionCard>
 
-        <SectionTitle>Speed Limits</SectionTitle>
+      <SectionCard
+        title="Global Speed & Seeding Limits"
+        description="Base rate caps and automatic ratio completion thresholds"
+      >
         <NumberInput
           label="Max Upload Speed"
           value={form.maxUploadSpeedKbps}
           onChange={(v) => set("maxUploadSpeedKbps", v)}
           min={1}
           suffix="KB/s"
-          hint="Default 625 KB/s (5 Mbit/s). Minimum 1 KB/s."
+          hint="Default 625 KB/s (5 Mbit/s)"
         />
         <NumberInput
           label="Max Download Speed"
@@ -164,7 +178,7 @@ export function SeedingTab() {
           onChange={(v) => set("maxDownloadSpeedKbps", v)}
           min={1}
           suffix="KB/s"
-          hint="Default 1250 KB/s (10 Mbit/s). Minimum 1 KB/s."
+          hint="Default 1250 KB/s (10 Mbit/s)"
         />
         <NumberInput
           label="Global Seed Ratio Limit"
@@ -172,14 +186,19 @@ export function SeedingTab() {
           onChange={(v) => set("globalSeedRatioLimit", v)}
           min={0}
           step={0.1}
-          hint="Stop seeding when ratio reaches this value. Set to 0 to disable."
+          hint="Stop seeding automatically when ratio reaches this value (0 = unlimited)"
         />
+      </SectionCard>
 
-        <SectionTitle>Alternative Speeds</SectionTitle>
+      <SectionCard
+        title="Alternative Speed Limits (Secondary Throttling)"
+        description="Reduced secondary bandwidth limits that can be toggled on demand or via scheduler"
+      >
         <Toggle
           label="Enable Alt Speeds"
           checked={form.alternativeSpeedEnabled}
           onChange={(v) => set("alternativeSpeedEnabled", v)}
+          hint="Enable secondary throttled speed profile"
         />
         <NumberInput
           label="Alt Upload Speed"
@@ -197,13 +216,18 @@ export function SeedingTab() {
           suffix="KB/s"
           disabled={!form.alternativeSpeedEnabled}
         />
+      </SectionCard>
 
-        <SectionTitle>Upload Distribution</SectionTitle>
+      <SectionCard
+        title="Upload Bandwidth Distribution Engine"
+        description="Mathematical curve allocating bandwidth across active torrents"
+      >
         <SelectInput
           label="Algorithm"
           value={form.uploadDistributionAlgorithm}
           onChange={(v) => set("uploadDistributionAlgorithm", v)}
           options={distOptions}
+          hint="Distribution algorithm used to split available upload capacity"
         />
         <NumberInput
           label="Spread %"
@@ -211,12 +235,14 @@ export function SeedingTab() {
           onChange={(v) => set("uploadDistributionSpreadPercentage", v)}
           min={0}
           max={100}
+          hint="Variance spread percentage across active swarms"
         />
         <SelectInput
-          label="Redistribution"
+          label="Redistribution Mode"
           value={form.uploadRedistributionMode}
           onChange={(v) => set("uploadRedistributionMode", v)}
           options={redistOptions}
+          hint="Rebalancing interval"
         />
         <NumberInput
           label="Custom Interval"
@@ -232,6 +258,7 @@ export function SeedingTab() {
           onChange={(v) => set("uploadStoppedMinPercentage", v)}
           min={0}
           max={100}
+          hint="Minimum percentage of torrents randomly paused/stopped to simulate natural seeding"
         />
         <NumberInput
           label="Stopped Max %"
@@ -239,14 +266,20 @@ export function SeedingTab() {
           onChange={(v) => set("uploadStoppedMaxPercentage", v)}
           min={0}
           max={100}
+          hint="Maximum percentage of torrents randomly paused/stopped"
         />
+      </SectionCard>
 
-        <SectionTitle>Download Distribution</SectionTitle>
+      <SectionCard
+        title="Download Bandwidth Distribution Engine"
+        description="Mathematical curve allocating bandwidth across active downloads"
+      >
         <SelectInput
           label="Algorithm"
           value={form.downloadDistributionAlgorithm}
           onChange={(v) => set("downloadDistributionAlgorithm", v)}
           options={distOptions}
+          hint="Distribution algorithm used to split available download capacity"
         />
         <NumberInput
           label="Spread %"
@@ -254,12 +287,14 @@ export function SeedingTab() {
           onChange={(v) => set("downloadDistributionSpreadPercentage", v)}
           min={0}
           max={100}
+          hint="Variance spread percentage across active downloads"
         />
         <SelectInput
-          label="Redistribution"
+          label="Redistribution Mode"
           value={form.downloadRedistributionMode}
           onChange={(v) => set("downloadRedistributionMode", v)}
           options={redistOptions}
+          hint="Rebalancing interval"
         />
         <NumberInput
           label="Custom Interval"
@@ -283,7 +318,7 @@ export function SeedingTab() {
           min={0}
           max={100}
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }

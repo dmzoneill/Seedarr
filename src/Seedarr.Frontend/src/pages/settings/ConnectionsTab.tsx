@@ -9,7 +9,7 @@ import {
   useArrSync,
 } from "../../api/hooks";
 import type { ArrConnection, ArrTestResult } from "../../api/types";
-import { TextInput, SelectInput, Toggle } from "./shared";
+import { TextInput, SelectInput, Toggle, SectionCard } from "./shared";
 
 export function ConnectionsTab() {
   const { data: connections, isLoading } = useArrConnections();
@@ -78,36 +78,58 @@ export function ConnectionsTab() {
     });
   };
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading">Loading connections...</div>;
 
   return (
     <>
-      <div className="card">
-        <div className="provider-section-header">
-          <h3>Arr Connections</h3>
-          <button
-            className="btn btn-small"
-            onClick={() => syncMutation.mutate()}
-            disabled={syncMutation.isPending}
+      <SectionCard
+        title="Arr Media Management Connections"
+        description="Integrate with Sonarr, Radarr, and Lidarr for automated import and download client synchronization"
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1rem",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
           >
-            {syncMutation.isPending ? "Syncing..." : "Sync Now"}
-          </button>
-          {syncMutation.isError && (
-            <span style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
-              Sync failed: {syncMutation.error?.message}
-            </span>
-          )}
-          {syncMutation.isSuccess && syncMutation.data && (
-            <span style={{ color: "var(--success)", fontSize: "0.85rem" }}>
-              Sync complete: {syncMutation.data.added} added,{" "}
-              {syncMutation.data.skipped} skipped
-              {syncMutation.data.failed > 0 && (
-                <span style={{ color: "var(--danger)", marginLeft: "0.35rem" }}>
-                  ({syncMutation.data.failed} failed)
-                </span>
-              )}
-            </span>
-          )}
+            <button
+              className="btn btn-outline btn-small"
+              onClick={() => syncMutation.mutate()}
+              disabled={syncMutation.isPending}
+            >
+              {syncMutation.isPending ? "Syncing..." : "🔄 Sync Now"}
+            </button>
+            {syncMutation.isError && (
+              <span style={{ color: "var(--danger)", fontSize: "0.85rem" }}>
+                Sync failed: {syncMutation.error?.message}
+              </span>
+            )}
+            {syncMutation.isSuccess && syncMutation.data && (
+              <span style={{ color: "var(--success)", fontSize: "0.85rem" }}>
+                ✓ Sync complete: {syncMutation.data.added} added,{" "}
+                {syncMutation.data.skipped} skipped
+                {syncMutation.data.failed > 0 && (
+                  <span
+                    style={{ color: "var(--danger)", marginLeft: "0.35rem" }}
+                  >
+                    ({syncMutation.data.failed} failed)
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="provider-cards">
@@ -133,7 +155,7 @@ export function ConnectionsTab() {
                 )}
                 <button
                   className="provider-card-action"
-                  title="Test"
+                  title="Test Connection"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleTest(conn.id);
@@ -143,7 +165,7 @@ export function ConnectionsTab() {
                 </button>
                 <button
                   className="provider-card-action provider-card-action-danger"
-                  title="Delete"
+                  title="Delete Connection"
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteMutation.mutate(conn.id);
@@ -181,7 +203,7 @@ export function ConnectionsTab() {
               <div className="provider-card-info">{conn.url}</div>
               {testResults[conn.id]?.success === true && (
                 <div className="provider-card-test provider-card-test-ok">
-                  Test passed
+                  ✓ Connection passed
                 </div>
               )}
               {testResults[conn.id]?.success === false && (
@@ -189,7 +211,7 @@ export function ConnectionsTab() {
                   className="provider-card-test provider-card-test-fail"
                   title={testResults[conn.id]?.message}
                 >
-                  Test failed
+                  ✕ Connection failed
                 </div>
               )}
               {testResults[conn.id] === null && (
@@ -202,16 +224,29 @@ export function ConnectionsTab() {
           <div
             className="provider-card-add"
             onClick={() => handleOpenModal(defaultConnection)}
+            title="Add Arr Connection"
           >
             <span className="provider-card-add-icon">+</span>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {editing && (
         <div className="modal-overlay" onClick={() => setEditing(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 520,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+            }}
+          >
+            <div
+              className="modal-title"
+              style={{ fontSize: "1.2rem", marginBottom: "1rem" }}
+            >
               {editing.id ? "Edit Connection" : "Add Connection"}
             </div>
             <TextInput
@@ -297,9 +332,9 @@ export function ConnectionsTab() {
                   padding: "0.75rem 1rem",
                   borderRadius: "6px",
                   fontSize: "0.875rem",
-                  backgroundColor: "rgba(0, 123, 255, 0.12)",
-                  color: "var(--primary, #007bff)",
-                  border: "1px solid rgba(0, 123, 255, 0.35)",
+                  backgroundColor: "rgba(200, 168, 78, 0.12)",
+                  color: "var(--accent, #c8a84e)",
+                  border: "1px solid rgba(200, 168, 78, 0.35)",
                   display: "flex",
                   alignItems: "center",
                   gap: "0.5rem",
@@ -374,11 +409,12 @@ export function ConnectionsTab() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                marginTop: "1.5rem",
               }}
             >
               <button
                 type="button"
-                className="btn"
+                className="btn btn-outline btn-small"
                 onClick={handleModalTest}
                 disabled={testDirectMutation.isPending}
               >
@@ -387,11 +423,14 @@ export function ConnectionsTab() {
                   : "Test Connection"}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button className="btn" onClick={() => setEditing(null)}>
+                <button
+                  className="btn btn-outline btn-small"
+                  onClick={() => setEditing(null)}
+                >
                   Cancel
                 </button>
                 <button
-                  className="btn btn-success"
+                  className="btn btn-primary btn-small"
                   onClick={handleSave}
                   disabled={
                     createMutation.isPending || updateMutation.isPending

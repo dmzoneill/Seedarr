@@ -7,7 +7,7 @@ import {
   SelectInput,
   TextInput,
   NumberInput,
-  SectionTitle,
+  SectionCard,
 } from "./shared";
 
 export function BitTorrentTab() {
@@ -42,7 +42,7 @@ export function BitTorrentTab() {
     setDirty(true);
   };
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading">Loading configuration...</div>;
 
   return (
     <div>
@@ -54,59 +54,71 @@ export function BitTorrentTab() {
         error={save.error}
         onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
       />
-      <div className="card">
-        <SectionTitle>Protocol Features</SectionTitle>
+
+      <SectionCard
+        title="Protocol Features"
+        description="Core BitTorrent discovery extensions, peer exchange, and encryption levels"
+      >
         <Toggle
           label="DHT"
           checked={form.enableDht}
           onChange={(v) => set("enableDht", v)}
-          hint="Distributed Hash Table"
+          hint="Distributed Hash Table (Mainline DHT)"
         />
         <Toggle
           label="PEX"
           checked={form.enablePex}
           onChange={(v) => set("enablePex", v)}
-          hint="Peer Exchange"
+          hint="Peer Exchange protocol (BEP 11)"
         />
         <Toggle
           label="LPD"
           checked={form.enableLpd}
           onChange={(v) => set("enableLpd", v)}
-          hint="Local Peer Discovery"
+          hint="Local Peer Discovery / Local Service Discovery (LSD)"
         />
         <SelectInput
           label="Encryption"
           value={form.encryptionMode}
           onChange={(v) => set("encryptionMode", v)}
           options={[
-            { value: "disabled", label: "Disabled" },
-            { value: "enabled", label: "Enabled" },
-            { value: "forced", label: "Forced" },
+            { value: "disabled", label: "Disabled (Plain Only)" },
+            { value: "enabled", label: "Enabled (Prefer Encrypted)" },
+            { value: "forced", label: "Forced (Encrypted Only)" },
           ]}
+          hint="Message Stream Encryption (MSE) / Protocol Encryption (PE)"
         />
+      </SectionCard>
 
-        <SectionTitle>Client Identity</SectionTitle>
+      <SectionCard
+        title="Client Emulation & Identity"
+        description="Headers and Peer ID fingerprints presented to trackers and swarms"
+      >
         <TextInput
           label="User Agent"
           value={form.bitTorrentUserAgent}
           onChange={(v) => set("bitTorrentUserAgent", v)}
-          hint="HTTP tracker header"
+          hint="HTTP tracker User-Agent string"
         />
         <TextInput
           label="Peer ID Prefix"
           value={form.peerIdPrefix}
           onChange={(v) => set("peerIdPrefix", v)}
-          hint="8-char Azureus-style"
+          hint="8-character Azureus-style Peer ID prefix"
         />
+      </SectionCard>
 
-        <SectionTitle>Tracker Timing</SectionTitle>
+      <SectionCard
+        title="Tracker Timing & Scrape Intervals"
+        description="Periodic announce cycles and scrape timing"
+      >
         <NumberInput
           label="Announce Interval"
           value={form.announceIntervalSeconds}
           onChange={(v) => set("announceIntervalSeconds", v)}
           min={60}
           suffix="seconds"
-          hint="Time between tracker announces"
+          hint="Standard periodic announce duration"
         />
         <NumberInput
           label="Min Announce Interval"
@@ -114,6 +126,7 @@ export function BitTorrentTab() {
           onChange={(v) => set("minAnnounceIntervalSeconds", v)}
           min={30}
           suffix="seconds"
+          hint="Minimum interval between back-to-back announces"
         />
         <NumberInput
           label="Scrape Interval"
@@ -121,8 +134,9 @@ export function BitTorrentTab() {
           onChange={(v) => set("scrapeIntervalSeconds", v)}
           min={60}
           suffix="seconds"
+          hint="Periodic scrape frequency for seed/peer counts"
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSchedulerConfig, useSaveSchedulerConfig } from "../../api/hooks";
 import type { SchedulerConfig } from "../../api/types";
-import { SaveBar, Toggle, NumberInput, SectionTitle } from "./shared";
+import { SaveBar, Toggle, NumberInput, SectionCard } from "./shared";
 
 export function SchedulerTab() {
   const { data: config, isLoading } = useSchedulerConfig();
@@ -38,7 +38,7 @@ export function SchedulerTab() {
     setDirty(true);
   };
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading">Loading configuration...</div>;
 
   const days: { key: keyof SchedulerConfig; label: string }[] = [
     { key: "schedulerMonday", label: "Monday" },
@@ -60,15 +60,23 @@ export function SchedulerTab() {
         error={save.error}
         onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
       />
-      <div className="card">
+
+      <SectionCard
+        title="Speed Limit Scheduler"
+        description="Automatically engage alternative rate limits during scheduled time windows"
+      >
         <Toggle
-          label="Enabled"
+          label="Scheduler Enabled"
           checked={form.schedulerEnabled}
           onChange={(v) => set("schedulerEnabled", v)}
-          hint="Use alt speeds on schedule"
+          hint="Automatically apply alternative speed profile on the schedule below"
         />
+      </SectionCard>
 
-        <SectionTitle>Time Window</SectionTitle>
+      <SectionCard
+        title="Time Window"
+        description="Daily start and end times for the throttled speed window (24-hour clock)"
+      >
         <NumberInput
           label="Start Hour"
           value={form.schedulerStartHour}
@@ -76,6 +84,7 @@ export function SchedulerTab() {
           min={0}
           max={23}
           disabled={!form.schedulerEnabled}
+          hint="Window start hour (0 - 23)"
         />
         <NumberInput
           label="Start Minute"
@@ -92,6 +101,7 @@ export function SchedulerTab() {
           min={0}
           max={23}
           disabled={!form.schedulerEnabled}
+          hint="Window end hour (0 - 23)"
         />
         <NumberInput
           label="End Minute"
@@ -101,17 +111,29 @@ export function SchedulerTab() {
           max={59}
           disabled={!form.schedulerEnabled}
         />
+      </SectionCard>
 
-        <SectionTitle>Active Days</SectionTitle>
-        {days.map((day) => (
-          <Toggle
-            key={day.key}
-            label={day.label}
-            checked={form[day.key] as boolean}
-            onChange={(v) => set(day.key, v as never)}
-          />
-        ))}
-      </div>
+      <SectionCard
+        title="Active Schedule Days"
+        description="Select the days of the week when the scheduled speed profile is enforced"
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: "0.5rem",
+          }}
+        >
+          {days.map((day) => (
+            <Toggle
+              key={day.key}
+              label={day.label}
+              checked={form[day.key] as boolean}
+              onChange={(v) => set(day.key, v as never)}
+            />
+          ))}
+        </div>
+      </SectionCard>
     </div>
   );
 }
