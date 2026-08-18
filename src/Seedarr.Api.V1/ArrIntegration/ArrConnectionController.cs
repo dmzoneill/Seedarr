@@ -37,7 +37,13 @@ public class ArrConnectionController : Controller
     [HttpGet("{id}")]
     public ActionResult<ArrConnectionDefinition> Get(int id)
     {
-        return Ok(MaskApiKey(_connectionFactory.Get(id)));
+        var definition = _connectionFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(MaskApiKey(definition));
     }
 
     [HttpPost]

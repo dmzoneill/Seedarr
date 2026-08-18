@@ -54,8 +54,8 @@ function StatusDonut({ counts, total }: { counts: Record<string, number>; total:
 }
 
 function Dashboard() {
-  const { data: torrents, isLoading } = useTorrents();
-  const { data: stats, isLoading: statsLoading } = useSeedingStats();
+  const { data: torrents, isLoading, isError } = useTorrents();
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useSeedingStats();
   const { data: activeLimits } = useActiveSpeedLimits();
 
   const totalSize = (torrents ?? []).reduce((sum, t) => sum + t.totalSize, 0);
@@ -89,6 +89,8 @@ function Dashboard() {
 
       {statsLoading ? (
         <SkeletonGrid count={4} />
+      ) : statsError ? (
+        <p className="error">Failed to load data.</p>
       ) : (
         <div className="stats-grid">
           <div className="stat-card">
@@ -168,7 +170,10 @@ function Dashboard() {
             ))}
           </>
         )}
-        {!isLoading && recent.length === 0 && (
+        {!isLoading && isError && (
+          <p className="error">Failed to load data.</p>
+        )}
+        {!isLoading && !isError && recent.length === 0 && (
           <p className="loading">No torrents added yet.</p>
         )}
         {recent.map((t) => (
