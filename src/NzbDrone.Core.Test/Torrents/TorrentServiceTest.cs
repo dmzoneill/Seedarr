@@ -183,11 +183,11 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
-        public void Delete_should_not_look_up_torrent_when_deleteFiles_is_false()
+        public void Delete_should_look_up_torrent_to_publish_model_event()
         {
             _subject.Delete(1, false);
 
-            _repository.DidNotReceive().Get(Arg.Any<int>());
+            _repository.Received(1).Get(1);
         }
 
         [Test]
