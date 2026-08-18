@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.ArrIntegration;
@@ -28,18 +29,24 @@ public class ArrSyncService : IArrSyncService
     private readonly ITorrentService _torrentService;
     private readonly IDownloadHistoryService _downloadHistoryService;
     private readonly IArrMetadataEnricherService _metadataEnricherService;
+    private readonly ITrackerEntryService _trackerEntryService;
+    private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly Logger _logger;
 
     public ArrSyncService(
         IArrConnectionFactory connectionFactory,
         ITorrentService torrentService,
         IDownloadHistoryService downloadHistoryService = null,
-        IArrMetadataEnricherService metadataEnricherService = null)
+        IArrMetadataEnricherService metadataEnricherService = null,
+        ITrackerEntryService trackerEntryService = null,
+        IDownloadClientFactory downloadClientFactory = null)
     {
         _connectionFactory = connectionFactory;
         _torrentService = torrentService;
         _downloadHistoryService = downloadHistoryService;
         _metadataEnricherService = metadataEnricherService;
+        _trackerEntryService = trackerEntryService;
+        _downloadClientFactory = downloadClientFactory;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -124,6 +131,52 @@ public class ArrSyncService : IArrSyncService
                     existingHashes.Add(torrent.InfoHash);
                     result.Added++;
                     _logger.Info("Synced from {0}: {1}", provider.Name, record.Title);
+
+                    if (_downloadClientFactory != null && _trackerEntryService != null)
+                    {
+                        var activeClients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+                        foreach (var clientDef in activeClients)
+                        {
+                            try
+                            {
+                                var dcProvider = _downloadClientFactory.CreateClient(clientDef);
+                                if (dcProvider != null)
+                                {
+                                    var clientTrackers = dcProvider.GetTrackers(torrent.InfoHash);
+                                    if (clientTrackers != null && clientTrackers.Count > 0)
+                                    {
+                                        var tier = 1;
+                                        foreach (var trUrl in clientTrackers)
+                                        {
+                                            var clean = trUrl.Trim();
+                                            if (!string.IsNullOrEmpty(clean))
+                                            {
+                                                _trackerEntryService.Add(new TrackerEntry
+                                                {
+                                                    TorrentId = torrent.Id,
+                                                    Url = clean,
+                                                    Tier = tier++,
+                                                    Enabled = true
+                                                });
+                                            }
+                                        }
+
+                                        if (string.IsNullOrEmpty(torrent.TrackerUrl) && clientTrackers.Count > 0)
+                                        {
+                                            torrent.TrackerUrl = clientTrackers[0].Trim();
+                                            _torrentService.Update(torrent);
+                                        }
+
+                                        break;
+                                    }
+                                }
+                            }
+                            catch (Exception dcEx)
+                            {
+                                _logger.Debug(dcEx, "Failed to get trackers from download client {0} during Arr sync", clientDef.Name);
+                            }
+                        }
+                    }
 
                     if (_metadataEnricherService != null && record.MediaId.HasValue && _downloadHistoryService != null)
                     {

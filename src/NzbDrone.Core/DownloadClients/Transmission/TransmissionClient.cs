@@ -176,6 +176,53 @@ public class TransmissionClient : IDownloadClient, IDisposable
         return null;
     }
 
+    public List<string> GetTrackers(string infoHash)
+    {
+        var trackers = new List<string>();
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return trackers;
+        }
+
+        try
+        {
+            var arguments = new
+            {
+                ids = new[] { infoHash },
+                fields = new[] { "trackers" },
+            };
+
+            using var doc = SendRequest("torrent-get", arguments);
+            var torrents = doc.RootElement
+                .GetProperty("arguments")
+                .GetProperty("torrents");
+
+            foreach (var t in torrents.EnumerateArray())
+            {
+                if (t.TryGetProperty("trackers", out var trArray))
+                {
+                    foreach (var tr in trArray.EnumerateArray())
+                    {
+                        if (tr.TryGetProperty("announce", out var annProp))
+                        {
+                            var ann = annProp.GetString();
+                            if (!string.IsNullOrWhiteSpace(ann))
+                            {
+                                trackers.Add(ann.Trim());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to get trackers from Transmission for {0}", infoHash);
+        }
+
+        return trackers;
+    }
+
     public bool AddTrackers(string infoHash, IEnumerable<string> trackers)
     {
         if (string.IsNullOrWhiteSpace(infoHash) || trackers == null)

@@ -82,6 +82,42 @@ public class TorrentFileParser : ITorrentFileParser
 
             var pieceCount = piecesStr.Value.Length / 20;
 
+            string announceUrl = null;
+            if (torrent.ContainsKey("announce") && torrent["announce"] is BString mainAnnounceStr)
+            {
+                var s = mainAnnounceStr.ToString().Trim();
+                if (!string.IsNullOrEmpty(s))
+                {
+                    announceUrl = s;
+                }
+            }
+            else if (info.ContainsKey("announce") && info["announce"] is BString infoAnnounceStr)
+            {
+                var s = infoAnnounceStr.ToString().Trim();
+                if (!string.IsNullOrEmpty(s))
+                {
+                    announceUrl = s;
+                }
+            }
+
+            List<List<string>> announceListParsed = null;
+
+            if (torrent.ContainsKey("announce-list") && torrent["announce-list"] is BList announceList)
+            {
+                announceListParsed = new List<List<string>>();
+                ExtractAnnounceList(announceList, announceListParsed);
+            }
+            else if (info.ContainsKey("announce-list") && info["announce-list"] is BList infoAnnounceList)
+            {
+                announceListParsed = new List<List<string>>();
+                ExtractAnnounceList(infoAnnounceList, announceListParsed);
+            }
+
+            if (announceUrl == null && announceListParsed != null && announceListParsed.Count > 0 && announceListParsed[0].Count > 0)
+            {
+                announceUrl = announceListParsed[0][0];
+            }
+
             var result = new ParsedTorrent
             {
                 Name = nameStr.ToString(),
@@ -91,21 +127,14 @@ public class TorrentFileParser : ITorrentFileParser
                 Comment = torrent.ContainsKey("comment") ? (torrent["comment"] as BString)?.ToString() : null,
                 CreatedBy = torrent.ContainsKey("created by") ? (torrent["created by"] as BString)?.ToString() : null,
                 IsPrivate = info.ContainsKey("private") && (info["private"] as BNumber)?.Value == 1,
-                AnnounceUrl = torrent.ContainsKey("announce") ? (torrent["announce"] as BString)?.ToString() : null,
+                AnnounceUrl = announceUrl,
+                AnnounceList = announceListParsed,
                 Files = new List<ParsedTorrentFile>()
             };
 
             if (torrent.ContainsKey("creation date") && torrent["creation date"] is BNumber creationDateNum)
             {
                 result.CreationDate = DateTimeOffset.FromUnixTimeSeconds(creationDateNum.Value).UtcDateTime;
-            }
-
-            if (torrent.ContainsKey("announce-list") && torrent["announce-list"] is BList announceList)
-            {
-                result.AnnounceList = announceList
-                    .OfType<BList>()
-                    .Select(tier => tier.OfType<BString>().Select(url => url.ToString()).ToList())
-                    .ToList();
             }
 
             if (info.ContainsKey("files") && info["files"] is BList files)
@@ -161,6 +190,32 @@ public class TorrentFileParser : ITorrentFileParser
         catch (Exception ex)
         {
             throw new InvalidTorrentFileException($"Failed to parse torrent file: {ex.Message}", ex);
+        }
+    }
+
+    private static void ExtractAnnounceList(BList announceList, List<List<string>> targetList)
+    {
+        foreach (var item in announceList)
+        {
+            if (item is BList tierList)
+            {
+                var tierUrls = tierList.OfType<BString>()
+                    .Select(u => u.ToString().Trim())
+                    .Where(u => !string.IsNullOrEmpty(u))
+                    .ToList();
+                if (tierUrls.Count > 0)
+                {
+                    targetList.Add(tierUrls);
+                }
+            }
+            else if (item is BString singleUrlStr)
+            {
+                var u = singleUrlStr.ToString().Trim();
+                if (!string.IsNullOrEmpty(u))
+                {
+                    targetList.Add(new List<string> { u });
+                }
+            }
         }
     }
 }

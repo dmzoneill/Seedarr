@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Http;
 using NzbDrone.Core.Torrents;
 using Polly;
@@ -38,18 +39,48 @@ public class ArrWebhookService : IArrWebhookService
     private readonly IArrConnectionFactory _connectionFactory;
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileParser _torrentFileParser;
+    private readonly ITrackerEntryService _trackerEntryService;
+    private readonly ITorrentFileService _torrentFileService;
+    private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly Logger _logger;
 
     public ArrWebhookService(
         IArrConnectionFactory connectionFactory,
         ITorrentService torrentService,
         ITorrentFileParser torrentFileParser,
-        HttpClient client = null,
-        ResiliencePipeline policy = null)
+        ITrackerEntryService trackerEntryService = null,
+        ITorrentFileService torrentFileService = null,
+        IDownloadClientFactory downloadClientFactory = null)
+        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, null, null)
+    {
+    }
+
+    public ArrWebhookService(
+        IArrConnectionFactory connectionFactory,
+        ITorrentService torrentService,
+        ITorrentFileParser torrentFileParser,
+        HttpClient client,
+        ResiliencePipeline policy)
+        : this(connectionFactory, torrentService, torrentFileParser, null, null, null, client, policy)
+    {
+    }
+
+    public ArrWebhookService(
+        IArrConnectionFactory connectionFactory,
+        ITorrentService torrentService,
+        ITorrentFileParser torrentFileParser,
+        ITrackerEntryService trackerEntryService,
+        ITorrentFileService torrentFileService,
+        IDownloadClientFactory downloadClientFactory,
+        HttpClient client,
+        ResiliencePipeline policy)
     {
         _connectionFactory = connectionFactory;
         _torrentService = torrentService;
         _torrentFileParser = torrentFileParser;
+        _trackerEntryService = trackerEntryService;
+        _torrentFileService = torrentFileService;
+        _downloadClientFactory = downloadClientFactory;
         _logger = LogManager.GetCurrentClassLogger();
         _client = client ?? SharedClient;
         _policy = policy ?? SharedPolicy;
@@ -140,10 +171,78 @@ public class ArrWebhookService : IArrWebhookService
             torrent.PieceLength = parsed.PieceLength;
             torrent.Comment = parsed.Comment;
             torrent.IsPrivate = parsed.IsPrivate;
+            if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
+            {
+                torrent.TrackerUrl = parsed.AnnounceUrl;
+            }
 
             _torrentService.Update(torrent);
+
+            if (_torrentFileService != null && parsed.Files != null && parsed.Files.Count > 0)
+            {
+                var existingFiles = _torrentFileService.GetByTorrentId(torrentId);
+                if (existingFiles.Count == 0)
+                {
+                    foreach (var f in parsed.Files)
+                    {
+                        _torrentFileService.Add(new TorrentFile
+                        {
+                            TorrentId = torrentId,
+                            Path = f.Path,
+                            Size = f.Size
+                        });
+                    }
+                }
+            }
+
+            if (_trackerEntryService != null)
+            {
+                var existingTrackers = _trackerEntryService.GetByTorrentId(torrentId)
+                    .Select(t => t.Url.Trim().ToLowerInvariant())
+                    .ToHashSet();
+
+                if (parsed.AnnounceList != null && parsed.AnnounceList.Count > 0)
+                {
+                    var tier = 1;
+                    foreach (var tierUrls in parsed.AnnounceList)
+                    {
+                        foreach (var url in tierUrls)
+                        {
+                            var clean = url.Trim();
+                            if (!string.IsNullOrEmpty(clean) && !existingTrackers.Contains(clean.ToLowerInvariant()))
+                            {
+                                _trackerEntryService.Add(new TrackerEntry
+                                {
+                                    TorrentId = torrentId,
+                                    Url = clean,
+                                    Tier = tier,
+                                    Enabled = true
+                                });
+                                existingTrackers.Add(clean.ToLowerInvariant());
+                            }
+                        }
+
+                        tier++;
+                    }
+                }
+                else if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
+                {
+                    var clean = parsed.AnnounceUrl.Trim();
+                    if (!existingTrackers.Contains(clean.ToLowerInvariant()))
+                    {
+                        _trackerEntryService.Add(new TrackerEntry
+                        {
+                            TorrentId = torrentId,
+                            Url = clean,
+                            Tier = 1,
+                            Enabled = true
+                        });
+                    }
+                }
+            }
+
             _logger.Info(
-                "Enrich: upgraded '{0}' ({1}) with full metadata from {2}",
+                "Enrich: upgraded '{0}' ({1}) with full metadata and trackers from {2}",
                 torrent.Name,
                 torrent.InfoHash,
                 instanceName);
@@ -155,6 +254,66 @@ public class ArrWebhookService : IArrWebhookService
         catch (Exception ex)
         {
             _logger.Error(ex, "Enrich: failed to upgrade torrent {0}", infoHash);
+        }
+
+        // Fallback: If torrent has no trackers attached, attempt to query configured download clients
+        try
+        {
+            if (_trackerEntryService != null && _downloadClientFactory != null)
+            {
+                var currentTrackers = _trackerEntryService.GetByTorrentId(torrentId);
+                if (currentTrackers.Count == 0)
+                {
+                    var activeClients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+                    foreach (var clientDef in activeClients)
+                    {
+                        try
+                        {
+                            var provider = _downloadClientFactory.CreateClient(clientDef);
+                            if (provider != null)
+                            {
+                                var clientTrackers = provider.GetTrackers(infoHash);
+                                if (clientTrackers != null && clientTrackers.Count > 0)
+                                {
+                                    var tier = 1;
+                                    var torrent = _torrentService.Get(torrentId);
+                                    foreach (var trUrl in clientTrackers)
+                                    {
+                                        var clean = trUrl.Trim();
+                                        if (!string.IsNullOrEmpty(clean))
+                                        {
+                                            _trackerEntryService.Add(new TrackerEntry
+                                            {
+                                                TorrentId = torrentId,
+                                                Url = clean,
+                                                Tier = tier++,
+                                                Enabled = true
+                                            });
+                                        }
+                                    }
+
+                                    if (torrent != null && string.IsNullOrEmpty(torrent.TrackerUrl) && clientTrackers.Count > 0)
+                                    {
+                                        torrent.TrackerUrl = clientTrackers[0].Trim();
+                                        _torrentService.Update(torrent);
+                                    }
+
+                                    _logger.Info("Enrich: recovered {0} tracker(s) from download client {1} for {2}", clientTrackers.Count, clientDef.Name, infoHash);
+                                    break;
+                                }
+                            }
+                        }
+                        catch (Exception clientEx)
+                        {
+                            _logger.Debug(clientEx, "Could not get trackers from download client {0} for {1}", clientDef.Name, infoHash);
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Fallback download client tracker enrichment failed for {0}", infoHash);
         }
     }
 
