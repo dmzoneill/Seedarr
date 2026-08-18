@@ -157,6 +157,13 @@ public class TrackerBoostController : Controller
         var results = await _trackerBoostService.BoostAllTorrentsAsync(onlyVerified);
         return Ok(results);
     }
+
+    [HttpPost("recover-trackers")]
+    public async Task<IActionResult> RecoverMissingTrackers()
+    {
+        var recovered = await _trackerBoostService.RecoverMissingTrackersAsync();
+        return Ok(new { success = true, recoveredCount = recovered });
+    }
 }
 
 public class AddTrackerResource
