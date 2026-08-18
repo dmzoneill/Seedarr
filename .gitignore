@@ -17,11 +17,13 @@ dist/
 .cache/
 wwwroot/
 
-# IDE
+# IDE & Local Tools
 .idea/
 .vscode/
 *.swp
 *.swo
+.claude/
+.gemini/
 
 # OS
 .DS_Store
