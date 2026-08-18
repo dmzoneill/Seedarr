@@ -1298,8 +1298,8 @@ public class TrackerBoostService : ITrackerBoostService
             RegisteredTorrentsCount = trackerTorrentsMap.TryGetValue(tr.Id, out var l) ? l.Count : 0,
             RegisteredTorrentNames = trackerTorrentsMap.TryGetValue(tr.Id, out var l2) ? l2 : new List<string>()
         }).OrderByDescending(tr => tr.RegisteredTorrentsCount)
-          .ThenByDescending(tr => tr.Status == TrackerHealthStatus.Alive)
-          .ToList();
+            .ThenByDescending(tr => tr.Status == TrackerHealthStatus.Alive)
+            .ToList();
 
         return new TrackerCrossMatrixResult
         {
