@@ -1688,4 +1688,25 @@ public class SeedingEngineTest
         // HasForceStartTorrents() calls GetAll - verify the wait loop was entered
         _torrentService.Received().GetAll();
     }
+
+    [Test]
+    public void Tick_should_increment_seeding_time_for_active_torrents()
+    {
+        _configService.UiRefreshRateSec.Returns(5);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            SeedingTime = 100,
+            InfoHash = "abc123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 100_000 });
+
+        CallTick();
+
+        // TickInterval is 5 seconds
+        Assert.That(torrent.SeedingTime, Is.EqualTo(105));
+    }
 }

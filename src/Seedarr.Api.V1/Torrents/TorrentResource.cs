@@ -44,5 +44,6 @@ public class TorrentResource : RestResource
     public int Eta { get; set; }
     public int SortOrder { get; set; }
     public bool ForceCompleted { get; set; }
+    public long SeedingTime { get; set; }
     public string MagnetLink { get; set; }
 }

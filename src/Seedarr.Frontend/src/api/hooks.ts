@@ -309,6 +309,14 @@ export function useArrSync() {
   });
 }
 
+export function useDownloadClientSync() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.post("/downloadclientsync/sync"),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["torrents"] }),
+  });
+}
+
 function useConfigQuery<T>(section: string) {
   return useQuery<T>({
     queryKey: ["config", section],
