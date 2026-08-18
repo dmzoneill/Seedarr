@@ -5,9 +5,9 @@ interface SkeletonLineProps {
 }
 
 export function SkeletonLine({
-  width = '100%',
-  height = '1rem',
-  className = '',
+  width = "100%",
+  height = "1rem",
+  className = "",
 }: SkeletonLineProps) {
   return (
     <div
@@ -21,7 +21,7 @@ interface SkeletonCardProps {
   className?: string;
 }
 
-export function SkeletonCard({ className = '' }: SkeletonCardProps) {
+export function SkeletonCard({ className = "" }: SkeletonCardProps) {
   return (
     <div className={`skeleton skeleton-card stat-card ${className}`}>
       <SkeletonLine width="60%" height="1.8rem" />
@@ -37,13 +37,13 @@ interface SkeletonTableRowProps {
 
 export function SkeletonTableRow({
   columns = 6,
-  className = '',
+  className = "",
 }: SkeletonTableRowProps) {
   return (
     <tr className={`torrent-table-row ${className}`}>
       {Array.from({ length: columns }, (_, i) => (
         <td key={i}>
-          <SkeletonLine width={i === 0 ? '80%' : '60%'} height="0.85rem" />
+          <SkeletonLine width={i === 0 ? "80%" : "60%"} height="0.85rem" />
         </td>
       ))}
     </tr>
@@ -55,7 +55,7 @@ interface SkeletonGridProps {
   className?: string;
 }
 
-export function SkeletonGrid({ count = 4, className = '' }: SkeletonGridProps) {
+export function SkeletonGrid({ count = 4, className = "" }: SkeletonGridProps) {
   return (
     <div className={`stats-grid ${className}`}>
       {Array.from({ length: count }, (_, i) => (

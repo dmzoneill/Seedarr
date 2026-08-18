@@ -1,6 +1,6 @@
-import { useRef, useEffect } from 'react';
-import { useSpeedHistory, useSeedingStats } from '../api/hooks';
-import { formatSpeed } from '../utils/formatters';
+import { useRef, useEffect } from "react";
+import { useSpeedHistory, useSeedingStats } from "../api/hooks";
+import { formatSpeed } from "../utils/formatters";
 
 interface SpeedDataPoint {
   uploadSpeed: number;
@@ -25,7 +25,11 @@ function getNiceMax(value: number): number {
   return nice * magnitude;
 }
 
-function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphProps) {
+function SpeedGraph({
+  width = 700,
+  height = 250,
+  maxPoints = 60,
+}: SpeedGraphProps) {
   const historyRef = useRef<SpeedDataPoint[]>([]);
   const seededRef = useRef(false);
   const prevRef = useRef<{
@@ -41,10 +45,12 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
     if (!serverHistory || seededRef.current) return;
     seededRef.current = true;
 
-    const points: SpeedDataPoint[] = serverHistory.slice(-maxPoints).map((s) => ({
-      uploadSpeed: s.uploadSpeed,
-      downloadSpeed: s.downloadSpeed,
-    }));
+    const points: SpeedDataPoint[] = serverHistory
+      .slice(-maxPoints)
+      .map((s) => ({
+        uploadSpeed: s.uploadSpeed,
+        downloadSpeed: s.downloadSpeed,
+      }));
     historyRef.current = points;
 
     if (serverHistory.length > 0) {
@@ -68,11 +74,11 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
       if (timeDelta >= 0.5) {
         const uploadSpeed = Math.max(
           0,
-          (stats.totalUploaded - prev.totalUploaded) / timeDelta
+          (stats.totalUploaded - prev.totalUploaded) / timeDelta,
         );
         const downloadSpeed = Math.max(
           0,
-          (stats.totalDownloaded - prev.totalDownloaded) / timeDelta
+          (stats.totalDownloaded - prev.totalDownloaded) / timeDelta,
         );
 
         const next = [...historyRef.current, { uploadSpeed, downloadSpeed }];
@@ -110,24 +116,21 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
 
   const toPoints = (
     data: SpeedDataPoint[],
-    key: 'uploadSpeed' | 'downloadSpeed'
+    key: "uploadSpeed" | "downloadSpeed",
   ): string => {
-    if (data.length === 0) return '';
+    if (data.length === 0) return "";
     return data
       .map((point, i) => {
-        const x =
-          padding.left + (i / Math.max(1, maxPoints - 1)) * chartWidth;
+        const x = padding.left + (i / Math.max(1, maxPoints - 1)) * chartWidth;
         const y =
-          padding.top +
-          chartHeight -
-          (point[key] / niceMax) * chartHeight;
+          padding.top + chartHeight - (point[key] / niceMax) * chartHeight;
         return `${x},${y}`;
       })
-      .join(' ');
+      .join(" ");
   };
 
-  const uploadPoints = toPoints(history, 'uploadSpeed');
-  const downloadPoints = toPoints(history, 'downloadSpeed');
+  const uploadPoints = toPoints(history, "uploadSpeed");
+  const downloadPoints = toPoints(history, "downloadSpeed");
 
   const currentUpload =
     history.length > 0 ? history[history.length - 1].uploadSpeed : 0;
@@ -141,14 +144,14 @@ function SpeedGraph({ width = 700, height = 250, maxPoints = 60 }: SpeedGraphPro
         <span className="speed-graph-legend-item">
           <span
             className="speed-graph-indicator"
-            style={{ backgroundColor: '#c8a84e' }}
+            style={{ backgroundColor: "#c8a84e" }}
           />
           Upload: {formatSpeed(currentUpload)}
         </span>
         <span className="speed-graph-legend-item">
           <span
             className="speed-graph-indicator"
-            style={{ backgroundColor: '#b5443a' }}
+            style={{ backgroundColor: "#b5443a" }}
           />
           Download: {formatSpeed(currentDownload)}
         </span>

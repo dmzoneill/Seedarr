@@ -1,15 +1,15 @@
-import { useEffect, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { useSignalR } from '../api/signalr';
-import { useToast } from '../context/ToastContext';
+import { useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useSignalR } from "../api/signalr";
+import { useToast } from "../context/ToastContext";
 
 const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
-  TorrentAdded: [['torrents']],
-  TorrentUpdated: [['torrents']],
-  TorrentDeleted: [['torrents']],
-  SeedingStatsUpdated: [['seeding', 'stats']],
-  HealthCheckCompleted: [['health']],
-  CommandCompleted: [['system', 'status']],
+  TorrentAdded: [["torrents"]],
+  TorrentUpdated: [["torrents"]],
+  TorrentDeleted: [["torrents"]],
+  SeedingStatsUpdated: [["seeding", "stats"]],
+  HealthCheckCompleted: [["health"]],
+  CommandCompleted: [["system", "status"]],
 };
 
 export default function SignalRProvider() {
@@ -29,17 +29,17 @@ export default function SignalRProvider() {
         }
 
         // Fire toast notifications for key events
-        if (event === 'TorrentAdded') {
+        if (event === "TorrentAdded") {
           const name =
-            data && typeof data === 'object' && 'name' in data
+            data && typeof data === "object" && "name" in data
               ? String((data as Record<string, unknown>).name)
               : undefined;
           showToastRef.current(
-            name ? `Torrent added: ${name}` : 'Torrent added',
-            'success'
+            name ? `Torrent added: ${name}` : "Torrent added",
+            "success",
           );
-        } else if (event === 'TorrentDeleted') {
-          showToastRef.current('Torrent removed', 'info');
+        } else if (event === "TorrentDeleted") {
+          showToastRef.current("Torrent removed", "info");
         }
       };
       handlers.push([event, handler]);
@@ -54,34 +54,34 @@ export default function SignalRProvider() {
   }, [connection, queryClient]);
 
   const dotColor =
-    status === 'connected'
-      ? 'var(--signalr-connected, #22c55e)'
-      : status === 'reconnecting'
-        ? 'var(--signalr-reconnecting, #f59e0b)'
-        : 'var(--signalr-disconnected, #ef4444)';
+    status === "connected"
+      ? "var(--signalr-connected, #22c55e)"
+      : status === "reconnecting"
+        ? "var(--signalr-reconnecting, #f59e0b)"
+        : "var(--signalr-disconnected, #ef4444)";
 
   const title =
-    status === 'connected'
-      ? 'Real-time: connected'
-      : status === 'reconnecting'
-        ? 'Real-time: reconnecting...'
-        : 'Real-time: disconnected';
+    status === "connected"
+      ? "Real-time: connected"
+      : status === "reconnecting"
+        ? "Real-time: reconnecting..."
+        : "Real-time: disconnected";
 
   return (
     <span
       title={title}
       aria-label={title}
       style={{
-        display: 'inline-block',
+        display: "inline-block",
         width: 8,
         height: 8,
-        borderRadius: '50%',
+        borderRadius: "50%",
         backgroundColor: dotColor,
-        position: 'fixed',
+        position: "fixed",
         bottom: 12,
         right: 12,
         zIndex: 9999,
-        transition: 'background-color 0.3s ease',
+        transition: "background-color 0.3s ease",
       }}
     />
   );

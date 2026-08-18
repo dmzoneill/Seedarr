@@ -1,18 +1,33 @@
-import { useMemo } from 'react';
-import { useTorrents, useSeedingStats, useActiveSpeedLimits } from '../api/hooks';
-import { formatBytes, formatSpeed, formatRatio, formatDate } from '../utils/formatters';
-import HealthAlerts from '../components/HealthAlerts';
-import SpeedGraph from '../components/SpeedGraph';
-import { SkeletonGrid, SkeletonLine } from '../components/Skeleton';
+import { useMemo } from "react";
+import {
+  useTorrents,
+  useSeedingStats,
+  useActiveSpeedLimits,
+} from "../api/hooks";
+import {
+  formatBytes,
+  formatSpeed,
+  formatRatio,
+  formatDate,
+} from "../utils/formatters";
+import HealthAlerts from "../components/HealthAlerts";
+import SpeedGraph from "../components/SpeedGraph";
+import { SkeletonGrid, SkeletonLine } from "../components/Skeleton";
 
 const STATUS_COLORS: Record<string, string> = {
-  Seeding: 'var(--color-success, #27ae60)',
-  Stopped: 'var(--color-danger, #e74c3c)',
-  Queued: 'var(--color-warning, #f39c12)',
-  Error: '#c0392b',
+  Seeding: "var(--color-success, #27ae60)",
+  Stopped: "var(--color-danger, #e74c3c)",
+  Queued: "var(--color-warning, #f39c12)",
+  Error: "#c0392b",
 };
 
-function StatusDonut({ counts, total }: { counts: Record<string, number>; total: number }) {
+function StatusDonut({
+  counts,
+  total,
+}: {
+  counts: Record<string, number>;
+  total: number;
+}) {
   if (total === 0) return null;
   const entries = Object.entries(counts).filter(([, v]) => v > 0);
   let offset = 0;
@@ -20,7 +35,10 @@ function StatusDonut({ counts, total }: { counts: Record<string, number>; total:
   const circumference = 2 * Math.PI * radius;
 
   return (
-    <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+    <div
+      className="card"
+      style={{ display: "flex", alignItems: "center", gap: 24 }}
+    >
       <svg width={100} height={100} viewBox="0 0 100 100">
         {entries.map(([status, count]) => {
           const pct = count / total;
@@ -30,9 +48,11 @@ function StatusDonut({ counts, total }: { counts: Record<string, number>; total:
           return (
             <circle
               key={status}
-              cx={50} cy={50} r={radius}
+              cx={50}
+              cy={50}
+              r={radius}
               fill="none"
-              stroke={STATUS_COLORS[status] || '#666'}
+              stroke={STATUS_COLORS[status] || "#666"}
               strokeWidth={16}
               strokeDasharray={`${dashLength} ${circumference - dashLength}`}
               strokeDashoffset={dashOffset}
@@ -40,13 +60,39 @@ function StatusDonut({ counts, total }: { counts: Record<string, number>; total:
             />
           );
         })}
-        <text x={50} y={54} textAnchor="middle" fontSize={16} fontWeight={700} fill="var(--color-text, #ccc)">{total}</text>
+        <text
+          x={50}
+          y={54}
+          textAnchor="middle"
+          fontSize={16}
+          fontWeight={700}
+          fill="var(--color-text, #ccc)"
+        >
+          {total}
+        </text>
       </svg>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {entries.map(([status, count]) => (
-          <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: STATUS_COLORS[status] || '#666' }} />
-            <span>{status}: {count}</span>
+          <div
+            key={status}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              fontSize: 13,
+            }}
+          >
+            <div
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                backgroundColor: STATUS_COLORS[status] || "#666",
+              }}
+            />
+            <span>
+              {status}: {count}
+            </span>
           </div>
         ))}
       </div>
@@ -56,26 +102,37 @@ function StatusDonut({ counts, total }: { counts: Record<string, number>; total:
 
 function Dashboard() {
   const { data: torrents, isLoading, isError } = useTorrents();
-  const { data: stats, isLoading: statsLoading, isError: statsError } = useSeedingStats();
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    isError: statsError,
+  } = useSeedingStats();
   const { data: activeLimits } = useActiveSpeedLimits();
 
   const totalSize = (torrents ?? []).reduce((sum, t) => sum + t.totalSize, 0);
   const recent = [...(torrents ?? [])]
-    .sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime())
+    .sort(
+      (a, b) =>
+        new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime(),
+    )
     .slice(0, 5);
 
   const statusCounts: Record<string, number> = {};
   (torrents ?? []).forEach((t) => {
-    const s = t.status || 'Unknown';
+    const s = t.status || "Unknown";
     statusCounts[s] = (statusCounts[s] || 0) + 1;
   });
 
   const topTrackers = useMemo(() => {
     const trackerCounts: Record<string, number> = {};
     (torrents ?? []).forEach((t) => {
-      let domain = 'No tracker';
+      let domain = "No tracker";
       if (t.trackerUrl) {
-        try { domain = new URL(t.trackerUrl).hostname; } catch { domain = t.trackerUrl; }
+        try {
+          domain = new URL(t.trackerUrl).hostname;
+        } catch {
+          domain = t.trackerUrl;
+        }
       }
       trackerCounts[domain] = (trackerCounts[domain] || 0) + 1;
     });
@@ -101,11 +158,15 @@ function Dashboard() {
             <div className="stat-label">Active Torrents</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{formatBytes(stats?.totalUploaded ?? 0)}</div>
+            <div className="stat-value">
+              {formatBytes(stats?.totalUploaded ?? 0)}
+            </div>
             <div className="stat-label">Total Uploaded</div>
           </div>
           <div className="stat-card">
-            <div className="stat-value">{formatRatio(stats?.averageRatio ?? 0)}</div>
+            <div className="stat-value">
+              {formatRatio(stats?.averageRatio ?? 0)}
+            </div>
             <div className="stat-label">Average Ratio</div>
           </div>
           <div className="stat-card">
@@ -115,7 +176,14 @@ function Dashboard() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginBottom: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: 16,
+          marginBottom: 16,
+        }}
+      >
         <StatusDonut counts={statusCounts} total={torrents?.length ?? 0} />
 
         {activeLimits && (
@@ -125,7 +193,9 @@ function Dashboard() {
               <span className="status-label">Active</span>
               <span className="status-value">
                 {activeLimits.isScheduleActive ? (
-                  <span className="badge badge-seeding">{activeLimits.activeScheduleName}</span>
+                  <span className="badge badge-seeding">
+                    {activeLimits.activeScheduleName}
+                  </span>
                 ) : (
                   <span className="badge badge-stopped">None</span>
                 )}
@@ -134,13 +204,17 @@ function Dashboard() {
             <div className="status-row">
               <span className="status-label">Upload Limit</span>
               <span className="status-value">
-                {activeLimits.maxUploadSpeed > 0 ? formatSpeed(activeLimits.maxUploadSpeed) : 'Global'}
+                {activeLimits.maxUploadSpeed > 0
+                  ? formatSpeed(activeLimits.maxUploadSpeed)
+                  : "Global"}
               </span>
             </div>
             <div className="status-row">
               <span className="status-label">Download Limit</span>
               <span className="status-value">
-                {activeLimits.maxDownloadSpeed > 0 ? formatSpeed(activeLimits.maxDownloadSpeed) : 'Global'}
+                {activeLimits.maxDownloadSpeed > 0
+                  ? formatSpeed(activeLimits.maxDownloadSpeed)
+                  : "Global"}
               </span>
             </div>
           </div>
@@ -151,7 +225,9 @@ function Dashboard() {
             <h3 style={{ marginBottom: 8 }}>Top Trackers</h3>
             {topTrackers.map(([domain, count]) => (
               <div key={domain} className="status-row">
-                <span className="status-label" style={{ fontSize: 13 }}>{domain}</span>
+                <span className="status-label" style={{ fontSize: 13 }}>
+                  {domain}
+                </span>
                 <span className="status-value">{count}</span>
               </div>
             ))}
@@ -173,9 +249,7 @@ function Dashboard() {
             ))}
           </>
         )}
-        {!isLoading && isError && (
-          <p className="error">Failed to load data.</p>
-        )}
+        {!isLoading && isError && <p className="error">Failed to load data.</p>}
         {!isLoading && !isError && recent.length === 0 && (
           <p className="loading">No torrents added yet.</p>
         )}
@@ -183,8 +257,11 @@ function Dashboard() {
           <div key={t.id} className="status-row">
             <span className="status-label">{t.name}</span>
             <span className="status-value">
-              <span className={`badge badge-${(t.status ?? 'unknown').toLowerCase()}`}>{t.status}</span>
-              {' '}
+              <span
+                className={`badge badge-${(t.status ?? "unknown").toLowerCase()}`}
+              >
+                {t.status}
+              </span>{" "}
               {formatDate(t.dateAdded)}
             </span>
           </div>

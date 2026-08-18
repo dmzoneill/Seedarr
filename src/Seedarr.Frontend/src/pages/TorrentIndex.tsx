@@ -1,29 +1,42 @@
-import { useState } from 'react';
-import TorrentTable from '../components/TorrentTable';
-import TorrentGrid from '../components/TorrentGrid';
-import TorrentDetailPanel from '../components/TorrentDetailPanel';
-import AddTorrentModal from '../components/AddTorrentModal';
-import { TorrentToolbar } from './torrentindex/TorrentToolbar';
-import { TorrentFilterPanel } from './torrentindex/TorrentFilterPanel';
-import { useTorrentIndexState } from './torrentindex/useTorrentIndexState';
+import { useState } from "react";
+import TorrentTable from "../components/TorrentTable";
+import TorrentGrid from "../components/TorrentGrid";
+import TorrentDetailPanel from "../components/TorrentDetailPanel";
+import AddTorrentModal from "../components/AddTorrentModal";
+import { TorrentToolbar } from "./torrentindex/TorrentToolbar";
+import { TorrentFilterPanel } from "./torrentindex/TorrentFilterPanel";
+import { useTorrentIndexState } from "./torrentindex/useTorrentIndexState";
 
 function TorrentIndex() {
   const {
     torrents,
-    startSeeding, stopSeeding, deleteTorrent,
-    startAll, stopAll,
+    startSeeding,
+    stopSeeding,
+    deleteTorrent,
+    startAll,
+    stopAll,
     seedingConfig,
-    filter, setFilter,
-    showAddModal, setShowAddModal,
-    selectedIds, setSelectedIds,
+    filter,
+    setFilter,
+    showAddModal,
+    setShowAddModal,
+    selectedIds,
+    setSelectedIds,
     viewMode,
-    selectedState, setSelectedState,
-    selectedTracker, setSelectedTracker,
-    selectedTorrentId, setSelectedTorrentId,
+    selectedState,
+    setSelectedState,
+    selectedTracker,
+    setSelectedTracker,
+    selectedTorrentId,
+    setSelectedTorrentId,
     adjustSpeed,
-    stateCounts, trackerGroups,
-    totalUploadSpeed, totalDownloadSpeed,
-    handleViewMode, handleToggleSelect, handleSelectAll,
+    stateCounts,
+    trackerGroups,
+    totalUploadSpeed,
+    totalDownloadSpeed,
+    handleViewMode,
+    handleToggleSelect,
+    handleSelectAll,
   } = useTorrentIndexState();
 
   const [bulkPending, setBulkPending] = useState(false);
@@ -31,7 +44,9 @@ function TorrentIndex() {
   async function handleBulkStart() {
     setBulkPending(true);
     try {
-      await Promise.all([...selectedIds].map((id) => startSeeding.mutateAsync(id)));
+      await Promise.all(
+        [...selectedIds].map((id) => startSeeding.mutateAsync(id)),
+      );
     } finally {
       setBulkPending(false);
       setSelectedIds(new Set());
@@ -41,7 +56,9 @@ function TorrentIndex() {
   async function handleBulkStop() {
     setBulkPending(true);
     try {
-      await Promise.all([...selectedIds].map((id) => stopSeeding.mutateAsync(id)));
+      await Promise.all(
+        [...selectedIds].map((id) => stopSeeding.mutateAsync(id)),
+      );
     } finally {
       setBulkPending(false);
       setSelectedIds(new Set());
@@ -52,7 +69,9 @@ function TorrentIndex() {
     if (!confirm(`Delete ${selectedIds.size} torrent(s)?`)) return;
     setBulkPending(true);
     try {
-      await Promise.all([...selectedIds].map((id) => deleteTorrent.mutateAsync({ id })));
+      await Promise.all(
+        [...selectedIds].map((id) => deleteTorrent.mutateAsync({ id })),
+      );
     } finally {
       setBulkPending(false);
       setSelectedIds(new Set());
@@ -96,7 +115,7 @@ function TorrentIndex() {
         <div className="filter-content">
           <div className="torrent-split-pane">
             <div className="torrent-split-top">
-              {viewMode === 'table' ? (
+              {viewMode === "table" ? (
                 <TorrentTable
                   filter={filter}
                   stateFilter={selectedState}
@@ -118,12 +137,17 @@ function TorrentIndex() {
               )}
             </div>
             {selectedTorrentId != null && (
-              <TorrentDetailPanel torrentId={selectedTorrentId} onClose={() => setSelectedTorrentId(null)} />
+              <TorrentDetailPanel
+                torrentId={selectedTorrentId}
+                onClose={() => setSelectedTorrentId(null)}
+              />
             )}
           </div>
         </div>
       </div>
-      {showAddModal && <AddTorrentModal onClose={() => setShowAddModal(false)} />}
+      {showAddModal && (
+        <AddTorrentModal onClose={() => setShowAddModal(false)} />
+      )}
     </div>
   );
 }

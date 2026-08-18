@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
-import { Torrent } from '../../api/types';
-import { useUpdateTorrent } from '../../api/hooks';
+import { useState, useEffect } from "react";
+import { Torrent } from "../../api/types";
+import { useUpdateTorrent } from "../../api/hooks";
 
 const priorityOptions = [
-  { value: '0', label: 'Low' },
-  { value: '1', label: 'Normal' },
-  { value: '2', label: 'High' },
+  { value: "0", label: "Low" },
+  { value: "1", label: "Normal" },
+  { value: "2", label: "High" },
 ];
 
 export function OptionsTab({ torrent }: { torrent: Torrent }) {
@@ -15,7 +15,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
   const [downloadLimit, setDownloadLimit] = useState(torrent.downloadLimit);
   const [superSeeding, setSuperSeeding] = useState(torrent.superSeeding);
   const [forceStart, setForceStart] = useState(torrent.forceStart);
-  const [label, setLabel] = useState(torrent.label ?? '');
+  const [label, setLabel] = useState(torrent.label ?? "");
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
     setDownloadLimit(torrent.downloadLimit);
     setSuperSeeding(torrent.superSeeding);
     setForceStart(torrent.forceStart);
-    setLabel(torrent.label ?? '');
+    setLabel(torrent.label ?? "");
   }, [torrent, dirty]);
 
   const handleSave = () => {
@@ -39,11 +39,16 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
         forceStart,
         label: label || null,
       },
-      { onSuccess: () => setDirty(false) }
+      { onSuccess: () => setDirty(false) },
     );
   };
 
-  const mark = <T,>(setter: (v: T) => void) => (v: T) => { setter(v); setDirty(true); };
+  const mark =
+    <T,>(setter: (v: T) => void) =>
+    (v: T) => {
+      setter(v);
+      setDirty(true);
+    };
 
   return (
     <div className="card">
@@ -59,7 +64,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           onChange={(e) => mark(setPriority)(e.target.value)}
         >
           {priorityOptions.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
           ))}
         </select>
       </div>
@@ -72,7 +79,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           type="number"
           className="form-input"
           value={uploadLimit}
-          onChange={(e) => mark(setUploadLimit)(parseInt(e.target.value, 10) || 0)}
+          onChange={(e) =>
+            mark(setUploadLimit)(parseInt(e.target.value, 10) || 0)
+          }
           min={0}
         />
       </div>
@@ -85,7 +94,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           type="number"
           className="form-input"
           value={downloadLimit}
-          onChange={(e) => mark(setDownloadLimit)(parseInt(e.target.value, 10) || 0)}
+          onChange={(e) =>
+            mark(setDownloadLimit)(parseInt(e.target.value, 10) || 0)
+          }
           min={0}
         />
       </div>
@@ -95,7 +106,11 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           <span className="form-hint">Enable super seeding mode</span>
         </label>
         <label className="toggle-switch">
-          <input type="checkbox" checked={superSeeding} onChange={(e) => mark(setSuperSeeding)(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={superSeeding}
+            onChange={(e) => mark(setSuperSeeding)(e.target.checked)}
+          />
           <span className="toggle-slider" />
         </label>
       </div>
@@ -105,7 +120,11 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
           <span className="form-hint">Bypass queue and start immediately</span>
         </label>
         <label className="toggle-switch">
-          <input type="checkbox" checked={forceStart} onChange={(e) => mark(setForceStart)(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={forceStart}
+            onChange={(e) => mark(setForceStart)(e.target.checked)}
+          />
           <span className="toggle-slider" />
         </label>
       </div>
@@ -123,16 +142,29 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
         />
       </div>
       <div className="form-actions">
-        <button className="btn btn-success" onClick={handleSave} disabled={!dirty || updateTorrent.isPending}>
-          {updateTorrent.isPending ? 'Saving...' : 'Save'}
+        <button
+          className="btn btn-success"
+          onClick={handleSave}
+          disabled={!dirty || updateTorrent.isPending}
+        >
+          {updateTorrent.isPending ? "Saving..." : "Save"}
         </button>
         {updateTorrent.isError && (
-          <span className="error" style={{ marginLeft: '0.75rem', fontSize: '0.85rem' }}>
-            Failed to save: {updateTorrent.error?.message ?? 'Unknown error'}
+          <span
+            className="error"
+            style={{ marginLeft: "0.75rem", fontSize: "0.85rem" }}
+          >
+            Failed to save: {updateTorrent.error?.message ?? "Unknown error"}
           </span>
         )}
         {updateTorrent.isSuccess && !dirty && (
-          <span style={{ marginLeft: '0.75rem', fontSize: '0.85rem', color: 'var(--success)' }}>
+          <span
+            style={{
+              marginLeft: "0.75rem",
+              fontSize: "0.85rem",
+              color: "var(--success)",
+            }}
+          >
             Saved
           </span>
         )}

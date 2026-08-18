@@ -3,9 +3,14 @@ import {
   useStartSeeding,
   useStopSeeding,
   useDeleteTorrent,
-} from '../api/hooks';
-import { formatBytes, formatRatio, formatDate, extractTrackerDomain } from '../utils/formatters';
-import type { Torrent } from '../api/types';
+} from "../api/hooks";
+import {
+  formatBytes,
+  formatRatio,
+  formatDate,
+  extractTrackerDomain,
+} from "../utils/formatters";
+import type { Torrent } from "../api/types";
 
 interface TorrentGridProps {
   filter?: string;
@@ -15,7 +20,13 @@ interface TorrentGridProps {
   onSelectTorrent?: (id: number | null) => void;
 }
 
-function TorrentGrid({ filter, stateFilter, trackerFilter, selectedTorrentId, onSelectTorrent }: TorrentGridProps) {
+function TorrentGrid({
+  filter,
+  stateFilter,
+  trackerFilter,
+  selectedTorrentId,
+  onSelectTorrent,
+}: TorrentGridProps) {
   const { data: torrents, isLoading } = useTorrents();
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
@@ -27,20 +38,35 @@ function TorrentGrid({ filter, stateFilter, trackerFilter, selectedTorrentId, on
         {[0, 1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="torrent-grid-card">
             <div className="torrent-grid-card-header">
-              <span className="skeleton skeleton-line" style={{ width: '80%', height: '1rem' }} />
+              <span
+                className="skeleton skeleton-line"
+                style={{ width: "80%", height: "1rem" }}
+              />
             </div>
             <div className="torrent-grid-card-stats">
               <div className="torrent-grid-stat">
-                <span className="skeleton skeleton-line" style={{ width: '60%', height: '0.8rem' }} />
+                <span
+                  className="skeleton skeleton-line"
+                  style={{ width: "60%", height: "0.8rem" }}
+                />
               </div>
               <div className="torrent-grid-stat">
-                <span className="skeleton skeleton-line" style={{ width: '50%', height: '0.8rem' }} />
+                <span
+                  className="skeleton skeleton-line"
+                  style={{ width: "50%", height: "0.8rem" }}
+                />
               </div>
               <div className="torrent-grid-stat">
-                <span className="skeleton skeleton-line" style={{ width: '55%', height: '0.8rem' }} />
+                <span
+                  className="skeleton skeleton-line"
+                  style={{ width: "55%", height: "0.8rem" }}
+                />
               </div>
               <div className="torrent-grid-stat">
-                <span className="skeleton skeleton-line" style={{ width: '65%', height: '0.8rem' }} />
+                <span
+                  className="skeleton skeleton-line"
+                  style={{ width: "65%", height: "0.8rem" }}
+                />
               </div>
             </div>
           </div>
@@ -50,9 +76,11 @@ function TorrentGrid({ filter, stateFilter, trackerFilter, selectedTorrentId, on
   }
 
   const filtered = (torrents ?? []).filter((t) => {
-    if (filter && !t.name.toLowerCase().includes(filter.toLowerCase())) return false;
-    if (stateFilter && stateFilter !== 'All' && t.status !== stateFilter) return false;
-    if (trackerFilter && trackerFilter !== 'All') {
+    if (filter && !t.name.toLowerCase().includes(filter.toLowerCase()))
+      return false;
+    if (stateFilter && stateFilter !== "All" && t.status !== stateFilter)
+      return false;
+    if (trackerFilter && trackerFilter !== "All") {
       if (extractTrackerDomain(t.trackerUrl) !== trackerFilter) return false;
     }
     return true;
@@ -64,7 +92,7 @@ function TorrentGrid({ filter, stateFilter, trackerFilter, selectedTorrentId, on
   }
 
   function renderActions(torrent: Torrent) {
-    const isSeeding = torrent.status === 'Seeding';
+    const isSeeding = torrent.status === "Seeding";
     return (
       <div className="torrent-actions" onClick={(e) => e.stopPropagation()}>
         {isSeeding ? (
@@ -97,9 +125,7 @@ function TorrentGrid({ filter, stateFilter, trackerFilter, selectedTorrentId, on
   }
 
   if (filtered.length === 0) {
-    return (
-      <div className="torrent-grid-empty">No torrents found</div>
-    );
+    return <div className="torrent-grid-empty">No torrents found</div>;
   }
 
   return (
@@ -107,8 +133,10 @@ function TorrentGrid({ filter, stateFilter, trackerFilter, selectedTorrentId, on
       {filtered.map((t) => (
         <div
           key={t.id}
-          className={`torrent-grid-card${selectedTorrentId === t.id ? ' torrent-grid-card-selected' : ''}`}
-          onClick={() => onSelectTorrent?.(selectedTorrentId === t.id ? null : t.id)}
+          className={`torrent-grid-card${selectedTorrentId === t.id ? " torrent-grid-card-selected" : ""}`}
+          onClick={() =>
+            onSelectTorrent?.(selectedTorrentId === t.id ? null : t.id)
+          }
         >
           <div className="torrent-grid-card-header">
             <span className="torrent-grid-card-name">{t.name}</span>
@@ -117,24 +145,30 @@ function TorrentGrid({ filter, stateFilter, trackerFilter, selectedTorrentId, on
           <div className="torrent-grid-card-stats">
             <div className="torrent-grid-stat">
               <span className="torrent-grid-stat-label">Size</span>
-              <span className="torrent-grid-stat-value">{formatBytes(t.totalSize)}</span>
+              <span className="torrent-grid-stat-value">
+                {formatBytes(t.totalSize)}
+              </span>
             </div>
             <div className="torrent-grid-stat">
               <span className="torrent-grid-stat-label">Uploaded</span>
-              <span className="torrent-grid-stat-value">{formatBytes(t.uploaded)}</span>
+              <span className="torrent-grid-stat-value">
+                {formatBytes(t.uploaded)}
+              </span>
             </div>
             <div className="torrent-grid-stat">
               <span className="torrent-grid-stat-label">Ratio</span>
-              <span className="torrent-grid-stat-value">{formatRatio(t.ratio)}</span>
+              <span className="torrent-grid-stat-value">
+                {formatRatio(t.ratio)}
+              </span>
             </div>
             <div className="torrent-grid-stat">
               <span className="torrent-grid-stat-label">Added</span>
-              <span className="torrent-grid-stat-value">{formatDate(t.dateAdded)}</span>
+              <span className="torrent-grid-stat-value">
+                {formatDate(t.dateAdded)}
+              </span>
             </div>
           </div>
-          <div className="torrent-grid-card-footer">
-            {renderActions(t)}
-          </div>
+          <div className="torrent-grid-card-footer">{renderActions(t)}</div>
         </div>
       ))}
     </div>

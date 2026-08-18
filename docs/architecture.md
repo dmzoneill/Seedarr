@@ -70,16 +70,16 @@ graph LR
     Http --> Common
 ```
 
-| Project | Directory | Responsibility |
-|---------|-----------|----------------|
-| Seedarr.Common | `NzbDrone.Common/` | DI container, logging, HTTP utilities, disk operations, serialization, caching |
-| Seedarr.Core | `NzbDrone.Core/` | All domain logic: torrents, seeding, trackers, peers, protocols, simulation |
-| Seedarr.SignalR | `NzbDrone.SignalR/` | Single SignalR hub for real-time browser updates |
-| Seedarr.Http | `Seedarr.Http/` | REST framework, middleware, auth, versioned routing |
-| Seedarr.Api.V1 | `Seedarr.Api.V1/` | API controllers (19 files, 24 controller classes, ~75 endpoints) |
-| Seedarr.Host | `NzbDrone.Host/` | Kestrel web server, startup pipeline, middleware registration |
-| Seedarr.Console | `NzbDrone.Console/` | Console entry point, restart loop |
-| Seedarr.Frontend | `Seedarr.Frontend/` | React SPA |
+| Project          | Directory           | Responsibility                                                                 |
+| ---------------- | ------------------- | ------------------------------------------------------------------------------ |
+| Seedarr.Common   | `NzbDrone.Common/`  | DI container, logging, HTTP utilities, disk operations, serialization, caching |
+| Seedarr.Core     | `NzbDrone.Core/`    | All domain logic: torrents, seeding, trackers, peers, protocols, simulation    |
+| Seedarr.SignalR  | `NzbDrone.SignalR/` | Single SignalR hub for real-time browser updates                               |
+| Seedarr.Http     | `Seedarr.Http/`     | REST framework, middleware, auth, versioned routing                            |
+| Seedarr.Api.V1   | `Seedarr.Api.V1/`   | API controllers (19 files, 24 controller classes, ~75 endpoints)               |
+| Seedarr.Host     | `NzbDrone.Host/`    | Kestrel web server, startup pipeline, middleware registration                  |
+| Seedarr.Console  | `NzbDrone.Console/` | Console entry point, restart loop                                              |
+| Seedarr.Frontend | `Seedarr.Frontend/` | React SPA                                                                      |
 
 ## NzbDrone Fork Pattern
 
@@ -165,6 +165,7 @@ graph TD
 ## DI Container (DryIoc)
 
 Auto-registration rules:
+
 - **Interfaces** registered as **Singleton** (one instance per application lifetime)
 - **Concrete classes** registered as **Transient** (new instance per resolution)
 - No manual wiring needed for standard services
