@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using NLog;
+using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Network;
 
@@ -22,7 +23,7 @@ public interface INetworkStatusService
     List<string> GetLocalAddresses();
 }
 
-public class NetworkStatusService : INetworkStatusService
+public class NetworkStatusService : INetworkStatusService, IHandle<UpnpMappingCreatedEvent>
 {
     private readonly IUpnpService _upnpService;
     private readonly IExternalIpService _externalIpService;
@@ -62,6 +63,11 @@ public class NetworkStatusService : INetworkStatusService
             ProxyEnabled = _proxySettings.IsEnabled,
             PortMappings = _upnpService.GetMappings()
         };
+    }
+
+    public void Handle(UpnpMappingCreatedEvent message)
+    {
+        _logger.Info("UPnP port mapping created for external port {0}", message.ExternalPort);
     }
 
     public List<string> GetLocalAddresses()
