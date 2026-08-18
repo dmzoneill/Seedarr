@@ -7,6 +7,7 @@ import {
   useImportDownloadClientTorrents,
   useDownloadHistory,
   useArrConnections,
+  useBoostHash,
 } from "../api/hooks";
 import { useToast } from "../context/ToastContext";
 import { formatBytes } from "../utils/formatters";
@@ -38,6 +39,21 @@ export default function DownloadClientTorrents() {
 
   const importOneMutation = useImportDownloadClientTorrent(clientId);
   const importAllMutation = useImportDownloadClientTorrents(clientId);
+  const boostHashMutation = useBoostHash();
+
+  const handleBoostTorrent = (hash: string, title: string) => {
+    boostHashMutation.mutate(
+      { infoHash: hash, name: title },
+      {
+        onSuccess: (res) => {
+          showToast(res.message, res.boosted ? "success" : "info");
+        },
+        onError: (err) => {
+          showToast(`Failed to boost swarm: ${err.message}`, "error");
+        },
+      },
+    );
+  };
 
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [searchTerm, setSearchTerm] = useState("");
@@ -698,40 +714,56 @@ export default function DownloadClientTorrents() {
                         {item.status || "unknown"}
                       </span>
 
-                      {item.isInLibrary ? (
+                      <div style={{ display: "flex", gap: "0.35rem" }}>
                         <button
-                          className="btn btn-outline btn-small"
+                          className="btn btn-primary btn-small"
                           style={{
                             fontSize: "0.78rem",
                             padding: "0.2rem 0.55rem",
                             borderRadius: "4px",
                           }}
-                          onClick={() => {
-                            if (item.libraryTorrentId) {
-                              navigate(`/torrents/${item.libraryTorrentId}`);
-                            } else {
-                              navigate("/torrents");
+                          onClick={() => handleBoostTorrent(item.infoHash, item.title)}
+                          disabled={boostHashMutation.isPending}
+                          title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
+                        >
+                          ⚡ Boost
+                        </button>
+
+                        {item.isInLibrary ? (
+                          <button
+                            className="btn btn-outline btn-small"
+                            style={{
+                              fontSize: "0.78rem",
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "4px",
+                            }}
+                            onClick={() => {
+                              if (item.libraryTorrentId) {
+                                navigate(`/torrents/${item.libraryTorrentId}`);
+                              } else {
+                                navigate("/torrents");
+                              }
+                            }}
+                          >
+                            View ↗
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-success btn-small"
+                            style={{
+                              fontSize: "0.78rem",
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "4px",
+                            }}
+                            onClick={() =>
+                              handleImportOne(item.infoHash, item.title)
                             }
-                          }}
-                        >
-                          View ↗
-                        </button>
-                      ) : (
-                        <button
-                          className="btn btn-success btn-small"
-                          style={{
-                            fontSize: "0.78rem",
-                            padding: "0.2rem 0.55rem",
-                            borderRadius: "4px",
-                          }}
-                          onClick={() =>
-                            handleImportOne(item.infoHash, item.title)
-                          }
-                          disabled={isImporting}
-                        >
-                          {isImporting ? "Importing..." : "+ Import"}
-                        </button>
-                      )}
+                            disabled={isImporting}
+                          >
+                            {isImporting ? "Importing..." : "+ Import"}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1024,45 +1056,61 @@ export default function DownloadClientTorrents() {
                             textAlign: "right",
                           }}
                         >
-                          {item.isInLibrary ? (
+                          <div style={{ display: "inline-flex", gap: "0.35rem" }}>
                             <button
-                              className="btn btn-outline"
+                              className="btn btn-primary"
                               style={{
                                 fontSize: "0.78rem",
                                 padding: "0.25rem 0.6rem",
                                 borderRadius: "4px",
                               }}
-                              onClick={() => {
-                                if (item.libraryTorrentId) {
-                                  navigate(
-                                    `/torrents/${item.libraryTorrentId}`,
-                                  );
-                                } else {
-                                  navigate("/torrents");
+                              onClick={() => handleBoostTorrent(item.infoHash, item.title)}
+                              disabled={boostHashMutation.isPending}
+                              title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
+                            >
+                              ⚡ Boost
+                            </button>
+
+                            {item.isInLibrary ? (
+                              <button
+                                className="btn btn-outline"
+                                style={{
+                                  fontSize: "0.78rem",
+                                  padding: "0.25rem 0.6rem",
+                                  borderRadius: "4px",
+                                }}
+                                onClick={() => {
+                                  if (item.libraryTorrentId) {
+                                    navigate(
+                                      `/torrents/${item.libraryTorrentId}`,
+                                    );
+                                  } else {
+                                    navigate("/torrents");
+                                  }
+                                }}
+                              >
+                                View
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-success"
+                                style={{
+                                  fontSize: "0.78rem",
+                                  padding: "0.25rem 0.6rem",
+                                  borderRadius: "4px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem",
+                                }}
+                                onClick={() =>
+                                  handleImportOne(item.infoHash, item.title)
                                 }
-                              }}
-                            >
-                              View
-                            </button>
-                          ) : (
-                            <button
-                              className="btn btn-success"
-                              style={{
-                                fontSize: "0.78rem",
-                                padding: "0.25rem 0.6rem",
-                                borderRadius: "4px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "0.3rem",
-                              }}
-                              onClick={() =>
-                                handleImportOne(item.infoHash, item.title)
-                              }
-                              disabled={isImporting}
-                            >
-                              {isImporting ? "Adding..." : "+ Add"}
-                            </button>
-                          )}
+                                disabled={isImporting}
+                              >
+                                {isImporting ? "Adding..." : "+ Add"}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );

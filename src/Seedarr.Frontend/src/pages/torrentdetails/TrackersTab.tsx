@@ -1,7 +1,8 @@
 import { Torrent } from "../../api/types";
-import { useTorrentTrackers } from "../../api/hooks";
+import { useTorrentTrackers, useBoostTorrent } from "../../api/hooks";
 import { formatDate } from "../../utils/formatters";
 import { SkeletonLine } from "../../components/Skeleton";
+import { useToast } from "../../context/ToastContext";
 
 function trackerStatusBadgeClass(status: string): string {
   switch (status) {
@@ -20,11 +21,37 @@ function trackerStatusBadgeClass(status: string): string {
 }
 
 export function TrackersTab({ torrent }: { torrent: Torrent }) {
-  const { data: trackers, isLoading, error } = useTorrentTrackers(torrent.id);
+  const { data: trackers, isLoading, error, refetch } = useTorrentTrackers(torrent.id);
+  const boostTorrent = useBoostTorrent();
+  const { showToast } = useToast();
+
+  const handleEnrichTrackers = () => {
+    boostTorrent.mutate(torrent.id, {
+      onSuccess: (res) => {
+        showToast(res.message, res.boosted ? "success" : "info");
+        refetch();
+      },
+      onError: (err) => {
+        showToast(`Failed to enrich trackers: ${err.message}`, "error");
+      },
+    });
+  };
 
   return (
     <div className="card">
-      <h3>Trackers</h3>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+        <h3 style={{ margin: 0 }}>Trackers</h3>
+        {!torrent.isPrivate && (
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={handleEnrichTrackers}
+            disabled={boostTorrent.isPending}
+            title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
+          >
+            {boostTorrent.isPending ? "Scraping & Enriching..." : "⚡ Enrich Trackers (TrackerBoost)"}
+          </button>
+        )}
+      </div>
       {isLoading && (
         <div className="torrent-table-wrapper">
           <SkeletonLine width="100%" height="2rem" />
