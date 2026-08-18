@@ -215,37 +215,62 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             return envUrl.TrimEnd('/');
         }
 
+        var connectionHost = connection?.WebhookHost;
+        if (!string.IsNullOrWhiteSpace(connectionHost))
+        {
+            if (connectionHost.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                connectionHost.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                return connectionHost.TrimEnd('/');
+            }
+
+            var scheme = _configFileProvider.EnableSsl ? "https" : "http";
+            return $"{scheme}://{connectionHost}:{_configFileProvider.Port}{_configFileProvider.UrlBase ?? ""}";
+        }
+
+        var envHost = Environment.GetEnvironmentVariable("SEEDARR_HOST");
+        if (!string.IsNullOrWhiteSpace(envHost))
+        {
+            var scheme = _configFileProvider.EnableSsl ? "https" : "http";
+            return $"{scheme}://{envHost}:{_configFileProvider.Port}{_configFileProvider.UrlBase ?? ""}";
+        }
+
         var bindAddress = _configFileProvider.BindAddress;
         var port = _configFileProvider.Port;
         var urlBase = _configFileProvider.UrlBase ?? "";
 
-        var connectionHost = connection?.WebhookHost;
-        if (!string.IsNullOrWhiteSpace(connectionHost))
+        if (string.IsNullOrWhiteSpace(bindAddress) ||
+            bindAddress == "*" ||
+            bindAddress == "0.0.0.0" ||
+            IsHexContainerId(bindAddress))
         {
-            bindAddress = connectionHost;
+            bindAddress = Dns.GetHostName();
         }
-        else if (bindAddress == "*" || bindAddress == "0.0.0.0")
+
+        var schemeDefault = _configFileProvider.EnableSsl ? "https" : "http";
+        return $"{schemeDefault}://{bindAddress}:{port}{urlBase}";
+    }
+
+    private static bool IsHexContainerId(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s))
         {
-            var envHost = Environment.GetEnvironmentVariable("SEEDARR_HOST");
-            if (!string.IsNullOrWhiteSpace(envHost))
-            {
-                bindAddress = envHost;
-            }
-            else
-            {
-                bindAddress = Dns.GetHostName();
-            }
+            return false;
         }
-        else
+
+        if (s.Length != 12 && s.Length != 64)
         {
-            var envHost = Environment.GetEnvironmentVariable("SEEDARR_HOST");
-            if (!string.IsNullOrWhiteSpace(envHost))
+            return false;
+        }
+
+        foreach (var c in s)
+        {
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
             {
-                bindAddress = envHost;
+                return false;
             }
         }
 
-        var scheme = _configFileProvider.EnableSsl ? "https" : "http";
-        return $"{scheme}://{bindAddress}:{port}{urlBase}";
+        return true;
     }
 }
