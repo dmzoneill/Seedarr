@@ -5,6 +5,11 @@ namespace NzbDrone.Core.ArrIntegration;
 
 public class ArrConnectionDefinition : ProviderDefinition
 {
+    public ArrConnectionDefinition()
+    {
+        Enable = true;
+    }
+
     public string Url { get; set; }
     public string ApiKey { get; set; }
     public string ArrType { get; set; }
