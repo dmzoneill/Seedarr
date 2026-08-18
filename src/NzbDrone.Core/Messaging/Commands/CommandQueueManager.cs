@@ -57,6 +57,23 @@ public class CommandQueueManager : IManageCommandQueue, IDisposable
         return model;
     }
 
+    public CommandModel PushRaw(string name, string body, CommandTrigger trigger = CommandTrigger.Manual)
+    {
+        _logger.Trace("Publishing raw command {0}", name);
+
+        var model = new CommandModel
+        {
+            Name = name,
+            Body = body,
+            Status = CommandStatus.Queued,
+            QueuedAt = DateTime.UtcNow,
+            Trigger = trigger
+        };
+
+        _repository.Insert(model);
+        return model;
+    }
+
     public IEnumerable<CommandModel> GetAll()
     {
         return _repository.All()
