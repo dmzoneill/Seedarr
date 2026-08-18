@@ -10,6 +10,7 @@ using NzbDrone.Core.Seeding.Scheduling;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.TrackerBoost;
 using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Datastore;
@@ -34,5 +35,6 @@ public static class TableRegistration
         TableMapping.Register<Tag>("Tags");
         TableMapping.Register<SpeedSchedule>("SpeedSchedules");
         TableMapping.Register<DownloadHistory>("DownloadHistory");
+        TableMapping.Register<TrackerBoostTracker>("TrackerBoostTrackers");
     }
 }

@@ -17,7 +17,7 @@ import PeerMap from "./pages/PeerMap";
 import SpeedSchedule from "./pages/SpeedSchedule";
 import Statistics from "./pages/Statistics";
 import DownloadHistory from "./pages/DownloadHistory";
-import DownloadPlusPlus from "./pages/DownloadPlusPlus";
+import TrackerBoost from "./pages/TrackerBoost";
 import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
@@ -96,6 +96,7 @@ function App() {
   const isActivityRoute = location.pathname.startsWith("/activity");
   const isTrackerRoute =
     location.pathname.startsWith("/tracker") ||
+    location.pathname.startsWith("/trackerboost") ||
     location.pathname.startsWith("/download++") ||
     location.pathname.startsWith("/downloadplusplus");
   const isSettingsRoute = location.pathname.startsWith("/settings");
@@ -202,16 +203,18 @@ function App() {
                 <span>Inbuilt</span>
               </NavLink>
               <NavLink
-                to="/tracker/boost"
+                to="/tracker/trackerboost"
                 className={`sidebar-nav-item sidebar-nav-sub ${
+                  location.pathname === "/tracker/trackerboost" ||
                   location.pathname === "/tracker/boost" ||
+                  location.pathname === "/trackerboost" ||
                   location.pathname === "/download++" ||
                   location.pathname === "/downloadplusplus"
                     ? "active"
                     : ""
                 }`}
               >
-                <span>Boost</span>
+                <span>TrackerBoost</span>
               </NavLink>
             </>
           )}
@@ -420,11 +423,13 @@ function App() {
               />
               <Route path="/activity" element={<Activity />} />
               <Route path="/activity/metrics" element={<Activity />} />
-              <Route path="/downloadplusplus" element={<DownloadPlusPlus />} />
-              <Route path="/download++" element={<DownloadPlusPlus />} />
+              <Route path="/downloadplusplus" element={<TrackerBoost />} />
+              <Route path="/download++" element={<TrackerBoost />} />
+              <Route path="/trackerboost" element={<TrackerBoost />} />
               <Route path="/tracker" element={<TrackerServer />} />
               <Route path="/tracker/inbuilt" element={<TrackerServer />} />
-              <Route path="/tracker/boost" element={<DownloadPlusPlus />} />
+              <Route path="/tracker/trackerboost" element={<TrackerBoost />} />
+              <Route path="/tracker/boost" element={<TrackerBoost />} />
               <Route path="/peermap" element={<PeerMap />} />
               <Route path="/schedule" element={<SpeedSchedule />} />
               <Route path="/statistics" element={<Statistics />} />

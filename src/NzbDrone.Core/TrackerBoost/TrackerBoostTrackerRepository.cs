@@ -3,26 +3,26 @@ using System.Linq;
 using Dapper;
 using NzbDrone.Core.Datastore;
 
-namespace NzbDrone.Core.DownloadPlusPlus;
+namespace NzbDrone.Core.TrackerBoost;
 
-public interface IDownloadPlusPlusTrackerRepository : IBasicRepository<DownloadPlusPlusTracker>
+public interface ITrackerBoostTrackerRepository : IBasicRepository<TrackerBoostTracker>
 {
-    DownloadPlusPlusTracker FindByUrl(string url);
-    List<DownloadPlusPlusTracker> GetAliveTrackers();
-    List<DownloadPlusPlusTracker> GetBySource(TrackerSourceType source);
+    TrackerBoostTracker FindByUrl(string url);
+    List<TrackerBoostTracker> GetAliveTrackers();
+    List<TrackerBoostTracker> GetBySource(TrackerSourceType source);
 }
 
-public class DownloadPlusPlusTrackerRepository : BasicRepository<DownloadPlusPlusTracker>, IDownloadPlusPlusTrackerRepository
+public class TrackerBoostTrackerRepository : BasicRepository<TrackerBoostTracker>, ITrackerBoostTrackerRepository
 {
     private readonly IDatabase _database;
 
-    public DownloadPlusPlusTrackerRepository(IDatabase database)
+    public TrackerBoostTrackerRepository(IDatabase database)
         : base(database)
     {
         _database = database;
     }
 
-    public DownloadPlusPlusTracker FindByUrl(string url)
+    public TrackerBoostTracker FindByUrl(string url)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -30,23 +30,23 @@ public class DownloadPlusPlusTrackerRepository : BasicRepository<DownloadPlusPlu
         }
 
         using var connection = _database.OpenConnection();
-        return connection.QueryFirstOrDefault<DownloadPlusPlusTracker>(
+        return connection.QueryFirstOrDefault<TrackerBoostTracker>(
             $"SELECT * FROM \"{_table}\" WHERE LOWER(\"Url\") = LOWER(@Url)",
             new { Url = url.Trim() });
     }
 
-    public List<DownloadPlusPlusTracker> GetAliveTrackers()
+    public List<TrackerBoostTracker> GetAliveTrackers()
     {
         using var connection = _database.OpenConnection();
-        return connection.Query<DownloadPlusPlusTracker>(
+        return connection.Query<TrackerBoostTracker>(
             $"SELECT * FROM \"{_table}\" WHERE \"Enabled\" = 1 AND (\"Status\" = 1 OR \"Status\" = 2) ORDER BY \"LatencyMs\" ASC")
             .ToList();
     }
 
-    public List<DownloadPlusPlusTracker> GetBySource(TrackerSourceType source)
+    public List<TrackerBoostTracker> GetBySource(TrackerSourceType source)
     {
         using var connection = _database.OpenConnection();
-        return connection.Query<DownloadPlusPlusTracker>(
+        return connection.Query<TrackerBoostTracker>(
             $"SELECT * FROM \"{_table}\" WHERE \"Source\" = @Source ORDER BY \"Id\" DESC",
             new { Source = (int)source })
             .ToList();
