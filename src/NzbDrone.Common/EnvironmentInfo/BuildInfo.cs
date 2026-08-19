@@ -1,11 +1,13 @@
 using System;
 using System.IO;
 using System.Reflection;
+using NLog;
 
 namespace NzbDrone.Common.EnvironmentInfo;
 
 public static class BuildInfo
 {
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     static BuildInfo()
     {
         var assembly = Assembly.GetExecutingAssembly();
@@ -57,9 +59,9 @@ public static class BuildInfo
                     }
                 }
             }
-            catch
+            catch (Exception ex) when (ex is IOException or FormatException)
             {
-                // Ignore read errors, fall through to assembly version
+                Logger.Warn(ex, "Could not read version file at {0}", path);
             }
         }
 
