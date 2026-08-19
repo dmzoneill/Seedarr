@@ -104,7 +104,9 @@ public class Startup
         app.UseStaticFiles(new StaticFileOptions
         {
             FileProvider = new PhysicalFileProvider(fixturesPath),
-            RequestPath = "/fixtures"
+            RequestPath = "/fixtures",
+            ServeUnknownFileTypes = true,
+            DefaultContentType = "application/octet-stream"
         });
 
         app.UseRouting();
