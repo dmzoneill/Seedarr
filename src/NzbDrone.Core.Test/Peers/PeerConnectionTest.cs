@@ -311,6 +311,23 @@ public class PeerConnectionTest
     }
 
     [Test]
+    public void ReceiveMessage_should_return_null_and_dispose_for_negative_length()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+
+        // High bit set in length bytes: 0x80000000 reconstructed via (uint) casts then (int) cast
+        // gives int.MinValue (-2147483648), triggering the length < 0 guard.
+        var lengthBytes = new byte[] { 0x80, 0x00, 0x00, 0x00 };
+        var stream = rawClient.GetStream();
+        stream.Write(lengthBytes, 0, 4);
+        stream.Flush();
+
+        var received = conn.ReceiveMessage();
+
+        Assert.That(received, Is.Null);
+    }
+
+    [Test]
     public void SendKeepAlive_should_send_four_zero_bytes()
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);

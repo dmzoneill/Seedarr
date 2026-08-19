@@ -470,9 +470,9 @@ public class PeerServer : BackgroundService
 
     private static void HandlePieceRequest(PeerConnection connection, byte[] payload)
     {
-        var index = (payload[0] << 24) | (payload[1] << 16) | (payload[2] << 8) | payload[3];
-        var begin = (payload[4] << 24) | (payload[5] << 16) | (payload[6] << 8) | payload[7];
-        var length = (payload[8] << 24) | (payload[9] << 16) | (payload[10] << 8) | payload[11];
+        var index = (int)(((uint)payload[0] << 24) | ((uint)payload[1] << 16) | ((uint)payload[2] << 8) | payload[3]);
+        var begin = (int)(((uint)payload[4] << 24) | ((uint)payload[5] << 16) | ((uint)payload[6] << 8) | payload[7]);
+        var length = (int)(((uint)payload[8] << 24) | ((uint)payload[9] << 16) | ((uint)payload[10] << 8) | payload[11]);
 
         const int MaxBlockSize = 32768; // 2x standard 16KB block size
         if (length <= 0 || length > MaxBlockSize)
