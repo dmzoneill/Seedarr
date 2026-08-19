@@ -52,7 +52,7 @@ public class ArrWebhookRegistrationTest
     }
 
     [Test]
-    public void GetSeedarrBaseUrl_should_replace_wildcard_with_localhost()
+    public void GetSeedarrBaseUrl_should_replace_wildcard_with_hostname()
     {
         _configFileProvider.BindAddress.Returns("*");
         _configFileProvider.Port.Returns(9898);
@@ -62,11 +62,12 @@ public class ArrWebhookRegistrationTest
             BindingFlags.NonPublic | BindingFlags.Instance);
         var result = (string)method.Invoke(_registration, null);
 
-        Assert.That(result, Is.EqualTo("http://localhost:9898"));
+        var expectedHost = Dns.GetHostName();
+        Assert.That(result, Is.EqualTo($"http://{expectedHost}:9898"));
     }
 
     [Test]
-    public void GetSeedarrBaseUrl_should_replace_0000_with_localhost()
+    public void GetSeedarrBaseUrl_should_replace_0000_with_hostname()
     {
         _configFileProvider.BindAddress.Returns("0.0.0.0");
         _configFileProvider.Port.Returns(9898);
@@ -76,7 +77,8 @@ public class ArrWebhookRegistrationTest
             BindingFlags.NonPublic | BindingFlags.Instance);
         var result = (string)method.Invoke(_registration, null);
 
-        Assert.That(result, Is.EqualTo("http://localhost:9898"));
+        var expectedHost = Dns.GetHostName();
+        Assert.That(result, Is.EqualTo($"http://{expectedHost}:9898"));
     }
 
     [Test]
@@ -496,8 +498,8 @@ public class ArrWebhookRegistrationTest
             BindingFlags.NonPublic | BindingFlags.Instance);
         var result = (string)method.Invoke(_registration, null);
 
-        Assert.That(result, Does.StartWith("http://localhost:"));
-        Assert.That(result, Does.EndWith("/seedarr"));
+        var expectedHost = Dns.GetHostName();
+        Assert.That(result, Is.EqualTo($"http://{expectedHost}:9898/seedarr"));
     }
 
     // --- Constructor-injection tests (inject mock HttpClient + fresh policy) ---
