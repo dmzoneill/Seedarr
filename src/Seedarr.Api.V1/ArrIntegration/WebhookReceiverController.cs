@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.ArrIntegration.Webhook;
 using Seedarr.Http;
@@ -16,6 +17,7 @@ public class WebhookReceiverController : Controller
         _webhookService = webhookService;
     }
 
+    [AllowAnonymous]
     [HttpPost("arr")]
     public ActionResult<ArrWebhookResult> ReceiveArrWebhook([FromBody] ArrWebhookPayload payload)
     {
