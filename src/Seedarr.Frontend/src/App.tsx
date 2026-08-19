@@ -214,7 +214,7 @@ function App() {
                     : ""
                 }`}
               >
-                <span>TrackerBoost</span>
+                <span>Tracker Boost</span>
               </NavLink>
             </>
           )}

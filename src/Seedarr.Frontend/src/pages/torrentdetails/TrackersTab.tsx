@@ -48,7 +48,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
             disabled={boostTorrent.isPending}
             title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
           >
-            {boostTorrent.isPending ? "Scraping & Enriching..." : "⚡ Enrich Trackers (TrackerBoost)"}
+            {boostTorrent.isPending ? "Scraping & Enriching..." : "⚡ Enrich Trackers (Tracker Boost)"}
           </button>
         )}
       </div>
