@@ -24,11 +24,13 @@ public class WebhookControllerTests : IntegrationTestBase
             webhookEnabled = true,
             webhookSecret = TestWebhookSecret,
             name = "TestConnection",
+            implementation = "SonarrConnection",
             arrType = "Sonarr",
             url = "http://localhost:8989",
             apiKey = "test-api-key",
         };
-        await PostJsonAsync("/api/v1/arrconnections", connection);
+        var response = await PostJsonAsync("/api/v1/arrconnections", connection);
+        response.EnsureSuccessStatusCode();
     }
 
     private async Task<(HttpStatusCode Status, Dictionary<string, object> Body)> PostWebhookAsync(object payload)
