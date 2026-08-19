@@ -10,6 +10,7 @@ if [ -n "$GITHUB_ENV" ]; then
 		echo "VALIDATE_TYPESCRIPT_ES=false"
 		echo "VALIDATE_MARKDOWN=false"
 		echo "VALIDATE_NATURAL_LANGUAGE=false"
+		echo "VALIDATE_CSS=false"
 	} >>"$GITHUB_ENV"
 fi
 
