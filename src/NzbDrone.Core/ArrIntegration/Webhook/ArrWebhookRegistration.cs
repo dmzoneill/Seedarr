@@ -57,9 +57,10 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             var currentApiKey = _configFileProvider.ApiKey ?? string.Empty;
 
             var existing = FindExistingWebhook(connection, apiVersion);
+            var existingKey = existing?.ApiKey ?? string.Empty;
             if (existing != null &&
                 string.Equals(existing.Url, webhookUrl, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(existing.ApiKey, currentApiKey, StringComparison.Ordinal))
+                (string.IsNullOrEmpty(currentApiKey) || string.Equals(existingKey, currentApiKey, StringComparison.Ordinal)))
             {
                 _logger.Debug("Seedarr webhook already registered in {0} (notification id {1})", connection.ArrType, existing.Id);
                 return true;
