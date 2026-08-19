@@ -54,7 +54,7 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /config /data
+RUN mkdir -p /config /data /app/fixtures
 
 LABEL org.opencontainers.image.title="Seedarr" \
       org.opencontainers.image.description="BitTorrent Seeding Simulator" \

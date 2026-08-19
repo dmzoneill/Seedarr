@@ -22,12 +22,38 @@ public class WebhookTests : ApiTestBase
     private const string RealHash = "e63e5567d9352b7b0d7d6d9271c0c5b2a303a059";
     private const string RealDownloadId = "E63E5567D9352B7B0D7D6D9271C0C5B2A303A059";
 
+    private const string TestWebhookSecret = "wh-test-secret-automation-abc123";
+
     private string _apiKey;
+    private int _testConnectionId;
 
     [OneTimeSetUp]
-    public async Task SetUpApiKey()
+    public async Task SetUpWebhookConnection()
     {
         _apiKey = await GetApiKeyAsync(SeedarrUrl);
+
+        var connection = new
+        {
+            name = "TestConn-WebhookTests",
+            arrType = "Sonarr",
+            url = "http://localhost:19999",
+            apiKey = "testkey-not-real",
+            implementation = "SonarrConnection",
+            configContract = "ArrConnectionDefinition",
+            enable = true,
+            webhookEnabled = true,
+            webhookSecret = TestWebhookSecret
+        };
+        var json = await PostJsonAsync($"{SeedarrUrl}/api/v1/arrconnections", connection, _apiKey);
+        using var doc = JsonDocument.Parse(json);
+        _testConnectionId = doc.RootElement.GetProperty("id").GetInt32();
+    }
+
+    [OneTimeTearDown]
+    public async Task TearDownWebhookConnection()
+    {
+        if (_testConnectionId > 0)
+            await DeleteAsync($"{SeedarrUrl}/api/v1/arrconnections/{_testConnectionId}");
     }
 
     [SetUp]
@@ -38,8 +64,12 @@ public class WebhookTests : ApiTestBase
 
     private async Task<string> PostWebhookAsync(object body)
     {
-        using var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-        var response = await Client.PostAsync($"{SeedarrUrl}/api/v1/webhook/arr", content);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"{SeedarrUrl}/api/v1/webhook/arr")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("X-Seedarr-Secret", TestWebhookSecret);
+        var response = await Client.SendAsync(request);
         return await response.Content.ReadAsStringAsync();
     }
 
