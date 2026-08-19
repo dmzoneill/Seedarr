@@ -69,6 +69,9 @@ public class ArrWebhookService : IArrWebhookService
 
         if (string.IsNullOrEmpty(secret))
         {
+            // DEPRECATED: Accepting webhooks without X-Seedarr-Secret is deprecated.
+            // Configure connections with an explicit WebhookSecret instead.
+            // This path will be removed in a future version.
             return connections.Any(d => string.IsNullOrEmpty(d.WebhookSecret));
         }
 
