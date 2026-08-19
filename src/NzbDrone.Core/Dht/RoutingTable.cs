@@ -89,13 +89,13 @@ public class RoutingTable
     private int GetBucketIndex(byte[] nodeId)
     {
         // Compute XOR distance from local node
-        for (var i = 0; i < nodeId.Length && i < _localNodeId.Length; i++)
+        for (var i = 0; i < nodeId.Length && i < _localNodeId.Length && i < _idBits / 8; i++)
         {
             var xorByte = (byte)(nodeId[i] ^ _localNodeId[i]);
             if (xorByte != 0)
             {
                 var bit = (i * 8) + (7 - (int)Math.Floor(Math.Log2(xorByte)));
-                var bucketIndex = 159 - bit;
+                var bucketIndex = (_idBits - 1) - bit;
                 return Math.Min(bucketIndex, _idBits - 1);
             }
         }
@@ -105,8 +105,9 @@ public class RoutingTable
 
     private static byte[] Distance(byte[] a, byte[] b)
     {
-        var result = new byte[20];
-        for (var i = 0; i < 20; i++)
+        var length = Math.Min(a.Length, b.Length);
+        var result = new byte[length];
+        for (var i = 0; i < length; i++)
         {
             result[i] = (byte)(a[i] ^ b[i]);
         }

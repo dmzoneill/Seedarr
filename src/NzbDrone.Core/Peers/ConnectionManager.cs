@@ -52,21 +52,26 @@ public class ConnectionManager : IConnectionManager
 
     public void Add(PeerConnection connection)
     {
+        PeerConnection evicted = null;
         lock (_lock)
         {
             var maxGlobal = _configService.MaxGlobalConnections;
 
             if (_connections.Count >= maxGlobal)
             {
-                var oldest = _connections.OrderBy(c => c.LastActivity).First();
-                _logger.Debug("Evicting peer {0} (LRU, global limit {1})", oldest.RemoteIp, maxGlobal);
-                LogDisconnect(oldest);
-                _fastExtensionHandler.UnregisterPeer(oldest);
-                oldest.Dispose();
-                _connections.Remove(oldest);
+                evicted = _connections.OrderBy(c => c.LastActivity).First();
+                _logger.Debug("Evicting peer {0} (LRU, global limit {1})", evicted.RemoteIp, maxGlobal);
+                _connections.Remove(evicted);
             }
 
             _connections.Add(connection);
+        }
+
+        if (evicted != null)
+        {
+            LogDisconnect(evicted);
+            _fastExtensionHandler.UnregisterPeer(evicted);
+            evicted.Dispose();
         }
 
         LogConnect(connection);
@@ -113,38 +118,46 @@ public class ConnectionManager : IConnectionManager
 
     public void ProcessDropouts()
     {
+        List<PeerConnection> toRemove;
+        double dropoutProbability;
         lock (_lock)
         {
-            var dropoutProbability = _configService.PeerDropoutProbability;
+            dropoutProbability = _configService.PeerDropoutProbability;
 
             if (dropoutProbability <= 0 || _connections.Count == 0)
             {
                 return;
             }
 
-            var toRemove = _connections
+            toRemove = _connections
                 .Where(_ => Random.Shared.NextDouble() < dropoutProbability)
                 .ToList();
 
             foreach (var conn in toRemove)
             {
-                _logger.Debug(
-                    "Peer {0} dropped out (probability: {1:F2})",
-                    conn.RemoteIp,
-                    dropoutProbability);
-                LogDisconnect(conn);
-                _fastExtensionHandler.UnregisterPeer(conn);
-                conn.Dispose();
                 _connections.Remove(conn);
             }
+        }
+
+        foreach (var conn in toRemove)
+        {
+            _logger.Debug(
+                "Peer {0} dropped out (probability: {1:F2})",
+                conn.RemoteIp,
+                dropoutProbability);
+            LogDisconnect(conn);
+            _fastExtensionHandler.UnregisterPeer(conn);
+            conn.Dispose();
         }
     }
 
     public void RotateConnections()
     {
+        List<PeerConnection> oldest;
+        double rotationPct;
         lock (_lock)
         {
-            var rotationPct = _configService.ConnectionRotationPercentage;
+            rotationPct = _configService.ConnectionRotationPercentage;
             var rotateCount = (int)Math.Ceiling(_connections.Count * rotationPct);
 
             if (rotateCount <= 0 || _connections.Count == 0)
@@ -154,22 +167,26 @@ public class ConnectionManager : IConnectionManager
 
             rotateCount = Math.Min(rotateCount, _connections.Count);
 
-            var oldest = _connections
+            oldest = _connections
                 .OrderBy(c => c.ConnectedAt)
                 .Take(rotateCount)
                 .ToList();
 
             foreach (var conn in oldest)
             {
-                _logger.Debug(
-                    "Rotating out peer {0} (oldest, rotation: {1:P0})",
-                    conn.RemoteIp,
-                    rotationPct);
-                LogDisconnect(conn);
-                _fastExtensionHandler.UnregisterPeer(conn);
-                conn.Dispose();
                 _connections.Remove(conn);
             }
+        }
+
+        foreach (var conn in oldest)
+        {
+            _logger.Debug(
+                "Rotating out peer {0} (oldest, rotation: {1:P0})",
+                conn.RemoteIp,
+                rotationPct);
+            LogDisconnect(conn);
+            _fastExtensionHandler.UnregisterPeer(conn);
+            conn.Dispose();
         }
     }
 

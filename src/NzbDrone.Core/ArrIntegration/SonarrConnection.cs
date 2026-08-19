@@ -1,21 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 using NLog;
-using NzbDrone.Core.Http;
 using Polly;
 
 namespace NzbDrone.Core.ArrIntegration;
 
 public class SonarrConnection : IArrConnection
 {
-    private static readonly HttpClient SharedClient = new(new SocketsHttpHandler
-    {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
-    });
-    private static readonly ResiliencePipeline SharedPolicy = ResiliencePolicies.GetArrApiPolicy();
-
     private readonly HttpClient _client;
     private readonly ResiliencePipeline _policy;
     private readonly Logger _logger;
@@ -29,8 +23,8 @@ public class SonarrConnection : IArrConnection
     public SonarrConnection(HttpClient client = null, ResiliencePipeline policy = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
-        _client = client ?? SharedClient;
-        _policy = policy ?? SharedPolicy;
+        _client = client ?? ArrConnectionResources.SharedClient;
+        _policy = policy ?? ArrConnectionResources.SharedPolicy;
     }
 
     public List<ArrDownloadRecord> GetDownloadHistory()
@@ -50,7 +44,7 @@ public class SonarrConnection : IArrConnection
                 }
 
                 using var stream = response.Content.ReadAsStream(ct);
-                using var reader = new System.IO.StreamReader(stream);
+                using var reader = new StreamReader(stream);
                 return reader.ReadToEnd();
             });
 
@@ -67,7 +61,12 @@ public class SonarrConnection : IArrConnection
             {
                 foreach (var record in recordsArray.EnumerateArray())
                 {
-                    var eventType = record.GetProperty("eventType").GetString();
+                    if (!record.TryGetProperty("eventType", out var eventTypeElement))
+                    {
+                        continue;
+                    }
+
+                    var eventType = eventTypeElement.GetString();
                     if (eventType != "grabbed")
                     {
                         continue;

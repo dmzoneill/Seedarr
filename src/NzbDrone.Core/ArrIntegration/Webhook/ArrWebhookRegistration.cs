@@ -216,6 +216,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             bindAddress = "localhost";
         }
 
-        return $"http://{bindAddress}:{port}{urlBase}";
+        var scheme = _configFileProvider.EnableSsl ? "https" : "http";
+        return $"{scheme}://{bindAddress}:{port}{urlBase}";
     }
 }

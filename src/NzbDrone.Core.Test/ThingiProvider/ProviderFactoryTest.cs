@@ -14,6 +14,16 @@ public interface ITestProvider : IProvider
 {
 }
 
+public class ConcreteTestProvider1 : ITestProvider
+{
+    public string Name => "ConcreteTestProvider1";
+}
+
+public class ConcreteTestProvider2 : ITestProvider
+{
+    public string Name => "ConcreteTestProvider2";
+}
+
 public class ConcreteProviderFactory : ProviderFactory<ITestProvider, TestProviderDefinition>
 {
     public ConcreteProviderFactory(
@@ -141,8 +151,13 @@ public class ProviderFactoryTest
     [Test]
     public void GetAvailableProviders_should_delegate_to_service_factory()
     {
-        var provider1 = Substitute.For<ITestProvider>();
-        var provider2 = Substitute.For<ITestProvider>();
+        var provider1 = new ConcreteTestProvider1();
+        var provider2 = new ConcreteTestProvider2();
+        _repository.All().Returns(new List<TestProviderDefinition>
+        {
+            new() { Id = 1, Name = "P1", Implementation = "ConcreteTestProvider1", Enable = true },
+            new() { Id = 2, Name = "P2", Implementation = "ConcreteTestProvider2", Enable = true }
+        });
         _serviceFactory.BuildAll<ITestProvider>().Returns(new List<ITestProvider> { provider1, provider2 });
 
         var result = _subject.GetAvailableProviders();
@@ -154,6 +169,7 @@ public class ProviderFactoryTest
     [Test]
     public void GetAvailableProviders_should_return_empty_list_when_no_providers()
     {
+        _repository.All().Returns(new List<TestProviderDefinition>());
         _serviceFactory.BuildAll<ITestProvider>().Returns(new List<ITestProvider>());
 
         var result = _subject.GetAvailableProviders();
@@ -164,11 +180,30 @@ public class ProviderFactoryTest
     [Test]
     public void GetAvailableProviders_should_return_list_type()
     {
+        _repository.All().Returns(new List<TestProviderDefinition>());
         _serviceFactory.BuildAll<ITestProvider>().Returns(new List<ITestProvider>());
 
         var result = _subject.GetAvailableProviders();
 
         Assert.That(result, Is.InstanceOf<List<ITestProvider>>());
+    }
+
+    [Test]
+    public void GetAvailableProviders_should_exclude_disabled_providers()
+    {
+        var provider1 = new ConcreteTestProvider1();
+        var provider2 = new ConcreteTestProvider2();
+        _repository.All().Returns(new List<TestProviderDefinition>
+        {
+            new() { Id = 1, Name = "P1", Implementation = "ConcreteTestProvider1", Enable = true },
+            new() { Id = 2, Name = "P2", Implementation = "ConcreteTestProvider2", Enable = false }
+        });
+        _serviceFactory.BuildAll<ITestProvider>().Returns(new List<ITestProvider> { provider1, provider2 });
+
+        var result = _subject.GetAvailableProviders();
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Name, Is.EqualTo("ConcreteTestProvider1"));
     }
 
     [Test]

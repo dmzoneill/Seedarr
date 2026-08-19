@@ -67,9 +67,5 @@ export function usePanelHeight() {
     document.addEventListener('mouseup', onMouseUp);
   }, [height]);
 
-  useEffect(() => {
-    localStorage.setItem('seedarr-detail-height', String(height));
-  }, [height]);
-
   return { height, panelRef, onMouseDown };
 }

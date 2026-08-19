@@ -12,7 +12,7 @@ namespace NzbDrone.Core.Test.Messaging.Commands;
 [TestFixture]
 public class CommandQueueManagerTest
 {
-    private IBasicRepository<CommandModel> _repository;
+    private ICommandRepository _repository;
     private CommandQueueManager _subject;
 
     private class TestCommand : Command
@@ -22,8 +22,9 @@ public class CommandQueueManagerTest
     [SetUp]
     public void SetUp()
     {
-        _repository = Substitute.For<IBasicRepository<CommandModel>>();
+        _repository = Substitute.For<ICommandRepository>();
         _repository.All().Returns(new List<CommandModel>());
+        _repository.GetByStatus(Arg.Any<CommandStatus>()).Returns(new List<CommandModel>());
         _subject = new CommandQueueManager(_repository);
     }
 
@@ -136,36 +137,35 @@ public class CommandQueueManagerTest
     }
 
     [Test]
-    public void GetStarted_should_return_only_started_commands()
+    public void GetStarted_should_query_repository_by_started_status()
     {
-        var commands = new List<CommandModel>
+        var startedCommands = new List<CommandModel>
         {
-            new() { Id = 1, Name = "A", Status = CommandStatus.Queued },
-            new() { Id = 2, Name = "B", Status = CommandStatus.Started },
-            new() { Id = 3, Name = "C", Status = CommandStatus.Completed }
+            new() { Id = 2, Name = "B", Status = CommandStatus.Started }
         };
-        _repository.All().Returns(commands);
+        _repository.GetByStatus(CommandStatus.Started).Returns(startedCommands);
 
         var result = _subject.GetStarted().ToList();
 
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result[0].Name, Is.EqualTo("B"));
+        _repository.Received(1).GetByStatus(CommandStatus.Started);
     }
 
     [Test]
-    public void GetQueued_should_return_only_queued_commands()
+    public void GetQueued_should_query_repository_by_queued_status()
     {
-        var commands = new List<CommandModel>
+        var queuedCommands = new List<CommandModel>
         {
             new() { Id = 1, Name = "A", Status = CommandStatus.Queued },
-            new() { Id = 2, Name = "B", Status = CommandStatus.Started },
             new() { Id = 3, Name = "C", Status = CommandStatus.Queued }
         };
-        _repository.All().Returns(commands);
+        _repository.GetByStatus(CommandStatus.Queued).Returns(queuedCommands);
 
         var result = _subject.GetQueued().ToList();
 
         Assert.That(result, Has.Count.EqualTo(2));
+        _repository.Received(1).GetByStatus(CommandStatus.Queued);
     }
 
     [Test]
@@ -194,138 +194,30 @@ public class CommandQueueManagerTest
     }
 
     [Test]
-    public void CleanupOldCommands_should_delete_old_completed_commands()
+    public void CleanupOldCommands_should_call_repository_delete_once()
     {
-        var old = DateTime.UtcNow.AddDays(-8);
-        _repository.All().Returns(new List<CommandModel>
-        {
-            new() { Id = 1, Name = "Done", Status = CommandStatus.Completed, EndedAt = old }
-        });
-
         InvokeCleanupOldCommands();
 
-        _repository.Received(1).Delete(Arg.Is<CommandModel>(c => c.Id == 1));
+        _repository.Received(1).DeleteOldTerminalCommands(Arg.Any<DateTime>());
     }
 
     [Test]
-    public void CleanupOldCommands_should_delete_old_failed_commands()
+    public void CleanupOldCommands_should_pass_cutoff_approximately_7_days_ago()
     {
-        var old = DateTime.UtcNow.AddDays(-8);
-        _repository.All().Returns(new List<CommandModel>
-        {
-            new() { Id = 2, Status = CommandStatus.Failed, EndedAt = old }
-        });
+        DateTime capturedCutoff = default;
+        _repository.When(r => r.DeleteOldTerminalCommands(Arg.Any<DateTime>()))
+                   .Do(ci => capturedCutoff = ci.Arg<DateTime>());
 
+        var before = DateTime.UtcNow.AddDays(-7);
         InvokeCleanupOldCommands();
+        var after = DateTime.UtcNow.AddDays(-7);
 
-        _repository.Received(1).Delete(Arg.Any<CommandModel>());
+        Assert.That(capturedCutoff, Is.InRange(before.AddSeconds(-1), after.AddSeconds(1)));
     }
 
     [Test]
-    public void CleanupOldCommands_should_delete_old_cancelled_commands()
+    public void CleanupOldCommands_should_not_throw_when_no_commands()
     {
-        var old = DateTime.UtcNow.AddDays(-8);
-        _repository.All().Returns(new List<CommandModel>
-        {
-            new() { Id = 3, Status = CommandStatus.Cancelled, EndedAt = old }
-        });
-
-        InvokeCleanupOldCommands();
-
-        _repository.Received(1).Delete(Arg.Any<CommandModel>());
-    }
-
-    [Test]
-    public void CleanupOldCommands_should_not_delete_recent_completed_commands()
-    {
-        _repository.All().Returns(new List<CommandModel>
-        {
-            new() { Id = 4, Status = CommandStatus.Completed, EndedAt = DateTime.UtcNow.AddDays(-1) }
-        });
-
-        InvokeCleanupOldCommands();
-
-        _repository.DidNotReceive().Delete(Arg.Any<CommandModel>());
-    }
-
-    [Test]
-    public void CleanupOldCommands_should_not_delete_old_queued_commands()
-    {
-        var old = DateTime.UtcNow.AddDays(-8);
-        _repository.All().Returns(new List<CommandModel>
-        {
-            new() { Id = 5, Status = CommandStatus.Queued, EndedAt = old }
-        });
-
-        InvokeCleanupOldCommands();
-
-        _repository.DidNotReceive().Delete(Arg.Any<CommandModel>());
-    }
-
-    [Test]
-    public void CleanupOldCommands_should_not_delete_old_started_commands()
-    {
-        var old = DateTime.UtcNow.AddDays(-8);
-        _repository.All().Returns(new List<CommandModel>
-        {
-            new() { Id = 6, Status = CommandStatus.Started, EndedAt = old }
-        });
-
-        InvokeCleanupOldCommands();
-
-        _repository.DidNotReceive().Delete(Arg.Any<CommandModel>());
-    }
-
-    [Test]
-    public void CleanupOldCommands_should_not_delete_completed_commands_without_ended_at()
-    {
-        _repository.All().Returns(new List<CommandModel>
-        {
-            new() { Id = 7, Status = CommandStatus.Completed, EndedAt = null }
-        });
-
-        InvokeCleanupOldCommands();
-
-        _repository.DidNotReceive().Delete(Arg.Any<CommandModel>());
-    }
-
-    [Test]
-    public void CleanupOldCommands_should_delete_multiple_old_terminal_commands()
-    {
-        var old = DateTime.UtcNow.AddDays(-8);
-        _repository.All().Returns(new List<CommandModel>
-        {
-            new() { Id = 1, Status = CommandStatus.Completed, EndedAt = old },
-            new() { Id = 2, Status = CommandStatus.Failed, EndedAt = old },
-            new() { Id = 3, Status = CommandStatus.Cancelled, EndedAt = old }
-        });
-
-        InvokeCleanupOldCommands();
-
-        _repository.Received(3).Delete(Arg.Any<CommandModel>());
-    }
-
-    [Test]
-    public void CleanupOldCommands_should_not_delete_when_no_commands()
-    {
-        _repository.All().Returns(new List<CommandModel>());
-
         Assert.DoesNotThrow(() => InvokeCleanupOldCommands());
-
-        _repository.DidNotReceive().Delete(Arg.Any<CommandModel>());
-    }
-
-    [Test]
-    public void CleanupOldCommands_should_not_delete_commands_within_retention_window()
-    {
-        // Commands that ended 6 days ago are clearly within the 7-day retention window
-        _repository.All().Returns(new List<CommandModel>
-        {
-            new() { Id = 8, Status = CommandStatus.Completed, EndedAt = DateTime.UtcNow.AddDays(-6) }
-        });
-
-        InvokeCleanupOldCommands();
-
-        _repository.DidNotReceive().Delete(Arg.Any<CommandModel>());
     }
 }

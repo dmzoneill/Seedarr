@@ -105,8 +105,7 @@ public class Startup
             app.UseStaticFiles(new StaticFileOptions
             {
                 FileProvider = new PhysicalFileProvider(fixturesPath),
-                RequestPath = "/fixtures",
-                ServeUnknownFileTypes = true
+                RequestPath = "/fixtures"
             });
         }
 

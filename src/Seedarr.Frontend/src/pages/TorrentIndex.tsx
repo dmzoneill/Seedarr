@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import TorrentTable from '../components/TorrentTable';
 import TorrentGrid from '../components/TorrentGrid';
 import TorrentDetailPanel from '../components/TorrentDetailPanel';
@@ -26,6 +27,39 @@ function TorrentIndex() {
     totalUploadSpeed, totalDownloadSpeed,
     handleViewMode, handleToggleSelect, handleSelectAll,
   } = useTorrentIndexState();
+
+  const [bulkPending, setBulkPending] = useState(false);
+
+  async function handleBulkStart() {
+    setBulkPending(true);
+    try {
+      await Promise.all([...selectedIds].map((id) => startSeeding.mutateAsync(id)));
+    } finally {
+      setBulkPending(false);
+      setSelectedIds(new Set());
+    }
+  }
+
+  async function handleBulkStop() {
+    setBulkPending(true);
+    try {
+      await Promise.all([...selectedIds].map((id) => stopSeeding.mutateAsync(id)));
+    } finally {
+      setBulkPending(false);
+      setSelectedIds(new Set());
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (!confirm(`Delete ${selectedIds.size} torrent(s)?`)) return;
+    setBulkPending(true);
+    try {
+      await Promise.all([...selectedIds].map((id) => deleteTorrent.mutateAsync({ id })));
+    } finally {
+      setBulkPending(false);
+      setSelectedIds(new Set());
+    }
+  }
 
   const count = torrents?.length ?? 0;
 
@@ -85,14 +119,10 @@ function TorrentIndex() {
       {selectMode && selectedIds.size > 0 && (
         <BulkActionPanel
           selectedIds={selectedIds}
-          onStart={() => { selectedIds.forEach((id) => startSeeding.mutate(id)); setSelectedIds(new Set()); }}
-          onStop={() => { selectedIds.forEach((id) => stopSeeding.mutate(id)); setSelectedIds(new Set()); }}
-          onDelete={() => {
-            if (confirm(`Delete ${selectedIds.size} torrent(s)?`)) {
-              selectedIds.forEach((id) => deleteTorrent.mutate({ id }));
-              setSelectedIds(new Set());
-            }
-          }}
+          isPending={bulkPending}
+          onStart={handleBulkStart}
+          onStop={handleBulkStop}
+          onDelete={handleBulkDelete}
           onClear={() => setSelectedIds(new Set())}
         />
       )}

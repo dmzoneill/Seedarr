@@ -449,6 +449,7 @@ public class WatchFolderServiceTest
         var args = new FileSystemEventArgs(WatcherChangeTypes.Created, _tempDir, "oncreated.torrent");
 
         method.Invoke(_subject, new object[] { null, args });
+        Thread.Sleep(700);
 
         _torrentService.Received(1).Add(Arg.Any<Torrent>());
     }
