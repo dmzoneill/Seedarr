@@ -1046,7 +1046,7 @@ public class SeedingEngineTest
         _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
         {
             MaxUploadSpeed = 1_048_576,
-            MaxDownloadSpeed = 0,
+            MaxDownloadSpeed = SpeedLimits.Unlimited,
             IsScheduleActive = false
         });
 
@@ -1585,7 +1585,7 @@ public class SeedingEngineTest
         _configService.MaxUploadSpeedKbps.Returns(75);
         _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
         {
-            MaxUploadSpeed = 0,
+            MaxUploadSpeed = SpeedLimits.Unlimited,
             MaxDownloadSpeed = 1_048_576,
             IsScheduleActive = false
         });

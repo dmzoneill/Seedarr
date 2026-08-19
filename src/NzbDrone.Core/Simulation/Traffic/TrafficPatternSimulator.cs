@@ -111,7 +111,13 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
         var variationMultiplier = 1.0;
         if (behaviorVariation > 0.0 && _configService.RealisticVariations)
         {
-            variationMultiplier = 1.0 + (((_random.NextDouble() * 2.0) - 1.0) * behaviorVariation);
+            double randomSample;
+            lock (_lock)
+            {
+                randomSample = _random.NextDouble();
+            }
+
+            variationMultiplier = 1.0 + (((randomSample * 2.0) - 1.0) * behaviorVariation);
         }
 
         var result = baseMultiplier * timeMultiplier * stateMultiplier * congestionMultiplier * peerMultiplier * variationMultiplier;

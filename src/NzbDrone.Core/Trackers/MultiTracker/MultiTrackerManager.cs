@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Configuration;
 
@@ -202,7 +203,7 @@ public class MultiTrackerManager : IMultiTrackerManager
         }
 
         var state = _failureStates.GetOrAdd(trackerUrl, _ => new TrackerFailureState());
-        state.ConsecutiveFailures++;
+        Interlocked.Increment(ref state.ConsecutiveFailures);
 
         var maxFailures = _configService.FailoverMaxConsecutiveFailures;
         if (state.ConsecutiveFailures >= maxFailures)
@@ -263,7 +264,7 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     private class TrackerFailureState
     {
-        public int ConsecutiveFailures { get; set; }
+        public int ConsecutiveFailures;
         public DateTime BackoffUntil { get; set; }
     }
 }

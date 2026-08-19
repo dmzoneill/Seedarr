@@ -161,7 +161,7 @@ public class UdpTrackerProviderTest
     {
         var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { new byte[10] });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { new byte[10], 0 });
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.FailureReason, Is.EqualTo("Response too short"));
@@ -172,11 +172,12 @@ public class UdpTrackerProviderTest
     {
         var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
         var response = new byte[20];
+        WriteInt32BigEndian(response, 0, 1); // ActionAnnounce
         WriteInt32BigEndian(response, 8, 1800);
         WriteInt32BigEndian(response, 12, 5);
         WriteInt32BigEndian(response, 16, 10);
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0 });
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Interval, Is.EqualTo(1800));
@@ -189,6 +190,7 @@ public class UdpTrackerProviderTest
     {
         var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
         var response = new byte[26];
+        WriteInt32BigEndian(response, 0, 1); // ActionAnnounce
         WriteInt32BigEndian(response, 8, 1800);
         response[20] = 192;
         response[21] = 168;
@@ -197,7 +199,7 @@ public class UdpTrackerProviderTest
         response[24] = (byte)(6881 >> 8);
         response[25] = (byte)(6881 & 0xFF);
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0 });
 
         Assert.That(result.Peers.Count, Is.EqualTo(1));
         Assert.That(result.Peers[0].Ip, Is.EqualTo("192.168.1.1"));
@@ -390,11 +392,12 @@ public class UdpTrackerProviderTest
     {
         var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
         var response = new byte[20];
+        WriteInt32BigEndian(response, 0, 1); // ActionAnnounce
         WriteInt32BigEndian(response, 8, 900);
         WriteInt32BigEndian(response, 12, 3);
         WriteInt32BigEndian(response, 16, 7);
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0 });
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Peers.Count, Is.EqualTo(0));
@@ -408,6 +411,7 @@ public class UdpTrackerProviderTest
     {
         var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
         var response = new byte[32];
+        WriteInt32BigEndian(response, 0, 1); // ActionAnnounce
         WriteInt32BigEndian(response, 8, 1800);
 
         // Peer 1: 10.0.0.1:8080
@@ -426,7 +430,7 @@ public class UdpTrackerProviderTest
         response[30] = (byte)(51413 >> 8);
         response[31] = (byte)(51413 & 0xFF);
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0 });
 
         Assert.That(result.Peers.Count, Is.EqualTo(2));
         Assert.That(result.Peers[0].Ip, Is.EqualTo("10.0.0.1"));
@@ -440,6 +444,7 @@ public class UdpTrackerProviderTest
     {
         var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
         var response = new byte[25];
+        WriteInt32BigEndian(response, 0, 1); // ActionAnnounce
         WriteInt32BigEndian(response, 8, 1800);
         response[20] = 192;
         response[21] = 168;
@@ -447,7 +452,7 @@ public class UdpTrackerProviderTest
         response[23] = 1;
         response[24] = 0x1A;
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0 });
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Peers.Count, Is.EqualTo(0));
