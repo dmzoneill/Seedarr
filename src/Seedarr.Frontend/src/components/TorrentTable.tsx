@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { Link } from 'react-router';
 import {
   useTorrents,
@@ -12,6 +12,7 @@ import {
 } from '../api/hooks';
 import { formatBytes, formatSpeed, formatRatio, formatDate, formatSeconds, extractTrackerDomain } from '../utils/formatters';
 import { SkeletonTableRow } from './Skeleton';
+import TorrentContextMenu from './TorrentContextMenu';
 import type { Torrent } from '../api/types';
 
 type ColumnKey =
@@ -123,25 +124,9 @@ function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, o
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortAsc, setSortAsc] = useState(true);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(loadVisibleColumns);
 
-  const closeContextMenu = useCallback(() => {
-    setContextMenu(null);
-    setOpenSubmenu(null);
-  }, []);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const handleClick = () => closeContextMenu();
-    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') closeContextMenu(); };
-    document.addEventListener('click', handleClick);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('click', handleClick);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [contextMenu, closeContextMenu]);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   function toggleColumn(key: string) {
     setVisibleColumns((prev) => {
@@ -159,17 +144,6 @@ function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, o
   function handleContextMenu(e: React.MouseEvent, torrent: Torrent | null) {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, torrent });
-  }
-
-  function handleCopy(text: string) {
-    navigator.clipboard.writeText(text);
-    closeContextMenu();
-  }
-
-  function buildMagnetLink(t: Torrent): string {
-    let magnet = `magnet:?xt=urn:btih:${t.infoHash}&dn=${encodeURIComponent(t.name)}`;
-    if (t.trackerUrl) magnet += `&tr=${encodeURIComponent(t.trackerUrl)}`;
-    return magnet;
   }
 
   const columns = ALL_COLUMNS.filter((col) => visibleColumns.has(col.key));
@@ -279,8 +253,6 @@ function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, o
     }
   }
 
-  const ct = contextMenu?.torrent;
-
   return (
     <div className="torrent-table-wrapper">
       <table className="torrent-table">
@@ -330,125 +302,22 @@ function TorrentTable({ filter, stateFilter, trackerFilter, selectedTorrentId, o
       </table>
 
       {contextMenu && (
-        <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(e) => e.stopPropagation()}>
-          {ct ? (
-            <>
-              {/* Pause / Resume */}
-              {ct.active ? (
-                <button className="context-menu-item" onClick={() => { stopSeeding.mutate(ct.id); closeContextMenu(); }}>Pause</button>
-              ) : (
-                <button className="context-menu-item" onClick={() => { startSeeding.mutate(ct.id); closeContextMenu(); }}>Resume</button>
-              )}
-              <button className="context-menu-item" onClick={() => { updateTorrent.mutate({ ...ct, forceStart: !ct.forceStart }); closeContextMenu(); }}>
-                {ct.forceStart ? '✓ ' : ''}Force Start
-              </button>
-              <button className="context-menu-item" onClick={() => { announceTorrent.mutate(ct.id); closeContextMenu(); }}>Update Tracker</button>
-              <button className="context-menu-item" onClick={() => { recheckTorrent.mutate(ct.id); closeContextMenu(); }}>Force Recheck</button>
-              {ct.progress < 1.0 && (
-                <button className="context-menu-item" onClick={() => { updateTorrent.mutate({ ...ct, progress: 1.0 }); closeContextMenu(); }}>Force Complete</button>
-              )}
-
-              <div className="context-menu-separator" />
-
-              {/* Copy submenu */}
-              <div className="context-menu-item context-menu-submenu-trigger" onMouseEnter={() => setOpenSubmenu('copy')} onMouseLeave={() => setOpenSubmenu(null)}>
-                Copy ▶
-                {openSubmenu === 'copy' && (
-                  <div className="context-menu context-menu-submenu">
-                    <button className="context-menu-item" onClick={() => handleCopy(ct.name)}>Name</button>
-                    <button className="context-menu-item" onClick={() => handleCopy(ct.infoHash)}>Info Hash</button>
-                    <button className="context-menu-item" onClick={() => handleCopy(buildMagnetLink(ct))}>Magnet Link</button>
-                    <button className="context-menu-item" onClick={() => handleCopy(ct.trackerUrl ?? '')}>Tracker URL</button>
-                  </div>
-                )}
-              </div>
-
-              {/* Priority submenu */}
-              <div className="context-menu-item context-menu-submenu-trigger" onMouseEnter={() => setOpenSubmenu('priority')} onMouseLeave={() => setOpenSubmenu(null)}>
-                Priority ▶
-                {openSubmenu === 'priority' && (
-                  <div className="context-menu context-menu-submenu">
-                    <button className="context-menu-item" onClick={() => { updateTorrent.mutate({ ...ct, priority: 2 }); closeContextMenu(); }}>{ct.priority === 2 ? '✓ ' : ''}High</button>
-                    <button className="context-menu-item" onClick={() => { updateTorrent.mutate({ ...ct, priority: 1 }); closeContextMenu(); }}>{ct.priority === 1 ? '✓ ' : ''}Normal</button>
-                    <button className="context-menu-item" onClick={() => { updateTorrent.mutate({ ...ct, priority: 0 }); closeContextMenu(); }}>{ct.priority === 0 ? '✓ ' : ''}Low</button>
-                  </div>
-                )}
-              </div>
-
-              {/* Speed Limits submenu */}
-              <div className="context-menu-item context-menu-submenu-trigger" onMouseEnter={() => setOpenSubmenu('speed')} onMouseLeave={() => setOpenSubmenu(null)}>
-                Speed Limits ▶
-                {openSubmenu === 'speed' && (
-                  <div className="context-menu context-menu-submenu">
-                    <button className="context-menu-item" onClick={() => { const v = window.prompt('Upload limit (KB/s, 0=unlimited):', String(ct.uploadLimit)); if (v !== null) updateTorrent.mutate({ ...ct, uploadLimit: parseInt(v, 10) || 0 }); closeContextMenu(); }}>Set Upload Limit...</button>
-                    <button className="context-menu-item" onClick={() => { const v = window.prompt('Download limit (KB/s, 0=unlimited):', String(ct.downloadLimit)); if (v !== null) updateTorrent.mutate({ ...ct, downloadLimit: parseInt(v, 10) || 0 }); closeContextMenu(); }}>Set Download Limit...</button>
-                    <button className="context-menu-item" onClick={() => { updateTorrent.mutate({ ...ct, uploadLimit: 0, downloadLimit: 0 }); closeContextMenu(); }}>Reset to Global Limits</button>
-                  </div>
-                )}
-              </div>
-
-              {/* Queue submenu */}
-              <div className="context-menu-item context-menu-submenu-trigger" onMouseEnter={() => setOpenSubmenu('queue')} onMouseLeave={() => setOpenSubmenu(null)}>
-                Queue ▶
-                {openSubmenu === 'queue' && (
-                  <div className="context-menu context-menu-submenu">
-                    <button className="context-menu-item" onClick={() => { moveTorrentQueue.mutate({ id: ct.id, position: 'top' }); closeContextMenu(); }}>Top</button>
-                    <button className="context-menu-item" onClick={() => { moveTorrentQueue.mutate({ id: ct.id, position: 'up' }); closeContextMenu(); }}>Up</button>
-                    <button className="context-menu-item" onClick={() => { moveTorrentQueue.mutate({ id: ct.id, position: 'down' }); closeContextMenu(); }}>Down</button>
-                    <button className="context-menu-item" onClick={() => { moveTorrentQueue.mutate({ id: ct.id, position: 'bottom' }); closeContextMenu(); }}>Bottom</button>
-                  </div>
-                )}
-              </div>
-
-              <div className="context-menu-separator" />
-
-              {/* Rename / Label / Toggles */}
-              <button className="context-menu-item" onClick={() => { const n = window.prompt('Rename torrent:', ct.name); if (n !== null && n.trim()) updateTorrent.mutate({ ...ct, name: n.trim() }); closeContextMenu(); }}>Rename...</button>
-              <button className="context-menu-item" onClick={() => { const l = window.prompt('Set label:', ct.label ?? ''); if (l !== null) updateTorrent.mutate({ ...ct, label: l || null }); closeContextMenu(); }}>
-                Set Label...{ct.label ? ` (${ct.label})` : ''}
-              </button>
-
-              <div className="context-menu-separator" />
-
-              <button className="context-menu-item" onClick={() => { updateTorrent.mutate({ ...ct, superSeeding: !ct.superSeeding }); closeContextMenu(); }}>
-                {ct.superSeeding ? 'Disable' : 'Enable'} Super Seeding
-              </button>
-              <button className="context-menu-item" onClick={() => { updateTorrent.mutate({ ...ct, sequentialDownload: !ct.sequentialDownload }); closeContextMenu(); }}>
-                {ct.sequentialDownload ? 'Disable' : 'Enable'} Sequential Download
-              </button>
-
-              <div className="context-menu-separator" />
-
-              {/* Remove submenu */}
-              <div className="context-menu-item context-menu-submenu-trigger" onMouseEnter={() => setOpenSubmenu('remove')} onMouseLeave={() => setOpenSubmenu(null)}>
-                Remove ▶
-                {openSubmenu === 'remove' && (
-                  <div className="context-menu context-menu-submenu">
-                    <button className="context-menu-item context-menu-item-danger" onClick={() => { if (confirm(`Remove "${ct.name}"?`)) deleteTorrent.mutate({ id: ct.id }); closeContextMenu(); }}>Remove Torrent</button>
-                    <button className="context-menu-item context-menu-item-danger" onClick={() => { if (confirm(`Remove "${ct.name}" and all data?`)) deleteTorrent.mutate({ id: ct.id, deleteFiles: true }); closeContextMenu(); }}>Remove Torrent and Data</button>
-                  </div>
-                )}
-              </div>
-
-              <div className="context-menu-separator" />
-            </>
-          ) : null}
-
-          {/* Columns section - always shown */}
-          <div className="context-menu-item context-menu-submenu-trigger" onMouseEnter={() => setOpenSubmenu('columns')} onMouseLeave={() => setOpenSubmenu(null)}>
-            Columns ▶
-            {openSubmenu === 'columns' && (
-              <div className="context-menu context-menu-submenu context-menu-columns">
-                {ALL_COLUMNS.map((col) => (
-                  <label key={col.key} className="column-menu-item">
-                    <input type="checkbox" checked={visibleColumns.has(col.key)} onChange={() => toggleColumn(col.key)} />
-                    {col.label}
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        <TorrentContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          torrent={contextMenu.torrent}
+          visibleColumns={visibleColumns}
+          allColumns={ALL_COLUMNS}
+          onClose={closeContextMenu}
+          onToggleColumn={toggleColumn}
+          onStart={(id) => startSeeding.mutate(id)}
+          onStop={(id) => stopSeeding.mutate(id)}
+          onUpdate={(torrent) => updateTorrent.mutate(torrent)}
+          onAnnounce={(id) => announceTorrent.mutate(id)}
+          onRecheck={(id) => recheckTorrent.mutate(id)}
+          onDelete={(payload) => deleteTorrent.mutate(payload)}
+          onMoveQueue={(payload) => moveTorrentQueue.mutate(payload)}
+        />
       )}
     </div>
   );
