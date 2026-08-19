@@ -27,7 +27,7 @@ function Statistics() {
   (torrents ?? []).forEach((t) => {
     let domain = 'No tracker';
     if (t.trackerUrl) {
-      try { domain = new URL(t.trackerUrl).hostname; } catch (err) { domain = t.trackerUrl; console.warn('Failed to parse tracker URL:', t.trackerUrl, err); }
+      try { domain = new URL(t.trackerUrl).hostname; } catch (err) { domain = 'Invalid Tracker'; console.warn('Failed to parse tracker URL:', t.trackerUrl, err); }
     }
     trackerCounts[domain] = (trackerCounts[domain] || 0) + 1;
   });
