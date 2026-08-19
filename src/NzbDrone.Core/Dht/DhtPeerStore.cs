@@ -17,6 +17,7 @@ public class DhtPeerStore
     private readonly int _peerTtlMinutes;
     private readonly Dictionary<string, List<DhtPeerEntry>> _peers = new(StringComparer.Ordinal);
     private readonly object _lock = new();
+    private DateTime _lastCleanup = DateTime.UtcNow;
 
     public DhtPeerStore(int peerTtlMinutes)
     {
@@ -53,11 +54,28 @@ public class DhtPeerStore
                 });
             }
 
-            list.RemoveAll(p => (DateTime.UtcNow - p.LastSeen).TotalMinutes > _peerTtlMinutes);
-
-            if (list.Count == 0)
+            var now = DateTime.UtcNow;
+            if ((now - _lastCleanup).TotalMinutes >= _peerTtlMinutes)
             {
-                _peers.Remove(key);
+                _lastCleanup = now;
+                foreach (var bucket in _peers)
+                {
+                    bucket.Value.RemoveAll(p => (now - p.LastSeen).TotalMinutes > _peerTtlMinutes);
+                }
+
+                var emptyKeys = new List<string>();
+                foreach (var kvp in _peers)
+                {
+                    if (kvp.Value.Count == 0)
+                    {
+                        emptyKeys.Add(kvp.Key);
+                    }
+                }
+
+                foreach (var k in emptyKeys)
+                {
+                    _peers.Remove(k);
+                }
             }
         }
     }

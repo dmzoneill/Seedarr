@@ -44,7 +44,16 @@ public class SpeedScheduleController : Controller
     [HttpPost]
     public ActionResult<SpeedScheduleResource> Create([FromBody] SpeedScheduleResource resource)
     {
-        var schedule = ToModel(resource);
+        SpeedSchedule schedule;
+        try
+        {
+            schedule = ToModel(resource);
+        }
+        catch (FormatException)
+        {
+            return BadRequest("Invalid time format. Expected HH:mm.");
+        }
+
         var added = _speedScheduler.Add(schedule);
         return Created($"/api/v1/speedschedule/{added.Id}", ToResource(added));
     }
@@ -58,7 +67,16 @@ public class SpeedScheduleController : Controller
             return NotFound();
         }
 
-        var schedule = ToModel(resource);
+        SpeedSchedule schedule;
+        try
+        {
+            schedule = ToModel(resource);
+        }
+        catch (FormatException)
+        {
+            return BadRequest("Invalid time format. Expected HH:mm.");
+        }
+
         schedule.Id = id;
         var updated = _speedScheduler.Update(schedule);
         return ToResource(updated);
