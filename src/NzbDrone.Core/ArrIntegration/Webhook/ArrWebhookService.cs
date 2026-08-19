@@ -58,13 +58,21 @@ public class ArrWebhookService : IArrWebhookService
 
     public bool ValidateWebhookSecret(string secret)
     {
-        if (string.IsNullOrEmpty(secret))
+        var connections = _connectionFactory.All()
+            .Where(d => d.Enable && d.WebhookEnabled)
+            .ToList();
+
+        if (!connections.Any())
         {
             return false;
         }
 
-        return _connectionFactory.All().Any(d =>
-            d.Enable && d.WebhookEnabled &&
+        if (string.IsNullOrEmpty(secret))
+        {
+            return connections.Any(d => string.IsNullOrEmpty(d.WebhookSecret));
+        }
+
+        return connections.Any(d =>
             !string.IsNullOrEmpty(d.WebhookSecret) &&
             string.Equals(d.WebhookSecret, secret, StringComparison.Ordinal));
     }
