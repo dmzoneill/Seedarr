@@ -206,7 +206,7 @@ public class CommandQueueManagerTest
     {
         DateTime capturedCutoff = default;
         _repository.When(r => r.DeleteOldTerminalCommands(Arg.Any<DateTime>()))
-                   .Do(ci => capturedCutoff = ci.Arg<DateTime>());
+            .Do(ci => capturedCutoff = ci.Arg<DateTime>());
 
         var before = DateTime.UtcNow.AddDays(-7);
         InvokeCleanupOldCommands();
