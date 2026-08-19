@@ -318,7 +318,7 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("FindExistingWebhook",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (int?)method.Invoke(_registration, new object[] { connection, "v3", "http://localhost:9898/api/v1/webhook/arr" });
+        var result = method.Invoke(_registration, new object[] { connection, "v3" });
 
         Assert.That(result, Is.Null);
     }
@@ -335,7 +335,7 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("FindExistingWebhook",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (int?)method.Invoke(_registration, new object[] { connection, "v1", "http://localhost:9898/api/v1/webhook/arr" });
+        var result = method.Invoke(_registration, new object[] { connection, "v1" });
 
         Assert.That(result, Is.Null);
     }
@@ -685,12 +685,11 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("FindExistingWebhook",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (int?)method.Invoke(registration, new object[]
-        {
-            connection, "v3", "http://localhost:9898/api/v1/webhook/arr"
-        });
+        var result = method.Invoke(registration, new object[] { connection, "v3" });
 
-        Assert.That(result, Is.EqualTo(55));
+        Assert.That(result, Is.Not.Null);
+        var id = (int)result.GetType().GetProperty("Id").GetValue(result);
+        Assert.That(id, Is.EqualTo(55));
     }
 
     [Test]
@@ -698,7 +697,7 @@ public class ArrWebhookRegistrationTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK,
-            @"[{""id"":10,""name"":""OtherPlugin"",""fields"":[{""name"":""url"",""value"":""http://localhost:9898/api/v1/webhook/arr""}]}]");
+            @"[{""id"":10,""name"":""OtherPlugin"",""fields"":[{""name"":""url"",""value"":""http://localhost:9898/api/v1/other""}]}]");
 
         var registration = CreateWithMockClient(handler);
         var connection = new ArrConnectionDefinition
@@ -710,16 +709,13 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("FindExistingWebhook",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (int?)method.Invoke(registration, new object[]
-        {
-            connection, "v3", "http://localhost:9898/api/v1/webhook/arr"
-        });
+        var result = method.Invoke(registration, new object[] { connection, "v3" });
 
         Assert.That(result, Is.Null);
     }
 
     [Test]
-    public void FindExistingWebhook_with_injected_client_should_return_null_when_url_field_mismatch()
+    public void FindExistingWebhook_with_injected_client_should_return_info_when_url_field_differs()
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK,
@@ -735,12 +731,11 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("FindExistingWebhook",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (int?)method.Invoke(registration, new object[]
-        {
-            connection, "v3", "http://localhost:9898/api/v1/webhook/arr"
-        });
+        var result = method.Invoke(registration, new object[] { connection, "v3" });
 
-        Assert.That(result, Is.Null);
+        Assert.That(result, Is.Not.Null);
+        var id = (int)result.GetType().GetProperty("Id").GetValue(result);
+        Assert.That(id, Is.EqualTo(20));
     }
 
     [Test]
@@ -759,10 +754,7 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("FindExistingWebhook",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (int?)method.Invoke(registration, new object[]
-        {
-            connection, "v3", "http://localhost:9898/api/v1/webhook/arr"
-        });
+        var result = method.Invoke(registration, new object[] { connection, "v3" });
 
         Assert.That(result, Is.Null);
     }
@@ -783,10 +775,7 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("FindExistingWebhook",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (int?)method.Invoke(registration, new object[]
-        {
-            connection, "v3", "http://localhost:9898/api/v1/webhook/arr"
-        });
+        var result = method.Invoke(registration, new object[] { connection, "v3" });
 
         Assert.That(result, Is.Null);
     }
@@ -889,12 +878,11 @@ public class ArrWebhookRegistrationTest
 
         var method = typeof(ArrWebhookRegistration).GetMethod("FindExistingWebhook",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        var result = (int?)method.Invoke(registration, new object[]
-        {
-            connection, "v3", "http://localhost:9898/api/v1/webhook/arr"
-        });
+        var result = method.Invoke(registration, new object[] { connection, "v3" });
 
-        Assert.That(result, Is.Null);
+        Assert.That(result, Is.Not.Null);
+        var id = (int)result.GetType().GetProperty("Id").GetValue(result);
+        Assert.That(id, Is.EqualTo(30));
     }
 
     [Test]
