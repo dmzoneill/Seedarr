@@ -9,7 +9,6 @@ public abstract class RestController<TResource> : Controller
     protected ResourceValidator<TResource> PutValidator { get; set; }
     protected ResourceValidator<TResource> SharedValidator { get; set; }
 
-
     protected ActionResult ValidateAndRespond(TResource resource, ResourceValidator<TResource> validator)
     {
         if (validator != null)

@@ -8,7 +8,7 @@ namespace NzbDrone.Core.Seeding.Scheduling;
 
 public class SpeedLimits
 {
-    public static readonly long Unlimited;
+    public static readonly long Unlimited = -1L;
 
     public long MaxUploadSpeed { get; set; }
     public long MaxDownloadSpeed { get; set; }
