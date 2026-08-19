@@ -366,6 +366,20 @@ export interface DownloadClientDefinition {
   enable: boolean;
 }
 
+export interface DownloadClientRemoteItem {
+  downloadId: string;
+  title: string;
+  infoHash: string;
+  totalSize: number;
+  remainingSize: number;
+  progress: number;
+  status: string;
+  outputPath: string;
+  category: string;
+  isInLibrary: boolean;
+  libraryTorrentId?: number | null;
+}
+
 export interface IndexerDefinition {
   id: number;
   name: string;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Torrents;
 
@@ -10,6 +11,9 @@ namespace NzbDrone.Core.DownloadClients.Sync;
 public interface IDownloadClientSyncService
 {
     SyncResult Sync();
+    List<DownloadClientRemoteItem> GetClientItems(int clientId);
+    Torrent ImportTorrent(int clientId, string infoHash);
+    SyncResult ImportTorrents(int clientId, List<string> infoHashes);
 }
 
 public class DownloadClientSyncService : IDownloadClientSyncService
@@ -69,8 +73,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService
                         continue;
                     }
 
-                    // User requested a framework/strategy to query indexers (e.g. Prowlarr) for metadata/torrent
-                    // or to get it from the download client.
+                    // Query indexers or get from client
                     byte[] torrentBytes = null;
 
                     try
@@ -125,9 +128,183 @@ public class DownloadClientSyncService : IDownloadClientSyncService
         return result;
     }
 
+    public List<DownloadClientRemoteItem> GetClientItems(int clientId)
+    {
+        var definition = _downloadClientFactory.Get(clientId);
+        if (definition == null)
+        {
+            throw new ArgumentException($"Download client with id {clientId} not found.");
+        }
+
+        var provider = CreateClient(definition);
+        if (provider == null)
+        {
+            throw new ArgumentException($"Could not create provider for client type {definition.ClientType}.");
+        }
+
+        var existingTorrents = _torrentService.GetAll()
+            .Where(t => !string.IsNullOrEmpty(t.InfoHash))
+            .GroupBy(t => t.InfoHash.ToLowerInvariant())
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        var items = provider.GetItems();
+        var result = new List<DownloadClientRemoteItem>();
+
+        foreach (var item in items)
+        {
+            var hash = item.InfoHash?.ToLowerInvariant() ?? "";
+            var isInLibrary = !string.IsNullOrEmpty(hash) && existingTorrents.ContainsKey(hash);
+            var libraryId = isInLibrary ? (int?)existingTorrents[hash].Id : null;
+
+            double progress = 0;
+            if (item.TotalSize > 0)
+            {
+                var downloaded = Math.Max(0, item.TotalSize - item.RemainingSize);
+                progress = Math.Round((double)downloaded / item.TotalSize * 100.0, 1);
+            }
+            else if (item.Status?.Equals("seeding", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                progress = 100.0;
+            }
+
+            result.Add(new DownloadClientRemoteItem
+            {
+                DownloadId = item.DownloadId,
+                Title = item.Title,
+                InfoHash = item.InfoHash,
+                TotalSize = item.TotalSize,
+                RemainingSize = item.RemainingSize,
+                Progress = progress,
+                Status = item.Status,
+                OutputPath = item.OutputPath,
+                Category = item.Category,
+                IsInLibrary = isInLibrary,
+                LibraryTorrentId = libraryId
+            });
+        }
+
+        return result;
+    }
+
+    public Torrent ImportTorrent(int clientId, string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            throw new ArgumentException("InfoHash cannot be empty.");
+        }
+
+        var definition = _downloadClientFactory.Get(clientId);
+        if (definition == null)
+        {
+            throw new ArgumentException($"Download client with id {clientId} not found.");
+        }
+
+        var provider = CreateClient(definition);
+        if (provider == null)
+        {
+            throw new ArgumentException($"Could not create provider for client type {definition.ClientType}.");
+        }
+
+        var normalizedHash = infoHash.ToLowerInvariant();
+        var existing = _torrentService.GetAll()
+            .FirstOrDefault(t => string.Equals(t.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        byte[] torrentBytes = null;
+        try
+        {
+            torrentBytes = provider.GetTorrentFile(normalizedHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to get torrent file from client for {0}", normalizedHash);
+        }
+
+        if (torrentBytes == null || torrentBytes.Length == 0)
+        {
+            torrentBytes = SearchIndexersForTorrent(normalizedHash);
+        }
+
+        if (torrentBytes == null || torrentBytes.Length == 0)
+        {
+            throw new InvalidOperationException($"Could not fetch torrent metadata for hash {normalizedHash} from download client or indexers.");
+        }
+
+        using var ms = new System.IO.MemoryStream(torrentBytes);
+        var parsed = _torrentFileParser.Parse(ms);
+
+        var title = parsed.Name;
+        if (string.IsNullOrEmpty(title))
+        {
+            try
+            {
+                var items = provider.GetItems();
+                var matchingItem = items.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
+                if (matchingItem != null)
+                {
+                    title = matchingItem.Title;
+                }
+            }
+            catch
+            {
+                // Ignore item lookup error
+            }
+        }
+
+        var torrent = new Torrent
+        {
+            Name = title ?? parsed.Name ?? normalizedHash,
+            InfoHash = normalizedHash,
+            TotalSize = parsed.TotalSize,
+            PieceCount = parsed.PieceCount,
+            PieceLength = parsed.PieceLength,
+            DateAdded = DateTime.UtcNow,
+            Status = TorrentStatus.Stopped
+        };
+
+        _torrentService.Add(torrent);
+        _logger.Info("Imported torrent {0} from download client {1}", torrent.Name, definition.Name);
+        return torrent;
+    }
+
+    public SyncResult ImportTorrents(int clientId, List<string> infoHashes)
+    {
+        var result = new SyncResult();
+        if (infoHashes == null || infoHashes.Count == 0)
+        {
+            return result;
+        }
+
+        foreach (var hash in infoHashes)
+        {
+            try
+            {
+                var existing = _torrentService.GetAll()
+                    .FirstOrDefault(t => string.Equals(t.InfoHash, hash, StringComparison.OrdinalIgnoreCase));
+                if (existing != null)
+                {
+                    result.Skipped++;
+                    continue;
+                }
+
+                ImportTorrent(clientId, hash);
+                result.Added++;
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to import torrent {0} from client {1}", hash, clientId);
+                result.Failed++;
+            }
+        }
+
+        return result;
+    }
+
     private byte[] SearchIndexersForTorrent(string infoHash)
     {
-        // Strategy pattern to query indexers (Prowlarr, Torznab, etc)
         var indexers = _indexerFactory.All().Where(i => i.Enable).ToList();
         foreach (var indexerDef in indexers)
         {
@@ -199,11 +376,4 @@ public class DownloadClientSyncService : IDownloadClientSyncService
             _ => null
         };
     }
-}
-
-public class SyncResult
-{
-    public int Added { get; set; }
-    public int Skipped { get; set; }
-    public int Failed { get; set; }
 }
