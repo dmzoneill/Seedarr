@@ -36,7 +36,7 @@ function History() {
   }
 
   return (
-    <div>
+    <div className="content-area">
       <div className="page-heading-row">
         <h1 className="page-heading">History</h1>
       </div>
