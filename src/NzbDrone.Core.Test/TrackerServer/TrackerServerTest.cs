@@ -1033,10 +1033,10 @@ public class TrackerServerTest
 
         // Verify the exact binary values
         var dataStart = colonIdx + 1;
-        Assert.That(result[dataStart],     Is.EqualTo(1),    "IP byte 0 must be 1");
-        Assert.That(result[dataStart + 1], Is.EqualTo(2),    "IP byte 1 must be 2");
-        Assert.That(result[dataStart + 2], Is.EqualTo(3),    "IP byte 2 must be 3");
-        Assert.That(result[dataStart + 3], Is.EqualTo(4),    "IP byte 3 must be 4");
+        Assert.That(result[dataStart], Is.EqualTo(1), "IP byte 0 must be 1");
+        Assert.That(result[dataStart + 1], Is.EqualTo(2), "IP byte 1 must be 2");
+        Assert.That(result[dataStart + 2], Is.EqualTo(3), "IP byte 2 must be 3");
+        Assert.That(result[dataStart + 3], Is.EqualTo(4), "IP byte 3 must be 4");
         Assert.That(result[dataStart + 4], Is.EqualTo(0x1A), "Port high byte must be 0x1A");
         Assert.That(result[dataStart + 5], Is.EqualTo(0xE1), "Port low byte must be 0xE1 (225), not UTF-8 inflated");
     }
