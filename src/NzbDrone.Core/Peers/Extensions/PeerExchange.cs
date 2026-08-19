@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NLog;
@@ -101,16 +103,20 @@ public class PeerExchange : IPeerExchange
 
     private static byte[] CompactPeers(List<PeerInfo> peers)
     {
-        var data = new byte[peers.Count * 6];
-        for (var i = 0; i < peers.Count; i++)
+        var ipv4Peers = peers
+            .Where(p => IPAddress.TryParse(p.Ip, out var addr) && addr.AddressFamily == AddressFamily.InterNetwork)
+            .ToList();
+
+        var data = new byte[ipv4Peers.Count * 6];
+        for (var i = 0; i < ipv4Peers.Count; i++)
         {
-            var parts = peers[i].Ip.Split('.');
+            var parts = ipv4Peers[i].Ip.Split('.');
             data[i * 6] = byte.Parse(parts[0]);
             data[(i * 6) + 1] = byte.Parse(parts[1]);
             data[(i * 6) + 2] = byte.Parse(parts[2]);
             data[(i * 6) + 3] = byte.Parse(parts[3]);
-            data[(i * 6) + 4] = (byte)(peers[i].Port >> 8);
-            data[(i * 6) + 5] = (byte)peers[i].Port;
+            data[(i * 6) + 4] = (byte)(ipv4Peers[i].Port >> 8);
+            data[(i * 6) + 5] = (byte)ipv4Peers[i].Port;
         }
 
         return data;
