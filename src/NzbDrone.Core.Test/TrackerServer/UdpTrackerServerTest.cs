@@ -653,6 +653,54 @@ public class UdpTrackerServerTest
     }
 
     [Test]
+    public void BuildCompactPeers_should_skip_malformed_ip()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "not.an.ip", Port = 6881 },
+            new TrackerPeerEntry { Ip = "10.0.0.1", Port = 6882 }
+        };
+
+        var result = InvokeBuildCompactPeers(peers, "10.0.0.99", 9999, 50);
+
+        // The malformed IP is silently skipped via IPAddress.TryParse; only the valid peer is encoded
+        Assert.That(result, Has.Length.EqualTo(6));
+        Assert.That(result[0], Is.EqualTo(10));
+        Assert.That(result[3], Is.EqualTo(1));
+    }
+
+    [Test]
+    public void BuildCompactPeers_should_skip_ipv6_address()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "::1", Port = 6881 },
+            new TrackerPeerEntry { Ip = "10.0.0.2", Port = 6882 }
+        };
+
+        var result = InvokeBuildCompactPeers(peers, "10.0.0.99", 9999, 50);
+
+        // IPv6 addresses fail the InterNetwork family check and are silently skipped
+        Assert.That(result, Has.Length.EqualTo(6));
+        Assert.That(result[3], Is.EqualTo(2));
+    }
+
+    [Test]
+    public void BuildCompactPeers_should_return_empty_when_all_ips_are_invalid()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "not.an.ip", Port = 6881 },
+            new TrackerPeerEntry { Ip = "999.999.999.999", Port = 6882 },
+            new TrackerPeerEntry { Ip = "::1", Port = 6883 }
+        };
+
+        var result = InvokeBuildCompactPeers(peers, "10.0.0.99", 9999, 50);
+
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
     public void ConvertInfoHashToHex_should_convert_bytes_to_lowercase_hex()
     {
         var data = new byte[30];
