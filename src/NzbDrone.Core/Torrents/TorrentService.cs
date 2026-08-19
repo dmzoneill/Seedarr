@@ -117,7 +117,7 @@ public class TorrentService : ITorrentService
 
         _logger.Info("Rechecking torrent: {0}", torrent.Name);
 
-        torrent.Progress = torrent.Progress >= 1.0 ? 1.0 : 0.0;
+        torrent.Progress = Math.Clamp(torrent.Progress, 0.0, 1.0);
         torrent.LastActive = DateTime.UtcNow;
 
         return _repository.Update(torrent);

@@ -34,7 +34,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
 
     protected virtual TResource GetResourceById(TModel model)
     {
-        return null;
+        throw new NotImplementedException($"{GetType().Name} must override GetResourceById");
     }
 
     protected void BroadcastResourceChange(ModelAction action, TResource resource)
