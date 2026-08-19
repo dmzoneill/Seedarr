@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
@@ -49,6 +50,11 @@ public class ArrConnectionController : Controller
     [HttpPost]
     public ActionResult<ArrConnectionDefinition> Create([FromBody] ArrConnectionDefinition definition)
     {
+        if (string.IsNullOrEmpty(definition.WebhookSecret))
+        {
+            definition.WebhookSecret = Guid.NewGuid().ToString("N");
+        }
+
         var created = _connectionFactory.Create(definition);
 
         if (!_webhookRegistration.RegisterWebhook(created))
@@ -67,6 +73,11 @@ public class ArrConnectionController : Controller
         if (definition.ApiKey != null)
         {
             var existing = _connectionFactory.Get(id);
+            if (existing == null)
+            {
+                return NotFound();
+            }
+
             var maskedKey = existing.ApiKey?.Length > 4
                 ? new string('*', existing.ApiKey.Length - 4) + existing.ApiKey[^4..]
                 : new string('*', existing.ApiKey?.Length ?? 0);
@@ -90,6 +101,11 @@ public class ArrConnectionController : Controller
     public ActionResult Delete(int id)
     {
         var definition = _connectionFactory.Get(id);
+        if (definition == null)
+        {
+            return NotFound();
+        }
+
         _webhookRegistration.UnregisterWebhook(definition);
         _connectionFactory.Delete(id);
         return Ok();
@@ -111,9 +127,10 @@ public class ArrConnectionController : Controller
 
     private static ArrConnectionDefinition MaskApiKey(ArrConnectionDefinition definition)
     {
-        definition.ApiKey = definition.ApiKey?.Length > 4
-            ? new string('*', definition.ApiKey.Length - 4) + definition.ApiKey[^4..]
-            : new string('*', definition.ApiKey?.Length ?? 0);
-        return definition;
+        var clone = definition.Clone();
+        clone.ApiKey = clone.ApiKey?.Length > 4
+            ? new string('*', clone.ApiKey.Length - 4) + clone.ApiKey[^4..]
+            : new string('*', clone.ApiKey?.Length ?? 0);
+        return clone;
     }
 }

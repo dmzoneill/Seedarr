@@ -412,7 +412,7 @@ public class PeerServer : BackgroundService
     private bool ValidateInfoHash(byte[] skeyHash)
     {
         var torrents = _torrentService.GetAll();
-        return torrents.Any(t =>
+        return torrents.Where(t => !string.IsNullOrEmpty(t.InfoHash)).Any(t =>
         {
             var infoHashBytes = Convert.FromHexString(t.InfoHash);
             var expected = MseKeyDerivation.DeriveKey(infoHashBytes, Encoding.ASCII.GetBytes("req2"));

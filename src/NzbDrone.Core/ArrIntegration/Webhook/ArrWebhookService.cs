@@ -15,6 +15,7 @@ namespace NzbDrone.Core.ArrIntegration.Webhook;
 
 public interface IArrWebhookService
 {
+    bool ValidateWebhookSecret(string secret);
     ArrWebhookResult ProcessWebhook(ArrWebhookPayload payload);
 }
 
@@ -53,6 +54,19 @@ public class ArrWebhookService : IArrWebhookService
         _logger = LogManager.GetCurrentClassLogger();
         _client = client ?? SharedClient;
         _policy = policy ?? SharedPolicy;
+    }
+
+    public bool ValidateWebhookSecret(string secret)
+    {
+        if (string.IsNullOrEmpty(secret))
+        {
+            return false;
+        }
+
+        return _connectionFactory.All().Any(d =>
+            d.Enable && d.WebhookEnabled &&
+            !string.IsNullOrEmpty(d.WebhookSecret) &&
+            string.Equals(d.WebhookSecret, secret, StringComparison.Ordinal));
     }
 
     public ArrWebhookResult ProcessWebhook(ArrWebhookPayload payload)

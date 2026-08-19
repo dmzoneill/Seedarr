@@ -12,4 +12,6 @@ public class IndexerDefinition : ProviderDefinition
     public bool EnableSearch { get; set; } = true;
     public string Categories { get; set; }
     public int DownloadClientId { get; set; }
+
+    public IndexerDefinition Clone() => (IndexerDefinition)MemberwiseClone();
 }

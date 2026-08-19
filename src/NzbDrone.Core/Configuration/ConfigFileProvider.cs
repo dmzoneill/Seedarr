@@ -1,19 +1,30 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Xml.Linq;
+using NzbDrone.Common.EnvironmentInfo;
 
 namespace NzbDrone.Core.Configuration;
 
 public class ConfigFileProvider : IConfigFileProvider
 {
-    private readonly Dictionary<string, string> _config;
+    private const string ConfigFileName = "config.xml";
+    private const string ConfigElementName = "Config";
 
-    public ConfigFileProvider()
+    private readonly string _configFile;
+    private readonly Dictionary<string, string> _config;
+    private static readonly object Mutex = new();
+
+    public ConfigFileProvider(IAppFolderInfo appFolderInfo)
     {
+        _configFile = Path.Combine(appFolderInfo.AppDataFolder, ConfigFileName);
         _config = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        if (ApiKey.Length == 0)
+        LoadFromFile();
+
+        if (string.IsNullOrEmpty(ApiKey))
         {
-            _config["ApiKey"] = GenerateApiKey();
+            SetValue("ApiKey", GenerateApiKey());
         }
     }
 
@@ -29,6 +40,50 @@ public class ConfigFileProvider : IConfigFileProvider
     public string PostgresMainDb => GetValue("PostgresMainDb", string.Empty);
     public string PostgresUser => GetValue("PostgresUser", string.Empty);
     public string PostgresPassword => GetValue("PostgresPassword", string.Empty);
+
+    private void LoadFromFile()
+    {
+        lock (Mutex)
+        {
+            if (!File.Exists(_configFile))
+            {
+                return;
+            }
+
+            var xDoc = XDocument.Load(_configFile);
+            var config = xDoc.Element(ConfigElementName);
+            if (config == null)
+            {
+                return;
+            }
+
+            foreach (var element in config.Elements())
+            {
+                _config[element.Name.LocalName] = element.Value.Trim();
+            }
+        }
+    }
+
+    private void SetValue(string key, string value)
+    {
+        _config[key] = value;
+        SaveToFile();
+    }
+
+    private void SaveToFile()
+    {
+        lock (Mutex)
+        {
+            var configElement = new XElement(ConfigElementName);
+            foreach (var kvp in _config)
+            {
+                configElement.Add(new XElement(kvp.Key, kvp.Value));
+            }
+
+            var xDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), configElement);
+            xDoc.Save(_configFile);
+        }
+    }
 
     private string GetValue(string key, string defaultValue)
     {

@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using NUnit.Framework;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Test.Configuration;
@@ -8,11 +10,30 @@ namespace NzbDrone.Core.Test.Configuration;
 public class ConfigFileProviderTest
 {
     private ConfigFileProvider _subject;
+    private string _tempDir;
 
     [SetUp]
     public void SetUp()
     {
-        _subject = new ConfigFileProvider();
+        _tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(_tempDir);
+        _subject = new ConfigFileProvider(new TestAppFolderInfo(_tempDir));
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        if (Directory.Exists(_tempDir))
+        {
+            Directory.Delete(_tempDir, true);
+        }
+    }
+
+    private sealed class TestAppFolderInfo : IAppFolderInfo
+    {
+        public TestAppFolderInfo(string appDataFolder) => AppDataFolder = appDataFolder;
+        public string AppDataFolder { get; }
+        public string StartUpFolder => AppDataFolder;
     }
 
     [Test]
@@ -31,6 +52,14 @@ public class ConfigFileProviderTest
     public void ApiKey_should_be_valid_guid_format()
     {
         Assert.That(Guid.TryParse(_subject.ApiKey, out _), Is.True);
+    }
+
+    [Test]
+    public void ApiKey_should_persist_across_instances()
+    {
+        var firstKey = _subject.ApiKey;
+        var second = new ConfigFileProvider(new TestAppFolderInfo(_tempDir));
+        Assert.That(second.ApiKey, Is.EqualTo(firstKey));
     }
 
     [Test]

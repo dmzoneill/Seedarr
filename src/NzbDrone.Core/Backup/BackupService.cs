@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using Microsoft.Data.Sqlite;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.Backup;
 
@@ -24,11 +26,13 @@ public class BackupService : IBackupService
     private const string ConfigFileName = "config.xml";
 
     private readonly IAppFolderInfo _appFolderInfo;
+    private readonly IConnectionStringFactory _connectionStringFactory;
     private readonly Logger _logger;
 
-    public BackupService(IAppFolderInfo appFolderInfo)
+    public BackupService(IAppFolderInfo appFolderInfo, IConnectionStringFactory connectionStringFactory)
     {
         _appFolderInfo = appFolderInfo;
+        _connectionStringFactory = connectionStringFactory;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -50,13 +54,38 @@ public class BackupService : IBackupService
             return null;
         }
 
-        using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
-        {
-            zip.CreateEntryFromFile(dbPath, DbFileName);
+        var dbStagingPath = dbPath + ".backup-staging";
 
-            if (File.Exists(configPath))
+        try
+        {
+            if (_connectionStringFactory.DatabaseType == DatabaseType.SQLite)
             {
-                zip.CreateEntryFromFile(configPath, ConfigFileName);
+                using var conn = new SqliteConnection(_connectionStringFactory.MainDbConnectionString);
+                conn.Open();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"VACUUM INTO '{dbStagingPath.Replace("'", "''")}';";
+                cmd.ExecuteNonQuery();
+            }
+            else
+            {
+                File.Copy(dbPath, dbStagingPath, overwrite: true);
+            }
+
+            using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+            {
+                zip.CreateEntryFromFile(dbStagingPath, DbFileName);
+
+                if (File.Exists(configPath))
+                {
+                    zip.CreateEntryFromFile(configPath, ConfigFileName);
+                }
+            }
+        }
+        finally
+        {
+            if (File.Exists(dbStagingPath))
+            {
+                File.Delete(dbStagingPath);
             }
         }
 
@@ -130,9 +159,10 @@ public class BackupService : IBackupService
             throw new FileNotFoundException("Backup file not found", fileName);
         }
 
-        _logger.Warn("Restoring backup from {0} - this will overwrite the current database", filePath);
+        _logger.Warn("Staging restore from {0} - application restart required to complete", filePath);
 
         var dbPath = Path.Combine(_appFolderInfo.AppDataFolder, DbFileName);
+        var dbRestorePath = dbPath + ".restore";
         var configPath = Path.Combine(_appFolderInfo.AppDataFolder, ConfigFileName);
 
         using var zip = ZipFile.OpenRead(filePath);
@@ -140,8 +170,8 @@ public class BackupService : IBackupService
         var dbEntry = zip.GetEntry(DbFileName);
         if (dbEntry != null)
         {
-            dbEntry.ExtractToFile(dbPath, overwrite: true);
-            _logger.Info("Database restored from backup");
+            dbEntry.ExtractToFile(dbRestorePath, overwrite: true);
+            _logger.Info("Database restore staged at {0}; swap will occur on next startup", dbRestorePath);
         }
 
         var configEntry = zip.GetEntry(ConfigFileName);
