@@ -97,10 +97,11 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
 
         // Only apply realistic variations (burst/idle states, congestion) when enabled
         var stateMultiplier = 1.0;
+        var currentState = TrafficState.Normal;
         var congestionMultiplier = 1.0;
         if (_configService.RealisticVariations)
         {
-            stateMultiplier = GetStateMultiplier();
+            (stateMultiplier, currentState) = GetStateMultiplier();
             congestionMultiplier = GetCongestionMultiplier();
         }
 
@@ -127,7 +128,7 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
             result,
             effectiveProfile,
             hour,
-            _currentState,
+            currentState,
             congestionMultiplier,
             peerCount,
             peerMultiplier,
@@ -154,7 +155,7 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
         return fallback;
     }
 
-    private double GetStateMultiplier()
+    private (double Multiplier, TrafficState State) GetStateMultiplier()
     {
         lock (_lock)
         {
@@ -180,7 +181,7 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
                 }
             }
 
-            return _stateMultiplier;
+            return (_stateMultiplier, _currentState);
         }
     }
 
