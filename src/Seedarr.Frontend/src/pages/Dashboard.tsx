@@ -170,19 +170,23 @@ function Dashboard() {
   }, [torrents]);
 
   return (
-    <div>
+    <div className="content-area">
       <div
-        className="page-heading-row"
+        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           marginBottom: "1rem",
+          flexWrap: "wrap",
+          gap: "0.75rem",
         }}
       >
-        <h1 className="page-heading" style={{ margin: 0 }}>
-          Dashboard
-        </h1>
+        <div className="page-header-group">
+          <h1 className="page-heading" style={{ margin: 0 }}>
+            Dashboard
+          </h1>
+        </div>
       </div>
 
       <HealthAlerts />
