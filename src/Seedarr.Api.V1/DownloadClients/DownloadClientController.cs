@@ -50,6 +50,15 @@ public class DownloadClientController : Controller
     [HttpPost]
     public ActionResult<DownloadClientDefinition> Create([FromBody] DownloadClientDefinition definition)
     {
+        if (string.IsNullOrWhiteSpace(definition.Implementation))
+        {
+            definition.Implementation = $"{definition.ClientType}Client";
+        }
+        if (string.IsNullOrWhiteSpace(definition.ConfigContract))
+        {
+            definition.ConfigContract = $"{definition.ClientType}Settings";
+        }
+
         try
         {
             CreateClient(definition);
@@ -67,6 +76,15 @@ public class DownloadClientController : Controller
     public ActionResult Update(int id, [FromBody] DownloadClientDefinition definition)
     {
         definition.Id = id;
+
+        if (string.IsNullOrWhiteSpace(definition.Implementation))
+        {
+            definition.Implementation = $"{definition.ClientType}Client";
+        }
+        if (string.IsNullOrWhiteSpace(definition.ConfigContract))
+        {
+            definition.ConfigContract = $"{definition.ClientType}Settings";
+        }
 
         // If the masked password was sent back, preserve the existing value
         if (definition.Password == PasswordMask)
