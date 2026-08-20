@@ -1,4 +1,3 @@
-/* eslint-disable n/no-missing-import, n/no-unsupported-features/node-builtins */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
 import type {
@@ -43,6 +42,9 @@ import type {
   PeerConnectionLogEntry,
   TorrentEventLogEntry,
   NetworkDiagnostics,
+  DownloadHistoryEntry,
+  ReleaseInfo,
+  DownloadReleaseRequest,
 } from "./types";
 
 const DEFAULT_REFETCH_MS = 5000;
@@ -798,3 +800,83 @@ export function useActivePeers() {
     refetchInterval: interval,
   });
 }
+
+export function useDownloadHistory(params?: {
+  query?: string;
+  status?: string;
+  limit?: number;
+}) {
+  const interval = useRefetchInterval();
+  const searchParams = new URLSearchParams();
+  if (params?.query) searchParams.set("query", params.query);
+  if (params?.status) searchParams.set("status", params.status);
+  if (params?.limit) searchParams.set("limit", String(params.limit));
+  const queryString = searchParams.toString();
+
+  return useQuery<DownloadHistoryEntry[]>({
+    queryKey: ["downloadhistory", params?.query, params?.status, params?.limit],
+    queryFn: () => apiClient.get(`/downloadhistory${queryString ? `?${queryString}` : ""}`),
+    refetchInterval: interval,
+  });
+}
+
+export function useReAddHistoryTorrent() {
+  const queryClient = useQueryClient();
+  return useMutation<Torrent, Error, number>({
+    mutationFn: (id: number) => apiClient.post(`/downloadhistory/${id}/readd`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["downloadhistory"] });
+    },
+  });
+}
+
+export function useDeleteHistoryTorrent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/downloadhistory/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadhistory"] });
+    },
+  });
+}
+
+export function useClearDownloadHistory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.delete("/downloadhistory"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadhistory"] });
+    },
+  });
+}
+
+export function useIndexerSearch(
+  params: { query: string; category?: string; indexerId?: number },
+  enabled = true,
+) {
+  const searchParams = new URLSearchParams();
+  searchParams.set("query", params.query);
+  if (params.category) searchParams.set("category", params.category);
+  if (params.indexerId) searchParams.set("indexerId", String(params.indexerId));
+  const queryString = searchParams.toString();
+
+  return useQuery<ReleaseInfo[]>({
+    queryKey: ["indexers", "search", params.query, params.category, params.indexerId],
+    queryFn: () => apiClient.get(`/indexers/search?${queryString}`),
+    enabled: enabled && Boolean(params.query?.trim()),
+    staleTime: 30_000,
+  });
+}
+
+export function useDownloadIndexerRelease() {
+  const queryClient = useQueryClient();
+  return useMutation<Torrent, Error, DownloadReleaseRequest>({
+    mutationFn: (req) => apiClient.post("/indexers/download", req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["downloadhistory"] });
+    },
+  });
+}
+

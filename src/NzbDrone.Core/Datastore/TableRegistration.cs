@@ -33,5 +33,6 @@ public static class TableRegistration
         TableMapping.Register<PeerConnectionLog>("PeerConnectionLogs");
         TableMapping.Register<Tag>("Tags");
         TableMapping.Register<SpeedSchedule>("SpeedSchedules");
+        TableMapping.Register<DownloadHistory>("DownloadHistory");
     }
 }
