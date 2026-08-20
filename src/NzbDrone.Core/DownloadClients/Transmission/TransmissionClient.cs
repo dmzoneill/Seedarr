@@ -249,6 +249,26 @@ public class TransmissionClient : IDownloadClient, IDisposable
         }
     }
 
+    public bool Reannounce(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        try
+        {
+            var args = new { ids = new[] { infoHash } };
+            using var doc = SendRequest("torrent-reannounce", args);
+            return doc.RootElement.TryGetProperty("result", out var res) && res.GetString() == "success";
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to reannounce Transmission torrent {0}", infoHash);
+            return false;
+        }
+    }
+
     public bool TestConnection()
     {
         return TestConnectionDetailed().Success;

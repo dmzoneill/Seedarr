@@ -8,6 +8,7 @@ using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.TrackerBoost;
 using NzbDrone.SignalR;
 using Seedarr.Http;
 using Seedarr.Http.REST;
@@ -25,6 +26,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly ITorrentEventLogService _eventLogService;
     private readonly IConfigService _configService;
     private readonly IDownloadHistoryRepository _downloadHistoryRepository;
+    private readonly ITrackerBoostService _trackerBoostService;
 
     public TorrentController(
         ITorrentService torrentService,
@@ -36,7 +38,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         IConfigService configService,
         IBroadcastSignalRMessage signalRBroadcaster,
         TorrentResourceValidator torrentResourceValidator,
-        IDownloadHistoryRepository downloadHistoryRepository = null)
+        IDownloadHistoryRepository downloadHistoryRepository = null,
+        ITrackerBoostService trackerBoostService = null)
         : base(signalRBroadcaster)
     {
         _torrentService = torrentService;
@@ -47,6 +50,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _eventLogService = eventLogService;
         _configService = configService;
         _downloadHistoryRepository = downloadHistoryRepository;
+        _trackerBoostService = trackerBoostService;
 
         SharedValidator = torrentResourceValidator;
     }
@@ -170,6 +174,86 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return trackers.Select(TorrentResourceMapper.ToTrackerResource).ToList();
     }
 
+    [HttpPost("{torrentId:int}/trackers")]
+    public ActionResult<TrackerEntryResource> AddTracker(int torrentId, [FromBody] AddTorrentTrackerResource resource)
+    {
+        if (resource == null || string.IsNullOrWhiteSpace(resource.Url))
+        {
+            return BadRequest(new { message = "Tracker URL is required." });
+        }
+
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var clean = resource.Url.Trim();
+        var existing = _trackerEntryService.GetByTorrentId(torrentId)
+            .FirstOrDefault(t => string.Equals((t.Url ?? string.Empty).Trim(), clean, StringComparison.OrdinalIgnoreCase));
+
+        TrackerEntry entry;
+        if (existing != null)
+        {
+            entry = existing;
+        }
+        else
+        {
+            entry = new TrackerEntry
+            {
+                TorrentId = torrentId,
+                Url = clean,
+                Tier = resource.Tier > 0 ? resource.Tier : 1,
+                Status = TrackerStatus.Working,
+                Enabled = true,
+                Seeders = 0,
+                Leechers = 0,
+                LastAnnounce = DateTime.UtcNow,
+                NextAnnounce = DateTime.UtcNow,
+                TotalAnnounces = 1,
+                SuccessfulAnnounces = 1,
+                AnnounceInterval = 1800,
+                MinAnnounceInterval = 900
+            };
+            entry = _trackerEntryService.Add(entry);
+        }
+
+        // Also inject into download clients
+        if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
+        {
+            _trackerBoostService?.InjectIntoDownloadClients(torrent.InfoHash, new[] { clean });
+        }
+
+        TriggerAnnounceInternal(torrent);
+        _eventLogService.Info(torrentId, "Tracker", $"Added tracker {clean} and triggered announce");
+
+        return Ok(TorrentResourceMapper.ToTrackerResource(entry));
+    }
+
+    [HttpDelete("{torrentId:int}/trackers/{trackerId:int}")]
+    public ActionResult DeleteTracker(int torrentId, int trackerId)
+    {
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var trackers = _trackerEntryService.GetByTorrentId(torrentId);
+        var target = trackers.FirstOrDefault(t => t.Id == trackerId);
+        if (target == null)
+        {
+            return NotFound();
+        }
+
+        _trackerEntryService.Delete(trackerId);
+        _eventLogService.Info(torrentId, "Tracker", $"Removed tracker {target.Url}");
+
+        TriggerAnnounceInternal(torrent);
+
+        return NoContent();
+    }
+
     [HttpGet("{torrentId:int}/peers")]
     public ActionResult<List<PeerResource>> GetPeers(int torrentId)
     {
@@ -282,16 +366,14 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return MapTorrentToResource(updated);
     }
 
-    [HttpPost("{id:int}/announce")]
-    public ActionResult Announce(int id)
+    private void TriggerAnnounceInternal(Torrent torrent)
     {
-        var torrent = _torrentService.Get(id);
         if (torrent == null)
         {
-            return NotFound();
+            return;
         }
 
-        var trackers = _trackerEntryService.GetByTorrentId(id);
+        var trackers = _trackerEntryService.GetByTorrentId(torrent.Id);
         foreach (var tracker in trackers)
         {
             if (!tracker.Enabled)
@@ -310,7 +392,24 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         torrent.LastActive = DateTime.UtcNow;
         _torrentService.Update(torrent);
-        _eventLogService.Info(id, "Tracker", $"Manual announce to {trackers.Count(t => t.Enabled)} enabled tracker(s)");
+        _eventLogService.Info(torrent.Id, "Tracker", $"Announce triggered for {trackers.Count(t => t.Enabled)} enabled tracker(s)");
+
+        if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
+        {
+            _trackerBoostService?.ReannounceDownloadClients(torrent.InfoHash);
+        }
+    }
+
+    [HttpPost("{id:int}/announce")]
+    public ActionResult Announce(int id)
+    {
+        var torrent = _torrentService.Get(id);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        TriggerAnnounceInternal(torrent);
 
         return Ok();
     }
@@ -548,3 +647,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 public record TorrentUploadFailure(string FileName, string Reason);
 
 public record TorrentUploadResult(List<TorrentResource> Added, List<TorrentUploadFailure> Failed);
+
+public class AddTorrentTrackerResource
+{
+    public string Url { get; set; } = string.Empty;
+    public int Tier { get; set; } = 1;
+}

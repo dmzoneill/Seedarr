@@ -200,6 +200,30 @@ public class DelugeClient : IDownloadClient, IDisposable
         }
     }
 
+    public bool Reannounce(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        if (!Authenticate())
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = SendRequest("core.force_reannounce", new object[] { new[] { infoHash } });
+            return doc.RootElement.TryGetProperty("result", out var res) && res.ValueKind != JsonValueKind.Null;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to force reannounce Deluge torrent {0}", infoHash);
+            return false;
+        }
+    }
+
     public bool TestConnection()
     {
         return TestConnectionDetailed().Success;
