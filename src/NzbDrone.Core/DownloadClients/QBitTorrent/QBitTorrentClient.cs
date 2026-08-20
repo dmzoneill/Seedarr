@@ -204,6 +204,35 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         }
     }
 
+    public bool Reannounce(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        if (!Authenticate())
+        {
+            return false;
+        }
+
+        try
+        {
+            using var content = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("hashes", infoHash)
+            });
+
+            var response = Task.Run(() => _client.PostAsync($"{BaseUrl}/api/v2/torrents/reannounce", content)).GetAwaiter().GetResult();
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to reannounce qBittorrent torrent {0}", infoHash);
+            return false;
+        }
+    }
+
     public bool TestConnection()
     {
         return TestConnectionDetailed().Success;

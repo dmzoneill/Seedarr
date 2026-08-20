@@ -19,6 +19,7 @@ public interface IDownloadClient : IProvider
     byte[] GetTorrentFile(string infoHash);
     List<string> GetTrackers(string infoHash);
     bool AddTrackers(string infoHash, IEnumerable<string> trackers);
+    bool Reannounce(string infoHash);
     bool TestConnection();
     DownloadClientTestResult TestConnectionDetailed();
 }

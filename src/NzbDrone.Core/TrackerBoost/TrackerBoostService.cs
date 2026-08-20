@@ -37,11 +37,13 @@ public interface ITrackerBoostService
     Task<TorrentTrackerInspectionResult> InspectHashTrackersAsync(string infoHash, string name = "");
     Task<SwarmBoostResult> BoostTorrentAsync(int torrentId, bool onlyVerified = true);
     Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "", bool onlyVerified = true);
-    Task<SwarmBoostResult> InjectTrackerToTorrentAsync(int torrentId, string trackerUrl);
-    Task<SwarmBoostResult> InjectTrackerToHashAsync(string infoHash, string trackerUrl);
+    Task<SwarmBoostResult> InjectTrackerToTorrentAsync(int torrentId, string trackerUrl, bool force = false);
+    Task<SwarmBoostResult> InjectTrackerToHashAsync(string infoHash, string trackerUrl, bool force = false);
     Task<List<SwarmBoostResult>> BoostAllTorrentsAsync(bool onlyVerified = true);
     Task<TrackerCrossMatrixResult> GetCrossMatrixAsync();
     Task<int> RecoverMissingTrackersAsync();
+    int InjectIntoDownloadClients(string infoHash, IEnumerable<string> trackers);
+    void ReannounceDownloadClients(string infoHash);
     Task RunOptimizationCycleAsync();
 }
 
@@ -283,10 +285,27 @@ public class TrackerBoostService : ITrackerBoostService
             {
                 try
                 {
-                    if (string.Equals(clientDef.ClientType, "QBitTorrent", StringComparison.OrdinalIgnoreCase))
+                    var client = _downloadClientFactory.CreateClient(clientDef);
+                    var items = client.GetItems();
+                    foreach (var item in items)
                     {
-                        var harvested = await HarvestQBitTorrentTrackersAsync(clientDef);
-                        discovered += harvested;
+                        if (string.IsNullOrWhiteSpace(item.InfoHash))
+                        {
+                            continue;
+                        }
+
+                        var trackers = client.GetTrackers(item.InfoHash);
+                        foreach (var trUrl in trackers)
+                        {
+                            if (IsValidPublicTrackerUrl(trUrl))
+                            {
+                                var res = AddTrackerInternal(trUrl, TrackerSourceType.ActiveTorrent, $"{clientDef.Name} Swarm Harvest");
+                                if (res != null && res.Id > 0)
+                                {
+                                    discovered++;
+                                }
+                            }
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -937,6 +956,29 @@ public class TrackerBoostService : ITrackerBoostService
 
         await Task.WhenAll(tasks);
 
+        foreach (var entry in attachedMap.Values)
+        {
+            var cleanUrl = (entry.Url ?? string.Empty).Trim().ToLowerInvariant();
+            if (!detections.Any(d => (d.TrackerUrl ?? string.Empty).Trim().ToLowerInvariant() == cleanUrl))
+            {
+                var host = !string.IsNullOrEmpty(entry.Url) && Uri.TryCreate(entry.Url, UriKind.Absolute, out var u) ? u.Host : entry.Url;
+                detections.Add(new TorrentTrackerDetection
+                {
+                    TrackerId = 0,
+                    TrackerUrl = entry.Url ?? string.Empty,
+                    TrackerHost = host ?? string.Empty,
+                    Protocol = (entry.Url != null && entry.Url.StartsWith("udp", StringComparison.OrdinalIgnoreCase)) ? TrackerProtocol.Udp : TrackerProtocol.Http,
+                    Source = TrackerSourceType.ActiveTorrent,
+                    SourceName = "Torrent Attached Tracker",
+                    IsAttached = true,
+                    HealthStatus = TrackerHealthStatus.Alive,
+                    Seeders = entry.Seeders,
+                    Leechers = entry.Leechers,
+                    DetectionStatus = isPrivate ? "Protected (Private Tracker Attached)" : "Attached"
+                });
+            }
+        }
+
         var hasBoost = BoostHistory.TryGetValue(infoHash, out var boostInfo);
 
         return new TorrentTrackerInspectionResult
@@ -1126,7 +1168,7 @@ public class TrackerBoostService : ITrackerBoostService
         };
     }
 
-    public async Task<SwarmBoostResult> InjectTrackerToTorrentAsync(int torrentId, string trackerUrl)
+    public async Task<SwarmBoostResult> InjectTrackerToTorrentAsync(int torrentId, string trackerUrl, bool force = false)
     {
         var torrent = _torrentService.Get(torrentId);
         if (torrent == null)
@@ -1134,7 +1176,7 @@ public class TrackerBoostService : ITrackerBoostService
             return new SwarmBoostResult { TorrentId = torrentId, Boosted = false, Message = "Torrent not found" };
         }
 
-        if (torrent.IsPrivate)
+        if (torrent.IsPrivate && !force)
         {
             return new SwarmBoostResult
             {
@@ -1170,6 +1212,7 @@ public class TrackerBoostService : ITrackerBoostService
         }
 
         InjectIntoDownloadClients(torrent.InfoHash, new[] { trackerUrl.Trim() });
+        ReannounceDownloadClients(torrent.InfoHash);
 
         return await Task.FromResult(new SwarmBoostResult
         {
@@ -1179,19 +1222,20 @@ public class TrackerBoostService : ITrackerBoostService
             Boosted = true,
             AddedTrackersCount = 1,
             AddedTrackers = new List<string> { trackerUrl.Trim() },
-            Message = $"Injected {trackerUrl} into Seedarr & active download agents."
+            Message = $"Injected {trackerUrl} and announced to Seedarr & active download agents."
         });
     }
 
-    public async Task<SwarmBoostResult> InjectTrackerToHashAsync(string infoHash, string trackerUrl)
+    public async Task<SwarmBoostResult> InjectTrackerToHashAsync(string infoHash, string trackerUrl, bool force = false)
     {
         var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
         if (torrent != null)
         {
-            return await InjectTrackerToTorrentAsync(torrent.Id, trackerUrl);
+            return await InjectTrackerToTorrentAsync(torrent.Id, trackerUrl, force);
         }
 
         var injected = InjectIntoDownloadClients(infoHash, new[] { trackerUrl.Trim() });
+        ReannounceDownloadClients(infoHash);
         return await Task.FromResult(new SwarmBoostResult
         {
             TorrentId = 0,
@@ -1200,7 +1244,7 @@ public class TrackerBoostService : ITrackerBoostService
             Boosted = injected > 0,
             AddedTrackersCount = injected > 0 ? 1 : 0,
             AddedTrackers = new List<string> { trackerUrl.Trim() },
-            Message = injected > 0 ? $"Injected tracker into {injected} download client(s)." : "Injected tracker."
+            Message = injected > 0 ? $"Injected tracker into {injected} download client(s) and triggered reannounce." : "Injected tracker."
         });
     }
 
@@ -1255,7 +1299,7 @@ public class TrackerBoostService : ITrackerBoostService
 
     public async Task<TrackerCrossMatrixResult> GetCrossMatrixAsync()
     {
-        var torrents = _torrentService.GetAll().Where(t => !t.IsPrivate).ToList();
+        var torrents = _torrentService.GetAll();
         var allTrackers = _trackerRepository.All().Where(t => t.Enabled).ToList();
 
         var torrentMatrix = new List<TorrentMatrixItem>();
@@ -1493,7 +1537,7 @@ public class TrackerBoostService : ITrackerBoostService
         }
     }
 
-    private int InjectIntoDownloadClients(string infoHash, IEnumerable<string> trackers)
+    public int InjectIntoDownloadClients(string infoHash, IEnumerable<string> trackers)
     {
         if (string.IsNullOrWhiteSpace(infoHash) || trackers == null)
         {
@@ -1526,6 +1570,35 @@ public class TrackerBoostService : ITrackerBoostService
         }
 
         return count;
+    }
+
+    public void ReannounceDownloadClients(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return;
+        }
+
+        try
+        {
+            var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+            foreach (var clientDef in clients)
+            {
+                try
+                {
+                    var provider = CreateDownloadClient(clientDef);
+                    provider?.Reannounce(infoHash);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to reannounce in client {0} for {1}", clientDef.Name, infoHash);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to reannounce torrent {0} across download clients", infoHash);
+        }
     }
 
     private static IDownloadClient CreateDownloadClient(DownloadClientDefinition definition)

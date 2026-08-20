@@ -119,6 +119,40 @@ export function useTorrentTrackers(torrentId: number) {
   });
 }
 
+export function useDeleteTorrentTracker() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, { torrentId: number; trackerId: number }>({
+    mutationFn: ({ torrentId, trackerId }) =>
+      apiClient.delete(`/torrent/${torrentId}/trackers/${trackerId}`),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ["torrents", vars.torrentId, "trackers"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
+    },
+  });
+}
+
+export function useAddTorrentTracker() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    TrackerEntry,
+    Error,
+    { torrentId: number; url: string; tier?: number }
+  >({
+    mutationFn: ({ torrentId, url, tier }) =>
+      apiClient.post(`/torrent/${torrentId}/trackers`, { url, tier: tier ?? 1 }),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ["torrents", vars.torrentId, "trackers"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
+    },
+  });
+}
+
 export function useTorrentLogs(torrentId: number) {
   return useQuery<TorrentEventLogEntry[]>({
     queryKey: ["torrents", torrentId, "logs"],

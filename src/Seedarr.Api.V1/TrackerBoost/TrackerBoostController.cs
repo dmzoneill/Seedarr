@@ -141,12 +141,12 @@ public class TrackerBoostController : Controller
 
         if (resource.TorrentId > 0)
         {
-            var result = await _trackerBoostService.InjectTrackerToTorrentAsync(resource.TorrentId, resource.TrackerUrl);
+            var result = await _trackerBoostService.InjectTrackerToTorrentAsync(resource.TorrentId, resource.TrackerUrl, resource.Force);
             return Ok(result);
         }
         else
         {
-            var result = await _trackerBoostService.InjectTrackerToHashAsync(resource.InfoHash, resource.TrackerUrl);
+            var result = await _trackerBoostService.InjectTrackerToHashAsync(resource.InfoHash, resource.TrackerUrl, resource.Force);
             return Ok(result);
         }
     }
@@ -176,4 +176,5 @@ public class InjectTrackerResource
     public int TorrentId { get; set; }
     public string InfoHash { get; set; } = string.Empty;
     public string TrackerUrl { get; set; } = string.Empty;
+    public bool Force { get; set; } = true;
 }
