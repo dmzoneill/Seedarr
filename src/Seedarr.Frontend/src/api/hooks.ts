@@ -49,6 +49,7 @@ import type {
   TrackerBoostStatusSummary,
   TrackerBoostSettings,
   TrackerCrossMatrixResult,
+  TrackerBoostLogEntry,
   DownloadPlusPlusTracker,
   DownloadPlusPlusStatusSummary,
   SwarmBoostResult,
@@ -1166,6 +1167,36 @@ export function useDeleteTrackerBoostTracker() {
     mutationFn: (id) => apiClient.delete(`/trackerboost/trackers/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
+    },
+  });
+}
+
+export function useTrackerBoostLogs(
+  limit = 150,
+  category?: string,
+  level?: string,
+  refetchInterval?: number | false,
+) {
+  return useQuery<TrackerBoostLogEntry[]>({
+    queryKey: ["trackerboost", "logs", limit, category, level],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (limit) params.set("limit", limit.toString());
+      if (category && category !== "all") params.set("category", category);
+      if (level && level !== "all") params.set("level", level);
+      const queryStr = params.toString();
+      return apiClient.get(`/trackerboost/logs${queryStr ? `?${queryStr}` : ""}`);
+    },
+    refetchInterval: refetchInterval ?? 3000,
+  });
+}
+
+export function useClearTrackerBoostLogs() {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean }, Error>({
+    mutationFn: () => apiClient.delete("/trackerboost/logs"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trackerboost", "logs"] });
     },
   });
 }

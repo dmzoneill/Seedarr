@@ -22,16 +22,24 @@ function MiniChart({
   const cw = CHART_W - CHART_PAD.left - CHART_PAD.right;
   const ch = CHART_H - CHART_PAD.top - CHART_PAD.bottom;
   let maxVal = 0;
-  for (const v of data) if (v > maxVal) maxVal = v;
+  for (const v of data) {
+    if (typeof v === "number" && Number.isFinite(v) && v > maxVal) {
+      maxVal = v;
+    }
+  }
   const niceMax = maxVal > 0 ? maxVal * 1.1 : 1;
 
   const pts = data
     .map((v, i) => {
+      const rawVal = typeof v === "number" && Number.isFinite(v) ? v : 0;
+      const clampedVal = Math.max(0, Math.min(rawVal, niceMax));
       const x = CHART_PAD.left + (i / Math.max(1, MAX_PTS - 1)) * cw;
-      const y = CHART_PAD.top + ch - (v / niceMax) * ch;
-      return `${x},${y}`;
+      const y = CHART_PAD.top + ch - (clampedVal / niceMax) * ch;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
+
+  const clipId = `mini_clip_${title.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
 
   return (
     <div className="detail-panel-chart">
@@ -44,6 +52,16 @@ function MiniChart({
         viewBox={`0 0 ${CHART_W} ${CHART_H}`}
         preserveAspectRatio="xMidYMid meet"
       >
+        <defs>
+          <clipPath id={clipId}>
+            <rect
+              x={CHART_PAD.left}
+              y={CHART_PAD.top}
+              width={cw}
+              height={ch}
+            />
+          </clipPath>
+        </defs>
         <rect
           x={CHART_PAD.left}
           y={CHART_PAD.top}
@@ -54,13 +72,15 @@ function MiniChart({
           strokeWidth={0.5}
         />
         {pts && (
-          <polyline
-            points={pts}
-            fill="none"
-            stroke={color}
-            strokeWidth={1.5}
-            strokeLinejoin="round"
-          />
+          <g clipPath={`url(#${clipId})`}>
+            <polyline
+              points={pts}
+              fill="none"
+              stroke={color}
+              strokeWidth={1.5}
+              strokeLinejoin="round"
+            />
+          </g>
         )}
       </svg>
     </div>

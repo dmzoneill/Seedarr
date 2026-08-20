@@ -44,14 +44,20 @@ public interface ITrackerBoostService
     Task<int> RecoverMissingTrackersAsync();
     int InjectIntoDownloadClients(string infoHash, IEnumerable<string> trackers);
     void ReannounceDownloadClients(string infoHash);
+    IReadOnlyList<TrackerBoostLogEntry> GetLogs(int limit = 100, string category = null, string level = null);
+    void ClearLogs();
+    void LogActivity(string level, string category, string message, string trackerUrl = null, string infoHash = null);
     Task RunOptimizationCycleAsync();
 }
 
 public class TrackerBoostService : ITrackerBoostService
 {
+    private const int MaxLogEntries = 500;
+
     private static readonly HttpClient HttpClient = new(new HttpClientHandler { CheckCertificateRevocationList = true }) { Timeout = TimeSpan.FromSeconds(6) };
     private static readonly BencodeParser BParser = new();
     private static readonly ConcurrentDictionary<string, (DateTime BoostedAt, HashSet<string> InjectedTrackers)> BoostHistory = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentQueue<TrackerBoostLogEntry> LogBuffer = new();
 
     private static readonly string[] DefaultBootstrapTrackers = new[]
     {
@@ -69,6 +75,15 @@ public class TrackerBoostService : ITrackerBoostService
         "https://tracker.tamersunion.org:443/announce"
     };
 
+    private static DateTime? _lastScanTime;
+    private static DateTime? _lastHarvestTime;
+    private static DateTime? _lastProwlarrHarvestTime;
+    private static DateTime? _lastAutoBoostTime;
+    private static int _totalTorrentsBoosted;
+    private static int _totalTrackersInjected;
+    private static int _totalVerifiedMatchesCount;
+    private static int _nextLogId;
+
     private readonly ITrackerBoostTrackerRepository _trackerRepository;
     private readonly ITorrentService _torrentService;
     private readonly ITrackerEntryService _trackerEntryService;
@@ -77,14 +92,6 @@ public class TrackerBoostService : ITrackerBoostService
     private readonly IConfigService _configService;
     private readonly ITorrentFileParser _torrentFileParser;
     private readonly Logger _logger;
-
-    private static DateTime? _lastScanTime;
-    private static DateTime? _lastHarvestTime;
-    private static DateTime? _lastProwlarrHarvestTime;
-    private static DateTime? _lastAutoBoostTime;
-    private static int _totalTorrentsBoosted;
-    private static int _totalTrackersInjected;
-    private static int _totalVerifiedMatchesCount;
 
     public TrackerBoostService(
         ITrackerBoostTrackerRepository trackerRepository,
@@ -154,6 +161,68 @@ public class TrackerBoostService : ITrackerBoostService
             ["TrackerBoostOnlyVerified"] = settings.OnlyVerified
         };
         _configService.SaveConfigDictionary(dict);
+        LogActivity("Info", "General", $"Tracker Boost settings updated: AutoBoost={settings.AutoBoostEnabled}, Interval={settings.IntervalMinutes}m, OnlyVerified={settings.OnlyVerified}");
+    }
+
+    public IReadOnlyList<TrackerBoostLogEntry> GetLogs(int limit = 100, string category = null, string level = null)
+    {
+        var query = LogBuffer.ToArray().AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(category) && !string.Equals(category, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(l => string.Equals(l.Category, category, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(level) && !string.Equals(level, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(l => string.Equals(l.Level, level, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return query.OrderByDescending(l => l.Id).Take(Math.Clamp(limit, 1, 500)).ToList();
+    }
+
+    public void ClearLogs()
+    {
+        while (LogBuffer.TryDequeue(out _))
+        {
+        }
+
+        LogActivity("Info", "General", "Tracker Boost activity logs cleared");
+    }
+
+    public void LogActivity(string level, string category, string message, string trackerUrl = null, string infoHash = null)
+    {
+        var entry = new TrackerBoostLogEntry
+        {
+            Id = Interlocked.Increment(ref _nextLogId),
+            Timestamp = DateTime.UtcNow,
+            Level = level ?? "Info",
+            Category = category ?? "General",
+            TrackerUrl = trackerUrl ?? string.Empty,
+            InfoHash = infoHash ?? string.Empty,
+            Message = message ?? string.Empty
+        };
+
+        LogBuffer.Enqueue(entry);
+        while (LogBuffer.Count > MaxLogEntries && LogBuffer.TryDequeue(out _))
+        {
+        }
+
+        switch (level?.ToLowerInvariant())
+        {
+            case "error":
+                _logger.Error("[{0}] {1}", category, message);
+                break;
+            case "warn":
+                _logger.Warn("[{0}] {1}", category, message);
+                break;
+            case "debug":
+                _logger.Debug("[{0}] {1}", category, message);
+                break;
+            default:
+                _logger.Info("[{0}] {1}", category, message);
+                break;
+        }
     }
 
     public List<TrackerBoostTracker> GetAllTrackers()
@@ -318,11 +387,17 @@ public class TrackerBoostService : ITrackerBoostService
             if (discovered > 0)
             {
                 _logger.Info("Harvested {0} new public trackers from active download swarms", discovered);
+                LogActivity("Success", "Discovery", $"Harvested {discovered} new public tracker(s) from active download clients (qBittorrent, Deluge, Transmission)");
+            }
+            else
+            {
+                LogActivity("Info", "Discovery", "Harvested active download clients: all client swarms up to date");
             }
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Error harvesting trackers from active downloads");
+            LogActivity("Error", "Discovery", $"Error harvesting from download clients: {ex.Message}");
         }
 
         return discovered;
@@ -517,10 +592,12 @@ public class TrackerBoostService : ITrackerBoostService
 
             _lastProwlarrHarvestTime = DateTime.UtcNow;
             _logger.Info("Harvested {0} trackers from connected Prowlarr indexers", harvestedCount);
+            LogActivity(harvestedCount > 0 ? "Success" : "Info", "Discovery", $"Prowlarr sync complete: {harvestedCount} tracker(s) harvested from indexers");
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to harvest trackers from Prowlarr");
+            LogActivity("Warn", "Discovery", $"Failed to harvest from Prowlarr: {ex.Message}");
         }
 
         return harvestedCount;
@@ -560,9 +637,11 @@ public class TrackerBoostService : ITrackerBoostService
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Failed to download tracker feed from {0}", feed);
+                LogActivity("Warn", "Discovery", $"Failed to download tracker feed from {feed}: {ex.Message}");
             }
         }
 
+        LogActivity(count > 0 ? "Success" : "Info", "Discovery", $"Curated list sync complete: {count} new candidate tracker(s) discovered");
         return count;
     }
 
@@ -598,21 +677,24 @@ public class TrackerBoostService : ITrackerBoostService
                     tracker.Status = tracker.LatencyMs < 400 ? TrackerHealthStatus.Alive : TrackerHealthStatus.Slow;
                     tracker.LastSuccess = DateTime.UtcNow;
                     tracker.SuccessfulScrapes++;
+                    LogActivity(tracker.Status == TrackerHealthStatus.Alive ? "Success" : "Warn", "Health", $"Probe succeeded for {tracker.Url} ({tracker.LatencyMs}ms - {tracker.Status})", tracker.Url);
                 }
                 else
                 {
                     tracker.Status = TrackerHealthStatus.Offline;
                     tracker.FailedScrapes++;
+                    LogActivity("Error", "Health", $"Probe failed / connection timeout for {tracker.Url} - marked Offline", tracker.Url);
                 }
 
                 _trackerRepository.Update(tracker);
                 Interlocked.Increment(ref testedCount);
             }
-            catch
+            catch (Exception ex)
             {
                 tracker.Status = TrackerHealthStatus.Offline;
                 tracker.FailedScrapes++;
                 _trackerRepository.Update(tracker);
+                LogActivity("Error", "Health", $"Probe exception for {tracker.Url}: {ex.Message} - marked Offline", tracker.Url);
             }
             finally
             {
@@ -622,6 +704,7 @@ public class TrackerBoostService : ITrackerBoostService
 
         await Task.WhenAll(tasks);
         _lastScanTime = DateTime.UtcNow;
+        LogActivity("Info", "Health", $"Completed health scan of {testedCount} candidate tracker(s)");
         return testedCount;
     }
 
@@ -1093,6 +1176,12 @@ public class TrackerBoostService : ITrackerBoostService
                 totalLeechers,
                 clientCount);
 
+            LogActivity(
+                "Success",
+                "Inject",
+                $"Boosted torrent '{torrent.Name}': injected {addedList.Count} verified tracker(s) (+{totalSeeders} seeds, +{totalLeechers} leeches) into {clientCount} download client(s)",
+                infoHash: torrent.InfoHash);
+
             return new SwarmBoostResult
             {
                 TorrentId = torrentId,
@@ -1108,6 +1197,8 @@ public class TrackerBoostService : ITrackerBoostService
                 Message = $"Injected {addedList.Count} verified alive trackers (+{totalSeeders} seeds, +{totalLeechers} leeches discovered) into Seedarr & download clients."
             };
         }
+
+        LogActivity("Info", "Inject", $"Torrent '{torrent.Name}' checked: no new candidate trackers needed", infoHash: torrent.InfoHash);
 
         return new SwarmBoostResult
         {
@@ -1150,6 +1241,7 @@ public class TrackerBoostService : ITrackerBoostService
             }
 
             BoostHistory[infoHash] = (DateTime.UtcNow, existingHistory.InjectedTrackers);
+            LogActivity("Success", "Inject", $"Injected {trackerUrls.Count} verified tracker(s) into hash {infoHash} across {clientCount} download client(s)", infoHash: infoHash);
         }
 
         return new SwarmBoostResult
@@ -1178,6 +1270,7 @@ public class TrackerBoostService : ITrackerBoostService
 
         if (torrent.IsPrivate && !force)
         {
+            LogActivity("Warn", "Inject", $"Injection skipped for private torrent '{torrent.Name}' (BEP 27 protection)", trackerUrl, torrent.InfoHash);
             return new SwarmBoostResult
             {
                 TorrentId = torrentId,
@@ -1213,6 +1306,7 @@ public class TrackerBoostService : ITrackerBoostService
 
         InjectIntoDownloadClients(torrent.InfoHash, new[] { trackerUrl.Trim() });
         ReannounceDownloadClients(torrent.InfoHash);
+        LogActivity("Success", "Inject", $"Injected tracker {trackerUrl} into torrent '{torrent.Name}' and triggered immediate reannounce", trackerUrl, torrent.InfoHash);
 
         return await Task.FromResult(new SwarmBoostResult
         {
@@ -1236,6 +1330,7 @@ public class TrackerBoostService : ITrackerBoostService
 
         var injected = InjectIntoDownloadClients(infoHash, new[] { trackerUrl.Trim() });
         ReannounceDownloadClients(infoHash);
+        LogActivity("Success", "Inject", $"Injected tracker {trackerUrl} into hash {infoHash} across {injected} download client(s) and reannounced", trackerUrl, infoHash);
         return await Task.FromResult(new SwarmBoostResult
         {
             TorrentId = 0,
@@ -1513,11 +1608,14 @@ public class TrackerBoostService : ITrackerBoostService
             _logger.Error(ex, "Failed to run RecoverMissingTrackersAsync");
         }
 
+        LogActivity("Info", "Discovery", $"Missing tracker recovery finished: {recoveredCount} torrent tracker swarm(s) recovered");
         return recoveredCount;
     }
 
     public async Task RunOptimizationCycleAsync()
     {
+        LogActivity("Info", "Cycle", "Background tracker optimization cycle started");
+
         await RecoverMissingTrackersAsync();
 
         var settings = GetSettings();
@@ -1535,6 +1633,8 @@ public class TrackerBoostService : ITrackerBoostService
         {
             await BoostAllTorrentsAsync(onlyVerified: settings.OnlyVerified);
         }
+
+        LogActivity("Info", "Cycle", "Background tracker optimization cycle completed successfully");
     }
 
     public int InjectIntoDownloadClients(string infoHash, IEnumerable<string> trackers)
