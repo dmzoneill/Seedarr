@@ -42,6 +42,16 @@ public class IndexerController : Controller
     [HttpPost]
     public ActionResult<IndexerDefinition> Create([FromBody] IndexerDefinition definition)
     {
+        if (string.IsNullOrWhiteSpace(definition.Implementation))
+        {
+            definition.Implementation = $"{definition.IndexerType}Indexer";
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.ConfigContract))
+        {
+            definition.ConfigContract = "IndexerDefinition";
+        }
+
         try
         {
             CreateIndexer(definition);
@@ -59,6 +69,16 @@ public class IndexerController : Controller
     public ActionResult Update(int id, [FromBody] IndexerDefinition definition)
     {
         definition.Id = id;
+
+        if (string.IsNullOrWhiteSpace(definition.Implementation))
+        {
+            definition.Implementation = $"{definition.IndexerType}Indexer";
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.ConfigContract))
+        {
+            definition.ConfigContract = "IndexerDefinition";
+        }
 
         // If the masked API key was sent back, preserve the existing value
         if (definition.ApiKey != null && definition.ApiKey.Contains('*'))
@@ -83,8 +103,25 @@ public class IndexerController : Controller
         return Ok();
     }
 
+    [HttpPost("test")]
+    public ActionResult<IndexerTestResult> TestDirect([FromBody] IndexerDefinition definition)
+    {
+        IIndexer indexer;
+        try
+        {
+            indexer = CreateIndexer(definition);
+        }
+        catch (ArgumentException ex)
+        {
+            return Ok(new IndexerTestResult { Success = false, Message = ex.Message });
+        }
+
+        var result = indexer.TestConnectionDetailed(definition);
+        return Ok(result);
+    }
+
     [HttpPost("{id}/test")]
-    public ActionResult<object> TestConnection(int id)
+    public ActionResult<IndexerTestResult> TestConnection(int id)
     {
         var definition = _indexerFactory.Get(id);
         if (definition == null)
@@ -99,11 +136,11 @@ public class IndexerController : Controller
         }
         catch (ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return Ok(new IndexerTestResult { Success = false, Message = ex.Message });
         }
 
-        var success = indexer.TestConnection(definition);
-        return Ok(new { success });
+        var result = indexer.TestConnectionDetailed(definition);
+        return Ok(result);
     }
 
     private static IndexerDefinition MaskApiKey(IndexerDefinition definition)
