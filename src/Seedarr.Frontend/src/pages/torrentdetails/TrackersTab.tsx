@@ -11,6 +11,7 @@ import {
 import { formatDate } from "../../utils/formatters";
 import { SkeletonLine } from "../../components/Skeleton";
 import { useToast } from "../../context/ToastContext";
+import TrackerFavicon from "../../components/TrackerFavicon";
 
 function getAttachedTrackerIndicator(status: string, det?: { isVerified?: boolean; healthStatus?: string | number }): {
   icon: string;
@@ -263,7 +264,12 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                 const ind = getAttachedTrackerIndicator(tracker.status, det);
                 return (
                   <tr key={tracker.id} className="torrent-table-row">
-                    <td className="mono" style={{ wordBreak: "break-all" }}>{tracker.url}</td>
+                    <td className="mono" style={{ wordBreak: "break-all" }}>
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                        <TrackerFavicon urlOrHost={tracker.url} size={15} />
+                        <span>{tracker.url}</span>
+                      </div>
+                    </td>
                     <td>{tracker.tier}</td>
                     <td>
                       <span

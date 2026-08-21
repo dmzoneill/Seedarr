@@ -9,6 +9,7 @@ import {
 import { formatDate } from "../../utils/formatters";
 import { PanelLoading, PanelEmpty } from "./shared";
 import { useToast } from "../../context/ToastContext";
+import TrackerFavicon from "../TrackerFavicon";
 
 function getAttachedTrackerIndicator(status: string, det?: { isVerified?: boolean; healthStatus?: string | number }): {
   icon: string;
@@ -244,7 +245,12 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
                 const ind = getAttachedTrackerIndicator(t.status, det);
                 return (
                   <tr key={t.id} className="torrent-table-row">
-                    <td className="mono" style={{ wordBreak: "break-all" }}>{t.url}</td>
+                    <td className="mono" style={{ wordBreak: "break-all" }}>
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                        <TrackerFavicon urlOrHost={t.url} size={15} />
+                        <span>{t.url}</span>
+                      </div>
+                    </td>
                     <td>{t.tier}</td>
                     <td>
                       <span
