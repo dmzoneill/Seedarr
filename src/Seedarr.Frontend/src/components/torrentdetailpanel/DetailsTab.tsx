@@ -6,6 +6,10 @@ import {
   getTmdbUrl,
   getProwlarrUrl,
 } from "../../utils/arrLinks";
+import {
+  getTorrentBadges,
+  calculateHnrStatus,
+} from "../../utils/milestones";
 import type { Torrent } from "../../api/types";
 import { InfoRow } from "./shared";
 
@@ -27,6 +31,9 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
   const tmdbUrl = getTmdbUrl(meta?.tmdbId, meta?.mediaType);
   const prowlarrUrl = getProwlarrUrl(indexers, meta?.title || torrent.name);
 
+  const badges = getTorrentBadges(torrent);
+  const hnr = calculateHnrStatus(torrent);
+
   const rows: [string, string][] = [
     ["Name", torrent.name],
     ["Info Hash", torrent.infoHash],
@@ -42,7 +49,7 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
   if (torrent.sourcePath) rows.push(["Source Path", torrent.sourcePath]);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
       {/* Arr & Metadata Integration Banner */}
       {(arrLink || meta || prowlarrUrl) && (
         <div
@@ -142,6 +149,55 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
           </div>
         </div>
       )}
+
+      {/* Gamification Badges & HNR Clearance Bar */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "0.5rem",
+          padding: "0.4rem 0.75rem",
+          backgroundColor: "var(--bg-secondary, #222)",
+          borderRadius: "4px",
+          border: "1px solid var(--border-color, #333)",
+          fontSize: "0.8rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+          <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>Badges:</span>
+          {badges.length === 0 ? (
+            <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>Building ratio...</span>
+          ) : (
+            badges.map((b, i) => (
+              <span
+                key={i}
+                className="badge"
+                style={{
+                  backgroundColor: b.color,
+                  color: "#fff",
+                  fontSize: "0.7rem",
+                  padding: "0.1rem 0.35rem",
+                }}
+                title={b.title}
+              >
+                {b.icon} {b.label}
+              </span>
+            ))
+          )}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+          <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>HNR:</span>
+          <span
+            className={`badge ${hnr.isCleared ? "badge-success" : "badge-warning"}`}
+            style={{ fontSize: "0.7rem", padding: "0.1rem 0.35rem" }}
+          >
+            {hnr.label}
+          </span>
+        </div>
+      </div>
 
       <div className="detail-panel-grid">
         {rows.map(([label, value]) => (
