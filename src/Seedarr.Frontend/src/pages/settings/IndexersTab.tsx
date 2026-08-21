@@ -111,6 +111,19 @@ export function IndexersTab() {
               }}
             >
               <div className="provider-card-actions">
+                {idx.url && (
+                  <a
+                    href={idx.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="provider-card-action"
+                    title={`Open ${idx.name} Web UI (${idx.url})`}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ textDecoration: "none", color: "inherit" }}
+                  >
+                    ↗
+                  </a>
+                )}
                 <button
                   className="provider-card-action"
                   title="Test"
