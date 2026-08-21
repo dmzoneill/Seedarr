@@ -135,6 +135,37 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         }
     }
 
+    public bool AddTrackers(string infoHash, IEnumerable<string> trackers)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash) || trackers == null)
+        {
+            return false;
+        }
+
+        if (!Authenticate())
+        {
+            return false;
+        }
+
+        try
+        {
+            var trackerList = string.Join("\n", trackers);
+            using var content = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("hash", infoHash),
+                new KeyValuePair<string, string>("urls", trackerList)
+            });
+
+            var response = Task.Run(() => _client.PostAsync($"{BaseUrl}/api/v2/torrents/addTrackers", content)).GetAwaiter().GetResult();
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to add trackers to qBittorrent for torrent {0}", infoHash);
+            return false;
+        }
+    }
+
     public bool TestConnection()
     {
         return TestConnectionDetailed().Success;
