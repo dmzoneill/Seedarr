@@ -722,7 +722,9 @@ export default function DownloadClientTorrents() {
                             padding: "0.2rem 0.55rem",
                             borderRadius: "4px",
                           }}
-                          onClick={() => handleBoostTorrent(item.infoHash, item.title)}
+                          onClick={() =>
+                            handleBoostTorrent(item.infoHash, item.title)
+                          }
                           disabled={boostHashMutation.isPending}
                           title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
                         >
@@ -1056,7 +1058,9 @@ export default function DownloadClientTorrents() {
                             textAlign: "right",
                           }}
                         >
-                          <div style={{ display: "inline-flex", gap: "0.35rem" }}>
+                          <div
+                            style={{ display: "inline-flex", gap: "0.35rem" }}
+                          >
                             <button
                               className="btn btn-primary"
                               style={{
@@ -1064,7 +1068,9 @@ export default function DownloadClientTorrents() {
                                 padding: "0.25rem 0.6rem",
                                 borderRadius: "4px",
                               }}
-                              onClick={() => handleBoostTorrent(item.infoHash, item.title)}
+                              onClick={() =>
+                                handleBoostTorrent(item.infoHash, item.title)
+                              }
                               disabled={boostHashMutation.isPending}
                               title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
                             >

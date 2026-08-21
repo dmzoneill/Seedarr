@@ -143,7 +143,10 @@ export function useAddTorrentTracker() {
     { torrentId: number; url: string; tier?: number }
   >({
     mutationFn: ({ torrentId, url, tier }) =>
-      apiClient.post(`/torrent/${torrentId}/trackers`, { url, tier: tier ?? 1 }),
+      apiClient.post(`/torrent/${torrentId}/trackers`, {
+        url,
+        tier: tier ?? 1,
+      }),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({
         queryKey: ["torrents", vars.torrentId, "trackers"],
@@ -1120,8 +1123,7 @@ export function useInjectTrackerToTorrent() {
     Error,
     { torrentId?: number; infoHash?: string; trackerUrl: string }
   >({
-    mutationFn: (payload) =>
-      apiClient.post("/trackerboost/inject", payload),
+    mutationFn: (payload) => apiClient.post("/trackerboost/inject", payload),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
       if (vars.torrentId) {
@@ -1153,8 +1155,7 @@ export function useBoostAllTorrents() {
 export function useAddTrackerBoostTracker() {
   const queryClient = useQueryClient();
   return useMutation<TrackerBoostTracker, Error, { url: string }>({
-    mutationFn: (payload) =>
-      apiClient.post("/trackerboost/trackers", payload),
+    mutationFn: (payload) => apiClient.post("/trackerboost/trackers", payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
     },
@@ -1185,7 +1186,9 @@ export function useTrackerBoostLogs(
       if (category && category !== "all") params.set("category", category);
       if (level && level !== "all") params.set("level", level);
       const queryStr = params.toString();
-      return apiClient.get(`/trackerboost/logs${queryStr ? `?${queryStr}` : ""}`);
+      return apiClient.get(
+        `/trackerboost/logs${queryStr ? `?${queryStr}` : ""}`,
+      );
     },
     refetchInterval: refetchInterval ?? 3000,
   });

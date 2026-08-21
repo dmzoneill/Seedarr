@@ -54,12 +54,7 @@ function MiniChart({
       >
         <defs>
           <clipPath id={clipId}>
-            <rect
-              x={CHART_PAD.left}
-              y={CHART_PAD.top}
-              width={cw}
-              height={ch}
-            />
+            <rect x={CHART_PAD.left} y={CHART_PAD.top} width={cw} height={ch} />
           </clipPath>
         </defs>
         <rect
