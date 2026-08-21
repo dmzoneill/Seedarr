@@ -13,18 +13,31 @@ import { SkeletonLine } from "../../components/Skeleton";
 import { useToast } from "../../context/ToastContext";
 import TrackerFavicon from "../../components/TrackerFavicon";
 
-function getAttachedTrackerIndicator(status: string, det?: { isVerified?: boolean; healthStatus?: string | number }): {
+function getAttachedTrackerIndicator(
+  status: string,
+  det?: { isVerified?: boolean; healthStatus?: string | number },
+): {
   icon: string;
   badgeClass: string;
 } {
-  const isWorking = status === "Working" || status === "Announcing" || det?.isVerified || det?.healthStatus === "Alive" || det?.healthStatus === 1;
-  const isFailed = status === "Failed" || status === "Disabled" || det?.healthStatus === "Offline" || det?.healthStatus === 3;
+  const isWorking =
+    status === "Working" ||
+    status === "Announcing" ||
+    det?.isVerified ||
+    det?.healthStatus === "Alive" ||
+    det?.healthStatus === 1;
+  const isFailed =
+    status === "Failed" ||
+    status === "Disabled" ||
+    det?.healthStatus === "Offline" ||
+    det?.healthStatus === 3;
   const isSlow = det?.healthStatus === "Slow" || det?.healthStatus === 2;
 
   if (isWorking) {
     return {
       icon: "🟢",
-      badgeClass: status === "Announcing" ? "badge-announcing" : "badge-seeding",
+      badgeClass:
+        status === "Announcing" ? "badge-announcing" : "badge-seeding",
     };
   }
   if (isFailed) {
@@ -46,21 +59,35 @@ function getAttachedTrackerIndicator(status: string, det?: { isVerified?: boolea
 }
 
 export function TrackersTab({ torrent }: { torrent: Torrent }) {
-  const { data: trackers, isLoading, error, refetch } = useTorrentTrackers(torrent.id);
+  const {
+    data: trackers,
+    isLoading,
+    error,
+    refetch,
+  } = useTorrentTrackers(torrent.id);
   const { data: availableTrackers } = useTrackerBoostTrackers();
-  const { data: inspection } = useInspectTorrentTrackers(torrent.id, torrent.id > 0);
+  const { data: inspection } = useInspectTorrentTrackers(
+    torrent.id,
+    torrent.id > 0,
+  );
   const addTracker = useAddTorrentTracker();
   const deleteTracker = useDeleteTorrentTracker();
   const boostTorrent = useBoostTorrent();
   const { showToast } = useToast();
-  const [selectedTracker, setSelectedTracker] = useState<string>("all_verified");
+  const [selectedTracker, setSelectedTracker] =
+    useState<string>("all_verified");
 
   const attachedUrls = useMemo(() => {
-    return new Set((trackers ?? []).map((t) => (t.url ?? "").trim().toLowerCase()));
+    return new Set(
+      (trackers ?? []).map((t) => (t.url ?? "").trim().toLowerCase()),
+    );
   }, [trackers]);
 
   const detectionMap = useMemo(() => {
-    const map = new Map<string, NonNullable<typeof inspection>["detections"][number]>();
+    const map = new Map<
+      string,
+      NonNullable<typeof inspection>["detections"][number]
+    >();
     (inspection?.detections ?? []).forEach((d) => {
       if (d.trackerUrl) {
         map.set(d.trackerUrl.trim().toLowerCase(), d);
@@ -75,9 +102,21 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
       const det = detectionMap.get(cleanUrl);
       const isAttached = attachedUrls.has(cleanUrl) || det?.isAttached;
       const isVerified = det?.isVerified;
-      const isAlive = tr.status === "Alive" || tr.status === 1 || det?.healthStatus === "Alive" || det?.healthStatus === 1;
-      const isSlow = tr.status === "Slow" || tr.status === 2 || det?.healthStatus === "Slow" || det?.healthStatus === 2;
-      const isOffline = tr.status === "Offline" || tr.status === 3 || det?.healthStatus === "Offline" || det?.healthStatus === 3;
+      const isAlive =
+        tr.status === "Alive" ||
+        tr.status === 1 ||
+        det?.healthStatus === "Alive" ||
+        det?.healthStatus === 1;
+      const isSlow =
+        tr.status === "Slow" ||
+        tr.status === 2 ||
+        det?.healthStatus === "Slow" ||
+        det?.healthStatus === 2;
+      const isOffline =
+        tr.status === "Offline" ||
+        tr.status === 3 ||
+        det?.healthStatus === "Offline" ||
+        det?.healthStatus === 3;
 
       let icon = "⚪";
       let statusLabel = "Untested";
@@ -150,7 +189,9 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
     if (!torrent.id) return;
 
     if (selectedTracker === "all_verified") {
-      const candidates = trackerOptions.filter((o) => o.isVerified && !o.isAttached);
+      const candidates = trackerOptions.filter(
+        (o) => o.isVerified && !o.isAttached,
+      );
       if (candidates.length === 0) {
         showToast("No verified candidate trackers found in swarm", "info");
         return;
@@ -164,10 +205,15 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
           // continue
         }
       }
-      showToast(`Added ${added} verified tracker(s) to torrent and announced`, "success");
+      showToast(
+        `Added ${added} verified tracker(s) to torrent and announced`,
+        "success",
+      );
       refetch();
     } else if (selectedTracker === "all_online") {
-      const candidates = trackerOptions.filter((o) => o.isAlive && !o.isAttached);
+      const candidates = trackerOptions.filter(
+        (o) => o.isAlive && !o.isAttached,
+      );
       if (candidates.length === 0) {
         showToast("No unattached online trackers available", "info");
         return;
@@ -181,7 +227,10 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
           // continue
         }
       }
-      showToast(`Added ${added} online tracker(s) to torrent and announced`, "success");
+      showToast(
+        `Added ${added} online tracker(s) to torrent and announced`,
+        "success",
+      );
       refetch();
     } else if (selectedTracker === "all") {
       const candidates = trackerOptions.filter((o) => !o.isAttached);
@@ -198,7 +247,10 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
           // continue
         }
       }
-      showToast(`Added ${added} tracker(s) to torrent and announced`, "success");
+      showToast(
+        `Added ${added} tracker(s) to torrent and announced`,
+        "success",
+      );
       refetch();
     } else if (selectedTracker) {
       addTracker.mutate(
@@ -218,7 +270,14 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
 
   return (
     <div className="card">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "0.75rem",
+        }}
+      >
         <h3 style={{ margin: 0 }}>Trackers</h3>
         {!torrent.isPrivate && (
           <button
@@ -227,7 +286,9 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
             disabled={boostTorrent.isPending}
             title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
           >
-            {boostTorrent.isPending ? "Scraping & Enriching..." : "⚡ Enrich Trackers (Tracker Boost)"}
+            {boostTorrent.isPending
+              ? "Scraping & Enriching..."
+              : "⚡ Enrich Trackers (Tracker Boost)"}
           </button>
         )}
       </div>
@@ -255,17 +316,30 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                 <th className="torrent-table-th">Announces</th>
                 <th className="torrent-table-th">Last Announce</th>
                 <th className="torrent-table-th">Next Announce</th>
-                <th className="torrent-table-th" style={{ textAlign: "right", width: "90px" }}>Action</th>
+                <th
+                  className="torrent-table-th"
+                  style={{ textAlign: "right", width: "90px" }}
+                >
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody>
               {trackers.map((tracker) => {
-                const det = detectionMap.get((tracker.url ?? "").trim().toLowerCase());
+                const det = detectionMap.get(
+                  (tracker.url ?? "").trim().toLowerCase(),
+                );
                 const ind = getAttachedTrackerIndicator(tracker.status, det);
                 return (
                   <tr key={tracker.id} className="torrent-table-row">
                     <td className="mono" style={{ wordBreak: "break-all" }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                        }}
+                      >
                         <TrackerFavicon urlOrHost={tracker.url} size={15} />
                         <span>{tracker.url}</span>
                       </div>
@@ -274,7 +348,11 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                     <td>
                       <span
                         className={`badge ${ind.badgeClass}`}
-                        style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                        }}
                       >
                         <span style={{ fontSize: "0.85em" }}>{ind.icon}</span>
                         <span>{tracker.status}</span>
@@ -290,7 +368,10 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                     <td style={{ textAlign: "right" }}>
                       <button
                         className="btn btn-sm btn-danger"
-                        style={{ padding: "0.2rem 0.5rem", fontSize: "0.75rem" }}
+                        style={{
+                          padding: "0.2rem 0.5rem",
+                          fontSize: "0.75rem",
+                        }}
                         onClick={() => handleDeleteTracker(tracker.id)}
                         disabled={deleteTracker.isPending}
                         title="Remove tracker from torrent and reannounce"
@@ -318,12 +399,23 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
           flexWrap: "wrap",
         }}
       >
-        <label style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-secondary)" }}>
+        <label
+          style={{
+            fontSize: "0.85rem",
+            fontWeight: 500,
+            color: "var(--text-secondary)",
+          }}
+        >
           Add Tracker:
         </label>
         <select
           className="form-control"
-          style={{ flex: "1 1 300px", maxWidth: "560px", padding: "0.35rem 0.6rem", fontSize: "0.85rem" }}
+          style={{
+            flex: "1 1 300px",
+            maxWidth: "560px",
+            padding: "0.35rem 0.6rem",
+            fontSize: "0.85rem",
+          }}
           value={selectedTracker}
           onChange={(e) => setSelectedTracker(e.target.value)}
         >
@@ -335,9 +427,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
           <option value="all_online">
             🟢 All Online Trackers ({onlineCount})
           </option>
-          <option value="all">
-            ⚡ All Trackers ({trackerOptions.length})
-          </option>
+          <option value="all">⚡ All Trackers ({trackerOptions.length})</option>
           {trackerOptions.map((tr) => (
             <option key={tr.url} value={tr.url} disabled={tr.isAttached}>
               {tr.display}
@@ -347,7 +437,11 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
         <button
           className="btn btn-sm btn-primary"
           onClick={handleAddTracker}
-          disabled={addTracker.isPending || !availableTrackers || availableTrackers.length === 0}
+          disabled={
+            addTracker.isPending ||
+            !availableTrackers ||
+            availableTrackers.length === 0
+          }
           title="Add selected tracker(s) to this torrent and trigger announce"
         >
           {addTracker.isPending ? "Adding..." : "+ Add & Announce"}
