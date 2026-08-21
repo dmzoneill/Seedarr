@@ -586,32 +586,33 @@ function TrackerBoost() {
               borderRadius: "8px",
             }}
           >
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
               <button
                 className="btn btn-primary"
                 onClick={handleBoostAll}
                 disabled={boostAll.isPending || filteredDownloads.length === 0}
                 title="Scrape candidate trackers and inject only verified positive matches across all active downloads"
+                style={{ padding: "0.45rem 1rem", fontWeight: 600 }}
               >
-                {boostAll.isPending ? "Scraping & Boosting..." : "⚡ Boost All Downloads (Verified Only)"}
+                {boostAll.isPending ? "⚡ Scraping & Boosting..." : "⚡ Boost All Downloads (Verified Only)"}
               </button>
 
               <button
-                className="btn btn-outline"
+                className="btn btn-action"
                 onClick={handleHarvestDownloads}
                 disabled={harvestDownloads.isPending}
                 title="Extract and discover tracker URLs from active download swarms in Seedarr and download clients"
               >
-                {harvestDownloads.isPending ? "Harvesting..." : "🔄 Harvest from Live Swarms"}
+                {harvestDownloads.isPending ? "🔄 Harvesting..." : "🔄 Harvest from Live Swarms"}
               </button>
 
               <button
-                className="btn btn-outline"
+                className="btn btn-action"
                 onClick={handleScanAll}
                 disabled={scanTrackers.isPending}
                 title="Ping and probe health across all monitored tracker endpoints"
               >
-                {scanTrackers.isPending ? "Probing..." : "📡 Probe All Trackers"}
+                {scanTrackers.isPending ? "📡 Probing..." : "📡 Probe All Trackers"}
               </button>
             </div>
 
@@ -638,10 +639,37 @@ function TrackerBoost() {
           </div>
 
           {/* Master-Detail Split: Left = Downloads List, Right = Live Tracker Scraper */}
-          <div style={{ display: "grid", gridTemplateColumns: "360px 1fr", gap: "1.25rem", alignItems: "start" }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "360px 1fr",
+              gap: "1.25rem",
+              alignItems: "stretch",
+              minHeight: "calc(100vh - 320px)",
+            }}
+          >
             {/* Left: Downloads List */}
-            <div className="card" style={{ padding: "0.75rem", minHeight: "500px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", paddingBottom: "0.5rem", borderBottom: "1px solid var(--border-color)" }}>
+            <div
+              className="card"
+              style={{
+                padding: "0.85rem",
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                minHeight: "550px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "0.75rem",
+                  paddingBottom: "0.5rem",
+                  borderBottom: "1px solid var(--border-color)",
+                  flexShrink: 0,
+                }}
+              >
                 <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>Swarms ({filteredDownloads.length})</span>
                 <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Select to inspect swarm</span>
               </div>
@@ -653,7 +681,17 @@ function TrackerBoost() {
                   No downloads found matching filter.
                 </div>
               ) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxHeight: "650px", overflowY: "auto" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                    flex: "1 1 0",
+                    minHeight: 0,
+                    overflowY: "auto",
+                    paddingRight: "0.25rem",
+                  }}
+                >
                   {filteredDownloads.map((item) => {
                     const isSelected = item.key === activeSelectedKey;
                     return (
@@ -717,7 +755,17 @@ function TrackerBoost() {
             </div>
 
             {/* Right: Live Scrape Inspector Pane */}
-            <div className="card" style={{ padding: "1.25rem", minHeight: "500px" }}>
+            <div
+              className="card"
+              style={{
+                padding: "1.25rem",
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                minHeight: "550px",
+                overflowY: "auto",
+              }}
+            >
               {selectedItem ? (
                 <div>
                   {/* Selected Item Banner */}
@@ -737,7 +785,7 @@ function TrackerBoost() {
                     </div>
                     <div style={{ display: "flex", gap: "0.5rem" }}>
                       <button
-                        className="btn btn-outline"
+                        className="btn btn-action"
                         style={{ fontSize: "0.85rem" }}
                         onClick={() => (selectedItem.id ? refetchTorrentInspect() : refetchHashInspect())}
                         title="Re-scrape candidate trackers for this info_hash"
@@ -747,7 +795,7 @@ function TrackerBoost() {
                       {!selectedItem.isPrivate && (
                         <button
                           className="btn btn-primary"
-                          style={{ fontSize: "0.85rem" }}
+                          style={{ fontSize: "0.85rem", fontWeight: 600 }}
                           onClick={() => handleBoostItem(selectedItem)}
                           title="Inject verified candidate trackers into this torrent"
                         >
@@ -1665,32 +1713,32 @@ function TrackerBoost() {
             <h3 style={{ margin: "0 0 0.5rem 0" }}>Manual Discovery Triggers</h3>
             <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
               <button
-                className="btn btn-outline"
+                className="btn btn-action"
                 onClick={handleHarvestDownloads}
                 disabled={harvestDownloads.isPending}
               >
-                {harvestDownloads.isPending ? "Harvesting..." : "🔄 Harvest Live Swarms"}
+                {harvestDownloads.isPending ? "⏳ Harvesting Swarms..." : "🔄 Harvest Live Swarms"}
               </button>
               <button
-                className="btn btn-outline"
+                className="btn btn-action"
                 onClick={handleHarvestProwlarr}
                 disabled={harvestProwlarr.isPending}
               >
-                {harvestProwlarr.isPending ? "Syncing..." : "🔄 Sync Prowlarr Trackers"}
+                {harvestProwlarr.isPending ? "⏳ Syncing Prowlarr..." : "🔄 Sync Prowlarr Trackers"}
               </button>
               <button
-                className="btn btn-outline"
+                className="btn btn-action"
                 onClick={handleHarvestFeeds}
                 disabled={harvestFeeds.isPending}
               >
-                {harvestFeeds.isPending ? "Syncing..." : "🌐 Sync Curated Feeds"}
+                {harvestFeeds.isPending ? "⏳ Syncing Feeds..." : "🌐 Sync Curated Feeds"}
               </button>
               <button
-                className="btn btn-outline"
+                className="btn btn-action"
                 onClick={handleScanAll}
                 disabled={scanTrackers.isPending}
               >
-                {scanTrackers.isPending ? "Probing..." : "📡 Probe All Trackers"}
+                {scanTrackers.isPending ? "⏳ Probing Trackers..." : "📡 Probe All Trackers"}
               </button>
             </div>
           </div>
