@@ -35,9 +35,9 @@ function TorrentDetails() {
 
   if (!isValidId) {
     return (
-      <div>
+      <div className="content-area">
         <Link to="/torrents" className="back-link">
-          Back to Torrents
+          ← Back to Torrents
         </Link>
         <p className="error">Invalid torrent ID.</p>
       </div>
@@ -46,9 +46,9 @@ function TorrentDetails() {
 
   if (isLoading) {
     return (
-      <div>
+      <div className="content-area">
         <Link to="/torrents" className="back-link">
-          Back to Torrents
+          ← Back to Torrents
         </Link>
         <TorrentDetailSkeleton />
       </div>
@@ -57,9 +57,9 @@ function TorrentDetails() {
 
   if (error || !torrent) {
     return (
-      <div>
+      <div className="content-area">
         <Link to="/torrents" className="back-link">
-          Back to Torrents
+          ← Back to Torrents
         </Link>
         <p className="error">Torrent not found.</p>
       </div>
@@ -69,31 +69,68 @@ function TorrentDetails() {
   const isSeeding = torrent.status === "Seeding";
 
   return (
-    <div>
-      <Link to="/torrents" className="back-link">
-        Back to Torrents
-      </Link>
-      <h1 className="page-heading">{torrent.name}</h1>
+    <div
+      className="content-area"
+      style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+    >
+      {/* Top Breadcrumb & Actions Bar */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "1rem",
+        }}
+      >
+        <div>
+          <Link
+            to="/torrents"
+            className="back-link"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.35rem",
+              padding: 0,
+              margin: "0 0 0.4rem 0",
+            }}
+          >
+            ← Back to Torrents
+          </Link>
+          <h1 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
+            {torrent.name}
+          </h1>
+        </div>
 
-      <div className="torrent-detail-actions">
-        {isSeeding ? (
-          <button
-            className="btn btn-danger"
-            onClick={() => stopSeeding.mutate(torrent.id)}
-          >
-            Stop Seeding
-          </button>
-        ) : (
-          <button
-            className="btn btn-success"
-            onClick={() => startSeeding.mutate(torrent.id)}
-          >
-            Start Seeding
-          </button>
-        )}
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          {isSeeding ? (
+            <button
+              className="btn btn-danger"
+              onClick={() => stopSeeding.mutate(torrent.id)}
+            >
+              Stop Seeding
+            </button>
+          ) : (
+            <button
+              className="btn btn-success"
+              onClick={() => startSeeding.mutate(torrent.id)}
+            >
+              Start Seeding
+            </button>
+          )}
+        </div>
       </div>
 
-      <nav className="tab-nav">
+      {/* Tab Navigation */}
+      <nav
+        className="tab-nav"
+        style={{
+          borderRadius: "6px",
+          border: "1px solid var(--border-light)",
+          padding: "0 0.5rem",
+          margin: 0,
+        }}
+      >
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -105,13 +142,16 @@ function TorrentDetails() {
         ))}
       </nav>
 
-      {activeTab === "general" && <GeneralTab torrent={torrent} />}
-      {activeTab === "files" && <FilesTab torrent={torrent} />}
-      {activeTab === "trackers" && <TrackersTab torrent={torrent} />}
-      {activeTab === "options" && <OptionsTab torrent={torrent} />}
-      {activeTab === "peers" && <PeerList torrentId={torrent.id} />}
-      {activeTab === "monitoring" && <MonitoringTab torrent={torrent} />}
-      {activeTab === "log" && <LogTab torrent={torrent} />}
+      {/* Active Tab Content Pane */}
+      <div style={{ flex: 1 }}>
+        {activeTab === "general" && <GeneralTab torrent={torrent} />}
+        {activeTab === "files" && <FilesTab torrent={torrent} />}
+        {activeTab === "trackers" && <TrackersTab torrent={torrent} />}
+        {activeTab === "options" && <OptionsTab torrent={torrent} />}
+        {activeTab === "peers" && <PeerList torrentId={torrent.id} />}
+        {activeTab === "monitoring" && <MonitoringTab torrent={torrent} />}
+        {activeTab === "log" && <LogTab torrent={torrent} />}
+      </div>
     </div>
   );
 }
