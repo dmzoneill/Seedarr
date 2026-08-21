@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Routes, Route, NavLink, useLocation, useNavigate } from "react-router";
 import Dashboard from "./pages/Dashboard";
 import TorrentIndex from "./pages/TorrentIndex";
@@ -26,6 +26,8 @@ import ToastContainer from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SignalRProvider from "./components/SignalRProvider";
 import AddTorrentModal from "./components/AddTorrentModal";
+import CommandPalette from "./components/CommandPalette";
+import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
 import AddTorrentPage from "./pages/AddTorrentPage";
 import SeedarrLogo from "./components/icons/SeedarrLogo";
 import SeedarrText from "./components/icons/SeedarrText";
@@ -90,6 +92,9 @@ function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showAddTorrentModal, setShowAddTorrentModal] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+
   const isTorrentsRoute =
     location.pathname.startsWith("/torrents") ||
     location.pathname === "/history";
@@ -104,6 +109,90 @@ function App() {
   const { data: generalConfig } = useGeneralConfig();
   const { data: downloadClients } = useDownloadClients();
   const [showApiKey, setShowApiKey] = useState(false);
+
+  // Global Keyboard Shortcuts Listener
+  useEffect(() => {
+    let pendingGKey = false;
+    let pendingGTimer: any = null;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInputActive =
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          activeEl.tagName === "SELECT" ||
+          (activeEl as HTMLElement).isContentEditable);
+
+      // Cmd+K / Ctrl+K
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setShowCommandPalette((prev) => !prev);
+        return;
+      }
+
+      // If typing inside an input/textarea, do not intercept single-key shortcuts
+      if (isInputActive) return;
+
+      // "/" opens search / command palette
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setShowCommandPalette(true);
+        return;
+      }
+
+      // "?" opens Keyboard Shortcuts cheat sheet
+      if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        e.preventDefault();
+        setShowShortcutsModal(true);
+        return;
+      }
+
+      // "g" sequence navigation (e.g. g then d => dashboard)
+      if (e.key === "g" && !pendingGKey) {
+        pendingGKey = true;
+        clearTimeout(pendingGTimer);
+        pendingGTimer = setTimeout(() => {
+          pendingGKey = false;
+        }, 1000);
+        return;
+      }
+
+      if (pendingGKey) {
+        pendingGKey = false;
+        clearTimeout(pendingGTimer);
+
+        if (e.key === "d") {
+          e.preventDefault();
+          navigate("/");
+        } else if (e.key === "t") {
+          e.preventDefault();
+          navigate("/torrents");
+        } else if (e.key === "h") {
+          e.preventDefault();
+          navigate("/torrents/history");
+        } else if (e.key === "b") {
+          e.preventDefault();
+          navigate("/tracker/trackerboost");
+        } else if (e.key === "m") {
+          e.preventDefault();
+          navigate("/activity/metrics");
+        } else if (e.key === "p") {
+          e.preventDefault();
+          navigate("/peermap");
+        } else if (e.key === "s") {
+          e.preventDefault();
+          navigate("/settings/general");
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      clearTimeout(pendingGTimer);
+    };
+  }, [navigate]);
 
   return (
     <div className="app">
@@ -264,23 +353,41 @@ function App() {
 
       <div className="main-wrapper">
         <header className="topbar">
-          <div className="topbar-search">
+          <div
+            className="topbar-search"
+            onClick={() => setShowCommandPalette(true)}
+            style={{
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+            title="Search & Quick Jump (Ctrl+K or /)"
+          >
             <SearchIcon />
             <input
               type="text"
-              placeholder="Search"
+              placeholder="Quick Jump / Search... (Ctrl+K or /)"
               className="topbar-search-input"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && searchTerm.trim()) {
-                  navigate(
-                    `/torrents?q=${encodeURIComponent(searchTerm.trim())}`,
-                  );
-                  setSearchTerm("");
-                }
-              }}
+              readOnly
+              onClick={() => setShowCommandPalette(true)}
+              style={{ cursor: "pointer" }}
             />
+            <kbd
+              style={{
+                backgroundColor: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.16)",
+                borderRadius: "4px",
+                padding: "0.1rem 0.4rem",
+                fontSize: "0.7rem",
+                color: "var(--text-muted)",
+                fontFamily: "monospace",
+                marginRight: "0.4rem",
+              }}
+            >
+              ⌘K
+            </kbd>
           </div>
           <div className="topbar-actions">
             {generalConfig?.apiKey && (
@@ -361,6 +468,18 @@ function App() {
                     onClick={() => navigate("/settings/general")}
                   >
                     Settings
+                  </button>
+                  <button
+                    className="topbar-dropdown-item"
+                    onClick={() => setShowCommandPalette(true)}
+                  >
+                    🔍 Command Palette (⌘K)
+                  </button>
+                  <button
+                    className="topbar-dropdown-item"
+                    onClick={() => setShowShortcutsModal(true)}
+                  >
+                    ⌨️ Keyboard Shortcuts (?)
                   </button>
                   <div className="topbar-dropdown-separator" />
                   <button
@@ -452,6 +571,16 @@ function App() {
       {showAddTorrentModal && (
         <AddTorrentModal onClose={() => setShowAddTorrentModal(false)} />
       )}
+      <CommandPalette
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onOpenShortcuts={() => setShowShortcutsModal(true)}
+        onOpenAddTorrent={() => setShowAddTorrentModal(true)}
+      />
+      <KeyboardShortcutsModal
+        isOpen={showShortcutsModal}
+        onClose={() => setShowShortcutsModal(false)}
+      />
     </div>
   );
 }

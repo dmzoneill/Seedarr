@@ -74,6 +74,9 @@ function TrackerBoost() {
   const [healthFilter, setHealthFilter] = useState<string>("all");
   const [newTrackerUrl, setNewTrackerUrl] = useState("");
   const [isAddingTracker, setIsAddingTracker] = useState(false);
+  const [showBulkImportModal, setShowBulkImportModal] = useState(false);
+  const [bulkImportText, setBulkImportText] = useState("");
+  const [isBulkImporting, setIsBulkImporting] = useState(false);
 
   // Activity Logs state
   const [logLevelFilter, setLogLevelFilter] = useState<string>("all");
@@ -422,6 +425,75 @@ function TrackerBoost() {
           showToast(`Failed to add tracker: ${err.message}`, "error");
         },
       },
+    );
+  };
+
+  const handleExportTrackers = () => {
+    if (!trackers || trackers.length === 0) {
+      showToast("No trackers available to export", "info");
+      return;
+    }
+    const uniqueUrls = Array.from(new Set(trackers.map((t) => t.url))).join(
+      "\n",
+    );
+    const blob = new Blob([uniqueUrls], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `seedarr-trackers-${new Date().toISOString().slice(0, 10)}.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast(
+      `Exported ${trackers.length} tracker endpoints to .txt!`,
+      "success",
+    );
+  };
+
+  const handleCopyAllTrackers = () => {
+    if (!trackers || trackers.length === 0) return;
+    const uniqueUrls = Array.from(new Set(trackers.map((t) => t.url))).join(
+      "\n",
+    );
+    navigator.clipboard.writeText(uniqueUrls);
+    showToast(`Copied ${trackers.length} tracker URLs to clipboard!`, "info");
+  };
+
+  const handleBulkImportTrackers = async () => {
+    if (!bulkImportText.trim()) return;
+    const lines = bulkImportText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(
+        (l) =>
+          l.startsWith("http://") ||
+          l.startsWith("https://") ||
+          l.startsWith("udp://"),
+      );
+
+    if (lines.length === 0) {
+      showToast(
+        "No valid http://, https://, or udp:// tracker URLs found.",
+        "error",
+      );
+      return;
+    }
+
+    setIsBulkImporting(true);
+    let imported = 0;
+    for (const url of lines) {
+      try {
+        await addTracker.mutateAsync({ url });
+        imported++;
+      } catch {
+        // Continue on duplicates/errors
+      }
+    }
+    setIsBulkImporting(false);
+    setShowBulkImportModal(false);
+    setBulkImportText("");
+    showToast(
+      `Successfully processed ${lines.length} trackers (${imported} added)!`,
+      "success",
     );
   };
 
@@ -2398,13 +2470,42 @@ function TrackerBoost() {
                 <option value="manual">Manual Entry</option>
               </select>
             </div>
-
-            <button
-              className="btn btn-primary"
-              onClick={() => setIsAddingTracker(true)}
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
             >
-              + Add Custom Tracker
-            </button>
+              <button
+                className="btn btn-action"
+                onClick={handleCopyAllTrackers}
+                title="Copy all tracker URLs to clipboard"
+              >
+                📋 Copy All
+              </button>
+              <button
+                className="btn btn-action"
+                onClick={handleExportTrackers}
+                title="Download verified and active trackers as a .txt file"
+              >
+                📤 Export (.txt)
+              </button>
+              <button
+                className="btn btn-action"
+                onClick={() => setShowBulkImportModal(true)}
+                title="Paste multiple tracker URLs at once"
+              >
+                📥 Bulk Import
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => setIsAddingTracker(true)}
+              >
+                + Add Single
+              </button>
+            </div>
           </div>
 
           {isAddingTracker && (
@@ -3008,6 +3109,109 @@ function TrackerBoost() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* BULK IMPORT MODAL */}
+      {showBulkImportModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "1rem",
+          }}
+          onClick={() => setShowBulkImportModal(false)}
+        >
+          <div
+            className="card"
+            style={{
+              width: "560px",
+              maxWidth: "92vw",
+              display: "flex",
+              flexDirection: "column",
+              borderRadius: "10px",
+              padding: "1.25rem",
+              gap: "1rem",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+              >
+                <span style={{ fontSize: "1.2rem" }}>📥</span>
+                <h3 style={{ margin: 0, fontSize: "1.05rem" }}>
+                  Bulk Import Trackers
+                </h3>
+              </div>
+              <button
+                className="btn btn-sm btn-outline"
+                onClick={() => setShowBulkImportModal(false)}
+                style={{ padding: "0.2rem 0.5rem" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-muted)",
+                margin: 0,
+              }}
+            >
+              Paste tracker announce URLs (one per line). Supported protocols:{" "}
+              <code>udp://</code>, <code>http://</code>, <code>https://</code>.
+            </p>
+
+            <textarea
+              className="form-control"
+              rows={8}
+              placeholder="udp://tracker.opentrackr.org:1337/announce&#10;http://tracker.example.com/announce&#10;udp://open.stealth.si:80/announce"
+              value={bulkImportText}
+              onChange={(e) => setBulkImportText(e.target.value)}
+              style={{ fontFamily: "monospace", fontSize: "0.82rem" }}
+            />
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.5rem",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-action"
+                onClick={() => setShowBulkImportModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleBulkImportTrackers}
+                disabled={isBulkImporting || !bulkImportText.trim()}
+              >
+                {isBulkImporting ? "Importing Trackers..." : "Import Trackers"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
