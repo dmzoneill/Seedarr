@@ -71,6 +71,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             var mainTracker = torrentTrackers.OrderBy(tr => tr.Tier).First();
             resource.AnnounceInterval = mainTracker.AnnounceInterval;
 
+            if (string.IsNullOrWhiteSpace(resource.TrackerUrl))
+            {
+                resource.TrackerUrl = mainTracker.Url;
+            }
+
             if (mainTracker.NextAnnounce.HasValue && mainTracker.NextAnnounce.Value > DateTime.UtcNow)
             {
                 resource.NextUpdate = (int)(mainTracker.NextAnnounce.Value - DateTime.UtcNow).TotalSeconds;
@@ -218,6 +223,12 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             entry = _trackerEntryService.Add(entry);
         }
 
+        if (string.IsNullOrWhiteSpace(torrent.TrackerUrl))
+        {
+            torrent.TrackerUrl = clean;
+            _torrentService.Update(torrent);
+        }
+
         // Also inject into download clients
         if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
         {
@@ -248,6 +259,10 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         _trackerEntryService.Delete(trackerId);
         _eventLogService.Info(torrentId, "Tracker", $"Removed tracker {target.Url}");
+
+        var remaining = _trackerEntryService.GetByTorrentId(torrentId);
+        torrent.TrackerUrl = remaining.OrderBy(t => t.Tier).FirstOrDefault()?.Url;
+        _torrentService.Update(torrent);
 
         TriggerAnnounceInternal(torrent);
 
