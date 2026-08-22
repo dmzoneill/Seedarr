@@ -53,12 +53,19 @@ export function formatUptime(seconds: number): string {
   return `${minutes}m`;
 }
 
-export function extractTrackerDomain(url: string | null): string {
-  if (!url) return "Unknown";
+export function extractTrackerDomain(url: string | null | undefined): string {
+  if (!url || typeof url !== "string") return "Unknown";
+  const trimmed = url.trim();
+  if (!trimmed) return "Unknown";
   try {
-    const parsed = new URL(url);
-    return parsed.hostname;
+    const parsed = new URL(trimmed);
+    if (parsed.hostname) return parsed.hostname.toLowerCase();
   } catch {
-    return "Unknown";
+    // Fallback to regex parser
   }
+  const match = trimmed.match(/^(?:[a-z0-9+.-]+:\/\/)?([^/:]+)/i);
+  if (match && match[1]) {
+    return match[1].toLowerCase();
+  }
+  return "Unknown";
 }

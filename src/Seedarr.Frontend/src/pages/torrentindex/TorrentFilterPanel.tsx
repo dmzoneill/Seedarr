@@ -4,8 +4,8 @@ import {
   StoppedIcon,
   QueuedIcon,
   ErrorIcon,
-  GlobeIcon,
 } from "../../components/icons/UIIcons";
+import TrackerFavicon from "../../components/TrackerFavicon";
 
 const STATE_FILTERS = ["All", "Seeding", "Stopped", "Queued", "Error"] as const;
 
@@ -75,8 +75,24 @@ export function TorrentFilterPanel({
               className={`filter-panel-item${selectedTracker === domain ? " active" : ""}`}
               onClick={() => onSelectTracker(domain)}
             >
-              <span className="filter-panel-label">
-                <GlobeIcon size={13} /> {domain}
+              <span
+                className="filter-panel-label"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                }}
+              >
+                <TrackerFavicon urlOrHost={domain} size={14} />
+                <span
+                  style={{
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {domain}
+                </span>
               </span>
               <span className="filter-panel-count">{groupCount}</span>
             </button>
