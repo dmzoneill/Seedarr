@@ -644,8 +644,10 @@ export interface DownloadReleaseRequest {
 }
 
 export type TrackerProtocol = "Udp" | "Http" | "Https" | number;
-export type TrackerHealthStatus = "Untested" | "Alive" | "Slow" | "Offline" | number;
-export type TrackerSourceType = "PublicList" | "Prowlarr" | "ReleaseMagnet" | "Manual" | number;
+export type TrackerHealthStatus =
+  "Untested" | "Alive" | "Slow" | "Offline" | number;
+export type TrackerSourceType =
+  "PublicList" | "Prowlarr" | "ReleaseMagnet" | "Manual" | number;
 
 export interface DownloadPlusPlusTracker {
   id: number;
@@ -718,5 +720,3 @@ export interface TorrentTrackerInspectionResult {
   detectedTrackersCount: number;
   detections: TorrentTrackerDetection[];
 }
-
-

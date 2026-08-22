@@ -15,11 +15,14 @@ import type { TrackerServerConfig } from "../api/types";
 
 function TrackerServer() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [filterScope, setFilterScope] = useState<"all" | "internal" | "external">("all");
+  const [filterScope, setFilterScope] = useState<
+    "all" | "internal" | "external"
+  >("all");
   const [searchTerm, setSearchTerm] = useState("");
 
   const { data: stats, isLoading: statsLoading } = useTrackerServerStats();
-  const { data: torrents, isLoading: torrentsLoading } = useTrackerServerTorrents();
+  const { data: torrents, isLoading: torrentsLoading } =
+    useTrackerServerTorrents();
   const { data: config } = useTrackerServerConfig();
   const { data: network } = useNetworkStatus();
   const { data: arrConnections } = useArrConnections();
@@ -77,13 +80,22 @@ function TrackerServer() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <h1 className="page-heading" style={{ margin: 0 }}>Tracker Server</h1>
+          <h1 className="page-heading" style={{ margin: 0 }}>
+            Tracker Server
+          </h1>
           <span className="badge badge-secondary">
             {statsLoading ? "-" : `${stats?.totalTorrents ?? 0} tracked`}
           </span>
         </div>
 
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           {/* View Mode Toggle */}
           <div className="tab-nav" style={{ margin: 0 }}>
             <button
@@ -111,7 +123,9 @@ function TrackerServer() {
               disabled={saveConfig.isPending}
               style={{ fontSize: "0.82rem" }}
             >
-              {config.trackerServerEnabled ? "Disable Tracker" : "Enable Tracker"}
+              {config.trackerServerEnabled
+                ? "Disable Tracker"
+                : "Enable Tracker"}
             </button>
           )}
         </div>
@@ -128,7 +142,9 @@ function TrackerServer() {
         <div className="card tracker-stat-card">
           <div className="tracker-stat-label">Internal (Seedarr)</div>
           <div className="tracker-stat-value">
-            {statsLoading ? "-" : (stats?.internalTorrents ?? 0).toLocaleString()}
+            {statsLoading
+              ? "-"
+              : (stats?.internalTorrents ?? 0).toLocaleString()}
           </div>
         </div>
         <div className="card tracker-stat-card">
@@ -176,7 +192,13 @@ function TrackerServer() {
               }}
             >
               <div>
-                <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 600 }}>
+                <div
+                  style={{
+                    fontSize: "0.72rem",
+                    color: "var(--text-muted)",
+                    fontWeight: 600,
+                  }}
+                >
                   HTTP ANNOUNCE URL
                 </div>
                 <code style={{ fontSize: "0.85rem", color: "var(--accent)" }}>
@@ -207,7 +229,13 @@ function TrackerServer() {
               }}
             >
               <div>
-                <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontWeight: 600 }}>
+                <div
+                  style={{
+                    fontSize: "0.72rem",
+                    color: "var(--text-muted)",
+                    fontWeight: 600,
+                  }}
+                >
                   UDP ANNOUNCE URL
                 </div>
                 <code style={{ fontSize: "0.85rem", color: "var(--accent)" }}>
@@ -239,7 +267,14 @@ function TrackerServer() {
           padding: "0.75rem 1rem",
         }}
       >
-        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.4rem",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
           {(
             [
               { id: "all", label: "All" },
@@ -263,7 +298,16 @@ function TrackerServer() {
           ))}
         </div>
 
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", minWidth: "260px", flex: "1", maxWidth: "450px" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            alignItems: "center",
+            minWidth: "260px",
+            flex: "1",
+            maxWidth: "450px",
+          }}
+        >
           <input
             type="text"
             className="form-control"
@@ -284,7 +328,11 @@ function TrackerServer() {
             <button
               className="btn btn-outline"
               onClick={() => setSearchTerm("")}
-              style={{ fontSize: "0.75rem", padding: "0.35rem 0.5rem", borderRadius: "6px" }}
+              style={{
+                fontSize: "0.75rem",
+                padding: "0.35rem 0.5rem",
+                borderRadius: "6px",
+              }}
               title="Clear search filter"
             >
               ✕
@@ -299,11 +347,28 @@ function TrackerServer() {
           <p className="loading">Loading tracked swarms & rich metadata...</p>
         </div>
       ) : filteredTorrents.length === 0 ? (
-        <div className="card empty-state" style={{ padding: "3.5rem 1rem", textAlign: "center" }}>
-          <div className="empty-state-title" style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+        <div
+          className="card empty-state"
+          style={{ padding: "3.5rem 1rem", textAlign: "center" }}
+        >
+          <div
+            className="empty-state-title"
+            style={{
+              fontSize: "1.25rem",
+              fontWeight: 600,
+              marginBottom: "0.5rem",
+            }}
+          >
             No Tracked Torrents
           </div>
-          <div className="empty-state-text" style={{ color: "var(--text-muted)", maxWidth: "500px", margin: "0 auto" }}>
+          <div
+            className="empty-state-text"
+            style={{
+              color: "var(--text-muted)",
+              maxWidth: "500px",
+              margin: "0 auto",
+            }}
+          >
             {searchTerm || filterScope !== "all"
               ? "No tracked torrents match the current search or scope filter."
               : "Torrents announced to this built-in tracker will appear here with live peer statistics and rich media posters."}
@@ -322,8 +387,12 @@ function TrackerServer() {
             const displayTitle = t.mediaTitle || t.name;
             const hasPoster = Boolean(t.posterUrl);
             const arrLink = getMediaDeepLink(
-              { source: t.source, metadata: { title: t.mediaTitle, mediaId: 0 } as any, title: t.name },
-              arrConnections
+              {
+                source: t.source,
+                metadata: { title: t.mediaTitle, mediaId: 0 } as any,
+                title: t.name,
+              },
+              arrConnections,
             );
 
             return (
@@ -338,8 +407,10 @@ function TrackerServer() {
                   borderRadius: "8px",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                   backgroundColor: "var(--bg-secondary)",
-                  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2)",
-                  transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
+                  boxShadow:
+                    "0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2)",
+                  transition:
+                    "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
                   cursor: "pointer",
                 }}
               >
@@ -381,11 +452,20 @@ function TrackerServer() {
                         justifyContent: "center",
                         padding: "1rem",
                         textAlign: "center",
-                        background: "linear-gradient(180deg, #2a2620 0%, #151412 100%)",
+                        background:
+                          "linear-gradient(180deg, #2a2620 0%, #151412 100%)",
                       }}
                     >
-                      <span style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>
-                        {t.source === "Radarr" ? "🎬" : t.source === "Sonarr" ? "📺" : t.source === "Lidarr" ? "🎵" : "📡"}
+                      <span
+                        style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}
+                      >
+                        {t.source === "Radarr"
+                          ? "🎬"
+                          : t.source === "Sonarr"
+                            ? "📺"
+                            : t.source === "Lidarr"
+                              ? "🎵"
+                              : "📡"}
                       </span>
                       <div
                         style={{
@@ -412,7 +492,11 @@ function TrackerServer() {
                     onClick={(e) => {
                       if (arrLink) {
                         e.stopPropagation();
-                        window.open(arrLink.url, "_blank", "noopener,noreferrer");
+                        window.open(
+                          arrLink.url,
+                          "_blank",
+                          "noopener,noreferrer",
+                        );
                       }
                     }}
                   >
@@ -431,9 +515,14 @@ function TrackerServer() {
                         gap: "0.25rem",
                         borderRadius: "4px",
                       }}
-                      title={arrLink ? `${arrLink.label} (${arrLink.url})` : t.source || "Tracker"}
+                      title={
+                        arrLink
+                          ? `${arrLink.label} (${arrLink.url})`
+                          : t.source || "Tracker"
+                      }
                     >
-                      {t.isInternal ? "🌱 Internal" : "🌐 External"} {arrLink ? "↗" : ""}
+                      {t.isInternal ? "🌱 Internal" : "🌐 External"}{" "}
+                      {arrLink ? "↗" : ""}
                     </span>
                   </div>
 
@@ -496,9 +585,15 @@ function TrackerServer() {
                       borderTop: "1px solid rgba(255,255,255,0.1)",
                     }}
                   >
-                    <span style={{ color: "#4caf50" }}>▲ {t.seeders} seeds</span>
-                    <span style={{ color: "#ff9800" }}>▼ {t.leechers} leech</span>
-                    <span style={{ color: "#90caf9" }}>✓ {t.completed} done</span>
+                    <span style={{ color: "#4caf50" }}>
+                      ▲ {t.seeders} seeds
+                    </span>
+                    <span style={{ color: "#ff9800" }}>
+                      ▼ {t.leechers} leech
+                    </span>
+                    <span style={{ color: "#90caf9" }}>
+                      ✓ {t.completed} done
+                    </span>
                   </div>
                 </div>
 
@@ -532,7 +627,13 @@ function TrackerServer() {
 
                   {/* Genres */}
                   {t.genres && t.genres.length > 0 && (
-                    <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.3rem",
+                        flexWrap: "wrap",
+                      }}
+                    >
                       {t.genres.slice(0, 2).map((g) => (
                         <span
                           key={g}
@@ -565,25 +666,46 @@ function TrackerServer() {
                   >
                     <div>
                       <span style={{ color: "var(--text-dim)" }}>Up: </span>
-                      <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>
+                      <span
+                        style={{
+                          color: "var(--text-secondary)",
+                          fontWeight: 500,
+                        }}
+                      >
                         {formatBytes(t.uploaded)}
                       </span>
                     </div>
                     <div>
                       <span style={{ color: "var(--text-dim)" }}>Down: </span>
-                      <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>
+                      <span
+                        style={{
+                          color: "var(--text-secondary)",
+                          fontWeight: 500,
+                        }}
+                      >
                         {formatBytes(t.downloaded)}
                       </span>
                     </div>
                     <div>
-                      <span style={{ color: "var(--text-dim)" }}>Activity: </span>
-                      <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>
-                        {t.lastActivity ? formatDate(t.lastActivity).split(" ")[0] : "Idle"}
+                      <span style={{ color: "var(--text-dim)" }}>
+                        Activity:{" "}
+                      </span>
+                      <span
+                        style={{
+                          color: "var(--text-secondary)",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {t.lastActivity
+                          ? formatDate(t.lastActivity).split(" ")[0]
+                          : "Idle"}
                       </span>
                     </div>
                     <div>
                       <span style={{ color: "var(--text-dim)" }}>Hash: </span>
-                      <code style={{ fontSize: "0.68rem", color: "var(--accent)" }}>
+                      <code
+                        style={{ fontSize: "0.68rem", color: "var(--accent)" }}
+                      >
                         {t.infoHash.substring(0, 6)}...
                       </code>
                     </div>
@@ -662,7 +784,10 @@ function TrackerServer() {
                           {t.isInternal ? (
                             <Link
                               to="/torrents"
-                              style={{ color: "inherit", textDecoration: "none" }}
+                              style={{
+                                color: "inherit",
+                                textDecoration: "none",
+                              }}
                               title="Jump to active torrent in library"
                             >
                               {displayTitle} ↗
@@ -672,24 +797,40 @@ function TrackerServer() {
                           )}
                         </div>
                         {t.mediaTitle && t.mediaTitle !== t.name && (
-                          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                          <div
+                            style={{
+                              fontSize: "0.72rem",
+                              color: "var(--text-dim)",
+                            }}
+                          >
                             {t.name}
                           </div>
                         )}
                       </td>
-                      <td style={{ color: "#4caf50", fontWeight: 600 }}>{t.seeders}</td>
-                      <td style={{ color: "#ff9800", fontWeight: 600 }}>{t.leechers}</td>
+                      <td style={{ color: "#4caf50", fontWeight: 600 }}>
+                        {t.seeders}
+                      </td>
+                      <td style={{ color: "#ff9800", fontWeight: 600 }}>
+                        {t.leechers}
+                      </td>
                       <td>{formatBytes(t.uploaded)}</td>
                       <td>{formatBytes(t.downloaded)}</td>
                       <td>{t.completed}</td>
                       <td>
-                        <span className="badge badge-secondary" style={{ borderRadius: "4px" }}>
+                        <span
+                          className="badge badge-secondary"
+                          style={{ borderRadius: "4px" }}
+                        >
                           {t.peerCount}
                         </span>
                       </td>
-                      <td>{t.lastActivity ? formatDate(t.lastActivity) : "Never"}</td>
                       <td>
-                        <code className="info-hash">{t.infoHash.substring(0, 10)}...</code>
+                        {t.lastActivity ? formatDate(t.lastActivity) : "Never"}
+                      </td>
+                      <td>
+                        <code className="info-hash">
+                          {t.infoHash.substring(0, 10)}...
+                        </code>
                       </td>
                     </tr>
                   );

@@ -84,7 +84,10 @@ export default function DownloadClientTorrents() {
       .map((i) => i.infoHash);
 
     if (missingHashes.length === 0) {
-      showToast("All torrents from this client are already in the library.", "info");
+      showToast(
+        "All torrents from this client are already in the library.",
+        "info",
+      );
       return;
     }
 
@@ -151,7 +154,9 @@ export default function DownloadClientTorrents() {
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
             <h2 style={{ margin: 0 }}>{client.name}</h2>
             <span className="badge badge-primary">{client.clientType}</span>
             <span className="badge badge-secondary">
@@ -267,16 +272,30 @@ export default function DownloadClientTorrents() {
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
         {itemsLoading && (
           <div style={{ padding: "2rem", textAlign: "center" }}>
-            <div className="loading">Connecting to {client.name} and fetching torrents...</div>
+            <div className="loading">
+              Connecting to {client.name} and fetching torrents...
+            </div>
           </div>
         )}
 
         {isError && (
           <div style={{ padding: "2rem", textAlign: "center" }}>
-            <div style={{ color: "var(--danger, #dc3545)", fontWeight: 600, marginBottom: "0.5rem" }}>
+            <div
+              style={{
+                color: "var(--danger, #dc3545)",
+                fontWeight: 600,
+                marginBottom: "0.5rem",
+              }}
+            >
               Unable to connect to download client
             </div>
-            <div style={{ color: "var(--text-muted, #888)", fontSize: "0.9rem", marginBottom: "1rem" }}>
+            <div
+              style={{
+                color: "var(--text-muted, #888)",
+                fontSize: "0.9rem",
+                marginBottom: "1rem",
+              }}
+            >
               {(error as Error)?.message || "Connection refused or timed out."}
             </div>
             <Link to="/settings/download-clients" className="btn btn-outline">
@@ -298,16 +317,40 @@ export default function DownloadClientTorrents() {
 
         {!itemsLoading && !isError && filteredItems.length > 0 && (
           <div style={{ overflowX: "auto" }}>
-            <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+            <table
+              className="table"
+              style={{ width: "100%", borderCollapse: "collapse" }}
+            >
               <thead>
-                <tr style={{ borderBottom: "1px solid var(--border-color, #333)", textAlign: "left" }}>
+                <tr
+                  style={{
+                    borderBottom: "1px solid var(--border-color, #333)",
+                    textAlign: "left",
+                  }}
+                >
                   <th style={{ padding: "0.75rem 1rem" }}>Name</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "130px" }}>Status</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "150px" }}>Size & Progress</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "130px" }}>Category</th>
+                  <th style={{ padding: "0.75rem 1rem", width: "130px" }}>
+                    Status
+                  </th>
+                  <th style={{ padding: "0.75rem 1rem", width: "150px" }}>
+                    Size & Progress
+                  </th>
+                  <th style={{ padding: "0.75rem 1rem", width: "130px" }}>
+                    Category
+                  </th>
                   <th style={{ padding: "0.75rem 1rem" }}>Save Path</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "130px" }}>Library State</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "130px", textAlign: "right" }}>Action</th>
+                  <th style={{ padding: "0.75rem 1rem", width: "130px" }}>
+                    Library State
+                  </th>
+                  <th
+                    style={{
+                      padding: "0.75rem 1rem",
+                      width: "130px",
+                      textAlign: "right",
+                    }}
+                  >
+                    Action
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -325,7 +368,9 @@ export default function DownloadClientTorrents() {
                       }}
                     >
                       <td style={{ padding: "0.75rem 1rem" }}>
-                        <div style={{ fontWeight: 500, wordBreak: "break-word" }}>
+                        <div
+                          style={{ fontWeight: 500, wordBreak: "break-word" }}
+                        >
                           {item.title}
                         </div>
                         <div
@@ -346,8 +391,8 @@ export default function DownloadClientTorrents() {
                             item.status?.toLowerCase() === "seeding"
                               ? "badge-success"
                               : item.status?.toLowerCase() === "downloading"
-                              ? "badge-primary"
-                              : "badge-secondary"
+                                ? "badge-primary"
+                                : "badge-secondary"
                           }`}
                         >
                           {item.status || "unknown"}
@@ -355,8 +400,14 @@ export default function DownloadClientTorrents() {
                       </td>
 
                       <td style={{ padding: "0.75rem 1rem" }}>
-                        <div style={{ fontSize: "0.85rem", marginBottom: "0.25rem" }}>
-                          {formatBytes(item.totalSize)} • {item.progress.toFixed(1)}%
+                        <div
+                          style={{
+                            fontSize: "0.85rem",
+                            marginBottom: "0.25rem",
+                          }}
+                        >
+                          {formatBytes(item.totalSize)} •{" "}
+                          {item.progress.toFixed(1)}%
                         </div>
                         <div
                           style={{
@@ -382,15 +433,28 @@ export default function DownloadClientTorrents() {
 
                       <td style={{ padding: "0.75rem 1rem" }}>
                         {item.category ? (
-                          <span className="badge badge-secondary">{item.category}</span>
+                          <span className="badge badge-secondary">
+                            {item.category}
+                          </span>
                         ) : (
-                          <span style={{ color: "var(--text-muted, #666)", fontSize: "0.85rem" }}>
+                          <span
+                            style={{
+                              color: "var(--text-muted, #666)",
+                              fontSize: "0.85rem",
+                            }}
+                          >
                             -
                           </span>
                         )}
                       </td>
 
-                      <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem", wordBreak: "break-all" }}>
+                      <td
+                        style={{
+                          padding: "0.75rem 1rem",
+                          fontSize: "0.85rem",
+                          wordBreak: "break-all",
+                        }}
+                      >
                         {item.outputPath || "-"}
                       </td>
 
@@ -423,11 +487,16 @@ export default function DownloadClientTorrents() {
                         )}
                       </td>
 
-                      <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
+                      <td
+                        style={{ padding: "0.75rem 1rem", textAlign: "right" }}
+                      >
                         {item.isInLibrary ? (
                           <button
                             className="btn btn-outline"
-                            style={{ fontSize: "0.8rem", padding: "0.3rem 0.6rem" }}
+                            style={{
+                              fontSize: "0.8rem",
+                              padding: "0.3rem 0.6rem",
+                            }}
                             onClick={() => {
                               if (item.libraryTorrentId) {
                                 navigate(`/torrent/${item.libraryTorrentId}`);
@@ -448,7 +517,9 @@ export default function DownloadClientTorrents() {
                               alignItems: "center",
                               gap: "0.3rem",
                             }}
-                            onClick={() => handleImportOne(item.infoHash, item.title)}
+                            onClick={() =>
+                              handleImportOne(item.infoHash, item.title)
+                            }
                             disabled={isImporting}
                           >
                             {isImporting ? "Adding..." : "+ Add"}
