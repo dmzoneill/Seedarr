@@ -187,7 +187,12 @@ public abstract class ApiTestBase
         if (!response.IsSuccessStatusCode)
             return null;
 
-        return JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var result = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var added = result.RootElement.GetProperty("added");
+        if (added.GetArrayLength() == 0)
+            return null;
+
+        return JsonDocument.Parse(added[0].GetRawText());
     }
 
     protected async Task<string> RunCommandAsync(string command, string args)

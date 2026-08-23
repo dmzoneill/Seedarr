@@ -693,6 +693,49 @@ body {
   color: var(--text-dim);
 }
 
+.torrent-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background-color: var(--bg-primary);
+  cursor: pointer;
+  position: relative;
+  vertical-align: middle;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.torrent-checkbox:hover {
+  border-color: var(--accent);
+}
+
+.torrent-checkbox:checked {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+.torrent-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--bg-secondary);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.torrent-table-index {
+  text-align: right;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  min-width: 2.5rem;
+}
+
 .torrent-link {
   color: var(--accent);
   text-decoration: none;
@@ -792,6 +835,33 @@ body {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+.page-header-group {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.page-header-group .page-heading {
+  padding: 0;
+  background-color: transparent;
+  border-bottom: none;
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 0.3rem;
+  align-items: center;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--border);
+}
+
+.bulk-actions-count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
 }
 
 /* ============================================
@@ -1377,6 +1447,82 @@ body {
   color: var(--text-secondary);
   font-size: 0.85rem;
   word-break: break-all;
+}
+
+.add-torrent-file-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  max-height: 10rem;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.add-torrent-file-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.add-torrent-file-item + .add-torrent-file-item {
+  border-top: 1px solid var(--border);
+}
+
+.add-torrent-file-name {
+  word-break: break-all;
+}
+
+.add-torrent-file-remove {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.15rem 0.3rem;
+  flex-shrink: 0;
+}
+
+.add-torrent-file-remove:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+/* ============================================
+  Torrent Event Log Levels
+  ============================================ */
+
+.torrent-log-level {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+}
+
+.torrent-log-level-debug {
+  color: var(--text-muted);
+  background-color: var(--bg-hover-elevated);
+}
+
+.torrent-log-level-info {
+  color: var(--accent);
+  background-color: var(--accent-bg-light);
+}
+
+.torrent-log-level-warn {
+  color: var(--warning);
+  background-color: var(--warning-bg-alert);
+}
+
+.torrent-log-level-error {
+  color: var(--danger);
+  background-color: var(--danger-bg-alert);
 }
 
 /* ============================================

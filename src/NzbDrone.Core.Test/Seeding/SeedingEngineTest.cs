@@ -27,6 +27,7 @@ public class SeedingEngineTest
     private IEventAggregator _eventAggregator;
     private IPeerDatabase _peerDatabase;
     private IConnectionManager _connectionManager;
+    private ITorrentEventLogService _eventLogService;
     private SeedingEngine _engine;
 
     [SetUp]
@@ -39,6 +40,7 @@ public class SeedingEngineTest
         _eventAggregator = Substitute.For<IEventAggregator>();
         _peerDatabase = Substitute.For<IPeerDatabase>();
         _connectionManager = Substitute.For<IConnectionManager>();
+        _eventLogService = Substitute.For<ITorrentEventLogService>();
 
         _configService.AutoStart.Returns(true);
         _configService.AlternativeSpeedEnabled.Returns(false);
@@ -72,7 +74,8 @@ public class SeedingEngineTest
             _configService,
             _eventAggregator,
             _peerDatabase,
-            _connectionManager);
+            _connectionManager,
+            _eventLogService);
     }
 
     private void CallTick()

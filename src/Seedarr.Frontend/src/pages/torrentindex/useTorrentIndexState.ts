@@ -32,7 +32,6 @@ export function useTorrentIndexState() {
 
   const [filter, setFilter] = useState(() => searchParams.get("q") || "");
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
   const [selectedState, setSelectedState] = useState<string>("All");
@@ -129,8 +128,6 @@ export function useTorrentIndexState() {
     setFilter,
     showAddModal,
     setShowAddModal,
-    selectMode,
-    setSelectMode,
     selectedIds,
     setSelectedIds,
     viewMode,
