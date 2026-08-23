@@ -31,11 +31,12 @@ function toLogLevel(level: string): LogLevel {
   return 'Info';
 }
 
-function useLogEntries() {
+function useLogEntries(levelParam: LogLevel | null) {
   return useQuery<LogEntry[]>({
-    queryKey: ['system', 'log'],
+    queryKey: ['system', 'log', levelParam],
     queryFn: async () => {
-      const data = await apiClient.get<ApiLogEntry[]>('/log');
+      const query = levelParam ? `?level=${encodeURIComponent(levelParam.toLowerCase())}` : '';
+      const data = await apiClient.get<ApiLogEntry[]>(`/log${query}`);
       return data.map((entry) => ({
         id: entry.id,
         timestamp: entry.time,
@@ -58,8 +59,8 @@ function formatTimestamp(iso: string): string {
 }
 
 function SystemLogs() {
-  const { data: entries, isLoading, isError } = useLogEntries();
   const [levelFilter, setLevelFilter] = useState<LogLevel | 'All'>('All');
+  const { data: entries, isLoading, isError } = useLogEntries(levelFilter === 'All' ? null : levelFilter);
   const [searchText, setSearchText] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
   const [cleared, setCleared] = useState(false);
@@ -68,19 +69,14 @@ function SystemLogs() {
   const filteredEntries = useMemo(() => {
     if (cleared) return [];
     if (!entries) return [];
-    return entries.filter((entry) => {
-      if (levelFilter !== 'All' && entry.level !== levelFilter) return false;
-      if (searchText) {
-        const q = searchText.toLowerCase();
-        return (
-          entry.message.toLowerCase().includes(q) ||
-          entry.source.toLowerCase().includes(q) ||
-          entry.level.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  }, [entries, levelFilter, searchText, cleared]);
+    if (!searchText) return entries;
+    const q = searchText.toLowerCase();
+    return entries.filter((entry) =>
+      entry.message.toLowerCase().includes(q) ||
+      entry.source.toLowerCase().includes(q) ||
+      entry.level.toLowerCase().includes(q)
+    );
+  }, [entries, searchText, cleared]);
 
   const handleClear = useCallback(() => {
     setCleared(true);
@@ -102,6 +98,7 @@ function SystemLogs() {
           {(['All', ...ALL_LEVELS] as const).map((level) => (
             <button
               key={level}
+              title={level === 'All' ? 'Shows entries at or above the log level configured in Settings > Advanced' : `Show ${level} entries and above`}
               className={`btn btn-small ${levelFilter === level ? 'log-filter-active' : ''} ${level !== 'All' ? `log-filter-${level.toLowerCase()}` : ''}`}
               onClick={() => {
                 setLevelFilter(level);
