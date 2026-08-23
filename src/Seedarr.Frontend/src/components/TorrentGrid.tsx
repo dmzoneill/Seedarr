@@ -1,4 +1,3 @@
-import { Link } from 'react-router';
 import {
   useTorrents,
   useStartSeeding,
@@ -12,9 +11,11 @@ interface TorrentGridProps {
   filter?: string;
   stateFilter?: string;
   trackerFilter?: string;
+  selectedTorrentId?: number | null;
+  onSelectTorrent?: (id: number | null) => void;
 }
 
-function TorrentGrid({ filter, stateFilter, trackerFilter }: TorrentGridProps) {
+function TorrentGrid({ filter, stateFilter, trackerFilter, selectedTorrentId, onSelectTorrent }: TorrentGridProps) {
   const { data: torrents, isLoading } = useTorrents();
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
@@ -65,7 +66,7 @@ function TorrentGrid({ filter, stateFilter, trackerFilter }: TorrentGridProps) {
   function renderActions(torrent: Torrent) {
     const isSeeding = torrent.status === 'Seeding';
     return (
-      <div className="torrent-actions">
+      <div className="torrent-actions" onClick={(e) => e.stopPropagation()}>
         {isSeeding ? (
           <button
             className="btn btn-small"
@@ -104,11 +105,13 @@ function TorrentGrid({ filter, stateFilter, trackerFilter }: TorrentGridProps) {
   return (
     <div className="torrent-grid">
       {filtered.map((t) => (
-        <div key={t.id} className="torrent-grid-card">
+        <div
+          key={t.id}
+          className={`torrent-grid-card${selectedTorrentId === t.id ? ' torrent-grid-card-selected' : ''}`}
+          onClick={() => onSelectTorrent?.(selectedTorrentId === t.id ? null : t.id)}
+        >
           <div className="torrent-grid-card-header">
-            <Link to={`/torrents/${t.id}`} className="torrent-link torrent-grid-card-name">
-              {t.name}
-            </Link>
+            <span className="torrent-grid-card-name">{t.name}</span>
             {statusBadge(t.status)}
           </div>
           <div className="torrent-grid-card-stats">

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Seeding.Scheduling;
 using Seedarr.Http;
 
@@ -11,10 +12,12 @@ namespace Seedarr.Api.V1.Seeding;
 public class SpeedScheduleController : Controller
 {
     private readonly ISpeedScheduler _speedScheduler;
+    private readonly IConfigService _configService;
 
-    public SpeedScheduleController(ISpeedScheduler speedScheduler)
+    public SpeedScheduleController(ISpeedScheduler speedScheduler, IConfigService configService)
     {
         _speedScheduler = speedScheduler;
+        _configService = configService;
     }
 
     [HttpGet]
@@ -38,7 +41,16 @@ public class SpeedScheduleController : Controller
     [HttpGet("active")]
     public ActionResult<SpeedLimits> GetActiveLimits()
     {
-        return _speedScheduler.GetCurrentLimits();
+        var limits = _speedScheduler.GetCurrentLimits();
+
+        var uploadKbps = _configService.AlternativeSpeedEnabled
+            ? _configService.AltUploadSpeedKbps
+            : _configService.MaxUploadSpeedKbps;
+        var downloadKbps = _configService.AlternativeSpeedEnabled
+            ? _configService.AltDownloadSpeedKbps
+            : _configService.MaxDownloadSpeedKbps;
+
+        return SpeedLimitMerger.Apply(limits, (long)uploadKbps * 1024, (long)downloadKbps * 1024);
     }
 
     [HttpPost]

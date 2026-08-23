@@ -101,8 +101,8 @@ function TorrentContextMenu({
             Speed Limits ▶
             {openSubmenu === 'speed' && (
               <div className="context-menu context-menu-submenu">
-                <button className="context-menu-item" onClick={() => { const v = window.prompt('Upload limit (KB/s, 0=unlimited):', String(ct.uploadLimit)); if (v !== null) onUpdate({ ...ct, uploadLimit: parseInt(v, 10) || 0 }); onClose(); }}>Set Upload Limit...</button>
-                <button className="context-menu-item" onClick={() => { const v = window.prompt('Download limit (KB/s, 0=unlimited):', String(ct.downloadLimit)); if (v !== null) onUpdate({ ...ct, downloadLimit: parseInt(v, 10) || 0 }); onClose(); }}>Set Download Limit...</button>
+                <button className="context-menu-item" onClick={() => { const v = window.prompt('Upload limit (KB/s, 0=global):', String(ct.uploadLimit)); if (v !== null) onUpdate({ ...ct, uploadLimit: parseInt(v, 10) || 0 }); onClose(); }}>Set Upload Limit...</button>
+                <button className="context-menu-item" onClick={() => { const v = window.prompt('Download limit (KB/s, 0=global):', String(ct.downloadLimit)); if (v !== null) onUpdate({ ...ct, downloadLimit: parseInt(v, 10) || 0 }); onClose(); }}>Set Download Limit...</button>
                 <button className="context-menu-item" onClick={() => { onUpdate({ ...ct, uploadLimit: 0, downloadLimit: 0 }); onClose(); }}>Reset to Global Limits</button>
               </div>
             )}
