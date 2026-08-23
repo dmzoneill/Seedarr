@@ -177,7 +177,8 @@ public class ArrSyncServiceTest
     {
         _connectionFactory.Get(1).Returns(new ArrConnectionDefinition
         {
-            ArrType = "InvalidType", Name = "Bad Connection"
+            ArrType = "InvalidType",
+            Name = "Bad Connection"
         });
 
         var result = _service.TestConnection(1);
@@ -203,7 +204,8 @@ public class ArrSyncServiceTest
     {
         _connectionFactory.Get(1).Returns(new ArrConnectionDefinition
         {
-            ArrType = null, Name = "Null type"
+            ArrType = null,
+            Name = "Null type"
         });
 
         var result = _service.TestConnection(1);
