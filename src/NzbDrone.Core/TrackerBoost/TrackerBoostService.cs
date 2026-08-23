@@ -1003,6 +1003,14 @@ public class TrackerBoostService : ITrackerBoostService
                         detection.Downloaded = scrape.Downloaded;
                         detection.IsVerified = scrape.Seeders > 0 || scrape.Leechers > 0 || scrape.Downloaded > 0;
 
+                        if (tracker.Status == TrackerHealthStatus.Untested)
+                        {
+                            tracker.Status = TrackerHealthStatus.Alive;
+                            tracker.LastSuccess = DateTime.UtcNow;
+                            tracker.LastScraped = DateTime.UtcNow;
+                            _trackerRepository.Update(tracker);
+                        }
+
                         if (detection.IsVerified)
                         {
                             detection.IsDetected = true;
@@ -1630,7 +1638,8 @@ public class TrackerBoostService : ITrackerBoostService
             await HarvestFromActiveDownloadsAsync();
         }
 
-        if (_lastScanTime == null || DateTime.UtcNow.Subtract(_lastScanTime.Value).TotalMinutes > 10)
+        var hasUntested = _trackerRepository.All().Any(t => t.Enabled && t.Status == TrackerHealthStatus.Untested);
+        if (hasUntested || _lastScanTime == null || DateTime.UtcNow.Subtract(_lastScanTime.Value).TotalMinutes > 5)
         {
             await ProbeTrackerHealthAsync();
         }
