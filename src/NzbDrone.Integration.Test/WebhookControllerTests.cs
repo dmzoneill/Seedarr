@@ -13,9 +13,13 @@ namespace NzbDrone.Integration.Test;
 [Category("IntegrationTest")]
 public class WebhookControllerTests : IntegrationTestBase
 {
+    private string _apiKey = string.Empty;
+
     [OneTimeSetUp]
     public async Task CreateTestArrConnectionAsync()
     {
+        _apiKey = await GetApiKeyAsync();
+
         var connection = new
         {
             enable = true,
@@ -30,11 +34,27 @@ public class WebhookControllerTests : IntegrationTestBase
         response.EnsureSuccessStatusCode();
     }
 
+    private async Task<string> GetApiKeyAsync()
+    {
+        var response = await GetAsync("/initialize.json");
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+
+        return doc.RootElement.TryGetProperty("apiKey", out var apiKey)
+            ? apiKey.GetString() ?? string.Empty
+            : string.Empty;
+    }
+
     private async Task<(HttpStatusCode Status, Dictionary<string, object> Body)> PostWebhookAsync(object payload)
     {
         var json = JsonSerializer.Serialize(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/webhook/arr") { Content = content };
+        if (!string.IsNullOrEmpty(_apiKey))
+        {
+            request.Headers.Add("X-Api-Key", _apiKey);
+        }
+
         var response = await Client.SendAsync(request);
         var responseJson = await response.Content.ReadAsStringAsync();
         return (response.StatusCode, Deserialize<Dictionary<string, object>>(responseJson));
