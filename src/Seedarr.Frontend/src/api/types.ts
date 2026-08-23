@@ -103,7 +103,7 @@ export interface DiskSpaceInfo {
 }
 
 export interface HealthCheckResult {
-  type: 'Ok' | 'Notice' | 'Warning' | 'Error';
+  type: "Ok" | "Notice" | "Warning" | "Error";
   source: string;
   message: string | null;
 }
@@ -435,7 +435,7 @@ export interface Backup {
 export interface PeerGraphNode {
   id: string;
   label: string;
-  type: 'center' | 'torrent' | 'peer';
+  type: "center" | "torrent" | "peer";
   infoHash?: string;
   isEncrypted?: boolean;
 }
