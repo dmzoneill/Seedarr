@@ -12,8 +12,6 @@ export function ProtocolsTab() {
     extensionUtPex: true,
     extensionLtDontHave: true,
     extensionFastExtension: true,
-    utpEnabled: false,
-    tcpFallback: true,
     transportConnectionTimeoutSeconds: 30,
     pexInterval: 60,
     pexMaxPeersPerMessage: 50,
@@ -60,8 +58,6 @@ export function ProtocolsTab() {
       <Toggle label="Fast Extension" checked={form.extensionFastExtension} onChange={(v) => set('extensionFastExtension', v)} hint="BEP 6" />
 
       <SectionTitle>Transport</SectionTitle>
-      <Toggle label="uTP" checked={form.utpEnabled} onChange={(v) => set('utpEnabled', v)} hint="BEP 29, LEDBAT" />
-      <Toggle label="TCP Fallback" checked={form.tcpFallback} onChange={(v) => set('tcpFallback', v)} />
       <NumberInput label="Connection Timeout" value={form.transportConnectionTimeoutSeconds} onChange={(v) => set('transportConnectionTimeoutSeconds', v)} min={1} suffix="seconds" />
 
       <SectionTitle>PEX</SectionTitle>

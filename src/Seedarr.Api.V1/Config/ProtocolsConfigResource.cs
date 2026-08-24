@@ -9,8 +9,6 @@ public class ProtocolsConfigResource : RestResource
     public bool ExtensionUtPex { get; set; }
     public bool ExtensionLtDontHave { get; set; }
     public bool ExtensionFastExtension { get; set; }
-    public bool UtpEnabled { get; set; }
-    public bool TcpFallback { get; set; }
     public int TransportConnectionTimeoutSeconds { get; set; }
     public int PexInterval { get; set; }
     public int PexMaxPeersPerMessage { get; set; }
@@ -43,8 +41,6 @@ public static class ProtocolsConfigResourceMapper
             ExtensionUtPex = model.ExtensionUtPex,
             ExtensionLtDontHave = model.ExtensionLtDontHave,
             ExtensionFastExtension = model.ExtensionFastExtension,
-            UtpEnabled = model.UtpEnabled,
-            TcpFallback = model.TcpFallback,
             TransportConnectionTimeoutSeconds = model.TransportConnectionTimeoutSeconds,
             PexInterval = model.PexInterval,
             PexMaxPeersPerMessage = model.PexMaxPeersPerMessage,

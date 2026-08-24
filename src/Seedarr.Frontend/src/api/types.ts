@@ -236,8 +236,6 @@ export interface ProtocolsConfig {
   extensionUtPex: boolean;
   extensionLtDontHave: boolean;
   extensionFastExtension: boolean;
-  utpEnabled: boolean;
-  tcpFallback: boolean;
   transportConnectionTimeoutSeconds: number;
   pexInterval: number;
   pexMaxPeersPerMessage: number;

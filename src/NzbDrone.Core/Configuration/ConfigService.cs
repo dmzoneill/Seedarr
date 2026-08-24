@@ -112,8 +112,6 @@ public interface IConfigService
     bool ExtensionUtPex { get; }
     bool ExtensionLtDontHave { get; }
     bool ExtensionFastExtension { get; }
-    bool UtpEnabled { get; }
-    bool TcpFallback { get; }
     int TransportConnectionTimeoutSeconds { get; }
     int PexInterval { get; }
     int PexMaxPeersPerMessage { get; }
@@ -388,8 +386,6 @@ public class ConfigService : IConfigService
     public bool ExtensionUtPex => GetValueBoolean("ExtensionUtPex", true);
     public bool ExtensionLtDontHave => GetValueBoolean("ExtensionLtDontHave", true);
     public bool ExtensionFastExtension => GetValueBoolean("ExtensionFastExtension", true);
-    public bool UtpEnabled => GetValueBoolean("UtpEnabled", false);
-    public bool TcpFallback => GetValueBoolean("TcpFallback", true);
     public int TransportConnectionTimeoutSeconds => GetValueInt("TransportConnectionTimeoutSeconds", 30);
     public int PexInterval => GetValueInt("PexInterval", 60);
     public int PexMaxPeersPerMessage => GetValueInt("PexMaxPeersPerMessage", 50);

@@ -1210,22 +1210,6 @@ namespace NzbDrone.Core.Test.Configuration
         }
 
         [Test]
-        public void UtpEnabled_should_default_to_false()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.UtpEnabled, Is.False);
-        }
-
-        [Test]
-        public void TcpFallback_should_default_to_true()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.TcpFallback, Is.True);
-        }
-
-        [Test]
         public void TransportConnectionTimeoutSeconds_should_default_to_30()
         {
             _repository.All().Returns(new List<ConfigModel>().AsQueryable());
