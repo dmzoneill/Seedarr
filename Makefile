@@ -55,7 +55,8 @@ integration: stack-clean stack-build stack-up stack-healthy stack-configure
 		--collect:"XPlat Code Coverage"
 	@echo ""
 	@echo "Running automation tests..."
-	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
+	$(eval SEEDARR_API_KEY := $(shell podman exec seedarr sh -c "grep -o '<ApiKey>[^<]*</ApiKey>' /config/config.xml 2>/dev/null" | sed 's/<[^>]*>//g'))
+	SEEDARR_URL=http://localhost:9898 SEEDARR_API_KEY=$(SEEDARR_API_KEY) dotnet test $(AUTOMATION_TEST) --no-build \
 		--logger "trx;LogFileName=automation-results.trx"
 	@echo ""
 	@echo "Extracting automation coverage..."
