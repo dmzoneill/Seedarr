@@ -1389,96 +1389,6 @@ namespace NzbDrone.Core.Test.Configuration
             Assert.That(_subject.DhtMaxQueriesPerSecond, Is.EqualTo(10));
         }
 
-        // ---- Property defaults (Simulation) ----
-
-        [Test]
-        public void ClientBehaviorEngineEnabled_should_default_to_true()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.ClientBehaviorEngineEnabled, Is.True);
-        }
-
-        [Test]
-        public void PrimaryClient_should_default_to_qBittorrent()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.PrimaryClient, Is.EqualTo("qBittorrent"));
-        }
-
-        [Test]
-        public void BehaviorVariation_should_default_to_0_3()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.BehaviorVariation, Is.EqualTo(0.3));
-        }
-
-        [Test]
-        public void ClientProfileSwitching_should_default_to_true()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.ClientProfileSwitching, Is.True);
-        }
-
-        [Test]
-        public void SwitchClientProbability_should_default_to_0_05()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.SwitchClientProbability, Is.EqualTo(0.05));
-        }
-
-        [Test]
-        public void TrafficPatternProfile_should_default_to_balanced()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.TrafficPatternProfile, Is.EqualTo("balanced"));
-        }
-
-        [Test]
-        public void RealisticVariations_should_default_to_true()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.RealisticVariations, Is.True);
-        }
-
-        [Test]
-        public void TimeBasedPatterns_should_default_to_true()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.TimeBasedPatterns, Is.True);
-        }
-
-        [Test]
-        public void SwarmIntelligenceEnabled_should_default_to_true()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.SwarmIntelligenceEnabled, Is.True);
-        }
-
-        [Test]
-        public void SwarmAdaptationRate_should_default_to_0_5()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.SwarmAdaptationRate, Is.EqualTo(0.5));
-        }
-
-        [Test]
-        public void SwarmPeerAnalysisDepth_should_default_to_10()
-        {
-            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
-
-            Assert.That(_subject.SwarmPeerAnalysisDepth, Is.EqualTo(10));
-        }
-
         // ---- Property defaults (Tracker Server) ----
 
         [Test]
@@ -1707,30 +1617,6 @@ namespace NzbDrone.Core.Test.Configuration
             _repository.All().Returns(configs.AsQueryable());
 
             Assert.That(_subject.SchedulerEnabled, Is.True);
-        }
-
-        [Test]
-        public void BehaviorVariation_should_return_stored_value_when_set()
-        {
-            var configs = new List<ConfigModel>
-            {
-                new ConfigModel { Key = "BehaviorVariation", Value = "0.75" }
-            };
-            _repository.All().Returns(configs.AsQueryable());
-
-            Assert.That(_subject.BehaviorVariation, Is.EqualTo(0.75));
-        }
-
-        [Test]
-        public void PrimaryClient_should_return_stored_value_when_set()
-        {
-            var configs = new List<ConfigModel>
-            {
-                new ConfigModel { Key = "PrimaryClient", Value = "Transmission" }
-            };
-            _repository.All().Returns(configs.AsQueryable());
-
-            Assert.That(_subject.PrimaryClient, Is.EqualTo("Transmission"));
         }
 
         [Test]

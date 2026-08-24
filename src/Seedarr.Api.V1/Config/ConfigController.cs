@@ -199,31 +199,6 @@ public class ProtocolsConfigController : ConfigController<ProtocolsConfigResourc
     }
 }
 
-[V1ApiController("config/simulation")]
-public class SimulationConfigController : ConfigController<SimulationConfigResource>
-{
-    public SimulationConfigController(IConfigService configService)
-        : base(configService)
-    {
-        SharedValidator.RuleFor(c => c.BehaviorVariation)
-            .InclusiveBetween(0.0, 1.0);
-
-        SharedValidator.RuleFor(c => c.SwitchClientProbability)
-            .InclusiveBetween(0.0, 1.0);
-
-        SharedValidator.RuleFor(c => c.SwarmAdaptationRate)
-            .InclusiveBetween(0.0, 1.0);
-
-        SharedValidator.RuleFor(c => c.SwarmPeerAnalysisDepth)
-            .GreaterThanOrEqualTo(1);
-    }
-
-    protected override SimulationConfigResource ToResource(IConfigService model)
-    {
-        return SimulationConfigResourceMapper.ToResource(model);
-    }
-}
-
 [V1ApiController("config/trackerserver")]
 public class TrackerServerConfigController : ConfigController<TrackerServerConfigResource>
 {

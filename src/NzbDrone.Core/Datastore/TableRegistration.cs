@@ -7,7 +7,6 @@ using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding.Scheduling;
-using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
@@ -24,7 +23,6 @@ public static class TableRegistration
         TableMapping.Register<Torrent>("Torrents");
         TableMapping.Register<TorrentFile>("TorrentFiles");
         TableMapping.Register<TrackerEntry>("TrackerEntries");
-        TableMapping.Register<ClientProfileDefinition>("ClientProfileDefinitions");
         TableMapping.Register<TrackerProviderDefinition>("TrackerProviderDefinitions");
         TableMapping.Register<ArrConnectionDefinition>("ArrConnectionDefinitions");
         TableMapping.Register<DownloadClientDefinition>("DownloadClientDefinitions");

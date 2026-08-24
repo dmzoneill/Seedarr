@@ -139,19 +139,6 @@ public interface IConfigService
     bool DhtRateLimitEnabled { get; }
     int DhtMaxQueriesPerSecond { get; }
 
-    // Simulation
-    bool ClientBehaviorEngineEnabled { get; }
-    string PrimaryClient { get; }
-    double BehaviorVariation { get; }
-    bool ClientProfileSwitching { get; }
-    double SwitchClientProbability { get; }
-    string TrafficPatternProfile { get; }
-    bool RealisticVariations { get; }
-    bool TimeBasedPatterns { get; }
-    bool SwarmIntelligenceEnabled { get; }
-    double SwarmAdaptationRate { get; }
-    int SwarmPeerAnalysisDepth { get; }
-
     // Tracker Server
     bool TrackerServerEnabled { get; }
     bool TrackerHttpEnabled { get; }
@@ -414,19 +401,6 @@ public class ConfigService : IConfigService
     public bool DhtAutoBootstrap => GetValueBoolean("DhtAutoBootstrap", true);
     public bool DhtRateLimitEnabled => GetValueBoolean("DhtRateLimitEnabled", true);
     public int DhtMaxQueriesPerSecond => GetValueInt("DhtMaxQueriesPerSecond", 10);
-
-    // Simulation
-    public bool ClientBehaviorEngineEnabled => GetValueBoolean("ClientBehaviorEngineEnabled", true);
-    public string PrimaryClient => GetValue("PrimaryClient", "qBittorrent");
-    public double BehaviorVariation => GetValueDouble("BehaviorVariation", 0.3);
-    public bool ClientProfileSwitching => GetValueBoolean("ClientProfileSwitching", true);
-    public double SwitchClientProbability => GetValueDouble("SwitchClientProbability", 0.05);
-    public string TrafficPatternProfile => GetValue("TrafficPatternProfile", "balanced");
-    public bool RealisticVariations => GetValueBoolean("RealisticVariations", true);
-    public bool TimeBasedPatterns => GetValueBoolean("TimeBasedPatterns", true);
-    public bool SwarmIntelligenceEnabled => GetValueBoolean("SwarmIntelligenceEnabled", true);
-    public double SwarmAdaptationRate => GetValueDouble("SwarmAdaptationRate", 0.5);
-    public int SwarmPeerAnalysisDepth => GetValueInt("SwarmPeerAnalysisDepth", 10);
 
     // Tracker Server
     public bool TrackerServerEnabled => GetValueBoolean("TrackerServerEnabled", false);

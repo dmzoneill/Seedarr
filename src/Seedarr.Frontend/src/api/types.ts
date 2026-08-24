@@ -260,21 +260,6 @@ export interface ProtocolsConfig {
   dhtMaxQueriesPerSecond: number;
 }
 
-export interface SimulationConfig {
-  id: number;
-  clientBehaviorEngineEnabled: boolean;
-  primaryClient: string;
-  behaviorVariation: number;
-  clientProfileSwitching: boolean;
-  switchClientProbability: number;
-  trafficPatternProfile: string;
-  realisticVariations: boolean;
-  timeBasedPatterns: boolean;
-  swarmIntelligenceEnabled: boolean;
-  swarmAdaptationRate: number;
-  swarmPeerAnalysisDepth: number;
-}
-
 export interface TrackerServerConfig {
   id: number;
   trackerServerEnabled: boolean;

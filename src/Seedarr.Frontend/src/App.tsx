@@ -50,7 +50,6 @@ const settingsSubItems = [
   { path: '/settings/network', label: 'Network' },
   { path: '/settings/peer-protocol', label: 'Peer Protocol' },
   { path: '/settings/protocols', label: 'Protocols' },
-  { path: '/settings/simulation', label: 'Simulation' },
   { path: '/settings/tracker-server', label: 'Tracker Server' },
   { path: '/settings/scheduler', label: 'Scheduler' },
   { path: '/settings/indexers', label: 'Indexers' },

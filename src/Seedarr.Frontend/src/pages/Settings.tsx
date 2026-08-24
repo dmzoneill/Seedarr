@@ -5,7 +5,6 @@ import { BitTorrentTab } from './settings/BitTorrentTab';
 import { NetworkTab } from './settings/NetworkTab';
 import { PeerProtocolTab } from './settings/PeerProtocolTab';
 import { ProtocolsTab } from './settings/ProtocolsTab';
-import { SimulationTab } from './settings/SimulationTab';
 import { TrackerServerTab } from './settings/TrackerServerTab';
 import { SchedulerTab } from './settings/SchedulerTab';
 import { AdvancedTab } from './settings/AdvancedTab';
@@ -24,7 +23,6 @@ const sectionTitles: Record<string, string> = {
   network: 'Network',
   'peer-protocol': 'Peer Protocol',
   protocols: 'Protocols',
-  simulation: 'Simulation',
   'tracker-server': 'Tracker Server',
   scheduler: 'Scheduler',
   indexers: 'Indexers',
@@ -50,7 +48,6 @@ function Settings() {
       {activeSection === 'network' && <NetworkTab />}
       {activeSection === 'peer-protocol' && <PeerProtocolTab />}
       {activeSection === 'protocols' && <ProtocolsTab />}
-      {activeSection === 'simulation' && <SimulationTab />}
       {activeSection === 'tracker-server' && <TrackerServerTab />}
       {activeSection === 'scheduler' && <SchedulerTab />}
       {activeSection === 'indexers' && <IndexersTab />}

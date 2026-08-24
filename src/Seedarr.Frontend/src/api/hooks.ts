@@ -19,7 +19,6 @@ import type {
   BitTorrentConfig,
   PeerProtocolConfig,
   ProtocolsConfig,
-  SimulationConfig,
   TrackerServerConfig,
   TrackerServerStats,
   SchedulerConfig,
@@ -371,14 +370,6 @@ export function useProtocolsConfig() {
 
 export function useSaveProtocolsConfig() {
   return useConfigMutation<ProtocolsConfig>("protocols");
-}
-
-export function useSimulationConfig() {
-  return useConfigQuery<SimulationConfig>("simulation");
-}
-
-export function useSaveSimulationConfig() {
-  return useConfigMutation<SimulationConfig>("simulation");
 }
 
 export function useTrackerServerConfig() {
