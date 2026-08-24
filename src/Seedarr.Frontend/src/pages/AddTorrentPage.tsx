@@ -5,7 +5,16 @@ export function AddTorrentPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="content-area">
+    <div
+      className="content-area"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
       <div
         className="page-header"
         style={{
@@ -13,6 +22,7 @@ export function AddTorrentPage() {
           justifyContent: "space-between",
           alignItems: "center",
           marginBottom: "1rem",
+          flexShrink: 0,
         }}
       >
         <div className="page-header-group">
@@ -29,7 +39,12 @@ export function AddTorrentPage() {
           padding: "1.5rem",
           boxShadow:
             "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
-          maxWidth: "1100px",
+          flex: "1 1 auto",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          overflow: "hidden",
+          width: "100%",
         }}
       >
         <AddTorrentForm
