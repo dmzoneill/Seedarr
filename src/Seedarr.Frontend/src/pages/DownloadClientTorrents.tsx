@@ -163,7 +163,16 @@ export default function DownloadClientTorrents() {
   }
 
   return (
-    <div className="content-area">
+    <div
+      className="content-area"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
       {/* Header Row */}
       <div
         className="page-header"
@@ -174,6 +183,7 @@ export default function DownloadClientTorrents() {
           marginBottom: "1rem",
           flexWrap: "wrap",
           gap: "0.75rem",
+          flexShrink: 0,
         }}
       >
         <div className="page-header-group">
@@ -278,6 +288,7 @@ export default function DownloadClientTorrents() {
           borderRadius: "8px",
           boxShadow:
             "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          flexShrink: 0,
         }}
       >
         <div
@@ -456,9 +467,14 @@ export default function DownloadClientTorrents() {
         viewMode === "grid" && (
           <div
             style={{
+              flex: "1 1 auto",
+              minHeight: 0,
+              overflowY: "auto",
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
               gap: "1.25rem",
+              paddingRight: "0.25rem",
+              paddingBottom: "1rem",
             }}
           >
             {filteredItems.map((item) => {
@@ -787,14 +803,32 @@ export default function DownloadClientTorrents() {
               borderRadius: "8px",
               boxShadow:
                 "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+              flex: "1 1 auto",
+              minHeight: 0,
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-            <div style={{ overflowX: "auto" }}>
+            <div
+              style={{
+                flex: "1 1 auto",
+                minHeight: 0,
+                overflowY: "auto",
+                overflowX: "auto",
+              }}
+            >
               <table
                 className="table"
                 style={{ width: "100%", borderCollapse: "collapse" }}
               >
-                <thead>
+                <thead
+                  style={{
+                    position: "sticky",
+                    top: 0,
+                    zIndex: 2,
+                    backgroundColor: "var(--bg-secondary)",
+                  }}
+                >
                   <tr
                     style={{
                       borderBottom: "1px solid var(--border-light)",
@@ -1056,17 +1090,27 @@ export default function DownloadClientTorrents() {
                           style={{
                             padding: "0.75rem 1rem",
                             textAlign: "right",
+                            whiteSpace: "nowrap",
                           }}
                         >
                           <div
-                            style={{ display: "inline-flex", gap: "0.35rem" }}
+                            style={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.45rem",
+                              whiteSpace: "nowrap",
+                            }}
                           >
                             <button
                               className="btn btn-primary"
                               style={{
                                 fontSize: "0.78rem",
-                                padding: "0.25rem 0.6rem",
+                                padding: "0.3rem 0.65rem",
                                 borderRadius: "4px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                                whiteSpace: "nowrap",
                               }}
                               onClick={() =>
                                 handleBoostTorrent(item.infoHash, item.title)
@@ -1074,7 +1118,8 @@ export default function DownloadClientTorrents() {
                               disabled={boostHashMutation.isPending}
                               title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
                             >
-                              ⚡ Boost
+                              <span>⚡</span>
+                              <span>Boost</span>
                             </button>
 
                             {item.isInLibrary ? (
@@ -1082,8 +1127,12 @@ export default function DownloadClientTorrents() {
                                 className="btn btn-outline"
                                 style={{
                                   fontSize: "0.78rem",
-                                  padding: "0.25rem 0.6rem",
+                                  padding: "0.3rem 0.65rem",
                                   borderRadius: "4px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem",
+                                  whiteSpace: "nowrap",
                                 }}
                                 onClick={() => {
                                   if (item.libraryTorrentId) {
@@ -1102,18 +1151,26 @@ export default function DownloadClientTorrents() {
                                 className="btn btn-success"
                                 style={{
                                   fontSize: "0.78rem",
-                                  padding: "0.25rem 0.6rem",
+                                  padding: "0.3rem 0.65rem",
                                   borderRadius: "4px",
                                   display: "inline-flex",
                                   alignItems: "center",
-                                  gap: "0.3rem",
+                                  gap: "0.35rem",
+                                  whiteSpace: "nowrap",
                                 }}
                                 onClick={() =>
                                   handleImportOne(item.infoHash, item.title)
                                 }
                                 disabled={isImporting}
                               >
-                                {isImporting ? "Adding..." : "+ Add"}
+                                {isImporting ? (
+                                  <span>Adding...</span>
+                                ) : (
+                                  <>
+                                    <span>+</span>
+                                    <span>Add</span>
+                                  </>
+                                )}
                               </button>
                             )}
                           </div>

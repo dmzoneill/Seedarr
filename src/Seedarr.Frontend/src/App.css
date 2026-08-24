@@ -631,7 +631,10 @@ body {
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: center;
+  flex-direction: row;
+  gap: 0.45rem;
+  white-space: nowrap;
   padding: 0.4rem 0.95rem;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -687,7 +690,10 @@ body {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex-direction: row;
   gap: 0.45rem;
+  white-space: nowrap;
   font-weight: 500;
   transition: all 0.18s ease;
 }
@@ -722,7 +728,10 @@ body {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  flex-direction: row;
   gap: 0.5rem;
+  white-space: nowrap;
   transition: all 0.18s ease;
 }
 
@@ -775,9 +784,15 @@ body {
 }
 
 .btn-small {
-  padding: 0.22rem 0.6rem;
+  padding: 0.25rem 0.65rem;
   font-size: 0.75rem;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  gap: 0.35rem;
+  white-space: nowrap;
 }
 
 /* ============================================
