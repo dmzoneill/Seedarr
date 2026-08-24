@@ -304,10 +304,10 @@ function DownloadPlusPlus() {
   }, [downloadClients]);
 
   return (
-    <div>
+    <div className="content-area">
       {/* Top Header Row */}
       <div
-        className="page-heading-row"
+        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -317,22 +317,21 @@ function DownloadPlusPlus() {
           marginBottom: "1rem",
         }}
       >
-        <div>
+        <div className="page-header-group">
           <div
             style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
           >
             <h1 className="page-heading" style={{ margin: 0 }}>
-              ⚡ Download++
+              Tracker Booster
             </h1>
-            <span className="badge badge-primary">
-              Real & Simulated Swarm Booster
-            </span>
+            <span className="badge badge-primary">Boost</span>
+            <span className="badge badge-secondary">Download++</span>
           </div>
           <div
             style={{
-              fontSize: "0.85rem",
+              fontSize: "0.8rem",
               color: "var(--text-muted)",
-              marginTop: "0.25rem",
+              marginTop: "0.2rem",
             }}
           >
             Detects trackers on live swarms and accelerates real downloads in
@@ -401,8 +400,11 @@ function DownloadPlusPlus() {
               alignItems: "center",
               flexWrap: "wrap",
               gap: "1rem",
-              marginBottom: "1rem",
+              marginBottom: "1.25rem",
               padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              boxShadow:
+                "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
             }}
           >
             <div
@@ -478,6 +480,9 @@ function DownloadPlusPlus() {
                 padding: "0.75rem",
                 maxHeight: "calc(100vh - 280px)",
                 overflow: "auto",
+                borderRadius: "8px",
+                boxShadow:
+                  "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
               }}
             >
               <div
@@ -635,7 +640,15 @@ function DownloadPlusPlus() {
             </div>
 
             {/* Right Detail: Per-Torrent Tracker Detection Matrix */}
-            <div className="card" style={{ padding: "1rem" }}>
+            <div
+              className="card"
+              style={{
+                padding: "1.25rem",
+                borderRadius: "8px",
+                boxShadow:
+                  "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+              }}
+            >
               {selectedItem ? (
                 <div>
                   {/* Torrent Header Info & Actions */}
