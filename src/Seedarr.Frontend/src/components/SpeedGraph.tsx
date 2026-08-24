@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import { useSpeedHistory, useSeedingStats } from "../api/hooks";
 import { formatSpeed } from "../utils/formatters";
 
@@ -11,7 +11,7 @@ interface SpeedGraphProps {
   maxPoints?: number;
 }
 
-const SVG_WIDTH = 1000;
+const DEFAULT_SVG_WIDTH = 1000;
 const SVG_HEIGHT = 180;
 const PADDING = { top: 12, right: 24, bottom: 26, left: 75 };
 
@@ -28,6 +28,9 @@ function getNiceMax(value: number): number {
 }
 
 function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] =
+    useState<number>(DEFAULT_SVG_WIDTH);
   const historyRef = useRef<SpeedDataPoint[]>([]);
   const seededRef = useRef(false);
   const prevRef = useRef<{
@@ -38,6 +41,25 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
 
   const { data: serverHistory } = useSpeedHistory();
   const { data: stats } = useSeedingStats();
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const el = containerRef.current;
+    if (el.clientWidth > 0) {
+      setContainerWidth(el.clientWidth);
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0) {
+          setContainerWidth(entry.contentRect.width);
+        }
+      }
+    });
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!serverHistory || seededRef.current) return;
@@ -95,7 +117,8 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
   }, [stats, maxPoints]);
 
   const history = historyRef.current;
-  const chartWidth = SVG_WIDTH - PADDING.left - PADDING.right;
+  const svgWidth = Math.max(300, containerWidth);
+  const chartWidth = Math.max(100, svgWidth - PADDING.left - PADDING.right);
   const chartHeight = SVG_HEIGHT - PADDING.top - PADDING.bottom;
 
   let maxSpeed = 0;
@@ -272,13 +295,17 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
         </div>
       </div>
 
-      <div className="speed-graph" style={{ width: "100%", height: "180px" }}>
+      <div
+        className="speed-graph"
+        ref={containerRef}
+        style={{ width: "100%", height: "180px", overflow: "hidden" }}
+      >
         <svg
           width="100%"
           height="100%"
-          viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-          preserveAspectRatio="xMidYMid meet"
-          style={{ overflow: "visible" }}
+          viewBox={`0 0 ${svgWidth} ${SVG_HEIGHT}`}
+          preserveAspectRatio="none"
+          style={{ overflow: "visible", display: "block" }}
         >
           <defs>
             <linearGradient id="speedUploadGrad" x1="0" y1="0" x2="0" y2="1">
@@ -309,7 +336,7 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
               <line
                 x1={PADDING.left}
                 y1={y}
-                x2={SVG_WIDTH - PADDING.right}
+                x2={svgWidth - PADDING.right}
                 y2={y}
                 stroke="rgba(255, 255, 255, 0.06)"
                 strokeWidth={1}
@@ -377,7 +404,7 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
             {Math.floor(maxPoints / 2)}s ago
           </text>
           <text
-            x={SVG_WIDTH - PADDING.right}
+            x={svgWidth - PADDING.right}
             y={SVG_HEIGHT - 6}
             fill="var(--text-muted)"
             fontSize={9.5}
