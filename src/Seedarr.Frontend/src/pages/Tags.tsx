@@ -53,36 +53,85 @@ function Tags() {
     deleteTag.mutate(id);
   }
 
+  const tagList = tags ?? [];
+
   return (
-    <div>
-      <div className="page-heading-row">
-        <h1 className="page-heading">Tags</h1>
-        <button className="btn btn-primary" onClick={() => setShowAdd(true)}>
-          Add Tag
+    <div className="content-area">
+      <div
+        className="page-header"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1.25rem",
+        }}
+      >
+        <div className="page-header-group">
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
+            <h1 className="page-heading" style={{ margin: 0 }}>
+              Tags ({tagList.length})
+            </h1>
+            <span className="badge badge-primary">Metadata</span>
+          </div>
+          <div
+            style={{
+              fontSize: "0.8rem",
+              color: "var(--text-muted)",
+              marginTop: "0.2rem",
+            }}
+          >
+            Organize and filter torrent swarms by custom labels and categories
+          </div>
+        </div>
+
+        <button
+          className="btn btn-primary btn-small"
+          onClick={() => setShowAdd(true)}
+        >
+          + Add Tag
         </button>
       </div>
 
       {showAdd && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div
+          className="card"
+          style={{
+            marginBottom: "1.25rem",
+            borderRadius: "8px",
+            boxShadow:
+              "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+            border: "1px solid rgba(200, 168, 78, 0.4)",
+            padding: "1rem 1.25rem",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              gap: "0.75rem",
+              alignItems: "center",
+              maxWidth: "500px",
+            }}
+          >
             <input
               type="text"
               className="form-input"
-              placeholder="Tag name"
+              placeholder="Tag name (e.g. 4k-hdr, seedbox, anime)"
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               autoFocus
             />
             <button
-              className="btn btn-primary"
+              className="btn btn-primary btn-small"
               onClick={handleCreate}
-              disabled={createTag.isPending}
+              disabled={createTag.isPending || !newLabel.trim()}
             >
-              Save
+              {createTag.isPending ? "Saving..." : "Save Tag"}
             </button>
             <button
-              className="btn btn-default"
+              className="btn btn-outline btn-small"
               onClick={() => {
                 setShowAdd(false);
                 setNewLabel("");
@@ -94,30 +143,50 @@ function Tags() {
         </div>
       )}
 
-      <div className="card">
+      <div
+        className="card"
+        style={{
+          borderRadius: "8px",
+          boxShadow:
+            "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          padding: 0,
+          overflow: "hidden",
+        }}
+      >
         {isLoading ? (
-          <p className="loading">Loading tags...</p>
+          <p className="loading" style={{ padding: "1.5rem" }}>
+            Loading tags...
+          </p>
         ) : isError ? (
-          <p className="error">Failed to load tags.</p>
+          <p className="error" style={{ padding: "1.5rem" }}>
+            Failed to load tags.
+          </p>
         ) : (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">
               <thead>
                 <tr>
-                  <th className="torrent-table-th">Tag</th>
-                  <th className="torrent-table-th">Torrents</th>
-                  <th className="torrent-table-th">Actions</th>
+                  <th className="torrent-table-th">Tag Label</th>
+                  <th className="torrent-table-th">Assigned Torrents</th>
+                  <th
+                    className="torrent-table-th"
+                    style={{ textAlign: "right" }}
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {(tags ?? []).length === 0 ? (
+                {tagList.length === 0 ? (
                   <tr>
                     <td colSpan={3} className="torrent-table-empty">
-                      No tags defined
+                      No tags defined yet. Click &quot;+ Add Tag&quot; to create
+                      one.
                     </td>
                   </tr>
                 ) : (
-                  (tags ?? []).map((tag) => (
+                  tagList.map((tag) => (
                     <tr key={tag.id} className="torrent-table-row">
                       <td>
                         {editing?.id === tag.id ? (
@@ -132,38 +201,64 @@ function Tags() {
                               e.key === "Enter" && handleUpdate()
                             }
                             autoFocus
+                            style={{ maxWidth: "250px" }}
                           />
                         ) : (
-                          <span className="badge badge-info">{tag.label}</span>
+                          <span
+                            className="badge badge-primary"
+                            style={{
+                              fontSize: "0.82rem",
+                              padding: "0.2rem 0.6rem",
+                            }}
+                          >
+                            🏷️ {tag.label}
+                          </span>
                         )}
                       </td>
-                      <td>{tagUsageCounts[tag.label] ?? 0}</td>
                       <td>
+                        <span style={{ fontWeight: 600 }}>
+                          {tagUsageCounts[tag.label] ?? 0}
+                        </span>{" "}
+                        <span
+                          style={{
+                            color: "var(--text-muted)",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          torrents
+                        </span>
+                      </td>
+                      <td style={{ textAlign: "right" }}>
                         {editing?.id === tag.id ? (
-                          <div style={{ display: "flex", gap: 4 }}>
+                          <div
+                            style={{ display: "inline-flex", gap: "0.5rem" }}
+                          >
                             <button
-                              className="btn btn-sm btn-primary"
+                              className="btn btn-primary btn-small"
                               onClick={handleUpdate}
+                              disabled={updateTag.isPending}
                             >
                               Save
                             </button>
                             <button
-                              className="btn btn-sm btn-default"
+                              className="btn btn-outline btn-small"
                               onClick={() => setEditing(null)}
                             >
                               Cancel
                             </button>
                           </div>
                         ) : (
-                          <div style={{ display: "flex", gap: 4 }}>
+                          <div
+                            style={{ display: "inline-flex", gap: "0.5rem" }}
+                          >
                             <button
-                              className="btn btn-sm btn-default"
+                              className="btn btn-outline btn-small"
                               onClick={() => setEditing({ ...tag })}
                             >
                               Edit
                             </button>
                             <button
-                              className="btn btn-sm btn-danger"
+                              className="btn btn-danger btn-small"
                               onClick={() => handleDelete(tag.id)}
                             >
                               Delete

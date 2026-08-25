@@ -6,7 +6,7 @@ import {
   Toggle,
   SelectInput,
   NumberInput,
-  SectionTitle,
+  SectionCard,
 } from "./shared";
 
 export function AdvancedTab() {
@@ -36,7 +36,7 @@ export function AdvancedTab() {
     setDirty(true);
   };
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading">Loading configuration...</div>;
 
   return (
     <div>
@@ -48,42 +48,53 @@ export function AdvancedTab() {
         error={save.error}
         onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
       />
-      <div className="card">
-        <SectionTitle>Logging</SectionTitle>
+
+      <SectionCard
+        title="System Logging & Diagnostics"
+        description="Disk logging verbosity and debug diagnostics for troubleshooting"
+      >
         <Toggle
           label="Log to File"
           checked={form.logToFile}
           onChange={(v) => set("logToFile", v)}
+          hint="Persist log entries to rolling disk log files"
         />
         <SelectInput
-          label="Log Level"
+          label="File Log Level"
           value={form.fileLogLevel}
           onChange={(v) => set("fileLogLevel", v)}
           options={[
-            { value: "Trace", label: "Trace" },
+            { value: "Trace", label: "Trace (Most Verbose)" },
             { value: "Debug", label: "Debug" },
-            { value: "Info", label: "Info" },
-            { value: "Warn", label: "Warn" },
-            { value: "Error", label: "Error" },
+            { value: "Info", label: "Info (Recommended)" },
+            { value: "Warn", label: "Warning" },
+            { value: "Error", label: "Error Only" },
           ]}
           disabled={!form.logToFile}
+          hint="Minimum severity level recorded to file"
         />
         <Toggle
           label="Debug Mode"
           checked={form.debugMode}
           onChange={(v) => set("debugMode", v)}
+          hint="Enable comprehensive internal state tracing and diagnostic outputs"
         />
+      </SectionCard>
 
-        <SectionTitle>UI</SectionTitle>
+      <SectionCard
+        title="User Interface & Polling Frequency"
+        description="Background data polling intervals for torrent lists and statistics"
+      >
         <NumberInput
-          label="Refresh Rate"
+          label="UI Refresh Rate"
           value={form.uiRefreshRateSec}
           onChange={(v) => set("uiRefreshRateSec", v)}
           min={1}
           max={60}
           suffix="seconds"
+          hint="Default polling interval for web interface live updates (default: 9s)"
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }
