@@ -48,6 +48,8 @@ function PeerMap() {
     isError,
   } = usePeerGraph(range.start, range.end);
 
+  const zoomRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+
   const updateDimensions = useCallback(() => {
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
@@ -114,21 +116,41 @@ function PeerMap() {
       type: l.type,
     }));
 
-    const centerNode = nodes.find((n) => n.type === "center");
-    if (centerNode) {
-      centerNode.fx = width / 2;
-      centerNode.fy = height / 2;
-    }
+    const numTorrents = nodes.filter((n) => n.type === "torrent").length;
+    const numPeers = nodes.filter((n) => n.type === "peer").length;
+
+    // Dynamic radius based on torrent count to avoid cluster overlap
+    const baseTorrentRadius = Math.max(
+      220,
+      Math.min(width, height) * 0.35,
+      numTorrents * 12,
+    );
+    const peerDistance = Math.max(90, Math.min(130, 800 / (numPeers || 1)));
+
+    // Pre-distribute torrent nodes in a circle around center to prevent tangling
+    let tIdx = 0;
+    nodes.forEach((n) => {
+      if (n.type === "center") {
+        n.fx = width / 2;
+        n.fy = height / 2;
+      } else if (n.type === "torrent") {
+        const angle = (tIdx / (numTorrents || 1)) * 2 * Math.PI - Math.PI / 2;
+        n.x = width / 2 + Math.cos(angle) * baseTorrentRadius;
+        n.y = height / 2 + Math.sin(angle) * baseTorrentRadius;
+        tIdx++;
+      }
+    });
 
     const g = svg.append("g");
 
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 4])
+      .scaleExtent([0.1, 5])
       .on("zoom", (event) => {
         g.attr("transform", event.transform);
       });
 
+    zoomRef.current = zoom;
     svg.call(zoom);
 
     const defs = svg.append("defs");
@@ -154,16 +176,34 @@ function PeerMap() {
         d3
           .forceLink<SimNode, SimLink>(links)
           .id((d) => d.id)
-          .distance((d) => (d.type === "seeds" ? 100 : 80)),
+          .distance((d) =>
+            d.type === "seeds" ? baseTorrentRadius : peerDistance,
+          )
+          .strength((d) => (d.type === "seeds" ? 0.6 : 0.8)),
       )
-      .force("charge", d3.forceManyBody().strength(-180))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collision", d3.forceCollide().radius(28));
+      .force(
+        "charge",
+        d3
+          .forceManyBody<SimNode>()
+          .strength((d) =>
+            d.type === "center" ? -1200 : d.type === "torrent" ? -500 : -200,
+          )
+          .distanceMax(Math.max(width, height) * 1.5),
+      )
+      .force("center", d3.forceCenter(width / 2, height / 2).strength(0.06))
+      .force(
+        "collision",
+        d3
+          .forceCollide<SimNode>()
+          .radius((d) =>
+            d.type === "center" ? 48 : d.type === "torrent" ? 42 : 24,
+          )
+          .iterations(2),
+      );
 
-    const link = g
-      .append("g")
-      .attr("class", "links")
-      .selectAll("line")
+    const linkGroup = g.append("g").attr("class", "links");
+    const link = linkGroup
+      .selectAll<SVGLineElement, SimLink>("line")
       .data(links)
       .enter()
       .append("line")
@@ -193,9 +233,8 @@ function PeerMap() {
         }
       });
 
-    const node = g
-      .append("g")
-      .attr("class", "nodes")
+    const nodeGroup = g.append("g").attr("class", "nodes");
+    const node = nodeGroup
       .selectAll<SVGGElement, SimNode>("g")
       .data(nodes)
       .enter()
@@ -205,6 +244,51 @@ function PeerMap() {
       .on("click", (event, d) => {
         event.stopPropagation();
         setSelectedNode(d);
+      })
+      .on("mouseenter", (_event, d) => {
+        // Highlight connected neighborhood
+        const neighborIds = new Set<string>();
+        neighborIds.add(d.id);
+        links.forEach((l) => {
+          const sId = (l.source as SimNode).id;
+          const tId = (l.target as SimNode).id;
+          if (sId === d.id) neighborIds.add(tId);
+          if (tId === d.id) neighborIds.add(sId);
+        });
+
+        nodeGroup
+          .selectAll<SVGGElement, SimNode>("g")
+          .transition()
+          .duration(150)
+          .attr("opacity", (n) => (neighborIds.has(n.id) ? 1 : 0.2));
+
+        linkGroup
+          .selectAll<SVGLineElement, SimLink>("line")
+          .transition()
+          .duration(150)
+          .attr("opacity", (l) => {
+            const sId = (l.source as SimNode).id;
+            const tId = (l.target as SimNode).id;
+            return sId === d.id || tId === d.id ? 1 : 0.05;
+          })
+          .attr("stroke-width", (l) => {
+            const sId = (l.source as SimNode).id;
+            const tId = (l.target as SimNode).id;
+            return sId === d.id || tId === d.id ? 2.5 : 1;
+          });
+      })
+      .on("mouseleave", () => {
+        nodeGroup
+          .selectAll<SVGGElement, SimNode>("g")
+          .transition()
+          .duration(150)
+          .attr("opacity", 1);
+        linkGroup
+          .selectAll<SVGLineElement, SimLink>("line")
+          .transition()
+          .duration(150)
+          .attr("opacity", 0.7)
+          .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1.2));
       });
 
     node
@@ -222,24 +306,27 @@ function PeerMap() {
     node
       .append("text")
       .text((d) => {
-        if (d.label.length > 20) {
-          return d.label.substring(0, 18) + "...";
+        if (d.label.length > 18) {
+          return d.label.substring(0, 16) + "...";
         }
         return d.label;
       })
       .attr("text-anchor", "middle")
       .attr("dy", (d) => {
-        if (d.type === "center") return 46;
-        if (d.type === "torrent") return 30;
+        if (d.type === "center") return 44;
+        if (d.type === "torrent") return 28;
         return 22;
       })
       .attr("fill", "var(--text-primary)")
+      .attr("stroke", "#0e0e0e")
+      .attr("stroke-width", "3.5px")
+      .attr("paint-order", "stroke fill")
       .attr("font-size", (d) => {
         if (d.type === "center") return "12px";
         if (d.type === "torrent") return "10px";
         return "8px";
       })
-      .attr("font-weight", (d) => (d.type === "center" ? 700 : 500))
+      .attr("font-weight", (d) => (d.type === "center" ? 700 : 600))
       .attr("font-family", "inherit");
 
     node
@@ -290,13 +377,49 @@ function PeerMap() {
     };
   }, [graphData, dimensions, selectedTorrentFilter]);
 
+  const handleZoomIn = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(250)
+        .call(zoomRef.current.scaleBy, 1.35);
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(250)
+        .call(zoomRef.current.scaleBy, 0.75);
+    }
+  };
+
+  const handleResetZoom = () => {
+    if (svgRef.current && zoomRef.current) {
+      d3.select(svgRef.current)
+        .transition()
+        .duration(350)
+        .call(zoomRef.current.transform, d3.zoomIdentity);
+    }
+  };
+
   const torrentCount =
     graphData?.nodes.filter((n) => n.type === "torrent").length ?? 0;
   const peerCount =
     graphData?.nodes.filter((n) => n.type === "peer").length ?? 0;
 
   return (
-    <div className="content-area">
+    <div
+      className="content-area"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
       {/* Header Row */}
       <div
         className="page-header"
@@ -304,7 +427,8 @@ function PeerMap() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "1rem",
+          marginBottom: "0.75rem",
+          flexShrink: 0,
         }}
       >
         <div className="page-header-group">
@@ -332,7 +456,7 @@ function PeerMap() {
       </div>
 
       {/* Control Toolbar */}
-      <div className="peer-map-controls">
+      <div className="peer-map-controls" style={{ flexShrink: 0 }}>
         <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
           <label className="peer-map-label">Time Range:</label>
           {[1, 6, 12, 24].map((h) => (
@@ -376,7 +500,7 @@ function PeerMap() {
       </div>
 
       {/* Legend */}
-      <div className="peer-map-legend">
+      <div className="peer-map-legend" style={{ flexShrink: 0 }}>
         <span className="peer-map-legend-item">
           <span
             className="peer-map-legend-dot"
@@ -421,7 +545,12 @@ function PeerMap() {
       <div
         ref={containerRef}
         className="peer-map-container"
-        style={{ position: "relative" }}
+        style={{
+          position: "relative",
+          flex: "1 1 auto",
+          minHeight: 0,
+          height: "100%",
+        }}
       >
         {isLoading && (
           <div className="peer-map-loading">Loading peer topology...</div>
@@ -443,6 +572,62 @@ function PeerMap() {
           className="peer-map-svg"
           onClick={() => setSelectedNode(null)}
         />
+
+        {/* Floating Zoom Controls */}
+        <div
+          style={{
+            position: "absolute",
+            top: "1rem",
+            right: "1rem",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.35rem",
+            zIndex: 5,
+          }}
+        >
+          <button
+            className="btn btn-outline"
+            style={{
+              padding: "0.35rem 0.65rem",
+              fontSize: "0.85rem",
+              borderRadius: "6px",
+              backgroundColor: "rgba(20, 20, 20, 0.85)",
+              backdropFilter: "blur(4px)",
+            }}
+            onClick={handleZoomIn}
+            title="Zoom In"
+          >
+            ➕
+          </button>
+          <button
+            className="btn btn-outline"
+            style={{
+              padding: "0.35rem 0.65rem",
+              fontSize: "0.85rem",
+              borderRadius: "6px",
+              backgroundColor: "rgba(20, 20, 20, 0.85)",
+              backdropFilter: "blur(4px)",
+            }}
+            onClick={handleZoomOut}
+            title="Zoom Out"
+          >
+            ➖
+          </button>
+          <button
+            className="btn btn-outline"
+            style={{
+              padding: "0.35rem 0.65rem",
+              fontSize: "0.85rem",
+              borderRadius: "6px",
+              backgroundColor: "rgba(20, 20, 20, 0.85)",
+              backdropFilter: "blur(4px)",
+            }}
+            onClick={handleResetZoom}
+            title="Reset Zoom & Center"
+          >
+            ⟲
+          </button>
+        </div>
 
         {/* Selected Node Details Flyout */}
         {selectedNode && (
