@@ -1348,11 +1348,6 @@ body {
   box-shadow: 0 0 0 2px var(--accent-bg-toast);
 }
 
-.form-select:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
 .form-select:disabled {
   opacity: 0.35;
   cursor: not-allowed;
