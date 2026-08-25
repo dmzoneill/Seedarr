@@ -5,6 +5,7 @@ namespace Seedarr.Api.V1.Config;
 
 public class GeneralConfigResource : RestResource
 {
+    public string InstanceUuid { get; set; }
     public bool AutoStart { get; set; }
     public string ThemeStyle { get; set; }
     public string ColorScheme { get; set; }
@@ -26,6 +27,7 @@ public static class GeneralConfigResourceMapper
     {
         return new GeneralConfigResource
         {
+            InstanceUuid = config.InstanceUuid,
             AutoStart = config.AutoStart,
             ThemeStyle = config.ThemeStyle,
             ColorScheme = config.ColorScheme,

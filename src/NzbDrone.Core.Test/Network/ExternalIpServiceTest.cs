@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Test.TestHelpers;
@@ -244,5 +245,68 @@ public class ExternalIpServiceTest
 
         Assert.That(first, Is.EqualTo("4.4.4.4"));
         Assert.That(second, Is.EqualTo("4.4.4.4"));
+    }
+
+    [Test]
+    public async Task GetExternalIpAsync_should_query_seedarr_net_with_uuid_and_extract_ip_from_json()
+    {
+        var jsonResponse = @"
+{
+  ""status"": ""success"",
+  ""action"": ""inserted"",
+  ""message"": ""Client entry inserted successfully."",
+  ""data"": {
+    ""uuid"": ""f47ac10b-58cc-4372-a567-0e02b2c3d479"",
+    ""ip"": ""127.0.0.1"",
+    ""timestamp"": 1756585406
+  }
+}";
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, jsonResponse);
+
+        var configService = NSubstitute.Substitute.For<NzbDrone.Core.Configuration.IConfigService>();
+        configService.InstanceUuid.Returns("f47ac10b-58cc-4372-a567-0e02b2c3d479");
+
+        var subject = new ExternalIpService(configService, new HttpClient(handler));
+
+        var result = await subject.GetExternalIpAsync();
+
+        Assert.That(result, Is.EqualTo("127.0.0.1"));
+        Assert.That(subject.CachedIp, Is.EqualTo("127.0.0.1"));
+    }
+
+    [Test]
+    public void TryExtractIpFromResponse_should_parse_seedarr_net_json_response()
+    {
+        var jsonResponse = @"
+{
+  ""status"": ""success"",
+  ""action"": ""inserted"",
+  ""message"": ""Client entry inserted successfully."",
+  ""data"": {
+    ""uuid"": ""f47ac10b-58cc-4372-a567-0e02b2c3d479"",
+    ""ip"": ""198.51.100.42"",
+    ""timestamp"": 1756585406
+  }
+}";
+        var success = ExternalIpService.TryExtractIpFromResponse(jsonResponse, out var ip);
+
+        Assert.That(success, Is.True);
+        Assert.That(ip, Is.EqualTo("198.51.100.42"));
+    }
+
+    [Test]
+    public async Task GetExternalIpAsync_should_fallback_to_secondary_source_if_primary_fails()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.InternalServerError, "error"); // primary https://seedarr.net/my/?uuid=... fails
+        handler.Enqueue(HttpStatusCode.InternalServerError, "error"); // primary http://seedarr.net/my/?uuid=... fails
+        handler.Enqueue(HttpStatusCode.OK, "203.0.113.19");          // fallback succeeds
+
+        var subject = new ExternalIpService(new HttpClient(handler));
+
+        var result = await subject.GetExternalIpAsync();
+
+        Assert.That(result, Is.EqualTo("203.0.113.19"));
     }
 }

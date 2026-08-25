@@ -94,6 +94,11 @@ public class SystemResource : RestResource
     public string DatabaseMigration { get; set; }
 
     /// <summary>
+    /// Gets or sets the unique instance identifier UUID.
+    /// </summary>
+    public string InstanceUuid { get; set; }
+
+    /// <summary>
     /// Gets or sets the application uptime in seconds.
     /// </summary>
     public double UptimeSeconds { get; set; }

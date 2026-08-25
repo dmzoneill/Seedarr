@@ -602,6 +602,16 @@ function SystemStatus() {
                   v{status.version}
                 </span>
               </div>
+              {status.instanceUuid && (
+                <div className="status-row">
+                  <span className="status-label">Instance UUID</span>
+                  <span className="status-value">
+                    <code style={{ fontSize: "0.82rem" }}>
+                      {status.instanceUuid}
+                    </code>
+                  </span>
+                </div>
+              )}
               <div className="status-row">
                 <span className="status-label">.NET Runtime</span>
                 <span className="status-value">

@@ -88,6 +88,7 @@ export interface TorrentSpeedSnapshot {
 export interface SystemStatus {
   appName: string;
   version: string;
+  instanceUuid?: string;
   buildTime: string;
   isDebug: boolean;
   isProduction: boolean;
@@ -99,6 +100,7 @@ export interface SystemStatus {
   isDocker: boolean;
   branch: string;
   startupPath: string;
+  AppDataPath?: string;
   appDataPath: string;
   databaseVersion: string;
   databaseMigration: string;
@@ -158,6 +160,7 @@ export interface TrackerServerStats {
 
 export interface GeneralConfig {
   id: number;
+  instanceUuid?: string;
   autoStart: boolean;
   themeStyle: string;
   colorScheme: string;
