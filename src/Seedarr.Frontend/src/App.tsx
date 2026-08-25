@@ -27,9 +27,10 @@ import SeedarrLogo from './components/icons/SeedarrLogo';
 import SeedarrText from './components/icons/SeedarrText';
 import { DashboardIcon, TorrentIcon, SettingsIcon, SystemIcon } from './components/icons/NavIcons';
 import { ActivityIcon } from './components/icons/UIIcons';
-import { TrackerIcon, SunIcon, MoonIcon, HeartIcon, UserIcon, PeerMapIcon, ScheduleIcon, StatsIcon, HistoryIcon, SearchIcon } from './components/icons/AppIcons';
+import { TrackerIcon, SunIcon, MoonIcon, HeartIcon, UserIcon, PeerMapIcon, ScheduleIcon, StatsIcon, HistoryIcon, SearchIcon, KeyIcon } from './components/icons/AppIcons';
 import { useTheme } from './context/ThemeContext';
 import { apiClient } from './api/client';
+import { useGeneralConfig } from './api/hooks';
 
 const systemSubItems = [
   { path: '/system/status', label: 'Status' },
@@ -68,6 +69,8 @@ function App() {
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const isSettingsRoute = location.pathname.startsWith('/settings');
   const isSystemRoute = location.pathname.startsWith('/system');
+  const { data: generalConfig } = useGeneralConfig();
+  const [showApiKey, setShowApiKey] = useState(false);
 
   return (
     <div className="app">
@@ -150,6 +153,38 @@ function App() {
             />
           </div>
           <div className="topbar-actions">
+            {generalConfig?.apiKey && (
+              <div 
+                className="topbar-api-key" 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.5rem', 
+                  marginRight: '1rem', 
+                  color: 'var(--text-dim)', 
+                  fontSize: '0.85rem' 
+                }}
+              >
+                <KeyIcon size={14} />
+                <code 
+                  style={{ 
+                    background: 'var(--bg-lighter)', 
+                    padding: '0.2rem 0.5rem', 
+                    borderRadius: '4px', 
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }} 
+                  onClick={() => {
+                    navigator.clipboard.writeText(generalConfig.apiKey);
+                  }}
+                  onMouseEnter={() => setShowApiKey(true)}
+                  onMouseLeave={() => setShowApiKey(false)}
+                  title="Click to copy API Key"
+                >
+                  {showApiKey ? generalConfig.apiKey : '••••••••••••••••••••••••••••••••'}
+                </code>
+              </div>
+            )}
             <button className="topbar-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
               {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
             </button>
