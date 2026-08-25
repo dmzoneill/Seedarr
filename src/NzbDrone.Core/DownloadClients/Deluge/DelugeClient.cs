@@ -135,6 +135,40 @@ public class DelugeClient : IDownloadClient, IDisposable
         return null;
     }
 
+    public List<string> GetTrackers(string infoHash)
+    {
+        var trackers = new List<string>();
+        if (string.IsNullOrWhiteSpace(infoHash) || !Authenticate())
+        {
+            return trackers;
+        }
+
+        try
+        {
+            using var doc = SendRequest("core.get_torrent_status", new object[] { infoHash, new[] { "trackers" } });
+            if (doc.RootElement.TryGetProperty("result", out var result) && result.TryGetProperty("trackers", out var trList))
+            {
+                foreach (var tr in trList.EnumerateArray())
+                {
+                    if (tr.TryGetProperty("url", out var urlProp))
+                    {
+                        var url = urlProp.GetString();
+                        if (!string.IsNullOrWhiteSpace(url))
+                        {
+                            trackers.Add(url.Trim());
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to get trackers from Deluge for {0}", infoHash);
+        }
+
+        return trackers;
+    }
+
     public bool AddTrackers(string infoHash, IEnumerable<string> trackers)
     {
         if (string.IsNullOrWhiteSpace(infoHash) || trackers == null)

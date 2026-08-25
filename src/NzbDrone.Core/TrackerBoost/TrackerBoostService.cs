@@ -41,6 +41,7 @@ public interface ITrackerBoostService
     Task<SwarmBoostResult> InjectTrackerToHashAsync(string infoHash, string trackerUrl);
     Task<List<SwarmBoostResult>> BoostAllTorrentsAsync(bool onlyVerified = true);
     Task<TrackerCrossMatrixResult> GetCrossMatrixAsync();
+    Task<int> RecoverMissingTrackersAsync();
     Task RunOptimizationCycleAsync();
 }
 
@@ -72,6 +73,7 @@ public class TrackerBoostService : ITrackerBoostService
     private readonly IIndexerRepository _indexerRepository;
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly IConfigService _configService;
+    private readonly ITorrentFileParser _torrentFileParser;
     private readonly Logger _logger;
 
     private static DateTime? _lastScanTime;
@@ -88,7 +90,8 @@ public class TrackerBoostService : ITrackerBoostService
         ITrackerEntryService trackerEntryService,
         IIndexerRepository indexerRepository,
         IDownloadClientFactory downloadClientFactory,
-        IConfigService configService)
+        IConfigService configService,
+        ITorrentFileParser torrentFileParser = null)
     {
         _trackerRepository = trackerRepository;
         _torrentService = torrentService;
@@ -96,6 +99,7 @@ public class TrackerBoostService : ITrackerBoostService
         _indexerRepository = indexerRepository;
         _downloadClientFactory = downloadClientFactory;
         _configService = configService;
+        _torrentFileParser = torrentFileParser;
         _logger = LogManager.GetCurrentClassLogger();
 
         EnsureDefaultTrackersBootstrapped();
@@ -1308,8 +1312,170 @@ public class TrackerBoostService : ITrackerBoostService
         };
     }
 
+    public async Task<int> RecoverMissingTrackersAsync()
+    {
+        var recoveredCount = 0;
+        try
+        {
+            var torrents = _torrentService.GetAll();
+            var activeClients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+
+            foreach (var torrent in torrents)
+            {
+                var existingEntries = _trackerEntryService.GetByTorrentId(torrent.Id);
+                if (existingEntries.Count > 0 && !string.IsNullOrWhiteSpace(torrent.TrackerUrl))
+                {
+                    continue;
+                }
+
+                var existingUrls = existingEntries.Select(t => t.Url.Trim().ToLowerInvariant()).ToHashSet();
+                var foundTrackers = false;
+
+                // 1. Query active download clients for attached trackers
+                foreach (var clientDef in activeClients)
+                {
+                    try
+                    {
+                        var provider = CreateDownloadClient(clientDef);
+                        if (provider == null)
+                        {
+                            continue;
+                        }
+
+                        var clientTrackers = provider.GetTrackers(torrent.InfoHash);
+                        if (clientTrackers != null && clientTrackers.Count > 0)
+                        {
+                            var tier = existingEntries.Count + 1;
+                            foreach (var trUrl in clientTrackers)
+                            {
+                                var clean = trUrl.Trim();
+                                if (!string.IsNullOrEmpty(clean) && !existingUrls.Contains(clean.ToLowerInvariant()))
+                                {
+                                    _trackerEntryService.Add(new TrackerEntry
+                                    {
+                                        TorrentId = torrent.Id,
+                                        Url = clean,
+                                        Tier = tier++,
+                                        Enabled = true
+                                    });
+                                    existingUrls.Add(clean.ToLowerInvariant());
+                                    foundTrackers = true;
+                                }
+                            }
+
+                            if (string.IsNullOrWhiteSpace(torrent.TrackerUrl) && clientTrackers.Count > 0)
+                            {
+                                torrent.TrackerUrl = clientTrackers[0].Trim();
+                                _torrentService.Update(torrent);
+                            }
+
+                            if (foundTrackers)
+                            {
+                                _logger.Info("Recovered {0} tracker(s) from download client {1} for torrent '{2}' ({3})", clientTrackers.Count, clientDef.Name, torrent.Name, torrent.InfoHash);
+                                recoveredCount++;
+                                break;
+                            }
+                        }
+
+                        // Try .torrent export if available
+                        var torrentBytes = provider.GetTorrentFile(torrent.InfoHash);
+                        if (torrentBytes != null && torrentBytes.Length > 0 && _torrentFileParser != null)
+                        {
+                            using var ms = new MemoryStream(torrentBytes);
+                            var parsed = _torrentFileParser.Parse(ms);
+                            if (parsed.AnnounceList != null && parsed.AnnounceList.Count > 0)
+                            {
+                                var tier = 1;
+                                foreach (var tierUrls in parsed.AnnounceList)
+                                {
+                                    foreach (var url in tierUrls)
+                                    {
+                                        var clean = url.Trim();
+                                        if (!string.IsNullOrEmpty(clean) && !existingUrls.Contains(clean.ToLowerInvariant()))
+                                        {
+                                            _trackerEntryService.Add(new TrackerEntry
+                                            {
+                                                TorrentId = torrent.Id,
+                                                Url = clean,
+                                                Tier = tier,
+                                                Enabled = true
+                                            });
+                                            existingUrls.Add(clean.ToLowerInvariant());
+                                            foundTrackers = true;
+                                        }
+                                    }
+
+                                    tier++;
+                                }
+                            }
+                            else if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
+                            {
+                                var clean = parsed.AnnounceUrl.Trim();
+                                if (!existingUrls.Contains(clean.ToLowerInvariant()))
+                                {
+                                    _trackerEntryService.Add(new TrackerEntry
+                                    {
+                                        TorrentId = torrent.Id,
+                                        Url = clean,
+                                        Tier = 1,
+                                        Enabled = true
+                                    });
+                                    existingUrls.Add(clean.ToLowerInvariant());
+                                    foundTrackers = true;
+                                }
+                            }
+
+                            if (!string.IsNullOrEmpty(parsed.AnnounceUrl) && string.IsNullOrEmpty(torrent.TrackerUrl))
+                            {
+                                torrent.TrackerUrl = parsed.AnnounceUrl;
+                            }
+
+                            torrent.IsPrivate = parsed.IsPrivate;
+                            _torrentService.Update(torrent);
+
+                            if (foundTrackers)
+                            {
+                                recoveredCount++;
+                                break;
+                            }
+                        }
+                    }
+                    catch (Exception clientEx)
+                    {
+                        _logger.Debug(clientEx, "Failed to inspect download client {0} for torrent {1}", clientDef.Name, torrent.InfoHash);
+                    }
+                }
+
+                // 2. If still no trackers and torrent is not private, scrape candidate trackers via TrackerBoost
+                if (!foundTrackers && !torrent.IsPrivate)
+                {
+                    try
+                    {
+                        var boostRes = await BoostTorrentAsync(torrent.Id, onlyVerified: true);
+                        if (boostRes.Boosted && boostRes.AddedTrackersCount > 0)
+                        {
+                            recoveredCount++;
+                        }
+                    }
+                    catch (Exception boostEx)
+                    {
+                        _logger.Debug(boostEx, "Failed to auto-boost torrent {0} during recovery", torrent.InfoHash);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to run RecoverMissingTrackersAsync");
+        }
+
+        return recoveredCount;
+    }
+
     public async Task RunOptimizationCycleAsync()
     {
+        await RecoverMissingTrackersAsync();
+
         var settings = GetSettings();
         if (settings.AutoHarvestEnabled)
         {

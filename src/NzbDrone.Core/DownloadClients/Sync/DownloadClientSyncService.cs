@@ -22,18 +22,24 @@ public class DownloadClientSyncService : IDownloadClientSyncService
     private readonly IIndexerFactory _indexerFactory;
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileParser _torrentFileParser;
+    private readonly ITrackerEntryService _trackerEntryService;
+    private readonly ITorrentFileService _torrentFileService;
     private readonly Logger _logger;
 
     public DownloadClientSyncService(
         IDownloadClientFactory downloadClientFactory,
         IIndexerFactory indexerFactory,
         ITorrentService torrentService,
-        ITorrentFileParser torrentFileParser)
+        ITorrentFileParser torrentFileParser,
+        ITrackerEntryService trackerEntryService = null,
+        ITorrentFileService torrentFileService = null)
     {
         _downloadClientFactory = downloadClientFactory;
         _indexerFactory = indexerFactory;
         _torrentService = torrentService;
         _torrentFileParser = torrentFileParser;
+        _trackerEntryService = trackerEntryService;
+        _torrentFileService = torrentFileService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -102,14 +108,39 @@ public class DownloadClientSyncService : IDownloadClientSyncService
                             TotalSize = parsed.TotalSize,
                             PieceCount = parsed.PieceCount,
                             PieceLength = parsed.PieceLength,
+                            Comment = parsed.Comment,
+                            IsPrivate = parsed.IsPrivate,
+                            TrackerUrl = parsed.AnnounceUrl,
                             DateAdded = DateTime.UtcNow,
                             Status = TorrentStatus.Stopped
                         };
 
                         _torrentService.Add(torrent);
+                        SaveParsedTrackersAndFiles(torrent.Id, parsed);
+
                         existingHashes.Add(hash);
                         result.Added++;
                         _logger.Info("Synced torrent {0} from download client {1}", torrent.Name, definition.Name);
+                    }
+                    else if (item != null)
+                    {
+                        var clientTrackers = provider.GetTrackers(hash);
+                        var torrent = new Torrent
+                        {
+                            Name = !string.IsNullOrEmpty(item.Title) ? item.Title : hash,
+                            InfoHash = hash,
+                            TotalSize = item.TotalSize,
+                            TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
+                            DateAdded = DateTime.UtcNow,
+                            Status = TorrentStatus.Stopped
+                        };
+
+                        _torrentService.Add(torrent);
+                        SaveClientTrackers(torrent.Id, clientTrackers);
+
+                        existingHashes.Add(hash);
+                        result.Added++;
+                        _logger.Info("Synced torrent {0} (client metadata) from download client {1}", torrent.Name, definition.Name);
                     }
                     else
                     {
@@ -252,29 +283,134 @@ public class DownloadClientSyncService : IDownloadClientSyncService
                 TotalSize = parsed.TotalSize > 0 ? parsed.TotalSize : (matchingItem?.TotalSize ?? 0),
                 PieceCount = parsed.PieceCount,
                 PieceLength = parsed.PieceLength,
+                Comment = parsed.Comment,
+                IsPrivate = parsed.IsPrivate,
+                TrackerUrl = parsed.AnnounceUrl,
                 DateAdded = DateTime.UtcNow,
                 Status = TorrentStatus.Stopped
             };
+
+            _torrentService.Add(torrent);
+            SaveParsedTrackersAndFiles(torrent.Id, parsed);
         }
         else if (matchingItem != null)
         {
+            var clientTrackers = provider.GetTrackers(normalizedHash);
             torrent = new Torrent
             {
                 Name = !string.IsNullOrEmpty(matchingItem.Title) ? matchingItem.Title : normalizedHash,
                 InfoHash = normalizedHash,
                 TotalSize = matchingItem.TotalSize,
+                TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
                 DateAdded = DateTime.UtcNow,
                 Status = TorrentStatus.Stopped
             };
+
+            _torrentService.Add(torrent);
+            SaveClientTrackers(torrent.Id, clientTrackers);
         }
         else
         {
             throw new InvalidOperationException($"Could not fetch torrent metadata for hash {normalizedHash} from download client or indexers.");
         }
 
-        _torrentService.Add(torrent);
         _logger.Info("Imported torrent {0} from download client {1}", torrent.Name, definition.Name);
         return torrent;
+    }
+
+    private void SaveParsedTrackersAndFiles(int torrentId, ParsedTorrent parsed)
+    {
+        if (_torrentFileService != null && parsed.Files != null && parsed.Files.Count > 0)
+        {
+            var existingFiles = _torrentFileService.GetByTorrentId(torrentId);
+            if (existingFiles.Count == 0)
+            {
+                foreach (var f in parsed.Files)
+                {
+                    _torrentFileService.Add(new TorrentFile
+                    {
+                        TorrentId = torrentId,
+                        Path = f.Path,
+                        Size = f.Size
+                    });
+                }
+            }
+        }
+
+        if (_trackerEntryService != null)
+        {
+            var existingTrackers = _trackerEntryService.GetByTorrentId(torrentId)
+                .Select(t => t.Url.Trim().ToLowerInvariant())
+                .ToHashSet();
+
+            if (parsed.AnnounceList != null && parsed.AnnounceList.Count > 0)
+            {
+                var tier = 1;
+                foreach (var tierUrls in parsed.AnnounceList)
+                {
+                    foreach (var url in tierUrls)
+                    {
+                        var clean = url.Trim();
+                        if (!string.IsNullOrEmpty(clean) && !existingTrackers.Contains(clean.ToLowerInvariant()))
+                        {
+                            _trackerEntryService.Add(new TrackerEntry
+                            {
+                                TorrentId = torrentId,
+                                Url = clean,
+                                Tier = tier,
+                                Enabled = true
+                            });
+                            existingTrackers.Add(clean.ToLowerInvariant());
+                        }
+                    }
+
+                    tier++;
+                }
+            }
+            else if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
+            {
+                var clean = parsed.AnnounceUrl.Trim();
+                if (!existingTrackers.Contains(clean.ToLowerInvariant()))
+                {
+                    _trackerEntryService.Add(new TrackerEntry
+                    {
+                        TorrentId = torrentId,
+                        Url = clean,
+                        Tier = 1,
+                        Enabled = true
+                    });
+                }
+            }
+        }
+    }
+
+    private void SaveClientTrackers(int torrentId, List<string> clientTrackers)
+    {
+        if (_trackerEntryService == null || clientTrackers == null || clientTrackers.Count == 0)
+        {
+            return;
+        }
+
+        var existingTrackers = _trackerEntryService.GetByTorrentId(torrentId)
+            .Select(t => t.Url.Trim().ToLowerInvariant())
+            .ToHashSet();
+
+        var tier = 1;
+        foreach (var tr in clientTrackers)
+        {
+            var clean = tr.Trim();
+            if (!string.IsNullOrEmpty(clean) && !existingTrackers.Contains(clean.ToLowerInvariant()))
+            {
+                _trackerEntryService.Add(new TrackerEntry
+                {
+                    TorrentId = torrentId,
+                    Url = clean,
+                    Tier = tier++,
+                    Enabled = true
+                });
+                existingTrackers.Add(clean.ToLowerInvariant());
+            }
+        }
     }
 
     public SyncResult ImportTorrents(int clientId, List<string> infoHashes)
