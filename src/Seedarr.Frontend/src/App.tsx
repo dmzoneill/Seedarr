@@ -154,26 +154,26 @@ function App() {
           </div>
           <div className="topbar-actions">
             {generalConfig?.apiKey && (
-              <div 
-                className="topbar-api-key" 
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '0.5rem', 
-                  marginRight: '1rem', 
-                  color: 'var(--text-dim)', 
-                  fontSize: '0.85rem' 
+              <div
+                className="topbar-api-key"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  marginRight: '1rem',
+                  color: 'var(--text-dim)',
+                  fontSize: '0.85rem'
                 }}
               >
                 <KeyIcon size={14} />
-                <code 
-                  style={{ 
-                    background: 'var(--bg-lighter)', 
-                    padding: '0.2rem 0.5rem', 
-                    borderRadius: '4px', 
+                <code
+                  style={{
+                    background: 'var(--bg-lighter)',
+                    padding: '0.2rem 0.5rem',
+                    borderRadius: '4px',
                     cursor: 'pointer',
                     userSelect: 'none'
-                  }} 
+                  }}
                   onClick={() => {
                     navigator.clipboard.writeText(generalConfig.apiKey);
                   }}
