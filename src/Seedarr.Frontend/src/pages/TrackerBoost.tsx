@@ -323,7 +323,7 @@ function TrackerBoost() {
         <div className="page-header-group">
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <h1 className="page-heading" style={{ margin: 0 }}>
-              TrackerBoost
+              Tracker Boost
             </h1>
             <span className="badge badge-primary">⚡ Smart Booster</span>
             <span className="badge badge-secondary">BEP 15 & 48 Scraper</span>
