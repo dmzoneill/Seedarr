@@ -5,6 +5,7 @@ import {
   useUpdateDownloadClient,
   useDeleteDownloadClient,
   useTestDownloadClient,
+  useDownloadClientSync,
 } from '../../api/hooks';
 import type { DownloadClientDefinition } from '../../api/types';
 import { TextInput, SelectInput, Toggle, NumberInput } from './shared';
@@ -15,6 +16,7 @@ export function DownloadClientsTab() {
   const updateMutation = useUpdateDownloadClient();
   const deleteMutation = useDeleteDownloadClient();
   const testMutation = useTestDownloadClient();
+  const syncMutation = useDownloadClientSync();
   const [editing, setEditing] = useState<Partial<DownloadClientDefinition> | null>(null);
   const [testResults, setTestResults] = useState<Record<number, boolean | null>>({});
 
@@ -58,7 +60,21 @@ export function DownloadClientsTab() {
   return (
     <>
       <div className="card">
-        <h3>Download Clients</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h3 style={{ margin: 0 }}>Download Clients</h3>
+          <button 
+            className="btn btn-outline" 
+            onClick={() => {
+                syncMutation.mutate(undefined, {
+                    onSuccess: (res) => alert(`Sync Complete.\nAdded: ${res.added}\nSkipped: ${res.skipped}\nFailed: ${res.failed}`)
+                });
+            }} 
+            disabled={syncMutation.isPending}
+            title="Import torrents currently in your download clients"
+          >
+            {syncMutation.isPending ? 'Syncing...' : 'Sync Torrents'}
+          </button>
+        </div>
 
         <div className="provider-cards">
           {clients?.map((client) => (
