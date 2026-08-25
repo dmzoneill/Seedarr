@@ -28,6 +28,7 @@ public class RenameDownloadPlusPlusToTrackerBoost : NzbDroneMigrationBase
                 .WithColumn("SuccessfulScrapes").AsInt32().NotNullable().WithDefaultValue(0)
                 .WithColumn("FailedScrapes").AsInt32().NotNullable().WithDefaultValue(0)
                 .WithColumn("TotalSwarmsFound").AsInt32().NotNullable().WithDefaultValue(0)
+                .WithColumn("TotalVerifiedTorrents").AsInt32().NotNullable().WithDefaultValue(0)
                 .WithColumn("Enabled").AsBoolean().NotNullable().WithDefaultValue(true);
 
             Create.Index("IX_TrackerBoostTrackers_Url")
