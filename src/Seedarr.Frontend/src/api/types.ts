@@ -647,9 +647,9 @@ export type TrackerProtocol = "Udp" | "Http" | "Https" | number;
 export type TrackerHealthStatus =
   "Untested" | "Alive" | "Slow" | "Offline" | number;
 export type TrackerSourceType =
-  "PublicList" | "Prowlarr" | "ReleaseMagnet" | "Manual" | number;
+  "PublicList" | "Prowlarr" | "ReleaseMagnet" | "Manual" | "ActiveTorrent" | number;
 
-export interface DownloadPlusPlusTracker {
+export interface TrackerBoostTracker {
   id: number;
   url: string;
   host: string;
@@ -664,8 +664,11 @@ export interface DownloadPlusPlusTracker {
   successfulScrapes: number;
   failedScrapes: number;
   totalSwarmsFound: number;
+  totalVerifiedTorrents?: number;
   enabled: boolean;
 }
+
+export type DownloadPlusPlusTracker = TrackerBoostTracker;
 
 export interface SwarmBoostResult {
   torrentId: number;
@@ -677,10 +680,12 @@ export interface SwarmBoostResult {
   addedTrackers: string[];
   totalSeedersFound: number;
   totalLeechersFound: number;
+  verifiedCandidateTrackersCount?: number;
+  skippedTrackersCount?: number;
   message: string;
 }
 
-export interface DownloadPlusPlusStatusSummary {
+export interface TrackerBoostStatusSummary {
   totalTrackersMonitored: number;
   aliveTrackersCount: number;
   slowTrackersCount: number;
@@ -688,11 +693,19 @@ export interface DownloadPlusPlusStatusSummary {
   untestedTrackersCount: number;
   prowlarrTrackersCount: number;
   publicListTrackersCount: number;
+  activeTorrentTrackersCount: number;
   torrentsBoostedCount: number;
   extraTrackersInjectedCount: number;
+  totalVerifiedMatchesCount: number;
+  autoBoostEnabled: boolean;
+  autoHarvestEnabled: boolean;
   lastScanTime: string | null;
+  lastHarvestTime: string | null;
   lastProwlarrHarvestTime: string | null;
+  lastAutoBoostTime: string | null;
 }
+
+export type DownloadPlusPlusStatusSummary = TrackerBoostStatusSummary;
 
 export interface TorrentTrackerDetection {
   trackerId: number;
@@ -703,8 +716,10 @@ export interface TorrentTrackerDetection {
   sourceName: string;
   isAttached: boolean;
   isDetected: boolean;
+  isVerified: boolean;
   seeders: number;
   leechers: number;
+  downloaded?: number;
   latencyMs: number;
   healthStatus: TrackerHealthStatus;
   detectionStatus: string;
@@ -715,8 +730,47 @@ export interface TorrentTrackerInspectionResult {
   torrentName: string;
   infoHash: string;
   isPrivate: boolean;
+  isBoosted?: boolean;
+  boostedAt?: string | null;
+  injectedTrackersCount?: number;
   totalTrackersChecked: number;
   attachedTrackersCount: number;
   detectedTrackersCount: number;
+  verifiedTrackersCount: number;
   detections: TorrentTrackerDetection[];
+}
+
+export interface TrackerBoostSettings {
+  autoBoostEnabled: boolean;
+  autoHarvestEnabled: boolean;
+  intervalMinutes: number;
+  maxTrackersPerTorrent: number;
+  onlyVerified: boolean;
+}
+
+export interface TorrentMatrixItem {
+  torrentId: number;
+  torrentName: string;
+  infoHash: string;
+  isPrivate: boolean;
+  isBoosted: boolean;
+  attachedTrackersCount: number;
+  verifiedTrackersCount: number;
+  trackers: TorrentTrackerDetection[];
+}
+
+export interface TrackerMatrixItem {
+  trackerId: number;
+  trackerUrl: string;
+  host: string;
+  protocol: TrackerProtocol;
+  status: TrackerHealthStatus;
+  latencyMs: number;
+  registeredTorrentsCount: number;
+  registeredTorrentNames: string[];
+}
+
+export interface TrackerCrossMatrixResult {
+  torrents: TorrentMatrixItem[];
+  trackers: TrackerMatrixItem[];
 }
