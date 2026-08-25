@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NSubstitute;
@@ -1755,6 +1756,34 @@ namespace NzbDrone.Core.Test.Configuration
             _repository.All().Returns(configs.AsQueryable());
 
             Assert.That(_subject.FileLogLevel, Is.EqualTo("Debug"));
+        }
+
+        [Test]
+        public void InstanceUuid_should_generate_and_persist_new_guid_when_not_present()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            var uuid = _subject.InstanceUuid;
+
+            Assert.That(uuid, Is.Not.Null.And.Not.Empty);
+            Assert.That(Guid.TryParse(uuid, out _), Is.True);
+            _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "InstanceUuid" && c.Value == uuid));
+        }
+
+        [Test]
+        public void InstanceUuid_should_return_stored_value_when_present()
+        {
+            var expectedUuid = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "InstanceUuid", Value = expectedUuid }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            var uuid = _subject.InstanceUuid;
+
+            Assert.That(uuid, Is.EqualTo(expectedUuid));
+            _repository.DidNotReceive().Insert(Arg.Any<ConfigModel>());
         }
     }
 }
