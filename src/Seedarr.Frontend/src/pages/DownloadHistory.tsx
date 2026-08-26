@@ -395,6 +395,7 @@ export default function DownloadHistory() {
             overflowY: "auto",
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+            alignContent: "start",
             gap: "1.25rem",
             paddingRight: "0.25rem",
             paddingBottom: "1rem",
@@ -415,6 +416,7 @@ export default function DownloadHistory() {
                   overflow: "hidden",
                   display: "flex",
                   flexDirection: "column",
+                  height: "auto",
                   borderRadius: "8px",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                   backgroundColor: "var(--bg-secondary)",
@@ -426,12 +428,12 @@ export default function DownloadHistory() {
                 }}
                 onClick={() => setSelectedDetailItem(item)}
               >
-                {/* Poster Container */}
+                {/* Poster Artwork Box */}
                 <div
                   style={{
                     position: "relative",
                     width: "100%",
-                    paddingTop: "145%", // 2:3 aspect ratio
+                    paddingTop: "140%", // 2:3 aspect ratio matching TrackerServer
                     backgroundColor: "#141414",
                     overflow: "hidden",
                   }}
@@ -465,7 +467,7 @@ export default function DownloadHistory() {
                         padding: "1rem",
                         textAlign: "center",
                         background:
-                          "linear-gradient(180deg, #2a2a2a 0%, #151515 100%)",
+                          "linear-gradient(180deg, #2a2620 0%, #151412 100%)",
                       }}
                     >
                       <span
@@ -481,10 +483,11 @@ export default function DownloadHistory() {
                       </span>
                       <div
                         style={{
-                          fontSize: "0.85rem",
+                          fontSize: "0.82rem",
                           fontWeight: 600,
                           wordBreak: "break-word",
-                          color: "#ccc",
+                          color: "var(--text-secondary)",
+                          lineHeight: "1.25",
                         }}
                       >
                         {displayTitle}
@@ -518,13 +521,14 @@ export default function DownloadHistory() {
                           backgroundColor: "rgba(0, 0, 0, 0.78)",
                           backdropFilter: "blur(4px)",
                           color: "#fff",
-                          fontSize: "0.7rem",
+                          fontSize: "0.68rem",
                           padding: "0.2rem 0.5rem",
                           border: "1px solid rgba(255,255,255,0.18)",
                           cursor: arrLink ? "pointer" : "default",
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.25rem",
+                          borderRadius: "4px",
                         }}
                         title={
                           arrLink
@@ -555,9 +559,10 @@ export default function DownloadHistory() {
                             : "badge-secondary"
                       }`}
                       style={{
-                        fontSize: "0.75rem",
-                        padding: "0.2rem 0.55rem",
+                        fontSize: "0.72rem",
+                        padding: "0.2rem 0.5rem",
                         boxShadow: "0 2px 6px rgba(0,0,0,0.5)",
+                        borderRadius: "4px",
                       }}
                     >
                       ★ {formatRatio(item.ratio)}
@@ -571,17 +576,20 @@ export default function DownloadHistory() {
                       bottom: 0,
                       left: 0,
                       right: 0,
-                      padding: "0.4rem 0.6rem",
-                      background:
-                        "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.85) 40%, rgba(0,0,0,0.95) 100%)",
+                      zIndex: 2,
+                      backgroundColor: "rgba(0, 0, 0, 0.82)",
+                      backdropFilter: "blur(6px)",
+                      padding: "0.3rem 0.5rem",
                       display: "flex",
                       justifyContent: "space-between",
                       alignItems: "center",
-                      fontSize: "0.75rem",
-                      color: "#eee",
+                      fontSize: "0.7rem",
+                      borderTop: "1px solid rgba(255,255,255,0.1)",
                     }}
                   >
-                    <span>↑ {formatBytes(item.uploaded)}</span>
+                    <span style={{ color: "#eee" }}>
+                      ↑ {formatBytes(item.uploaded)}
+                    </span>
                     <span style={{ color: "var(--text-muted, #aaa)" }}>
                       ⏱ {formatDuration(item.seedingTime)}
                     </span>
@@ -592,69 +600,117 @@ export default function DownloadHistory() {
                 <div
                   style={{
                     padding: "0.75rem",
-                    flex: 1,
                     display: "flex",
                     flexDirection: "column",
-                    justifyContent: "space-between",
+                    flex: "1 1 auto",
+                    gap: "0.4rem",
                   }}
                 >
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        fontSize: "0.9rem",
-                        lineHeight: "1.25",
-                        marginBottom: "0.25rem",
-                        overflow: "hidden",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
-                      }}
-                      title={displayTitle}
-                    >
-                      {displayTitle}{" "}
-                      {meta?.year ? (
-                        <span
-                          style={{
-                            color: "var(--text-muted, #888)",
-                            fontWeight: 400,
-                          }}
-                        >
-                          ({meta.year})
-                        </span>
-                      ) : null}
-                    </div>
-
-                    {/* Genres (Clickable to Filter) */}
-                    {meta?.genres && meta.genres.length > 0 && (
-                      <div
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: "0.85rem",
+                      color: "var(--text-primary)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      lineHeight: "1.3",
+                      minHeight: "2.2em",
+                    }}
+                    title={displayTitle}
+                  >
+                    {displayTitle}{" "}
+                    {meta?.year ? (
+                      <span
                         style={{
-                          display: "flex",
-                          gap: "0.25rem",
-                          flexWrap: "wrap",
-                          margin: "0.35rem 0",
+                          color: "var(--text-muted, #888)",
+                          fontWeight: 400,
                         }}
                       >
-                        {meta.genres.slice(0, 2).map((g, i) => (
-                          <span
-                            key={i}
-                            className="badge badge-secondary"
-                            style={{
-                              fontSize: "0.65rem",
-                              padding: "0.1rem 0.35rem",
-                              cursor: "pointer",
-                            }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSearchTerm(g);
-                            }}
-                            title={`Filter downloads by genre "${g}"`}
-                          >
-                            {g}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                        ({meta.year})
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {/* Genres (Clickable to Filter) */}
+                  {meta?.genres && meta.genres.length > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "0.3rem",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {meta.genres.slice(0, 2).map((g, i) => (
+                        <span
+                          key={i}
+                          className="badge badge-secondary"
+                          style={{
+                            fontSize: "0.65rem",
+                            padding: "0.1rem 0.35rem",
+                            backgroundColor: "rgba(255,255,255,0.06)",
+                            color: "var(--text-muted)",
+                            borderRadius: "3px",
+                            cursor: "pointer",
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSearchTerm(g);
+                          }}
+                          title={`Filter downloads by genre "${g}"`}
+                        >
+                          {g}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Stats Bar */}
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "0.25rem 0.5rem",
+                      fontSize: "0.72rem",
+                      color: "var(--text-muted)",
+                      marginTop: "auto",
+                      paddingTop: "0.4rem",
+                      borderTop: "1px solid var(--border-light)",
+                    }}
+                  >
+                    <div>
+                      <span>Size: </span>
+                      <strong style={{ color: "var(--text-primary)" }}>
+                        {formatBytes(item.totalSize)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Uploaded: </span>
+                      <strong style={{ color: "var(--text-primary)" }}>
+                        {formatBytes(item.uploaded)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Ratio: </span>
+                      <strong
+                        style={{
+                          color:
+                            item.ratio >= 1.0
+                              ? "var(--success)"
+                              : "var(--text-primary)",
+                        }}
+                      >
+                        {formatRatio(item.ratio)}
+                      </strong>
+                    </div>
+                    <div>
+                      <span>Added: </span>
+                      <strong style={{ color: "var(--text-primary)" }}>
+                        {formatDate(item.dateAdded).split(" ")[0]}
+                      </strong>
+                    </div>
                   </div>
 
                   {/* Quick Card Action Buttons */}
@@ -662,9 +718,9 @@ export default function DownloadHistory() {
                     style={{
                       display: "flex",
                       gap: "0.3rem",
-                      marginTop: "0.6rem",
-                      paddingTop: "0.5rem",
-                      borderTop: "1px solid var(--border-color, #2a2a2a)",
+                      marginTop: "0.5rem",
+                      paddingTop: "0.4rem",
+                      borderTop: "1px solid var(--border-light)",
                     }}
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -674,11 +730,15 @@ export default function DownloadHistory() {
                         flex: 1,
                         fontSize: "0.75rem",
                         padding: "0.25rem 0.4rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.35rem",
                       }}
                       onClick={() => setSearchModalQuery(item.title)}
                       title="Search again on Indexers"
                     >
-                      🔍 Search
+                      <span>🔍</span> <span>Search</span>
                     </button>
                     <button
                       className="btn btn-primary"
@@ -686,6 +746,10 @@ export default function DownloadHistory() {
                         flex: 1,
                         fontSize: "0.75rem",
                         padding: "0.25rem 0.4rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "0.35rem",
                       }}
                       onClick={() => handleReAdd(item.id, item.title)}
                       disabled={
@@ -697,11 +761,17 @@ export default function DownloadHistory() {
                           : "Re-add to active queue"
                       }
                     >
-                      🔄 Re-add
+                      <span>🔄</span> <span>Re-add</span>
                     </button>
                     <button
                       className="btn btn-outline"
-                      style={{ fontSize: "0.75rem", padding: "0.25rem 0.4rem" }}
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "0.25rem 0.45rem",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                       onClick={() => setSelectedDetailItem(item)}
                       title="View full media details, actors, and Arr links"
                     >
