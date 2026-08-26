@@ -472,6 +472,7 @@ export default function DownloadClientTorrents() {
               overflowY: "auto",
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+              alignContent: "start",
               gap: "1.25rem",
               paddingRight: "0.25rem",
               paddingBottom: "1rem",
@@ -504,6 +505,7 @@ export default function DownloadClientTorrents() {
                     overflow: "hidden",
                     display: "flex",
                     flexDirection: "column",
+                    height: "auto",
                     borderRadius: "8px",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                     backgroundColor: "var(--bg-secondary)",
@@ -512,12 +514,12 @@ export default function DownloadClientTorrents() {
                     transition: "transform 0.18s ease, box-shadow 0.18s ease",
                   }}
                 >
-                  {/* Poster Container */}
+                  {/* Poster Artwork Box */}
                   <div
                     style={{
                       position: "relative",
                       width: "100%",
-                      paddingTop: "145%",
+                      paddingTop: "140%", // 2:3 aspect ratio matching TrackerServer
                       backgroundColor: "#141414",
                       overflow: "hidden",
                     }}

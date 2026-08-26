@@ -385,6 +385,7 @@ function TrackerServer() {
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+            alignContent: "start",
             gap: "1.25rem",
           }}
         >
@@ -409,6 +410,7 @@ function TrackerServer() {
                   overflow: "hidden",
                   display: "flex",
                   flexDirection: "column",
+                  height: "auto",
                   borderRadius: "8px",
                   border: "1px solid rgba(255, 255, 255, 0.08)",
                   backgroundColor: "var(--bg-secondary)",
