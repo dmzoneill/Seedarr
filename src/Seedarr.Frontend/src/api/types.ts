@@ -774,3 +774,13 @@ export interface TrackerCrossMatrixResult {
   torrents: TorrentMatrixItem[];
   trackers: TrackerMatrixItem[];
 }
+
+export interface TrackerBoostLogEntry {
+  id: number;
+  timestamp: string;
+  level: "Info" | "Success" | "Warn" | "Error" | "Debug" | string;
+  category: "General" | "Scrape" | "Health" | "Discovery" | "Inject" | "Announce" | "Cycle" | string;
+  trackerUrl: string;
+  infoHash: string;
+  message: string;
+}

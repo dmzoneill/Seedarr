@@ -204,8 +204,24 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
   if (isError) return <PanelEmpty>Failed to load trackers.</PanelEmpty>;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div className="detail-panel-table-wrap" style={{ flex: 1, minHeight: 0 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "calc(100% + 1rem)",
+        margin: "-0.5rem -0.75rem",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        className="detail-panel-table-wrap"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          padding: "0.5rem 0.75rem",
+        }}
+      >
         {!trackers || trackers.length === 0 ? (
           <PanelEmpty>No trackers attached to this torrent.</PanelEmpty>
         ) : (
@@ -264,24 +280,24 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
         )}
       </div>
 
-      {/* Action bar below listed trackers */}
+      {/* Action bar pinned flush to bottom, left and right */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: "0.5rem",
-          padding: "0.6rem 1rem",
-          borderTop: "1px solid var(--border)",
+          padding: "0.5rem 0.75rem",
+          borderTop: "1px solid var(--border-light)",
           backgroundColor: "var(--bg-secondary)",
-          flexWrap: "wrap",
+          flexShrink: 0,
         }}
       >
-        <label style={{ fontSize: "0.85rem", fontWeight: 500, color: "var(--text-secondary)" }}>
+        <label style={{ fontSize: "0.82rem", fontWeight: 500, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
           Add Tracker:
         </label>
         <select
           className="form-control"
-          style={{ flex: "1 1 300px", maxWidth: "560px", padding: "0.35rem 0.6rem", fontSize: "0.85rem" }}
+          style={{ flex: "1 1 300px", maxWidth: "600px", padding: "0.35rem 0.6rem", fontSize: "0.82rem" }}
           value={selectedTracker}
           onChange={(e) => setSelectedTracker(e.target.value)}
         >
@@ -304,6 +320,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
         </select>
         <button
           className="btn btn-sm btn-primary"
+          style={{ fontSize: "0.82rem", padding: "0.35rem 0.75rem", whiteSpace: "nowrap" }}
           onClick={handleAddTracker}
           disabled={addTracker.isPending || !availableTrackers || availableTrackers.length === 0}
           title="Add selected tracker(s) to this torrent and trigger announce"

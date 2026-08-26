@@ -157,3 +157,14 @@ public class TrackerCrossMatrixResult
     public List<TorrentMatrixItem> Torrents { get; set; } = new();
     public List<TrackerMatrixItem> Trackers { get; set; } = new();
 }
+
+public class TrackerBoostLogEntry
+{
+    public int Id { get; set; }
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public string Level { get; set; } = "Info";
+    public string Category { get; set; } = "General";
+    public string TrackerUrl { get; set; } = string.Empty;
+    public string InfoHash { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+}
