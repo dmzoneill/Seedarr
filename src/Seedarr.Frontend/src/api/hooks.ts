@@ -54,6 +54,9 @@ import type {
   DownloadPlusPlusStatusSummary,
   SwarmBoostResult,
   TorrentTrackerInspectionResult,
+  TrackerMetric,
+  TrackerMetricsSummary,
+  TrackerMetricSnapshot,
 } from "./types";
 
 const DEFAULT_REFETCH_MS = 5000;
@@ -1233,3 +1236,61 @@ export const useDownloadPlusPlusTrackers = useTrackerBoostTrackers;
 export const useScanDownloadPlusPlusTrackers = useScanTrackerBoostTrackers;
 export const useAddDownloadPlusPlusTracker = useAddTrackerBoostTracker;
 export const useDeleteDownloadPlusPlusTracker = useDeleteTrackerBoostTracker;
+
+// Tracker Metrics Hooks
+export function useTrackerMetrics(refetchInterval: number | false = 4000) {
+  return useQuery<TrackerMetric[]>({
+    queryKey: ["trackermetrics"],
+    queryFn: () => apiClient.get("/trackermetrics"),
+    refetchInterval,
+  });
+}
+
+export function useTrackerMetricsSummary(
+  refetchInterval: number | false = 4000,
+) {
+  return useQuery<TrackerMetricsSummary>({
+    queryKey: ["trackermetrics", "summary"],
+    queryFn: () => apiClient.get("/trackermetrics/summary"),
+    refetchInterval,
+  });
+}
+
+export function useTrackerMetric(id: number) {
+  return useQuery<TrackerMetric>({
+    queryKey: ["trackermetrics", id],
+    queryFn: () => apiClient.get(`/trackermetrics/${id}`),
+    enabled: id > 0,
+  });
+}
+
+export function useTrackerMetricHistory(id: number, hours = 24) {
+  return useQuery<TrackerMetricSnapshot[]>({
+    queryKey: ["trackermetrics", id, "history", hours],
+    queryFn: () =>
+      apiClient.get(`/trackermetrics/${id}/history?hours=${hours}`),
+    enabled: id > 0,
+  });
+}
+
+export function useResetTrackerMetric() {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean; message: string }, Error, number>({
+    mutationFn: (id: number) =>
+      apiClient.post(`/trackermetrics/${id}/reset`, {}),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trackermetrics"] });
+    },
+  });
+}
+
+export function useDeleteTrackerMetric() {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean; message: string }, Error, number>({
+    mutationFn: (id: number) => apiClient.delete(`/trackermetrics/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trackermetrics"] });
+    },
+  });
+}
+

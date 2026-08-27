@@ -36,5 +36,7 @@ public static class TableRegistration
         TableMapping.Register<SpeedSchedule>("SpeedSchedules");
         TableMapping.Register<DownloadHistory>("DownloadHistory");
         TableMapping.Register<TrackerBoostTracker>("TrackerBoostTrackers");
+        TableMapping.Register<Trackers.Metrics.TrackerMetric>("TrackerMetrics");
+        TableMapping.Register<Trackers.Metrics.TrackerMetricSnapshot>("TrackerMetricSnapshots");
     }
 }

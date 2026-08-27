@@ -53,6 +53,106 @@ export interface Torrent {
   source?: string | null;
 }
 
+export interface TrackerMetric {
+  id: number;
+  trackerUrl: string;
+  host: string;
+  domain: string;
+  protocol: string;
+  port: number;
+  status: string;
+  firstSeen: string;
+  lastAnnounce: string | null;
+  lastScrape: string | null;
+  lastSuccess: string | null;
+  lastErrorTime: string | null;
+  lastErrorMessage: string | null;
+  totalAnnounces: number;
+  successfulAnnounces: number;
+  failedAnnounces: number;
+  announceSuccessRate: number;
+  totalScrapes: number;
+  successfulScrapes: number;
+  failedScrapes: number;
+  totalUploaded: number;
+  totalDownloaded: number;
+  ratio: number;
+  totalLeft: number;
+  sessionUploaded: number;
+  sessionDownloaded: number;
+  totalTorrentsTracked: number;
+  lastSeeders: number;
+  lastLeechers: number;
+  lastPeers: number;
+  totalPeersDiscovered: number;
+  avgResponseTimeMs: number;
+  lastResponseTimeMs: number;
+  minResponseTimeMs: number;
+  maxResponseTimeMs: number;
+  consecutiveFailures: number;
+}
+
+export interface TrackerMetricSnapshot {
+  id: number;
+  trackerMetricId: number;
+  trackerUrl: string;
+  timestamp: string;
+  responseTimeMs: number;
+  uploaded: number;
+  downloaded: number;
+  seeders: number;
+  leechers: number;
+  peersDiscovered: number;
+  isSuccess: boolean;
+  operation: string;
+}
+
+export interface HourlyTrafficPoint {
+  timeLabel: string;
+  timestamp: string;
+  uploaded: number;
+  downloaded: number;
+  announces: number;
+  peersDiscovered: number;
+  avgLatencyMs: number;
+}
+
+export interface TrackerMetricItemSummary {
+  id: number;
+  trackerUrl: string;
+  domain: string;
+  protocol: string;
+  status: string;
+  totalUploaded: number;
+  totalDownloaded: number;
+  totalPeersDiscovered: number;
+  avgResponseTimeMs: number;
+  successRate: number;
+}
+
+export interface TrackerMetricsSummary {
+  totalTrackers: number;
+  healthyTrackers: number;
+  degradedTrackers: number;
+  offlineTrackers: number;
+  totalUploaded: number;
+  totalDownloaded: number;
+  globalRatio: number;
+  totalAnnounces: number;
+  successfulAnnounces: number;
+  failedAnnounces: number;
+  announceSuccessRate: number;
+  totalScrapes: number;
+  successfulScrapes: number;
+  totalPeersDiscovered: number;
+  avgResponseTimeMs: number;
+  protocolDistribution: Record<string, number>;
+  healthDistribution: Record<string, number>;
+  topUploadTrackers: TrackerMetricItemSummary[];
+  topPeerTrackers: TrackerMetricItemSummary[];
+  hourlyHistory: HourlyTrafficPoint[];
+}
+
 export interface TorrentFileInfo {
   id: number;
   torrentId: number;
