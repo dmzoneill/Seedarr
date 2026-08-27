@@ -1304,6 +1304,12 @@ public class TrackerBoostService : ITrackerBoostService
             _totalTrackersInjected++;
         }
 
+        if (string.IsNullOrWhiteSpace(torrent.TrackerUrl))
+        {
+            torrent.TrackerUrl = trackerUrl.Trim();
+            _torrentService.Update(torrent);
+        }
+
         InjectIntoDownloadClients(torrent.InfoHash, new[] { trackerUrl.Trim() });
         ReannounceDownloadClients(torrent.InfoHash);
         LogActivity("Success", "Inject", $"Injected tracker {trackerUrl} into torrent '{torrent.Name}' and triggered immediate reannounce", trackerUrl, torrent.InfoHash);

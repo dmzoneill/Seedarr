@@ -20,6 +20,44 @@ export default function SignalRProvider() {
   showToastRef.current = showToast;
 
   useEffect(() => {
+    // 1. Generic receiveMessage dispatcher from Seedarr REST controller SignalR broadcasts
+    const onReceiveMessage = (msg: unknown) => {
+      if (!msg || typeof msg !== "object") return;
+      const message = msg as {
+        name?: string;
+        body?: unknown;
+        action?: string;
+      };
+      const name = (message.name ?? "").toLowerCase();
+
+      if (name === "torrent" || name.includes("torrent")) {
+        queryClient.invalidateQueries({ queryKey: ["torrents"] });
+        queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
+        const bodyObj = message.body as Record<string, unknown> | undefined;
+        if (bodyObj?.id && typeof bodyObj.id === "number") {
+          queryClient.invalidateQueries({
+            queryKey: ["torrents", bodyObj.id],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ["torrents", bodyObj.id, "trackers"],
+          });
+        }
+      } else if (name.includes("tracker")) {
+        queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
+        queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      } else if (name.includes("seeding")) {
+        queryClient.invalidateQueries({ queryKey: ["seeding", "stats"] });
+        queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      } else if (name.includes("health")) {
+        queryClient.invalidateQueries({ queryKey: ["health"] });
+      } else if (name.includes("command") || name.includes("system")) {
+        queryClient.invalidateQueries({ queryKey: ["system", "status"] });
+      }
+    };
+
+    connection.on("receiveMessage", onReceiveMessage);
+
+    // 2. Direct named event handlers
     const handlers: Array<[string, (data?: unknown) => void]> = [];
 
     for (const [event, queryKeys] of Object.entries(EVENT_INVALIDATION_MAP)) {
@@ -47,6 +85,7 @@ export default function SignalRProvider() {
     }
 
     return () => {
+      connection.off("receiveMessage", onReceiveMessage);
       for (const [event, handler] of handlers) {
         connection.off(event, handler);
       }
