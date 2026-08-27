@@ -20,7 +20,7 @@ const tabs: { key: Tab; label: string }[] = [
   { key: "options", label: "Options" },
   { key: "peers", label: "Peers" },
   { key: "monitoring", label: "Monitoring" },
-  { key: "log", label: "Log" },
+  { key: "log", label: "Seeder Log" },
 ];
 
 function TorrentDetails() {

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 
@@ -6,9 +8,9 @@ namespace Seedarr.Api.V1.Torrents;
 
 public static class TorrentResourceMapper
 {
-    public static TorrentResource ToResource(Torrent model)
+    public static TorrentResource ToResource(Torrent model, IEnumerable<string> trackers = null)
     {
-        return new TorrentResource
+        var resource = new TorrentResource
         {
             Id = model.Id,
             Name = model.Name,
@@ -52,6 +54,17 @@ public static class TorrentResourceMapper
             ForceCompleted = model.ForceCompleted,
             SeedingTime = model.SeedingTime
         };
+
+        if (trackers != null)
+        {
+            resource.Trackers = trackers.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct().ToList();
+        }
+        else if (!string.IsNullOrWhiteSpace(model.TrackerUrl))
+        {
+            resource.Trackers = new List<string> { model.TrackerUrl };
+        }
+
+        return resource;
     }
 
     public static Torrent ToModel(TorrentResource resource)

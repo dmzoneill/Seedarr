@@ -80,8 +80,19 @@ export function useTorrentIndexState() {
   const trackerGroups = useMemo(() => {
     const groups: Record<string, number> = {};
     for (const t of torrents ?? []) {
-      const domain = extractTrackerDomain(t.trackerUrl);
-      groups[domain] = (groups[domain] || 0) + 1;
+      const urls =
+        t.trackers && t.trackers.length > 0
+          ? t.trackers
+          : t.trackerUrl
+            ? [t.trackerUrl]
+            : [];
+      const domains = new Set(urls.map((u) => extractTrackerDomain(u)));
+      if (domains.size === 0) {
+        domains.add("Unknown");
+      }
+      for (const domain of domains) {
+        groups[domain] = (groups[domain] || 0) + 1;
+      }
     }
     return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
   }, [torrents]);

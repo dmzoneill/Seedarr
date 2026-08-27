@@ -91,6 +91,7 @@ public class TrackerBoostService : ITrackerBoostService
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly IConfigService _configService;
     private readonly ITorrentFileParser _torrentFileParser;
+    private readonly ITorrentEventLogService _eventLogService;
     private readonly Logger _logger;
 
     public TrackerBoostService(
@@ -100,7 +101,8 @@ public class TrackerBoostService : ITrackerBoostService
         IIndexerRepository indexerRepository,
         IDownloadClientFactory downloadClientFactory,
         IConfigService configService,
-        ITorrentFileParser torrentFileParser = null)
+        ITorrentFileParser torrentFileParser = null,
+        ITorrentEventLogService eventLogService = null)
     {
         _trackerRepository = trackerRepository;
         _torrentService = torrentService;
@@ -109,6 +111,7 @@ public class TrackerBoostService : ITrackerBoostService
         _downloadClientFactory = downloadClientFactory;
         _configService = configService;
         _torrentFileParser = torrentFileParser;
+        _eventLogService = eventLogService;
         _logger = LogManager.GetCurrentClassLogger();
 
         EnsureDefaultTrackersBootstrapped();
@@ -1227,6 +1230,11 @@ public class TrackerBoostService : ITrackerBoostService
                 totalLeechers,
                 clientCount);
 
+            _eventLogService?.Info(
+                torrentId,
+                "TrackerBoost",
+                $"Swarm Boost injected {addedList.Count} verified alive tracker(s) (+{totalSeeders} seeds, +{totalLeechers} leeches) into Seedarr & {clientCount} active download client(s)");
+
             LogActivity(
                 "Success",
                 "Inject",
@@ -1363,6 +1371,7 @@ public class TrackerBoostService : ITrackerBoostService
 
         InjectIntoDownloadClients(torrent.InfoHash, new[] { trackerUrl.Trim() });
         ReannounceDownloadClients(torrent.InfoHash);
+        _eventLogService?.Info(torrentId, "TrackerBoost", $"Injected tracker {trackerUrl} into torrent and triggered immediate reannounce");
         LogActivity("Success", "Inject", $"Injected tracker {trackerUrl} into torrent '{torrent.Name}' and triggered immediate reannounce", trackerUrl, torrent.InfoHash);
 
         return await Task.FromResult(new SwarmBoostResult
