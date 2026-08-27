@@ -10,6 +10,9 @@ import { formatDate } from "../../utils/formatters";
 import { PanelLoading, PanelEmpty } from "./shared";
 import { useToast } from "../../context/ToastContext";
 import TrackerFavicon from "../TrackerFavicon";
+import TrackerMultiSelectModal, {
+  TrackerPickerItem,
+} from "../TrackerMultiSelectModal";
 
 function getAttachedTrackerIndicator(
   status: string,
@@ -71,8 +74,9 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
   const addTracker = useAddTorrentTracker();
   const deleteTracker = useDeleteTorrentTracker();
   const { showToast } = useToast();
-  const [selectedTracker, setSelectedTracker] =
-    useState<string>("all_verified");
+  const [showPickerModal, setShowPickerModal] = useState(false);
+  const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
+  const [isAddingBatch, setIsAddingBatch] = useState(false);
 
   const attachedUrls = useMemo(() => {
     return new Set(
@@ -93,67 +97,103 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
     return map;
   }, [inspection]);
 
-  const trackerOptions = useMemo(() => {
+  const pickerTrackers = useMemo<TrackerPickerItem[]>(() => {
     return (availableTrackers ?? []).map((tr) => {
       const cleanUrl = (tr.url ?? "").trim().toLowerCase();
       const det = detectionMap.get(cleanUrl);
-      const isAttached = attachedUrls.has(cleanUrl) || det?.isAttached;
-      const isVerified = det?.isVerified;
+      const isAttached = attachedUrls.has(cleanUrl) || det?.isAttached || false;
+      const isVerified = det?.isVerified || false;
       const isAlive =
         tr.status === "Alive" ||
         tr.status === 1 ||
         det?.healthStatus === "Alive" ||
-        det?.healthStatus === 1;
+        det?.healthStatus === 1 ||
+        false;
       const isSlow =
         tr.status === "Slow" ||
         tr.status === 2 ||
         det?.healthStatus === "Slow" ||
-        det?.healthStatus === 2;
+        det?.healthStatus === 2 ||
+        false;
       const isOffline =
         tr.status === "Offline" ||
         tr.status === 3 ||
         det?.healthStatus === "Offline" ||
-        det?.healthStatus === 3;
+        det?.healthStatus === 3 ||
+        false;
 
-      let icon = "⚪";
       let statusLabel = "Untested";
       if (isAttached) {
-        icon = "🟢";
         statusLabel = "Attached";
       } else if (isVerified) {
-        icon = "🟢";
         statusLabel = `✓ Found in Swarm (${det?.seeders ?? 0}s / ${det?.leechers ?? 0}l)`;
       } else if (isAlive) {
-        icon = "🟢";
         statusLabel = "Online (0 Peers)";
       } else if (isSlow) {
-        icon = "🟡";
         statusLabel = `Slow (${tr.latencyMs > 0 ? tr.latencyMs + "ms" : "High Latency"})`;
       } else if (isOffline) {
-        icon = "🔴";
-        statusLabel = "✗ Offline";
+        statusLabel = "Offline";
       }
 
       return {
         url: tr.url,
+        host: tr.host,
         protocol: tr.protocol,
         isAttached,
         isVerified,
         isAlive,
-        icon,
+        isSlow,
+        isOffline,
+        latencyMs: tr.latencyMs,
+        seeders: det?.seeders,
+        leechers: det?.leechers,
         statusLabel,
-        display: `${icon} ${tr.url} [${statusLabel}]`,
       };
     });
   }, [availableTrackers, detectionMap, attachedUrls]);
 
-  const verifiedCount = useMemo(() => {
-    return trackerOptions.filter((o) => o.isVerified && !o.isAttached).length;
-  }, [trackerOptions]);
+  const handleToggleUrl = (url: string) => {
+    setSelectedUrls((prev) => {
+      const next = new Set(prev);
+      if (next.has(url)) next.delete(url);
+      else next.add(url);
+      return next;
+    });
+  };
 
-  const onlineCount = useMemo(() => {
-    return trackerOptions.filter((o) => o.isAlive && !o.isAttached).length;
-  }, [trackerOptions]);
+  const handleSelectBatch = (urls: string[]) => {
+    setSelectedUrls((prev) => {
+      const next = new Set(prev);
+      urls.forEach((u) => next.add(u));
+      return next;
+    });
+  };
+
+  const handleClearSelection = () => {
+    setSelectedUrls(new Set());
+  };
+
+  const handleAddAndAnnounceSelected = async () => {
+    if (!torrentId || selectedUrls.size === 0) return;
+
+    setIsAddingBatch(true);
+    let addedCount = 0;
+    for (const url of Array.from(selectedUrls)) {
+      try {
+        await addTracker.mutateAsync({ torrentId, url });
+        addedCount++;
+      } catch {
+        // continue
+      }
+    }
+    setIsAddingBatch(false);
+    setSelectedUrls(new Set());
+    showToast(
+      `Added ${addedCount} tracker(s) to torrent and triggered announce`,
+      "success",
+    );
+    refetch();
+  };
 
   const handleDeleteTracker = (trackerId: number) => {
     deleteTracker.mutate(
@@ -368,6 +408,7 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
           borderTop: "1px solid var(--border-light)",
           backgroundColor: "var(--bg-secondary)",
           flexShrink: 0,
+          flexWrap: "wrap",
         }}
       >
         <label
@@ -380,50 +421,83 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
         >
           Add Tracker:
         </label>
-        <select
-          className="form-control"
+
+        <button
+          type="button"
+          className="form-control btn-action"
           style={{
-            flex: "1 1 300px",
-            maxWidth: "600px",
-            padding: "0.35rem 0.6rem",
+            flex: "1 1 280px",
+            maxWidth: "520px",
+            padding: "0.35rem 0.75rem",
             fontSize: "0.82rem",
+            textAlign: "left",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            cursor: "pointer",
           }}
-          value={selectedTracker}
-          onChange={(e) => setSelectedTracker(e.target.value)}
+          onClick={() => setShowPickerModal(true)}
+          title="Open tracker picker to select, search, and filter trackers"
         >
-          {verifiedCount > 0 && (
-            <option value="all_verified">
-              🟢 ⚡ All Verified Trackers ({verifiedCount} found in swarm)
-            </option>
-          )}
-          <option value="all_online">
-            🟢 All Online Trackers ({onlineCount})
-          </option>
-          <option value="all">⚡ All Trackers ({trackerOptions.length})</option>
-          {trackerOptions.map((tr) => (
-            <option key={tr.url} value={tr.url} disabled={tr.isAttached}>
-              {tr.display}
-            </option>
-          ))}
-        </select>
+          <span
+            style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
+          >
+            <span>🎯</span>
+            {selectedUrls.size === 0 ? (
+              <span style={{ color: "var(--text-muted)" }}>
+                Choose Trackers to Add... (0 Selected)
+              </span>
+            ) : (
+              <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+                {selectedUrls.size} Tracker{selectedUrls.size === 1 ? "" : "s"}{" "}
+                Selected (Click to change)
+              </span>
+            )}
+          </span>
+
+          <span
+            className={`badge ${selectedUrls.size > 0 ? "badge-success" : "badge-secondary"}`}
+            style={{ fontSize: "0.7rem", padding: "0.15rem 0.45rem" }}
+          >
+            {selectedUrls.size} Selected
+          </span>
+        </button>
+
         <button
           className="btn btn-sm btn-primary"
           style={{
             fontSize: "0.82rem",
-            padding: "0.35rem 0.75rem",
+            padding: "0.35rem 0.85rem",
             whiteSpace: "nowrap",
           }}
-          onClick={handleAddTracker}
+          onClick={handleAddAndAnnounceSelected}
           disabled={
-            addTracker.isPending ||
+            isAddingBatch ||
+            selectedUrls.size === 0 ||
             !availableTrackers ||
             availableTrackers.length === 0
           }
           title="Add selected tracker(s) to this torrent and trigger announce"
         >
-          {addTracker.isPending ? "Adding..." : "+ Add & Announce"}
+          {isAddingBatch
+            ? "Adding..."
+            : selectedUrls.size > 0
+              ? `+ Add & Announce (${selectedUrls.size})`
+              : "+ Add & Announce"}
         </button>
       </div>
+
+      <TrackerMultiSelectModal
+        isOpen={showPickerModal}
+        onClose={() => setShowPickerModal(false)}
+        trackers={pickerTrackers}
+        selectedUrls={selectedUrls}
+        onToggleUrl={handleToggleUrl}
+        onSelectBatch={handleSelectBatch}
+        onClearSelection={handleClearSelection}
+        onAddAndAnnounce={handleAddAndAnnounceSelected}
+        isAdding={isAddingBatch}
+      />
     </div>
   );
 }
