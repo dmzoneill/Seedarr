@@ -11,6 +11,8 @@ import {
   getProwlarrUrl,
 } from "../../utils/arrLinks";
 import { getTorrentBadges, calculateHnrStatus } from "../../utils/milestones";
+import PieceMap from "../PieceMap";
+import SeedingSimulator from "../SeedingSimulator";
 import type { Torrent } from "../../api/types";
 import { InfoRow } from "./shared";
 
@@ -244,11 +246,26 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
         </div>
       </div>
 
+      <PieceMap
+        pieceCount={torrent.pieceCount}
+        pieceLength={torrent.pieceLength}
+        progress={torrent.progress}
+        isSeeding={torrent.status === "Seeding"}
+      />
+
       <div className="detail-panel-grid">
         {rows.map(([label, value]) => (
           <InfoRow key={label} label={label} value={value} mono />
         ))}
       </div>
+
+      <SeedingSimulator
+        currentUploaded={torrent.uploaded}
+        totalSize={torrent.totalSize}
+        currentRatio={torrent.ratio}
+        currentUploadSpeed={torrent.uploadSpeed}
+        seedingTimeSeconds={torrent.seedingTime}
+      />
     </div>
   );
 }
