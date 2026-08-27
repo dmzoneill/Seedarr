@@ -155,7 +155,16 @@ export default function DownloadHistory() {
   const totalCount = history?.length || 0;
 
   return (
-    <div className="content-area">
+    <div
+      className="content-area"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
       <div
         className="page-header"
         style={{
@@ -165,6 +174,7 @@ export default function DownloadHistory() {
           marginBottom: "1rem",
           flexWrap: "wrap",
           gap: "0.75rem",
+          flexShrink: 0,
         }}
       >
         <div className="page-header-group">
@@ -245,6 +255,7 @@ export default function DownloadHistory() {
           borderRadius: "8px",
           boxShadow:
             "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          flexShrink: 0,
         }}
       >
         <div
@@ -379,9 +390,14 @@ export default function DownloadHistory() {
       {!isLoading && !isError && totalCount > 0 && viewMode === "grid" && (
         <div
           style={{
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflowY: "auto",
             display: "grid",
             gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
             gap: "1.25rem",
+            paddingRight: "0.25rem",
+            paddingBottom: "1rem",
           }}
         >
           {history?.map((item) => {
@@ -701,13 +717,40 @@ export default function DownloadHistory() {
 
       {/* DETAILED TABLE VIEW */}
       {!isLoading && !isError && totalCount > 0 && viewMode === "table" && (
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-          <div style={{ overflowX: "auto" }}>
+        <div
+          className="card"
+          style={{
+            padding: 0,
+            overflow: "hidden",
+            flex: "1 1 auto",
+            minHeight: 0,
+            display: "flex",
+            flexDirection: "column",
+            borderRadius: "8px",
+            boxShadow:
+              "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+          }}
+        >
+          <div
+            style={{
+              flex: "1 1 auto",
+              minHeight: 0,
+              overflowY: "auto",
+              overflowX: "auto",
+            }}
+          >
             <table
               className="table"
               style={{ width: "100%", borderCollapse: "collapse" }}
             >
-              <thead>
+              <thead
+                style={{
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 2,
+                  backgroundColor: "var(--bg-secondary)",
+                }}
+              >
                 <tr
                   style={{
                     borderBottom: "1px solid var(--border-color, #333)",
@@ -736,8 +779,9 @@ export default function DownloadHistory() {
                   <th
                     style={{
                       padding: "0.75rem 1rem",
-                      width: "210px",
+                      minWidth: "290px",
                       textAlign: "right",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     Actions
@@ -945,36 +989,61 @@ export default function DownloadHistory() {
                       </td>
 
                       <td
-                        style={{ padding: "0.75rem 1rem", textAlign: "right" }}
+                        style={{
+                          padding: "0.75rem 1rem",
+                          textAlign: "right",
+                          whiteSpace: "nowrap",
+                        }}
                       >
-                        <div style={{ display: "inline-flex", gap: "0.3rem" }}>
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.45rem",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           <button
                             className="btn btn-outline"
                             style={{
                               fontSize: "0.75rem",
-                              padding: "0.25rem 0.5rem",
+                              padding: "0.3rem 0.65rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              whiteSpace: "nowrap",
                             }}
                             onClick={() => setSelectedDetailItem(item)}
                             title="View synopsis, actors, and Arr links"
                           >
-                            ℹ️ Details
+                            <span>ℹ️</span>
+                            <span>Details</span>
                           </button>
                           <button
                             className="btn btn-outline"
                             style={{
                               fontSize: "0.75rem",
-                              padding: "0.25rem 0.5rem",
+                              padding: "0.3rem 0.65rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              whiteSpace: "nowrap",
                             }}
                             onClick={() => setSearchModalQuery(item.title)}
                             title="Search for this release again on configured indexers"
                           >
-                            🔍 Search
+                            <span>🔍</span>
+                            <span>Search</span>
                           </button>
                           <button
                             className="btn btn-primary"
                             style={{
                               fontSize: "0.75rem",
-                              padding: "0.25rem 0.5rem",
+                              padding: "0.3rem 0.65rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.35rem",
+                              whiteSpace: "nowrap",
                             }}
                             onClick={() => handleReAdd(item.id, item.title)}
                             disabled={
@@ -987,14 +1056,19 @@ export default function DownloadHistory() {
                                 : "Re-add to active seeding library"
                             }
                           >
-                            🔄 Re-add
+                            <span>🔄</span>
+                            <span>Re-add</span>
                           </button>
                           <button
                             className="btn btn-outline"
                             style={{
                               fontSize: "0.75rem",
-                              padding: "0.25rem 0.45rem",
+                              padding: "0.3rem 0.55rem",
                               color: "var(--danger, #dc3545)",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              whiteSpace: "nowrap",
                             }}
                             onClick={() => handleDelete(item.id, item.title)}
                             title="Delete historical record"
