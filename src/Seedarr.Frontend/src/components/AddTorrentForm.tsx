@@ -21,6 +21,32 @@ export interface AddTorrentFormProps {
 
 export type InputMode = "file" | "magnet" | "search";
 
+interface MagnetInfo {
+  name?: string;
+  hash?: string;
+  trackerCount: number;
+}
+
+function parseMagnetPreview(uri: string): MagnetInfo | null {
+  const trimmed = uri.trim();
+  if (!trimmed.startsWith("magnet:?")) return null;
+  try {
+    const rawParams = trimmed.substring(8);
+    const params = new URLSearchParams(rawParams);
+    const xt = params.get("xt") || "";
+    const hash = xt.replace(/^urn:btih:/i, "").substring(0, 40);
+    const name = params.get("dn") || undefined;
+    const trackers = params.getAll("tr");
+    return {
+      name: name ? decodeURIComponent(name.replace(/\+/g, " ")) : undefined,
+      hash: hash || undefined,
+      trackerCount: trackers.length,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function AddTorrentForm({
   initialMode = "file",
   initialQuery = "",
@@ -203,6 +229,10 @@ export function AddTorrentForm({
   };
 
   const isMagnetValid = magnetLink.trim().startsWith("magnet:?");
+  const magnetPreview = useMemo(
+    () => parseMagnetPreview(magnetLink),
+    [magnetLink],
+  );
   const canSubmit =
     (mode === "file" && files.length > 0) ||
     (mode === "magnet" && isMagnetValid);
@@ -276,6 +306,10 @@ export function AddTorrentForm({
             flexDirection: "column",
             flex: "1 1 auto",
             minHeight: 0,
+            justifyContent: files.length > 0 ? "flex-start" : "center",
+            alignItems: "center",
+            width: "100%",
+            padding: "1rem 0",
           }}
         >
           <div
@@ -289,16 +323,23 @@ export function AddTorrentForm({
                 ? "2px dashed var(--accent)"
                 : "2px dashed rgba(255, 255, 255, 0.15)",
               borderRadius: "8px",
-              padding: isModal ? "2.5rem 1.5rem" : "3.5rem 1.5rem",
+              padding: isModal ? "2.5rem 1.5rem" : "4rem 2rem",
               textAlign: "center",
               cursor: "pointer",
               backgroundColor: isDragOver
                 ? "rgba(200, 168, 78, 0.08)"
                 : "var(--bg-primary)",
               transition: "all 0.2s ease",
+              width: "100%",
+              maxWidth: isModal ? "100%" : "640px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: files.length > 0 ? "0 auto" : "auto",
             }}
           >
-            <div style={{ fontSize: "2.2rem", marginBottom: "0.5rem" }}>📤</div>
+            <div style={{ fontSize: "2.5rem", marginBottom: "0.6rem" }}>📤</div>
             {files.length > 0 ? (
               <div>
                 <span style={{ fontWeight: 600, color: "var(--accent)" }}>
@@ -318,14 +359,14 @@ export function AddTorrentForm({
               </div>
             ) : (
               <div>
-                <div style={{ fontWeight: 500, fontSize: "0.95rem" }}>
+                <div style={{ fontWeight: 500, fontSize: "1rem" }}>
                   Drop .torrent files here or click to browse
                 </div>
                 <div
                   style={{
-                    fontSize: "0.8rem",
+                    fontSize: "0.82rem",
                     color: "var(--text-muted)",
-                    marginTop: "0.25rem",
+                    marginTop: "0.35rem",
                   }}
                 >
                   Supports multiple .torrent files simultaneously
@@ -344,7 +385,7 @@ export function AddTorrentForm({
           />
 
           {files.length > 0 && (
-            <div style={{ marginTop: "1rem" }}>
+            <div style={{ marginTop: "1rem", width: "100%", maxWidth: isModal ? "100%" : "640px" }}>
               <div
                 style={{
                   fontSize: "0.8rem",
@@ -426,65 +467,181 @@ export function AddTorrentForm({
             flexDirection: "column",
             flex: "1 1 auto",
             minHeight: 0,
+            justifyContent: "center",
+            alignItems: "center",
+            width: "100%",
+            padding: "1rem 0",
           }}
         >
-          <label
-            style={{
-              display: "block",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              marginBottom: "0.5rem",
-              color: "var(--text-primary)",
-              flexShrink: 0,
-            }}
-          >
-            Magnet URI / Link
-          </label>
-          <textarea
-            className="form-control"
-            placeholder="magnet:?xt=urn:btih:..."
-            value={magnetLink}
-            onChange={(e) => setMagnetLink(e.target.value)}
-            rows={isModal ? 4 : 6}
-            style={{
-              width: "100%",
-              flex: isModal ? undefined : "1 1 auto",
-              minHeight: isModal ? "100px" : "140px",
-              padding: "0.75rem",
-              borderRadius: "6px",
-              backgroundColor: "var(--bg-primary)",
-              border: "1px solid var(--border-light)",
-              color: "inherit",
-              fontFamily: "monospace",
-              fontSize: "0.85rem",
-              resize: isModal ? "vertical" : "none",
-            }}
-            autoFocus
-          />
           <div
             style={{
+              width: "100%",
+              maxWidth: isModal ? "100%" : "640px",
               display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginTop: "0.5rem",
-              fontSize: "0.78rem",
-              flexShrink: 0,
+              flexDirection: "column",
+              gap: "0.85rem",
+              margin: "auto",
             }}
           >
-            <span style={{ color: "var(--text-muted)" }}>
-              Paste any valid BitTorrent v1 or v2 magnet link.
-            </span>
-            {magnetLink.trim() && (
-              <span
+            {/* Header with Title & Quick Action Buttons */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <label
                 style={{
-                  color: isMagnetValid ? "var(--success)" : "var(--danger)",
+                  fontSize: "0.95rem",
                   fontWeight: 600,
+                  color: "var(--text-primary)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  margin: 0,
                 }}
               >
-                {isMagnetValid
-                  ? "✓ Valid Magnet Format"
-                  : "✗ Must start with magnet:?"}
+                <span>🧲</span> Magnet URI / Link
+              </label>
+
+              <div style={{ display: "flex", gap: "0.4rem" }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-xs"
+                  onClick={async () => {
+                    try {
+                      const text = await navigator.clipboard.readText();
+                      if (text) setMagnetLink(text.trim());
+                    } catch {
+                      // clipboard access rejected or unsupported
+                    }
+                  }}
+                  style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                  title="Paste link from clipboard"
+                >
+                  📋 Paste Clipboard
+                </button>
+                {magnetLink && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-xs"
+                    onClick={() => setMagnetLink("")}
+                    style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                    title="Clear input"
+                  >
+                    ✕ Clear
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Textarea container with border feedback */}
+            <div
+              style={{
+                borderRadius: "8px",
+                border: magnetLink.trim()
+                  ? isMagnetValid
+                    ? "1px solid rgba(34, 197, 94, 0.6)"
+                    : "1px solid rgba(239, 68, 68, 0.6)"
+                  : "1px solid var(--border-light, rgba(255, 255, 255, 0.15))",
+                backgroundColor: "var(--bg-primary)",
+                boxShadow: magnetLink.trim() && isMagnetValid ? "0 0 0 1px rgba(34, 197, 94, 0.2)" : "none",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <textarea
+                className="form-control"
+                placeholder="magnet:?xt=urn:btih:..."
+                value={magnetLink}
+                onChange={(e) => setMagnetLink(e.target.value)}
+                rows={isModal ? 4 : 5}
+                style={{
+                  width: "100%",
+                  minHeight: isModal ? "100px" : "130px",
+                  maxHeight: "220px",
+                  padding: "0.85rem",
+                  borderRadius: "8px",
+                  backgroundColor: "transparent",
+                  border: "none",
+                  outline: "none",
+                  boxShadow: "none",
+                  color: "inherit",
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                  fontSize: "0.85rem",
+                  lineHeight: "1.45",
+                  resize: isModal ? "vertical" : "none",
+                }}
+                autoFocus
+              />
+            </div>
+
+            {/* Status & Validation Message */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                fontSize: "0.8rem",
+              }}
+            >
+              <span style={{ color: "var(--text-muted)" }}>
+                Paste any valid BitTorrent v1 or v2 magnet link.
               </span>
+              {magnetLink.trim() && (
+                <span
+                  style={{
+                    color: isMagnetValid ? "var(--success, #22c55e)" : "var(--danger, #ef4444)",
+                    fontWeight: 600,
+                  }}
+                >
+                  {isMagnetValid
+                    ? "✓ Valid Magnet Format"
+                    : "✗ Must start with magnet:?"}
+                </span>
+              )}
+            </div>
+
+            {/* Extracted Magnet Details Preview */}
+            {isMagnetValid && (
+              <div
+                style={{
+                  marginTop: "0.25rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "6px",
+                  backgroundColor: "rgba(34, 197, 94, 0.08)",
+                  border: "1px solid rgba(34, 197, 94, 0.2)",
+                  fontSize: "0.82rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.35rem",
+                }}
+              >
+                {magnetPreview?.name && (
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <span style={{ color: "var(--text-muted)", minWidth: "75px" }}>Name:</span>
+                    <span style={{ fontWeight: 600, color: "var(--text-primary)", wordBreak: "break-all" }}>
+                      {magnetPreview.name}
+                    </span>
+                  </div>
+                )}
+                {magnetPreview?.hash && (
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <span style={{ color: "var(--text-muted)", minWidth: "75px" }}>Info Hash:</span>
+                    <span style={{ fontFamily: "monospace", color: "#60a5fa" }}>
+                      {magnetPreview.hash}
+                    </span>
+                  </div>
+                )}
+                {magnetPreview?.trackerCount !== undefined && magnetPreview.trackerCount > 0 && (
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <span style={{ color: "var(--text-muted)", minWidth: "75px" }}>Trackers:</span>
+                    <span style={{ color: "#4ade80" }}>
+                      {magnetPreview.trackerCount} bundled tracker(s)
+                    </span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

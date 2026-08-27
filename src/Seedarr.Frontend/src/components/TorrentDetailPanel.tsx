@@ -54,7 +54,7 @@ const DETAIL_TABS: { key: DetailTab; label: string }[] = [
   { key: "trackers", label: "Trackers" },
   { key: "options", label: "Options" },
   { key: "monitoring", label: "Monitoring" },
-  { key: "log", label: "Log" },
+  { key: "log", label: "Seeder Log" },
 ];
 
 function TorrentDetailPanel({ torrentId, onClose }: TorrentDetailPanelProps) {

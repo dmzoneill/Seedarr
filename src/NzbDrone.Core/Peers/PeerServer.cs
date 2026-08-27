@@ -21,9 +21,11 @@ public class PeerServer : BackgroundService
     private const int OutgoingConnectTimeoutMs = 5000;
     private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;
+    private readonly ITrackerEntryService _trackerEntryService;
     private readonly IConnectionManager _connectionManager;
     private readonly IPeerDiscoveryService _peerDiscovery;
     private readonly Trackers.MultiTracker.IMultiTrackerManager _multiTracker;
+    private readonly ITorrentEventLogService _eventLogService;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
     private readonly Logger _logger;
@@ -31,15 +33,19 @@ public class PeerServer : BackgroundService
     public PeerServer(
         IConfigService configService,
         ITorrentService torrentService,
+        ITrackerEntryService trackerEntryService,
         IConnectionManager connectionManager,
         IPeerDiscoveryService peerDiscovery,
-        Trackers.MultiTracker.IMultiTrackerManager multiTracker)
+        Trackers.MultiTracker.IMultiTrackerManager multiTracker,
+        ITorrentEventLogService eventLogService)
     {
         _configService = configService;
         _torrentService = torrentService;
+        _trackerEntryService = trackerEntryService;
         _connectionManager = connectionManager;
         _peerDiscovery = peerDiscovery;
         _multiTracker = multiTracker;
+        _eventLogService = eventLogService;
         _connectionSemaphore = new SemaphoreSlim(configService.MaxGlobalConnections);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -180,37 +186,112 @@ public class PeerServer : BackgroundService
     {
         try
         {
-            var trackerUrl = torrent.TrackerUrl;
-            if (string.IsNullOrEmpty(trackerUrl))
+            var trackerEntries = _trackerEntryService.GetByTorrentId(torrent.Id);
+            if (trackerEntries.Count == 0 && !string.IsNullOrEmpty(torrent.TrackerUrl))
+            {
+                var entry = new TrackerEntry
+                {
+                    TorrentId = torrent.Id,
+                    Url = torrent.TrackerUrl,
+                    Tier = 1,
+                    Status = TrackerStatus.Working,
+                    Enabled = true
+                };
+                entry = _trackerEntryService.Add(entry);
+                trackerEntries = new System.Collections.Generic.List<TrackerEntry> { entry };
+            }
+
+            var enabledTrackers = trackerEntries.Where(t => t.Enabled && !string.IsNullOrWhiteSpace(t.Url)).ToList();
+            if (enabledTrackers.Count == 0)
             {
                 return;
             }
 
-            var request = new Trackers.TrackerAnnounceRequest
+            foreach (var entry in enabledTrackers)
             {
-                InfoHash = torrent.InfoHash,
-                PeerId = "-SD1000-000000000000",
-                Port = _configService.ListeningPort,
-                Uploaded = torrent.Uploaded,
-                Downloaded = torrent.Downloaded,
-                Left = Math.Max(0, torrent.TotalSize - torrent.Downloaded),
-                Event = "started",
-                TrackerUrl = trackerUrl,
-                Compact = true,
-                NumWant = 50
-            };
+                var isFirstAnnounce = entry.TotalAnnounces == 0 || !entry.LastAnnounce.HasValue;
+                if (!isFirstAnnounce && entry.NextAnnounce.HasValue && entry.NextAnnounce.Value > DateTime.UtcNow)
+                {
+                    continue;
+                }
 
-            var announceList = new System.Collections.Generic.List<System.Collections.Generic.List<string>>
-            {
-                new() { trackerUrl }
-            };
+                var eventName = isFirstAnnounce ? "started" : (torrent.Status == TorrentStatus.Stopped ? "stopped" : "regular");
+                _eventLogService.Info(
+                    torrent.Id,
+                    "Tracker",
+                    $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {torrent.Uploaded:N0} bytes, left: {Math.Max(0, torrent.TotalSize - torrent.Downloaded):N0} bytes)");
 
-            var response = _multiTracker.Announce(request, announceList);
+                var request = new Trackers.TrackerAnnounceRequest
+                {
+                    InfoHash = torrent.InfoHash,
+                    PeerId = "-SD1000-000000000000",
+                    Port = _configService.ListeningPort,
+                    Uploaded = torrent.Uploaded,
+                    Downloaded = torrent.Downloaded,
+                    Left = Math.Max(0, torrent.TotalSize - torrent.Downloaded),
+                    Event = isFirstAnnounce ? "started" : null,
+                    TrackerUrl = entry.Url,
+                    Compact = true,
+                    NumWant = 50
+                };
 
-            if (response.Success && response.Peers.Count > 0)
-            {
-                _peerDiscovery.AddPeers(torrent.InfoHash, response.Peers, "tracker");
-                _logger.Debug("Discovered {0} peers for {1} from tracker", response.Peers.Count, torrent.Name);
+                var announceList = new System.Collections.Generic.List<System.Collections.Generic.List<string>>
+                {
+                    new() { entry.Url }
+                };
+
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var response = _multiTracker.Announce(request, announceList);
+                sw.Stop();
+
+                entry.TotalAnnounces++;
+                entry.LastResponseTime = sw.ElapsedMilliseconds;
+
+                if (response.Success)
+                {
+                    entry.Status = TrackerStatus.Working;
+                    entry.Seeders = response.Complete;
+                    entry.Leechers = response.Incomplete;
+                    entry.LastAnnounce = DateTime.UtcNow;
+                    var interval = response.Interval > 0 ? response.Interval : (_configService.AnnounceIntervalSeconds > 0 ? _configService.AnnounceIntervalSeconds : 1800);
+                    entry.AnnounceInterval = interval;
+                    entry.MinAnnounceInterval = response.MinInterval > 0 ? response.MinInterval : 900;
+                    entry.NextAnnounce = DateTime.UtcNow.AddSeconds(interval);
+                    entry.SuccessfulAnnounces++;
+                    entry.ConsecutiveFailures = 0;
+                    entry.ErrorMessage = null;
+                    _trackerEntryService.Update(entry);
+
+                    _eventLogService.Info(
+                        torrent.Id,
+                        "Tracker",
+                        $"Tracker announce succeeded: {entry.Url} -> Seeders: {response.Complete}, Leechers: {response.Incomplete}, Peers: {response.Peers.Count}, Interval: {interval}s ({sw.ElapsedMilliseconds}ms)");
+
+                    if (response.Peers.Count > 0)
+                    {
+                        _peerDiscovery.AddPeers(torrent.InfoHash, response.Peers, "tracker");
+                        var peerSample = string.Join(", ", response.Peers.Take(5).Select(p => $"{p.Ip}:{p.Port}"));
+                        _eventLogService.Info(
+                            torrent.Id,
+                            "Peers",
+                            $"Discovered {response.Peers.Count} peer candidate(s) from {entry.Url} ({peerSample}{(response.Peers.Count > 5 ? ", ..." : "")})");
+                    }
+                }
+                else
+                {
+                    entry.Status = TrackerStatus.Failed;
+                    entry.ConsecutiveFailures++;
+                    entry.ErrorMessage = response.FailureReason;
+                    entry.LastErrorTime = DateTime.UtcNow;
+                    var backoffSeconds = Math.Min(1800, 60 * Math.Pow(2, Math.Min(5, entry.ConsecutiveFailures)));
+                    entry.NextAnnounce = DateTime.UtcNow.AddSeconds(backoffSeconds);
+                    _trackerEntryService.Update(entry);
+
+                    _eventLogService.Warn(
+                        torrent.Id,
+                        "Tracker",
+                        $"Tracker announce failed: {entry.Url} -> {response.FailureReason ?? "Unreachable"} (failure #{entry.ConsecutiveFailures}, next retry in {(int)backoffSeconds}s)");
+                }
             }
         }
         catch (Exception ex)
@@ -249,6 +330,7 @@ public class PeerServer : BackgroundService
         try
         {
             _logger.Debug("Connecting to peer {0}:{1} for {2}", candidate.Ip, candidate.Port, torrent.Name);
+            _eventLogService.Debug(torrent.Id, "Peers", $"Attempting connection to peer {candidate.Ip}:{candidate.Port} (source: {candidate.Source})");
 
             connection = new PeerConnection(candidate.Ip, candidate.Port);
             connection.HandshakeTimeoutMs = Math.Min(_configService.HandshakeTimeoutSeconds * 1000, OutgoingConnectTimeoutMs);
@@ -261,6 +343,7 @@ public class PeerServer : BackgroundService
             {
                 _logger.Debug("Outgoing encryption failed to {0}:{1}", candidate.Ip, candidate.Port);
                 _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                _eventLogService.Debug(torrent.Id, "Peers", $"Encryption negotiation rejected by peer {candidate.Ip}:{candidate.Port}");
                 connection.Dispose();
                 return;
             }
@@ -272,6 +355,7 @@ public class PeerServer : BackgroundService
             {
                 _logger.Debug("Outgoing handshake failed from {0}:{1}", candidate.Ip, candidate.Port);
                 _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                _eventLogService.Debug(torrent.Id, "Peers", $"BitTorrent handshake rejected/timed out from {candidate.Ip}:{candidate.Port}");
                 connection.Dispose();
                 return;
             }
@@ -290,12 +374,18 @@ public class PeerServer : BackgroundService
                 torrent.Name,
                 connection.IsEncrypted);
 
+            _eventLogService.Info(
+                torrent.Id,
+                "Peers",
+                $"Peer connected & active: {candidate.Ip}:{candidate.Port} (encrypted: {connection.IsEncrypted})");
+
             HandlePeerSession(connection, torrent);
         }
         catch (Exception ex)
         {
             _logger.Debug(ex, "Failed to connect to peer {0}:{1}", candidate.Ip, candidate.Port);
             _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+            _eventLogService.Debug(torrent.Id, "Peers", $"Failed to connect to peer {candidate.Ip}:{candidate.Port}: {ex.Message}");
             connection?.Dispose();
         }
     }

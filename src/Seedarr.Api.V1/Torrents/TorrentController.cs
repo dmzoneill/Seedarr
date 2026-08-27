@@ -63,8 +63,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
     private TorrentResource MapTorrentToResource(Torrent torrent, List<TrackerEntry> trackers)
     {
-        var resource = TorrentResourceMapper.ToResource(torrent);
         var torrentTrackers = trackers.Where(t => t.TorrentId == torrent.Id).ToList();
+        var resource = TorrentResourceMapper.ToResource(torrent, torrentTrackers.Select(t => t.Url));
 
         if (torrentTrackers.Any())
         {
@@ -549,11 +549,32 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
     }
 
+    [HttpPost("{torrentId:int}/trackers/{trackerId:int}/announce")]
+    public ActionResult AnnounceTracker(int torrentId, int trackerId)
+    {
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var trackers = _trackerEntryService.GetByTorrentId(torrentId);
+        var target = trackers.FirstOrDefault(t => t.Id == trackerId);
+        if (target == null)
+        {
+            return NotFound();
+        }
+
+        _eventLogService.Info(torrentId, "Tracker", $"Manual announce initiated for tracker {target.Url}");
+        TriggerAnnounceInternal(torrent);
+        return Ok(new { success = true, message = $"Announce queued for {target.Url}" });
+    }
+
     [HttpGet("{id:int}/logs")]
     public ActionResult<List<TorrentEventLogResource>> GetLogs(
         int id,
         [FromQuery] string level = null,
-        [FromQuery] int count = 200)
+        [FromQuery] int count = 100)
     {
         var torrent = _torrentService.Get(id);
         if (torrent == null)
@@ -571,7 +592,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             count = 1000;
         }
 
-        var minimumRank = ParseLevelRank(level) ?? ParseLevelRank(_configService.FileLogLevel) ?? LevelRank.Info;
+        var minimumRank = ParseLevelRank(level) ?? LevelRank.Debug;
         var entries = _eventLogService.GetByTorrentId(id, count);
 
         var resources = entries

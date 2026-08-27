@@ -157,11 +157,34 @@ export function useAddTorrentTracker() {
   });
 }
 
-export function useTorrentLogs(torrentId: number) {
+export function useTorrentLogs(torrentId: number, options?: { polling?: boolean }) {
   return useQuery<TorrentEventLogEntry[]>({
     queryKey: ["torrents", torrentId, "logs"],
-    queryFn: () => apiClient.get(`/torrent/${torrentId}/logs`),
+    queryFn: () => apiClient.get(`/torrent/${torrentId}/logs?count=100`),
     enabled: torrentId > 0,
+    refetchInterval: options?.polling === false ? false : 3000,
+  });
+}
+
+export function useAnnounceTorrentTracker() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    { success: boolean; message: string },
+    Error,
+    { torrentId: number; trackerId: number }
+  >({
+    mutationFn: ({ torrentId, trackerId }) =>
+      apiClient.post(`/torrent/${torrentId}/trackers/${trackerId}/announce`, {}),
+    onSuccess: (_, { torrentId }) => {
+      queryClient.invalidateQueries({
+        queryKey: ["torrents", torrentId, "trackers"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["torrents", torrentId, "logs"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["torrents", torrentId] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
   });
 }
 

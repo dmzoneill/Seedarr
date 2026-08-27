@@ -7,6 +7,7 @@ import {
   useAddTorrentTracker,
   useDeleteTorrentTracker,
   useBoostTorrent,
+  useAnnounceTorrentTracker,
 } from "../../api/hooks";
 import { formatDate } from "../../utils/formatters";
 import { SkeletonLine } from "../../components/Skeleton";
@@ -76,6 +77,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
   const addTracker = useAddTorrentTracker();
   const deleteTracker = useDeleteTorrentTracker();
   const boostTorrent = useBoostTorrent();
+  const announceTracker = useAnnounceTorrentTracker();
   const { showToast } = useToast();
   const [showPickerModal, setShowPickerModal] = useState(false);
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(new Set());
@@ -407,18 +409,44 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                     <td>{formatDate(tracker.lastAnnounce)}</td>
                     <td>{formatDate(tracker.nextAnnounce)}</td>
                     <td style={{ textAlign: "right" }}>
-                      <button
-                        className="btn btn-sm btn-danger"
-                        style={{
-                          padding: "0.2rem 0.5rem",
-                          fontSize: "0.75rem",
-                        }}
-                        onClick={() => handleDeleteTracker(tracker.id)}
-                        disabled={deleteTracker.isPending}
-                        title="Remove tracker from torrent and reannounce"
-                      >
-                        Remove
-                      </button>
+                      <div style={{ display: "inline-flex", gap: "0.35rem", justifyContent: "flex-end" }}>
+                        <button
+                          className="btn btn-sm btn-primary"
+                          style={{
+                            padding: "0.2rem 0.5rem",
+                            fontSize: "0.75rem",
+                          }}
+                          onClick={() => {
+                            announceTracker.mutate(
+                              { torrentId: torrent.id, trackerId: tracker.id },
+                              {
+                                onSuccess: (data) => {
+                                  showToast(data.message || "Announce queued", "success");
+                                },
+                                onError: (err) => {
+                                  showToast(`Announce failed: ${err.message}`, "error");
+                                },
+                              },
+                            );
+                          }}
+                          disabled={announceTracker.isPending}
+                          title="Trigger immediate tracker announce"
+                        >
+                          {announceTracker.isPending ? "..." : "Announce"}
+                        </button>
+                        <button
+                          className="btn btn-sm btn-danger"
+                          style={{
+                            padding: "0.2rem 0.5rem",
+                            fontSize: "0.75rem",
+                          }}
+                          onClick={() => handleDeleteTracker(tracker.id)}
+                          disabled={deleteTracker.isPending}
+                          title="Remove tracker from torrent and reannounce"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
