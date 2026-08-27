@@ -477,27 +477,70 @@ public class TrackerBoostService : ITrackerBoostService
         return count;
     }
 
-    private static bool IsValidPublicTrackerUrl(string url)
+    public static bool IsValidPublicTrackerUrl(string url)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
             return false;
         }
 
-        var clean = url.Trim().ToLowerInvariant();
-        if (!clean.StartsWith("udp://") && !clean.StartsWith("http://") && !clean.StartsWith("https://"))
+        var clean = url.Trim();
+        if (!clean.StartsWith("udp://", StringComparison.OrdinalIgnoreCase) &&
+            !clean.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !clean.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        if (clean.Contains("localhost") || clean.Contains("127.0.0.1") || clean.Contains("dht:") || clean.Contains("pex:") || clean.Contains("lsd:"))
+        if (clean.StartsWith("dht:", StringComparison.OrdinalIgnoreCase) ||
+            clean.StartsWith("pex:", StringComparison.OrdinalIgnoreCase) ||
+            clean.StartsWith("lsd:", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        if (clean.Contains("passkey=") || clean.Contains("authkey=") || clean.Contains("torrentpass="))
+        if (!Uri.TryCreate(clean, UriKind.Absolute, out var uri))
         {
             return false;
+        }
+
+        var host = uri.Host;
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return false;
+        }
+
+        // Exclude loopback IPs and explicit localhost/internal hostnames
+        if (IPAddress.TryParse(host, out var ip))
+        {
+            if (IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any) || ip.Equals(IPAddress.None))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase) ||
+                host.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
+                host.EndsWith(".internal", StringComparison.OrdinalIgnoreCase) ||
+                host.Equals("[dht]", StringComparison.OrdinalIgnoreCase) ||
+                host.Equals("[pex]", StringComparison.OrdinalIgnoreCase) ||
+                host.Equals("[lsd]", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        // Check for private tracker passkey query parameters
+        var query = uri.Query;
+        if (!string.IsNullOrEmpty(query))
+        {
+            var lowerQuery = query.ToLowerInvariant();
+            if (lowerQuery.Contains("passkey=") || lowerQuery.Contains("authkey=") || lowerQuery.Contains("torrentpass="))
+            {
+                return false;
+            }
         }
 
         return true;
