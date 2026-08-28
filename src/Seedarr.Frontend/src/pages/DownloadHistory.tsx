@@ -163,6 +163,7 @@ export default function DownloadHistory() {
         height: "100%",
         minHeight: 0,
         overflow: "hidden",
+        boxSizing: "border-box",
       }}
     >
       <div
