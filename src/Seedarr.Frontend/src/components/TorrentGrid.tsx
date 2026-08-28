@@ -41,10 +41,16 @@ function TorrentGrid({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+          gridAutoRows: "max-content",
           alignContent: "start",
           gap: "1.25rem",
           padding: "1.25rem",
           overflowY: "auto",
+          overflowX: "hidden",
+          flex: "1 1 0%",
+          minHeight: 0,
+          height: "100%",
+          width: "100%",
         }}
       >
         {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
@@ -54,19 +60,25 @@ function TorrentGrid({
             style={{
               padding: 0,
               overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              height: "auto",
+              minHeight: "min-content",
+              flexShrink: 0,
               borderRadius: "8px",
               boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
             }}
           >
             <div
               className="skeleton"
-              style={{ width: "100%", paddingTop: "140%" }}
+              style={{ width: "100%", aspectRatio: "2 / 3", flexShrink: 0 }}
             />
             <div
               style={{
                 padding: "0.75rem",
                 display: "flex",
                 flexDirection: "column",
+                flex: "0 0 auto",
                 gap: "0.5rem",
               }}
             >
@@ -114,12 +126,16 @@ function TorrentGrid({
       style={{
         display: "grid",
         gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+        gridAutoRows: "max-content",
         alignContent: "start",
         gap: "1.25rem",
         padding: "1.25rem",
         overflowY: "auto",
-        flex: "1 1 auto",
+        overflowX: "hidden",
+        flex: "1 1 0%",
         minHeight: 0,
+        height: "100%",
+        width: "100%",
       }}
     >
       {filtered.map((t) => {
@@ -146,6 +162,8 @@ function TorrentGrid({
               display: "flex",
               flexDirection: "column",
               height: "auto",
+              minHeight: "min-content",
+              flexShrink: 0,
               borderRadius: "8px",
               border: isSelected
                 ? "1px solid var(--accent)"
@@ -167,9 +185,10 @@ function TorrentGrid({
               style={{
                 position: "relative",
                 width: "100%",
-                paddingTop: "140%", // 2:3 ratio matching TrackerServer
+                aspectRatio: "2 / 3",
                 backgroundColor: "#141414",
                 overflow: "hidden",
+                flexShrink: 0,
               }}
             >
               {hasPoster ? (
@@ -355,8 +374,9 @@ function TorrentGrid({
                 padding: "0.75rem",
                 display: "flex",
                 flexDirection: "column",
-                flex: "1 1 auto",
+                flex: "0 0 auto",
                 gap: "0.4rem",
+                backgroundColor: "var(--bg-secondary)",
               }}
             >
               <div
