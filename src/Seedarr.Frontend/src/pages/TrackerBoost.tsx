@@ -1594,6 +1594,7 @@ function TrackerBoost() {
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+                  alignContent: "start",
                   gap: "1.25rem",
                   flex: "1 1 auto",
                   minHeight: 0,
@@ -1617,6 +1618,7 @@ function TrackerBoost() {
                         overflow: "hidden",
                         display: "flex",
                         flexDirection: "column",
+                        height: "auto",
                         borderRadius: "8px",
                         border: "1px solid rgba(255, 255, 255, 0.08)",
                         backgroundColor: "var(--bg-secondary)",
@@ -1630,7 +1632,7 @@ function TrackerBoost() {
                         style={{
                           position: "relative",
                           width: "100%",
-                          paddingTop: "135%", // ~2:3 aspect
+                          paddingTop: "140%", // 2:3 ratio matching TrackerServer
                           backgroundColor: "#141414",
                           overflow: "hidden",
                         }}
