@@ -91,7 +91,16 @@ function TorrentGrid({
     if (stateFilter && stateFilter !== "All" && t.status !== stateFilter)
       return false;
     if (trackerFilter && trackerFilter !== "All") {
-      if (extractTrackerDomain(t.trackerUrl) !== trackerFilter) return false;
+      const urls =
+        t.trackers && t.trackers.length > 0
+          ? t.trackers
+          : t.trackerUrl
+            ? [t.trackerUrl]
+            : [];
+      const hasTracker = urls.some(
+        (u) => extractTrackerDomain(u) === trackerFilter,
+      );
+      if (!hasTracker) return false;
     }
     return true;
   });
