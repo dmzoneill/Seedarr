@@ -34,7 +34,7 @@ public class RadarrConnection : IArrConnection
         {
             var result = _policy.Execute(ct =>
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url}/api/v3/history?pageSize=50&sortKey=date&sortDirection=descending");
+                using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v3/history?pageSize=50&sortKey=date&sortDirection=descending");
                 request.Headers.Add("X-Api-Key", ApiKey);
 
                 using var response = _client.Send(request, ct);
@@ -77,8 +77,14 @@ public class RadarrConnection : IArrConnection
                     {
                         Title = record.TryGetProperty("sourceTitle", out var title) ? title.GetString() : "",
                         DownloadId = record.TryGetProperty("downloadId", out var dlId) ? dlId.GetString() : "",
-                        Date = record.TryGetProperty("date", out var date) ? date.GetDateTime() : DateTime.UtcNow
+                        Date = record.TryGetProperty("date", out var date) ? date.GetDateTime() : DateTime.UtcNow,
+                        MediaType = "movie"
                     };
+
+                    if (record.TryGetProperty("movieId", out var mId) && mId.TryGetInt32(out var movieIdVal))
+                    {
+                        downloadRecord.MediaId = movieIdVal;
+                    }
 
                     if (record.TryGetProperty("data", out var data))
                     {
@@ -102,6 +108,119 @@ public class RadarrConnection : IArrConnection
         {
             _logger.Error(ex, "Failed to fetch Radarr history");
             return new List<ArrDownloadRecord>();
+        }
+    }
+
+    public MediaMetadata GetMediaDetails(int mediaId)
+    {
+        try
+        {
+            var result = _policy.Execute(ct =>
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v3/movie/{mediaId}");
+                request.Headers.Add("X-Api-Key", ApiKey ?? "");
+                using var response = _client.Send(request, ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return (string)null;
+                }
+
+                using var stream = response.Content.ReadAsStream(ct);
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            });
+
+            if (result == null)
+            {
+                return null;
+            }
+
+            using var doc = JsonDocument.Parse(result);
+            var root = doc.RootElement;
+            var metadata = new MediaMetadata
+            {
+                MediaType = "movie",
+                MediaId = mediaId,
+                Title = root.TryGetProperty("title", out var title) ? title.GetString() : null,
+                Year = root.TryGetProperty("year", out var yr) && yr.TryGetInt32(out var yVal) ? yVal : null,
+                Overview = root.TryGetProperty("overview", out var ov) ? ov.GetString() : null,
+                StudioOrNetwork = root.TryGetProperty("studio", out var std) ? std.GetString() : null
+            };
+
+            if (root.TryGetProperty("genres", out var genresArray))
+            {
+                foreach (var g in genresArray.EnumerateArray())
+                {
+                    var gStr = g.GetString();
+                    if (!string.IsNullOrEmpty(gStr))
+                    {
+                        metadata.Genres.Add(gStr);
+                    }
+                }
+            }
+
+            if (root.TryGetProperty("images", out var imagesArray))
+            {
+                foreach (var img in imagesArray.EnumerateArray())
+                {
+                    var coverType = img.TryGetProperty("coverType", out var ct) ? ct.GetString() : "";
+                    var remoteUrl = img.TryGetProperty("remoteUrl", out var ru) ? ru.GetString() : null;
+                    var localUrl = img.TryGetProperty("url", out var lu) ? lu.GetString() : null;
+                    var imgUrl = !string.IsNullOrEmpty(remoteUrl) ? remoteUrl : localUrl;
+
+                    if (coverType.Equals("poster", StringComparison.OrdinalIgnoreCase))
+                    {
+                        metadata.PosterUrl = imgUrl;
+                    }
+                    else if (coverType.Equals("fanart", StringComparison.OrdinalIgnoreCase))
+                    {
+                        metadata.FanartUrl = imgUrl;
+                    }
+                    else if (coverType.Equals("banner", StringComparison.OrdinalIgnoreCase))
+                    {
+                        metadata.BannerUrl = imgUrl;
+                    }
+                }
+            }
+
+            if (root.TryGetProperty("credits", out var creditsObj) && creditsObj.TryGetProperty("cast", out var castArray))
+            {
+                foreach (var actorElem in castArray.EnumerateArray())
+                {
+                    var name = actorElem.TryGetProperty("name", out var an) ? an.GetString() : null;
+                    var character = actorElem.TryGetProperty("character", out var ac) ? ac.GetString() : null;
+                    var headshotUrl = (string)null;
+
+                    if (actorElem.TryGetProperty("images", out var actorImgs))
+                    {
+                        foreach (var ai in actorImgs.EnumerateArray())
+                        {
+                            headshotUrl = ai.TryGetProperty("remoteUrl", out var aru) ? aru.GetString() : (ai.TryGetProperty("url", out var alu) ? alu.GetString() : null);
+                            if (!string.IsNullOrEmpty(headshotUrl))
+                            {
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        metadata.Actors.Add(new MediaActor
+                        {
+                            Name = name,
+                            Character = character,
+                            ImageUrl = headshotUrl
+                        });
+                    }
+                }
+            }
+
+            return metadata;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to get movie media details for id {0}", mediaId);
+            return null;
         }
     }
 

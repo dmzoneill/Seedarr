@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http;
 
@@ -11,10 +13,14 @@ namespace Seedarr.Api.V1.Torrents;
 public class DownloadHistoryController : Controller
 {
     private readonly IDownloadHistoryService _historyService;
+    private readonly IArrMetadataEnricherService _metadataEnricherService;
 
-    public DownloadHistoryController(IDownloadHistoryService historyService)
+    public DownloadHistoryController(
+        IDownloadHistoryService historyService,
+        IArrMetadataEnricherService metadataEnricherService = null)
     {
         _historyService = historyService;
+        _metadataEnricherService = metadataEnricherService;
     }
 
     [HttpGet]
@@ -61,6 +67,37 @@ public class DownloadHistoryController : Controller
         }
     }
 
+    [HttpPost("{id:int}/enrich")]
+    public ActionResult<DownloadHistoryResource> Enrich(int id)
+    {
+        if (_metadataEnricherService == null)
+        {
+            return BadRequest(new { message = "Metadata enricher service not available" });
+        }
+
+        var metadata = _metadataEnricherService.EnrichHistoryEntry(id);
+        var record = _historyService.Get(id);
+        if (record == null)
+        {
+            return NotFound();
+        }
+
+        var resource = ToResource(record);
+        resource.Metadata = metadata;
+        return Ok(resource);
+    }
+
+    [HttpPost("enrich-all")]
+    public ActionResult EnrichAll()
+    {
+        if (_metadataEnricherService != null)
+        {
+            _metadataEnricherService.EnrichAll();
+        }
+
+        return Ok(new { message = "Enrichment started" });
+    }
+
     [HttpDelete("{id:int}")]
     public ActionResult Delete(int id)
     {
@@ -77,6 +114,21 @@ public class DownloadHistoryController : Controller
 
     private static DownloadHistoryResource ToResource(DownloadHistory model)
     {
+        MediaMetadata metadata = null;
+        if (!string.IsNullOrEmpty(model.DataJson))
+        {
+            try
+            {
+                metadata = JsonSerializer.Deserialize<MediaMetadata>(
+                    model.DataJson,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch
+            {
+                metadata = null;
+            }
+        }
+
         return new DownloadHistoryResource
         {
             Id = model.Id,
@@ -98,7 +150,8 @@ public class DownloadHistoryController : Controller
             DownloadUrl = model.DownloadUrl,
             Status = model.Status,
             RemovalReason = model.RemovalReason,
-            DataJson = model.DataJson
+            DataJson = model.DataJson,
+            Metadata = metadata
         };
     }
 }

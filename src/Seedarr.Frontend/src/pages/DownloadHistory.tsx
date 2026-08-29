@@ -4,10 +4,13 @@ import {
   useReAddHistoryTorrent,
   useDeleteHistoryTorrent,
   useClearDownloadHistory,
+  useEnrichHistoryTorrent,
+  useEnrichAllHistory,
 } from "../api/hooks";
 import { formatBytes, formatRatio, formatDate } from "../utils/formatters";
 import { useToast } from "../context/ToastContext";
 import AddTorrentModal from "../components/AddTorrentModal";
+import type { DownloadHistoryEntry } from "../api/types";
 
 function formatDuration(seconds: number): string {
   if (!seconds || seconds <= 0) return "0s";
@@ -23,7 +26,9 @@ function formatDuration(seconds: number): string {
 export default function DownloadHistory() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
+  const [selectedDetailItem, setSelectedDetailItem] = useState<DownloadHistoryEntry | null>(null);
   const { showToast } = useToast();
 
   const {
@@ -38,6 +43,8 @@ export default function DownloadHistory() {
   const reAddMutation = useReAddHistoryTorrent();
   const deleteMutation = useDeleteHistoryTorrent();
   const clearMutation = useClearDownloadHistory();
+  const enrichMutation = useEnrichHistoryTorrent();
+  const enrichAllMutation = useEnrichAllHistory();
 
   const handleReAdd = (id: number, title: string) => {
     reAddMutation.mutate(id, {
@@ -57,10 +64,38 @@ export default function DownloadHistory() {
     if (!confirm(`Delete history record for "${title}"?`)) return;
     deleteMutation.mutate(id, {
       onSuccess: () => {
+        if (selectedDetailItem?.id === id) {
+          setSelectedDetailItem(null);
+        }
         showToast("Historical record removed", "info");
       },
       onError: (err) => {
         showToast(`Failed to delete record: ${err.message}`, "error");
+      },
+    });
+  };
+
+  const handleEnrich = (item: DownloadHistoryEntry) => {
+    enrichMutation.mutate(item.id, {
+      onSuccess: (updated) => {
+        showToast(`Enriched metadata for "${item.title}"`, "success");
+        if (selectedDetailItem?.id === item.id) {
+          setSelectedDetailItem(updated);
+        }
+      },
+      onError: (err) => {
+        showToast(`Could not enrich metadata: ${err.message}`, "error");
+      },
+    });
+  };
+
+  const handleEnrichAll = () => {
+    enrichAllMutation.mutate(undefined, {
+      onSuccess: () => {
+        showToast("Started metadata enrichment from connected Arr instances", "info");
+      },
+      onError: (err) => {
+        showToast(`Failed to start enrichment: ${err.message}`, "error");
       },
     });
   };
@@ -75,6 +110,7 @@ export default function DownloadHistory() {
     }
     clearMutation.mutate(undefined, {
       onSuccess: () => {
+        setSelectedDetailItem(null);
         showToast("Download history cleared successfully", "success");
       },
       onError: (err) => {
@@ -87,14 +123,59 @@ export default function DownloadHistory() {
 
   return (
     <div className="content-area">
-      <div className="page-heading-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-        <h1 className="page-heading" style={{ margin: 0 }}>Historical Downloads</h1>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
+      <div
+        className="page-heading-row"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1rem",
+          flexWrap: "wrap",
+          gap: "0.75rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <h1 className="page-heading" style={{ margin: 0 }}>Historical Downloads</h1>
+          <span className="badge badge-secondary">{totalCount} items</span>
+        </div>
+
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          {/* View mode toggle */}
+          <div className="tab-nav" style={{ margin: 0 }}>
+            <button
+              className={`tab-btn ${viewMode === "grid" ? "tab-btn-active" : ""}`}
+              style={{ padding: "0.35rem 0.75rem", fontSize: "0.85rem" }}
+              onClick={() => setViewMode("grid")}
+              title="Poster Card Grid View (Sonarr / Radarr style)"
+            >
+              🎬 Posters
+            </button>
+            <button
+              className={`tab-btn ${viewMode === "table" ? "tab-btn-active" : ""}`}
+              style={{ padding: "0.35rem 0.75rem", fontSize: "0.85rem" }}
+              onClick={() => setViewMode("table")}
+              title="Detailed Table View"
+            >
+              📋 Table
+            </button>
+          </div>
+
+          <button
+            className="btn btn-outline"
+            onClick={handleEnrichAll}
+            disabled={enrichAllMutation.isPending || totalCount === 0}
+            title="Fetch and update rich media metadata and posters from connected Sonarr/Radarr/Lidarr instances"
+            style={{ fontSize: "0.85rem" }}
+          >
+            ⚡ Sync Arr Metadata
+          </button>
+
           <button
             className="btn btn-outline"
             onClick={handleClearAll}
             disabled={clearMutation.isPending || totalCount === 0}
             title="Clear all history entries"
+            style={{ fontSize: "0.85rem" }}
           >
             Clear History
           </button>
@@ -110,11 +191,11 @@ export default function DownloadHistory() {
           alignItems: "center",
           flexWrap: "wrap",
           gap: "1rem",
-          marginBottom: "1rem",
+          marginBottom: "1.25rem",
           padding: "0.75rem 1rem",
         }}
       >
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
           {(["all", "Active", "Completed", "Removed"] as const).map((st) => (
             <button
               key={st}
@@ -127,11 +208,11 @@ export default function DownloadHistory() {
           ))}
         </div>
 
-        <div style={{ minWidth: "240px", flex: "1", maxWidth: "350px" }}>
+        <div style={{ minWidth: "240px", flex: "1", maxWidth: "380px" }}>
           <input
             type="text"
             className="form-control"
-            placeholder="Search by title, infohash, tracker..."
+            placeholder="Search title, actor, genre, hash, tracker..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -147,169 +228,748 @@ export default function DownloadHistory() {
         </div>
       </div>
 
-      {/* History table */}
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        {isLoading && (
-          <div style={{ padding: "2rem", textAlign: "center" }}>
-            <div className="loading">Loading download history...</div>
-          </div>
-        )}
+      {/* Loading & Error States */}
+      {isLoading && (
+        <div className="card" style={{ padding: "3rem", textAlign: "center" }}>
+          <div className="loading">Loading download history & rich metadata...</div>
+        </div>
+      )}
 
-        {isError && (
-          <div style={{ padding: "2rem", textAlign: "center", color: "var(--danger, #dc3545)" }}>
-            Failed to load download history.
-          </div>
-        )}
+      {isError && (
+        <div className="card" style={{ padding: "2rem", textAlign: "center", color: "var(--danger, #dc3545)" }}>
+          Failed to load download history.
+        </div>
+      )}
 
-        {!isLoading && !isError && totalCount === 0 && (
-          <div className="empty-state" style={{ padding: "3rem 1rem", textAlign: "center" }}>
-            <div className="empty-state-title" style={{ fontSize: "1.2rem", fontWeight: 600, marginBottom: "0.5rem" }}>
-              No Historical Downloads
-            </div>
-            <div className="empty-state-text" style={{ color: "var(--text-muted, #888)" }}>
-              {searchTerm || statusFilter !== "all"
-                ? "No history records match the current filters."
-                : "Downloads and seeded torrents will be permanently recorded here even after removal."}
-            </div>
+      {!isLoading && !isError && totalCount === 0 && (
+        <div className="card empty-state" style={{ padding: "3.5rem 1rem", textAlign: "center" }}>
+          <div className="empty-state-title" style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+            No Historical Downloads
           </div>
-        )}
+          <div className="empty-state-text" style={{ color: "var(--text-muted, #888)", maxWidth: "500px", margin: "0 auto" }}>
+            {searchTerm || statusFilter !== "all"
+              ? "No history records match the current search or status filter."
+              : "Downloads and seeded torrents will be permanently captured and enriched with Arr media posters, actors, and stats here."}
+          </div>
+        </div>
+      )}
 
-        {!isLoading && !isError && totalCount > 0 && (
+      {/* POSTER GRID VIEW (Sonarr / Radarr Style) */}
+      {!isLoading && !isError && totalCount > 0 && viewMode === "grid" && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))",
+            gap: "1.25rem",
+          }}
+        >
+          {history?.map((item) => {
+            const meta = item.metadata;
+            const displayTitle = meta?.title || item.title;
+            const hasPoster = Boolean(meta?.posterUrl);
+
+            return (
+              <div
+                key={item.id}
+                className="card"
+                style={{
+                  padding: 0,
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-color, #333)",
+                  backgroundColor: "var(--bg-secondary, #1e1e1e)",
+                  transition: "transform 0.18s ease, box-shadow 0.18s ease",
+                  cursor: "pointer",
+                }}
+                onClick={() => setSelectedDetailItem(item)}
+              >
+                {/* Poster Container */}
+                <div
+                  style={{
+                    position: "relative",
+                    width: "100%",
+                    paddingTop: "145%", // 2:3 aspect ratio
+                    backgroundColor: "#141414",
+                    overflow: "hidden",
+                  }}
+                >
+                  {hasPoster ? (
+                    <img
+                      src={meta?.posterUrl || ""}
+                      alt={displayTitle}
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        width: "100%",
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "1rem",
+                        textAlign: "center",
+                        background: "linear-gradient(180deg, #2a2a2a 0%, #151515 100%)",
+                      }}
+                    >
+                      <span style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>
+                        {item.source === "Radarr" ? "🎬" : item.source === "Sonarr" ? "📺" : item.source === "Lidarr" ? "🎵" : "📦"}
+                      </span>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 600, wordBreak: "break-word", color: "#ccc" }}>
+                        {displayTitle}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Top-left Source Badge */}
+                  {item.source && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "8px",
+                        left: "8px",
+                        zIndex: 2,
+                      }}
+                    >
+                      <span
+                        className="badge"
+                        style={{
+                          backgroundColor: "rgba(0, 0, 0, 0.75)",
+                          backdropFilter: "blur(4px)",
+                          color: "#fff",
+                          fontSize: "0.7rem",
+                          padding: "0.2rem 0.5rem",
+                          border: "1px solid rgba(255,255,255,0.15)",
+                        }}
+                      >
+                        {item.source}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Top-right Ratio Badge */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "8px",
+                      right: "8px",
+                      zIndex: 2,
+                    }}
+                  >
+                    <span
+                      className={`badge ${
+                        item.ratio >= 2.0
+                          ? "badge-success"
+                          : item.ratio >= 1.0
+                          ? "badge-primary"
+                          : "badge-secondary"
+                      }`}
+                      style={{
+                        fontSize: "0.75rem",
+                        padding: "0.2rem 0.55rem",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.5)",
+                      }}
+                    >
+                      ★ {formatRatio(item.ratio)}
+                    </span>
+                  </div>
+
+                  {/* Bottom Telemetry Overlay Bar */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      padding: "0.4rem 0.6rem",
+                      background: "linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.85) 40%, rgba(0,0,0,0.95) 100%)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      fontSize: "0.75rem",
+                      color: "#eee",
+                    }}
+                  >
+                    <span>↑ {formatBytes(item.uploaded)}</span>
+                    <span style={{ color: "var(--text-muted, #aaa)" }}>⏱ {formatDuration(item.seedingTime)}</span>
+                  </div>
+                </div>
+
+                {/* Card Info Body */}
+                <div style={{ padding: "0.75rem", flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        fontSize: "0.9rem",
+                        lineHeight: "1.25",
+                        marginBottom: "0.25rem",
+                        overflow: "hidden",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                      }}
+                      title={displayTitle}
+                    >
+                      {displayTitle} {meta?.year ? <span style={{ color: "var(--text-muted, #888)", fontWeight: 400 }}>({meta.year})</span> : null}
+                    </div>
+
+                    {/* Genres */}
+                    {meta?.genres && meta.genres.length > 0 && (
+                      <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", margin: "0.35rem 0" }}>
+                        {meta.genres.slice(0, 2).map((g, i) => (
+                          <span
+                            key={i}
+                            className="badge badge-secondary"
+                            style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem" }}
+                          >
+                            {g}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Quick Card Action Buttons */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.3rem",
+                      marginTop: "0.6rem",
+                      paddingTop: "0.5rem",
+                      borderTop: "1px solid var(--border-color, #2a2a2a)",
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      className="btn btn-outline"
+                      style={{ flex: 1, fontSize: "0.75rem", padding: "0.25rem 0.4rem" }}
+                      onClick={() => setSearchModalQuery(item.title)}
+                      title="Search again on Prowlarr"
+                    >
+                      🔍 Search
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      style={{ flex: 1, fontSize: "0.75rem", padding: "0.25rem 0.4rem" }}
+                      onClick={() => handleReAdd(item.id, item.title)}
+                      disabled={reAddMutation.isPending || item.status === "Active"}
+                      title={item.status === "Active" ? "Already in library" : "Re-add to active queue"}
+                    >
+                      🔄 Re-add
+                    </button>
+                    <button
+                      className="btn btn-outline"
+                      style={{ fontSize: "0.75rem", padding: "0.25rem 0.4rem" }}
+                      onClick={() => setSelectedDetailItem(item)}
+                      title="View full media details and actors"
+                    >
+                      ℹ️
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* DETAILED TABLE VIEW */}
+      {!isLoading && !isError && totalCount > 0 && viewMode === "table" && (
+        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border-color, #333)", textAlign: "left" }}>
-                  <th style={{ padding: "0.75rem 1rem" }}>Release</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "110px" }}>Size</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "130px" }}>Uploaded</th>
+                  <th style={{ padding: "0.75rem 1rem" }}>Release & Media</th>
+                  <th style={{ padding: "0.75rem 1rem", width: "100px" }}>Size</th>
+                  <th style={{ padding: "0.75rem 1rem", width: "120px" }}>Uploaded</th>
                   <th style={{ padding: "0.75rem 1rem", width: "90px" }}>Ratio</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "110px" }}>Seed Time</th>
+                  <th style={{ padding: "0.75rem 1rem", width: "100px" }}>Seed Time</th>
                   <th style={{ padding: "0.75rem 1rem", width: "130px" }}>Date Added</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "110px" }}>Status</th>
-                  <th style={{ padding: "0.75rem 1rem", width: "180px", textAlign: "right" }}>Actions</th>
+                  <th style={{ padding: "0.75rem 1rem", width: "100px" }}>Status</th>
+                  <th style={{ padding: "0.75rem 1rem", width: "210px", textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {history?.map((item) => (
-                  <tr
-                    key={item.id}
-                    style={{
-                      borderBottom: "1px solid var(--border-color, #222)",
-                      transition: "background-color 0.15s ease",
-                    }}
-                  >
-                    <td style={{ padding: "0.75rem 1rem" }}>
-                      <div style={{ fontWeight: 500, wordBreak: "break-word" }}>
-                        {item.title}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "0.75rem",
-                          color: "var(--text-muted, #777)",
-                          fontFamily: "monospace",
-                          marginTop: "0.2rem",
-                          display: "flex",
-                          gap: "0.5rem",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span>{item.infoHash}</span>
-                        {item.source && (
-                          <span className="badge badge-secondary" style={{ fontSize: "0.7rem", padding: "0.1rem 0.4rem" }}>
-                            {item.source}
-                          </span>
-                        )}
-                        {item.primaryTracker && (
-                          <span style={{ color: "var(--text-dim, #999)" }}>
-                            • {item.primaryTracker}
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                {history?.map((item) => {
+                  const meta = item.metadata;
+                  const displayTitle = meta?.title || item.title;
 
-                    <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
-                      {formatBytes(item.totalSize)}
-                    </td>
+                  return (
+                    <tr
+                      key={item.id}
+                      style={{
+                        borderBottom: "1px solid var(--border-color, #222)",
+                        transition: "background-color 0.15s ease",
+                      }}
+                    >
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                          {meta?.posterUrl ? (
+                            <img
+                              src={meta.posterUrl}
+                              alt=""
+                              style={{
+                                width: "38px",
+                                height: "54px",
+                                objectFit: "cover",
+                                borderRadius: "4px",
+                                flexShrink: 0,
+                              }}
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: "38px",
+                                height: "54px",
+                                backgroundColor: "#222",
+                                borderRadius: "4px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "1.2rem",
+                                flexShrink: 0,
+                              }}
+                            >
+                              🎬
+                            </div>
+                          )}
 
-                    <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
-                      {formatBytes(item.uploaded)}
-                    </td>
-
-                    <td style={{ padding: "0.75rem 1rem" }}>
-                      <span
-                        className={`badge ${
-                          item.ratio >= 1.0 ? "badge-success" : "badge-secondary"
-                        }`}
-                        style={{ fontSize: "0.8rem" }}
-                      >
-                        {formatRatio(item.ratio)}
-                      </span>
-                    </td>
-
-                    <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
-                      {formatDuration(item.seedingTime)}
-                    </td>
-
-                    <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
-                      <div>{formatDate(item.dateAdded)}</div>
-                      {item.dateRemoved && (
-                        <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #777)" }}>
-                          Removed {formatDate(item.dateRemoved)}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, wordBreak: "break-word" }}>
+                              {displayTitle} {meta?.year ? <span style={{ color: "var(--text-muted, #888)", fontWeight: 400 }}>({meta.year})</span> : null}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "var(--text-muted, #777)",
+                                fontFamily: "monospace",
+                                marginTop: "0.2rem",
+                                display: "flex",
+                                gap: "0.5rem",
+                                alignItems: "center",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <span>{item.infoHash}</span>
+                              {item.source && (
+                                <span className="badge badge-secondary" style={{ fontSize: "0.7rem", padding: "0.1rem 0.4rem" }}>
+                                  {item.source}
+                                </span>
+                              )}
+                              {item.primaryTracker && (
+                                <span style={{ color: "var(--text-dim, #999)" }}>
+                                  • {item.primaryTracker}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      )}
-                    </td>
+                      </td>
 
-                    <td style={{ padding: "0.75rem 1rem" }}>
-                      <span
-                        className={`badge ${
-                          item.status === "Active"
-                            ? "badge-success"
-                            : item.status === "Completed"
-                            ? "badge-primary"
-                            : "badge-stopped"
-                        }`}
-                      >
-                        {item.status}
-                      </span>
-                    </td>
+                      <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
+                        {formatBytes(item.totalSize)}
+                      </td>
 
-                    <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
-                      <div style={{ display: "inline-flex", gap: "0.35rem" }}>
-                        <button
-                          className="btn btn-outline"
-                          style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
-                          onClick={() => setSearchModalQuery(item.title)}
-                          title="Search for this release again on Prowlarr"
+                      <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
+                        {formatBytes(item.uploaded)}
+                      </td>
+
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        <span
+                          className={`badge ${
+                            item.ratio >= 1.0 ? "badge-success" : "badge-secondary"
+                          }`}
+                          style={{ fontSize: "0.8rem" }}
                         >
-                          🔍 Search
-                        </button>
-                        <button
-                          className="btn btn-primary"
-                          style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem" }}
-                          onClick={() => handleReAdd(item.id, item.title)}
-                          disabled={reAddMutation.isPending || item.status === "Active"}
-                          title={item.status === "Active" ? "Already in library" : "Re-add to active seeding library"}
+                          {formatRatio(item.ratio)}
+                        </span>
+                      </td>
+
+                      <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
+                        {formatDuration(item.seedingTime)}
+                      </td>
+
+                      <td style={{ padding: "0.75rem 1rem", fontSize: "0.85rem" }}>
+                        <div>{formatDate(item.dateAdded)}</div>
+                        {item.dateRemoved && (
+                          <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #777)" }}>
+                            Removed {formatDate(item.dateRemoved)}
+                          </div>
+                        )}
+                      </td>
+
+                      <td style={{ padding: "0.75rem 1rem" }}>
+                        <span
+                          className={`badge ${
+                            item.status === "Active"
+                              ? "badge-success"
+                              : item.status === "Completed"
+                              ? "badge-primary"
+                              : "badge-stopped"
+                          }`}
                         >
-                          🔄 Re-add
-                        </button>
-                        <button
-                          className="btn btn-outline"
-                          style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem", color: "var(--danger, #dc3545)" }}
-                          onClick={() => handleDelete(item.id, item.title)}
-                          title="Delete historical record"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {item.status}
+                        </span>
+                      </td>
+
+                      <td style={{ padding: "0.75rem 1rem", textAlign: "right" }}>
+                        <div style={{ display: "inline-flex", gap: "0.3rem" }}>
+                          <button
+                            className="btn btn-outline"
+                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                            onClick={() => setSelectedDetailItem(item)}
+                            title="View synopsis & actors"
+                          >
+                            ℹ️ Details
+                          </button>
+                          <button
+                            className="btn btn-outline"
+                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                            onClick={() => setSearchModalQuery(item.title)}
+                            title="Search for this release again on Prowlarr"
+                          >
+                            🔍 Search
+                          </button>
+                          <button
+                            className="btn btn-primary"
+                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                            onClick={() => handleReAdd(item.id, item.title)}
+                            disabled={reAddMutation.isPending || item.status === "Active"}
+                            title={item.status === "Active" ? "Already in library" : "Re-add to active seeding library"}
+                          >
+                            🔄 Re-add
+                          </button>
+                          <button
+                            className="btn btn-outline"
+                            style={{ fontSize: "0.75rem", padding: "0.25rem 0.45rem", color: "var(--danger, #dc3545)" }}
+                            onClick={() => handleDelete(item.id, item.title)}
+                            title="Delete historical record"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
+      {/* RICH MEDIA DETAILS MODAL */}
+      {selectedDetailItem && (
+        <div className="modal-overlay" onClick={() => setSelectedDetailItem(null)}>
+          <div
+            className="modal"
+            style={{
+              maxWidth: "850px",
+              width: "95%",
+              padding: 0,
+              overflow: "hidden",
+              borderRadius: "10px",
+              backgroundColor: "var(--bg-primary, #1a1a1a)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Fanart Backdrop Header */}
+            <div
+              style={{
+                position: "relative",
+                height: "220px",
+                backgroundImage: selectedDetailItem.metadata?.fanartUrl
+                  ? `url(${selectedDetailItem.metadata.fanartUrl})`
+                  : undefined,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundColor: "#111",
+                display: "flex",
+                alignItems: "flex-end",
+                padding: "1.5rem",
+              }}
+            >
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  background: "linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(20,20,20,0.95) 100%)",
+                }}
+              />
+
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{
+                  position: "absolute",
+                  top: "1rem",
+                  right: "1rem",
+                  zIndex: 10,
+                  backgroundColor: "rgba(0,0,0,0.6)",
+                  border: "none",
+                  color: "#fff",
+                  padding: "0.25rem 0.6rem",
+                  fontSize: "1rem",
+                }}
+                onClick={() => setSelectedDetailItem(null)}
+              >
+                ✕
+              </button>
+
+              <div style={{ position: "relative", zIndex: 2, display: "flex", gap: "1.5rem", alignItems: "flex-end" }}>
+                {selectedDetailItem.metadata?.posterUrl && (
+                  <img
+                    src={selectedDetailItem.metadata.posterUrl}
+                    alt=""
+                    style={{
+                      width: "105px",
+                      height: "155px",
+                      objectFit: "cover",
+                      borderRadius: "6px",
+                      boxShadow: "0 6px 16px rgba(0,0,0,0.6)",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      marginBottom: "-1.5rem",
+                    }}
+                  />
+                )}
+
+                <div>
+                  <h2 style={{ margin: "0 0 0.25rem 0", fontSize: "1.5rem", fontWeight: 700 }}>
+                    {selectedDetailItem.metadata?.title || selectedDetailItem.title}
+                    {selectedDetailItem.metadata?.year && (
+                      <span style={{ color: "var(--text-muted, #aaa)", fontWeight: 400, fontSize: "1.1rem", marginLeft: "0.5rem" }}>
+                        ({selectedDetailItem.metadata.year})
+                      </span>
+                    )}
+                  </h2>
+
+                  <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                    {selectedDetailItem.source && (
+                      <span className="badge badge-primary">{selectedDetailItem.source}</span>
+                    )}
+                    {selectedDetailItem.metadata?.studioOrNetwork && (
+                      <span style={{ color: "var(--text-muted, #bbb)", fontSize: "0.85rem" }}>
+                        {selectedDetailItem.metadata.studioOrNetwork}
+                      </span>
+                    )}
+                    {selectedDetailItem.metadata?.rating && (
+                      <span className="badge badge-success">⭐ {selectedDetailItem.metadata.rating}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: "2rem 1.5rem 1.5rem 1.5rem" }}>
+              {/* Genres */}
+              {selectedDetailItem.metadata?.genres && selectedDetailItem.metadata.genres.length > 0 && (
+                <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+                  {selectedDetailItem.metadata.genres.map((g, i) => (
+                    <span key={i} className="badge badge-secondary" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}>
+                      {g}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Overview / Synopsis */}
+              {selectedDetailItem.metadata?.overview && (
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <h4 style={{ margin: "0 0 0.4rem 0", fontSize: "0.95rem", color: "var(--text-muted, #aaa)" }}>
+                    Overview
+                  </h4>
+                  <p style={{ margin: 0, fontSize: "0.9rem", lineHeight: "1.5", color: "var(--text-normal, #ddd)" }}>
+                    {selectedDetailItem.metadata.overview}
+                  </p>
+                </div>
+              )}
+
+              {/* Cast & Actors */}
+              {selectedDetailItem.metadata?.actors && selectedDetailItem.metadata.actors.length > 0 && (
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <h4 style={{ margin: "0 0 0.6rem 0", fontSize: "0.95rem", color: "var(--text-muted, #aaa)" }}>
+                    Cast & Actors
+                  </h4>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+                      gap: "0.75rem",
+                      maxHeight: "180px",
+                      overflowY: "auto",
+                      paddingRight: "0.5rem",
+                    }}
+                  >
+                    {selectedDetailItem.metadata.actors.slice(0, 12).map((actor, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          gap: "0.5rem",
+                          alignItems: "center",
+                          backgroundColor: "var(--bg-secondary, #222)",
+                          padding: "0.4rem",
+                          borderRadius: "4px",
+                          border: "1px solid var(--border-color, #333)",
+                        }}
+                      >
+                        {actor.imageUrl ? (
+                          <img
+                            src={actor.imageUrl}
+                            alt=""
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                              flexShrink: 0,
+                            }}
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width: "36px",
+                              height: "36px",
+                              borderRadius: "50%",
+                              backgroundColor: "#333",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "0.9rem",
+                              flexShrink: 0,
+                            }}
+                          >
+                            👤
+                          </div>
+                        )}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: "0.8rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {actor.name}
+                          </div>
+                          {actor.character && (
+                            <div style={{ fontSize: "0.7rem", color: "var(--text-muted, #888)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {actor.character}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* BitTorrent Performance Stats Grid */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))",
+                  gap: "0.75rem",
+                  backgroundColor: "var(--bg-secondary, #202020)",
+                  padding: "1rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color, #333)",
+                  marginBottom: "1.5rem",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Final Ratio</div>
+                  <div style={{ fontSize: "1.1rem", fontWeight: 700, color: selectedDetailItem.ratio >= 1.0 ? "var(--success, #28a745)" : "inherit" }}>
+                    {formatRatio(selectedDetailItem.ratio)}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Total Uploaded</div>
+                  <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>
+                    {formatBytes(selectedDetailItem.uploaded)}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Total Size</div>
+                  <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>
+                    {formatBytes(selectedDetailItem.totalSize)}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Seeding Duration</div>
+                  <div style={{ fontSize: "1.1rem", fontWeight: 700 }}>
+                    {formatDuration(selectedDetailItem.seedingTime)}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Primary Tracker</div>
+                  <div style={{ fontSize: "0.85rem", wordBreak: "break-all" }}>
+                    {selectedDetailItem.primaryTracker || "None"}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Added Date</div>
+                  <div style={{ fontSize: "0.85rem" }}>
+                    {formatDate(selectedDetailItem.dateAdded)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
+                <button
+                  className="btn btn-outline"
+                  onClick={() => handleEnrich(selectedDetailItem)}
+                  disabled={enrichMutation.isPending}
+                  title="Query connected Arr instance again to refresh metadata"
+                  style={{ fontSize: "0.85rem" }}
+                >
+                  ⚡ Re-enrich Metadata
+                </button>
+
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <button
+                    className="btn btn-outline"
+                    onClick={() => {
+                      setSearchModalQuery(selectedDetailItem.title);
+                      setSelectedDetailItem(null);
+                    }}
+                  >
+                    🔍 Search on Prowlarr
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => handleReAdd(selectedDetailItem.id, selectedDetailItem.title)}
+                    disabled={reAddMutation.isPending || selectedDetailItem.status === "Active"}
+                  >
+                    🔄 Re-add Torrent
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prowlarr Search / Add Modal */}
       {searchModalQuery && (
         <AddTorrentModal
           initialMode="search"

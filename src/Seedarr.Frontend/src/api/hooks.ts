@@ -851,6 +851,26 @@ export function useClearDownloadHistory() {
   });
 }
 
+export function useEnrichHistoryTorrent() {
+  const queryClient = useQueryClient();
+  return useMutation<DownloadHistoryEntry, Error, number>({
+    mutationFn: (id: number) => apiClient.post(`/downloadhistory/${id}/enrich`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadhistory"] });
+    },
+  });
+}
+
+export function useEnrichAllHistory() {
+  const queryClient = useQueryClient();
+  return useMutation<{ message: string }, Error, void>({
+    mutationFn: () => apiClient.post("/downloadhistory/enrich-all"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["downloadhistory"] });
+    },
+  });
+}
+
 export function useIndexerSearch(
   params: { query: string; category?: string; indexerId?: number },
   enabled = true,
