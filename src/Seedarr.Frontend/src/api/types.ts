@@ -625,3 +625,80 @@ export interface DownloadReleaseRequest {
   indexerName?: string;
 }
 
+export type TrackerProtocol = "Udp" | "Http" | "Https" | number;
+export type TrackerHealthStatus = "Untested" | "Alive" | "Slow" | "Offline" | number;
+export type TrackerSourceType = "PublicList" | "Prowlarr" | "ReleaseMagnet" | "Manual" | number;
+
+export interface DownloadPlusPlusTracker {
+  id: number;
+  url: string;
+  host: string;
+  port: number;
+  protocol: TrackerProtocol;
+  status: TrackerHealthStatus;
+  source: TrackerSourceType;
+  sourceName: string;
+  latencyMs: number;
+  lastScraped: string | null;
+  lastSuccess: string | null;
+  successfulScrapes: number;
+  failedScrapes: number;
+  totalSwarmsFound: number;
+  enabled: boolean;
+}
+
+export interface SwarmBoostResult {
+  torrentId: number;
+  torrentName: string;
+  infoHash: string;
+  isPrivate: boolean;
+  boosted: boolean;
+  addedTrackersCount: number;
+  addedTrackers: string[];
+  totalSeedersFound: number;
+  totalLeechersFound: number;
+  message: string;
+}
+
+export interface DownloadPlusPlusStatusSummary {
+  totalTrackersMonitored: number;
+  aliveTrackersCount: number;
+  slowTrackersCount: number;
+  offlineTrackersCount: number;
+  untestedTrackersCount: number;
+  prowlarrTrackersCount: number;
+  publicListTrackersCount: number;
+  torrentsBoostedCount: number;
+  extraTrackersInjectedCount: number;
+  lastScanTime: string | null;
+  lastProwlarrHarvestTime: string | null;
+}
+
+export interface TorrentTrackerDetection {
+  trackerId: number;
+  trackerUrl: string;
+  trackerHost: string;
+  protocol: TrackerProtocol;
+  source: TrackerSourceType;
+  sourceName: string;
+  isAttached: boolean;
+  isDetected: boolean;
+  seeders: number;
+  leechers: number;
+  latencyMs: number;
+  healthStatus: TrackerHealthStatus;
+  detectionStatus: string;
+}
+
+export interface TorrentTrackerInspectionResult {
+  torrentId: number;
+  torrentName: string;
+  infoHash: string;
+  isPrivate: boolean;
+  totalTrackersChecked: number;
+  attachedTrackersCount: number;
+  detectedTrackersCount: number;
+  detections: TorrentTrackerDetection[];
+}
+
+
