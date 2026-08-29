@@ -11,6 +11,8 @@ public interface IArrSyncService
     SyncResult Sync();
     bool TestConnection(int id);
     bool TestConnectionDirect(ArrConnectionDefinition definition);
+    ArrTestResult TestConnectionDetailed(int id);
+    ArrTestResult TestConnectionDetailedDirect(ArrConnectionDefinition definition);
 }
 
 public class SyncResult
@@ -107,26 +109,36 @@ public class ArrSyncService : IArrSyncService
 
     public bool TestConnection(int id)
     {
+        return TestConnectionDetailed(id).Success;
+    }
+
+    public bool TestConnectionDirect(ArrConnectionDefinition definition)
+    {
+        return TestConnectionDetailedDirect(definition).Success;
+    }
+
+    public ArrTestResult TestConnectionDetailed(int id)
+    {
         var definition = _connectionFactory.Get(id);
         if (definition == null)
         {
             _logger.Warn("No ArrConnection found with id {0}", id);
-            return false;
+            return ArrTestResult.Fail($"No ArrConnection found with id {id}");
         }
 
-        return TestConnectionDirect(definition);
+        return TestConnectionDetailedDirect(definition);
     }
 
-    public bool TestConnectionDirect(ArrConnectionDefinition definition)
+    public ArrTestResult TestConnectionDetailedDirect(ArrConnectionDefinition definition)
     {
         var provider = CreateProvider(definition);
         if (provider == null)
         {
             _logger.Warn("Unknown ArrType '{0}' for connection '{1}'", definition.ArrType, definition.Name);
-            return false;
+            return ArrTestResult.Fail($"Unknown ArrType '{definition.ArrType}'. Supported types are Sonarr, Radarr, Lidarr.");
         }
 
-        return provider.TestConnection();
+        return provider.TestConnectionDetailed();
     }
 
     protected virtual IArrConnection CreateProvider(ArrConnectionDefinition definition)
