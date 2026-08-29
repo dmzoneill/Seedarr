@@ -16,7 +16,7 @@ import SystemLogFiles from "./pages/SystemLogFiles";
 import PeerMap from "./pages/PeerMap";
 import SpeedSchedule from "./pages/SpeedSchedule";
 import Statistics from "./pages/Statistics";
-import History from "./pages/History";
+import DownloadHistory from "./pages/DownloadHistory";
 import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
@@ -24,6 +24,7 @@ import StatusBar from "./components/StatusBar";
 import ToastContainer from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SignalRProvider from "./components/SignalRProvider";
+import AddTorrentModal from "./components/AddTorrentModal";
 import SeedarrLogo from "./components/icons/SeedarrLogo";
 import SeedarrText from "./components/icons/SeedarrText";
 import {
@@ -86,6 +87,10 @@ function App() {
   const { theme, toggleTheme } = useTheme();
   const [searchTerm, setSearchTerm] = useState("");
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showAddTorrentModal, setShowAddTorrentModal] = useState(false);
+  const isTorrentsRoute =
+    location.pathname.startsWith("/torrents") || location.pathname === "/history";
+  const isActivityRoute = location.pathname.startsWith("/activity");
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const isSystemRoute = location.pathname.startsWith("/system");
   const { data: generalConfig } = useGeneralConfig();
@@ -106,25 +111,82 @@ function App() {
         </a>
         <nav className="sidebar-nav">
           <NavLink to="/" end className="sidebar-nav-item">
-            <DashboardIcon /> <span>Torrents</span>
+            <DashboardIcon /> <span>Dashboard</span>
           </NavLink>
-          <NavLink to="/torrents" className="sidebar-nav-item sidebar-nav-sub">
-            <TorrentIcon /> <span>Library</span>
+
+          {/* Torrents Top-Level with Historical History & Add Torrent */}
+          <NavLink
+            to="/torrents/history"
+            className={`sidebar-nav-item ${isTorrentsRoute ? "active" : ""}`}
+          >
+            <TorrentIcon /> <span>Torrents</span>
           </NavLink>
-          {downloadClients
-            ?.filter((c) => c.enable)
-            .map((client) => (
+          {isTorrentsRoute && (
+            <>
               <NavLink
-                key={client.id}
-                to={`/torrents/client/${client.id}`}
+                to="/torrents/history"
                 className="sidebar-nav-item sidebar-nav-sub"
               >
-                <DownloadAgentIcon /> <span>{client.name}</span>
+                <HistoryIcon /> <span>History</span>
               </NavLink>
-            ))}
-          <NavLink to="/activity" className="sidebar-nav-item">
+              <button
+                type="button"
+                className="sidebar-nav-item sidebar-nav-sub"
+                onClick={() => setShowAddTorrentModal(true)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  width: "100%",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  color: "inherit",
+                  font: "inherit",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>+</span>{" "}
+                <span>Add Torrent</span>
+              </button>
+            </>
+          )}
+
+          {/* Activity Top-Level with Active Torrents, Download Agents, & Metrics */}
+          <NavLink
+            to="/activity/torrents"
+            className={`sidebar-nav-item ${isActivityRoute ? "active" : ""}`}
+          >
             <ActivityIcon /> <span>Activity</span>
           </NavLink>
+          {isActivityRoute && (
+            <>
+              <NavLink
+                to="/activity/torrents"
+                className="sidebar-nav-item sidebar-nav-sub"
+              >
+                <DashboardIcon /> <span>Torrents</span>
+              </NavLink>
+              {downloadClients
+                ?.filter((c) => c.enable)
+                .map((client) => (
+                  <NavLink
+                    key={client.id}
+                    to={`/activity/client/${client.id}`}
+                    className="sidebar-nav-item sidebar-nav-sub"
+                  >
+                    <DownloadAgentIcon /> <span>{client.name}</span>
+                  </NavLink>
+                ))}
+              <NavLink
+                to="/activity/metrics"
+                className="sidebar-nav-item sidebar-nav-sub"
+              >
+                <StatsIcon /> <span>Metrics</span>
+              </NavLink>
+            </>
+          )}
+
           <NavLink to="/tracker" className="sidebar-nav-item">
             <TrackerIcon /> <span>Tracker</span>
           </NavLink>
@@ -136,9 +198,6 @@ function App() {
           </NavLink>
           <NavLink to="/statistics" className="sidebar-nav-item">
             <StatsIcon /> <span>Statistics</span>
-          </NavLink>
-          <NavLink to="/history" className="sidebar-nav-item">
-            <HistoryIcon /> <span>History</span>
           </NavLink>
           <NavLink
             to="/settings/general"
@@ -315,18 +374,26 @@ function App() {
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/torrents/history" element={<DownloadHistory />} />
+              <Route path="/history" element={<DownloadHistory />} />
+              <Route path="/activity/torrents" element={<TorrentIndex />} />
               <Route path="/torrents" element={<TorrentIndex />} />
               <Route path="/torrents/:id" element={<TorrentDetails />} />
+              <Route path="/activity/torrents/:id" element={<TorrentDetails />} />
+              <Route
+                path="/activity/client/:id"
+                element={<DownloadClientTorrents />}
+              />
               <Route
                 path="/torrents/client/:id"
                 element={<DownloadClientTorrents />}
               />
               <Route path="/activity" element={<Activity />} />
+              <Route path="/activity/metrics" element={<Activity />} />
               <Route path="/tracker" element={<TrackerServer />} />
               <Route path="/peermap" element={<PeerMap />} />
               <Route path="/schedule" element={<SpeedSchedule />} />
               <Route path="/statistics" element={<Statistics />} />
-              <Route path="/history" element={<History />} />
               <Route path="/settings/tags" element={<Tags />} />
               <Route path="/settings/:section?" element={<Settings />} />
               <Route path="/system/status" element={<SystemStatus />} />
@@ -343,6 +410,9 @@ function App() {
         <StatusBar />
       </div>
       <SignalRProvider />
+      {showAddTorrentModal && (
+        <AddTorrentModal onClose={() => setShowAddTorrentModal(false)} />
+      )}
     </div>
   );
 }
