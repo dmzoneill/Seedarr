@@ -426,7 +426,15 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         TriggerAnnounceInternal(torrent);
 
-        return Ok();
+        var trackers = _trackerEntryService.GetByTorrentId(id);
+        return Ok(new
+        {
+            success = true,
+            torrentId = id,
+            torrentName = torrent.Name,
+            trackersCount = trackers.Count(t => t.Enabled),
+            message = $"Announce triggered for {trackers.Count(t => t.Enabled)} tracker(s)"
+        });
     }
 
     [HttpPost("{id:int}/recheck")]
