@@ -5,8 +5,9 @@ import {
   useUpdateIndexer,
   useDeleteIndexer,
   useTestIndexer,
+  useTestDirectIndexer,
 } from "../../api/hooks";
-import type { IndexerDefinition } from "../../api/types";
+import type { IndexerDefinition, IndexerTestResult } from "../../api/types";
 import { TextInput, SelectInput, Toggle } from "./shared";
 
 export function IndexersTab() {
@@ -15,12 +16,15 @@ export function IndexersTab() {
   const updateMutation = useUpdateIndexer();
   const deleteMutation = useDeleteIndexer();
   const testMutation = useTestIndexer();
+  const testDirectMutation = useTestDirectIndexer();
   const [editing, setEditing] = useState<Partial<IndexerDefinition> | null>(
     null,
   );
   const [testResults, setTestResults] = useState<
     Record<number, boolean | null>
   >({});
+  const [modalTestResult, setModalTestResult] =
+    useState<IndexerTestResult | null>(null);
 
   const defaultIndexer: Partial<IndexerDefinition> = {
     name: "",
@@ -43,10 +47,18 @@ export function IndexersTab() {
     };
     if (editing.id) {
       updateMutation.mutate(payload as IndexerDefinition, {
-        onSuccess: () => setEditing(null),
+        onSuccess: () => {
+          setEditing(null);
+          setModalTestResult(null);
+        },
       });
     } else {
-      createMutation.mutate(payload, { onSuccess: () => setEditing(null) });
+      createMutation.mutate(payload, {
+        onSuccess: () => {
+          setEditing(null);
+          setModalTestResult(null);
+        },
+      });
     }
   };
 
@@ -56,6 +68,22 @@ export function IndexersTab() {
       onSuccess: (data) =>
         setTestResults((prev) => ({ ...prev, [id]: data.success })),
       onError: () => setTestResults((prev) => ({ ...prev, [id]: false })),
+    });
+  };
+
+  const handleModalTest = () => {
+    if (!editing) return;
+    setModalTestResult(null);
+    testDirectMutation.mutate(editing, {
+      onSuccess: (res) => {
+        setModalTestResult(res);
+      },
+      onError: (err) => {
+        setModalTestResult({
+          success: false,
+          message: err.message || "Failed to test indexer connection.",
+        });
+      },
     });
   };
 
@@ -73,7 +101,10 @@ export function IndexersTab() {
             <div
               key={idx.id}
               className="provider-card"
-              onClick={() => setEditing({ ...idx })}
+              onClick={() => {
+                setEditing({ ...idx });
+                setModalTestResult(null);
+              }}
             >
               <div className="provider-card-actions">
                 <button
@@ -133,7 +164,10 @@ export function IndexersTab() {
           ))}
           <div
             className="provider-card-add"
-            onClick={() => setEditing({ ...defaultIndexer })}
+            onClick={() => {
+              setEditing({ ...defaultIndexer });
+              setModalTestResult(null);
+            }}
           >
             <span className="provider-card-add-icon">+</span>
           </div>
@@ -141,7 +175,13 @@ export function IndexersTab() {
       </div>
 
       {editing && (
-        <div className="modal-overlay" onClick={() => setEditing(null)}>
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setEditing(null);
+            setModalTestResult(null);
+          }}
+        >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-title">
               {editing.id ? "Edit Indexer" : "Add Indexer"}
@@ -149,7 +189,10 @@ export function IndexersTab() {
             <TextInput
               label="Name"
               value={editing.name || ""}
-              onChange={(v) => setEditing({ ...editing, name: v })}
+              onChange={(v) => {
+                setEditing({ ...editing, name: v });
+                setModalTestResult(null);
+              }}
               placeholder="My Prowlarr"
             />
             <SelectInput
@@ -166,6 +209,7 @@ export function IndexersTab() {
                   indexerType: v,
                   url: defaults[v] || editing.url || "",
                 });
+                setModalTestResult(null);
               }}
               options={[
                 { value: "Prowlarr", label: "Prowlarr" },
@@ -176,55 +220,174 @@ export function IndexersTab() {
             <TextInput
               label="URL"
               value={editing.url || ""}
-              onChange={(v) => setEditing({ ...editing, url: v })}
+              onChange={(v) => {
+                setEditing({ ...editing, url: v });
+                setModalTestResult(null);
+              }}
               placeholder="http://localhost:9696"
             />
             <TextInput
               label="API Key"
               value={editing.apiKey || ""}
-              onChange={(v) => setEditing({ ...editing, apiKey: v })}
+              onChange={(v) => {
+                setEditing({ ...editing, apiKey: v });
+                setModalTestResult(null);
+              }}
               type="password"
             />
             <TextInput
               label="API Path"
               value={editing.apiPath || "/api"}
-              onChange={(v) => setEditing({ ...editing, apiPath: v })}
+              onChange={(v) => {
+                setEditing({ ...editing, apiPath: v });
+                setModalTestResult(null);
+              }}
               placeholder="/api"
             />
             <TextInput
               label="Categories"
               value={editing.categories || ""}
-              onChange={(v) => setEditing({ ...editing, categories: v })}
+              onChange={(v) => {
+                setEditing({ ...editing, categories: v });
+                setModalTestResult(null);
+              }}
               placeholder="2000,5000"
             />
             <Toggle
               label="RSS"
               checked={editing.enableRss ?? true}
-              onChange={(v) => setEditing({ ...editing, enableRss: v })}
+              onChange={(v) => {
+                setEditing({ ...editing, enableRss: v });
+                setModalTestResult(null);
+              }}
             />
             <Toggle
               label="Search"
               checked={editing.enableSearch ?? true}
-              onChange={(v) => setEditing({ ...editing, enableSearch: v })}
+              onChange={(v) => {
+                setEditing({ ...editing, enableSearch: v });
+                setModalTestResult(null);
+              }}
             />
+
+            {testDirectMutation.isPending && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  backgroundColor: "rgba(0, 123, 255, 0.12)",
+                  color: "var(--primary, #007bff)",
+                  border: "1px solid rgba(0, 123, 255, 0.35)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                }}
+              >
+                <span>Testing connection to {editing.url || "indexer"}...</span>
+              </div>
+            )}
+
+            {modalTestResult && !testDirectMutation.isPending && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  padding: "0.75rem 1rem",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                  lineHeight: "1.4",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "0.65rem",
+                  backgroundColor: modalTestResult.success
+                    ? "rgba(40, 167, 69, 0.15)"
+                    : "rgba(220, 53, 69, 0.15)",
+                  color: modalTestResult.success
+                    ? "var(--success, #28a745)"
+                    : "var(--danger, #dc3545)",
+                  border: `1px solid ${
+                    modalTestResult.success
+                      ? "rgba(40, 167, 69, 0.35)"
+                      : "rgba(220, 53, 69, 0.35)"
+                  }`,
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: "bold",
+                    fontSize: "1.1rem",
+                    lineHeight: "1",
+                  }}
+                >
+                  {modalTestResult.success ? "✓" : "✕"}
+                </span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600 }}>
+                    {modalTestResult.success
+                      ? "Connection Successful"
+                      : "Connection Failed"}
+                  </div>
+                  {modalTestResult.message && (
+                    <div
+                      style={{
+                        marginTop: "0.25rem",
+                        opacity: 0.95,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {modalTestResult.message}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {(createMutation.isError || updateMutation.isError) && (
               <div className="modal-error">
                 {(createMutation.error || updateMutation.error)?.message}
               </div>
             )}
-            <div className="modal-actions">
-              <button className="btn" onClick={() => setEditing(null)}>
-                Cancel
-              </button>
+            <div
+              className="modal-actions"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
               <button
-                className="btn btn-success"
-                onClick={handleSave}
-                disabled={createMutation.isPending || updateMutation.isPending}
+                type="button"
+                className="btn"
+                onClick={handleModalTest}
+                disabled={testDirectMutation.isPending}
               >
-                {createMutation.isPending || updateMutation.isPending
-                  ? "Saving..."
-                  : "Save"}
+                {testDirectMutation.isPending
+                  ? "Testing..."
+                  : "Test Connection"}
               </button>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    setEditing(null);
+                    setModalTestResult(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="btn btn-success"
+                  onClick={handleSave}
+                  disabled={
+                    createMutation.isPending || updateMutation.isPending
+                  }
+                >
+                  {createMutation.isPending || updateMutation.isPending
+                    ? "Saving..."
+                    : "Save"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
