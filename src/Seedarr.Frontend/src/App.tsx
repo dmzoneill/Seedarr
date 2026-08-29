@@ -18,6 +18,7 @@ import SpeedSchedule from "./pages/SpeedSchedule";
 import Statistics from "./pages/Statistics";
 import DownloadHistory from "./pages/DownloadHistory";
 import TrackerBoost from "./pages/TrackerBoost";
+import TrackerMetrics from "./pages/TrackerMetrics";
 import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
@@ -102,6 +103,7 @@ function App() {
   const isTrackerRoute =
     location.pathname.startsWith("/tracker") ||
     location.pathname.startsWith("/trackerboost") ||
+    location.pathname.startsWith("/trackermetrics") ||
     location.pathname.startsWith("/download++") ||
     location.pathname.startsWith("/downloadplusplus");
   const isSettingsRoute = location.pathname.startsWith("/settings");
@@ -304,6 +306,17 @@ function App() {
                 }`}
               >
                 <span>Tracker Boost</span>
+              </NavLink>
+              <NavLink
+                to="/tracker/metrics"
+                className={`sidebar-nav-item sidebar-nav-sub ${
+                  location.pathname === "/tracker/metrics" ||
+                  location.pathname === "/trackermetrics"
+                    ? "active"
+                    : ""
+                }`}
+              >
+                <span>Tracker Metrics</span>
               </NavLink>
             </>
           )}
@@ -549,6 +562,8 @@ function App() {
               <Route path="/tracker/inbuilt" element={<TrackerServer />} />
               <Route path="/tracker/trackerboost" element={<TrackerBoost />} />
               <Route path="/tracker/boost" element={<TrackerBoost />} />
+              <Route path="/tracker/metrics" element={<TrackerMetrics />} />
+              <Route path="/trackermetrics" element={<TrackerMetrics />} />
               <Route path="/peermap" element={<PeerMap />} />
               <Route path="/schedule" element={<SpeedSchedule />} />
               <Route path="/statistics" element={<Statistics />} />
