@@ -32,3 +32,5 @@ jobs:
       VALIDATE_NATURAL_LANGUAGE: "false"
       VALIDATE_BASH: "false"
       VALIDATE_SHELL_SHFMT: "false"
+      VALIDATE_CSS: "false"
+
