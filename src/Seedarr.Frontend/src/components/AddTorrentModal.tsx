@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useNavigate } from "react-router";
 import {
   useAddTorrent,
   useIndexers,
@@ -31,6 +32,7 @@ function AddTorrentModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addTorrent = useAddTorrent();
   const { showToast } = useToast();
+  const navigate = useNavigate();
 
   // Indexer Search State
   const [searchQuery, setSearchQuery] = useState(initialQuery);
@@ -39,6 +41,8 @@ function AddTorrentModal({
   const [downloadingGuid, setDownloadingGuid] = useState<string | null>(null);
 
   const { data: indexers } = useIndexers();
+  const enabledIndexers = indexers?.filter((i) => i.enable) || [];
+
   const searchResults = useIndexerSearch(
     {
       query: activeSearchTerm,
@@ -55,6 +59,17 @@ function AddTorrentModal({
       setActiveSearchTerm(initialQuery);
     }
   }, [initialQuery]);
+
+  // Debounced auto-search as user types
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed !== activeSearchTerm) {
+      const timer = setTimeout(() => {
+        setActiveSearchTerm(trimmed);
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [searchQuery, activeSearchTerm]);
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -179,13 +194,11 @@ function AddTorrentModal({
     (mode === "file" && files.length > 0) ||
     (mode === "magnet" && magnetLink.trim().startsWith("magnet:?"));
 
-  const enabledIndexers = indexers?.filter((i) => i.enable) || [];
-
   return (
     <div className="modal-overlay" onClick={handleBackdropClick}>
       <div
         className="modal"
-        style={mode === "search" ? { maxWidth: "800px", width: "90%" } : undefined}
+        style={mode === "search" ? { maxWidth: "820px", width: "90%" } : undefined}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
           <h2 className="modal-title" style={{ margin: 0 }}>Add Torrent</h2>
@@ -216,7 +229,7 @@ function AddTorrentModal({
             className={`tab-btn ${mode === "search" ? "tab-btn-active" : ""}`}
             onClick={() => setMode("search")}
           >
-            🔍 Prowlarr Search
+            🔍 Indexer Search
           </button>
         </div>
 
@@ -283,175 +296,206 @@ function AddTorrentModal({
 
         {mode === "search" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <form
-              onSubmit={handleSearchSubmit}
-              style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
-            >
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Search releases (e.g. Ubuntu 24.04, Debian)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={{ flex: 1, minWidth: "220px" }}
-                autoFocus
-              />
-              {enabledIndexers.length > 1 && (
-                <select
-                  className="form-control"
-                  value={selectedIndexerId ?? ""}
-                  onChange={(e) =>
-                    setSelectedIndexerId(
-                      e.target.value ? Number(e.target.value) : undefined,
-                    )
-                  }
-                  style={{
-                    backgroundColor: "var(--bg-secondary, #222)",
-                    color: "inherit",
-                    border: "1px solid var(--border-color, #444)",
-                    borderRadius: "4px",
-                    padding: "0.4rem 0.6rem",
+            {enabledIndexers.length === 0 ? (
+              <div
+                style={{
+                  padding: "2rem 1.5rem",
+                  textAlign: "center",
+                  backgroundColor: "var(--bg-secondary, #222)",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color, #333)",
+                }}
+              >
+                <div style={{ fontSize: "1.05rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+                  No Indexers Configured
+                </div>
+                <p style={{ color: "var(--text-muted, #888)", fontSize: "0.85rem", maxWidth: "480px", margin: "0 auto 1rem auto" }}>
+                  To search and download torrent releases directly, configure a <strong>Prowlarr</strong> or <strong>Torznab / Newznab</strong> indexer in Settings.
+                </p>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    onClose();
+                    navigate("/settings/indexers");
                   }}
                 >
-                  <option value="">All Indexers</option>
-                  {enabledIndexers.map((idx) => (
-                    <option key={idx.id} value={idx.id}>
-                      {idx.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={searchResults.isFetching}
-              >
-                {searchResults.isFetching ? "Searching..." : "Search"}
-              </button>
-            </form>
+                  ⚙️ Configure Indexers
+                </button>
+              </div>
+            ) : (
+              <>
+                <form
+                  onSubmit={handleSearchSubmit}
+                  style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}
+                >
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Search releases (e.g. Ubuntu, Debian, release name)..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    style={{ flex: 1, minWidth: "220px" }}
+                    autoFocus
+                  />
+                  {enabledIndexers.length > 1 && (
+                    <select
+                      className="form-control"
+                      value={selectedIndexerId ?? ""}
+                      onChange={(e) =>
+                        setSelectedIndexerId(
+                          e.target.value ? Number(e.target.value) : undefined,
+                        )
+                      }
+                      style={{
+                        backgroundColor: "var(--bg-secondary, #222)",
+                        color: "inherit",
+                        border: "1px solid var(--border-color, #444)",
+                        borderRadius: "4px",
+                        padding: "0.4rem 0.6rem",
+                      }}
+                    >
+                      <option value="">All Indexers ({enabledIndexers.length})</option>
+                      {enabledIndexers.map((idx) => (
+                        <option key={idx.id} value={idx.id}>
+                          {idx.name} ({idx.indexerType})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={searchResults.isFetching}
+                  >
+                    {searchResults.isFetching ? "Searching..." : "Search"}
+                  </button>
+                </form>
 
-            {/* Results section */}
-            <div
-              style={{
-                maxHeight: "360px",
-                overflowY: "auto",
-                border: "1px solid var(--border-color, #333)",
-                borderRadius: "4px",
-                backgroundColor: "var(--bg-primary, #181818)",
-              }}
-            >
-              {searchResults.isFetching && (
-                <div style={{ padding: "2rem", textAlign: "center" }}>
-                  <div className="loading">Searching indexers...</div>
-                </div>
-              )}
+                {/* Results section */}
+                <div
+                  style={{
+                    maxHeight: "360px",
+                    overflowY: "auto",
+                    border: "1px solid var(--border-color, #333)",
+                    borderRadius: "4px",
+                    backgroundColor: "var(--bg-primary, #181818)",
+                  }}
+                >
+                  {searchResults.isFetching && (
+                    <div style={{ padding: "2rem", textAlign: "center" }}>
+                      <div className="loading">Searching configured indexers...</div>
+                    </div>
+                  )}
 
-              {searchResults.isError && (
-                <div style={{ padding: "1.5rem", color: "var(--danger, #dc3545)", textAlign: "center" }}>
-                  Search failed: {(searchResults.error as Error)?.message || "Check indexer connection"}
-                </div>
-              )}
+                  {searchResults.isError && (
+                    <div style={{ padding: "1.5rem", color: "var(--danger, #dc3545)", textAlign: "center" }}>
+                      Search failed: {(searchResults.error as Error)?.message || "Check indexer connection"}
+                    </div>
+                  )}
 
-              {!searchResults.isFetching &&
-                !searchResults.isError &&
-                activeSearchTerm &&
-                (searchResults.data?.length ?? 0) === 0 && (
-                  <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted, #888)" }}>
-                    No releases found for "{activeSearchTerm}". Try different keywords.
-                  </div>
-                )}
+                  {!searchResults.isFetching &&
+                    !searchResults.isError &&
+                    activeSearchTerm &&
+                    (searchResults.data?.length ?? 0) === 0 && (
+                      <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted, #888)" }}>
+                        No releases found for "{activeSearchTerm}". Try different keywords or indexer.
+                      </div>
+                    )}
 
-              {!searchResults.isFetching && !activeSearchTerm && (
-                <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted, #888)" }}>
-                  Enter a search query to search configured Prowlarr / Torznab indexers.
-                </div>
-              )}
+                  {!searchResults.isFetching && !activeSearchTerm && (
+                    <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted, #888)" }}>
+                      Type a keyword above to search across your configured indexers ({enabledIndexers.map((i) => i.name).join(", ")}).
+                    </div>
+                  )}
 
-              {!searchResults.isFetching &&
-                (searchResults.data?.length ?? 0) > 0 && (
-                  <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid var(--border-color, #333)", textAlign: "left", fontSize: "0.8rem" }}>
-                        <th style={{ padding: "0.6rem 0.8rem" }}>Title</th>
-                        <th style={{ padding: "0.6rem 0.8rem", width: "100px" }}>Indexer</th>
-                        <th style={{ padding: "0.6rem 0.8rem", width: "90px" }}>Size</th>
-                        <th style={{ padding: "0.6rem 0.8rem", width: "80px" }}>Peers</th>
-                        <th style={{ padding: "0.6rem 0.8rem", width: "90px" }}>Date</th>
-                        <th style={{ padding: "0.6rem 0.8rem", width: "90px", textAlign: "right" }}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {searchResults.data?.map((rel) => {
-                        const itemKey = rel.guid || rel.infoHash || rel.title;
-                        const isDownloading = downloadingGuid === itemKey;
-
-                        return (
-                          <tr
-                            key={itemKey}
-                            style={{
-                              borderBottom: "1px solid var(--border-color, #222)",
-                              fontSize: "0.85rem",
-                            }}
-                          >
-                            <td style={{ padding: "0.6rem 0.8rem" }}>
-                              <div style={{ fontWeight: 500, wordBreak: "break-word" }}>
-                                {rel.title}
-                              </div>
-                              {rel.categories && rel.categories.length > 0 && (
-                                <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.2rem" }}>
-                                  {rel.categories.slice(0, 3).map((c, i) => (
-                                    <span
-                                      key={i}
-                                      className="badge badge-secondary"
-                                      style={{ fontSize: "0.65rem", padding: "0.1rem 0.3rem" }}
-                                    >
-                                      {c}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </td>
-
-                            <td style={{ padding: "0.6rem 0.8rem" }}>
-                              <span className="badge badge-primary" style={{ fontSize: "0.75rem" }}>
-                                {rel.indexer || "Indexer"}
-                              </span>
-                            </td>
-
-                            <td style={{ padding: "0.6rem 0.8rem" }}>
-                              {formatBytes(rel.size)}
-                            </td>
-
-                            <td style={{ padding: "0.6rem 0.8rem" }}>
-                              <span style={{ color: "var(--success, #28a745)", fontWeight: 600 }}>
-                                ↑{rel.seeders ?? 0}
-                              </span>{" "}
-                              <span style={{ color: "var(--text-muted, #888)" }}>
-                                ↓{rel.leechers ?? 0}
-                              </span>
-                            </td>
-
-                            <td style={{ padding: "0.6rem 0.8rem", fontSize: "0.8rem", color: "var(--text-muted, #888)" }}>
-                              {rel.publishDate ? formatDate(rel.publishDate) : "-"}
-                            </td>
-
-                            <td style={{ padding: "0.6rem 0.8rem", textAlign: "right" }}>
-                              <button
-                                className="btn btn-success"
-                                style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem" }}
-                                onClick={() => handleAddRelease(rel)}
-                                disabled={isDownloading}
-                              >
-                                {isDownloading ? "Adding..." : "+ Add"}
-                              </button>
-                            </td>
+                  {!searchResults.isFetching &&
+                    (searchResults.data?.length ?? 0) > 0 && (
+                      <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid var(--border-color, #333)", textAlign: "left", fontSize: "0.8rem" }}>
+                            <th style={{ padding: "0.6rem 0.8rem" }}>Title</th>
+                            <th style={{ padding: "0.6rem 0.8rem", width: "110px" }}>Indexer</th>
+                            <th style={{ padding: "0.6rem 0.8rem", width: "90px" }}>Size</th>
+                            <th style={{ padding: "0.6rem 0.8rem", width: "80px" }}>Peers</th>
+                            <th style={{ padding: "0.6rem 0.8rem", width: "90px" }}>Date</th>
+                            <th style={{ padding: "0.6rem 0.8rem", width: "90px", textAlign: "right" }}>Action</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                )}
-            </div>
+                        </thead>
+                        <tbody>
+                          {searchResults.data?.map((rel) => {
+                            const itemKey = rel.guid || rel.infoHash || rel.title;
+                            const isDownloading = downloadingGuid === itemKey;
+
+                            return (
+                              <tr
+                                key={itemKey}
+                                style={{
+                                  borderBottom: "1px solid var(--border-color, #222)",
+                                  fontSize: "0.85rem",
+                                }}
+                              >
+                                <td style={{ padding: "0.6rem 0.8rem" }}>
+                                  <div style={{ fontWeight: 500, wordBreak: "break-word" }}>
+                                    {rel.title}
+                                  </div>
+                                  {rel.categories && rel.categories.length > 0 && (
+                                    <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.2rem" }}>
+                                      {rel.categories.slice(0, 3).map((c, i) => (
+                                        <span
+                                          key={i}
+                                          className="badge badge-secondary"
+                                          style={{ fontSize: "0.65rem", padding: "0.1rem 0.3rem" }}
+                                        >
+                                          {c}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </td>
+
+                                <td style={{ padding: "0.6rem 0.8rem" }}>
+                                  <span className="badge badge-primary" style={{ fontSize: "0.75rem" }}>
+                                    {rel.indexer || "Indexer"}
+                                  </span>
+                                </td>
+
+                                <td style={{ padding: "0.6rem 0.8rem" }}>
+                                  {formatBytes(rel.size)}
+                                </td>
+
+                                <td style={{ padding: "0.6rem 0.8rem" }}>
+                                  <span style={{ color: "var(--success, #28a745)", fontWeight: 600 }}>
+                                    ↑{rel.seeders ?? 0}
+                                  </span>{" "}
+                                  <span style={{ color: "var(--text-muted, #888)" }}>
+                                    ↓{rel.leechers ?? 0}
+                                  </span>
+                                </td>
+
+                                <td style={{ padding: "0.6rem 0.8rem", fontSize: "0.8rem", color: "var(--text-muted, #888)" }}>
+                                  {rel.publishDate ? formatDate(rel.publishDate) : "-"}
+                                </td>
+
+                                <td style={{ padding: "0.6rem 0.8rem", textAlign: "right" }}>
+                                  <button
+                                    className="btn btn-success"
+                                    style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem" }}
+                                    onClick={() => handleAddRelease(rel)}
+                                    disabled={isDownloading}
+                                  >
+                                    {isDownloading ? "Adding..." : "+ Add"}
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
