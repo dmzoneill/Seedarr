@@ -331,6 +331,11 @@ export interface ArrTestResult {
   message?: string;
 }
 
+export interface DownloadClientTestResult {
+  success: boolean;
+  message?: string;
+}
+
 export interface ArrConnection {
   id: number;
   name: string;
