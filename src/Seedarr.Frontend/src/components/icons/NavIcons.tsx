@@ -271,3 +271,37 @@ export function TagIcon({ size = 16, color = "currentColor" }: IconProps) {
     </svg>
   );
 }
+
+export function DownloadAgentIcon({
+  size = 16,
+  color = "currentColor",
+}: IconProps) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <rect
+        x="2"
+        y="4"
+        width="20"
+        height="16"
+        rx="2"
+        stroke={color}
+        strokeWidth="2"
+      />
+      <path
+        d="M12 8V14M12 14L9 11M12 14L15 11"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="6" cy="16" r="1" fill={color} />
+      <circle cx="18" cy="16" r="1" fill={color} />
+    </svg>
+  );
+}

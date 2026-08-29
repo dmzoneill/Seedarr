@@ -19,6 +19,7 @@ import Statistics from "./pages/Statistics";
 import History from "./pages/History";
 import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
+import DownloadClientTorrents from "./pages/DownloadClientTorrents";
 import StatusBar from "./components/StatusBar";
 import ToastContainer from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -30,6 +31,7 @@ import {
   TorrentIcon,
   SettingsIcon,
   SystemIcon,
+  DownloadAgentIcon,
 } from "./components/icons/NavIcons";
 import { ActivityIcon } from "./components/icons/UIIcons";
 import {
@@ -47,7 +49,7 @@ import {
 } from "./components/icons/AppIcons";
 import { useTheme } from "./context/ThemeContext";
 import { apiClient } from "./api/client";
-import { useGeneralConfig } from "./api/hooks";
+import { useGeneralConfig, useDownloadClients } from "./api/hooks";
 
 const systemSubItems = [
   { path: "/system/status", label: "Status" },
@@ -87,6 +89,7 @@ function App() {
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const isSystemRoute = location.pathname.startsWith("/system");
   const { data: generalConfig } = useGeneralConfig();
+  const { data: downloadClients } = useDownloadClients();
   const [showApiKey, setShowApiKey] = useState(false);
 
   return (
@@ -108,6 +111,17 @@ function App() {
           <NavLink to="/torrents" className="sidebar-nav-item sidebar-nav-sub">
             <TorrentIcon /> <span>Library</span>
           </NavLink>
+          {downloadClients
+            ?.filter((c) => c.enable)
+            .map((client) => (
+              <NavLink
+                key={client.id}
+                to={`/torrents/client/${client.id}`}
+                className="sidebar-nav-item sidebar-nav-sub"
+              >
+                <DownloadAgentIcon /> <span>{client.name}</span>
+              </NavLink>
+            ))}
           <NavLink to="/activity" className="sidebar-nav-item">
             <ActivityIcon /> <span>Activity</span>
           </NavLink>
@@ -303,6 +317,10 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/torrents" element={<TorrentIndex />} />
               <Route path="/torrents/:id" element={<TorrentDetails />} />
+              <Route
+                path="/torrents/client/:id"
+                element={<DownloadClientTorrents />}
+              />
               <Route path="/activity" element={<Activity />} />
               <Route path="/tracker" element={<TrackerServer />} />
               <Route path="/peermap" element={<PeerMap />} />
