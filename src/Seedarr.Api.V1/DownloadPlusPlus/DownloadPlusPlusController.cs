@@ -36,6 +36,13 @@ public class DownloadPlusPlusController : Controller
         return Ok(result);
     }
 
+    [HttpGet("check-hash/{infoHash}")]
+    public async Task<IActionResult> InspectHashTrackers(string infoHash, [FromQuery] string name = "")
+    {
+        var result = await _downloadPlusPlusService.InspectHashTrackersAsync(infoHash, name);
+        return Ok(result);
+    }
+
     [HttpPost("trackers")]
     public IActionResult AddTracker([FromBody] AddTrackerResource resource)
     {
@@ -83,16 +90,31 @@ public class DownloadPlusPlusController : Controller
         return Ok(result);
     }
 
+    [HttpPost("boost-hash/{infoHash}")]
+    public async Task<IActionResult> BoostHash(string infoHash, [FromQuery] string name = "")
+    {
+        var result = await _downloadPlusPlusService.BoostHashAsync(infoHash, name);
+        return Ok(result);
+    }
+
     [HttpPost("inject")]
     public async Task<IActionResult> InjectTracker([FromBody] InjectTrackerResource resource)
     {
-        if (resource == null || resource.TorrentId <= 0 || string.IsNullOrWhiteSpace(resource.TrackerUrl))
+        if (resource == null || (resource.TorrentId <= 0 && string.IsNullOrWhiteSpace(resource.InfoHash)) || string.IsNullOrWhiteSpace(resource.TrackerUrl))
         {
-            return BadRequest(new { message = "TorrentId and TrackerUrl are required." });
+            return BadRequest(new { message = "TorrentId or InfoHash and TrackerUrl are required." });
         }
 
-        var result = await _downloadPlusPlusService.InjectTrackerToTorrentAsync(resource.TorrentId, resource.TrackerUrl);
-        return Ok(result);
+        if (resource.TorrentId > 0)
+        {
+            var result = await _downloadPlusPlusService.InjectTrackerToTorrentAsync(resource.TorrentId, resource.TrackerUrl);
+            return Ok(result);
+        }
+        else
+        {
+            var result = await _downloadPlusPlusService.InjectTrackerToHashAsync(resource.InfoHash, resource.TrackerUrl);
+            return Ok(result);
+        }
     }
 
     [HttpPost("boost-all")]
@@ -111,5 +133,6 @@ public class AddTrackerResource
 public class InjectTrackerResource
 {
     public int TorrentId { get; set; }
+    public string InfoHash { get; set; } = string.Empty;
     public string TrackerUrl { get; set; } = string.Empty;
 }
