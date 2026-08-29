@@ -6,8 +6,18 @@ import {
   useClearDownloadHistory,
   useEnrichHistoryTorrent,
   useEnrichAllHistory,
+  useArrConnections,
+  useIndexers,
 } from "../api/hooks";
 import { formatBytes, formatRatio, formatDate } from "../utils/formatters";
+import {
+  getMediaDeepLink,
+  getImdbUrl,
+  getTmdbUrl,
+  getTvdbUrl,
+  getActorSearchUrl,
+  getProwlarrUrl,
+} from "../utils/arrLinks";
 import { useToast } from "../context/ToastContext";
 import AddTorrentModal from "../components/AddTorrentModal";
 import type { DownloadHistoryEntry } from "../api/types";
@@ -30,6 +40,9 @@ export default function DownloadHistory() {
   const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
   const [selectedDetailItem, setSelectedDetailItem] = useState<DownloadHistoryEntry | null>(null);
   const { showToast } = useToast();
+
+  const { data: arrConnections } = useArrConnections();
+  const { data: indexers } = useIndexers();
 
   const {
     data: history,
@@ -208,7 +221,7 @@ export default function DownloadHistory() {
           ))}
         </div>
 
-        <div style={{ minWidth: "240px", flex: "1", maxWidth: "380px" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", minWidth: "260px", flex: "1", maxWidth: "450px" }}>
           <input
             type="text"
             className="form-control"
@@ -225,6 +238,16 @@ export default function DownloadHistory() {
               fontSize: "0.85rem",
             }}
           />
+          {searchTerm && (
+            <button
+              className="btn btn-outline"
+              onClick={() => setSearchTerm("")}
+              style={{ fontSize: "0.75rem", padding: "0.35rem 0.5rem" }}
+              title="Clear search filter"
+            >
+              ✕
+            </button>
+          )}
         </div>
       </div>
 
@@ -267,6 +290,7 @@ export default function DownloadHistory() {
             const meta = item.metadata;
             const displayTitle = meta?.title || item.title;
             const hasPoster = Boolean(meta?.posterUrl);
+            const arrLink = getMediaDeepLink(item, arrConnections);
 
             return (
               <div
@@ -335,7 +359,7 @@ export default function DownloadHistory() {
                     </div>
                   )}
 
-                  {/* Top-left Source Badge */}
+                  {/* Top-left Source Badge & Direct Deep Link */}
                   {item.source && (
                     <div
                       style={{
@@ -344,19 +368,30 @@ export default function DownloadHistory() {
                         left: "8px",
                         zIndex: 2,
                       }}
+                      onClick={(e) => {
+                        if (arrLink) {
+                          e.stopPropagation();
+                          window.open(arrLink.url, "_blank", "noopener,noreferrer");
+                        }
+                      }}
                     >
                       <span
                         className="badge"
                         style={{
-                          backgroundColor: "rgba(0, 0, 0, 0.75)",
+                          backgroundColor: "rgba(0, 0, 0, 0.78)",
                           backdropFilter: "blur(4px)",
                           color: "#fff",
                           fontSize: "0.7rem",
                           padding: "0.2rem 0.5rem",
-                          border: "1px solid rgba(255,255,255,0.15)",
+                          border: "1px solid rgba(255,255,255,0.18)",
+                          cursor: arrLink ? "pointer" : "default",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.25rem",
                         }}
+                        title={arrLink ? `${arrLink.label} (${arrLink.url})` : item.source}
                       >
-                        {item.source}
+                        {item.source} {arrLink ? "↗" : ""}
                       </span>
                     </div>
                   )}
@@ -428,14 +463,19 @@ export default function DownloadHistory() {
                       {displayTitle} {meta?.year ? <span style={{ color: "var(--text-muted, #888)", fontWeight: 400 }}>({meta.year})</span> : null}
                     </div>
 
-                    {/* Genres */}
+                    {/* Genres (Clickable to Filter) */}
                     {meta?.genres && meta.genres.length > 0 && (
                       <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", margin: "0.35rem 0" }}>
                         {meta.genres.slice(0, 2).map((g, i) => (
                           <span
                             key={i}
                             className="badge badge-secondary"
-                            style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem" }}
+                            style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem", cursor: "pointer" }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSearchTerm(g);
+                            }}
+                            title={`Filter downloads by genre "${g}"`}
                           >
                             {g}
                           </span>
@@ -476,7 +516,7 @@ export default function DownloadHistory() {
                       className="btn btn-outline"
                       style={{ fontSize: "0.75rem", padding: "0.25rem 0.4rem" }}
                       onClick={() => setSelectedDetailItem(item)}
-                      title="View full media details and actors"
+                      title="View full media details, actors, and Arr links"
                     >
                       ℹ️
                     </button>
@@ -509,6 +549,7 @@ export default function DownloadHistory() {
                 {history?.map((item) => {
                   const meta = item.metadata;
                   const displayTitle = meta?.title || item.title;
+                  const arrLink = getMediaDeepLink(item, arrConnections);
 
                   return (
                     <tr
@@ -530,7 +571,9 @@ export default function DownloadHistory() {
                                 objectFit: "cover",
                                 borderRadius: "4px",
                                 flexShrink: 0,
+                                cursor: "pointer",
                               }}
+                              onClick={() => setSelectedDetailItem(item)}
                               loading="lazy"
                             />
                           ) : (
@@ -545,14 +588,19 @@ export default function DownloadHistory() {
                                 justifyContent: "center",
                                 fontSize: "1.2rem",
                                 flexShrink: 0,
+                                cursor: "pointer",
                               }}
+                              onClick={() => setSelectedDetailItem(item)}
                             >
                               🎬
                             </div>
                           )}
 
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: 600, wordBreak: "break-word" }}>
+                            <div
+                              style={{ fontWeight: 600, wordBreak: "break-word", cursor: "pointer" }}
+                              onClick={() => setSelectedDetailItem(item)}
+                            >
                               {displayTitle} {meta?.year ? <span style={{ color: "var(--text-muted, #888)", fontWeight: 400 }}>({meta.year})</span> : null}
                             </div>
                             <div
@@ -569,12 +617,30 @@ export default function DownloadHistory() {
                             >
                               <span>{item.infoHash}</span>
                               {item.source && (
-                                <span className="badge badge-secondary" style={{ fontSize: "0.7rem", padding: "0.1rem 0.4rem" }}>
-                                  {item.source}
-                                </span>
+                                arrLink ? (
+                                  <a
+                                    href={arrLink.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="badge badge-secondary"
+                                    style={{ fontSize: "0.7rem", padding: "0.1rem 0.4rem", textDecoration: "none", color: "inherit" }}
+                                    title={arrLink.label}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {item.source} ↗
+                                  </a>
+                                ) : (
+                                  <span className="badge badge-secondary" style={{ fontSize: "0.7rem", padding: "0.1rem 0.4rem" }}>
+                                    {item.source}
+                                  </span>
+                                )
                               )}
                               {item.primaryTracker && (
-                                <span style={{ color: "var(--text-dim, #999)" }}>
+                                <span
+                                  style={{ color: "var(--text-dim, #999)", cursor: "pointer" }}
+                                  onClick={() => setSearchTerm(item.primaryTracker || "")}
+                                  title="Filter by tracker"
+                                >
                                   • {item.primaryTracker}
                                 </span>
                               )}
@@ -635,7 +701,7 @@ export default function DownloadHistory() {
                             className="btn btn-outline"
                             style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
                             onClick={() => setSelectedDetailItem(item)}
-                            title="View synopsis & actors"
+                            title="View synopsis, actors, and Arr links"
                           >
                             ℹ️ Details
                           </button>
@@ -675,13 +741,13 @@ export default function DownloadHistory() {
         </div>
       )}
 
-      {/* RICH MEDIA DETAILS MODAL */}
+      {/* RICH MEDIA DETAILS MODAL WITH DEEP-LINK INTEGRATIONS */}
       {selectedDetailItem && (
         <div className="modal-overlay" onClick={() => setSelectedDetailItem(null)}>
           <div
             className="modal"
             style={{
-              maxWidth: "850px",
+              maxWidth: "860px",
               width: "95%",
               padding: 0,
               overflow: "hidden",
@@ -694,7 +760,7 @@ export default function DownloadHistory() {
             <div
               style={{
                 position: "relative",
-                height: "220px",
+                height: "230px",
                 backgroundImage: selectedDetailItem.metadata?.fanartUrl
                   ? `url(${selectedDetailItem.metadata.fanartUrl})`
                   : undefined,
@@ -710,7 +776,7 @@ export default function DownloadHistory() {
                 style={{
                   position: "absolute",
                   inset: 0,
-                  background: "linear-gradient(180deg, rgba(0,0,0,0.3) 0%, rgba(20,20,20,0.95) 100%)",
+                  background: "linear-gradient(180deg, rgba(0,0,0,0.35) 0%, rgba(20,20,20,0.96) 100%)",
                 }}
               />
 
@@ -733,14 +799,14 @@ export default function DownloadHistory() {
                 ✕
               </button>
 
-              <div style={{ position: "relative", zIndex: 2, display: "flex", gap: "1.5rem", alignItems: "flex-end" }}>
+              <div style={{ position: "relative", zIndex: 2, display: "flex", gap: "1.5rem", alignItems: "flex-end", width: "100%" }}>
                 {selectedDetailItem.metadata?.posterUrl && (
                   <img
                     src={selectedDetailItem.metadata.posterUrl}
                     alt=""
                     style={{
-                      width: "105px",
-                      height: "155px",
+                      width: "110px",
+                      height: "160px",
                       objectFit: "cover",
                       borderRadius: "6px",
                       boxShadow: "0 6px 16px rgba(0,0,0,0.6)",
@@ -750,8 +816,8 @@ export default function DownloadHistory() {
                   />
                 )}
 
-                <div>
-                  <h2 style={{ margin: "0 0 0.25rem 0", fontSize: "1.5rem", fontWeight: 700 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h2 style={{ margin: "0 0 0.35rem 0", fontSize: "1.55rem", fontWeight: 700, wordBreak: "break-word" }}>
                     {selectedDetailItem.metadata?.title || selectedDetailItem.title}
                     {selectedDetailItem.metadata?.year && (
                       <span style={{ color: "var(--text-muted, #aaa)", fontWeight: 400, fontSize: "1.1rem", marginLeft: "0.5rem" }}>
@@ -760,15 +826,118 @@ export default function DownloadHistory() {
                     )}
                   </h2>
 
+                  {/* Arr & External Database Links Bar */}
                   <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-                    {selectedDetailItem.source && (
-                      <span className="badge badge-primary">{selectedDetailItem.source}</span>
+                    {(() => {
+                      const arrLink = getMediaDeepLink(selectedDetailItem, arrConnections);
+                      if (arrLink) {
+                        return (
+                          <a
+                            href={arrLink.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-primary"
+                            style={{
+                              fontSize: "0.8rem",
+                              padding: "0.25rem 0.65rem",
+                              textDecoration: "none",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                            }}
+                            title={`Open in ${arrLink.appName} (${arrLink.url})`}
+                          >
+                            🔗 {arrLink.label} ↗
+                          </a>
+                        );
+                      }
+                      if (selectedDetailItem.source) {
+                        return <span className="badge badge-primary">{selectedDetailItem.source}</span>;
+                      }
+                      return null;
+                    })()}
+
+                    {/* IMDb link */}
+                    <a
+                      href={getImdbUrl(selectedDetailItem.metadata?.imdbId, selectedDetailItem.metadata?.title || selectedDetailItem.title)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="badge"
+                      style={{
+                        backgroundColor: "#f5c518",
+                        color: "#000",
+                        fontWeight: 700,
+                        textDecoration: "none",
+                        fontSize: "0.75rem",
+                        padding: "0.25rem 0.5rem",
+                      }}
+                      title="View on IMDb"
+                    >
+                      IMDb ↗
+                    </a>
+
+                    {/* TMDb link */}
+                    {selectedDetailItem.metadata?.tmdbId && (
+                      <a
+                        href={getTmdbUrl(selectedDetailItem.metadata.tmdbId, selectedDetailItem.metadata.mediaType) || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="badge"
+                        style={{
+                          backgroundColor: "#01b4e4",
+                          color: "#fff",
+                          fontWeight: 700,
+                          textDecoration: "none",
+                          fontSize: "0.75rem",
+                          padding: "0.25rem 0.5rem",
+                        }}
+                        title="View on The Movie Database (TMDb)"
+                      >
+                        TMDb ↗
+                      </a>
                     )}
+
+                    {/* TheTVDB link */}
+                    {selectedDetailItem.metadata?.tvdbId && (
+                      <a
+                        href={getTvdbUrl(selectedDetailItem.metadata.tvdbId) || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="badge"
+                        style={{
+                          backgroundColor: "#228b22",
+                          color: "#fff",
+                          fontWeight: 700,
+                          textDecoration: "none",
+                          fontSize: "0.75rem",
+                          padding: "0.25rem 0.5rem",
+                        }}
+                        title="View on TheTVDB"
+                      >
+                        TheTVDB ↗
+                      </a>
+                    )}
+
+                    {/* Prowlarr Deep Link if configured */}
+                    {getProwlarrUrl(indexers, selectedDetailItem.metadata?.title || selectedDetailItem.title) && (
+                      <a
+                        href={getProwlarrUrl(indexers, selectedDetailItem.metadata?.title || selectedDetailItem.title) || "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="badge badge-secondary"
+                        style={{ textDecoration: "none", fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                        title="Search in Prowlarr Web UI"
+                      >
+                        Prowlarr ↗
+                      </a>
+                    )}
+
                     {selectedDetailItem.metadata?.studioOrNetwork && (
-                      <span style={{ color: "var(--text-muted, #bbb)", fontSize: "0.85rem" }}>
+                      <span style={{ color: "var(--text-muted, #bbb)", fontSize: "0.85rem", marginLeft: "0.25rem" }}>
                         {selectedDetailItem.metadata.studioOrNetwork}
                       </span>
                     )}
+
                     {selectedDetailItem.metadata?.rating && (
                       <span className="badge badge-success">⭐ {selectedDetailItem.metadata.rating}</span>
                     )}
@@ -779,11 +948,21 @@ export default function DownloadHistory() {
 
             {/* Modal Body */}
             <div style={{ padding: "2rem 1.5rem 1.5rem 1.5rem" }}>
-              {/* Genres */}
+              {/* Genres (Click to filter in Seedarr) */}
               {selectedDetailItem.metadata?.genres && selectedDetailItem.metadata.genres.length > 0 && (
-                <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Genres:</span>
                   {selectedDetailItem.metadata.genres.map((g, i) => (
-                    <span key={i} className="badge badge-secondary" style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}>
+                    <span
+                      key={i}
+                      className="badge badge-secondary"
+                      style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem", cursor: "pointer" }}
+                      onClick={() => {
+                        setSearchTerm(g);
+                        setSelectedDetailItem(null);
+                      }}
+                      title={`Filter history by genre "${g}"`}
+                    >
                       {g}
                     </span>
                   ))}
@@ -802,7 +981,7 @@ export default function DownloadHistory() {
                 </div>
               )}
 
-              {/* Cast & Actors */}
+              {/* Cast & Actors with Click-to-Search and Profile links */}
               {selectedDetailItem.metadata?.actors && selectedDetailItem.metadata.actors.length > 0 && (
                 <div style={{ marginBottom: "1.5rem" }}>
                   <h4 style={{ margin: "0 0 0.6rem 0", fontSize: "0.95rem", color: "var(--text-muted, #aaa)" }}>
@@ -811,9 +990,9 @@ export default function DownloadHistory() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+                      gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))",
                       gap: "0.75rem",
-                      maxHeight: "180px",
+                      maxHeight: "190px",
                       overflowY: "auto",
                       paddingRight: "0.5rem",
                     }}
@@ -829,6 +1008,7 @@ export default function DownloadHistory() {
                           padding: "0.4rem",
                           borderRadius: "4px",
                           border: "1px solid var(--border-color, #333)",
+                          position: "relative",
                         }}
                       >
                         {actor.imageUrl ? (
@@ -836,8 +1016,8 @@ export default function DownloadHistory() {
                             src={actor.imageUrl}
                             alt=""
                             style={{
-                              width: "36px",
-                              height: "36px",
+                              width: "38px",
+                              height: "38px",
                               borderRadius: "50%",
                               objectFit: "cover",
                               flexShrink: 0,
@@ -847,8 +1027,8 @@ export default function DownloadHistory() {
                         ) : (
                           <div
                             style={{
-                              width: "36px",
-                              height: "36px",
+                              width: "38px",
+                              height: "38px",
                               borderRadius: "50%",
                               backgroundColor: "#333",
                               display: "flex",
@@ -861,8 +1041,22 @@ export default function DownloadHistory() {
                             👤
                           </div>
                         )}
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: "0.8rem", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div
+                            style={{
+                              fontSize: "0.8rem",
+                              fontWeight: 600,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              cursor: "pointer",
+                            }}
+                            onClick={() => {
+                              setSearchTerm(actor.name);
+                              setSelectedDetailItem(null);
+                            }}
+                            title={`Click to filter Seedarr history by "${actor.name}"`}
+                          >
                             {actor.name}
                           </div>
                           {actor.character && (
@@ -871,6 +1065,22 @@ export default function DownloadHistory() {
                             </div>
                           )}
                         </div>
+
+                        {/* External TMDb actor link */}
+                        <a
+                          href={getActorSearchUrl(actor.name)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "var(--text-dim, #777)",
+                            textDecoration: "none",
+                            padding: "0.2rem",
+                          }}
+                          title={`View ${actor.name} on TMDb`}
+                        >
+                          ↗
+                        </a>
                       </div>
                     ))}
                   </div>
@@ -920,7 +1130,16 @@ export default function DownloadHistory() {
 
                 <div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>Primary Tracker</div>
-                  <div style={{ fontSize: "0.85rem", wordBreak: "break-all" }}>
+                  <div
+                    style={{ fontSize: "0.85rem", wordBreak: "break-all", cursor: selectedDetailItem.primaryTracker ? "pointer" : "default" }}
+                    onClick={() => {
+                      if (selectedDetailItem.primaryTracker) {
+                        setSearchTerm(selectedDetailItem.primaryTracker);
+                        setSelectedDetailItem(null);
+                      }
+                    }}
+                    title={selectedDetailItem.primaryTracker ? "Click to filter by tracker" : undefined}
+                  >
                     {selectedDetailItem.primaryTracker || "None"}
                   </div>
                 </div>
@@ -969,7 +1188,7 @@ export default function DownloadHistory() {
         </div>
       )}
 
-      {/* Prowlarr Search / Add Modal */}
+      {/* Indexer Search / Add Modal */}
       {searchModalQuery && (
         <AddTorrentModal
           initialMode="search"
