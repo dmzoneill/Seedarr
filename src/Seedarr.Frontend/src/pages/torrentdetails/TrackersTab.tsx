@@ -1,16 +1,21 @@
-import { Torrent } from '../../api/types';
-import { useTorrentTrackers } from '../../api/hooks';
-import { formatDate } from '../../utils/formatters';
-import { SkeletonLine } from '../../components/Skeleton';
+import { Torrent } from "../../api/types";
+import { useTorrentTrackers } from "../../api/hooks";
+import { formatDate } from "../../utils/formatters";
+import { SkeletonLine } from "../../components/Skeleton";
 
 function trackerStatusBadgeClass(status: string): string {
   switch (status) {
-    case 'Working': return 'badge-seeding';
-    case 'Announcing': return 'badge-announcing';
-    case 'Failed': return 'badge-error';
-    case 'Disabled': return 'badge-stopped';
-    case 'Unknown':
-    default: return 'badge-warning';
+    case "Working":
+      return "badge-seeding";
+    case "Announcing":
+      return "badge-announcing";
+    case "Failed":
+      return "badge-error";
+    case "Disabled":
+      return "badge-stopped";
+    case "Unknown":
+    default:
+      return "badge-warning";
   }
 }
 
@@ -52,13 +57,17 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                   <td className="mono">{tracker.url}</td>
                   <td>{tracker.tier}</td>
                   <td>
-                    <span className={`badge ${trackerStatusBadgeClass(tracker.status)}`}>
+                    <span
+                      className={`badge ${trackerStatusBadgeClass(tracker.status)}`}
+                    >
                       {tracker.status}
                     </span>
                   </td>
                   <td>{tracker.seeders}</td>
                   <td>{tracker.leechers}</td>
-                  <td>{tracker.successfulAnnounces}/{tracker.totalAnnounces}</td>
+                  <td>
+                    {tracker.successfulAnnounces}/{tracker.totalAnnounces}
+                  </td>
                   <td>{formatDate(tracker.lastAnnounce)}</td>
                   <td>{formatDate(tracker.nextAnnounce)}</td>
                 </tr>

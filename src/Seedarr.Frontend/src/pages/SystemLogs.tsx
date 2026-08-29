@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "../api/client";
 
-type LogLevel = 'Trace' | 'Debug' | 'Info' | 'Warn' | 'Error';
+type LogLevel = "Trace" | "Debug" | "Info" | "Warn" | "Error";
 
 interface ApiLogEntry {
   id: number;
@@ -21,21 +21,24 @@ interface LogEntry {
   message: string;
 }
 
-const ALL_LEVELS: LogLevel[] = ['Trace', 'Debug', 'Info', 'Warn', 'Error'];
+const ALL_LEVELS: LogLevel[] = ["Trace", "Debug", "Info", "Warn", "Error"];
 
 function toLogLevel(level: string): LogLevel {
-  const normalized = level.charAt(0).toUpperCase() + level.slice(1).toLowerCase();
+  const normalized =
+    level.charAt(0).toUpperCase() + level.slice(1).toLowerCase();
   if (ALL_LEVELS.includes(normalized as LogLevel)) {
     return normalized as LogLevel;
   }
-  return 'Info';
+  return "Info";
 }
 
 function useLogEntries(levelParam: LogLevel | null) {
   return useQuery<LogEntry[]>({
-    queryKey: ['system', 'log', levelParam],
+    queryKey: ["system", "log", levelParam],
     queryFn: async () => {
-      const query = levelParam ? `?level=${encodeURIComponent(levelParam.toLowerCase())}` : '';
+      const query = levelParam
+        ? `?level=${encodeURIComponent(levelParam.toLowerCase())}`
+        : "";
       const data = await apiClient.get<ApiLogEntry[]>(`/log${query}`);
       return data.map((entry) => ({
         id: entry.id,
@@ -53,15 +56,19 @@ function useLogEntries(levelParam: LogLevel | null) {
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
-  const pad = (n: number) => n.toString().padStart(2, '0');
-  const ms = d.getMilliseconds().toString().padStart(3, '0');
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  const ms = d.getMilliseconds().toString().padStart(3, "0");
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${ms}`;
 }
 
 function SystemLogs() {
-  const [levelFilter, setLevelFilter] = useState<LogLevel | 'All'>('All');
-  const { data: entries, isLoading, isError } = useLogEntries(levelFilter === 'All' ? null : levelFilter);
-  const [searchText, setSearchText] = useState('');
+  const [levelFilter, setLevelFilter] = useState<LogLevel | "All">("All");
+  const {
+    data: entries,
+    isLoading,
+    isError,
+  } = useLogEntries(levelFilter === "All" ? null : levelFilter);
+  const [searchText, setSearchText] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
   const [cleared, setCleared] = useState(false);
   const logContentRef = useRef<HTMLDivElement>(null);
@@ -71,10 +78,11 @@ function SystemLogs() {
     if (!entries) return [];
     if (!searchText) return entries;
     const q = searchText.toLowerCase();
-    return entries.filter((entry) =>
-      entry.message.toLowerCase().includes(q) ||
-      entry.source.toLowerCase().includes(q) ||
-      entry.level.toLowerCase().includes(q)
+    return entries.filter(
+      (entry) =>
+        entry.message.toLowerCase().includes(q) ||
+        entry.source.toLowerCase().includes(q) ||
+        entry.level.toLowerCase().includes(q),
     );
   }, [entries, searchText, cleared]);
 
@@ -95,11 +103,15 @@ function SystemLogs() {
 
       <div className="log-toolbar">
         <div className="log-toolbar-filters">
-          {(['All', ...ALL_LEVELS] as const).map((level) => (
+          {(["All", ...ALL_LEVELS] as const).map((level) => (
             <button
               key={level}
-              title={level === 'All' ? 'Shows entries at or above the log level configured in Settings > Advanced' : `Show ${level} entries and above`}
-              className={`btn btn-small ${levelFilter === level ? 'log-filter-active' : ''} ${level !== 'All' ? `log-filter-${level.toLowerCase()}` : ''}`}
+              title={
+                level === "All"
+                  ? "Shows entries at or above the log level configured in Settings > Advanced"
+                  : `Show ${level} entries and above`
+              }
+              className={`btn btn-small ${levelFilter === level ? "log-filter-active" : ""} ${level !== "All" ? `log-filter-${level.toLowerCase()}` : ""}`}
               onClick={() => {
                 setLevelFilter(level);
                 setCleared(false);
@@ -145,12 +157,18 @@ function SystemLogs() {
         )}
         {filteredEntries.map((entry) => (
           <div key={entry.id} className="log-entry">
-            <span className="log-timestamp">{formatTimestamp(entry.timestamp)}</span>
-            <span className={`log-level log-level-${entry.level.toLowerCase()}`}>
+            <span className="log-timestamp">
+              {formatTimestamp(entry.timestamp)}
+            </span>
+            <span
+              className={`log-level log-level-${entry.level.toLowerCase()}`}
+            >
               {entry.level.toUpperCase().padEnd(5)}
             </span>
             <span className="log-source">{entry.source}</span>
-            <span className="log-message" style={{ whiteSpace: 'pre-wrap' }}>{entry.message}</span>
+            <span className="log-message" style={{ whiteSpace: "pre-wrap" }}>
+              {entry.message}
+            </span>
           </div>
         ))}
       </div>

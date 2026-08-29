@@ -1,5 +1,5 @@
-import { usePeers } from '../api/hooks';
-import { formatBytes, formatSpeed } from '../utils/formatters';
+import { usePeers } from "../api/hooks";
+import { formatBytes, formatSpeed } from "../utils/formatters";
 
 interface PeerListProps {
   torrentId: number;
@@ -34,13 +34,17 @@ function PeerList({ torrentId }: PeerListProps) {
             <tbody>
               {peers.map((peer) => (
                 <tr key={peer.id} className="peer-table-row">
-                  <td className="mono">{peer.ip}:{peer.port}</td>
+                  <td className="mono">
+                    {peer.ip}:{peer.port}
+                  </td>
                   <td>{peer.client}</td>
                   <td>
                     <div className="peer-progress">
                       <div
                         className="peer-progress-bar"
-                        style={{ width: `${(peer.progress * 100).toFixed(1)}%` }}
+                        style={{
+                          width: `${(peer.progress * 100).toFixed(1)}%`,
+                        }}
                       />
                       <span className="peer-progress-text">
                         {(peer.progress * 100).toFixed(1)}%

@@ -1,11 +1,9 @@
-import { useRef, useEffect } from 'react';
-import { useTorrents, useSeedingStats, useSpeedHistory } from '../api/hooks';
-import { formatSpeed, formatRatio } from '../utils/formatters';
-import LineChart from '../components/LineChart';
+import { useRef, useEffect } from "react";
+import { useTorrents, useSeedingStats, useSpeedHistory } from "../api/hooks";
+import { formatSpeed, formatRatio } from "../utils/formatters";
+import LineChart from "../components/LineChart";
 
 const MAX_POINTS = 60;
-
-
 
 interface HistoryState {
   uploadSpeed: number[];
@@ -72,17 +70,24 @@ function Activity() {
     if (prev) {
       const timeDelta = (now - prev.timestamp) / 1000;
       if (timeDelta >= 1) {
-        const upSpeed = Math.max(0, (stats.totalUploaded - prev.totalUploaded) / timeDelta);
-        const downSpeed = Math.max(0, (stats.totalDownloaded - prev.totalDownloaded) / timeDelta);
+        const upSpeed = Math.max(
+          0,
+          (stats.totalUploaded - prev.totalUploaded) / timeDelta,
+        );
+        const downSpeed = Math.max(
+          0,
+          (stats.totalDownloaded - prev.totalDownloaded) / timeDelta,
+        );
 
         const totalPeers = (torrents ?? []).reduce(
           (sum, t) => sum + (t.seeders || 0) + (t.leechers || 0),
-          0
+          0,
         );
 
         const push = (arr: number[], val: number) => {
           const next = [...arr, val];
-          if (next.length > MAX_POINTS) next.splice(0, next.length - MAX_POINTS);
+          if (next.length > MAX_POINTS)
+            next.splice(0, next.length - MAX_POINTS);
           return next;
         };
 
@@ -104,12 +109,16 @@ function Activity() {
 
   const h = historyRef.current;
 
-  const currentUpload = h.uploadSpeed.length > 0 ? h.uploadSpeed[h.uploadSpeed.length - 1] : 0;
-  const currentDownload = h.downloadSpeed.length > 0 ? h.downloadSpeed[h.downloadSpeed.length - 1] : 0;
+  const currentUpload =
+    h.uploadSpeed.length > 0 ? h.uploadSpeed[h.uploadSpeed.length - 1] : 0;
+  const currentDownload =
+    h.downloadSpeed.length > 0
+      ? h.downloadSpeed[h.downloadSpeed.length - 1]
+      : 0;
   const currentActive = stats?.activeTorrents ?? 0;
   const currentPeers = (torrents ?? []).reduce(
     (sum, t) => sum + (t.seeders || 0) + (t.leechers || 0),
-    0
+    0,
   );
   const currentRatio = stats?.averageRatio ?? 0;
   const currentNetwork = currentUpload + currentDownload;

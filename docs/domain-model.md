@@ -211,14 +211,14 @@ erDiagram
 
 ## Torrent Status Enum
 
-| Value | Description |
-|-------|-------------|
-| `Stopped` | Not seeding |
-| `Seeding` | Actively simulating upload |
-| `Paused` | Temporarily paused |
-| `Error` | Tracker/network failure |
-| `Queued` | Waiting to start |
-| `Downloading` | Simulating download |
+| Value         | Description                |
+| ------------- | -------------------------- |
+| `Stopped`     | Not seeding                |
+| `Seeding`     | Actively simulating upload |
+| `Paused`      | Temporarily paused         |
+| `Error`       | Tracker/network failure    |
+| `Queued`      | Waiting to start           |
+| `Downloading` | Simulating download        |
 
 ## Torrent Lifecycle
 
@@ -331,19 +331,19 @@ classDiagram
 
 Entity-to-table mapping defined in `NzbDrone.Core/Datastore/TableRegistration.cs`:
 
-| Entity Class | Table Name |
-|-------------|------------|
-| Torrent | Torrents |
-| TorrentFile | TorrentFiles |
-| TrackerEntry | TrackerEntries |
+| Entity Class              | Table Name                 |
+| ------------------------- | -------------------------- |
+| Torrent                   | Torrents                   |
+| TorrentFile               | TorrentFiles               |
+| TrackerEntry              | TrackerEntries             |
 | TrackerProviderDefinition | TrackerProviderDefinitions |
-| ClientProfileDefinition | ClientProfileDefinitions |
-| ArrConnectionDefinition | ArrConnectionDefinitions |
-| DownloadClientDefinition | DownloadClientDefinitions |
-| IndexerDefinition | IndexerDefinitions |
-| NotificationDefinition | NotificationDefinitions |
-| SpeedSchedule | SpeedSchedules |
-| Tag | Tags |
-| ConfigModel | Config |
-| ScheduledTask | ScheduledTasks |
-| CommandModel | Commands |
+| ClientProfileDefinition   | ClientProfileDefinitions   |
+| ArrConnectionDefinition   | ArrConnectionDefinitions   |
+| DownloadClientDefinition  | DownloadClientDefinitions  |
+| IndexerDefinition         | IndexerDefinitions         |
+| NotificationDefinition    | NotificationDefinitions    |
+| SpeedSchedule             | SpeedSchedules             |
+| Tag                       | Tags                       |
+| ConfigModel               | Config                     |
+| ScheduledTask             | ScheduledTasks             |
+| CommandModel              | Commands                   |

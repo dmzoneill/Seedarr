@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../api/client';
+import { useQuery } from "@tanstack/react-query";
+import { apiClient } from "../api/client";
 
 interface ScheduledTask {
   typeName: string;
@@ -22,30 +22,30 @@ interface CommandItem {
 }
 
 function formatTaskName(typeName: string): string {
-  if (!typeName) return '';
-  const shortName = typeName.includes('.')
-    ? typeName.split('.').pop() || typeName
+  if (!typeName) return "";
+  const shortName = typeName.includes(".")
+    ? typeName.split(".").pop() || typeName
     : typeName;
-  return shortName.replace(/([a-z])([A-Z])/g, '$1 $2');
+  return shortName.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
 function formatInterval(minutes: number): string {
   if (minutes < 60) {
-    return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+    return `${minutes} minute${minutes !== 1 ? "s" : ""}`;
   }
   const hours = Math.floor(minutes / 60);
   if (minutes % 60 === 0) {
     if (hours >= 24 && hours % 24 === 0) {
       const days = hours / 24;
-      return `${days} day${days !== 1 ? 's' : ''}`;
+      return `${days} day${days !== 1 ? "s" : ""}`;
     }
-    return `${hours} hour${hours !== 1 ? 's' : ''}`;
+    return `${hours} hour${hours !== 1 ? "s" : ""}`;
   }
   return `${hours}h ${minutes % 60}m`;
 }
 
 function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return '-';
+  if (!dateStr) return "-";
   const date = new Date(dateStr);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -59,21 +59,21 @@ function formatRelativeTime(dateStr: string | null): string {
 
   let text: string;
   if (seconds < 60) {
-    text = 'just now';
+    text = "just now";
     return text;
   } else if (minutes < 60) {
-    text = `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+    text = `${minutes} minute${minutes !== 1 ? "s" : ""}`;
   } else if (hours < 24) {
-    text = `${hours} hour${hours !== 1 ? 's' : ''}`;
+    text = `${hours} hour${hours !== 1 ? "s" : ""}`;
   } else {
-    text = `${days} day${days !== 1 ? 's' : ''}`;
+    text = `${days} day${days !== 1 ? "s" : ""}`;
   }
 
   return isFuture ? `in ${text}` : `${text} ago`;
 }
 
 function formatDuration(durationStr: string | null): string {
-  if (!durationStr) return '-';
+  if (!durationStr) return "-";
   const match = durationStr.match(/^(\d+):(\d+):(\d+)/);
   if (!match) return durationStr;
   const [, h, m, s] = match;
@@ -86,43 +86,63 @@ function formatDuration(durationStr: string | null): string {
 }
 
 function formatDateTime(dateStr: string | null): string {
-  if (!dateStr) return '-';
+  if (!dateStr) return "-";
   return new Date(dateStr).toLocaleString();
 }
 
 function statusIcon(status: string): string {
   switch (status) {
-    case 'queued': return '⌚';
-    case 'started': return '⏳';
-    case 'completed': return '✓';
-    case 'failed': return '✗';
-    case 'cancelled': return '—';
-    default: return '';
+    case "queued":
+      return "⌚";
+    case "started":
+      return "⏳";
+    case "completed":
+      return "✓";
+    case "failed":
+      return "✗";
+    case "cancelled":
+      return "—";
+    default:
+      return "";
   }
 }
 
 function statusClass(status: string): string {
   switch (status) {
-    case 'queued': return 'badge badge-queued';
-    case 'started': return 'badge badge-seeding';
-    case 'completed': return 'badge badge-success';
-    case 'failed': return 'badge badge-error';
-    case 'cancelled': return 'badge badge-stopped';
-    default: return 'badge';
+    case "queued":
+      return "badge badge-queued";
+    case "started":
+      return "badge badge-seeding";
+    case "completed":
+      return "badge badge-success";
+    case "failed":
+      return "badge badge-error";
+    case "cancelled":
+      return "badge badge-stopped";
+    default:
+      return "badge";
   }
 }
 
 function SystemTasks() {
-  const { data: tasks, isLoading: tasksLoading, isError: tasksError } = useQuery<ScheduledTask[]>({
-    queryKey: ['system', 'tasks'],
-    queryFn: () => apiClient.get('/system/task'),
+  const {
+    data: tasks,
+    isLoading: tasksLoading,
+    isError: tasksError,
+  } = useQuery<ScheduledTask[]>({
+    queryKey: ["system", "tasks"],
+    queryFn: () => apiClient.get("/system/task"),
     retry: false,
     refetchInterval: 30000,
   });
 
-  const { data: commands, isLoading: commandsLoading, isError: commandsError } = useQuery<CommandItem[]>({
-    queryKey: ['system', 'commands'],
-    queryFn: () => apiClient.get('/system/command'),
+  const {
+    data: commands,
+    isLoading: commandsLoading,
+    isError: commandsError,
+  } = useQuery<CommandItem[]>({
+    queryKey: ["system", "commands"],
+    queryFn: () => apiClient.get("/system/command"),
     retry: false,
     refetchInterval: 5000,
   });
@@ -135,7 +155,9 @@ function SystemTasks() {
       <div className="card">
         <h3>Scheduled</h3>
         {tasksLoading && <p className="loading">Loading tasks...</p>}
-        {!tasksLoading && tasksError && <p className="error">Failed to load tasks.</p>}
+        {!tasksLoading && tasksError && (
+          <p className="error">Failed to load tasks.</p>
+        )}
         {tasks && tasks.length > 0 && (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">
@@ -175,7 +197,9 @@ function SystemTasks() {
       <div className="card">
         <h3>Queue</h3>
         {commandsLoading && <p className="loading">Loading commands...</p>}
-        {!commandsLoading && commandsError && <p className="error">Failed to load commands.</p>}
+        {!commandsLoading && commandsError && (
+          <p className="error">Failed to load commands.</p>
+        )}
         {commands && commands.length > 0 && (
           <div className="torrent-table-wrapper">
             <table className="torrent-table">
@@ -194,7 +218,7 @@ function SystemTasks() {
                     <td>
                       <span
                         className={statusClass(cmd.status)}
-                        style={{ marginRight: '0.5rem' }}
+                        style={{ marginRight: "0.5rem" }}
                       >
                         {statusIcon(cmd.status)} {cmd.status}
                       </span>
@@ -202,7 +226,7 @@ function SystemTasks() {
                       {cmd.message && (
                         <span
                           className="status-value"
-                          style={{ marginLeft: '0.5rem', fontSize: '0.8em' }}
+                          style={{ marginLeft: "0.5rem", fontSize: "0.8em" }}
                         >
                           {cmd.message}
                         </span>

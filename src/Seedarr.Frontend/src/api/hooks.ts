@@ -57,8 +57,7 @@ export function useRefetchInterval(): number {
 }
 
 type AddTorrentInput =
-  | { files: File[]; magnetLink?: never }
-  | { magnetLink: string; files?: never };
+  { files: File[]; magnetLink?: never } | { magnetLink: string; files?: never };
 
 export interface TorrentUploadFailure {
   fileName: string;
@@ -479,7 +478,8 @@ export function useTestArrConnection() {
 
 export function useTestDirectArrConnection() {
   return useMutation<ArrTestResult, Error, Partial<ArrConnection>>({
-    mutationFn: (connection) => apiClient.post("/arrconnections/test", connection),
+    mutationFn: (connection) =>
+      apiClient.post("/arrconnections/test", connection),
   });
 }
 

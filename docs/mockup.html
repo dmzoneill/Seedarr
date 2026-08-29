@@ -1,1169 +1,1597 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Seedarr UI Mockup</title>
-<style>
-  :root {
-    --bg-primary: #1a1d23;
-    --bg-secondary: #22262e;
-    --bg-tertiary: #2a2e37;
-    --bg-hover: #31363f;
-    --accent: #35c5f4;
-    --accent-dark: #2ba3cc;
-    --success: #27c24c;
-    --warning: #f0ad4e;
-    --danger: #d9534f;
-    --text-primary: #cccccc;
-    --text-secondary: #8e8e8e;
-    --text-muted: #606060;
-    --border: #353840;
-    --sidebar-width: 210px;
-    --navbar-height: 55px;
-  }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Seedarr UI Mockup</title>
+    <style>
+      :root {
+        --bg-primary: #1a1d23;
+        --bg-secondary: #22262e;
+        --bg-tertiary: #2a2e37;
+        --bg-hover: #31363f;
+        --accent: #35c5f4;
+        --accent-dark: #2ba3cc;
+        --success: #27c24c;
+        --warning: #f0ad4e;
+        --danger: #d9534f;
+        --text-primary: #cccccc;
+        --text-secondary: #8e8e8e;
+        --text-muted: #606060;
+        --border: #353840;
+        --sidebar-width: 210px;
+        --navbar-height: 55px;
+      }
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: var(--bg-primary); color: var(--text-primary); font-size: 14px; }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family:
+          -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 14px;
+      }
 
-  /* Navigation Tabs */
-  .page-tabs {
-    display: flex;
-    background: var(--bg-secondary);
-    border-bottom: 2px solid var(--border);
-    padding: 0 20px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .page-tab {
-    padding: 12px 20px;
-    cursor: pointer;
-    color: var(--text-secondary);
-    border-bottom: 3px solid transparent;
-    margin-bottom: -2px;
-    font-size: 13px;
-    font-weight: 500;
-  }
-  .page-tab:hover { color: var(--text-primary); }
-  .page-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+      /* Navigation Tabs */
+      .page-tabs {
+        display: flex;
+        background: var(--bg-secondary);
+        border-bottom: 2px solid var(--border);
+        padding: 0 20px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+      .page-tab {
+        padding: 12px 20px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        border-bottom: 3px solid transparent;
+        margin-bottom: -2px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .page-tab:hover {
+        color: var(--text-primary);
+      }
+      .page-tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
 
-  /* Navbar */
-  .navbar {
-    height: var(--navbar-height);
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    padding: 0 20px;
-    justify-content: space-between;
-  }
-  .navbar-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 20px;
-    font-weight: 700;
-    color: var(--accent);
-    letter-spacing: 1px;
-  }
-  .navbar-brand svg { width: 28px; height: 28px; }
-  .navbar-links { display: flex; gap: 0; height: 100%; }
-  .navbar-link {
-    padding: 0 16px;
-    color: var(--text-secondary);
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-    height: 100%;
-    font-size: 13px;
-    font-weight: 500;
-    border-bottom: 3px solid transparent;
-    transition: all 0.15s;
-  }
-  .navbar-link:hover { color: var(--text-primary); background: var(--bg-hover); }
-  .navbar-link.active { color: var(--accent); border-bottom-color: var(--accent); }
-  .navbar-right { display: flex; align-items: center; gap: 16px; }
-  .navbar-icon { color: var(--text-secondary); cursor: pointer; font-size: 18px; }
-  .navbar-icon:hover { color: var(--text-primary); }
-  .health-indicator { width: 10px; height: 10px; border-radius: 50%; background: var(--success); }
+      /* Navbar */
+      .navbar {
+        height: var(--navbar-height);
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        justify-content: space-between;
+      }
+      .navbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--accent);
+        letter-spacing: 1px;
+      }
+      .navbar-brand svg {
+        width: 28px;
+        height: 28px;
+      }
+      .navbar-links {
+        display: flex;
+        gap: 0;
+        height: 100%;
+      }
+      .navbar-link {
+        padding: 0 16px;
+        color: var(--text-secondary);
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        height: 100%;
+        font-size: 13px;
+        font-weight: 500;
+        border-bottom: 3px solid transparent;
+        transition: all 0.15s;
+      }
+      .navbar-link:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+      }
+      .navbar-link.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
+      .navbar-right {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+      .navbar-icon {
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 18px;
+      }
+      .navbar-icon:hover {
+        color: var(--text-primary);
+      }
+      .health-indicator {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--success);
+      }
 
-  /* Page Container */
-  .page { display: none; }
-  .page.active { display: block; }
-  .page-content { padding: 20px; }
+      /* Page Container */
+      .page {
+        display: none;
+      }
+      .page.active {
+        display: block;
+      }
+      .page-content {
+        padding: 20px;
+      }
 
-  /* Dashboard */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-  .stat-card {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 20px;
-  }
-  .stat-label { color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-  .stat-value { font-size: 28px; font-weight: 600; }
-  .stat-value.accent { color: var(--accent); }
-  .stat-value.success { color: var(--success); }
-  .stat-value.warning { color: var(--warning); }
-  .stat-sub { color: var(--text-secondary); font-size: 12px; margin-top: 4px; }
+      /* Dashboard */
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .stat-card {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 20px;
+      }
+      .stat-label {
+        color: var(--text-secondary);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
+      }
+      .stat-value {
+        font-size: 28px;
+        font-weight: 600;
+      }
+      .stat-value.accent {
+        color: var(--accent);
+      }
+      .stat-value.success {
+        color: var(--success);
+      }
+      .stat-value.warning {
+        color: var(--warning);
+      }
+      .stat-sub {
+        color: var(--text-secondary);
+        font-size: 12px;
+        margin-top: 4px;
+      }
 
-  .dashboard-grid {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 16px;
-  }
+      .dashboard-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 16px;
+      }
 
-  .panel {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-  }
-  .panel-header {
-    padding: 14px 16px;
-    border-bottom: 1px solid var(--border);
-    font-weight: 600;
-    font-size: 13px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .panel-body { padding: 16px; }
+      .panel {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+      }
+      .panel-header {
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+        font-weight: 600;
+        font-size: 13px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .panel-body {
+        padding: 16px;
+      }
 
-  /* Speed Graph */
-  .speed-graph {
-    height: 200px;
-    position: relative;
-    overflow: hidden;
-  }
-  .speed-graph svg { width: 100%; height: 100%; }
+      /* Speed Graph */
+      .speed-graph {
+        height: 200px;
+        position: relative;
+        overflow: hidden;
+      }
+      .speed-graph svg {
+        width: 100%;
+        height: 100%;
+      }
 
-  /* Activity Feed */
-  .activity-item {
-    display: flex;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-    gap: 12px;
-  }
-  .activity-item:last-child { border-bottom: none; }
-  .activity-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .activity-dot.seeding { background: var(--success); }
-  .activity-dot.added { background: var(--accent); }
-  .activity-dot.error { background: var(--danger); }
-  .activity-text { flex: 1; font-size: 13px; }
-  .activity-time { color: var(--text-secondary); font-size: 12px; }
+      /* Activity Feed */
+      .activity-item {
+        display: flex;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border);
+        gap: 12px;
+      }
+      .activity-item:last-child {
+        border-bottom: none;
+      }
+      .activity-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .activity-dot.seeding {
+        background: var(--success);
+      }
+      .activity-dot.added {
+        background: var(--accent);
+      }
+      .activity-dot.error {
+        background: var(--danger);
+      }
+      .activity-text {
+        flex: 1;
+        font-size: 13px;
+      }
+      .activity-time {
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
 
-  /* Health */
-  .health-item {
-    display: flex;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-    gap: 10px;
-  }
-  .health-item:last-child { border-bottom: none; }
-  .health-badge {
-    padding: 2px 8px;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-  }
-  .health-badge.ok { background: rgba(39,194,76,0.15); color: var(--success); }
-  .health-badge.warn { background: rgba(240,173,78,0.15); color: var(--warning); }
-  .health-badge.error { background: rgba(217,83,79,0.15); color: var(--danger); }
+      /* Health */
+      .health-item {
+        display: flex;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border);
+        gap: 10px;
+      }
+      .health-item:last-child {
+        border-bottom: none;
+      }
+      .health-badge {
+        padding: 2px 8px;
+        border-radius: 3px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+      .health-badge.ok {
+        background: rgba(39, 194, 76, 0.15);
+        color: var(--success);
+      }
+      .health-badge.warn {
+        background: rgba(240, 173, 78, 0.15);
+        color: var(--warning);
+      }
+      .health-badge.error {
+        background: rgba(217, 83, 79, 0.15);
+        color: var(--danger);
+      }
 
-  /* Torrent Table */
-  .toolbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
-    gap: 12px;
-  }
-  .toolbar-left { display: flex; gap: 8px; align-items: center; }
-  .toolbar-right { display: flex; gap: 8px; align-items: center; }
+      /* Torrent Table */
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        gap: 12px;
+      }
+      .toolbar-left {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .toolbar-right {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
 
-  .btn {
-    padding: 7px 14px;
-    border: 1px solid var(--border);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .btn:hover { background: var(--bg-hover); }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn-primary:hover { background: var(--accent-dark); }
-  .btn-success { background: var(--success); border-color: var(--success); color: #fff; }
-  .btn-danger { background: var(--danger); border-color: var(--danger); color: #fff; }
-  .btn-sm { padding: 4px 10px; font-size: 12px; }
+      .btn {
+        padding: 7px 14px;
+        border: 1px solid var(--border);
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .btn:hover {
+        background: var(--bg-hover);
+      }
+      .btn-primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      .btn-primary:hover {
+        background: var(--accent-dark);
+      }
+      .btn-success {
+        background: var(--success);
+        border-color: var(--success);
+        color: #fff;
+      }
+      .btn-danger {
+        background: var(--danger);
+        border-color: var(--danger);
+        color: #fff;
+      }
+      .btn-sm {
+        padding: 4px 10px;
+        font-size: 12px;
+      }
 
-  .search-input {
-    padding: 7px 12px;
-    border: 1px solid var(--border);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border-radius: 4px;
-    width: 250px;
-    font-size: 13px;
-  }
-  .search-input::placeholder { color: var(--text-muted); }
+      .search-input {
+        padding: 7px 12px;
+        border: 1px solid var(--border);
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border-radius: 4px;
+        width: 250px;
+        font-size: 13px;
+      }
+      .search-input::placeholder {
+        color: var(--text-muted);
+      }
 
-  .filter-select {
-    padding: 7px 12px;
-    border: 1px solid var(--border);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border-radius: 4px;
-    font-size: 13px;
-  }
+      .filter-select {
+        padding: 7px 12px;
+        border: 1px solid var(--border);
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border-radius: 4px;
+        font-size: 13px;
+      }
 
-  table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  th {
-    text-align: left;
-    padding: 10px 12px;
-    border-bottom: 2px solid var(--border);
-    color: var(--text-secondary);
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    cursor: pointer;
-    user-select: none;
-  }
-  th:hover { color: var(--text-primary); }
-  th.sorted { color: var(--accent); }
-  td {
-    padding: 12px;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-  }
-  tr:hover { background: var(--bg-hover); }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 2px solid var(--border);
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        cursor: pointer;
+        user-select: none;
+      }
+      th:hover {
+        color: var(--text-primary);
+      }
+      th.sorted {
+        color: var(--accent);
+      }
+      td {
+        padding: 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+      }
+      tr:hover {
+        background: var(--bg-hover);
+      }
 
-  .status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 10px;
-    border-radius: 3px;
-    font-size: 12px;
-    font-weight: 500;
-  }
-  .status-badge.seeding { background: rgba(39,194,76,0.15); color: var(--success); }
-  .status-badge.paused { background: rgba(142,142,142,0.15); color: var(--text-secondary); }
-  .status-badge.error { background: rgba(217,83,79,0.15); color: var(--danger); }
-  .status-badge.announcing { background: rgba(53,197,244,0.15); color: var(--accent); }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 3px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+      .status-badge.seeding {
+        background: rgba(39, 194, 76, 0.15);
+        color: var(--success);
+      }
+      .status-badge.paused {
+        background: rgba(142, 142, 142, 0.15);
+        color: var(--text-secondary);
+      }
+      .status-badge.error {
+        background: rgba(217, 83, 79, 0.15);
+        color: var(--danger);
+      }
+      .status-badge.announcing {
+        background: rgba(53, 197, 244, 0.15);
+        color: var(--accent);
+      }
 
-  .progress-bar {
-    width: 80px;
-    height: 4px;
-    background: var(--bg-primary);
-    border-radius: 2px;
-    overflow: hidden;
-  }
-  .progress-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 2px;
-  }
+      .progress-bar {
+        width: 80px;
+        height: 4px;
+        background: var(--bg-primary);
+        border-radius: 2px;
+        overflow: hidden;
+      }
+      .progress-fill {
+        height: 100%;
+        background: var(--accent);
+        border-radius: 2px;
+      }
 
-  .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: var(--text-secondary); }
+      .mono {
+        font-family: "SF Mono", "Fira Code", monospace;
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
 
-  /* Footer Status Bar */
-  .status-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 28px;
-    background: var(--bg-secondary);
-    border-top: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    font-size: 11px;
-    color: var(--text-secondary);
-    gap: 20px;
-    z-index: 100;
-  }
-  .status-item { display: flex; align-items: center; gap: 5px; }
-  .status-dot { width: 6px; height: 6px; border-radius: 50%; }
-  .status-dot.green { background: var(--success); }
-  .status-separator { width: 1px; height: 14px; background: var(--border); }
-  .speed-up { color: var(--success); }
-  .speed-down { color: var(--accent); }
+      /* Footer Status Bar */
+      .status-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 28px;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        padding: 0 16px;
+        font-size: 11px;
+        color: var(--text-secondary);
+        gap: 20px;
+        z-index: 100;
+      }
+      .status-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+      }
+      .status-dot.green {
+        background: var(--success);
+      }
+      .status-separator {
+        width: 1px;
+        height: 14px;
+        background: var(--border);
+      }
+      .speed-up {
+        color: var(--success);
+      }
+      .speed-down {
+        color: var(--accent);
+      }
 
-  /* Torrent Detail */
-  .detail-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-  }
-  .detail-title { font-size: 20px; font-weight: 600; }
-  .detail-hash { color: var(--text-secondary); font-family: monospace; font-size: 12px; margin-top: 4px; }
-  .detail-actions { display: flex; gap: 8px; }
+      /* Torrent Detail */
+      .detail-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .detail-title {
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .detail-hash {
+        color: var(--text-secondary);
+        font-family: monospace;
+        font-size: 12px;
+        margin-top: 4px;
+      }
+      .detail-actions {
+        display: flex;
+        gap: 8px;
+      }
 
-  .detail-tabs {
-    display: flex;
-    border-bottom: 2px solid var(--border);
-    margin-bottom: 16px;
-  }
-  .detail-tab {
-    padding: 10px 20px;
-    cursor: pointer;
-    color: var(--text-secondary);
-    font-size: 13px;
-    border-bottom: 3px solid transparent;
-    margin-bottom: -2px;
-  }
-  .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+      .detail-tabs {
+        display: flex;
+        border-bottom: 2px solid var(--border);
+        margin-bottom: 16px;
+      }
+      .detail-tab {
+        padding: 10px 20px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        font-size: 13px;
+        border-bottom: 3px solid transparent;
+        margin-bottom: -2px;
+      }
+      .detail-tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+      }
 
-  .detail-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-  }
-  .detail-field { margin-bottom: 12px; }
-  .detail-field-label { color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-  .detail-field-value { font-size: 14px; }
+      .detail-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+      .detail-field {
+        margin-bottom: 12px;
+      }
+      .detail-field-label {
+        color: var(--text-secondary);
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+      }
+      .detail-field-value {
+        font-size: 14px;
+      }
 
-  /* Settings */
-  .settings-layout {
-    display: grid;
-    grid-template-columns: 200px 1fr;
-    gap: 0;
-    min-height: calc(100vh - var(--navbar-height) - 28px);
-  }
-  .settings-nav {
-    background: var(--bg-secondary);
-    border-right: 1px solid var(--border);
-    padding: 16px 0;
-  }
-  .settings-nav-item {
-    padding: 10px 20px;
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: 13px;
-  }
-  .settings-nav-item:hover { color: var(--text-primary); background: var(--bg-hover); }
-  .settings-nav-item.active { color: var(--accent); border-left: 3px solid var(--accent); background: rgba(53,197,244,0.05); }
-  .settings-content { padding: 24px; max-width: 800px; }
-  .settings-section { margin-bottom: 32px; }
-  .settings-section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+      /* Settings */
+      .settings-layout {
+        display: grid;
+        grid-template-columns: 200px 1fr;
+        gap: 0;
+        min-height: calc(100vh - var(--navbar-height) - 28px);
+      }
+      .settings-nav {
+        background: var(--bg-secondary);
+        border-right: 1px solid var(--border);
+        padding: 16px 0;
+      }
+      .settings-nav-item {
+        padding: 10px 20px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .settings-nav-item:hover {
+        color: var(--text-primary);
+        background: var(--bg-hover);
+      }
+      .settings-nav-item.active {
+        color: var(--accent);
+        border-left: 3px solid var(--accent);
+        background: rgba(53, 197, 244, 0.05);
+      }
+      .settings-content {
+        padding: 24px;
+        max-width: 800px;
+      }
+      .settings-section {
+        margin-bottom: 32px;
+      }
+      .settings-section-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--border);
+      }
 
-  .form-group { margin-bottom: 16px; }
-  .form-label { display: block; color: var(--text-secondary); font-size: 12px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .form-input {
-    width: 100%;
-    max-width: 400px;
-    padding: 8px 12px;
-    border: 1px solid var(--border);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border-radius: 4px;
-    font-size: 13px;
-  }
-  .form-select {
-    padding: 8px 12px;
-    border: 1px solid var(--border);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    border-radius: 4px;
-    font-size: 13px;
-    max-width: 400px;
-    width: 100%;
-  }
-  .form-hint { color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+      .form-group {
+        margin-bottom: 16px;
+      }
+      .form-label {
+        display: block;
+        color: var(--text-secondary);
+        font-size: 12px;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .form-input {
+        width: 100%;
+        max-width: 400px;
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border-radius: 4px;
+        font-size: 13px;
+      }
+      .form-select {
+        padding: 8px 12px;
+        border: 1px solid var(--border);
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border-radius: 4px;
+        font-size: 13px;
+        max-width: 400px;
+        width: 100%;
+      }
+      .form-hint {
+        color: var(--text-muted);
+        font-size: 12px;
+        margin-top: 4px;
+      }
 
-  .toggle {
-    width: 40px; height: 22px;
-    background: var(--bg-hover);
-    border-radius: 11px;
-    position: relative;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .toggle.on { background: var(--accent); }
-  .toggle::after {
-    content: '';
-    width: 18px; height: 18px;
-    background: white;
-    border-radius: 50%;
-    position: absolute;
-    top: 2px; left: 2px;
-    transition: transform 0.2s;
-  }
-  .toggle.on::after { transform: translateX(18px); }
+      .toggle {
+        width: 40px;
+        height: 22px;
+        background: var(--bg-hover);
+        border-radius: 11px;
+        position: relative;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .toggle.on {
+        background: var(--accent);
+      }
+      .toggle::after {
+        content: "";
+        width: 18px;
+        height: 18px;
+        background: white;
+        border-radius: 50%;
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        transition: transform 0.2s;
+      }
+      .toggle.on::after {
+        transform: translateX(18px);
+      }
 
-  .form-row { display: flex; align-items: center; gap: 12px; }
+      .form-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
 
-  /* Peer table in detail */
-  .peer-flag { font-size: 16px; }
+      /* Peer table in detail */
+      .peer-flag {
+        font-size: 16px;
+      }
 
-  /* Modal */
-  .modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 200;
-    justify-content: center;
-    align-items: center;
-  }
-  .modal-overlay.show { display: flex; }
-  .modal {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    width: 500px;
-    max-width: 90vw;
-  }
-  .modal-header {
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--border);
-    font-weight: 600;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .modal-body { padding: 20px; }
-  .modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+      /* Modal */
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 200;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-overlay.show {
+        display: flex;
+      }
+      .modal {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        width: 500px;
+        max-width: 90vw;
+      }
+      .modal-header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border);
+        font-weight: 600;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .modal-body {
+        padding: 20px;
+      }
+      .modal-footer {
+        padding: 12px 20px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
 
-  .dropzone {
-    border: 2px dashed var(--border);
-    border-radius: 6px;
-    padding: 40px;
-    text-align: center;
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-bottom: 16px;
-  }
-  .dropzone:hover { border-color: var(--accent); color: var(--accent); }
-  .dropzone-icon { font-size: 36px; margin-bottom: 8px; }
+      .dropzone {
+        border: 2px dashed var(--border);
+        border-radius: 6px;
+        padding: 40px;
+        text-align: center;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-bottom: 16px;
+      }
+      .dropzone:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .dropzone-icon {
+        font-size: 36px;
+        margin-bottom: 8px;
+      }
 
-  body { padding-bottom: 28px; }
-</style>
-</head>
-<body>
-
-<!-- Navbar -->
-<nav class="navbar">
-  <div style="display:flex;align-items:center;gap:0;height:100%">
-    <div class="navbar-brand" style="margin-right:24px">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M12 6v6l4 2"/>
-        <path d="M8 12l4 4 4-4" stroke-dasharray="2 2"/>
-      </svg>
-      Seedarr
-    </div>
-    <a class="navbar-link active" onclick="showPage('dashboard')" href="#">Dashboard</a>
-    <a class="navbar-link" onclick="showPage('torrents')" href="#">Torrents</a>
-    <a class="navbar-link" onclick="showPage('settings')" href="#">Settings</a>
-    <a class="navbar-link" onclick="showPage('system')" href="#">System</a>
-  </div>
-  <div class="navbar-right">
-    <div class="health-indicator" title="All systems healthy"></div>
-    <span class="navbar-icon" title="Activity">&#9881;</span>
-  </div>
-</nav>
-
-<!-- ==================== DASHBOARD ==================== -->
-<div id="page-dashboard" class="page active">
-  <div class="page-content">
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Total Torrents</div>
-        <div class="stat-value">47</div>
-        <div class="stat-sub">12 added this week</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Active Seeding</div>
-        <div class="stat-value success">38</div>
-        <div class="stat-sub">6 paused, 3 error</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Upload Speed</div>
-        <div class="stat-value accent">14.7 MB/s</div>
-        <div class="stat-sub">across all torrents</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Uploaded</div>
-        <div class="stat-value">2.84 TB</div>
-        <div class="stat-sub">142.6 GB today</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Global Ratio</div>
-        <div class="stat-value warning">3.72</div>
-        <div class="stat-sub">target: 2.0</div>
-      </div>
-    </div>
-
-    <div class="dashboard-grid">
-      <div class="panel">
-        <div class="panel-header">
-          Upload Speed
-          <span style="color:var(--text-secondary);font-size:12px">Last 24 hours</span>
+      body {
+        padding-bottom: 28px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Navbar -->
+    <nav class="navbar">
+      <div style="display: flex; align-items: center; gap: 0; height: 100%">
+        <div class="navbar-brand" style="margin-right: 24px">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 6v6l4 2" />
+            <path d="M8 12l4 4 4-4" stroke-dasharray="2 2" />
+          </svg>
+          Seedarr
         </div>
-        <div class="panel-body">
-          <div class="speed-graph">
-            <svg viewBox="0 0 600 180" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="uploadGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="rgba(39,194,76,0.3)"/>
-                  <stop offset="100%" stop-color="rgba(39,194,76,0)"/>
-                </linearGradient>
-              </defs>
-              <!-- Grid lines -->
-              <line x1="0" y1="45" x2="600" y2="45" stroke="var(--border)" stroke-width="0.5"/>
-              <line x1="0" y1="90" x2="600" y2="90" stroke="var(--border)" stroke-width="0.5"/>
-              <line x1="0" y1="135" x2="600" y2="135" stroke="var(--border)" stroke-width="0.5"/>
-              <!-- Y-axis labels -->
-              <text x="4" y="42" fill="var(--text-muted)" font-size="9">20 MB/s</text>
-              <text x="4" y="87" fill="var(--text-muted)" font-size="9">15 MB/s</text>
-              <text x="4" y="132" fill="var(--text-muted)" font-size="9">10 MB/s</text>
-              <text x="4" y="177" fill="var(--text-muted)" font-size="9">5 MB/s</text>
-              <!-- Upload area -->
-              <path d="M0,160 C30,155 60,140 90,130 C120,120 150,85 180,75 C210,65 240,70 270,60 C300,50 330,55 360,45 C390,55 420,50 450,40 C480,45 510,35 540,30 C560,28 580,25 600,20 L600,180 L0,180 Z" fill="url(#uploadGrad)"/>
-              <path d="M0,160 C30,155 60,140 90,130 C120,120 150,85 180,75 C210,65 240,70 270,60 C300,50 330,55 360,45 C390,55 420,50 450,40 C480,45 510,35 540,30 C560,28 580,25 600,20" fill="none" stroke="var(--success)" stroke-width="2"/>
-              <!-- X-axis labels -->
-              <text x="50" y="178" fill="var(--text-muted)" font-size="9">00:00</text>
-              <text x="150" y="178" fill="var(--text-muted)" font-size="9">06:00</text>
-              <text x="300" y="178" fill="var(--text-muted)" font-size="9">12:00</text>
-              <text x="450" y="178" fill="var(--text-muted)" font-size="9">18:00</text>
-              <text x="560" y="178" fill="var(--text-muted)" font-size="9">Now</text>
-            </svg>
+        <a class="navbar-link active" onclick="showPage('dashboard')" href="#"
+          >Dashboard</a
+        >
+        <a class="navbar-link" onclick="showPage('torrents')" href="#"
+          >Torrents</a
+        >
+        <a class="navbar-link" onclick="showPage('settings')" href="#"
+          >Settings</a
+        >
+        <a class="navbar-link" onclick="showPage('system')" href="#">System</a>
+      </div>
+      <div class="navbar-right">
+        <div class="health-indicator" title="All systems healthy"></div>
+        <span class="navbar-icon" title="Activity">&#9881;</span>
+      </div>
+    </nav>
+
+    <!-- ==================== DASHBOARD ==================== -->
+    <div id="page-dashboard" class="page active">
+      <div class="page-content">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total Torrents</div>
+            <div class="stat-value">47</div>
+            <div class="stat-sub">12 added this week</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Active Seeding</div>
+            <div class="stat-value success">38</div>
+            <div class="stat-sub">6 paused, 3 error</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Upload Speed</div>
+            <div class="stat-value accent">14.7 MB/s</div>
+            <div class="stat-sub">across all torrents</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Total Uploaded</div>
+            <div class="stat-value">2.84 TB</div>
+            <div class="stat-sub">142.6 GB today</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Global Ratio</div>
+            <div class="stat-value warning">3.72</div>
+            <div class="stat-sub">target: 2.0</div>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="panel">
+            <div class="panel-header">
+              Upload Speed
+              <span style="color: var(--text-secondary); font-size: 12px"
+                >Last 24 hours</span
+              >
+            </div>
+            <div class="panel-body">
+              <div class="speed-graph">
+                <svg viewBox="0 0 600 180" preserveAspectRatio="none">
+                  <defs>
+                    <linearGradient id="uploadGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stop-color="rgba(39,194,76,0.3)" />
+                      <stop offset="100%" stop-color="rgba(39,194,76,0)" />
+                    </linearGradient>
+                  </defs>
+                  <!-- Grid lines -->
+                  <line
+                    x1="0"
+                    y1="45"
+                    x2="600"
+                    y2="45"
+                    stroke="var(--border)"
+                    stroke-width="0.5"
+                  />
+                  <line
+                    x1="0"
+                    y1="90"
+                    x2="600"
+                    y2="90"
+                    stroke="var(--border)"
+                    stroke-width="0.5"
+                  />
+                  <line
+                    x1="0"
+                    y1="135"
+                    x2="600"
+                    y2="135"
+                    stroke="var(--border)"
+                    stroke-width="0.5"
+                  />
+                  <!-- Y-axis labels -->
+                  <text x="4" y="42" fill="var(--text-muted)" font-size="9">
+                    20 MB/s
+                  </text>
+                  <text x="4" y="87" fill="var(--text-muted)" font-size="9">
+                    15 MB/s
+                  </text>
+                  <text x="4" y="132" fill="var(--text-muted)" font-size="9">
+                    10 MB/s
+                  </text>
+                  <text x="4" y="177" fill="var(--text-muted)" font-size="9">
+                    5 MB/s
+                  </text>
+                  <!-- Upload area -->
+                  <path
+                    d="M0,160 C30,155 60,140 90,130 C120,120 150,85 180,75 C210,65 240,70 270,60 C300,50 330,55 360,45 C390,55 420,50 450,40 C480,45 510,35 540,30 C560,28 580,25 600,20 L600,180 L0,180 Z"
+                    fill="url(#uploadGrad)"
+                  />
+                  <path
+                    d="M0,160 C30,155 60,140 90,130 C120,120 150,85 180,75 C210,65 240,70 270,60 C300,50 330,55 360,45 C390,55 420,50 450,40 C480,45 510,35 540,30 C560,28 580,25 600,20"
+                    fill="none"
+                    stroke="var(--success)"
+                    stroke-width="2"
+                  />
+                  <!-- X-axis labels -->
+                  <text x="50" y="178" fill="var(--text-muted)" font-size="9">
+                    00:00
+                  </text>
+                  <text x="150" y="178" fill="var(--text-muted)" font-size="9">
+                    06:00
+                  </text>
+                  <text x="300" y="178" fill="var(--text-muted)" font-size="9">
+                    12:00
+                  </text>
+                  <text x="450" y="178" fill="var(--text-muted)" font-size="9">
+                    18:00
+                  </text>
+                  <text x="560" y="178" fill="var(--text-muted)" font-size="9">
+                    Now
+                  </text>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 16px">
+            <div class="panel">
+              <div class="panel-header">Recent Activity</div>
+              <div class="panel-body">
+                <div class="activity-item">
+                  <div class="activity-dot seeding"></div>
+                  <div class="activity-text">
+                    Ubuntu 24.04 LTS started seeding
+                  </div>
+                  <div class="activity-time">2m ago</div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot added"></div>
+                  <div class="activity-text">
+                    Big.Buck.Bunny.1080p added via Radarr sync
+                  </div>
+                  <div class="activity-time">15m ago</div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot error"></div>
+                  <div class="activity-text">
+                    Tracker timeout: tracker.example.com
+                  </div>
+                  <div class="activity-time">1h ago</div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot seeding"></div>
+                  <div class="activity-text">
+                    Debian 12.5 ratio target reached (2.0)
+                  </div>
+                  <div class="activity-time">3h ago</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-header">Health</div>
+              <div class="panel-body">
+                <div class="health-item">
+                  <span class="health-badge ok">OK</span>
+                  <span style="font-size: 13px">All trackers responding</span>
+                </div>
+                <div class="health-item">
+                  <span class="health-badge ok">OK</span>
+                  <span style="font-size: 13px">Sonarr connected</span>
+                </div>
+                <div class="health-item">
+                  <span class="health-badge warn">WARN</span>
+                  <span style="font-size: 13px">UPnP port mapping failed</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+    </div>
 
-      <div style="display:flex;flex-direction:column;gap:16px">
+    <!-- ==================== TORRENTS ==================== -->
+    <div id="page-torrents" class="page">
+      <div class="page-content">
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <button
+              class="btn btn-primary"
+              onclick="
+                document.getElementById('addModal').classList.add('show')
+              "
+            >
+              + Add Torrent
+            </button>
+            <button class="btn btn-success btn-sm">&#9654; Start All</button>
+            <button class="btn btn-sm">&#9724; Stop All</button>
+          </div>
+          <div class="toolbar-right">
+            <select class="filter-select">
+              <option>All Status</option>
+              <option>Seeding</option>
+              <option>Paused</option>
+              <option>Error</option>
+            </select>
+            <select class="filter-select">
+              <option>All Trackers</option>
+              <option>tracker1.example.com</option>
+              <option>tracker2.example.com</option>
+            </select>
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Filter torrents..."
+            />
+          </div>
+        </div>
+
         <div class="panel">
-          <div class="panel-header">Recent Activity</div>
-          <div class="panel-body">
-            <div class="activity-item">
-              <div class="activity-dot seeding"></div>
-              <div class="activity-text">Ubuntu 24.04 LTS started seeding</div>
-              <div class="activity-time">2m ago</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 30px"><input type="checkbox" /></th>
+                <th class="sorted">Name &#9660;</th>
+                <th>Status</th>
+                <th>Size</th>
+                <th>Upload Speed</th>
+                <th>Uploaded</th>
+                <th>Ratio</th>
+                <th>Peers</th>
+                <th>Tracker</th>
+                <th>Client</th>
+                <th>Added</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr onclick="showPage('detail')">
+                <td><input type="checkbox" /></td>
+                <td><strong>Ubuntu 24.04.1 LTS Desktop amd64</strong></td>
+                <td>
+                  <span class="status-badge seeding">&#9679; Seeding</span>
+                </td>
+                <td>5.7 GB</td>
+                <td class="speed-up">2.4 MB/s</td>
+                <td>48.2 GB</td>
+                <td style="color: var(--success)">8.45</td>
+                <td>142</td>
+                <td class="mono">tracker.ubuntu.com</td>
+                <td>qBittorrent</td>
+                <td>2024-08-01</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" /></td>
+                <td><strong>Debian 12.7.0 amd64 DVD</strong></td>
+                <td>
+                  <span class="status-badge seeding">&#9679; Seeding</span>
+                </td>
+                <td>3.9 GB</td>
+                <td class="speed-up">1.8 MB/s</td>
+                <td>31.4 GB</td>
+                <td style="color: var(--success)">8.05</td>
+                <td>87</td>
+                <td class="mono">bttracker.debian.org</td>
+                <td>Deluge</td>
+                <td>2024-07-15</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" /></td>
+                <td><strong>Big.Buck.Bunny.1080p.BluRay</strong></td>
+                <td>
+                  <span class="status-badge announcing"
+                    >&#9679; Announcing</span
+                  >
+                </td>
+                <td>4.4 GB</td>
+                <td class="speed-up">0.9 MB/s</td>
+                <td>2.1 GB</td>
+                <td style="color: var(--text-secondary)">0.48</td>
+                <td>23</td>
+                <td class="mono">tracker.example.com</td>
+                <td>Transmission</td>
+                <td>2024-08-12</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" /></td>
+                <td><strong>Fedora-Workstation-40-x86_64</strong></td>
+                <td>
+                  <span class="status-badge seeding">&#9679; Seeding</span>
+                </td>
+                <td>2.1 GB</td>
+                <td class="speed-up">3.1 MB/s</td>
+                <td>18.7 GB</td>
+                <td style="color: var(--success)">8.90</td>
+                <td>204</td>
+                <td class="mono">torrent.fedoraproject.org</td>
+                <td>qBittorrent</td>
+                <td>2024-06-20</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" /></td>
+                <td><strong>Sintel.2010.4K.Remaster</strong></td>
+                <td><span class="status-badge paused">&#9679; Paused</span></td>
+                <td>6.2 GB</td>
+                <td style="color: var(--text-muted)">-</td>
+                <td>12.4 GB</td>
+                <td style="color: var(--warning)">2.00</td>
+                <td>-</td>
+                <td class="mono">tracker.example.com</td>
+                <td>uTorrent</td>
+                <td>2024-05-10</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" /></td>
+                <td><strong>Arch.Linux.2024.08.01</strong></td>
+                <td>
+                  <span class="status-badge seeding">&#9679; Seeding</span>
+                </td>
+                <td>891 MB</td>
+                <td class="speed-up">1.2 MB/s</td>
+                <td>9.8 GB</td>
+                <td style="color: var(--success)">11.0</td>
+                <td>56</td>
+                <td class="mono">tracker.archlinux.org</td>
+                <td>BiglyBT</td>
+                <td>2024-08-02</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" /></td>
+                <td><strong>LibreOffice.24.8.0</strong></td>
+                <td><span class="status-badge error">&#9679; Error</span></td>
+                <td>328 MB</td>
+                <td style="color: var(--text-muted)">-</td>
+                <td>1.2 GB</td>
+                <td style="color: var(--success)">3.66</td>
+                <td>-</td>
+                <td class="mono">tracker.documentfound...</td>
+                <td>Deluge</td>
+                <td>2024-08-10</td>
+              </tr>
+              <tr>
+                <td><input type="checkbox" /></td>
+                <td><strong>Tears.of.Steel.2012.1080p</strong></td>
+                <td>
+                  <span class="status-badge seeding">&#9679; Seeding</span>
+                </td>
+                <td>1.7 GB</td>
+                <td class="speed-up">0.6 MB/s</td>
+                <td>5.9 GB</td>
+                <td style="color: var(--success)">3.47</td>
+                <td>31</td>
+                <td class="mono">tracker.example.com</td>
+                <td>Transmission</td>
+                <td>2024-07-28</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== TORRENT DETAIL ==================== -->
+    <div id="page-detail" class="page">
+      <div class="page-content">
+        <div class="detail-header">
+          <div>
+            <div class="detail-title">Ubuntu 24.04.1 LTS Desktop amd64</div>
+            <div class="detail-hash">
+              Info Hash: 2c6b6858d61da9543d4231a71db4b1c9264b0685
             </div>
-            <div class="activity-item">
-              <div class="activity-dot added"></div>
-              <div class="activity-text">Big.Buck.Bunny.1080p added via Radarr sync</div>
-              <div class="activity-time">15m ago</div>
+          </div>
+          <div class="detail-actions">
+            <button class="btn btn-sm" onclick="showPage('torrents')">
+              &#8592; Back
+            </button>
+            <button class="btn btn-success btn-sm">&#9654; Seeding</button>
+            <button class="btn btn-sm">&#9724; Stop</button>
+            <button class="btn btn-danger btn-sm">&#128465; Remove</button>
+          </div>
+        </div>
+
+        <div class="detail-tabs">
+          <div class="detail-tab active">General</div>
+          <div class="detail-tab">Files</div>
+          <div class="detail-tab">Peers</div>
+          <div class="detail-tab">Trackers</div>
+          <div class="detail-tab">Stats</div>
+        </div>
+
+        <div class="detail-grid">
+          <div class="panel">
+            <div class="panel-header">Torrent Info</div>
+            <div class="panel-body">
+              <div class="detail-field">
+                <div class="detail-field-label">Status</div>
+                <div class="detail-field-value">
+                  <span class="status-badge seeding">&#9679; Seeding</span>
+                </div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Total Size</div>
+                <div class="detail-field-value">
+                  5.7 GB (6,114,074,624 bytes)
+                </div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Pieces</div>
+                <div class="detail-field-value">5,832 x 1 MB</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Added</div>
+                <div class="detail-field-value">August 1, 2024 14:32:10</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Source</div>
+                <div class="detail-field-value">Sonarr Auto-Sync</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Client Profile</div>
+                <div class="detail-field-value">qBittorrent 4.4.2</div>
+              </div>
             </div>
-            <div class="activity-item">
-              <div class="activity-dot error"></div>
-              <div class="activity-text">Tracker timeout: tracker.example.com</div>
-              <div class="activity-time">1h ago</div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">Seeding Stats</div>
+            <div class="panel-body">
+              <div class="detail-field">
+                <div class="detail-field-label">Upload Speed</div>
+                <div
+                  class="detail-field-value speed-up"
+                  style="font-size: 20px; font-weight: 600"
+                >
+                  2.4 MB/s
+                </div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Total Uploaded</div>
+                <div class="detail-field-value">48.2 GB</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Ratio</div>
+                <div
+                  class="detail-field-value"
+                  style="
+                    color: var(--success);
+                    font-size: 20px;
+                    font-weight: 600;
+                  "
+                >
+                  8.45
+                </div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Connected Peers</div>
+                <div class="detail-field-value">142 (1,247 in swarm)</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Distribution Algorithm</div>
+                <div class="detail-field-value">Pareto (80/20)</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Seeding Time</div>
+                <div class="detail-field-value">12d 6h 42m</div>
+              </div>
             </div>
-            <div class="activity-item">
-              <div class="activity-dot seeding"></div>
-              <div class="activity-text">Debian 12.5 ratio target reached (2.0)</div>
-              <div class="activity-time">3h ago</div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top: 16px">
+          <div class="panel-header">Trackers</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Tracker</th>
+                <th>Status</th>
+                <th>Seeders</th>
+                <th>Leechers</th>
+                <th>Last Announce</th>
+                <th>Next Announce</th>
+                <th>Protocol</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono">https://torrent.ubuntu.com/announce</td>
+                <td><span class="status-badge seeding">&#9679; OK</span></td>
+                <td>847</td>
+                <td>400</td>
+                <td>2 min ago</td>
+                <td>in 28 min</td>
+                <td>HTTP (BEP 3)</td>
+              </tr>
+              <tr>
+                <td class="mono">udp://tracker.openbittorrent.com:6969</td>
+                <td><span class="status-badge seeding">&#9679; OK</span></td>
+                <td>623</td>
+                <td>312</td>
+                <td>5 min ago</td>
+                <td>in 25 min</td>
+                <td>UDP (BEP 15)</td>
+              </tr>
+              <tr>
+                <td class="mono">udp://tracker.opentrackr.org:1337</td>
+                <td><span class="status-badge error">&#9679; Timeout</span></td>
+                <td>-</td>
+                <td>-</td>
+                <td>1h ago</td>
+                <td>in 14 min (retry 3)</td>
+                <td>UDP (BEP 15)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SETTINGS ==================== -->
+    <div id="page-settings" class="page">
+      <div class="settings-layout">
+        <div class="settings-nav">
+          <div class="settings-nav-item active">General</div>
+          <div class="settings-nav-item">Seeding</div>
+          <div class="settings-nav-item">Trackers</div>
+          <div class="settings-nav-item">Client Profiles</div>
+          <div class="settings-nav-item">*arr Connections</div>
+          <div class="settings-nav-item">Tracker Server</div>
+          <div class="settings-nav-item">Network</div>
+          <div class="settings-nav-item">Notifications</div>
+          <div class="settings-nav-item">Tags</div>
+          <div class="settings-nav-item">UI</div>
+        </div>
+        <div class="settings-content">
+          <div class="settings-section">
+            <div class="settings-section-title">Host</div>
+            <div class="form-group">
+              <label class="form-label">Bind Address</label>
+              <input type="text" class="form-input" value="*" />
+              <div class="form-hint">
+                Use * for all interfaces, localhost for local only
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Port</label>
+              <input
+                type="number"
+                class="form-input"
+                value="9898"
+                style="max-width: 120px"
+              />
+            </div>
+            <div class="form-group">
+              <label class="form-label">URL Base</label>
+              <input type="text" class="form-input" placeholder="/seedarr" />
+              <div class="form-hint">For reverse proxy setups</div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Security</div>
+            <div class="form-group">
+              <label class="form-label">Authentication</label>
+              <select class="form-select">
+                <option>None</option>
+                <option selected>Forms (Login Page)</option>
+                <option>Basic (Browser Popup)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">API Key</label>
+              <div class="form-row">
+                <input
+                  type="text"
+                  class="form-input mono"
+                  value="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
+                  readonly
+                />
+                <button class="btn btn-sm">Regenerate</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Logging</div>
+            <div class="form-group">
+              <label class="form-label">Log Level</label>
+              <select class="form-select">
+                <option>Trace</option>
+                <option>Debug</option>
+                <option selected>Info</option>
+                <option>Warn</option>
+                <option>Error</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-top: 24px">
+            <button class="btn btn-primary">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== SYSTEM ==================== -->
+    <div id="page-system" class="page">
+      <div class="page-content">
+        <div
+          class="page-tabs"
+          style="margin: -20px -20px 20px; position: static"
+        >
+          <div class="page-tab active">Status</div>
+          <div class="page-tab">Tasks</div>
+          <div class="page-tab">Logs</div>
+          <div class="page-tab">Backups</div>
+          <div class="page-tab">Updates</div>
+        </div>
+
+        <div class="detail-grid">
+          <div class="panel">
+            <div class="panel-header">About</div>
+            <div class="panel-body">
+              <div class="detail-field">
+                <div class="detail-field-label">Version</div>
+                <div class="detail-field-value">1.0.0.0</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">.NET Version</div>
+                <div class="detail-field-value">10.0.0</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">OS</div>
+                <div class="detail-field-value">Linux 6.8.0</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Uptime</div>
+                <div class="detail-field-value">14d 7h 23m</div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">App Data</div>
+                <div class="detail-field-value mono">
+                  /home/user/.config/Seedarr
+                </div>
+              </div>
+              <div class="detail-field">
+                <div class="detail-field-label">Database</div>
+                <div class="detail-field-value">SQLite (24.3 MB)</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">Health Checks</div>
+            <div class="panel-body">
+              <div class="health-item">
+                <span class="health-badge ok">OK</span>
+                <span>Trackers reachable</span>
+              </div>
+              <div class="health-item">
+                <span class="health-badge ok">OK</span>
+                <span>Active torrents seeding</span>
+              </div>
+              <div class="health-item">
+                <span class="health-badge ok">OK</span>
+                <span>Sonarr connection</span>
+              </div>
+              <div class="health-item">
+                <span class="health-badge ok">OK</span>
+                <span>Radarr connection</span>
+              </div>
+              <div class="health-item">
+                <span class="health-badge warn">WARN</span>
+                <span>UPnP port mapping failed on router</span>
+              </div>
+              <div class="health-item">
+                <span class="health-badge ok">OK</span>
+                <span>Disk space (847 GB free)</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="panel">
-          <div class="panel-header">Health</div>
-          <div class="panel-body">
-            <div class="health-item">
-              <span class="health-badge ok">OK</span>
-              <span style="font-size:13px">All trackers responding</span>
-            </div>
-            <div class="health-item">
-              <span class="health-badge ok">OK</span>
-              <span style="font-size:13px">Sonarr connected</span>
-            </div>
-            <div class="health-item">
-              <span class="health-badge warn">WARN</span>
-              <span style="font-size:13px">UPnP port mapping failed</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ==================== TORRENTS ==================== -->
-<div id="page-torrents" class="page">
-  <div class="page-content">
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <button class="btn btn-primary" onclick="document.getElementById('addModal').classList.add('show')">+ Add Torrent</button>
-        <button class="btn btn-success btn-sm">&#9654; Start All</button>
-        <button class="btn btn-sm">&#9724; Stop All</button>
-      </div>
-      <div class="toolbar-right">
-        <select class="filter-select">
-          <option>All Status</option>
-          <option>Seeding</option>
-          <option>Paused</option>
-          <option>Error</option>
-        </select>
-        <select class="filter-select">
-          <option>All Trackers</option>
-          <option>tracker1.example.com</option>
-          <option>tracker2.example.com</option>
-        </select>
-        <input type="text" class="search-input" placeholder="Filter torrents...">
-      </div>
-    </div>
-
-    <div class="panel">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:30px"><input type="checkbox"></th>
-            <th class="sorted">Name &#9660;</th>
-            <th>Status</th>
-            <th>Size</th>
-            <th>Upload Speed</th>
-            <th>Uploaded</th>
-            <th>Ratio</th>
-            <th>Peers</th>
-            <th>Tracker</th>
-            <th>Client</th>
-            <th>Added</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr onclick="showPage('detail')">
-            <td><input type="checkbox"></td>
-            <td><strong>Ubuntu 24.04.1 LTS Desktop amd64</strong></td>
-            <td><span class="status-badge seeding">&#9679; Seeding</span></td>
-            <td>5.7 GB</td>
-            <td class="speed-up">2.4 MB/s</td>
-            <td>48.2 GB</td>
-            <td style="color:var(--success)">8.45</td>
-            <td>142</td>
-            <td class="mono">tracker.ubuntu.com</td>
-            <td>qBittorrent</td>
-            <td>2024-08-01</td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>Debian 12.7.0 amd64 DVD</strong></td>
-            <td><span class="status-badge seeding">&#9679; Seeding</span></td>
-            <td>3.9 GB</td>
-            <td class="speed-up">1.8 MB/s</td>
-            <td>31.4 GB</td>
-            <td style="color:var(--success)">8.05</td>
-            <td>87</td>
-            <td class="mono">bttracker.debian.org</td>
-            <td>Deluge</td>
-            <td>2024-07-15</td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>Big.Buck.Bunny.1080p.BluRay</strong></td>
-            <td><span class="status-badge announcing">&#9679; Announcing</span></td>
-            <td>4.4 GB</td>
-            <td class="speed-up">0.9 MB/s</td>
-            <td>2.1 GB</td>
-            <td style="color:var(--text-secondary)">0.48</td>
-            <td>23</td>
-            <td class="mono">tracker.example.com</td>
-            <td>Transmission</td>
-            <td>2024-08-12</td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>Fedora-Workstation-40-x86_64</strong></td>
-            <td><span class="status-badge seeding">&#9679; Seeding</span></td>
-            <td>2.1 GB</td>
-            <td class="speed-up">3.1 MB/s</td>
-            <td>18.7 GB</td>
-            <td style="color:var(--success)">8.90</td>
-            <td>204</td>
-            <td class="mono">torrent.fedoraproject.org</td>
-            <td>qBittorrent</td>
-            <td>2024-06-20</td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>Sintel.2010.4K.Remaster</strong></td>
-            <td><span class="status-badge paused">&#9679; Paused</span></td>
-            <td>6.2 GB</td>
-            <td style="color:var(--text-muted)">-</td>
-            <td>12.4 GB</td>
-            <td style="color:var(--warning)">2.00</td>
-            <td>-</td>
-            <td class="mono">tracker.example.com</td>
-            <td>uTorrent</td>
-            <td>2024-05-10</td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>Arch.Linux.2024.08.01</strong></td>
-            <td><span class="status-badge seeding">&#9679; Seeding</span></td>
-            <td>891 MB</td>
-            <td class="speed-up">1.2 MB/s</td>
-            <td>9.8 GB</td>
-            <td style="color:var(--success)">11.0</td>
-            <td>56</td>
-            <td class="mono">tracker.archlinux.org</td>
-            <td>BiglyBT</td>
-            <td>2024-08-02</td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>LibreOffice.24.8.0</strong></td>
-            <td><span class="status-badge error">&#9679; Error</span></td>
-            <td>328 MB</td>
-            <td style="color:var(--text-muted)">-</td>
-            <td>1.2 GB</td>
-            <td style="color:var(--success)">3.66</td>
-            <td>-</td>
-            <td class="mono">tracker.documentfound...</td>
-            <td>Deluge</td>
-            <td>2024-08-10</td>
-          </tr>
-          <tr>
-            <td><input type="checkbox"></td>
-            <td><strong>Tears.of.Steel.2012.1080p</strong></td>
-            <td><span class="status-badge seeding">&#9679; Seeding</span></td>
-            <td>1.7 GB</td>
-            <td class="speed-up">0.6 MB/s</td>
-            <td>5.9 GB</td>
-            <td style="color:var(--success)">3.47</td>
-            <td>31</td>
-            <td class="mono">tracker.example.com</td>
-            <td>Transmission</td>
-            <td>2024-07-28</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- ==================== TORRENT DETAIL ==================== -->
-<div id="page-detail" class="page">
-  <div class="page-content">
-    <div class="detail-header">
-      <div>
-        <div class="detail-title">Ubuntu 24.04.1 LTS Desktop amd64</div>
-        <div class="detail-hash">Info Hash: 2c6b6858d61da9543d4231a71db4b1c9264b0685</div>
-      </div>
-      <div class="detail-actions">
-        <button class="btn btn-sm" onclick="showPage('torrents')">&#8592; Back</button>
-        <button class="btn btn-success btn-sm">&#9654; Seeding</button>
-        <button class="btn btn-sm">&#9724; Stop</button>
-        <button class="btn btn-danger btn-sm">&#128465; Remove</button>
-      </div>
-    </div>
-
-    <div class="detail-tabs">
-      <div class="detail-tab active">General</div>
-      <div class="detail-tab">Files</div>
-      <div class="detail-tab">Peers</div>
-      <div class="detail-tab">Trackers</div>
-      <div class="detail-tab">Stats</div>
-    </div>
-
-    <div class="detail-grid">
-      <div class="panel">
-        <div class="panel-header">Torrent Info</div>
-        <div class="panel-body">
-          <div class="detail-field">
-            <div class="detail-field-label">Status</div>
-            <div class="detail-field-value"><span class="status-badge seeding">&#9679; Seeding</span></div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Total Size</div>
-            <div class="detail-field-value">5.7 GB (6,114,074,624 bytes)</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Pieces</div>
-            <div class="detail-field-value">5,832 x 1 MB</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Added</div>
-            <div class="detail-field-value">August 1, 2024 14:32:10</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Source</div>
-            <div class="detail-field-value">Sonarr Auto-Sync</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Client Profile</div>
-            <div class="detail-field-value">qBittorrent 4.4.2</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-header">Seeding Stats</div>
-        <div class="panel-body">
-          <div class="detail-field">
-            <div class="detail-field-label">Upload Speed</div>
-            <div class="detail-field-value speed-up" style="font-size:20px;font-weight:600">2.4 MB/s</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Total Uploaded</div>
-            <div class="detail-field-value">48.2 GB</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Ratio</div>
-            <div class="detail-field-value" style="color:var(--success);font-size:20px;font-weight:600">8.45</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Connected Peers</div>
-            <div class="detail-field-value">142 (1,247 in swarm)</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Distribution Algorithm</div>
-            <div class="detail-field-value">Pareto (80/20)</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Seeding Time</div>
-            <div class="detail-field-value">12d 6h 42m</div>
-          </div>
+        <div class="panel" style="margin-top: 16px">
+          <div class="panel-header">Scheduled Tasks</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Task</th>
+                <th>Interval</th>
+                <th>Last Run</th>
+                <th>Next Run</th>
+                <th>Duration</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Announce to Trackers</td>
+                <td>30 min</td>
+                <td>5 min ago</td>
+                <td>in 25 min</td>
+                <td>3.2s</td>
+                <td><button class="btn btn-sm">Run Now</button></td>
+              </tr>
+              <tr>
+                <td>Sync *arr Downloads</td>
+                <td>15 min</td>
+                <td>8 min ago</td>
+                <td>in 7 min</td>
+                <td>1.8s</td>
+                <td><button class="btn btn-sm">Run Now</button></td>
+              </tr>
+              <tr>
+                <td>DHT Bootstrap</td>
+                <td>1 hour</td>
+                <td>42 min ago</td>
+                <td>in 18 min</td>
+                <td>12.4s</td>
+                <td><button class="btn btn-sm">Run Now</button></td>
+              </tr>
+              <tr>
+                <td>Health Check</td>
+                <td>5 min</td>
+                <td>2 min ago</td>
+                <td>in 3 min</td>
+                <td>0.4s</td>
+                <td><button class="btn btn-sm">Run Now</button></td>
+              </tr>
+              <tr>
+                <td>Backup Database</td>
+                <td>7 days</td>
+                <td>3 days ago</td>
+                <td>in 4 days</td>
+                <td>2.1s</td>
+                <td><button class="btn btn-sm">Run Now</button></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
-    <div class="panel" style="margin-top:16px">
-      <div class="panel-header">Trackers</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Tracker</th>
-            <th>Status</th>
-            <th>Seeders</th>
-            <th>Leechers</th>
-            <th>Last Announce</th>
-            <th>Next Announce</th>
-            <th>Protocol</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="mono">https://torrent.ubuntu.com/announce</td>
-            <td><span class="status-badge seeding">&#9679; OK</span></td>
-            <td>847</td>
-            <td>400</td>
-            <td>2 min ago</td>
-            <td>in 28 min</td>
-            <td>HTTP (BEP 3)</td>
-          </tr>
-          <tr>
-            <td class="mono">udp://tracker.openbittorrent.com:6969</td>
-            <td><span class="status-badge seeding">&#9679; OK</span></td>
-            <td>623</td>
-            <td>312</td>
-            <td>5 min ago</td>
-            <td>in 25 min</td>
-            <td>UDP (BEP 15)</td>
-          </tr>
-          <tr>
-            <td class="mono">udp://tracker.opentrackr.org:1337</td>
-            <td><span class="status-badge error">&#9679; Timeout</span></td>
-            <td>-</td>
-            <td>-</td>
-            <td>1h ago</td>
-            <td>in 14 min (retry 3)</td>
-            <td>UDP (BEP 15)</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<!-- ==================== SETTINGS ==================== -->
-<div id="page-settings" class="page">
-  <div class="settings-layout">
-    <div class="settings-nav">
-      <div class="settings-nav-item active">General</div>
-      <div class="settings-nav-item">Seeding</div>
-      <div class="settings-nav-item">Trackers</div>
-      <div class="settings-nav-item">Client Profiles</div>
-      <div class="settings-nav-item">*arr Connections</div>
-      <div class="settings-nav-item">Tracker Server</div>
-      <div class="settings-nav-item">Network</div>
-      <div class="settings-nav-item">Notifications</div>
-      <div class="settings-nav-item">Tags</div>
-      <div class="settings-nav-item">UI</div>
-    </div>
-    <div class="settings-content">
-      <div class="settings-section">
-        <div class="settings-section-title">Host</div>
-        <div class="form-group">
-          <label class="form-label">Bind Address</label>
-          <input type="text" class="form-input" value="*">
-          <div class="form-hint">Use * for all interfaces, localhost for local only</div>
+    <!-- ==================== ADD TORRENT MODAL ==================== -->
+    <div
+      id="addModal"
+      class="modal-overlay"
+      onclick="if (event.target === this) this.classList.remove('show');"
+    >
+      <div class="modal">
+        <div class="modal-header">
+          Add Torrent
+          <span
+            style="cursor: pointer; color: var(--text-secondary)"
+            onclick="
+              document.getElementById('addModal').classList.remove('show')
+            "
+            >&times;</span
+          >
         </div>
-        <div class="form-group">
-          <label class="form-label">Port</label>
-          <input type="number" class="form-input" value="9898" style="max-width:120px">
-        </div>
-        <div class="form-group">
-          <label class="form-label">URL Base</label>
-          <input type="text" class="form-input" placeholder="/seedarr">
-          <div class="form-hint">For reverse proxy setups</div>
-        </div>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section-title">Security</div>
-        <div class="form-group">
-          <label class="form-label">Authentication</label>
-          <select class="form-select">
-            <option>None</option>
-            <option selected>Forms (Login Page)</option>
-            <option>Basic (Browser Popup)</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">API Key</label>
-          <div class="form-row">
-            <input type="text" class="form-input mono" value="a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4" readonly>
-            <button class="btn btn-sm">Regenerate</button>
+        <div class="modal-body">
+          <div class="dropzone">
+            <div class="dropzone-icon">&#128194;</div>
+            <div>Drop .torrent file here or click to browse</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Or Magnet URI</label>
+            <input
+              type="text"
+              class="form-input"
+              style="max-width: 100%"
+              placeholder="magnet:?xt=urn:btih:..."
+            />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Client Profile</label>
+            <select class="form-select" style="max-width: 100%">
+              <option>qBittorrent 4.4.2</option>
+              <option>Deluge 2.0.3</option>
+              <option>Transmission 3.0</option>
+              <option>uTorrent 3.5.5</option>
+              <option>BiglyBT</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tags</label>
+            <input
+              type="text"
+              class="form-input"
+              style="max-width: 100%"
+              placeholder="linux, iso"
+            />
           </div>
         </div>
-      </div>
-
-      <div class="settings-section">
-        <div class="settings-section-title">Logging</div>
-        <div class="form-group">
-          <label class="form-label">Log Level</label>
-          <select class="form-select">
-            <option>Trace</option>
-            <option>Debug</option>
-            <option selected>Info</option>
-            <option>Warn</option>
-            <option>Error</option>
-          </select>
-        </div>
-      </div>
-
-      <div style="margin-top:24px">
-        <button class="btn btn-primary">Save Changes</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ==================== SYSTEM ==================== -->
-<div id="page-system" class="page">
-  <div class="page-content">
-    <div class="page-tabs" style="margin:-20px -20px 20px;position:static">
-      <div class="page-tab active">Status</div>
-      <div class="page-tab">Tasks</div>
-      <div class="page-tab">Logs</div>
-      <div class="page-tab">Backups</div>
-      <div class="page-tab">Updates</div>
-    </div>
-
-    <div class="detail-grid">
-      <div class="panel">
-        <div class="panel-header">About</div>
-        <div class="panel-body">
-          <div class="detail-field">
-            <div class="detail-field-label">Version</div>
-            <div class="detail-field-value">1.0.0.0</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">.NET Version</div>
-            <div class="detail-field-value">10.0.0</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">OS</div>
-            <div class="detail-field-value">Linux 6.8.0</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Uptime</div>
-            <div class="detail-field-value">14d 7h 23m</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">App Data</div>
-            <div class="detail-field-value mono">/home/user/.config/Seedarr</div>
-          </div>
-          <div class="detail-field">
-            <div class="detail-field-label">Database</div>
-            <div class="detail-field-value">SQLite (24.3 MB)</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-header">Health Checks</div>
-        <div class="panel-body">
-          <div class="health-item">
-            <span class="health-badge ok">OK</span>
-            <span>Trackers reachable</span>
-          </div>
-          <div class="health-item">
-            <span class="health-badge ok">OK</span>
-            <span>Active torrents seeding</span>
-          </div>
-          <div class="health-item">
-            <span class="health-badge ok">OK</span>
-            <span>Sonarr connection</span>
-          </div>
-          <div class="health-item">
-            <span class="health-badge ok">OK</span>
-            <span>Radarr connection</span>
-          </div>
-          <div class="health-item">
-            <span class="health-badge warn">WARN</span>
-            <span>UPnP port mapping failed on router</span>
-          </div>
-          <div class="health-item">
-            <span class="health-badge ok">OK</span>
-            <span>Disk space (847 GB free)</span>
-          </div>
+        <div class="modal-footer">
+          <button
+            class="btn"
+            onclick="
+              document.getElementById('addModal').classList.remove('show')
+            "
+          >
+            Cancel
+          </button>
+          <button class="btn btn-primary">Add</button>
         </div>
       </div>
     </div>
 
-    <div class="panel" style="margin-top:16px">
-      <div class="panel-header">Scheduled Tasks</div>
-      <table>
-        <thead>
-          <tr>
-            <th>Task</th>
-            <th>Interval</th>
-            <th>Last Run</th>
-            <th>Next Run</th>
-            <th>Duration</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Announce to Trackers</td>
-            <td>30 min</td>
-            <td>5 min ago</td>
-            <td>in 25 min</td>
-            <td>3.2s</td>
-            <td><button class="btn btn-sm">Run Now</button></td>
-          </tr>
-          <tr>
-            <td>Sync *arr Downloads</td>
-            <td>15 min</td>
-            <td>8 min ago</td>
-            <td>in 7 min</td>
-            <td>1.8s</td>
-            <td><button class="btn btn-sm">Run Now</button></td>
-          </tr>
-          <tr>
-            <td>DHT Bootstrap</td>
-            <td>1 hour</td>
-            <td>42 min ago</td>
-            <td>in 18 min</td>
-            <td>12.4s</td>
-            <td><button class="btn btn-sm">Run Now</button></td>
-          </tr>
-          <tr>
-            <td>Health Check</td>
-            <td>5 min</td>
-            <td>2 min ago</td>
-            <td>in 3 min</td>
-            <td>0.4s</td>
-            <td><button class="btn btn-sm">Run Now</button></td>
-          </tr>
-          <tr>
-            <td>Backup Database</td>
-            <td>7 days</td>
-            <td>3 days ago</td>
-            <td>in 4 days</td>
-            <td>2.1s</td>
-            <td><button class="btn btn-sm">Run Now</button></td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <div class="status-item">
+        <div class="status-dot green"></div>
+        Connected
+      </div>
+      <div class="status-separator"></div>
+      <div class="status-item">
+        <span class="speed-up">&#9650; 14.7 MB/s</span>
+      </div>
+      <div class="status-separator"></div>
+      <div class="status-item">
+        <span class="speed-down">&#9660; 0 B/s</span>
+      </div>
+      <div class="status-separator"></div>
+      <div class="status-item">38 active</div>
+      <div class="status-separator"></div>
+      <div class="status-item">47 torrents</div>
+      <div style="flex: 1"></div>
+      <div class="status-item">Seedarr v1.0.0</div>
     </div>
-  </div>
-</div>
 
-<!-- ==================== ADD TORRENT MODAL ==================== -->
-<div id="addModal" class="modal-overlay" onclick="if(event.target===this)this.classList.remove('show')">
-  <div class="modal">
-    <div class="modal-header">
-      Add Torrent
-      <span style="cursor:pointer;color:var(--text-secondary)" onclick="document.getElementById('addModal').classList.remove('show')">&times;</span>
-    </div>
-    <div class="modal-body">
-      <div class="dropzone">
-        <div class="dropzone-icon">&#128194;</div>
-        <div>Drop .torrent file here or click to browse</div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Or Magnet URI</label>
-        <input type="text" class="form-input" style="max-width:100%" placeholder="magnet:?xt=urn:btih:...">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Client Profile</label>
-        <select class="form-select" style="max-width:100%">
-          <option>qBittorrent 4.4.2</option>
-          <option>Deluge 2.0.3</option>
-          <option>Transmission 3.0</option>
-          <option>uTorrent 3.5.5</option>
-          <option>BiglyBT</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Tags</label>
-        <input type="text" class="form-input" style="max-width:100%" placeholder="linux, iso">
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="document.getElementById('addModal').classList.remove('show')">Cancel</button>
-      <button class="btn btn-primary">Add</button>
-    </div>
-  </div>
-</div>
-
-<!-- Status Bar -->
-<div class="status-bar">
-  <div class="status-item">
-    <div class="status-dot green"></div>
-    Connected
-  </div>
-  <div class="status-separator"></div>
-  <div class="status-item">
-    <span class="speed-up">&#9650; 14.7 MB/s</span>
-  </div>
-  <div class="status-separator"></div>
-  <div class="status-item">
-    <span class="speed-down">&#9660; 0 B/s</span>
-  </div>
-  <div class="status-separator"></div>
-  <div class="status-item">38 active</div>
-  <div class="status-separator"></div>
-  <div class="status-item">47 torrents</div>
-  <div style="flex:1"></div>
-  <div class="status-item">Seedarr v1.0.0</div>
-</div>
-
-<script>
-function showPage(name) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  document.querySelectorAll('.navbar-link').forEach(l => l.classList.remove('active'));
-  const map = { dashboard: 0, torrents: 1, detail: 1, settings: 2, system: 3 };
-  document.querySelectorAll('.navbar-link')[map[name]].classList.add('active');
-}
-</script>
-</body>
+    <script>
+      function showPage(name) {
+        document
+          .querySelectorAll(".page")
+          .forEach((p) => p.classList.remove("active"));
+        document.getElementById("page-" + name).classList.add("active");
+        document
+          .querySelectorAll(".navbar-link")
+          .forEach((l) => l.classList.remove("active"));
+        const map = {
+          dashboard: 0,
+          torrents: 1,
+          detail: 1,
+          settings: 2,
+          system: 3,
+        };
+        document
+          .querySelectorAll(".navbar-link")
+          [map[name]].classList.add("active");
+      }
+    </script>
+  </body>
 </html>
