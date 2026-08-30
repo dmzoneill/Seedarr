@@ -66,7 +66,17 @@ function TrackerServer() {
   });
 
   return (
-    <div className="content-area">
+    <div
+      className="content-area"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+        boxSizing: "border-box",
+      }}
+    >
       {/* Header Row */}
       <div
         className="page-header"
@@ -134,7 +144,10 @@ function TrackerServer() {
       </div>
 
       {/* Top Stat Cards */}
-      <div className="tracker-stats-grid" style={{ marginBottom: "1rem" }}>
+      <div
+        className="tracker-stats-grid"
+        style={{ marginBottom: "1rem", flexShrink: 0 }}
+      >
         <div className="card tracker-stat-card">
           <div className="tracker-stat-label">Total Torrents</div>
           <div className="tracker-stat-value">
@@ -181,6 +194,7 @@ function TrackerServer() {
             borderRadius: "8px",
             boxShadow:
               "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+            flexShrink: 0,
           }}
         >
           {config.trackerHttpEnabled && httpAnnounceUrl && (
@@ -211,11 +225,12 @@ function TrackerServer() {
                 </code>
               </div>
               <button
-                className="btn btn-small btn-outline"
-                onClick={() => copyToClipboard(httpAnnounceUrl, "HTTP")}
+                className="btn btn-outline"
+                style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                onClick={() => copyToClipboard(httpAnnounceUrl, "HTTP URL")}
                 title="Copy HTTP Announce URL"
               >
-                📋 Copy
+                Copy
               </button>
             </div>
           )}
@@ -248,11 +263,12 @@ function TrackerServer() {
                 </code>
               </div>
               <button
-                className="btn btn-small btn-outline"
-                onClick={() => copyToClipboard(udpAnnounceUrl, "UDP")}
+                className="btn btn-outline"
+                style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                onClick={() => copyToClipboard(udpAnnounceUrl, "UDP URL")}
                 title="Copy UDP Announce URL"
               >
-                📋 Copy
+                Copy
               </button>
             </div>
           )}
@@ -270,6 +286,7 @@ function TrackerServer() {
           gap: "1rem",
           marginBottom: "1.25rem",
           padding: "0.75rem 1rem",
+          flexShrink: 0,
         }}
       >
         <div
