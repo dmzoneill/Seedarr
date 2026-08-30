@@ -467,11 +467,15 @@ export default function DownloadClientTorrents() {
         viewMode === "grid" && (
           <div
             style={{
-              flex: "1 1 auto",
+              flex: "1 1 0%",
               minHeight: 0,
+              height: "100%",
+              width: "100%",
               overflowY: "auto",
+              overflowX: "hidden",
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
+              gridAutoRows: "max-content",
               alignContent: "start",
               gap: "1.25rem",
               paddingRight: "0.25rem",
@@ -506,6 +510,8 @@ export default function DownloadClientTorrents() {
                     display: "flex",
                     flexDirection: "column",
                     height: "auto",
+                    minHeight: "min-content",
+                    flexShrink: 0,
                     borderRadius: "8px",
                     border: "1px solid rgba(255, 255, 255, 0.08)",
                     backgroundColor: "var(--bg-secondary)",
@@ -519,9 +525,10 @@ export default function DownloadClientTorrents() {
                     style={{
                       position: "relative",
                       width: "100%",
-                      paddingTop: "140%", // 2:3 aspect ratio matching TrackerServer
+                      aspectRatio: "2 / 3",
                       backgroundColor: "#141414",
                       overflow: "hidden",
+                      flexShrink: 0,
                     }}
                   >
                     {hasPoster ? (
@@ -676,8 +683,9 @@ export default function DownloadClientTorrents() {
                       padding: "0.85rem",
                       display: "flex",
                       flexDirection: "column",
-                      flex: 1,
+                      flex: "0 0 auto",
                       gap: "0.4rem",
+                      backgroundColor: "var(--bg-secondary)",
                     }}
                   >
                     <div
