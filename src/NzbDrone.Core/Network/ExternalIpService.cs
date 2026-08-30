@@ -1,10 +1,14 @@
 using System;
+using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Net.NetworkInformation;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
+using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Network;
 
@@ -16,10 +20,13 @@ public interface IExternalIpService
 
 public class ExternalIpService : BackgroundService, IExternalIpService
 {
+    private const string PrimaryEndpointTemplate = "https://seedarr.net/my/?uuid={0}";
+    private const string PrimaryHttpEndpointTemplate = "http://seedarr.net/my/?uuid={0}";
+
     private static readonly TimeSpan FallbackInterval = TimeSpan.FromHours(6);
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(1);
 
-    private static readonly string[] Sources =
+    private static readonly string[] FallbackSources =
     {
         "https://api.ipify.org",
         "https://ifconfig.me/ip",
@@ -34,6 +41,7 @@ public class ExternalIpService : BackgroundService, IExternalIpService
     { Timeout = TimeSpan.FromSeconds(5) };
 
     private readonly HttpClient _client;
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
     private readonly SemaphoreSlim _fetchLock = new(1, 1);
     private string _cachedIp = "";
@@ -42,10 +50,21 @@ public class ExternalIpService : BackgroundService, IExternalIpService
 
     public string CachedIp => _cachedIp;
 
-    public ExternalIpService(HttpClient httpClient = null)
+    public ExternalIpService(IConfigService configService, HttpClient httpClient = null)
     {
+        _configService = configService;
         _client = httpClient ?? SharedClient;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public ExternalIpService(HttpClient httpClient)
+        : this(null, httpClient)
+    {
+    }
+
+    public ExternalIpService()
+        : this(null, null)
+    {
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -124,13 +143,26 @@ public class ExternalIpService : BackgroundService, IExternalIpService
 
         try
         {
-            foreach (var source in Sources)
+            var uuid = _configService?.InstanceUuid;
+            if (string.IsNullOrWhiteSpace(uuid))
+            {
+                uuid = Guid.NewGuid().ToString().ToLowerInvariant();
+            }
+
+            var sources = new List<string>
+            {
+                string.Format(PrimaryEndpointTemplate, Uri.EscapeDataString(uuid)),
+                string.Format(PrimaryHttpEndpointTemplate, Uri.EscapeDataString(uuid))
+            };
+            sources.AddRange(FallbackSources);
+
+            foreach (var source in sources)
             {
                 try
                 {
-                    var ip = (await _client.GetStringAsync(source, cancellationToken)).Trim();
+                    var response = await _client.GetStringAsync(source, cancellationToken);
 
-                    if (System.Net.IPAddress.TryParse(ip, out _))
+                    if (TryExtractIpFromResponse(response, out var ip))
                     {
                         _cachedIp = ip;
                         _lastFetch = DateTime.UtcNow;
@@ -150,5 +182,82 @@ public class ExternalIpService : BackgroundService, IExternalIpService
         {
             _fetchLock.Release();
         }
+    }
+
+    public static bool TryExtractIpFromResponse(string responseText, out string ip)
+    {
+        ip = string.Empty;
+        if (string.IsNullOrWhiteSpace(responseText))
+        {
+            return false;
+        }
+
+        var trimmed = responseText.Trim();
+
+        // 1. Try parsing JSON format (e.g. from seedarr.net/my/?uuid=...)
+        try
+        {
+            using var doc = JsonDocument.Parse(trimmed);
+            var root = doc.RootElement;
+
+            // Check for { "data": { "ip": "127.0.0.1" } } or { "data": { "ip_address": "127.0.0.1" } }
+            if (root.TryGetProperty("data", out var dataElem) && dataElem.ValueKind == JsonValueKind.Object)
+            {
+                if (dataElem.TryGetProperty("ip", out var ipElem) && ipElem.ValueKind == JsonValueKind.String)
+                {
+                    var candidate = ipElem.GetString()?.Trim();
+                    if (!string.IsNullOrEmpty(candidate) && IPAddress.TryParse(candidate, out _))
+                    {
+                        ip = candidate;
+                        return true;
+                    }
+                }
+
+                if (dataElem.TryGetProperty("ip_address", out var ipAddressElem) && ipAddressElem.ValueKind == JsonValueKind.String)
+                {
+                    var candidate = ipAddressElem.GetString()?.Trim();
+                    if (!string.IsNullOrEmpty(candidate) && IPAddress.TryParse(candidate, out _))
+                    {
+                        ip = candidate;
+                        return true;
+                    }
+                }
+            }
+
+            // Check for root { "ip": "..." }
+            if (root.TryGetProperty("ip", out var simpleIpElem) && simpleIpElem.ValueKind == JsonValueKind.String)
+            {
+                var candidate = simpleIpElem.GetString()?.Trim();
+                if (!string.IsNullOrEmpty(candidate) && IPAddress.TryParse(candidate, out _))
+                {
+                    ip = candidate;
+                    return true;
+                }
+            }
+
+            // Check for root { "ip_address": "..." }
+            if (root.TryGetProperty("ip_address", out var rootIpElem) && rootIpElem.ValueKind == JsonValueKind.String)
+            {
+                var candidate = rootIpElem.GetString()?.Trim();
+                if (!string.IsNullOrEmpty(candidate) && IPAddress.TryParse(candidate, out _))
+                {
+                    ip = candidate;
+                    return true;
+                }
+            }
+        }
+        catch
+        {
+            // Not JSON, continue to plain IP parsing
+        }
+
+        // 2. Try parsing plain text IP
+        if (IPAddress.TryParse(trimmed, out _))
+        {
+            ip = trimmed;
+            return true;
+        }
+
+        return false;
     }
 }

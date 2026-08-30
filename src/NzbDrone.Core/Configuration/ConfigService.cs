@@ -15,6 +15,9 @@ public interface IConfigService
     int GetValueInt(string key, int defaultValue = 0);
     double GetValueDouble(string key, double defaultValue = 0.0);
 
+    // Instance Identity
+    string InstanceUuid { get; }
+
     // General
     bool AutoStart { get; }
     string ThemeStyle { get; }
@@ -286,6 +289,23 @@ public class ConfigService : IConfigService
     {
         var value = GetValueInt(key, defaultValue);
         return value > 0 ? value : defaultValue;
+    }
+
+    // Instance Identity
+    public string InstanceUuid
+    {
+        get
+        {
+            var uuid = GetValue("InstanceUuid", string.Empty);
+            if (string.IsNullOrWhiteSpace(uuid))
+            {
+                uuid = Guid.NewGuid().ToString().ToLowerInvariant();
+                SaveConfigDictionary(new Dictionary<string, object> { { "InstanceUuid", uuid } });
+                _logger.Info("Generated and saved new instance UUID: {0}", uuid);
+            }
+
+            return uuid;
+        }
     }
 
     // General

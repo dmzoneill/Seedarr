@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
 using Seedarr.Http;
@@ -24,17 +25,20 @@ public class SystemController : ControllerBase
     private readonly IManageCommandQueue _commandQueueManager;
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IHostApplicationLifetime _lifetime;
+    private readonly IConfigService _configService;
 
     public SystemController(
         ITaskManager taskManager,
         IManageCommandQueue commandQueueManager,
         IAppFolderInfo appFolderInfo,
-        IHostApplicationLifetime lifetime)
+        IHostApplicationLifetime lifetime,
+        IConfigService configService = null)
     {
         _taskManager = taskManager;
         _commandQueueManager = commandQueueManager;
         _appFolderInfo = appFolderInfo;
         _lifetime = lifetime;
+        _configService = configService;
     }
 
     /// <summary>
@@ -60,6 +64,7 @@ public class SystemController : ControllerBase
         {
             AppName = BuildInfo.AppName,
             Version = BuildInfo.Version.ToString(),
+            InstanceUuid = _configService?.InstanceUuid ?? string.Empty,
             OsName = OsInfo.Os,
             OsVersion = OsInfo.Version,
             IsWindows = OsInfo.IsWindows,
