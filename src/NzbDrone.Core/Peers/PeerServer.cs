@@ -26,6 +26,7 @@ public class PeerServer : BackgroundService
     private readonly IPeerDiscoveryService _peerDiscovery;
     private readonly Trackers.MultiTracker.IMultiTrackerManager _multiTracker;
     private readonly ITorrentEventLogService _eventLogService;
+    private readonly Trackers.Metrics.ITrackerMetricService _trackerMetricService;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
     private readonly Logger _logger;
@@ -33,19 +34,21 @@ public class PeerServer : BackgroundService
     public PeerServer(
         IConfigService configService,
         ITorrentService torrentService,
-        ITrackerEntryService trackerEntryService,
         IConnectionManager connectionManager,
         IPeerDiscoveryService peerDiscovery,
         Trackers.MultiTracker.IMultiTrackerManager multiTracker,
-        ITorrentEventLogService eventLogService)
+        ITrackerEntryService trackerEntryService = null,
+        ITorrentEventLogService eventLogService = null,
+        Trackers.Metrics.ITrackerMetricService trackerMetricService = null)
     {
         _configService = configService;
         _torrentService = torrentService;
-        _trackerEntryService = trackerEntryService;
         _connectionManager = connectionManager;
         _peerDiscovery = peerDiscovery;
         _multiTracker = multiTracker;
+        _trackerEntryService = trackerEntryService;
         _eventLogService = eventLogService;
+        _trackerMetricService = trackerMetricService;
         _connectionSemaphore = new SemaphoreSlim(configService.MaxGlobalConnections);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -243,6 +246,19 @@ public class PeerServer : BackgroundService
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var response = _multiTracker.Announce(request, announceList);
                 sw.Stop();
+
+                _trackerMetricService?.RecordAnnounce(
+                    entry.Url,
+                    torrent.Id,
+                    torrent.Uploaded,
+                    torrent.Downloaded,
+                    Math.Max(0, torrent.TotalSize - torrent.Downloaded),
+                    sw.ElapsedMilliseconds,
+                    response.Success,
+                    response.Complete,
+                    response.Incomplete,
+                    response.Peers?.Count ?? 0,
+                    response.FailureReason);
 
                 entry.TotalAnnounces++;
                 entry.LastResponseTime = sw.ElapsedMilliseconds;

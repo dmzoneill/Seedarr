@@ -110,6 +110,12 @@ export function CommandPalette({
         icon: "📡",
       },
       {
+        path: "/tracker/metrics",
+        title: "Tracker Metrics",
+        subtitle: "Telemetry, traffic statistics, scrape responses and latency",
+        icon: "🌐",
+      },
+      {
         path: "/peermap",
         title: "Peer Map",
         subtitle: "Global swarm distribution and GeoIP connections",
