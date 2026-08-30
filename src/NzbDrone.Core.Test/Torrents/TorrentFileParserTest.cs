@@ -369,4 +369,39 @@ public class TorrentFileParserTest
 
         Assert.That(result.AnnounceList, Is.Null);
     }
+
+    [Test]
+    public void Parse_should_extract_flat_announce_list_when_present()
+    {
+        var torrentDict = CreateMinimalTorrent();
+        var announceList = new BList
+        {
+            new BString("udp://tracker1.example.com:6969/announce"),
+            new BString("udp://tracker2.example.com:6969/announce")
+        };
+        torrentDict.Add("announce-list", announceList);
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.AnnounceList, Has.Count.EqualTo(2));
+        Assert.That(result.AnnounceList[0][0], Is.EqualTo("udp://tracker1.example.com:6969/announce"));
+        Assert.That(result.AnnounceList[1][0], Is.EqualTo("udp://tracker2.example.com:6969/announce"));
+    }
+
+    [Test]
+    public void Parse_should_fallback_announce_url_to_first_announce_list_entry_when_announce_not_set()
+    {
+        var torrentDict = CreateMinimalTorrent();
+        var announceList = new BList
+        {
+            new BList { new BString("udp://tracker-primary.example.com:1337/announce") }
+        };
+        torrentDict.Add("announce-list", announceList);
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.AnnounceUrl, Is.EqualTo("udp://tracker-primary.example.com:1337/announce"));
+    }
 }
