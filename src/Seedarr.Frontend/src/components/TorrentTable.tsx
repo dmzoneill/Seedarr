@@ -249,12 +249,18 @@ function TorrentTable({
       return false;
     if (stateFilter && stateFilter !== "All" && t.status !== stateFilter)
       return false;
-    if (
-      trackerFilter &&
-      trackerFilter !== "All" &&
-      extractTrackerDomain(t.trackerUrl) !== trackerFilter
-    )
-      return false;
+    if (trackerFilter && trackerFilter !== "All") {
+      const urls =
+        t.trackers && t.trackers.length > 0
+          ? t.trackers
+          : t.trackerUrl
+            ? [t.trackerUrl]
+            : [];
+      const hasTracker = urls.some(
+        (u) => extractTrackerDomain(u) === trackerFilter,
+      );
+      if (!hasTracker) return false;
+    }
     return true;
   });
 

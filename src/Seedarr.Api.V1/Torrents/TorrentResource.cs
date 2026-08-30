@@ -55,5 +55,6 @@ public class TorrentResource : RestResource
     public string Overview { get; set; }
     public double? Rating { get; set; }
     public List<string> Genres { get; set; } = new();
+    public List<string> Trackers { get; set; } = new();
     public string Source { get; set; }
 }
