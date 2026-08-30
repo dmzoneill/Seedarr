@@ -229,14 +229,21 @@ export default function DownloadHistory() {
           gap: "1rem",
           marginBottom: "1.25rem",
           padding: "0.75rem 1rem",
+          borderRadius: "8px",
+          boxShadow: "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
         }}
       >
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
           {(["all", "Active", "Completed", "Removed"] as const).map((st) => (
             <button
               key={st}
               className={`btn ${statusFilter === st ? "btn-primary" : "btn-outline"}`}
-              style={{ fontSize: "0.85rem", padding: "0.35rem 0.75rem" }}
+              style={{
+                fontSize: "0.82rem",
+                padding: "0.35rem 0.85rem",
+                borderRadius: "6px",
+                fontWeight: 500,
+              }}
               onClick={() => setStatusFilter(st)}
             >
               {st === "all" ? "All" : st}
@@ -254,9 +261,9 @@ export default function DownloadHistory() {
             style={{
               width: "100%",
               padding: "0.4rem 0.75rem",
-              borderRadius: "4px",
-              border: "1px solid var(--border-color, #444)",
-              backgroundColor: "var(--bg-secondary, #222)",
+              borderRadius: "6px",
+              border: "1px solid var(--border-light)",
+              backgroundColor: "var(--bg-primary)",
               color: "inherit",
               fontSize: "0.85rem",
             }}
@@ -265,7 +272,7 @@ export default function DownloadHistory() {
             <button
               className="btn btn-outline"
               onClick={() => setSearchTerm("")}
-              style={{ fontSize: "0.75rem", padding: "0.35rem 0.5rem" }}
+              style={{ fontSize: "0.75rem", padding: "0.35rem 0.5rem", borderRadius: "6px" }}
               title="Clear search filter"
             >
               ✕
@@ -276,19 +283,19 @@ export default function DownloadHistory() {
 
       {/* Loading & Error States */}
       {isLoading && (
-        <div className="card" style={{ padding: "3rem", textAlign: "center" }}>
+        <div className="card" style={{ padding: "3rem", textAlign: "center", borderRadius: "8px" }}>
           <div className="loading">Loading download history & rich metadata...</div>
         </div>
       )}
 
       {isError && (
-        <div className="card" style={{ padding: "2rem", textAlign: "center", color: "var(--danger, #dc3545)" }}>
+        <div className="card" style={{ padding: "2rem", textAlign: "center", color: "var(--danger, #dc3545)", borderRadius: "8px" }}>
           Failed to load download history.
         </div>
       )}
 
       {!isLoading && !isError && totalCount === 0 && (
-        <div className="card empty-state" style={{ padding: "3.5rem 1rem", textAlign: "center" }}>
+        <div className="card empty-state" style={{ padding: "3.5rem 1rem", textAlign: "center", borderRadius: "8px" }}>
           <div className="empty-state-title" style={{ fontSize: "1.25rem", fontWeight: 600, marginBottom: "0.5rem" }}>
             No Historical Downloads
           </div>
@@ -325,9 +332,10 @@ export default function DownloadHistory() {
                   display: "flex",
                   flexDirection: "column",
                   borderRadius: "8px",
-                  border: "1px solid var(--border-color, #333)",
-                  backgroundColor: "var(--bg-secondary, #1e1e1e)",
-                  transition: "transform 0.18s ease, box-shadow 0.18s ease",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  backgroundColor: "var(--bg-secondary)",
+                  boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2)",
+                  transition: "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
                   cursor: "pointer",
                 }}
                 onClick={() => setSelectedDetailItem(item)}

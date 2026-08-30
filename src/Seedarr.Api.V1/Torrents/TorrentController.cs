@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
@@ -22,6 +24,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly IConnectionManager _connectionManager;
     private readonly ITorrentEventLogService _eventLogService;
     private readonly IConfigService _configService;
+    private readonly IDownloadHistoryRepository _downloadHistoryRepository;
 
     public TorrentController(
         ITorrentService torrentService,
@@ -32,7 +35,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         ITorrentEventLogService eventLogService,
         IConfigService configService,
         IBroadcastSignalRMessage signalRBroadcaster,
-        TorrentResourceValidator torrentResourceValidator)
+        TorrentResourceValidator torrentResourceValidator,
+        IDownloadHistoryRepository downloadHistoryRepository = null)
         : base(signalRBroadcaster)
     {
         _torrentService = torrentService;
@@ -42,6 +46,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _connectionManager = connectionManager;
         _eventLogService = eventLogService;
         _configService = configService;
+        _downloadHistoryRepository = downloadHistoryRepository;
 
         SharedValidator = torrentResourceValidator;
     }
@@ -75,6 +80,40 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         {
             resource.AnnounceInterval = _configService.AnnounceIntervalSeconds;
             resource.NextUpdate = 0;
+        }
+
+        if (_downloadHistoryRepository != null && !string.IsNullOrEmpty(torrent.InfoHash))
+        {
+            try
+            {
+                var history = _downloadHistoryRepository.FindByInfoHash(torrent.InfoHash);
+                if (history != null)
+                {
+                    resource.Source = history.Source;
+                    if (!string.IsNullOrEmpty(history.DataJson))
+                    {
+                        var metadata = JsonSerializer.Deserialize<MediaMetadata>(
+                            history.DataJson,
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+                        if (metadata != null)
+                        {
+                            resource.PosterUrl = metadata.PosterUrl;
+                            resource.FanartUrl = metadata.FanartUrl;
+                            resource.BannerUrl = metadata.BannerUrl;
+                            resource.MediaTitle = metadata.Title;
+                            resource.Year = metadata.Year;
+                            resource.Overview = metadata.Overview;
+                            resource.Rating = metadata.Rating;
+                            resource.Genres = metadata.Genres ?? new();
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback gracefully
+            }
         }
 
         return resource;
