@@ -26,8 +26,8 @@ function getNiceMax(value: number): number {
 }
 
 function SpeedGraph({
-  width = 700,
-  height = 250,
+  width = 1200,
+  height = 200,
   maxPoints = 60,
 }: SpeedGraphProps) {
   const historyRef = useRef<SpeedDataPoint[]>([]);
@@ -97,7 +97,7 @@ function SpeedGraph({
   }, [stats, maxPoints]);
 
   const history = historyRef.current;
-  const padding = { top: 10, right: 20, bottom: 30, left: 70 };
+  const padding = { top: 12, right: 24, bottom: 26, left: 80 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
@@ -138,31 +138,62 @@ function SpeedGraph({
     history.length > 0 ? history[history.length - 1].downloadSpeed : 0;
 
   return (
-    <div className="card">
-      <h3>Transfer Speed</h3>
-      <div className="speed-graph-legend">
-        <span className="speed-graph-legend-item">
-          <span
-            className="speed-graph-indicator"
-            style={{ backgroundColor: "#c8a84e" }}
-          />
-          Upload: {formatSpeed(currentUpload)}
-        </span>
-        <span className="speed-graph-legend-item">
-          <span
-            className="speed-graph-indicator"
-            style={{ backgroundColor: "#b5443a" }}
-          />
-          Download: {formatSpeed(currentDownload)}
-        </span>
+    <div
+      className="card"
+      style={{
+        borderRadius: "8px",
+        boxShadow:
+          "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "0.75rem",
+        }}
+      >
+        <h3 style={{ margin: 0, border: "none", padding: 0 }}>
+          Transfer Speed
+        </h3>
+        <div className="speed-graph-legend" style={{ margin: 0 }}>
+          <span className="speed-graph-legend-item">
+            <span
+              className="speed-graph-indicator"
+              style={{ backgroundColor: "var(--accent)" }}
+            />
+            Upload: <strong>{formatSpeed(currentUpload)}</strong>
+          </span>
+          <span className="speed-graph-legend-item">
+            <span
+              className="speed-graph-indicator"
+              style={{ backgroundColor: "var(--danger)" }}
+            />
+            Download: <strong>{formatSpeed(currentDownload)}</strong>
+          </span>
+        </div>
       </div>
-      <div className="speed-graph">
+
+      <div className="speed-graph" style={{ width: "100%", height: "200px" }}>
         <svg
           width="100%"
           height="100%"
           viewBox={`0 0 ${width} ${height}`}
-          preserveAspectRatio="xMidYMid meet"
+          preserveAspectRatio="none"
         >
+          <defs>
+            <linearGradient id="uploadGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#c8a84e" stopOpacity="0.25" />
+              <stop offset="100%" stopColor="#c8a84e" stopOpacity="0.0" />
+            </linearGradient>
+            <linearGradient id="downloadGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#b5443a" stopOpacity="0.2" />
+              <stop offset="100%" stopColor="#b5443a" stopOpacity="0.0" />
+            </linearGradient>
+          </defs>
+
+          {/* Grid lines & values */}
           {gridLines.map(({ value, y }, i) => (
             <g key={i}>
               <line
@@ -170,14 +201,15 @@ function SpeedGraph({
                 y1={y}
                 x2={width - padding.right}
                 y2={y}
-                stroke="#3a352e"
+                stroke="rgba(255, 255, 255, 0.08)"
                 strokeWidth={1}
+                strokeDasharray={i === 0 ? "none" : "3 3"}
               />
               <text
                 x={padding.left - 8}
                 y={y + 4}
                 textAnchor="end"
-                fill="#7a7060"
+                fill="var(--text-dim)"
                 fontSize={11}
                 fontFamily="inherit"
               >
@@ -186,10 +218,11 @@ function SpeedGraph({
             </g>
           ))}
 
+          {/* Time axis labels */}
           <text
             x={padding.left}
-            y={height - 5}
-            fill="#7a7060"
+            y={height - 6}
+            fill="var(--text-dim)"
             fontSize={11}
             textAnchor="start"
           >
@@ -197,8 +230,8 @@ function SpeedGraph({
           </text>
           <text
             x={padding.left + chartWidth / 2}
-            y={height - 5}
-            fill="#7a7060"
+            y={height - 6}
+            fill="var(--text-dim)"
             fontSize={11}
             textAnchor="middle"
           >
@@ -206,24 +239,27 @@ function SpeedGraph({
           </text>
           <text
             x={width - padding.right}
-            y={height - 5}
-            fill="#7a7060"
+            y={height - 6}
+            fill="var(--text-dim)"
             fontSize={11}
             textAnchor="end"
           >
             now
           </text>
 
+          {/* Chart Boundary */}
           <rect
             x={padding.left}
             y={padding.top}
             width={chartWidth}
             height={chartHeight}
-            fill="none"
-            stroke="#3a352e"
+            fill="rgba(255, 255, 255, 0.01)"
+            stroke="rgba(255, 255, 255, 0.1)"
             strokeWidth={1}
+            rx={4}
           />
 
+          {/* Polylines */}
           {uploadPoints && (
             <polyline
               points={uploadPoints}
