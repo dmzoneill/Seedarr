@@ -164,6 +164,20 @@ public class TrackerBoostController : Controller
         var recovered = await _trackerBoostService.RecoverMissingTrackersAsync();
         return Ok(new { success = true, recoveredCount = recovered });
     }
+
+    [HttpGet("logs")]
+    public IActionResult GetLogs([FromQuery] int limit = 100, [FromQuery] string category = null, [FromQuery] string level = null)
+    {
+        var logs = _trackerBoostService.GetLogs(limit, category, level);
+        return Ok(logs);
+    }
+
+    [HttpDelete("logs")]
+    public IActionResult ClearLogs()
+    {
+        _trackerBoostService.ClearLogs();
+        return Ok(new { success = true });
+    }
 }
 
 public class AddTrackerResource

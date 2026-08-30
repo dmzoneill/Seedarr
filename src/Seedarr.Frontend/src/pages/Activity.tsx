@@ -1,9 +1,14 @@
-import { useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTorrents, useSeedingStats, useSpeedHistory } from "../api/hooks";
 import { formatSpeed, formatRatio } from "../utils/formatters";
 import LineChart from "../components/LineChart";
 
 const MAX_POINTS = 60;
+
+function sanitizeNumber(val: unknown): number {
+  const num = typeof val === "number" ? val : parseFloat(String(val));
+  return Number.isFinite(num) && num > 0 ? num : 0;
+}
 
 interface HistoryState {
   uploadSpeed: number[];
@@ -19,7 +24,7 @@ function Activity() {
   const { data: stats } = useSeedingStats();
   const { data: serverHistory } = useSpeedHistory();
 
-  const historyRef = useRef<HistoryState>({
+  const [history, setHistory] = useState<HistoryState>({
     uploadSpeed: [],
     downloadSpeed: [],
     activeTorrents: [],
@@ -41,20 +46,27 @@ function Activity() {
     seededRef.current = true;
 
     const recent = serverHistory.slice(-MAX_POINTS);
-    const h = historyRef.current;
+    const up = recent.map((s) => sanitizeNumber(s.uploadSpeed));
+    const down = recent.map((s) => sanitizeNumber(s.downloadSpeed));
+    const act = recent.map((s) => sanitizeNumber(s.activeTorrents));
+    const peers = recent.map((s) => sanitizeNumber(s.totalPeers));
+    const rat = recent.map((s) => sanitizeNumber(s.averageRatio));
+    const net = recent.map((s) => sanitizeNumber(s.uploadSpeed) + sanitizeNumber(s.downloadSpeed));
 
-    h.uploadSpeed = recent.map((s) => s.uploadSpeed);
-    h.downloadSpeed = recent.map((s) => s.downloadSpeed);
-    h.activeTorrents = recent.map((s) => s.activeTorrents);
-    h.peerConnections = recent.map((s) => s.totalPeers);
-    h.ratio = recent.map((s) => s.averageRatio);
-    h.networkActivity = recent.map((s) => s.uploadSpeed + s.downloadSpeed);
+    setHistory({
+      uploadSpeed: up,
+      downloadSpeed: down,
+      activeTorrents: act,
+      peerConnections: peers,
+      ratio: rat,
+      networkActivity: net,
+    });
 
     if (serverHistory.length > 0) {
       const last = serverHistory[serverHistory.length - 1];
       prevRef.current = {
-        totalUploaded: last.totalUploaded,
-        totalDownloaded: last.totalDownloaded,
+        totalUploaded: sanitizeNumber(last.totalUploaded),
+        totalDownloaded: sanitizeNumber(last.totalDownloaded),
         timestamp: new Date(last.timestamp).getTime(),
       };
     }
@@ -65,19 +77,19 @@ function Activity() {
 
     const now = Date.now();
     const prev = prevRef.current;
-    const h = historyRef.current;
 
     if (prev) {
       const timeDelta = (now - prev.timestamp) / 1000;
-      if (timeDelta >= 1) {
-        const upSpeed = Math.max(
-          0,
-          (stats.totalUploaded - prev.totalUploaded) / timeDelta,
-        );
-        const downSpeed = Math.max(
-          0,
-          (stats.totalDownloaded - prev.totalDownloaded) / timeDelta,
-        );
+      if (timeDelta >= 0.8) {
+        const statsUp = sanitizeNumber(stats.totalUploaded);
+        const statsDown = sanitizeNumber(stats.totalDownloaded);
+
+        const upSpeed = statsUp >= prev.totalUploaded
+          ? Math.max(0, (statsUp - prev.totalUploaded) / timeDelta)
+          : 0;
+        const downSpeed = statsDown >= prev.totalDownloaded
+          ? Math.max(0, (statsDown - prev.totalDownloaded) / timeDelta)
+          : 0;
 
         const totalPeers = (torrents ?? []).reduce(
           (sum, t) => sum + (t.seeders || 0) + (t.leechers || 0),
@@ -85,35 +97,42 @@ function Activity() {
         );
 
         const push = (arr: number[], val: number) => {
-          const next = [...arr, val];
-          if (next.length > MAX_POINTS)
+          const next = [...arr, sanitizeNumber(val)];
+          if (next.length > MAX_POINTS) {
             next.splice(0, next.length - MAX_POINTS);
+          }
           return next;
         };
 
-        h.uploadSpeed = push(h.uploadSpeed, upSpeed);
-        h.downloadSpeed = push(h.downloadSpeed, downSpeed);
-        h.activeTorrents = push(h.activeTorrents, stats.activeTorrents);
-        h.peerConnections = push(h.peerConnections, totalPeers);
-        h.ratio = push(h.ratio, stats.averageRatio);
-        h.networkActivity = push(h.networkActivity, upSpeed + downSpeed);
-      }
-    }
+        setHistory((curr) => ({
+          uploadSpeed: push(curr.uploadSpeed, upSpeed),
+          downloadSpeed: push(curr.downloadSpeed, downSpeed),
+          activeTorrents: push(curr.activeTorrents, sanitizeNumber(stats.activeTorrents)),
+          peerConnections: push(curr.peerConnections, sanitizeNumber(totalPeers)),
+          ratio: push(curr.ratio, sanitizeNumber(stats.averageRatio)),
+          networkActivity: push(curr.networkActivity, upSpeed + downSpeed),
+        }));
 
-    prevRef.current = {
-      totalUploaded: stats.totalUploaded,
-      totalDownloaded: stats.totalDownloaded,
-      timestamp: now,
-    };
+        prevRef.current = {
+          totalUploaded: statsUp,
+          totalDownloaded: statsDown,
+          timestamp: now,
+        };
+      }
+    } else {
+      prevRef.current = {
+        totalUploaded: sanitizeNumber(stats.totalUploaded),
+        totalDownloaded: sanitizeNumber(stats.totalDownloaded),
+        timestamp: now,
+      };
+    }
   }, [stats, torrents]);
 
-  const h = historyRef.current;
-
   const currentUpload =
-    h.uploadSpeed.length > 0 ? h.uploadSpeed[h.uploadSpeed.length - 1] : 0;
+    history.uploadSpeed.length > 0 ? history.uploadSpeed[history.uploadSpeed.length - 1] : 0;
   const currentDownload =
-    h.downloadSpeed.length > 0
-      ? h.downloadSpeed[h.downloadSpeed.length - 1]
+    history.downloadSpeed.length > 0
+      ? history.downloadSpeed[history.downloadSpeed.length - 1]
       : 0;
   const currentActive = stats?.activeTorrents ?? 0;
   const currentPeers = (torrents ?? []).reduce(
@@ -155,42 +174,42 @@ function Activity() {
         <LineChart
           title="Upload Speed"
           value={formatSpeed(currentUpload)}
-          data={h.uploadSpeed}
+          data={history.uploadSpeed}
           color="#c8a84e"
           maxPoints={MAX_POINTS}
         />
         <LineChart
           title="Download Speed"
           value={formatSpeed(currentDownload)}
-          data={h.downloadSpeed}
+          data={history.downloadSpeed}
           color="#b5443a"
           maxPoints={MAX_POINTS}
         />
         <LineChart
           title="Active Torrents"
           value={String(currentActive)}
-          data={h.activeTorrents}
+          data={history.activeTorrents}
           color="#27ae60"
           maxPoints={MAX_POINTS}
         />
         <LineChart
           title="Peer Connections"
           value={String(currentPeers)}
-          data={h.peerConnections}
+          data={history.peerConnections}
           color="#d4843a"
           maxPoints={MAX_POINTS}
         />
         <LineChart
           title="Upload/Download Ratio"
           value={formatRatio(currentRatio)}
-          data={h.ratio}
+          data={history.ratio}
           color="#3498db"
           maxPoints={MAX_POINTS}
         />
         <LineChart
           title="Network Activity"
           value={formatSpeed(currentNetwork)}
-          data={h.networkActivity}
+          data={history.networkActivity}
           color="#9b59b6"
           maxPoints={MAX_POINTS}
         />
