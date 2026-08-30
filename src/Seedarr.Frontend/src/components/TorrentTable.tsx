@@ -24,6 +24,7 @@ import { getTorrentBadges } from "../utils/milestones";
 import { SkeletonTableRow } from "./Skeleton";
 import TorrentContextMenu from "./TorrentContextMenu";
 import AddTorrentModal from "./AddTorrentModal";
+import TrackerFavicon from "./TrackerFavicon";
 import type { Torrent } from "../api/types";
 
 type ColumnKey =
@@ -443,8 +444,15 @@ function TorrentTable({
         return t.seeders;
       case "leechers":
         return t.leechers;
-      case "trackerUrl":
-        return extractTrackerDomain(t.trackerUrl);
+      case "trackerUrl": {
+        const domain = extractTrackerDomain(t.trackerUrl);
+        return (
+          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+            <TrackerFavicon urlOrHost={t.trackerUrl || domain} size={14} />
+            <span>{domain}</span>
+          </div>
+        );
+      }
       case "announceInterval":
         return formatSeconds(t.announceInterval);
       case "nextUpdate":
