@@ -13,6 +13,8 @@ import {
 } from "../utils/milestones";
 import SpeedGraph from "../components/SpeedGraph";
 
+import SeedingSimulator from "../components/SeedingSimulator";
+
 const STATUS_COLORS: Record<string, string> = {
   Seeding: "var(--color-success, #27ae60)",
   Stopped: "var(--color-danger, #e74c3c)",
@@ -29,7 +31,7 @@ function Statistics() {
   const { data: stats } = useSeedingStats();
 
   const [activeTab, setActiveTab] = useState<
-    "overview" | "achievements" | "buffers"
+    "overview" | "achievements" | "buffers" | "simulator"
   >("overview");
 
   const achievements = useMemo(
@@ -110,6 +112,12 @@ function Statistics() {
             onClick={() => setActiveTab("buffers")}
           >
             🛡️ Tracker Buffers & BP
+          </button>
+          <button
+            className={`view-toggle-btn ${activeTab === "simulator" ? "active" : ""}`}
+            onClick={() => setActiveTab("simulator")}
+          >
+            🎯 Seeding Simulator
           </button>
         </div>
       </div>
@@ -741,6 +749,87 @@ function Statistics() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SIMULATOR TAB */}
+      {activeTab === "simulator" && (
+        <div
+          style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}
+        >
+          <div className="card" style={{ padding: "1.25rem" }}>
+            <h3 style={{ margin: "0 0 0.5rem 0" }}>
+              ⚡ Global Seeding & Ratio Milestone Simulator
+            </h3>
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-muted)",
+                margin: "0 0 1rem 0",
+              }}
+            >
+              Calculate estimated upload timelines, target ratios, and private
+              tracker Hit & Run safety thresholds based on your live seeding
+              transfer rates.
+            </p>
+
+            <SeedingSimulator
+              currentUploaded={stats?.totalUploaded ?? 0}
+              totalSize={
+                stats?.totalDownloaded && stats.totalDownloaded > 0
+                  ? stats.totalDownloaded
+                  : (torrents ?? []).reduce((acc, t) => acc + t.totalSize, 0)
+              }
+              currentRatio={stats?.overallRatio ?? 0}
+              currentUploadSpeed={stats?.uploadSpeed ?? 0}
+            />
+          </div>
+
+          <div className="card" style={{ padding: "1.25rem" }}>
+            <h3 style={{ margin: "0 0 0.75rem 0" }}>
+              Simulate Individual Swarms
+            </h3>
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+            >
+              {(torrents ?? []).slice(0, 5).map((t) => (
+                <div
+                  key={t.id}
+                  style={{
+                    padding: "1rem",
+                    borderRadius: "8px",
+                    backgroundColor: "var(--bg-secondary)",
+                    border: "1px solid var(--border-light)",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "0.75rem",
+                      flexWrap: "wrap",
+                      gap: "0.5rem",
+                    }}
+                  >
+                    <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                      {t.name}
+                    </span>
+                    <span className="badge badge-secondary">
+                      {t.status} • {formatBytes(t.totalSize)}
+                    </span>
+                  </div>
+                  <SeedingSimulator
+                    currentUploaded={t.uploaded}
+                    totalSize={t.totalSize}
+                    currentRatio={t.ratio}
+                    currentUploadSpeed={t.uploadSpeed}
+                    seedingTimeSeconds={t.seedingTime}
+                  />
+                </div>
+              ))}
             </div>
           </div>
         </div>
