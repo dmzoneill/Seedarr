@@ -208,7 +208,16 @@ export function AddTorrentForm({
     (mode === "magnet" && isMagnetValid);
 
   return (
-    <div>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: "1 1 auto",
+        minHeight: 0,
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       {/* Mode Switcher Tabs */}
       <div
         className="tab-nav"
@@ -218,6 +227,7 @@ export function AddTorrentForm({
           marginBottom: "1.25rem",
           borderBottom: "1px solid var(--border-light)",
           paddingBottom: "0.5rem",
+          flexShrink: 0,
         }}
       >
         <button
@@ -260,7 +270,14 @@ export function AddTorrentForm({
 
       {/* Mode 1: File Upload */}
       {mode === "file" && (
-        <div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: "1 1 auto",
+            minHeight: 0,
+          }}
+        >
           <div
             className={`drop-zone ${isDragOver ? "drop-zone-active" : ""} ${files.length > 0 ? "drop-zone-has-file" : ""}`}
             onDragOver={handleDragOver}
@@ -272,7 +289,7 @@ export function AddTorrentForm({
                 ? "2px dashed var(--accent)"
                 : "2px dashed rgba(255, 255, 255, 0.15)",
               borderRadius: "8px",
-              padding: "2.5rem 1.5rem",
+              padding: isModal ? "2.5rem 1.5rem" : "3.5rem 1.5rem",
               textAlign: "center",
               cursor: "pointer",
               backgroundColor: isDragOver
@@ -403,7 +420,14 @@ export function AddTorrentForm({
 
       {/* Mode 2: Magnet Link */}
       {mode === "magnet" && (
-        <div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: "1 1 auto",
+            minHeight: 0,
+          }}
+        >
           <label
             style={{
               display: "block",
@@ -411,6 +435,7 @@ export function AddTorrentForm({
               fontWeight: 600,
               marginBottom: "0.5rem",
               color: "var(--text-primary)",
+              flexShrink: 0,
             }}
           >
             Magnet URI / Link
@@ -420,9 +445,11 @@ export function AddTorrentForm({
             placeholder="magnet:?xt=urn:btih:..."
             value={magnetLink}
             onChange={(e) => setMagnetLink(e.target.value)}
-            rows={4}
+            rows={isModal ? 4 : 6}
             style={{
               width: "100%",
+              flex: isModal ? undefined : "1 1 auto",
+              minHeight: isModal ? "100px" : "140px",
               padding: "0.75rem",
               borderRadius: "6px",
               backgroundColor: "var(--bg-primary)",
@@ -430,7 +457,7 @@ export function AddTorrentForm({
               color: "inherit",
               fontFamily: "monospace",
               fontSize: "0.85rem",
-              resize: "vertical",
+              resize: isModal ? "vertical" : "none",
             }}
             autoFocus
           />
@@ -441,6 +468,7 @@ export function AddTorrentForm({
               alignItems: "center",
               marginTop: "0.5rem",
               fontSize: "0.78rem",
+              flexShrink: 0,
             }}
           >
             <span style={{ color: "var(--text-muted)" }}>
@@ -464,7 +492,15 @@ export function AddTorrentForm({
 
       {/* Mode 3: Indexer Search */}
       {mode === "search" && (
-        <div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflow: "hidden",
+          }}
+        >
           {enabledIndexers.length === 0 ? (
             <div
               style={{
@@ -502,7 +538,15 @@ export function AddTorrentForm({
               </button>
             </div>
           ) : (
-            <div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                flex: "1 1 auto",
+                minHeight: 0,
+                overflow: "hidden",
+              }}
+            >
               <form
                 onSubmit={handleSearchSubmit}
                 style={{
@@ -510,6 +554,7 @@ export function AddTorrentForm({
                   gap: "0.5rem",
                   flexWrap: "wrap",
                   marginBottom: "1rem",
+                  flexShrink: 0,
                 }}
               >
                 <input
@@ -571,7 +616,9 @@ export function AddTorrentForm({
               {/* Results Container */}
               <div
                 style={{
-                  maxHeight: isModal ? "480px" : "620px",
+                  flex: isModal ? undefined : "1 1 auto",
+                  maxHeight: isModal ? "480px" : undefined,
+                  minHeight: 0,
                   overflowY: "auto",
                   border: "1px solid var(--border-light)",
                   borderRadius: "8px",
@@ -837,7 +884,7 @@ export function AddTorrentForm({
       {(addTorrent.isError || resultMessage) && (
         <div
           className="modal-error"
-          style={{ marginTop: "1rem", borderRadius: "6px" }}
+          style={{ marginTop: "1rem", borderRadius: "6px", flexShrink: 0 }}
         >
           {addTorrent.isError
             ? addTorrent.error instanceof Error
@@ -855,6 +902,7 @@ export function AddTorrentForm({
             justifyContent: "flex-end",
             gap: "0.5rem",
             marginTop: "1.25rem",
+            flexShrink: 0,
           }}
         >
           {isModal && onClose && (
