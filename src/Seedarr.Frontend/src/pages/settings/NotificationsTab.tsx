@@ -1,6 +1,12 @@
 import { useState } from "react";
 import type { NotificationSettings } from "../../api/types";
-import { Toggle, SelectInput, NumberInput, SectionTitle } from "./shared";
+import {
+  Toggle,
+  SelectInput,
+  NumberInput,
+  SaveBar,
+  SectionCard,
+} from "./shared";
 
 const NOTIFICATION_SETTINGS_KEY = "seedarr-notification-settings";
 
@@ -63,33 +69,24 @@ export function NotificationsTab() {
 
   return (
     <div>
-      <div className="settings-toolbar">
-        <button
-          className="btn btn-success"
-          onClick={handleSave}
-          disabled={!dirty}
-        >
-          {dirty ? "Save Changes" : "No Changes"}
-        </button>
-        {saved && !dirty && (
-          <span
-            style={{
-              marginLeft: "0.75rem",
-              fontSize: "0.85rem",
-              color: "var(--success)",
-            }}
-          >
-            Saved
-          </span>
-        )}
-      </div>
-      <div className="card">
-        <SectionTitle>General</SectionTitle>
+      <SaveBar
+        dirty={dirty}
+        isPending={false}
+        isError={false}
+        isSuccess={saved}
+        error={null}
+        onSave={handleSave}
+      />
+
+      <SectionCard
+        title="UI Toast Notifications"
+        description="Configure in-browser popup toasts and alert positions"
+      >
         <Toggle
           label="Enable Notifications"
           checked={form.enabled}
           onChange={(v) => set("enabled", v)}
-          hint="Show toast notifications"
+          hint="Show toast notification popups on application events"
         />
         <SelectInput
           label="Position"
@@ -102,6 +99,7 @@ export function NotificationsTab() {
             { value: "bottom-left", label: "Bottom Left" },
           ]}
           disabled={!form.enabled}
+          hint="Screen corner where notification popups will dock"
         />
         <NumberInput
           label="Auto-Dismiss Timeout"
@@ -111,34 +109,39 @@ export function NotificationsTab() {
           max={60}
           suffix="seconds"
           disabled={!form.enabled}
+          hint="Duration before toasts automatically fade out"
         />
+      </SectionCard>
 
-        <SectionTitle>Notification Types</SectionTitle>
+      <SectionCard
+        title="Notification Event Filters"
+        description="Filter specific alert categories"
+      >
         <Toggle
-          label="Info"
+          label="Information"
           checked={form.showInfo}
           onChange={(v) => set("showInfo", v)}
-          hint="General information"
+          hint="Informational background event notifications"
         />
         <Toggle
           label="Success"
           checked={form.showSuccess}
           onChange={(v) => set("showSuccess", v)}
-          hint="Successful operations"
+          hint="Successful operations, imports, and torrent actions"
         />
         <Toggle
           label="Warning"
           checked={form.showWarning}
           onChange={(v) => set("showWarning", v)}
-          hint="Warnings and cautions"
+          hint="Tracker timeouts, rate throttling, and disk threshold warnings"
         />
         <Toggle
           label="Error"
           checked={form.showError}
           onChange={(v) => set("showError", v)}
-          hint="Errors and failures"
+          hint="Critical failures and network disconnects"
         />
-      </div>
+      </SectionCard>
     </div>
   );
 }

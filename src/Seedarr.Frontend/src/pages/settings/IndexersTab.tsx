@@ -8,7 +8,7 @@ import {
   useTestDirectIndexer,
 } from "../../api/hooks";
 import type { IndexerDefinition, IndexerTestResult } from "../../api/types";
-import { TextInput, SelectInput, Toggle } from "./shared";
+import { TextInput, SelectInput, Toggle, SectionCard } from "./shared";
 
 export function IndexersTab() {
   const { data: indexers, isLoading } = useIndexers();
@@ -91,15 +91,14 @@ export function IndexersTab() {
     });
   };
 
-  if (isLoading) return <div className="loading">Loading...</div>;
+  if (isLoading) return <div className="loading">Loading indexers...</div>;
 
   return (
     <>
-      <div className="card">
-        <div className="provider-section-header">
-          <h3>Indexers</h3>
-        </div>
-
+      <SectionCard
+        title="Torznab & Newznab Indexers"
+        description="Configure Prowlarr, Jackett, or standalone Torznab/Newznab indexers for automated releases"
+      >
         <div className="provider-cards">
           {indexers?.map((idx) => (
             <div
@@ -126,7 +125,7 @@ export function IndexersTab() {
                 )}
                 <button
                   className="provider-card-action"
-                  title="Test"
+                  title="Test Connection"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleTest(idx.id);
@@ -136,7 +135,7 @@ export function IndexersTab() {
                 </button>
                 <button
                   className="provider-card-action provider-card-action-danger"
-                  title="Delete"
+                  title="Delete Indexer"
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteMutation.mutate(idx.id);
@@ -164,12 +163,12 @@ export function IndexersTab() {
               <div className="provider-card-info">{idx.url}</div>
               {testResults[idx.id] === true && (
                 <div className="provider-card-test provider-card-test-ok">
-                  Test passed
+                  ✓ Connection passed
                 </div>
               )}
               {testResults[idx.id] === false && (
                 <div className="provider-card-test provider-card-test-fail">
-                  Test failed
+                  ✕ Connection failed
                 </div>
               )}
               {testResults[idx.id] === null && (
@@ -185,11 +184,12 @@ export function IndexersTab() {
               setEditing({ ...defaultIndexer });
               setModalTestResult(null);
             }}
+            title="Add Indexer"
           >
             <span className="provider-card-add-icon">+</span>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {editing && (
         <div
@@ -199,8 +199,20 @@ export function IndexersTab() {
             setModalTestResult(null);
           }}
         >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 520,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+            }}
+          >
+            <div
+              className="modal-title"
+              style={{ fontSize: "1.2rem", marginBottom: "1rem" }}
+            >
               {editing.id ? "Edit Indexer" : "Add Indexer"}
             </div>
             <TextInput
@@ -302,9 +314,9 @@ export function IndexersTab() {
                   padding: "0.75rem 1rem",
                   borderRadius: "6px",
                   fontSize: "0.875rem",
-                  backgroundColor: "rgba(0, 123, 255, 0.12)",
-                  color: "var(--primary, #007bff)",
-                  border: "1px solid rgba(0, 123, 255, 0.35)",
+                  backgroundColor: "rgba(200, 168, 78, 0.12)",
+                  color: "var(--accent, #c8a84e)",
+                  border: "1px solid rgba(200, 168, 78, 0.35)",
                   display: "flex",
                   alignItems: "center",
                   gap: "0.5rem",
@@ -379,11 +391,12 @@ export function IndexersTab() {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
+                marginTop: "1.5rem",
               }}
             >
               <button
                 type="button"
-                className="btn"
+                className="btn btn-outline btn-small"
                 onClick={handleModalTest}
                 disabled={testDirectMutation.isPending}
               >
@@ -393,7 +406,7 @@ export function IndexersTab() {
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
-                  className="btn"
+                  className="btn btn-outline btn-small"
                   onClick={() => {
                     setEditing(null);
                     setModalTestResult(null);
@@ -402,7 +415,7 @@ export function IndexersTab() {
                   Cancel
                 </button>
                 <button
-                  className="btn btn-success"
+                  className="btn btn-primary btn-small"
                   onClick={handleSave}
                   disabled={
                     createMutation.isPending || updateMutation.isPending
