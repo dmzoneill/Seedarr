@@ -79,12 +79,15 @@ function TorrentContextMenu({
   const historyMatch = ct
     ? history?.find(
         (h) =>
-          (ct.infoHash && h.infoHash?.toLowerCase() === ct.infoHash.toLowerCase()) ||
+          (ct.infoHash &&
+            h.infoHash?.toLowerCase() === ct.infoHash.toLowerCase()) ||
           h.title?.toLowerCase() === ct.name?.toLowerCase(),
       )
     : null;
 
-  const arrLink = historyMatch ? getMediaDeepLink(historyMatch, arrConnections) : null;
+  const arrLink = historyMatch
+    ? getMediaDeepLink(historyMatch, arrConnections)
+    : null;
 
   return (
     <div

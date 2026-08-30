@@ -34,7 +34,8 @@ function PeerMap() {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [hours, setHours] = useState(1);
-  const [selectedTorrentFilter, setSelectedTorrentFilter] = useState<string>("all");
+  const [selectedTorrentFilter, setSelectedTorrentFilter] =
+    useState<string>("all");
   const [selectedNode, setSelectedNode] = useState<SimNode | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const navigate = useNavigate();
@@ -76,19 +77,33 @@ function PeerMap() {
     let rawLinks = graphData.links;
 
     if (selectedTorrentFilter !== "all") {
-      const targetTorrentNode = rawNodes.find((n) => n.id === selectedTorrentFilter || n.infoHash === selectedTorrentFilter);
+      const targetTorrentNode = rawNodes.find(
+        (n) =>
+          n.id === selectedTorrentFilter ||
+          n.infoHash === selectedTorrentFilter,
+      );
       if (targetTorrentNode) {
         const connectedPeerIds = new Set(
           rawLinks
-            .filter((l) => l.source === targetTorrentNode.id || l.target === targetTorrentNode.id)
-            .map((l) => (l.source === targetTorrentNode.id ? l.target : l.source)),
+            .filter(
+              (l) =>
+                l.source === targetTorrentNode.id ||
+                l.target === targetTorrentNode.id,
+            )
+            .map((l) =>
+              l.source === targetTorrentNode.id ? l.target : l.source,
+            ),
         );
         connectedPeerIds.add(targetTorrentNode.id);
         const centerId = rawNodes.find((n) => n.type === "center")?.id;
         if (centerId) connectedPeerIds.add(centerId);
 
         rawNodes = rawNodes.filter((n) => connectedPeerIds.has(n.id));
-        rawLinks = rawLinks.filter((l) => connectedPeerIds.has(l.source as string) && connectedPeerIds.has(l.target as string));
+        rawLinks = rawLinks.filter(
+          (l) =>
+            connectedPeerIds.has(l.source as string) &&
+            connectedPeerIds.has(l.target as string),
+        );
       }
     }
 
@@ -152,7 +167,9 @@ function PeerMap() {
       .append("line")
       .attr("stroke", (d) => LINK_COLORS[d.type] || "#5a5a5a")
       .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1))
-      .attr("stroke-dasharray", (d) => (d.type === "encrypted" ? "4,4" : "none"))
+      .attr("stroke-dasharray", (d) =>
+        d.type === "encrypted" ? "4,4" : "none",
+      )
       .attr("opacity", 0.6);
 
     const drag = d3
@@ -273,7 +290,15 @@ function PeerMap() {
   return (
     <div>
       <h1 className="page-heading">Peer Map</h1>
-      <div className="peer-map-controls" style={{ display: "flex", gap: "1rem", alignItems: "center", flexWrap: "wrap" }}>
+      <div
+        className="peer-map-controls"
+        style={{
+          display: "flex",
+          gap: "1rem",
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
         <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
           <label className="peer-map-label">Time Range:</label>
           {[1, 6, 12, 24].map((h) => (
@@ -357,7 +382,11 @@ function PeerMap() {
         </span>
       </div>
 
-      <div ref={containerRef} className="peer-map-container" style={{ position: "relative" }}>
+      <div
+        ref={containerRef}
+        className="peer-map-container"
+        style={{ position: "relative" }}
+      >
         {isLoading && (
           <div className="peer-map-loading">Loading peer data...</div>
         )}
@@ -396,7 +425,14 @@ function PeerMap() {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "0.5rem",
+              }}
+            >
               <span
                 className="badge"
                 style={{
@@ -410,19 +446,37 @@ function PeerMap() {
               </span>
               <button
                 className="btn btn-small"
-                style={{ border: "none", background: "none", fontSize: "0.85rem", cursor: "pointer" }}
+                style={{
+                  border: "none",
+                  background: "none",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                }}
                 onClick={() => setSelectedNode(null)}
               >
                 ✕
               </button>
             </div>
 
-            <div style={{ fontWeight: 600, fontSize: "0.9rem", wordBreak: "break-word", marginBottom: "0.5rem" }}>
+            <div
+              style={{
+                fontWeight: 600,
+                fontSize: "0.9rem",
+                wordBreak: "break-word",
+                marginBottom: "0.5rem",
+              }}
+            >
               {selectedNode.label}
             </div>
 
             {selectedNode.infoHash && (
-              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.75rem" }}>
+              <div
+                style={{
+                  fontSize: "0.75rem",
+                  color: "var(--text-muted)",
+                  marginBottom: "0.75rem",
+                }}
+              >
                 <code>{selectedNode.infoHash}</code>
               </div>
             )}
