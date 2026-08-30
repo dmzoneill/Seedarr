@@ -317,12 +317,12 @@ function TrackerBoost() {
           alignItems: "center",
           flexWrap: "wrap",
           gap: "1rem",
-          marginBottom: "1rem",
+          marginBottom: "1.25rem",
         }}
       >
         <div className="page-header-group">
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <h1 className="page-heading" style={{ margin: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <h1 className="page-heading" style={{ margin: 0, padding: 0, background: "transparent", border: "none" }}>
               Tracker Boost
             </h1>
             <span className="badge badge-primary">⚡ Smart Booster</span>
@@ -330,41 +330,13 @@ function TrackerBoost() {
           </div>
           <div
             style={{
-              fontSize: "0.8rem",
+              fontSize: "0.85rem",
               color: "var(--text-muted)",
-              marginTop: "0.2rem",
+              marginTop: "0.3rem",
             }}
           >
             Scrapes live tracker swarms by info_hash to discover and inject verified seeders/peers into Seedarr and download clients
           </div>
-        </div>
-
-        {/* Tab switcher */}
-        <div className="tab-nav" style={{ margin: 0 }}>
-          <button
-            className={`tab-btn ${activeTab === "booster" ? "tab-btn-active" : ""}`}
-            onClick={() => setActiveTab("booster")}
-          >
-            ⚡ Swarm Optimizer
-          </button>
-          <button
-            className={`tab-btn ${activeTab === "matrix" ? "tab-btn-active" : ""}`}
-            onClick={() => setActiveTab("matrix")}
-          >
-            📊 Cross-Matrix
-          </button>
-          <button
-            className={`tab-btn ${activeTab === "radar" ? "tab-btn-active" : ""}`}
-            onClick={() => setActiveTab("radar")}
-          >
-            📡 Tracker Radar ({trackers?.length || 0})
-          </button>
-          <button
-            className={`tab-btn ${activeTab === "settings" ? "tab-btn-active" : ""}`}
-            onClick={() => setActiveTab("settings")}
-          >
-            ⚙️ Sources & Automation
-          </button>
         </div>
       </div>
 
@@ -392,6 +364,64 @@ function TrackerBoost() {
           </div>
           <div className="stat-label">Swarms Boosted</div>
         </div>
+      </div>
+
+      {/* Tab Navigation Bar placed right above content */}
+      <div
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          alignItems: "center",
+          marginBottom: "1.25rem",
+          paddingBottom: "0.85rem",
+          borderBottom: "1px solid var(--border-light)",
+          flexWrap: "wrap",
+        }}
+      >
+        <button
+          className={`btn ${activeTab === "booster" ? "btn-primary" : ""}`}
+          onClick={() => setActiveTab("booster")}
+          style={{
+            padding: "0.5rem 1.15rem",
+            fontSize: "0.88rem",
+            fontWeight: activeTab === "booster" ? 600 : 500,
+          }}
+        >
+          ⚡ Swarm Optimizer
+        </button>
+        <button
+          className={`btn ${activeTab === "matrix" ? "btn-primary" : ""}`}
+          onClick={() => setActiveTab("matrix")}
+          style={{
+            padding: "0.5rem 1.15rem",
+            fontSize: "0.88rem",
+            fontWeight: activeTab === "matrix" ? 600 : 500,
+          }}
+        >
+          📊 Cross-Matrix
+        </button>
+        <button
+          className={`btn ${activeTab === "radar" ? "btn-primary" : ""}`}
+          onClick={() => setActiveTab("radar")}
+          style={{
+            padding: "0.5rem 1.15rem",
+            fontSize: "0.88rem",
+            fontWeight: activeTab === "radar" ? 600 : 500,
+          }}
+        >
+          📡 Tracker Radar ({trackers?.length || 0})
+        </button>
+        <button
+          className={`btn ${activeTab === "settings" ? "btn-primary" : ""}`}
+          onClick={() => setActiveTab("settings")}
+          style={{
+            padding: "0.5rem 1.15rem",
+            fontSize: "0.88rem",
+            fontWeight: activeTab === "settings" ? 600 : 500,
+          }}
+        >
+          ⚙️ Sources & Automation
+        </button>
       </div>
 
       {/* TAB 1: SWARM BOOSTER & TORRENT DETECTOR */}
