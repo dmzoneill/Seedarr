@@ -576,7 +576,16 @@ function TrackerBoost() {
   }, [downloadClients]);
 
   return (
-    <div className="content-area">
+    <div
+      className="content-area"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
       {/* Top Header Row */}
       <div
         className="page-header"
@@ -586,7 +595,8 @@ function TrackerBoost() {
           alignItems: "center",
           flexWrap: "wrap",
           gap: "1rem",
-          marginBottom: "1.25rem",
+          marginBottom: "1rem",
+          flexShrink: 0,
         }}
       >
         <div className="page-header-group">
@@ -626,7 +636,10 @@ function TrackerBoost() {
       </div>
 
       {/* Global Metric Cards */}
-      <div className="stats-grid" style={{ marginBottom: "1.25rem" }}>
+      <div
+        className="stats-grid"
+        style={{ marginBottom: "1rem", flexShrink: 0 }}
+      >
         <div className="stat-card">
           <div className="stat-value">
             {status?.totalTrackersMonitored ?? 0}
@@ -659,10 +672,11 @@ function TrackerBoost() {
           display: "flex",
           gap: "0.5rem",
           alignItems: "center",
-          marginBottom: "1.25rem",
-          paddingBottom: "0.85rem",
+          marginBottom: "1rem",
+          paddingBottom: "0.75rem",
           borderBottom: "1px solid var(--border-light)",
           flexWrap: "wrap",
+          flexShrink: 0,
         }}
       >
         <button
@@ -725,7 +739,15 @@ function TrackerBoost() {
 
       {/* TAB 1: SWARM BOOSTER & TORRENT DETECTOR */}
       {activeTab === "booster" && (
-        <div>
+        <div
+          style={{
+            flex: "1 1 auto",
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+            marginBottom: "0.5rem",
+          }}
+        >
           {/* Action Toolbar */}
           <div
             className="card"
@@ -831,7 +853,8 @@ function TrackerBoost() {
               gridTemplateColumns: "360px 1fr",
               gap: "1.25rem",
               alignItems: "stretch",
-              minHeight: "calc(100vh - 320px)",
+              flex: "1 1 auto",
+              minHeight: 0,
             }}
           >
             {/* Left: Downloads List */}
@@ -842,7 +865,7 @@ function TrackerBoost() {
                 display: "flex",
                 flexDirection: "column",
                 height: "100%",
-                minHeight: "550px",
+                minHeight: 0,
               }}
             >
               <div
@@ -1036,12 +1059,21 @@ function TrackerBoost() {
                 display: "flex",
                 flexDirection: "column",
                 height: "100%",
-                minHeight: "550px",
-                overflowY: "auto",
+                minHeight: 0,
+                overflow: "hidden",
               }}
             >
               {selectedItem ? (
-                <div>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    height: "100%",
+                    minHeight: 0,
+                    flex: "1 1 auto",
+                    overflow: "hidden",
+                  }}
+                >
                   {/* Selected Item Banner */}
                   <div
                     style={{
@@ -1050,9 +1082,10 @@ function TrackerBoost() {
                       alignItems: "center",
                       flexWrap: "wrap",
                       gap: "1rem",
-                      marginBottom: "1.25rem",
-                      paddingBottom: "1rem",
+                      marginBottom: "1rem",
+                      paddingBottom: "0.75rem",
                       borderBottom: "1px solid var(--border-color)",
+                      flexShrink: 0,
                     }}
                   >
                     <div>
@@ -1124,7 +1157,7 @@ function TrackerBoost() {
                     <div
                       style={{
                         padding: "0.75rem 1rem",
-                        marginBottom: "1.25rem",
+                        marginBottom: "1rem",
                         borderRadius: "6px",
                         backgroundColor: "rgba(230, 126, 34, 0.12)",
                         border: "1px solid rgba(230, 126, 34, 0.35)",
@@ -1133,6 +1166,7 @@ function TrackerBoost() {
                         display: "flex",
                         alignItems: "center",
                         gap: "0.75rem",
+                        flexShrink: 0,
                       }}
                     >
                       <span style={{ fontSize: "1.25rem" }}>🔒</span>
@@ -1153,7 +1187,8 @@ function TrackerBoost() {
                       gridTemplateColumns:
                         "repeat(auto-fit, minmax(130px, 1fr))",
                       gap: "0.75rem",
-                      marginBottom: "1.25rem",
+                      marginBottom: "1rem",
+                      flexShrink: 0,
                     }}
                   >
                     <div className="stat-card" style={{ padding: "0.75rem" }}>
@@ -1218,13 +1253,24 @@ function TrackerBoost() {
                       style={{
                         borderRadius: "6px",
                         border: "1px solid var(--border)",
+                        flex: "1 1 auto",
+                        minHeight: 0,
+                        overflowY: "auto",
+                        backgroundColor: "var(--bg-secondary, rgba(0,0,0,0.2))",
                       }}
                     >
                       <table
                         className="torrent-table"
                         style={{ width: "100%" }}
                       >
-                        <thead>
+                        <thead
+                          style={{
+                            position: "sticky",
+                            top: 0,
+                            zIndex: 2,
+                            backgroundColor: "var(--bg-secondary)",
+                          }}
+                        >
                           <tr>
                             <th
                               className="torrent-table-th"
@@ -1443,7 +1489,17 @@ function TrackerBoost() {
 
       {/* TAB 2: SWARM CROSS-MATRIX */}
       {activeTab === "matrix" && (
-        <div className="card" style={{ padding: "1.25rem" }}>
+        <div
+          className="card"
+          style={{
+            padding: "1.25rem",
+            flex: "1 1 auto",
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+            marginBottom: "0.5rem",
+          }}
+        >
           <div
             style={{
               display: "flex",
@@ -1539,6 +1595,10 @@ function TrackerBoost() {
                   display: "grid",
                   gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
                   gap: "1.25rem",
+                  flex: "1 1 auto",
+                  minHeight: 0,
+                  overflowY: "auto",
+                  paddingRight: "0.25rem",
                 }}
               >
                 {filteredMatrixTorrents.map((t) => {
@@ -1866,13 +1926,24 @@ function TrackerBoost() {
                 style={{
                   borderRadius: "6px",
                   border: "1px solid var(--border)",
+                  flex: "1 1 auto",
+                  minHeight: 0,
+                  overflowY: "auto",
+                  backgroundColor: "var(--bg-secondary, rgba(0,0,0,0.2))",
                 }}
               >
                 <table
                   className="torrent-table"
                   style={{ width: "100%", fontSize: "0.85rem" }}
                 >
-                  <thead>
+                  <thead
+                    style={{
+                      position: "sticky",
+                      top: 0,
+                      zIndex: 2,
+                      backgroundColor: "var(--bg-secondary)",
+                    }}
+                  >
                     <tr>
                       <th className="torrent-table-th" style={{ width: "35%" }}>
                         Media / Torrent
@@ -2107,6 +2178,10 @@ function TrackerBoost() {
                 display: "grid",
                 gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
                 gap: "1.25rem",
+                flex: "1 1 auto",
+                minHeight: 0,
+                overflowY: "auto",
+                paddingRight: "0.25rem",
               }}
             >
               {filteredMatrixTrackers.map((tr) => (
@@ -2280,13 +2355,27 @@ function TrackerBoost() {
             /* TRACKERS TABLE VIEW */
             <div
               className="torrent-table-wrapper"
-              style={{ borderRadius: "6px", border: "1px solid var(--border)" }}
+              style={{
+                borderRadius: "6px",
+                border: "1px solid var(--border)",
+                flex: "1 1 auto",
+                minHeight: 0,
+                overflowY: "auto",
+                backgroundColor: "var(--bg-secondary, rgba(0,0,0,0.2))",
+              }}
             >
               <table
                 className="torrent-table"
                 style={{ width: "100%", fontSize: "0.85rem" }}
               >
-                <thead>
+                <thead
+                  style={{
+                    position: "sticky",
+                    top: 0,
+                    zIndex: 2,
+                    backgroundColor: "var(--bg-secondary)",
+                  }}
+                >
                   <tr>
                     <th className="torrent-table-th" style={{ width: "35%" }}>
                       Tracker Endpoint
@@ -2422,7 +2511,17 @@ function TrackerBoost() {
 
       {/* TAB 3: TRACKER RADAR */}
       {activeTab === "radar" && (
-        <div className="card" style={{ padding: "1.25rem" }}>
+        <div
+          className="card"
+          style={{
+            padding: "1.25rem",
+            flex: "1 1 auto",
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+            marginBottom: "0.5rem",
+          }}
+        >
           <div
             style={{
               display: "flex",
@@ -2544,10 +2643,21 @@ function TrackerBoost() {
               borderRadius: "6px",
               border: "1px solid var(--border)",
               marginTop: "0.5rem",
+              flex: "1 1 auto",
+              minHeight: 0,
+              overflowY: "auto",
+              backgroundColor: "var(--bg-secondary, rgba(0,0,0,0.2))",
             }}
           >
             <table className="torrent-table" style={{ width: "100%" }}>
-              <thead>
+              <thead
+                style={{
+                  position: "sticky",
+                  top: 0,
+                  zIndex: 2,
+                  backgroundColor: "var(--bg-secondary)",
+                }}
+              >
                 <tr>
                   <th className="torrent-table-th" style={{ width: "38%" }}>
                     Tracker Endpoint
@@ -2851,7 +2961,17 @@ function TrackerBoost() {
 
       {/* TAB 5: ACTIVITY LOGS */}
       {activeTab === "logs" && (
-        <div className="card" style={{ padding: "1.25rem" }}>
+        <div
+          className="card"
+          style={{
+            padding: "1.25rem",
+            flex: "1 1 auto",
+            display: "flex",
+            flexDirection: "column",
+            minHeight: 0,
+            marginBottom: "0.5rem",
+          }}
+        >
           {/* Controls bar */}
           <div
             style={{
@@ -2996,7 +3116,8 @@ function TrackerBoost() {
               style={{
                 borderRadius: "6px",
                 border: "1px solid var(--border)",
-                maxHeight: "650px",
+                flex: "1 1 auto",
+                minHeight: 0,
                 overflowY: "auto",
                 backgroundColor: "var(--bg-secondary, rgba(0,0,0,0.2))",
               }}
@@ -3005,7 +3126,14 @@ function TrackerBoost() {
                 className="torrent-table"
                 style={{ width: "100%", fontSize: "0.82rem" }}
               >
-                <thead>
+                <thead
+                  style={{
+                    position: "sticky",
+                    top: 0,
+                    zIndex: 2,
+                    backgroundColor: "var(--bg-secondary)",
+                  }}
+                >
                   <tr>
                     <th className="torrent-table-th" style={{ width: "10%" }}>
                       Time
