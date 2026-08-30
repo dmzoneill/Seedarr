@@ -51,7 +51,9 @@ function Activity() {
     const act = recent.map((s) => sanitizeNumber(s.activeTorrents));
     const peers = recent.map((s) => sanitizeNumber(s.totalPeers));
     const rat = recent.map((s) => sanitizeNumber(s.averageRatio));
-    const net = recent.map((s) => sanitizeNumber(s.uploadSpeed) + sanitizeNumber(s.downloadSpeed));
+    const net = recent.map(
+      (s) => sanitizeNumber(s.uploadSpeed) + sanitizeNumber(s.downloadSpeed),
+    );
 
     setHistory({
       uploadSpeed: up,
@@ -84,12 +86,14 @@ function Activity() {
         const statsUp = sanitizeNumber(stats.totalUploaded);
         const statsDown = sanitizeNumber(stats.totalDownloaded);
 
-        const upSpeed = statsUp >= prev.totalUploaded
-          ? Math.max(0, (statsUp - prev.totalUploaded) / timeDelta)
-          : 0;
-        const downSpeed = statsDown >= prev.totalDownloaded
-          ? Math.max(0, (statsDown - prev.totalDownloaded) / timeDelta)
-          : 0;
+        const upSpeed =
+          statsUp >= prev.totalUploaded
+            ? Math.max(0, (statsUp - prev.totalUploaded) / timeDelta)
+            : 0;
+        const downSpeed =
+          statsDown >= prev.totalDownloaded
+            ? Math.max(0, (statsDown - prev.totalDownloaded) / timeDelta)
+            : 0;
 
         const totalPeers = (torrents ?? []).reduce(
           (sum, t) => sum + (t.seeders || 0) + (t.leechers || 0),
@@ -107,8 +111,14 @@ function Activity() {
         setHistory((curr) => ({
           uploadSpeed: push(curr.uploadSpeed, upSpeed),
           downloadSpeed: push(curr.downloadSpeed, downSpeed),
-          activeTorrents: push(curr.activeTorrents, sanitizeNumber(stats.activeTorrents)),
-          peerConnections: push(curr.peerConnections, sanitizeNumber(totalPeers)),
+          activeTorrents: push(
+            curr.activeTorrents,
+            sanitizeNumber(stats.activeTorrents),
+          ),
+          peerConnections: push(
+            curr.peerConnections,
+            sanitizeNumber(totalPeers),
+          ),
           ratio: push(curr.ratio, sanitizeNumber(stats.averageRatio)),
           networkActivity: push(curr.networkActivity, upSpeed + downSpeed),
         }));
@@ -129,7 +139,9 @@ function Activity() {
   }, [stats, torrents]);
 
   const currentUpload =
-    history.uploadSpeed.length > 0 ? history.uploadSpeed[history.uploadSpeed.length - 1] : 0;
+    history.uploadSpeed.length > 0
+      ? history.uploadSpeed[history.uploadSpeed.length - 1]
+      : 0;
   const currentDownload =
     history.downloadSpeed.length > 0
       ? history.downloadSpeed[history.downloadSpeed.length - 1]

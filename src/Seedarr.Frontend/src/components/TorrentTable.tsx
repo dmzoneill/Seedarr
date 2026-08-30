@@ -447,7 +447,13 @@ function TorrentTable({
       case "trackerUrl": {
         const domain = extractTrackerDomain(t.trackerUrl);
         return (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.35rem",
+            }}
+          >
             <TrackerFavicon urlOrHost={t.trackerUrl || domain} size={14} />
             <span>{domain}</span>
           </div>

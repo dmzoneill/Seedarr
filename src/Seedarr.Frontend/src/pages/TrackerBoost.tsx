@@ -50,18 +50,23 @@ function TrackerBoost() {
     useTrackerBoostTrackers();
   const { data: settings } = useTrackerBoostSettings();
   const updateSettings = useUpdateTrackerBoostSettings();
-  const { data: matrixData, isLoading: matrixLoading } = useTrackerBoostMatrix();
+  const { data: matrixData, isLoading: matrixLoading } =
+    useTrackerBoostMatrix();
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<"booster" | "matrix" | "radar" | "logs" | "settings">(
-    "booster",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "booster" | "matrix" | "radar" | "logs" | "settings"
+  >("booster");
   const [downloadFilter, setDownloadFilter] = useState<
     "all" | "public" | "private" | "real" | "seedarr"
   >("all");
   const [downloadSearch, setDownloadSearch] = useState("");
-  const [matrixViewMode, setMatrixViewMode] = useState<"by_torrent" | "by_tracker">("by_torrent");
-  const [matrixLayoutMode, setMatrixLayoutMode] = useState<"grid" | "table">("grid");
+  const [matrixViewMode, setMatrixViewMode] = useState<
+    "by_torrent" | "by_tracker"
+  >("by_torrent");
+  const [matrixLayoutMode, setMatrixLayoutMode] = useState<"grid" | "table">(
+    "grid",
+  );
   const [matrixSearch, setMatrixSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [trackerSearch, setTrackerSearch] = useState("");
@@ -76,7 +81,11 @@ function TrackerBoost() {
   const [logSearch, setLogSearch] = useState<string>("");
   const [logAutoRefresh, setLogAutoRefresh] = useState<boolean>(true);
 
-  const { data: boostLogs, isLoading: logsLoading, refetch: refetchLogs } = useTrackerBoostLogs(
+  const {
+    data: boostLogs,
+    isLoading: logsLoading,
+    refetch: refetchLogs,
+  } = useTrackerBoostLogs(
     250,
     logCategoryFilter,
     logLevelFilter,
@@ -187,7 +196,9 @@ function TrackerBoost() {
         t.torrentName.toLowerCase().includes(q) ||
         (meta?.mediaTitle && meta.mediaTitle.toLowerCase().includes(q)) ||
         t.infoHash.toLowerCase().includes(q) ||
-        t.trackers.some((tr) => (tr.trackerHost || tr.trackerUrl).toLowerCase().includes(q))
+        t.trackers.some((tr) =>
+          (tr.trackerHost || tr.trackerUrl).toLowerCase().includes(q),
+        )
       );
     });
   }, [matrixData?.torrents, matrixSearch, torrentMetaMap]);
@@ -208,11 +219,16 @@ function TrackerBoost() {
     return unifiedItems.filter((item) => {
       if (downloadFilter === "public" && item.isPrivate) return false;
       if (downloadFilter === "private" && !item.isPrivate) return false;
-      if (downloadFilter === "real" && item.sourceType !== "real_client") return false;
-      if (downloadFilter === "seedarr" && item.sourceType !== "seedarr") return false;
+      if (downloadFilter === "real" && item.sourceType !== "real_client")
+        return false;
+      if (downloadFilter === "seedarr" && item.sourceType !== "seedarr")
+        return false;
       if (downloadSearch.trim()) {
         const q = downloadSearch.toLowerCase();
-        if (!item.name.toLowerCase().includes(q) && !item.infoHash.toLowerCase().includes(q)) {
+        if (
+          !item.name.toLowerCase().includes(q) &&
+          !item.infoHash.toLowerCase().includes(q)
+        ) {
           return false;
         }
       }
@@ -226,18 +242,24 @@ function TrackerBoost() {
   }, [filteredDownloads, activeSelectedKey]);
 
   // Inspection hooks with live hash scraping
-  const { data: torrentInspection, isLoading: torrentInspectLoading, refetch: refetchTorrentInspect } =
-    useInspectTorrentTrackers(
-      selectedItem?.id ?? 0,
-      Boolean(selectedItem?.id && selectedItem.id > 0),
-    );
+  const {
+    data: torrentInspection,
+    isLoading: torrentInspectLoading,
+    refetch: refetchTorrentInspect,
+  } = useInspectTorrentTrackers(
+    selectedItem?.id ?? 0,
+    Boolean(selectedItem?.id && selectedItem.id > 0),
+  );
 
-  const { data: hashInspection, isLoading: hashInspectLoading, refetch: refetchHashInspect } =
-    useInspectHashTrackers(
-      selectedItem?.infoHash ?? "",
-      selectedItem?.name ?? "",
-      Boolean(!selectedItem?.id && selectedItem?.infoHash),
-    );
+  const {
+    data: hashInspection,
+    isLoading: hashInspectLoading,
+    refetch: refetchHashInspect,
+  } = useInspectHashTrackers(
+    selectedItem?.infoHash ?? "",
+    selectedItem?.name ?? "",
+    Boolean(!selectedItem?.id && selectedItem?.infoHash),
+  );
 
   const inspection = selectedItem?.id ? torrentInspection : hashInspection;
   const inspectionLoading = selectedItem?.id
@@ -269,7 +291,10 @@ function TrackerBoost() {
   const handleHarvestDownloads = () => {
     harvestDownloads.mutate(undefined, {
       onSuccess: (res) => {
-        showToast(`Harvested ${res.harvestedCount} new trackers from active downloads`, "success");
+        showToast(
+          `Harvested ${res.harvestedCount} new trackers from active downloads`,
+          "success",
+        );
       },
       onError: (err) => {
         showToast(`Failed to harvest from downloads: ${err.message}`, "error");
@@ -280,7 +305,10 @@ function TrackerBoost() {
   const handleHarvestProwlarr = () => {
     harvestProwlarr.mutate(undefined, {
       onSuccess: (res) => {
-        showToast(`Harvested ${res.harvestedCount} trackers from Prowlarr`, "success");
+        showToast(
+          `Harvested ${res.harvestedCount} trackers from Prowlarr`,
+          "success",
+        );
       },
       onError: (err) => {
         showToast(`Failed to harvest from Prowlarr: ${err.message}`, "error");
@@ -291,7 +319,10 @@ function TrackerBoost() {
   const handleHarvestFeeds = () => {
     harvestFeeds.mutate(undefined, {
       onSuccess: (res) => {
-        showToast(`Harvested ${res.harvestedCount} trackers from public feeds`, "success");
+        showToast(
+          `Harvested ${res.harvestedCount} trackers from public feeds`,
+          "success",
+        );
       },
       onError: (err) => {
         showToast(`Failed to harvest from feeds: ${err.message}`, "error");
@@ -407,16 +438,48 @@ function TrackerBoost() {
         }
       }
       if (sourceFilter !== "all") {
-        if (sourceFilter === "active" && t.source !== "ActiveTorrent" && t.source !== 4) return false;
-        if (sourceFilter === "prowlarr" && t.source !== "Prowlarr" && t.source !== 1) return false;
-        if (sourceFilter === "feeds" && t.source !== "PublicList" && t.source !== 0) return false;
-        if (sourceFilter === "manual" && t.source !== "Manual" && t.source !== 3) return false;
+        if (
+          sourceFilter === "active" &&
+          t.source !== "ActiveTorrent" &&
+          t.source !== 4
+        )
+          return false;
+        if (
+          sourceFilter === "prowlarr" &&
+          t.source !== "Prowlarr" &&
+          t.source !== 1
+        )
+          return false;
+        if (
+          sourceFilter === "feeds" &&
+          t.source !== "PublicList" &&
+          t.source !== 0
+        )
+          return false;
+        if (
+          sourceFilter === "manual" &&
+          t.source !== "Manual" &&
+          t.source !== 3
+        )
+          return false;
       }
       if (healthFilter !== "all") {
-        if (healthFilter === "alive" && t.status !== "Alive" && t.status !== 1) return false;
-        if (healthFilter === "slow" && t.status !== "Slow" && t.status !== 2) return false;
-        if (healthFilter === "offline" && t.status !== "Offline" && t.status !== 3) return false;
-        if (healthFilter === "untested" && t.status !== "Untested" && t.status !== 0) return false;
+        if (healthFilter === "alive" && t.status !== "Alive" && t.status !== 1)
+          return false;
+        if (healthFilter === "slow" && t.status !== "Slow" && t.status !== 2)
+          return false;
+        if (
+          healthFilter === "offline" &&
+          t.status !== "Offline" &&
+          t.status !== 3
+        )
+          return false;
+        if (
+          healthFilter === "untested" &&
+          t.status !== "Untested" &&
+          t.status !== 0
+        )
+          return false;
       }
       return true;
     });
@@ -455,8 +518,23 @@ function TrackerBoost() {
         }}
       >
         <div className="page-header-group">
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-            <h1 className="page-heading" style={{ margin: 0, padding: 0, background: "transparent", border: "none" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <h1
+              className="page-heading"
+              style={{
+                margin: 0,
+                padding: 0,
+                background: "transparent",
+                border: "none",
+              }}
+            >
               Tracker Boost
             </h1>
             <span className="badge badge-primary">⚡ Smart Booster</span>
@@ -469,7 +547,8 @@ function TrackerBoost() {
               marginTop: "0.3rem",
             }}
           >
-            Scrapes live tracker swarms by info_hash to discover and inject verified seeders/peers into Seedarr and download clients
+            Scrapes live tracker swarms by info_hash to discover and inject
+            verified seeders/peers into Seedarr and download clients
           </div>
         </div>
       </div>
@@ -477,7 +556,9 @@ function TrackerBoost() {
       {/* Global Metric Cards */}
       <div className="stats-grid" style={{ marginBottom: "1.25rem" }}>
         <div className="stat-card">
-          <div className="stat-value">{status?.totalTrackersMonitored ?? 0}</div>
+          <div className="stat-value">
+            {status?.totalTrackersMonitored ?? 0}
+          </div>
           <div className="stat-label">Trackers Monitored</div>
         </div>
         <div className="stat-card">
@@ -554,7 +635,8 @@ function TrackerBoost() {
             fontWeight: activeTab === "logs" ? 600 : 500,
           }}
         >
-          📜 Activity Logs {boostLogs && boostLogs.length > 0 ? `(${boostLogs.length})` : ""}
+          📜 Activity Logs{" "}
+          {boostLogs && boostLogs.length > 0 ? `(${boostLogs.length})` : ""}
         </button>
         <button
           className={`btn ${activeTab === "settings" ? "btn-primary" : ""}`}
@@ -586,7 +668,14 @@ function TrackerBoost() {
               borderRadius: "8px",
             }}
           >
-            <div style={{ display: "flex", gap: "0.6rem", alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.6rem",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 className="btn btn-primary"
                 onClick={handleBoostAll}
@@ -594,7 +683,9 @@ function TrackerBoost() {
                 title="Scrape candidate trackers and inject only verified positive matches across all active downloads"
                 style={{ padding: "0.45rem 1rem", fontWeight: 600 }}
               >
-                {boostAll.isPending ? "⚡ Scraping & Boosting..." : "⚡ Boost All Downloads (Verified Only)"}
+                {boostAll.isPending
+                  ? "⚡ Scraping & Boosting..."
+                  : "⚡ Boost All Downloads (Verified Only)"}
               </button>
 
               <button
@@ -603,7 +694,9 @@ function TrackerBoost() {
                 disabled={harvestDownloads.isPending}
                 title="Extract and discover tracker URLs from active download swarms in Seedarr and download clients"
               >
-                {harvestDownloads.isPending ? "🔄 Harvesting..." : "🔄 Harvest from Live Swarms"}
+                {harvestDownloads.isPending
+                  ? "🔄 Harvesting..."
+                  : "🔄 Harvest from Live Swarms"}
               </button>
 
               <button
@@ -612,25 +705,46 @@ function TrackerBoost() {
                 disabled={scanTrackers.isPending}
                 title="Ping and probe health across all monitored tracker endpoints"
               >
-                {scanTrackers.isPending ? "📡 Probing..." : "📡 Probe All Trackers"}
+                {scanTrackers.isPending
+                  ? "📡 Probing..."
+                  : "📡 Probe All Trackers"}
               </button>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                flexWrap: "wrap",
+              }}
+            >
               <select
                 className="form-control"
-                style={{ width: "150px", padding: "0.35rem 0.6rem", fontSize: "0.82rem" }}
+                style={{
+                  width: "150px",
+                  padding: "0.35rem 0.6rem",
+                  fontSize: "0.82rem",
+                }}
                 value={downloadFilter}
                 onChange={(e) => setDownloadFilter(e.target.value as any)}
               >
                 <option value="all">All Swarms ({unifiedItems.length})</option>
-                <option value="public">Public ({unifiedItems.filter(i => !i.isPrivate).length})</option>
-                <option value="private">Private ({unifiedItems.filter(i => i.isPrivate).length})</option>
+                <option value="public">
+                  Public ({unifiedItems.filter((i) => !i.isPrivate).length})
+                </option>
+                <option value="private">
+                  Private ({unifiedItems.filter((i) => i.isPrivate).length})
+                </option>
               </select>
               <input
                 type="text"
                 className="form-control"
-                style={{ width: "200px", padding: "0.35rem 0.6rem", fontSize: "0.82rem" }}
+                style={{
+                  width: "200px",
+                  padding: "0.35rem 0.6rem",
+                  fontSize: "0.82rem",
+                }}
                 placeholder="Search downloads..."
                 value={downloadSearch}
                 onChange={(e) => setDownloadSearch(e.target.value)}
@@ -670,14 +784,34 @@ function TrackerBoost() {
                   flexShrink: 0,
                 }}
               >
-                <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>Swarms ({filteredDownloads.length})</span>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Select to inspect swarm</span>
+                <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                  Swarms ({filteredDownloads.length})
+                </span>
+                <span
+                  style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}
+                >
+                  Select to inspect swarm
+                </span>
               </div>
 
               {torrentsLoading ? (
-                <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>Loading downloads...</div>
+                <div
+                  style={{
+                    padding: "2rem",
+                    textAlign: "center",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Loading downloads...
+                </div>
               ) : filteredDownloads.length === 0 ? (
-                <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
+                <div
+                  style={{
+                    padding: "2rem",
+                    textAlign: "center",
+                    color: "var(--text-muted)",
+                  }}
+                >
                   No downloads found matching filter.
                 </div>
               ) : (
@@ -702,39 +836,100 @@ function TrackerBoost() {
                           padding: "0.75rem",
                           borderRadius: "6px",
                           cursor: "pointer",
-                          backgroundColor: isSelected ? "var(--accent-glow, rgba(56, 189, 248, 0.12))" : "var(--bg-secondary, rgba(255,255,255,0.02))",
-                          border: isSelected ? "1px solid var(--accent, #38bdf8)" : "1px solid var(--border-color)",
+                          backgroundColor: isSelected
+                            ? "var(--accent-glow, rgba(56, 189, 248, 0.12))"
+                            : "var(--bg-secondary, rgba(255,255,255,0.02))",
+                          border: isSelected
+                            ? "1px solid var(--accent, #38bdf8)"
+                            : "1px solid var(--border-color)",
                           transition: "all 0.15s ease",
                         }}
                       >
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.35rem" }}>
-                          <span style={{ fontWeight: 600, fontSize: "0.85rem", wordBreak: "break-word" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "flex-start",
+                            gap: "0.5rem",
+                            marginBottom: "0.35rem",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              fontSize: "0.85rem",
+                              wordBreak: "break-word",
+                            }}
+                          >
                             {item.name}
                           </span>
                           {item.isPrivate ? (
-                            <span className="badge badge-secondary" style={{ fontSize: "0.7rem", whiteSpace: "nowrap" }} title="Private tracker swarm">
+                            <span
+                              className="badge badge-secondary"
+                              style={{
+                                fontSize: "0.7rem",
+                                whiteSpace: "nowrap",
+                              }}
+                              title="Private tracker swarm"
+                            >
                               🔒 Private
                             </span>
                           ) : (
-                            <span className="badge badge-success" style={{ fontSize: "0.7rem", whiteSpace: "nowrap" }} title="Public swarm boost eligible">
+                            <span
+                              className="badge badge-success"
+                              style={{
+                                fontSize: "0.7rem",
+                                whiteSpace: "nowrap",
+                              }}
+                              title="Public swarm boost eligible"
+                            >
                               🌐 Public
                             </span>
                           )}
                         </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                          <span>{formatBytes(item.totalSize)} • Ratio: {formatRatio(item.ratio)}</span>
-                          <span style={{ color: item.seeders > 0 ? "var(--success)" : "inherit" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            fontSize: "0.75rem",
+                            color: "var(--text-muted)",
+                          }}
+                        >
+                          <span>
+                            {formatBytes(item.totalSize)} • Ratio:{" "}
+                            {formatRatio(item.ratio)}
+                          </span>
+                          <span
+                            style={{
+                              color:
+                                item.seeders > 0 ? "var(--success)" : "inherit",
+                            }}
+                          >
                             {item.seeders} Seeds
                           </span>
                         </div>
-                        <div style={{ marginTop: "0.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span className="badge badge-secondary" style={{ fontSize: "0.7rem" }}>
+                        <div
+                          style={{
+                            marginTop: "0.5rem",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span
+                            className="badge badge-secondary"
+                            style={{ fontSize: "0.7rem" }}
+                          >
                             {item.clientName}
                           </span>
                           {!item.isPrivate ? (
                             <button
                               className="btn btn-sm btn-primary"
-                              style={{ padding: "0.2rem 0.5rem", fontSize: "0.75rem" }}
+                              style={{
+                                padding: "0.2rem 0.5rem",
+                                fontSize: "0.75rem",
+                              }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleBoostItem(item);
@@ -744,7 +939,14 @@ function TrackerBoost() {
                               ⚡ Enrich
                             </button>
                           ) : (
-                            <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Protected</span>
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "var(--text-dim)",
+                              }}
+                            >
+                              Protected
+                            </span>
                           )}
                         </div>
                       </div>
@@ -769,17 +971,54 @@ function TrackerBoost() {
               {selectedItem ? (
                 <div>
                   {/* Selected Item Banner */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem", paddingBottom: "1rem", borderBottom: "1px solid var(--border-color)" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      gap: "1rem",
+                      marginBottom: "1.25rem",
+                      paddingBottom: "1rem",
+                      borderBottom: "1px solid var(--border-color)",
+                    }}
+                  >
                     <div>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem", flexWrap: "wrap" }}>
-                        <h2 style={{ fontSize: "1.1rem", margin: 0 }}>{selectedItem.name}</h2>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          marginBottom: "0.25rem",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <h2 style={{ fontSize: "1.1rem", margin: 0 }}>
+                          {selectedItem.name}
+                        </h2>
                         {selectedItem.isPrivate ? (
-                          <span className="badge badge-secondary" style={{ fontSize: "0.75rem" }}>🔒 Private Swarm</span>
+                          <span
+                            className="badge badge-secondary"
+                            style={{ fontSize: "0.75rem" }}
+                          >
+                            🔒 Private Swarm
+                          </span>
                         ) : (
-                          <span className="badge badge-success" style={{ fontSize: "0.75rem" }}>🌐 Public Swarm</span>
+                          <span
+                            className="badge badge-success"
+                            style={{ fontSize: "0.75rem" }}
+                          >
+                            🌐 Public Swarm
+                          </span>
                         )}
                       </div>
-                      <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "monospace" }}>
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          color: "var(--text-muted)",
+                          fontFamily: "monospace",
+                        }}
+                      >
                         InfoHash: {selectedItem.infoHash}
                       </div>
                     </div>
@@ -787,7 +1026,11 @@ function TrackerBoost() {
                       <button
                         className="btn btn-action"
                         style={{ fontSize: "0.85rem" }}
-                        onClick={() => (selectedItem.id ? refetchTorrentInspect() : refetchHashInspect())}
+                        onClick={() =>
+                          selectedItem.id
+                            ? refetchTorrentInspect()
+                            : refetchHashInspect()
+                        }
                         title="Re-scrape candidate trackers for this info_hash"
                       >
                         🔄 Re-Scrape Swarm
@@ -822,102 +1065,284 @@ function TrackerBoost() {
                     >
                       <span style={{ fontSize: "1.25rem" }}>🔒</span>
                       <div>
-                        <strong>Private Tracker Swarm:</strong> Cross-swarm public tracker injection is protected and disabled to comply with BitTorrent private tracker rules (BEP 27). Attached private trackers and health metrics are displayed below.
+                        <strong>Private Tracker Swarm:</strong> Cross-swarm
+                        public tracker injection is protected and disabled to
+                        comply with BitTorrent private tracker rules (BEP 27).
+                        Attached private trackers and health metrics are
+                        displayed below.
                       </div>
                     </div>
                   )}
 
                   {/* Scrape Results Overview */}
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.75rem", marginBottom: "1.25rem" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        "repeat(auto-fit, minmax(130px, 1fr))",
+                      gap: "0.75rem",
+                      marginBottom: "1.25rem",
+                    }}
+                  >
                     <div className="stat-card" style={{ padding: "0.75rem" }}>
-                      <div className="stat-value" style={{ fontSize: "1.25rem" }}>{inspection?.attachedTrackersCount ?? 0}</div>
-                      <div className="stat-label" style={{ fontSize: "0.75rem" }}>Attached Trackers</div>
+                      <div
+                        className="stat-value"
+                        style={{ fontSize: "1.25rem" }}
+                      >
+                        {inspection?.attachedTrackersCount ?? 0}
+                      </div>
+                      <div
+                        className="stat-label"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        Attached Trackers
+                      </div>
                     </div>
                     <div className="stat-card" style={{ padding: "0.75rem" }}>
-                      <div className="stat-value" style={{ fontSize: "1.25rem", color: "var(--success)" }}>
+                      <div
+                        className="stat-value"
+                        style={{ fontSize: "1.25rem", color: "var(--success)" }}
+                      >
                         {inspection?.verifiedTrackersCount ?? 0}
                       </div>
-                      <div className="stat-label" style={{ fontSize: "0.75rem" }}>Verified Candidates</div>
+                      <div
+                        className="stat-label"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        Verified Candidates
+                      </div>
                     </div>
                     <div className="stat-card" style={{ padding: "0.75rem" }}>
-                      <div className="stat-value" style={{ fontSize: "1.25rem" }}>{inspection?.totalTrackersChecked ?? 0}</div>
-                      <div className="stat-label" style={{ fontSize: "0.75rem" }}>Total Checked</div>
+                      <div
+                        className="stat-value"
+                        style={{ fontSize: "1.25rem" }}
+                      >
+                        {inspection?.totalTrackersChecked ?? 0}
+                      </div>
+                      <div
+                        className="stat-label"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        Total Checked
+                      </div>
                     </div>
                   </div>
 
                   {/* Candidate Trackers Table */}
                   {inspectionLoading ? (
-                    <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
-                      Scraping candidate trackers for hash {selectedItem.infoHash.slice(0, 8)}...
+                    <div
+                      style={{
+                        padding: "3rem",
+                        textAlign: "center",
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      Scraping candidate trackers for hash{" "}
+                      {selectedItem.infoHash.slice(0, 8)}...
                     </div>
                   ) : (
-                    <div className="torrent-table-wrapper" style={{ borderRadius: "6px", border: "1px solid var(--border)" }}>
-                      <table className="torrent-table" style={{ width: "100%" }}>
+                    <div
+                      className="torrent-table-wrapper"
+                      style={{
+                        borderRadius: "6px",
+                        border: "1px solid var(--border)",
+                      }}
+                    >
+                      <table
+                        className="torrent-table"
+                        style={{ width: "100%" }}
+                      >
                         <thead>
                           <tr>
-                            <th className="torrent-table-th" style={{ width: "35%" }}>Tracker URL</th>
-                            <th className="torrent-table-th" style={{ width: "10%" }}>Protocol</th>
-                            <th className="torrent-table-th" style={{ width: "10%" }}>Latency</th>
-                            <th className="torrent-table-th" style={{ width: "25%" }}>Status / Detection</th>
-                            <th className="torrent-table-th" style={{ width: "15%" }}>Peers</th>
-                            <th className="torrent-table-th" style={{ textAlign: "right" }}>Action</th>
+                            <th
+                              className="torrent-table-th"
+                              style={{ width: "35%" }}
+                            >
+                              Tracker URL
+                            </th>
+                            <th
+                              className="torrent-table-th"
+                              style={{ width: "10%" }}
+                            >
+                              Protocol
+                            </th>
+                            <th
+                              className="torrent-table-th"
+                              style={{ width: "10%" }}
+                            >
+                              Latency
+                            </th>
+                            <th
+                              className="torrent-table-th"
+                              style={{ width: "25%" }}
+                            >
+                              Status / Detection
+                            </th>
+                            <th
+                              className="torrent-table-th"
+                              style={{ width: "15%" }}
+                            >
+                              Peers
+                            </th>
+                            <th
+                              className="torrent-table-th"
+                              style={{ textAlign: "right" }}
+                            >
+                              Action
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           {(inspection?.detections ?? []).map((det) => (
-                            <tr key={det.trackerId || det.trackerUrl} className="torrent-table-row" style={{ opacity: det.healthStatus === "Offline" || det.healthStatus === 3 ? 0.6 : 1 }}>
-                              <td style={{ maxWidth: "280px", wordBreak: "break-all", fontFamily: "monospace", fontSize: "0.8rem" }}>
-                                <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}>
-                                  <TrackerFavicon urlOrHost={det.trackerUrl} size={15} />
+                            <tr
+                              key={det.trackerId || det.trackerUrl}
+                              className="torrent-table-row"
+                              style={{
+                                opacity:
+                                  det.healthStatus === "Offline" ||
+                                  det.healthStatus === 3
+                                    ? 0.6
+                                    : 1,
+                              }}
+                            >
+                              <td
+                                style={{
+                                  maxWidth: "280px",
+                                  wordBreak: "break-all",
+                                  fontFamily: "monospace",
+                                  fontSize: "0.8rem",
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "0.45rem",
+                                  }}
+                                >
+                                  <TrackerFavicon
+                                    urlOrHost={det.trackerUrl}
+                                    size={15}
+                                  />
                                   <span>{det.trackerUrl}</span>
                                 </div>
                               </td>
                               <td>
-                                <span className="badge badge-secondary" style={{ fontSize: "0.75rem" }}>
+                                <span
+                                  className="badge badge-secondary"
+                                  style={{ fontSize: "0.75rem" }}
+                                >
                                   {det.protocol}
                                 </span>
                               </td>
-                              <td style={{ fontFamily: "monospace" }}>{det.latencyMs > 0 ? `${det.latencyMs}ms` : "-"}</td>
+                              <td style={{ fontFamily: "monospace" }}>
+                                {det.latencyMs > 0 ? `${det.latencyMs}ms` : "-"}
+                              </td>
                               <td>
                                 {det.isAttached ? (
-                                  <span className="badge badge-primary" style={{ fontSize: "0.75rem" }}>Attached</span>
+                                  <span
+                                    className="badge badge-primary"
+                                    style={{ fontSize: "0.75rem" }}
+                                  >
+                                    Attached
+                                  </span>
                                 ) : det.isVerified ? (
-                                  <span className="badge badge-success" style={{ fontSize: "0.75rem" }}>✓ Verified Match</span>
+                                  <span
+                                    className="badge badge-success"
+                                    style={{ fontSize: "0.75rem" }}
+                                  >
+                                    ✓ Verified Match
+                                  </span>
                                 ) : (
-                                  <span className="badge badge-secondary" style={{ fontSize: "0.75rem" }}>{det.detectionStatus}</span>
+                                  <span
+                                    className="badge badge-secondary"
+                                    style={{ fontSize: "0.75rem" }}
+                                  >
+                                    {det.detectionStatus}
+                                  </span>
                                 )}
                               </td>
                               <td>
-                                <span style={{ color: det.seeders > 0 ? "var(--success)" : "inherit", fontWeight: 600 }}>
+                                <span
+                                  style={{
+                                    color:
+                                      det.seeders > 0
+                                        ? "var(--success)"
+                                        : "inherit",
+                                    fontWeight: 600,
+                                  }}
+                                >
                                   {det.seeders} seeds
                                 </span>{" "}
-                                / <span style={{ color: det.leechers > 0 ? "var(--accent)" : "inherit" }}>{det.leechers} leeches</span>
+                                /{" "}
+                                <span
+                                  style={{
+                                    color:
+                                      det.leechers > 0
+                                        ? "var(--accent)"
+                                        : "inherit",
+                                  }}
+                                >
+                                  {det.leechers} leeches
+                                </span>
                               </td>
-                              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                              <td
+                                style={{
+                                  textAlign: "right",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
                                 {det.isAttached ? (
-                                  <span className="badge badge-primary" style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem" }}>
+                                  <span
+                                    className="badge badge-primary"
+                                    style={{
+                                      fontSize: "0.72rem",
+                                      padding: "0.25rem 0.5rem",
+                                    }}
+                                  >
                                     ✓ Attached
                                   </span>
                                 ) : selectedItem.isPrivate ? (
                                   <span
                                     className="badge badge-secondary"
                                     title="BEP 27: Public tracker injection is disabled for private torrents"
-                                    style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", opacity: 0.8 }}
+                                    style={{
+                                      fontSize: "0.72rem",
+                                      padding: "0.25rem 0.5rem",
+                                      opacity: 0.8,
+                                    }}
                                   >
                                     🔒 Private Guard
                                   </span>
                                 ) : det.isVerified ? (
                                   <button
                                     className="btn btn-sm btn-primary"
-                                    onClick={() => handleInjectSingle(det.trackerUrl)}
+                                    onClick={() =>
+                                      handleInjectSingle(det.trackerUrl)
+                                    }
                                     title="Inject this verified tracker into the torrent"
                                   >
                                     ⚡ Inject
                                   </button>
-                                ) : det.healthStatus === "Offline" || det.healthStatus === 3 ? (
-                                  <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>Offline</span>
+                                ) : det.healthStatus === "Offline" ||
+                                  det.healthStatus === 3 ? (
+                                  <span
+                                    style={{
+                                      color: "var(--text-dim)",
+                                      fontSize: "0.75rem",
+                                    }}
+                                  >
+                                    Offline
+                                  </span>
                                 ) : (
-                                  <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}>—</span>
+                                  <span
+                                    style={{
+                                      color: "var(--text-dim)",
+                                      fontSize: "0.75rem",
+                                    }}
+                                  >
+                                    —
+                                  </span>
                                 )}
                               </td>
                             </tr>
@@ -928,8 +1353,15 @@ function TrackerBoost() {
                   )}
                 </div>
               ) : (
-                <div style={{ padding: "4rem", textAlign: "center", color: "var(--text-muted)" }}>
-                  Select a download from the left list to inspect live tracker scrape results.
+                <div
+                  style={{
+                    padding: "4rem",
+                    textAlign: "center",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  Select a download from the left list to inspect live tracker
+                  scrape results.
                 </div>
               )}
             </div>
@@ -940,19 +1372,42 @@ function TrackerBoost() {
       {/* TAB 2: SWARM CROSS-MATRIX */}
       {activeTab === "matrix" && (
         <div className="card" style={{ padding: "1.25rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1.25rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "1rem",
+              marginBottom: "1.25rem",
+            }}
+          >
             <div>
-              <h2 style={{ fontSize: "1.1rem", margin: "0 0 0.25rem 0" }}>Swarm Cross-Matrix Explorer</h2>
+              <h2 style={{ fontSize: "1.1rem", margin: "0 0 0.25rem 0" }}>
+                Swarm Cross-Matrix Explorer
+              </h2>
               <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                Bi-directional mapping between library torrents and verified BitTorrent tracker endpoints
+                Bi-directional mapping between library torrents and verified
+                BitTorrent tracker endpoints
               </div>
             </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                flexWrap: "wrap",
+              }}
+            >
               <input
                 type="text"
                 className="form-control"
-                style={{ width: "240px", padding: "0.35rem 0.75rem", fontSize: "0.85rem" }}
+                style={{
+                  width: "240px",
+                  padding: "0.35rem 0.75rem",
+                  fontSize: "0.85rem",
+                }}
                 placeholder="Search torrents or trackers..."
                 value={matrixSearch}
                 onChange={(e) => setMatrixSearch(e.target.value)}
@@ -995,7 +1450,15 @@ function TrackerBoost() {
           </div>
 
           {matrixLoading ? (
-            <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>Building swarm cross-matrix...</div>
+            <div
+              style={{
+                padding: "3rem",
+                textAlign: "center",
+                color: "var(--text-muted)",
+              }}
+            >
+              Building swarm cross-matrix...
+            </div>
           ) : matrixViewMode === "by_torrent" ? (
             matrixLayoutMode === "grid" ? (
               /* TORRENTS GRID VIEW (POSTER CARDS) */
@@ -1007,7 +1470,9 @@ function TrackerBoost() {
                 }}
               >
                 {filteredMatrixTorrents.map((t) => {
-                  const meta = torrentMetaMap.get((t.infoHash || "").toLowerCase());
+                  const meta = torrentMetaMap.get(
+                    (t.infoHash || "").toLowerCase(),
+                  );
                   const displayTitle = meta?.mediaTitle || t.torrentName;
                   const hasPoster = Boolean(meta?.posterUrl);
 
@@ -1024,7 +1489,8 @@ function TrackerBoost() {
                         border: "1px solid rgba(255, 255, 255, 0.08)",
                         backgroundColor: "var(--bg-secondary)",
                         boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
-                        transition: "transform 0.18s ease, box-shadow 0.18s ease",
+                        transition:
+                          "transform 0.18s ease, box-shadow 0.18s ease",
                       }}
                     >
                       {/* Poster artwork container */}
@@ -1065,13 +1531,32 @@ function TrackerBoost() {
                               justifyContent: "center",
                               padding: "1rem",
                               textAlign: "center",
-                              background: "linear-gradient(180deg, #2a2620 0%, #151412 100%)",
+                              background:
+                                "linear-gradient(180deg, #2a2620 0%, #151412 100%)",
                             }}
                           >
-                            <span style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>
-                              {meta?.source === "Radarr" ? "🎬" : meta?.source === "Sonarr" ? "📺" : meta?.source === "Lidarr" ? "🎵" : "📦"}
+                            <span
+                              style={{
+                                fontSize: "2.5rem",
+                                marginBottom: "0.5rem",
+                              }}
+                            >
+                              {meta?.source === "Radarr"
+                                ? "🎬"
+                                : meta?.source === "Sonarr"
+                                  ? "📺"
+                                  : meta?.source === "Lidarr"
+                                    ? "🎵"
+                                    : "📦"}
                             </span>
-                            <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--text-secondary)", wordBreak: "break-word" }}>
+                            <span
+                              style={{
+                                fontSize: "0.82rem",
+                                fontWeight: 600,
+                                color: "var(--text-secondary)",
+                                wordBreak: "break-word",
+                              }}
+                            >
                               {displayTitle}
                             </span>
                           </div>
@@ -1085,7 +1570,8 @@ function TrackerBoost() {
                             left: 0,
                             right: 0,
                             height: "65%",
-                            background: "linear-gradient(to top, rgba(15,15,15,0.95) 0%, rgba(15,15,15,0.6) 50%, transparent 100%)",
+                            background:
+                              "linear-gradient(to top, rgba(15,15,15,0.95) 0%, rgba(15,15,15,0.6) 50%, transparent 100%)",
                             pointerEvents: "none",
                           }}
                         />
@@ -1151,7 +1637,13 @@ function TrackerBoost() {
                             {displayTitle}
                           </div>
                           {meta?.year && (
-                            <span style={{ fontSize: "0.75rem", color: "var(--accent, #c8a84e)", fontWeight: 600 }}>
+                            <span
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "var(--accent, #c8a84e)",
+                                fontWeight: 600,
+                              }}
+                            >
                               {meta.year}
                             </span>
                           )}
@@ -1159,17 +1651,45 @@ function TrackerBoost() {
                       </div>
 
                       {/* Card Info & Trackers Body */}
-                      <div style={{ padding: "0.85rem", display: "flex", flexDirection: "column", flex: 1, gap: "0.6rem" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.78rem" }}>
-                          <span style={{ fontFamily: "monospace", color: "var(--text-muted)", fontSize: "0.75rem" }} title={t.infoHash}>
+                      <div
+                        style={{
+                          padding: "0.85rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          flex: 1,
+                          gap: "0.6rem",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            fontSize: "0.78rem",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              color: "var(--text-muted)",
+                              fontSize: "0.75rem",
+                            }}
+                            title={t.infoHash}
+                          >
                             {t.infoHash ? `${t.infoHash.slice(0, 10)}...` : ""}
                           </span>
                           <div style={{ display: "flex", gap: "0.35rem" }}>
-                            <span className="badge badge-primary" style={{ fontSize: "0.7rem" }}>
+                            <span
+                              className="badge badge-primary"
+                              style={{ fontSize: "0.7rem" }}
+                            >
                               {t.attachedTrackersCount} Attached
                             </span>
                             {t.verifiedTrackersCount > 0 && (
-                              <span className="badge badge-success" style={{ fontSize: "0.7rem" }}>
+                              <span
+                                className="badge badge-success"
+                                style={{ fontSize: "0.7rem" }}
+                              >
                                 {t.verifiedTrackersCount} Verified
                               </span>
                             )}
@@ -1177,7 +1697,15 @@ function TrackerBoost() {
                         </div>
 
                         {/* Trackers list chips */}
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", maxHeight: "130px", overflowY: "auto" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "0.35rem",
+                            maxHeight: "130px",
+                            overflowY: "auto",
+                          }}
+                        >
                           {t.trackers.map((tr, idx) => (
                             <span
                               key={tr.trackerId || idx}
@@ -1191,26 +1719,50 @@ function TrackerBoost() {
                                 fontFamily: "monospace",
                               }}
                             >
-                              <TrackerFavicon urlOrHost={tr.trackerHost || tr.trackerUrl} size={13} />
+                              <TrackerFavicon
+                                urlOrHost={tr.trackerHost || tr.trackerUrl}
+                                size={13}
+                              />
                               <span>{tr.trackerHost || tr.trackerUrl}</span>
                               {(tr.seeders > 0 || tr.leechers > 0) && (
-                                <span style={{ opacity: 0.85 }}>({tr.seeders}s/{tr.leechers}l)</span>
+                                <span style={{ opacity: 0.85 }}>
+                                  ({tr.seeders}s/{tr.leechers}l)
+                                </span>
                               )}
                             </span>
                           ))}
                           {t.trackers.length === 0 && (
-                            <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                            <span
+                              style={{
+                                fontSize: "0.78rem",
+                                color: "var(--text-muted)",
+                              }}
+                            >
                               No positive tracker scrapes found yet.
                             </span>
                           )}
                         </div>
 
-                        <div style={{ marginTop: "auto", paddingTop: "0.5rem", borderTop: "1px solid var(--border-light)" }}>
+                        <div
+                          style={{
+                            marginTop: "auto",
+                            paddingTop: "0.5rem",
+                            borderTop: "1px solid var(--border-light)",
+                          }}
+                        >
                           <button
                             className="btn btn-sm btn-outline"
-                            style={{ width: "100%", fontSize: "0.78rem", padding: "0.3rem 0" }}
+                            style={{
+                              width: "100%",
+                              fontSize: "0.78rem",
+                              padding: "0.3rem 0",
+                            }}
                             onClick={() => {
-                              const targetKey = unifiedItems.find((u) => u.infoHash.toLowerCase() === t.infoHash.toLowerCase())?.key;
+                              const targetKey = unifiedItems.find(
+                                (u) =>
+                                  u.infoHash.toLowerCase() ===
+                                  t.infoHash.toLowerCase(),
+                              )?.key;
                               if (targetKey) setSelectedKey(targetKey);
                               setActiveTab("booster");
                             }}
@@ -1223,36 +1775,80 @@ function TrackerBoost() {
                   );
                 })}
                 {filteredMatrixTorrents.length === 0 && (
-                  <div style={{ gridColumn: "1 / -1", padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
+                  <div
+                    style={{
+                      gridColumn: "1 / -1",
+                      padding: "3rem",
+                      textAlign: "center",
+                      color: "var(--text-muted)",
+                    }}
+                  >
                     No library torrents match the search query.
                   </div>
                 )}
               </div>
             ) : (
               /* TORRENTS TABLE VIEW */
-              <div className="torrent-table-wrapper" style={{ borderRadius: "6px", border: "1px solid var(--border)" }}>
-                <table className="torrent-table" style={{ width: "100%", fontSize: "0.85rem" }}>
+              <div
+                className="torrent-table-wrapper"
+                style={{
+                  borderRadius: "6px",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                <table
+                  className="torrent-table"
+                  style={{ width: "100%", fontSize: "0.85rem" }}
+                >
                   <thead>
                     <tr>
-                      <th className="torrent-table-th" style={{ width: "35%" }}>Media / Torrent</th>
-                      <th className="torrent-table-th" style={{ width: "12%" }}>Privacy & Hash</th>
-                      <th className="torrent-table-th" style={{ width: "40%" }}>Attached & Verified Trackers</th>
-                      <th className="torrent-table-th" style={{ width: "13%", textAlign: "right" }}>Action</th>
+                      <th className="torrent-table-th" style={{ width: "35%" }}>
+                        Media / Torrent
+                      </th>
+                      <th className="torrent-table-th" style={{ width: "12%" }}>
+                        Privacy & Hash
+                      </th>
+                      <th className="torrent-table-th" style={{ width: "40%" }}>
+                        Attached & Verified Trackers
+                      </th>
+                      <th
+                        className="torrent-table-th"
+                        style={{ width: "13%", textAlign: "right" }}
+                      >
+                        Action
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredMatrixTorrents.map((t) => {
-                      const meta = torrentMetaMap.get((t.infoHash || "").toLowerCase());
+                      const meta = torrentMetaMap.get(
+                        (t.infoHash || "").toLowerCase(),
+                      );
                       const displayTitle = meta?.mediaTitle || t.torrentName;
                       return (
-                        <tr key={t.torrentId || t.infoHash} className="torrent-table-row">
+                        <tr
+                          key={t.torrentId || t.infoHash}
+                          className="torrent-table-row"
+                        >
                           <td>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.75rem",
+                              }}
+                            >
                               {meta?.posterUrl ? (
                                 <img
                                   src={meta.posterUrl}
                                   alt={displayTitle}
-                                  style={{ width: "36px", height: "50px", borderRadius: "4px", objectFit: "cover", flexShrink: 0 }}
+                                  style={{
+                                    width: "36px",
+                                    height: "50px",
+                                    borderRadius: "4px",
+                                    objectFit: "cover",
+                                    flexShrink: 0,
+                                  }}
                                   loading="lazy"
                                 />
                               ) : (
@@ -1269,33 +1865,90 @@ function TrackerBoost() {
                                     flexShrink: 0,
                                   }}
                                 >
-                                  {meta?.source === "Radarr" ? "🎬" : meta?.source === "Sonarr" ? "📺" : "📦"}
+                                  {meta?.source === "Radarr"
+                                    ? "🎬"
+                                    : meta?.source === "Sonarr"
+                                      ? "📺"
+                                      : "📦"}
                                 </div>
                               )}
                               <div style={{ minWidth: 0 }}>
-                                <div style={{ fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                <div
+                                  style={{
+                                    fontWeight: 600,
+                                    color: "var(--text-primary)",
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
                                   {displayTitle}
                                 </div>
-                                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.15rem" }}>
-                                  {meta?.source && <span className="badge badge-primary" style={{ fontSize: "0.65rem", padding: "0.1rem 0.35rem" }}>{meta.source}</span>}
+                                <div
+                                  style={{
+                                    fontSize: "0.75rem",
+                                    color: "var(--text-muted)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "0.4rem",
+                                    marginTop: "0.15rem",
+                                  }}
+                                >
+                                  {meta?.source && (
+                                    <span
+                                      className="badge badge-primary"
+                                      style={{
+                                        fontSize: "0.65rem",
+                                        padding: "0.1rem 0.35rem",
+                                      }}
+                                    >
+                                      {meta.source}
+                                    </span>
+                                  )}
                                   {meta?.year && <span>({meta.year})</span>}
-                                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.torrentName}</span>
+                                  <span
+                                    style={{
+                                      overflow: "hidden",
+                                      textOverflow: "ellipsis",
+                                      whiteSpace: "nowrap",
+                                    }}
+                                  >
+                                    {t.torrentName}
+                                  </span>
                                 </div>
                               </div>
                             </div>
                           </td>
                           <td>
                             <div>
-                              <span className={`badge ${t.isPrivate ? "badge-secondary" : "badge-success"}`} style={{ fontSize: "0.72rem" }}>
+                              <span
+                                className={`badge ${t.isPrivate ? "badge-secondary" : "badge-success"}`}
+                                style={{ fontSize: "0.72rem" }}
+                              >
                                 {t.isPrivate ? "🔒 Private" : "🌐 Public"}
                               </span>
-                              <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                                {t.infoHash ? `${t.infoHash.slice(0, 12)}...` : ""}
+                              <div
+                                style={{
+                                  fontFamily: "monospace",
+                                  fontSize: "0.72rem",
+                                  color: "var(--text-muted)",
+                                  marginTop: "0.25rem",
+                                }}
+                              >
+                                {t.infoHash
+                                  ? `${t.infoHash.slice(0, 12)}...`
+                                  : ""}
                               </div>
                             </div>
                           </td>
                           <td>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: "0.35rem",
+                              }}
+                            >
                               {t.trackers.map((tr, idx) => (
                                 <span
                                   key={tr.trackerId || idx}
@@ -1309,24 +1962,43 @@ function TrackerBoost() {
                                     fontFamily: "monospace",
                                   }}
                                 >
-                                  <TrackerFavicon urlOrHost={tr.trackerHost || tr.trackerUrl} size={13} />
+                                  <TrackerFavicon
+                                    urlOrHost={tr.trackerHost || tr.trackerUrl}
+                                    size={13}
+                                  />
                                   <span>{tr.trackerHost || tr.trackerUrl}</span>
                                   {(tr.seeders > 0 || tr.leechers > 0) && (
-                                    <span style={{ opacity: 0.85 }}>({tr.seeders}s/{tr.leechers}l)</span>
+                                    <span style={{ opacity: 0.85 }}>
+                                      ({tr.seeders}s/{tr.leechers}l)
+                                    </span>
                                   )}
                                 </span>
                               ))}
                               {t.trackers.length === 0 && (
-                                <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>No positive tracker scrapes yet.</span>
+                                <span
+                                  style={{
+                                    fontSize: "0.78rem",
+                                    color: "var(--text-muted)",
+                                  }}
+                                >
+                                  No positive tracker scrapes yet.
+                                </span>
                               )}
                             </div>
                           </td>
                           <td style={{ textAlign: "right" }}>
                             <button
                               className="btn btn-sm btn-outline"
-                              style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }}
+                              style={{
+                                fontSize: "0.75rem",
+                                padding: "0.25rem 0.5rem",
+                              }}
                               onClick={() => {
-                                const targetKey = unifiedItems.find((u) => u.infoHash.toLowerCase() === t.infoHash.toLowerCase())?.key;
+                                const targetKey = unifiedItems.find(
+                                  (u) =>
+                                    u.infoHash.toLowerCase() ===
+                                    t.infoHash.toLowerCase(),
+                                )?.key;
                                 if (targetKey) setSelectedKey(targetKey);
                                 setActiveTab("booster");
                               }}
@@ -1339,7 +2011,14 @@ function TrackerBoost() {
                     })}
                     {filteredMatrixTorrents.length === 0 && (
                       <tr>
-                        <td colSpan={4} style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
+                        <td
+                          colSpan={4}
+                          style={{
+                            padding: "3rem",
+                            textAlign: "center",
+                            color: "var(--text-muted)",
+                          }}
+                        >
                           No library torrents match the search query.
                         </td>
                       </tr>
@@ -1348,179 +2027,323 @@ function TrackerBoost() {
                 </table>
               </div>
             )
-          ) : (
-            /* TRACKERS -> TORRENTS VIEW */
-            matrixLayoutMode === "grid" ? (
-              /* TRACKERS GRID VIEW */
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-                  gap: "1.25rem",
-                }}
-              >
-                {filteredMatrixTrackers.map((tr) => (
+          ) : /* TRACKERS -> TORRENTS VIEW */
+          matrixLayoutMode === "grid" ? (
+            /* TRACKERS GRID VIEW */
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
+                gap: "1.25rem",
+              }}
+            >
+              {filteredMatrixTrackers.map((tr) => (
+                <div
+                  key={tr.trackerId || tr.trackerUrl}
+                  className="card"
+                  style={{
+                    padding: "1rem",
+                    backgroundColor: "var(--bg-secondary)",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.75rem",
+                  }}
+                >
                   <div
-                    key={tr.trackerId || tr.trackerUrl}
-                    className="card"
                     style={{
-                      padding: "1rem",
-                      backgroundColor: "var(--bg-secondary)",
-                      borderRadius: "8px",
-                      border: "1px solid rgba(255, 255, 255, 0.08)",
                       display: "flex",
-                      flexDirection: "column",
-                      gap: "0.75rem",
+                      justifyContent: "space-between",
+                      alignItems: "flex-start",
+                      gap: "0.5rem",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
-                        <TrackerFavicon urlOrHost={tr.trackerUrl} size={20} />
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: "0.9rem", fontFamily: "monospace", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {tr.host || tr.trackerUrl}
-                          </div>
-                          <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.15rem" }}>
-                            <span className="badge badge-secondary" style={{ fontSize: "0.68rem" }}>{tr.protocol}</span>
-                            {tr.latencyMs > 0 && (
-                              <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", fontFamily: "monospace" }}>
-                                {tr.latencyMs}ms
-                              </span>
-                            )}
-                          </div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        minWidth: 0,
+                      }}
+                    >
+                      <TrackerFavicon urlOrHost={tr.trackerUrl} size={20} />
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontWeight: 600,
+                            fontSize: "0.9rem",
+                            fontFamily: "monospace",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {tr.host || tr.trackerUrl}
+                        </div>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.35rem",
+                            marginTop: "0.15rem",
+                          }}
+                        >
+                          <span
+                            className="badge badge-secondary"
+                            style={{ fontSize: "0.68rem" }}
+                          >
+                            {tr.protocol}
+                          </span>
+                          {tr.latencyMs > 0 && (
+                            <span
+                              style={{
+                                fontSize: "0.68rem",
+                                color: "var(--text-muted)",
+                                fontFamily: "monospace",
+                              }}
+                            >
+                              {tr.latencyMs}ms
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <span className="badge badge-success" style={{ fontSize: "0.72rem", flexShrink: 0 }}>
-                        {tr.registeredTorrentsCount} Torrents
-                      </span>
                     </div>
+                    <span
+                      className="badge badge-success"
+                      style={{ fontSize: "0.72rem", flexShrink: 0 }}
+                    >
+                      {tr.registeredTorrentsCount} Torrents
+                    </span>
+                  </div>
 
-                    {/* Matched Torrents Poster / Title Gallery */}
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.25rem" }}>
-                      {tr.registeredTorrentNames.map((name, idx) => {
-                        const matchedTorrent = (torrents ?? []).find((t) => t.name === name);
-                        const meta = matchedTorrent ? torrentMetaMap.get((matchedTorrent.infoHash || "").toLowerCase()) : undefined;
-                        return (
-                          <div
-                            key={idx}
+                  {/* Matched Torrents Poster / Title Gallery */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "0.5rem",
+                      marginTop: "0.25rem",
+                    }}
+                  >
+                    {tr.registeredTorrentNames.map((name, idx) => {
+                      const matchedTorrent = (torrents ?? []).find(
+                        (t) => t.name === name,
+                      );
+                      const meta = matchedTorrent
+                        ? torrentMetaMap.get(
+                            (matchedTorrent.infoHash || "").toLowerCase(),
+                          )
+                        : undefined;
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.4rem",
+                            padding: "0.25rem 0.5rem",
+                            borderRadius: "4px",
+                            backgroundColor: "rgba(255,255,255,0.05)",
+                            border: "1px solid var(--border-light)",
+                            fontSize: "0.75rem",
+                            maxWidth: "100%",
+                          }}
+                          title={name}
+                        >
+                          {meta?.posterUrl ? (
+                            <img
+                              src={meta.posterUrl}
+                              alt={name}
+                              style={{
+                                width: "16px",
+                                height: "22px",
+                                borderRadius: "2px",
+                                objectFit: "cover",
+                                flexShrink: 0,
+                              }}
+                            />
+                          ) : (
+                            <span>🎬</span>
+                          )}
+                          <span
                             style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "0.4rem",
-                              padding: "0.25rem 0.5rem",
-                              borderRadius: "4px",
-                              backgroundColor: "rgba(255,255,255,0.05)",
-                              border: "1px solid var(--border-light)",
-                              fontSize: "0.75rem",
-                              maxWidth: "100%",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
                             }}
-                            title={name}
                           >
-                            {meta?.posterUrl ? (
-                              <img
-                                src={meta.posterUrl}
-                                alt={name}
-                                style={{ width: "16px", height: "22px", borderRadius: "2px", objectFit: "cover", flexShrink: 0 }}
-                              />
-                            ) : (
-                              <span>🎬</span>
-                            )}
-                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {meta?.mediaTitle || name}
-                            </span>
-                          </div>
-                        );
-                      })}
-                      {tr.registeredTorrentNames.length === 0 && (
-                        <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                          No library torrents currently registered on this tracker endpoint.
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {filteredMatrixTrackers.length === 0 && (
-                  <div style={{ gridColumn: "1 / -1", padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
-                    No tracker endpoints match the search query.
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* TRACKERS TABLE VIEW */
-              <div className="torrent-table-wrapper" style={{ borderRadius: "6px", border: "1px solid var(--border)" }}>
-                <table className="torrent-table" style={{ width: "100%", fontSize: "0.85rem" }}>
-                  <thead>
-                    <tr>
-                      <th className="torrent-table-th" style={{ width: "35%" }}>Tracker Endpoint</th>
-                      <th className="torrent-table-th" style={{ width: "10%" }}>Protocol</th>
-                      <th className="torrent-table-th" style={{ width: "10%" }}>Latency</th>
-                      <th className="torrent-table-th" style={{ width: "45%" }}>Matched Library Torrents</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredMatrixTrackers.map((tr) => (
-                      <tr key={tr.trackerId || tr.trackerUrl} className="torrent-table-row">
-                        <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <TrackerFavicon urlOrHost={tr.trackerUrl} size={16} />
-                            <span style={{ fontFamily: "monospace", fontSize: "0.82rem", wordBreak: "break-all" }}>
-                              {tr.trackerUrl}
-                            </span>
-                          </div>
-                        </td>
-                        <td>
-                          <span className="badge badge-secondary" style={{ fontSize: "0.75rem" }}>{tr.protocol}</span>
-                        </td>
-                        <td style={{ fontFamily: "monospace" }}>{tr.latencyMs > 0 ? `${tr.latencyMs}ms` : "-"}</td>
-                        <td>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-                            {tr.registeredTorrentNames.map((name, idx) => {
-                              const matchedTorrent = (torrents ?? []).find((t) => t.name === name);
-                              const meta = matchedTorrent ? torrentMetaMap.get((matchedTorrent.infoHash || "").toLowerCase()) : undefined;
-                              return (
-                                <span
-                                  key={idx}
-                                  className="badge badge-secondary"
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: "0.35rem",
-                                    padding: "0.25rem 0.5rem",
-                                    fontSize: "0.72rem",
-                                  }}
-                                  title={name}
-                                >
-                                  {meta?.posterUrl && (
-                                    <img
-                                      src={meta.posterUrl}
-                                      alt={name}
-                                      style={{ width: "14px", height: "18px", borderRadius: "2px", objectFit: "cover" }}
-                                    />
-                                  )}
-                                  <span>{meta?.mediaTitle || name}</span>
-                                </span>
-                              );
-                            })}
-                            {tr.registeredTorrentNames.length === 0 && (
-                              <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                                No library torrents currently registered.
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredMatrixTrackers.length === 0 && (
-                      <tr>
-                        <td colSpan={4} style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
-                          No tracker endpoints match the search query.
-                        </td>
-                      </tr>
+                            {meta?.mediaTitle || name}
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {tr.registeredTorrentNames.length === 0 && (
+                      <span
+                        style={{
+                          fontSize: "0.78rem",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        No library torrents currently registered on this tracker
+                        endpoint.
+                      </span>
                     )}
-                  </tbody>
-                </table>
-              </div>
-            )
+                  </div>
+                </div>
+              ))}
+              {filteredMatrixTrackers.length === 0 && (
+                <div
+                  style={{
+                    gridColumn: "1 / -1",
+                    padding: "3rem",
+                    textAlign: "center",
+                    color: "var(--text-muted)",
+                  }}
+                >
+                  No tracker endpoints match the search query.
+                </div>
+              )}
+            </div>
+          ) : (
+            /* TRACKERS TABLE VIEW */
+            <div
+              className="torrent-table-wrapper"
+              style={{ borderRadius: "6px", border: "1px solid var(--border)" }}
+            >
+              <table
+                className="torrent-table"
+                style={{ width: "100%", fontSize: "0.85rem" }}
+              >
+                <thead>
+                  <tr>
+                    <th className="torrent-table-th" style={{ width: "35%" }}>
+                      Tracker Endpoint
+                    </th>
+                    <th className="torrent-table-th" style={{ width: "10%" }}>
+                      Protocol
+                    </th>
+                    <th className="torrent-table-th" style={{ width: "10%" }}>
+                      Latency
+                    </th>
+                    <th className="torrent-table-th" style={{ width: "45%" }}>
+                      Matched Library Torrents
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMatrixTrackers.map((tr) => (
+                    <tr
+                      key={tr.trackerId || tr.trackerUrl}
+                      className="torrent-table-row"
+                    >
+                      <td>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                          }}
+                        >
+                          <TrackerFavicon urlOrHost={tr.trackerUrl} size={16} />
+                          <span
+                            style={{
+                              fontFamily: "monospace",
+                              fontSize: "0.82rem",
+                              wordBreak: "break-all",
+                            }}
+                          >
+                            {tr.trackerUrl}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className="badge badge-secondary"
+                          style={{ fontSize: "0.75rem" }}
+                        >
+                          {tr.protocol}
+                        </span>
+                      </td>
+                      <td style={{ fontFamily: "monospace" }}>
+                        {tr.latencyMs > 0 ? `${tr.latencyMs}ms` : "-"}
+                      </td>
+                      <td>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "0.4rem",
+                          }}
+                        >
+                          {tr.registeredTorrentNames.map((name, idx) => {
+                            const matchedTorrent = (torrents ?? []).find(
+                              (t) => t.name === name,
+                            );
+                            const meta = matchedTorrent
+                              ? torrentMetaMap.get(
+                                  (matchedTorrent.infoHash || "").toLowerCase(),
+                                )
+                              : undefined;
+                            return (
+                              <span
+                                key={idx}
+                                className="badge badge-secondary"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem",
+                                  padding: "0.25rem 0.5rem",
+                                  fontSize: "0.72rem",
+                                }}
+                                title={name}
+                              >
+                                {meta?.posterUrl && (
+                                  <img
+                                    src={meta.posterUrl}
+                                    alt={name}
+                                    style={{
+                                      width: "14px",
+                                      height: "18px",
+                                      borderRadius: "2px",
+                                      objectFit: "cover",
+                                    }}
+                                  />
+                                )}
+                                <span>{meta?.mediaTitle || name}</span>
+                              </span>
+                            );
+                          })}
+                          {tr.registeredTorrentNames.length === 0 && (
+                            <span
+                              style={{
+                                fontSize: "0.78rem",
+                                color: "var(--text-muted)",
+                              }}
+                            >
+                              No library torrents currently registered.
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredMatrixTrackers.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={4}
+                        style={{
+                          padding: "3rem",
+                          textAlign: "center",
+                          color: "var(--text-muted)",
+                        }}
+                      >
+                        No tracker endpoints match the search query.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -1528,19 +2351,43 @@ function TrackerBoost() {
       {/* TAB 3: TRACKER RADAR */}
       {activeTab === "radar" && (
         <div className="card" style={{ padding: "1.25rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem", marginBottom: "1rem" }}>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "1rem",
+              marginBottom: "1rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               <input
                 type="text"
                 className="form-control"
-                style={{ width: "240px", padding: "0.4rem 0.75rem", fontSize: "0.85rem" }}
+                style={{
+                  width: "240px",
+                  padding: "0.4rem 0.75rem",
+                  fontSize: "0.85rem",
+                }}
                 placeholder="Search tracker hosts..."
                 value={trackerSearch}
                 onChange={(e) => setTrackerSearch(e.target.value)}
               />
               <select
                 className="form-control"
-                style={{ width: "160px", padding: "0.4rem 0.75rem", fontSize: "0.85rem" }}
+                style={{
+                  width: "160px",
+                  padding: "0.4rem 0.75rem",
+                  fontSize: "0.85rem",
+                }}
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
               >
@@ -1552,13 +2399,19 @@ function TrackerBoost() {
               </select>
             </div>
 
-            <button className="btn btn-primary" onClick={() => setIsAddingTracker(true)}>
+            <button
+              className="btn btn-primary"
+              onClick={() => setIsAddingTracker(true)}
+            >
               + Add Custom Tracker
             </button>
           </div>
 
           {isAddingTracker && (
-            <form onSubmit={handleAddCustomTracker} style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+            <form
+              onSubmit={handleAddCustomTracker}
+              style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}
+            >
               <input
                 type="text"
                 className="form-control"
@@ -1567,50 +2420,118 @@ function TrackerBoost() {
                 onChange={(e) => setNewTrackerUrl(e.target.value)}
                 style={{ flex: 1 }}
               />
-              <button type="submit" className="btn btn-primary" disabled={addTracker.isPending}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={addTracker.isPending}
+              >
                 Save
               </button>
-              <button type="button" className="btn btn-outline" onClick={() => setIsAddingTracker(false)}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setIsAddingTracker(false)}
+              >
                 Cancel
               </button>
             </form>
           )}
 
-          <div className="torrent-table-wrapper" style={{ borderRadius: "6px", border: "1px solid var(--border)", marginTop: "0.5rem" }}>
+          <div
+            className="torrent-table-wrapper"
+            style={{
+              borderRadius: "6px",
+              border: "1px solid var(--border)",
+              marginTop: "0.5rem",
+            }}
+          >
             <table className="torrent-table" style={{ width: "100%" }}>
               <thead>
                 <tr>
-                  <th className="torrent-table-th" style={{ width: "38%" }}>Tracker Endpoint</th>
-                  <th className="torrent-table-th" style={{ width: "10%" }}>Protocol</th>
-                  <th className="torrent-table-th" style={{ width: "16%" }}>Source</th>
-                  <th className="torrent-table-th" style={{ width: "12%" }}>Status</th>
-                  <th className="torrent-table-th" style={{ width: "10%" }}>Latency</th>
-                  <th className="torrent-table-th" style={{ width: "14%" }}>Verified Swarms</th>
-                  <th className="torrent-table-th" style={{ width: "10%", textAlign: "right" }}>Actions</th>
+                  <th className="torrent-table-th" style={{ width: "38%" }}>
+                    Tracker Endpoint
+                  </th>
+                  <th className="torrent-table-th" style={{ width: "10%" }}>
+                    Protocol
+                  </th>
+                  <th className="torrent-table-th" style={{ width: "16%" }}>
+                    Source
+                  </th>
+                  <th className="torrent-table-th" style={{ width: "12%" }}>
+                    Status
+                  </th>
+                  <th className="torrent-table-th" style={{ width: "10%" }}>
+                    Latency
+                  </th>
+                  <th className="torrent-table-th" style={{ width: "14%" }}>
+                    Verified Swarms
+                  </th>
+                  <th
+                    className="torrent-table-th"
+                    style={{ width: "10%", textAlign: "right" }}
+                  >
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTrackers.map((tr) => (
                   <tr key={tr.id} className="torrent-table-row">
-                    <td style={{ fontFamily: "monospace", fontSize: "0.82rem", wordBreak: "break-all" }}>
-                      <div style={{ display: "inline-flex", alignItems: "center", gap: "0.45rem" }}>
+                    <td
+                      style={{
+                        fontFamily: "monospace",
+                        fontSize: "0.82rem",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.45rem",
+                        }}
+                      >
                         <TrackerFavicon urlOrHost={tr.url} size={15} />
                         <span>{tr.url}</span>
                       </div>
                     </td>
-                    <td><span className="badge badge-secondary" style={{ fontSize: "0.75rem" }}>{tr.protocol}</span></td>
-                    <td><span className="badge badge-outline" style={{ fontSize: "0.75rem" }}>{tr.sourceName}</span></td>
                     <td>
-                      <span className={`badge ${tr.status === "Alive" || tr.status === 1 ? "badge-success" : tr.status === "Offline" || tr.status === 3 ? "badge-danger" : "badge-secondary"}`} style={{ fontSize: "0.75rem" }}>
+                      <span
+                        className="badge badge-secondary"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        {tr.protocol}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className="badge badge-outline"
+                        style={{ fontSize: "0.75rem" }}
+                      >
+                        {tr.sourceName}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className={`badge ${tr.status === "Alive" || tr.status === 1 ? "badge-success" : tr.status === "Offline" || tr.status === 3 ? "badge-danger" : "badge-secondary"}`}
+                        style={{ fontSize: "0.75rem" }}
+                      >
                         {tr.status}
                       </span>
                     </td>
-                    <td style={{ fontFamily: "monospace" }}>{tr.latencyMs > 0 ? `${tr.latencyMs}ms` : "-"}</td>
-                    <td>{tr.totalVerifiedTorrents ?? tr.totalSwarmsFound} swarms</td>
+                    <td style={{ fontFamily: "monospace" }}>
+                      {tr.latencyMs > 0 ? `${tr.latencyMs}ms` : "-"}
+                    </td>
+                    <td>
+                      {tr.totalVerifiedTorrents ?? tr.totalSwarmsFound} swarms
+                    </td>
                     <td style={{ textAlign: "right" }}>
                       <button
                         className="btn btn-sm btn-danger"
-                        style={{ padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
+                        style={{
+                          padding: "0.25rem 0.6rem",
+                          fontSize: "0.75rem",
+                        }}
                         onClick={() => deleteTracker.mutate(tr.id)}
                       >
                         Delete
@@ -1629,13 +2550,36 @@ function TrackerBoost() {
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {/* Automation Toggles */}
           <div className="card" style={{ padding: "1.25rem" }}>
-            <h3 style={{ margin: "0 0 0.5rem 0" }}>⚡ Automation & Background Optimization</h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 1rem 0" }}>
-              TrackerBoost runs as a background service to constantly discover new trackers, monitor health, and optimize swarms across Seedarr and connected download clients.
+            <h3 style={{ margin: "0 0 0.5rem 0" }}>
+              ⚡ Automation & Background Optimization
+            </h3>
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-muted)",
+                margin: "0 0 1rem 0",
+              }}
+            >
+              TrackerBoost runs as a background service to constantly discover
+              new trackers, monitor health, and optimize swarms across Seedarr
+              and connected download clients.
             </p>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.75rem",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  cursor: "pointer",
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={settings?.autoBoostEnabled ?? true}
@@ -1643,14 +2587,26 @@ function TrackerBoost() {
                   style={{ width: "1.1rem", height: "1.1rem" }}
                 />
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>Automatic Background Swarm Boosting (Enabled by Default)</div>
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                    Periodically queries candidate trackers and automatically injects verified positive matches into active downloads.
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                    Automatic Background Swarm Boosting (Enabled by Default)
+                  </div>
+                  <div
+                    style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}
+                  >
+                    Periodically queries candidate trackers and automatically
+                    injects verified positive matches into active downloads.
                   </div>
                 </div>
               </label>
 
-              <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  cursor: "pointer",
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={settings?.autoHarvestEnabled ?? true}
@@ -1658,14 +2614,27 @@ function TrackerBoost() {
                   style={{ width: "1.1rem", height: "1.1rem" }}
                 />
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>Automatic Swarm Tracker Harvesting (Enabled by Default)</div>
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                    Continuously extracts and catalogues new public tracker endpoints from downloading torrents to grow the tracker database.
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                    Automatic Swarm Tracker Harvesting (Enabled by Default)
+                  </div>
+                  <div
+                    style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}
+                  >
+                    Continuously extracts and catalogues new public tracker
+                    endpoints from downloading torrents to grow the tracker
+                    database.
                   </div>
                 </div>
               </label>
 
-              <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer" }}>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.75rem",
+                  cursor: "pointer",
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={settings?.onlyVerified ?? true}
@@ -1673,9 +2642,15 @@ function TrackerBoost() {
                   style={{ width: "1.1rem", height: "1.1rem" }}
                 />
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>Scrape Verification Guard (Strict Mode)</div>
-                  <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                    Only injects trackers that respond with active seeders or leechers for the specific info_hash, preventing client clutter.
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                    Scrape Verification Guard (Strict Mode)
+                  </div>
+                  <div
+                    style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}
+                  >
+                    Only injects trackers that respond with active seeders or
+                    leechers for the specific info_hash, preventing client
+                    clutter.
                   </div>
                 </div>
               </label>
@@ -1684,9 +2659,19 @@ function TrackerBoost() {
 
           {/* Connected Download Agents */}
           <div className="card" style={{ padding: "1.25rem" }}>
-            <h3 style={{ margin: "0 0 0.5rem 0" }}>Connected Download Agents</h3>
-            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 1rem 0" }}>
-              TrackerBoost coordinates with your download clients (qBittorrent, Transmission, Deluge) to inject verified trackers into active physical downloads.
+            <h3 style={{ margin: "0 0 0.5rem 0" }}>
+              Connected Download Agents
+            </h3>
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-muted)",
+                margin: "0 0 1rem 0",
+              }}
+            >
+              TrackerBoost coordinates with your download clients (qBittorrent,
+              Transmission, Deluge) to inject verified trackers into active
+              physical downloads.
             </p>
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               {(downloadClients ?? [])
@@ -1702,7 +2687,8 @@ function TrackerBoost() {
                 ))}
               {enabledClientsCount === 0 && (
                 <span style={{ fontSize: "0.85rem", color: "var(--warning)" }}>
-                  No download agents currently configured. Add qBittorrent or Transmission in Settings ⚙️ to boost real downloads.
+                  No download agents currently configured. Add qBittorrent or
+                  Transmission in Settings ⚙️ to boost real downloads.
                 </span>
               )}
             </div>
@@ -1710,35 +2696,52 @@ function TrackerBoost() {
 
           {/* Discovery Feeds */}
           <div className="card" style={{ padding: "1.25rem" }}>
-            <h3 style={{ margin: "0 0 0.5rem 0" }}>Manual Discovery Triggers</h3>
-            <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
+            <h3 style={{ margin: "0 0 0.5rem 0" }}>
+              Manual Discovery Triggers
+            </h3>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.75rem",
+                flexWrap: "wrap",
+                marginTop: "0.75rem",
+              }}
+            >
               <button
                 className="btn btn-action"
                 onClick={handleHarvestDownloads}
                 disabled={harvestDownloads.isPending}
               >
-                {harvestDownloads.isPending ? "⏳ Harvesting Swarms..." : "🔄 Harvest Live Swarms"}
+                {harvestDownloads.isPending
+                  ? "⏳ Harvesting Swarms..."
+                  : "🔄 Harvest Live Swarms"}
               </button>
               <button
                 className="btn btn-action"
                 onClick={handleHarvestProwlarr}
                 disabled={harvestProwlarr.isPending}
               >
-                {harvestProwlarr.isPending ? "⏳ Syncing Prowlarr..." : "🔄 Sync Prowlarr Trackers"}
+                {harvestProwlarr.isPending
+                  ? "⏳ Syncing Prowlarr..."
+                  : "🔄 Sync Prowlarr Trackers"}
               </button>
               <button
                 className="btn btn-action"
                 onClick={handleHarvestFeeds}
                 disabled={harvestFeeds.isPending}
               >
-                {harvestFeeds.isPending ? "⏳ Syncing Feeds..." : "🌐 Sync Curated Feeds"}
+                {harvestFeeds.isPending
+                  ? "⏳ Syncing Feeds..."
+                  : "🌐 Sync Curated Feeds"}
               </button>
               <button
                 className="btn btn-action"
                 onClick={handleScanAll}
                 disabled={scanTrackers.isPending}
               >
-                {scanTrackers.isPending ? "⏳ Probing Trackers..." : "📡 Probe All Trackers"}
+                {scanTrackers.isPending
+                  ? "⏳ Probing Trackers..."
+                  : "📡 Probe All Trackers"}
               </button>
             </div>
           </div>
@@ -1761,10 +2764,21 @@ function TrackerBoost() {
               borderBottom: "1px solid var(--border-color)",
             }}
           >
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
               <select
                 className="form-control"
-                style={{ width: "150px", padding: "0.4rem 0.6rem", fontSize: "0.82rem" }}
+                style={{
+                  width: "150px",
+                  padding: "0.4rem 0.6rem",
+                  fontSize: "0.82rem",
+                }}
                 value={logCategoryFilter}
                 onChange={(e) => setLogCategoryFilter(e.target.value)}
               >
@@ -1779,7 +2793,11 @@ function TrackerBoost() {
 
               <select
                 className="form-control"
-                style={{ width: "130px", padding: "0.4rem 0.6rem", fontSize: "0.82rem" }}
+                style={{
+                  width: "130px",
+                  padding: "0.4rem 0.6rem",
+                  fontSize: "0.82rem",
+                }}
                 value={logLevelFilter}
                 onChange={(e) => setLogLevelFilter(e.target.value)}
               >
@@ -1793,15 +2811,34 @@ function TrackerBoost() {
               <input
                 type="text"
                 className="form-control"
-                style={{ width: "240px", padding: "0.4rem 0.75rem", fontSize: "0.82rem" }}
+                style={{
+                  width: "240px",
+                  padding: "0.4rem 0.75rem",
+                  fontSize: "0.82rem",
+                }}
                 placeholder="Search logs, hosts, hashes..."
                 value={logSearch}
                 onChange={(e) => setLogSearch(e.target.value)}
               />
             </div>
 
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.82rem", cursor: "pointer" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  fontSize: "0.82rem",
+                  cursor: "pointer",
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={logAutoRefresh}
@@ -1833,11 +2870,23 @@ function TrackerBoost() {
 
           {/* Logs Table / Console */}
           {logsLoading ? (
-            <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
+            <div
+              style={{
+                padding: "3rem",
+                textAlign: "center",
+                color: "var(--text-muted)",
+              }}
+            >
               Loading daemon activity logs...
             </div>
           ) : filteredLogs.length === 0 ? (
-            <div style={{ padding: "3rem", textAlign: "center", color: "var(--text-muted)" }}>
+            <div
+              style={{
+                padding: "3rem",
+                textAlign: "center",
+                color: "var(--text-muted)",
+              }}
+            >
               No log entries found matching current filter.
             </div>
           ) : (
@@ -1851,14 +2900,27 @@ function TrackerBoost() {
                 backgroundColor: "var(--bg-secondary, rgba(0,0,0,0.2))",
               }}
             >
-              <table className="torrent-table" style={{ width: "100%", fontSize: "0.82rem" }}>
+              <table
+                className="torrent-table"
+                style={{ width: "100%", fontSize: "0.82rem" }}
+              >
                 <thead>
                   <tr>
-                    <th className="torrent-table-th" style={{ width: "10%" }}>Time</th>
-                    <th className="torrent-table-th" style={{ width: "9%" }}>Level</th>
-                    <th className="torrent-table-th" style={{ width: "12%" }}>Category</th>
-                    <th className="torrent-table-th" style={{ width: "24%" }}>Tracker / InfoHash</th>
-                    <th className="torrent-table-th" style={{ width: "45%" }}>Activity Message</th>
+                    <th className="torrent-table-th" style={{ width: "10%" }}>
+                      Time
+                    </th>
+                    <th className="torrent-table-th" style={{ width: "9%" }}>
+                      Level
+                    </th>
+                    <th className="torrent-table-th" style={{ width: "12%" }}>
+                      Category
+                    </th>
+                    <th className="torrent-table-th" style={{ width: "24%" }}>
+                      Tracker / InfoHash
+                    </th>
+                    <th className="torrent-table-th" style={{ width: "45%" }}>
+                      Activity Message
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1867,34 +2929,71 @@ function TrackerBoost() {
                       log.level === "Success"
                         ? "badge-success"
                         : log.level === "Error"
-                        ? "badge-danger"
-                        : log.level === "Warn"
-                        ? "badge-warning"
-                        : "badge-primary";
+                          ? "badge-danger"
+                          : log.level === "Warn"
+                            ? "badge-warning"
+                            : "badge-primary";
 
                     return (
                       <tr key={log.id} className="torrent-table-row">
-                        <td style={{ fontFamily: "monospace", color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                        <td
+                          style={{
+                            fontFamily: "monospace",
+                            color: "var(--text-muted)",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           {new Date(log.timestamp).toLocaleTimeString()}
                         </td>
                         <td>
-                          <span className={`badge ${levelClass}`} style={{ fontSize: "0.72rem" }}>
-                            {log.level === "Success" ? "🟢 Success" : log.level === "Error" ? "🔴 Error" : log.level === "Warn" ? "🟡 Warn" : "🔵 Info"}
+                          <span
+                            className={`badge ${levelClass}`}
+                            style={{ fontSize: "0.72rem" }}
+                          >
+                            {log.level === "Success"
+                              ? "🟢 Success"
+                              : log.level === "Error"
+                                ? "🔴 Error"
+                                : log.level === "Warn"
+                                  ? "🟡 Warn"
+                                  : "🔵 Info"}
                           </span>
                         </td>
                         <td>
-                          <span className="badge badge-secondary" style={{ fontSize: "0.72rem" }}>
+                          <span
+                            className="badge badge-secondary"
+                            style={{ fontSize: "0.72rem" }}
+                          >
                             {log.category}
                           </span>
                         </td>
-                        <td style={{ fontFamily: "monospace", fontSize: "0.78rem", wordBreak: "break-all" }}>
+                        <td
+                          style={{
+                            fontFamily: "monospace",
+                            fontSize: "0.78rem",
+                            wordBreak: "break-all",
+                          }}
+                        >
                           {log.trackerUrl ? (
-                            <div style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
-                              <TrackerFavicon urlOrHost={log.trackerUrl} size={13} />
-                              <span style={{ color: "var(--accent)" }}>{log.trackerUrl}</span>
+                            <div
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.35rem",
+                              }}
+                            >
+                              <TrackerFavicon
+                                urlOrHost={log.trackerUrl}
+                                size={13}
+                              />
+                              <span style={{ color: "var(--accent)" }}>
+                                {log.trackerUrl}
+                              </span>
                             </div>
                           ) : log.infoHash ? (
-                            <span style={{ color: "var(--text-muted)" }}>{log.infoHash.slice(0, 16)}...</span>
+                            <span style={{ color: "var(--text-muted)" }}>
+                              {log.infoHash.slice(0, 16)}...
+                            </span>
                           ) : (
                             <span style={{ color: "var(--text-dim)" }}>-</span>
                           )}
