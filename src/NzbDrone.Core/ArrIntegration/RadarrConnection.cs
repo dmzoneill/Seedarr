@@ -224,6 +224,111 @@ public class RadarrConnection : IArrConnection
         }
     }
 
+    public MediaMetadata LookupMedia(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(Url))
+        {
+            return null;
+        }
+
+        try
+        {
+            var result = _policy.Execute(ct =>
+            {
+                var searchUrl = $"{Url.TrimEnd('/')}/api/v3/movie/lookup?term={Uri.EscapeDataString(title.Trim())}";
+                using var request = new HttpRequestMessage(HttpMethod.Get, searchUrl);
+                request.Headers.Add("X-Api-Key", ApiKey ?? "");
+                using var response = _client.Send(request, ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return (string)null;
+                }
+
+                using var stream = response.Content.ReadAsStream(ct);
+                using var reader = new StreamReader(stream);
+                return reader.ReadToEnd();
+            });
+
+            if (string.IsNullOrWhiteSpace(result))
+            {
+                return null;
+            }
+
+            using var doc = JsonDocument.Parse(result);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            foreach (var root in doc.RootElement.EnumerateArray())
+            {
+                var id = root.TryGetProperty("id", out var idProp) && idProp.TryGetInt32(out var idVal) ? idVal : 0;
+                var metadata = new MediaMetadata
+                {
+                    MediaType = "movie",
+                    MediaId = id,
+                    Title = root.TryGetProperty("title", out var tProp) ? tProp.GetString() : title,
+                    Year = root.TryGetProperty("year", out var yr) && yr.TryGetInt32(out var yVal) ? yVal : null,
+                    Overview = root.TryGetProperty("overview", out var ov) ? ov.GetString() : null,
+                    StudioOrNetwork = root.TryGetProperty("studio", out var std) ? std.GetString() : null
+                };
+
+                if (root.TryGetProperty("genres", out var genresArray))
+                {
+                    foreach (var g in genresArray.EnumerateArray())
+                    {
+                        var gStr = g.GetString();
+                        if (!string.IsNullOrEmpty(gStr))
+                        {
+                            metadata.Genres.Add(gStr);
+                        }
+                    }
+                }
+
+                if (root.TryGetProperty("ratings", out var ratingsElem) && ratingsElem.TryGetProperty("imdb", out var imdbElem) && imdbElem.TryGetProperty("value", out var rVal) && rVal.TryGetDouble(out var dblVal))
+                {
+                    metadata.Rating = Math.Round(dblVal, 1);
+                }
+
+                if (root.TryGetProperty("images", out var imagesArray))
+                {
+                    foreach (var imgElem in imagesArray.EnumerateArray())
+                    {
+                        var coverType = imgElem.TryGetProperty("coverType", out var ctProp) ? ctProp.GetString() ?? "" : "";
+                        var imgUrl = imgElem.TryGetProperty("remoteUrl", out var ruProp) ? ruProp.GetString() : (imgElem.TryGetProperty("url", out var luProp) ? luProp.GetString() : null);
+
+                        if (string.IsNullOrEmpty(imgUrl))
+                        {
+                            continue;
+                        }
+
+                        if (coverType.Equals("poster", StringComparison.OrdinalIgnoreCase))
+                        {
+                            metadata.PosterUrl = imgUrl;
+                        }
+                        else if (coverType.Equals("fanart", StringComparison.OrdinalIgnoreCase))
+                        {
+                            metadata.FanartUrl = imgUrl;
+                        }
+                        else if (coverType.Equals("banner", StringComparison.OrdinalIgnoreCase))
+                        {
+                            metadata.BannerUrl = imgUrl;
+                        }
+                    }
+                }
+
+                return metadata;
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to lookup movie by term '{0}' on Radarr", title);
+            return null;
+        }
+    }
+
     public bool TestConnection() => TestConnectionDetailed().Success;
 
     public ArrTestResult TestConnectionDetailed()

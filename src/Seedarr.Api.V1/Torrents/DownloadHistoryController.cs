@@ -98,6 +98,22 @@ public class DownloadHistoryController : Controller
         return Ok(new { message = "Enrichment started" });
     }
 
+    [HttpPost("reconcile")]
+    public ActionResult Reconcile()
+    {
+        var count = 0;
+        if (_metadataEnricherService != null)
+        {
+            count = _metadataEnricherService.ReconcileAndEnrichAll();
+        }
+        else
+        {
+            count = _historyService.ReconcileAllTorrents();
+        }
+
+        return Ok(new { success = true, processedCount = count });
+    }
+
     [HttpDelete("{id:int}")]
     public ActionResult Delete(int id)
     {

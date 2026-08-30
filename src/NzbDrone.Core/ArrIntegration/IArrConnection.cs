@@ -19,6 +19,7 @@ public interface IArrConnection : IProvider
     string ApiKey { get; set; }
     List<ArrDownloadRecord> GetDownloadHistory();
     MediaMetadata GetMediaDetails(int mediaId);
+    MediaMetadata LookupMedia(string title);
     bool TestConnection();
     ArrTestResult TestConnectionDetailed();
 }
