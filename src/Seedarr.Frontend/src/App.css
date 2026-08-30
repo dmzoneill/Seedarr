@@ -1488,13 +1488,16 @@ body {
 
 .modal {
   background-color: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 1.5rem;
   width: 100%;
-  max-width: 480px;
+  max-width: 580px;
   max-height: 90vh;
   overflow-y: auto;
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .modal-title {
