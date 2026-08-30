@@ -20,8 +20,8 @@ public interface IExternalIpService
 
 public class ExternalIpService : BackgroundService, IExternalIpService
 {
-    private const string PrimaryEndpointTemplate = "https://seedarr.net/my/?uuid={0}";
-    private const string PrimaryHttpEndpointTemplate = "http://seedarr.net/my/?uuid={0}";
+    private const string PrimaryEndpointTemplate = "https://www.seedarr.net/my/?uuid={0}";
+    private const string PrimaryHttpEndpointTemplate = "http://www.seedarr.net/my/?uuid={0}";
 
     private static readonly TimeSpan FallbackInterval = TimeSpan.FromHours(6);
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(1);
