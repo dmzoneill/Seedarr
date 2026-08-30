@@ -67,7 +67,7 @@ public class UpdateService : IUpdateService
             _cachedResult = result;
             _cacheExpiry = result.Releases.Count > 0
                 ? DateTime.UtcNow.Add(CacheDuration)
-                : DateTime.UtcNow.AddMinutes(5);
+                : DateTime.UtcNow.AddHours(1);
         }
 
         return result;
@@ -90,7 +90,15 @@ public class UpdateService : IUpdateService
 
             if (!response.IsSuccessStatusCode)
             {
-                _logger.Warn("GitHub releases API returned {0}", response.StatusCode);
+                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden || response.StatusCode == (System.Net.HttpStatusCode)429)
+                {
+                    _logger.Debug("GitHub releases API rate limit reached ({0})", response.StatusCode);
+                }
+                else
+                {
+                    _logger.Warn("GitHub releases API returned {0}", response.StatusCode);
+                }
+
                 return BuildResult(currentVersion, null, new List<ReleaseInfo>());
             }
 
