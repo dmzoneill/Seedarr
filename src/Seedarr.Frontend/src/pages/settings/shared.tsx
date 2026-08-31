@@ -378,21 +378,27 @@ export function Toggle({
   checked,
   onChange,
   hint,
+  disabled,
 }: {
   label: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   hint?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="form-group">
       <label className="form-label">{label}</label>
       <div className="form-input-wrapper">
         <div className="form-toggle-row">
-          <label className="toggle-switch">
+          <label
+            className="toggle-switch"
+            style={disabled ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+          >
             <input
               type="checkbox"
               checked={checked}
+              disabled={disabled}
               onChange={(e) => onChange(e.target.checked)}
             />
             <span className="toggle-slider" />
