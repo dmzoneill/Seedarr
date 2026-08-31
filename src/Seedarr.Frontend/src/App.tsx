@@ -29,6 +29,10 @@ import SignalRProvider from "./components/SignalRProvider";
 import AddTorrentModal from "./components/AddTorrentModal";
 import CommandPalette from "./components/CommandPalette";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
+import {
+  GettingStartedModal,
+  STORAGE_KEY_HIDE_GUIDE,
+} from "./components/GettingStartedModal";
 import AddTorrentPage from "./pages/AddTorrentPage";
 import SeedarrLogo from "./components/icons/SeedarrLogo";
 import SeedarrText from "./components/icons/SeedarrText";
@@ -95,6 +99,9 @@ function App() {
   const [showAddTorrentModal, setShowAddTorrentModal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [showGettingStartedModal, setShowGettingStartedModal] = useState<boolean>(
+    () => localStorage.getItem(STORAGE_KEY_HIDE_GUIDE) !== "true",
+  );
 
   const isTorrentsRoute =
     location.pathname.startsWith("/torrents") ||
@@ -494,6 +501,12 @@ function App() {
                   >
                     ⌨️ Keyboard Shortcuts (?)
                   </button>
+                  <button
+                    className="topbar-dropdown-item"
+                    onClick={() => setShowGettingStartedModal(true)}
+                  >
+                    🚀 Getting Started Guide
+                  </button>
                   <div className="topbar-dropdown-separator" />
                   <button
                     className="topbar-dropdown-item"
@@ -591,10 +604,15 @@ function App() {
         onClose={() => setShowCommandPalette(false)}
         onOpenShortcuts={() => setShowShortcutsModal(true)}
         onOpenAddTorrent={() => setShowAddTorrentModal(true)}
+        onOpenGettingStarted={() => setShowGettingStartedModal(true)}
       />
       <KeyboardShortcutsModal
         isOpen={showShortcutsModal}
         onClose={() => setShowShortcutsModal(false)}
+      />
+      <GettingStartedModal
+        isOpen={showGettingStartedModal}
+        onClose={() => setShowGettingStartedModal(false)}
       />
     </div>
   );
