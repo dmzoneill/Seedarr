@@ -30,6 +30,7 @@ interface CommandPaletteProps {
   onClose: () => void;
   onOpenShortcuts?: () => void;
   onOpenAddTorrent?: () => void;
+  onOpenGettingStarted?: () => void;
 }
 
 export function CommandPalette({
@@ -37,6 +38,7 @@ export function CommandPalette({
   onClose,
   onOpenShortcuts,
   onOpenAddTorrent,
+  onOpenGettingStarted,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -339,6 +341,18 @@ export function CommandPalette({
     });
 
     list.push({
+      id: "act-getting-started",
+      category: "Actions",
+      title: "Getting Started Guide & Setup",
+      subtitle: "Open the onboarding walkthrough and connection setup guide (🚀)",
+      icon: "🚀",
+      onSelect: () => {
+        onClose();
+        onOpenGettingStarted?.();
+      },
+    });
+
+    list.push({
       id: "act-shortcuts",
       category: "Actions",
       title: "Keyboard Shortcuts Cheat Sheet",
@@ -399,6 +413,7 @@ export function CommandPalette({
     onClose,
     onOpenShortcuts,
     onOpenAddTorrent,
+    onOpenGettingStarted,
     boostAll,
     harvestSwarm,
     syncProwlarr,
