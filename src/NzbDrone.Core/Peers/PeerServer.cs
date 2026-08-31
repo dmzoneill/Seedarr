@@ -27,6 +27,7 @@ public class PeerServer : BackgroundService
     private readonly Trackers.MultiTracker.IMultiTrackerManager _multiTracker;
     private readonly ITorrentEventLogService _eventLogService;
     private readonly Trackers.Metrics.ITrackerMetricService _trackerMetricService;
+    private readonly Trackers.ITrackerAnnounceService _trackerAnnounceService;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
     private readonly Logger _logger;
@@ -39,7 +40,8 @@ public class PeerServer : BackgroundService
         Trackers.MultiTracker.IMultiTrackerManager multiTracker,
         ITrackerEntryService trackerEntryService = null,
         ITorrentEventLogService eventLogService = null,
-        Trackers.Metrics.ITrackerMetricService trackerMetricService = null)
+        Trackers.Metrics.ITrackerMetricService trackerMetricService = null,
+        Trackers.ITrackerAnnounceService trackerAnnounceService = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -49,6 +51,7 @@ public class PeerServer : BackgroundService
         _trackerEntryService = trackerEntryService;
         _eventLogService = eventLogService;
         _trackerMetricService = trackerMetricService;
+        _trackerAnnounceService = trackerAnnounceService;
         _connectionSemaphore = new SemaphoreSlim(configService.MaxGlobalConnections);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -189,6 +192,12 @@ public class PeerServer : BackgroundService
     {
         try
         {
+            if (_trackerAnnounceService != null)
+            {
+                _trackerAnnounceService.AnnounceTorrent(torrent, force: false);
+                return;
+            }
+
             var trackerEntries = _trackerEntryService.GetByTorrentId(torrent.Id);
             if (trackerEntries.Count == 0 && !string.IsNullOrEmpty(torrent.TrackerUrl))
             {

@@ -9,6 +9,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerBoost;
+using NzbDrone.Core.Trackers;
 using NzbDrone.SignalR;
 using Seedarr.Http;
 using Seedarr.Http.REST;
@@ -27,6 +28,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly IConfigService _configService;
     private readonly IDownloadHistoryRepository _downloadHistoryRepository;
     private readonly ITrackerBoostService _trackerBoostService;
+    private readonly ITrackerAnnounceService _trackerAnnounceService;
 
     public TorrentController(
         ITorrentService torrentService,
@@ -39,7 +41,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         IBroadcastSignalRMessage signalRBroadcaster,
         TorrentResourceValidator torrentResourceValidator,
         IDownloadHistoryRepository downloadHistoryRepository = null,
-        ITrackerBoostService trackerBoostService = null)
+        ITrackerBoostService trackerBoostService = null,
+        ITrackerAnnounceService trackerAnnounceService = null)
         : base(signalRBroadcaster)
     {
         _torrentService = torrentService;
@@ -51,6 +54,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _configService = configService;
         _downloadHistoryRepository = downloadHistoryRepository;
         _trackerBoostService = trackerBoostService;
+        _trackerAnnounceService = trackerAnnounceService;
 
         SharedValidator = torrentResourceValidator;
     }
@@ -381,38 +385,58 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return MapTorrentToResource(updated);
     }
 
-    private void TriggerAnnounceInternal(Torrent torrent)
+    private List<TrackerAnnounceResult> TriggerAnnounceInternal(Torrent torrent, TrackerEntry specificTracker = null)
     {
         if (torrent == null)
         {
-            return;
+            return new List<TrackerAnnounceResult>();
         }
 
-        var trackers = _trackerEntryService.GetByTorrentId(torrent.Id);
-        foreach (var tracker in trackers)
+        List<TrackerAnnounceResult> results = null;
+
+        if (_trackerAnnounceService != null)
         {
-            if (!tracker.Enabled)
+            if (specificTracker != null)
             {
-                continue;
+                var result = _trackerAnnounceService.AnnounceTracker(torrent, specificTracker, force: true);
+                results = new List<TrackerAnnounceResult> { result };
+            }
+            else
+            {
+                results = _trackerAnnounceService.AnnounceTorrent(torrent, force: true);
+            }
+        }
+        else
+        {
+            var trackers = _trackerEntryService.GetByTorrentId(torrent.Id);
+            foreach (var tracker in trackers)
+            {
+                if (!tracker.Enabled)
+                {
+                    continue;
+                }
+
+                tracker.NextAnnounce = DateTime.UtcNow;
+                tracker.LastAnnounce = DateTime.UtcNow;
+                tracker.TotalAnnounces++;
+                tracker.SuccessfulAnnounces++;
+                tracker.Status = TrackerStatus.Working;
+                tracker.ConsecutiveFailures = 0;
+                _trackerEntryService.Update(tracker);
             }
 
-            tracker.NextAnnounce = DateTime.UtcNow;
-            tracker.LastAnnounce = DateTime.UtcNow;
-            tracker.TotalAnnounces++;
-            tracker.SuccessfulAnnounces++;
-            tracker.Status = TrackerStatus.Working;
-            tracker.ConsecutiveFailures = 0;
-            _trackerEntryService.Update(tracker);
+            _eventLogService.Info(torrent.Id, "Tracker", $"Announce triggered for {trackers.Count(t => t.Enabled)} enabled tracker(s)");
         }
 
         torrent.LastActive = DateTime.UtcNow;
         _torrentService.Update(torrent);
-        _eventLogService.Info(torrent.Id, "Tracker", $"Announce triggered for {trackers.Count(t => t.Enabled)} enabled tracker(s)");
 
         if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
         {
             _trackerBoostService?.ReannounceDownloadClients(torrent.InfoHash);
         }
+
+        return results ?? new List<TrackerAnnounceResult>();
     }
 
     [HttpPost("{id:int}/announce")]
@@ -424,7 +448,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
-        TriggerAnnounceInternal(torrent);
+        var results = TriggerAnnounceInternal(torrent);
 
         var trackers = _trackerEntryService.GetByTorrentId(id);
         return Ok(new
@@ -433,7 +457,10 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             torrentId = id,
             torrentName = torrent.Name,
             trackersCount = trackers.Count(t => t.Enabled),
-            message = $"Announce triggered for {trackers.Count(t => t.Enabled)} tracker(s)"
+            successfulAnnounces = results.Count(r => r.Success),
+            failedAnnounces = results.Count(r => !r.Success),
+            results,
+            message = $"Announce completed for {results.Count} tracker(s): {results.Count(r => r.Success)} succeeded, {results.Count(r => !r.Success)} failed"
         });
     }
 
@@ -573,9 +600,16 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
-        _eventLogService.Info(torrentId, "Tracker", $"Manual announce initiated for tracker {target.Url}");
-        TriggerAnnounceInternal(torrent);
-        return Ok(new { success = true, message = $"Announce queued for {target.Url}" });
+        var results = TriggerAnnounceInternal(torrent, target);
+        var res = results.FirstOrDefault();
+        return Ok(new
+        {
+            success = res?.Success ?? true,
+            message = res != null
+                ? (res.Success ? $"Announced to {target.Url} successfully ({res.Seeders} seeders, {res.Leechers} leechers, {res.PeersDiscovered} peers)" : $"Announce failed for {target.Url}: {res.FailureReason}")
+                : $"Announce queued for {target.Url}",
+            result = res
+        });
     }
 
     [HttpGet("{id:int}/logs")]
