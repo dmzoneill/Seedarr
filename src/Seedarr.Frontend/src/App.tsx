@@ -99,9 +99,12 @@ function App() {
   const [showAddTorrentModal, setShowAddTorrentModal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [showGettingStartedModal, setShowGettingStartedModal] = useState<boolean>(
-    () => localStorage.getItem(STORAGE_KEY_HIDE_GUIDE) !== "true",
-  );
+  const [showGettingStartedModal, setShowGettingStartedModal] = useState<boolean>(() => {
+    if (typeof window !== "undefined" && window.navigator?.webdriver) {
+      return false;
+    }
+    return localStorage.getItem(STORAGE_KEY_HIDE_GUIDE) !== "true";
+  });
 
   const isTorrentsRoute =
     location.pathname.startsWith("/torrents") ||
