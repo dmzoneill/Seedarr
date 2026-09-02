@@ -7,6 +7,41 @@ class ApiClient {
     this.apiKey = key;
   }
 
+  private async parseError(response: Response): Promise<string> {
+    let errorMessage = `API error: ${response.status} ${response.statusText}`;
+    try {
+      const text = await response.text();
+      if (text) {
+        try {
+          const data = JSON.parse(text);
+          if (typeof data === "string") {
+            errorMessage = data;
+          } else if (data && typeof data === "object") {
+            const errors = (data as { errors?: Record<string, string[]> | string[] }).errors;
+            let formattedErrors: string | null = null;
+            if (Array.isArray(errors)) {
+              formattedErrors = errors.join(", ");
+            } else if (errors && typeof errors === "object") {
+              formattedErrors = Object.values(errors).flat().join(", ");
+            }
+
+            errorMessage =
+              (data as { message?: string }).message ||
+              (data as { title?: string }).title ||
+              (data as { error?: string }).error ||
+              formattedErrors ||
+              errorMessage;
+          }
+        } catch {
+          errorMessage = text;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+    return errorMessage;
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
@@ -26,7 +61,8 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
+      const errorMsg = await this.parseError(response);
+      throw new Error(errorMsg);
     }
 
     if (
@@ -72,7 +108,8 @@ class ApiClient {
       body: formData,
     });
     if (!response.ok) {
-      throw new Error(`API error: ${response.status} ${response.statusText}`);
+      const errorMsg = await this.parseError(response);
+      throw new Error(errorMsg);
     }
     return response.json();
   }

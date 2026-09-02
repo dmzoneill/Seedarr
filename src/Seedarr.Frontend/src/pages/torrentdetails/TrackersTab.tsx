@@ -143,7 +143,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
       return {
         url: tr.url,
         host: tr.host,
-        protocol: tr.protocol,
+        protocol: String(tr.protocol),
         isAttached,
         isVerified,
         isAlive,
@@ -226,89 +226,6 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
         },
       },
     );
-  };
-
-  const handleAddTracker = async () => {
-    if (!torrent.id) return;
-
-    if (selectedTracker === "all_verified") {
-      const candidates = trackerOptions.filter(
-        (o) => o.isVerified && !o.isAttached,
-      );
-      if (candidates.length === 0) {
-        showToast("No verified candidate trackers found in swarm", "info");
-        return;
-      }
-      let added = 0;
-      for (const tr of candidates) {
-        try {
-          await addTracker.mutateAsync({ torrentId: torrent.id, url: tr.url });
-          added++;
-        } catch {
-          // continue
-        }
-      }
-      showToast(
-        `Added ${added} verified tracker(s) to torrent and announced`,
-        "success",
-      );
-      refetch();
-    } else if (selectedTracker === "all_online") {
-      const candidates = trackerOptions.filter(
-        (o) => o.isAlive && !o.isAttached,
-      );
-      if (candidates.length === 0) {
-        showToast("No unattached online trackers available", "info");
-        return;
-      }
-      let added = 0;
-      for (const tr of candidates) {
-        try {
-          await addTracker.mutateAsync({ torrentId: torrent.id, url: tr.url });
-          added++;
-        } catch {
-          // continue
-        }
-      }
-      showToast(
-        `Added ${added} online tracker(s) to torrent and announced`,
-        "success",
-      );
-      refetch();
-    } else if (selectedTracker === "all") {
-      const candidates = trackerOptions.filter((o) => !o.isAttached);
-      if (candidates.length === 0) {
-        showToast("All trackers are already attached", "info");
-        return;
-      }
-      let added = 0;
-      for (const tr of candidates) {
-        try {
-          await addTracker.mutateAsync({ torrentId: torrent.id, url: tr.url });
-          added++;
-        } catch {
-          // continue
-        }
-      }
-      showToast(
-        `Added ${added} tracker(s) to torrent and announced`,
-        "success",
-      );
-      refetch();
-    } else if (selectedTracker) {
-      addTracker.mutate(
-        { torrentId: torrent.id, url: selectedTracker },
-        {
-          onSuccess: () => {
-            showToast("Added tracker and announced successfully", "success");
-            refetch();
-          },
-          onError: (err) => {
-            showToast(`Failed to add tracker: ${err.message}`, "error");
-          },
-        },
-      );
-    }
   };
 
   return (

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
@@ -19,6 +20,7 @@ namespace Seedarr.Api.V1.Torrents;
 [V1ApiController("torrent")]
 public class TorrentController : RestControllerWithSignalR<TorrentResource, Torrent>
 {
+    private readonly Logger _logger;
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileService _torrentFileService;
     private readonly ITrackerEntryService _trackerEntryService;
@@ -55,6 +57,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _downloadHistoryRepository = downloadHistoryRepository;
         _trackerBoostService = trackerBoostService;
         _trackerAnnounceService = trackerAnnounceService;
+        _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
     }
@@ -65,7 +68,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return MapTorrentToResource(torrent, trackers);
     }
 
-    private TorrentResource MapTorrentToResource(Torrent torrent, List<TrackerEntry> trackers)
+    private TorrentResource MapTorrentToResource(Torrent torrent, List<TrackerEntry> trackers, Dictionary<string, DownloadHistory> histories = null)
     {
         var torrentTrackers = trackers.Where(t => t.TorrentId == torrent.Id).ToList();
         var resource = TorrentResourceMapper.ToResource(torrent, torrentTrackers.Select(t => t.Url));
@@ -95,11 +98,20 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             resource.NextUpdate = 0;
         }
 
-        if (_downloadHistoryRepository != null && !string.IsNullOrEmpty(torrent.InfoHash))
+        if (!string.IsNullOrEmpty(torrent.InfoHash))
         {
             try
             {
-                var history = _downloadHistoryRepository.FindByInfoHash(torrent.InfoHash);
+                DownloadHistory history = null;
+                if (histories != null)
+                {
+                    histories.TryGetValue(torrent.InfoHash, out history);
+                }
+                else if (_downloadHistoryRepository != null)
+                {
+                    history = _downloadHistoryRepository.FindByInfoHash(torrent.InfoHash);
+                }
+
                 if (history != null)
                 {
                     resource.Source = history.Source;
@@ -123,9 +135,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Fallback gracefully
+                _logger.Debug(ex, "Failed to deserialize media metadata for torrent {0}", torrent.InfoHash);
             }
         }
 
@@ -142,7 +154,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     {
         var torrents = _torrentService.GetAll();
         var trackers = _trackerEntryService.All();
-        return torrents.Select(t => MapTorrentToResource(t, trackers)).ToList();
+        var histories = _downloadHistoryRepository?.All()
+            .GroupBy(h => h.InfoHash, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First(), StringComparer.OrdinalIgnoreCase);
+
+        return torrents.Select(t => MapTorrentToResource(t, trackers, histories)).ToList();
     }
 
     [HttpGet("{id:int}")]

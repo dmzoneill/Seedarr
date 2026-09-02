@@ -161,6 +161,20 @@ public class MetadataExchangeTest
         Assert.That(result.Length, Is.EqualTo(headerLen + 100));
     }
 
+    [Test]
+    public void ParseMetadataMessage_should_extract_piece_data_from_response()
+    {
+        var rawData = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
+        var encoded = _exchange.BuildMetadataResponse(1, 4096, rawData);
+        var parsed = _exchange.ParseMetadataMessage(encoded);
+
+        Assert.That(parsed.MessageType, Is.EqualTo(1));
+        Assert.That(parsed.Piece, Is.EqualTo(1));
+        Assert.That(parsed.TotalSize, Is.EqualTo(4096));
+        Assert.That(parsed.Data, Is.Not.Null);
+        Assert.That(parsed.Data, Is.EqualTo(rawData));
+    }
+
     private static BDictionary ParseBencode(byte[] data)
     {
         var parser = new BencodeParser();

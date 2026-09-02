@@ -50,6 +50,11 @@ public class DownloadClientController : Controller
     [HttpPost]
     public ActionResult<DownloadClientDefinition> Create([FromBody] DownloadClientDefinition definition)
     {
+        if (definition == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
         if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
             definition.Implementation = $"{definition.ClientType}Client";
@@ -60,15 +65,6 @@ public class DownloadClientController : Controller
             definition.ConfigContract = $"{definition.ClientType}Settings";
         }
 
-        try
-        {
-            CreateClient(definition);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-
         var created = _downloadClientFactory.Create(definition);
         return Ok(MaskPassword(created));
     }
@@ -76,6 +72,17 @@ public class DownloadClientController : Controller
     [HttpPut("{id}")]
     public ActionResult Update(int id, [FromBody] DownloadClientDefinition definition)
     {
+        if (definition == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        var existing = _downloadClientFactory.Get(id);
+        if (existing == null)
+        {
+            return NotFound();
+        }
+
         definition.Id = id;
 
         if (string.IsNullOrWhiteSpace(definition.Implementation))
@@ -88,15 +95,9 @@ public class DownloadClientController : Controller
             definition.ConfigContract = $"{definition.ClientType}Settings";
         }
 
-        // If the masked password was sent back, preserve the existing value
-        if (definition.Password == PasswordMask)
+        // If password is omitted, empty, or masked, preserve the existing value
+        if (string.IsNullOrWhiteSpace(definition.Password) || definition.Password == PasswordMask || definition.Password.Contains('*'))
         {
-            var existing = _downloadClientFactory.Get(id);
-            if (existing == null)
-            {
-                return NotFound();
-            }
-
             definition.Password = existing.Password;
         }
 

@@ -78,7 +78,7 @@ public class MultiTrackerManager : IMultiTrackerManager
         Func<string, TResponse> operation,
         Func<TResponse> fallbackResponse,
         bool logBackoffSkip)
-        where TResponse : class
+        where TResponse : class, ITrackerResponse
     {
         var announceToAllTiers = _configService.AnnounceToAllTiers;
         var announceToAllInTier = _configService.AnnounceToAllInTier;
@@ -99,9 +99,8 @@ public class MultiTrackerManager : IMultiTrackerManager
                 }
 
                 var response = operation(trackerUrl);
-                dynamic dynResponse = response;
 
-                if (dynResponse.Success)
+                if (response != null && response.Success)
                 {
                     ResetFailureState(trackerUrl);
 
@@ -230,7 +229,7 @@ public class MultiTrackerManager : IMultiTrackerManager
     {
         var now = DateTime.UtcNow;
         var staleKeys = _failureStates
-            .Where(kvp => Volatile.Read(ref kvp.Value.ConsecutiveFailures) == 0 || kvp.Value.BackoffUntil < now)
+            .Where(kvp => kvp.Value.BackoffUntil != DateTime.MinValue && kvp.Value.BackoffUntil < now)
             .Select(kvp => kvp.Key)
             .ToList();
 

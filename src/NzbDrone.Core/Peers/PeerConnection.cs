@@ -17,6 +17,9 @@ public class PeerConnection : IDisposable
     private readonly TcpClient _client;
     private readonly NetworkStream _networkStream;
     private readonly Logger _logger;
+    private readonly object _writeLock = new();
+    private readonly object _disposeLock = new();
+    private bool _isDisposed;
     private Stream _activeStream;
 
     public string RemoteIp { get; }
@@ -212,8 +215,17 @@ public class PeerConnection : IDisposable
                 Array.Copy(message.Payload, 0, buffer, 5, payloadLength);
             }
 
-            _activeStream.Write(buffer, 0, bufferSize);
-            _activeStream.Flush();
+            lock (_writeLock)
+            {
+                if (_isDisposed)
+                {
+                    return;
+                }
+
+                _activeStream.Write(buffer, 0, bufferSize);
+                _activeStream.Flush();
+            }
+
             LastActivity = DateTime.UtcNow;
         }
         finally
@@ -225,8 +237,17 @@ public class PeerConnection : IDisposable
     public void SendKeepAlive()
     {
         var buffer = new byte[4];
-        _activeStream.Write(buffer, 0, 4);
-        _activeStream.Flush();
+        lock (_writeLock)
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            _activeStream.Write(buffer, 0, 4);
+            _activeStream.Flush();
+        }
+
         LastActivity = DateTime.UtcNow;
     }
 
@@ -292,6 +313,11 @@ public class PeerConnection : IDisposable
 
     public void SendBitfield(int pieceCount)
     {
+        if (pieceCount <= 0)
+        {
+            return;
+        }
+
         // Send full bitfield (all pieces available - we're a seeder)
         var byteCount = (pieceCount + 7) / 8;
         var bitfield = new byte[byteCount];
@@ -342,12 +368,22 @@ public class PeerConnection : IDisposable
 
     public void Dispose()
     {
-        if (_activeStream != _networkStream)
+        lock (_disposeLock)
         {
-            _activeStream?.Dispose();
-        }
+            if (_isDisposed)
+            {
+                return;
+            }
 
-        _networkStream?.Dispose();
-        _client?.Dispose();
+            _isDisposed = true;
+
+            if (_activeStream != _networkStream)
+            {
+                _activeStream?.Dispose();
+            }
+
+            _networkStream?.Dispose();
+            _client?.Dispose();
+        }
     }
 }

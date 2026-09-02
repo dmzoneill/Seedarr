@@ -59,17 +59,43 @@ public class MetadataExchange : IMetadataExchange
 
     public MetadataMessage ParseMetadataMessage(byte[] data)
     {
+        if (data == null || data.Length == 0)
+        {
+            return new MetadataMessage();
+        }
+
         try
         {
             var parser = new BencodeParser();
             using var stream = new MemoryStream(data);
             var dict = parser.Parse<BDictionary>(stream);
 
+            byte[] pieceData = null;
+            if (stream.Position < stream.Length)
+            {
+                var remaining = (int)(stream.Length - stream.Position);
+                pieceData = new byte[remaining];
+                stream.ReadExactly(pieceData, 0, remaining);
+            }
+
+            var messageType = dict.TryGetValue("msg_type", out var msgTypeObj) && msgTypeObj is BNumber msgTypeNum
+                ? (int)msgTypeNum.Value
+                : 0;
+
+            var piece = dict.TryGetValue("piece", out var pieceObj) && pieceObj is BNumber pieceNum
+                ? (int)pieceNum.Value
+                : 0;
+
+            var totalSize = dict.TryGetValue("total_size", out var totalSizeObj) && totalSizeObj is BNumber totalSizeNum
+                ? (int)totalSizeNum.Value
+                : 0;
+
             return new MetadataMessage
             {
-                MessageType = (int)((BNumber)dict["msg_type"]).Value,
-                Piece = (int)((BNumber)dict["piece"]).Value,
-                TotalSize = dict.ContainsKey("total_size") ? (int)((BNumber)dict["total_size"]).Value : 0
+                MessageType = messageType,
+                Piece = piece,
+                TotalSize = totalSize,
+                Data = pieceData
             };
         }
         catch (Exception ex)

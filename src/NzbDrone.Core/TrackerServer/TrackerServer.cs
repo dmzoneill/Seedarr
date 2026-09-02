@@ -175,14 +175,14 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
             if (IsRateLimited(clientIp))
             {
-                var rateLimitResponse = "HTTP/1.1 429 Too Many Requests\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                var rateLimitBytes = Encoding.ASCII.GetBytes(rateLimitResponse);
-                stream.Write(rateLimitBytes, 0, rateLimitBytes.Length);
+                var rateLimitHeaders = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                var rateLimitHeaderBytes = Encoding.ASCII.GetBytes(rateLimitHeaders);
+                stream.Write(rateLimitHeaderBytes, 0, rateLimitHeaderBytes.Length);
                 return;
             }
 
-            var requestLine = ReadBoundedLine(stream, 8192);
-            if (requestLine == null)
+            var requestLine = ReadBoundedLine(stream, 2048);
+            if (string.IsNullOrEmpty(requestLine))
             {
                 return;
             }
@@ -195,13 +195,20 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
             var path = parts[1];
 
+            // Drain remaining headers to prevent connection reset
+            string line;
+            while (!string.IsNullOrEmpty(line = ReadBoundedLine(stream, 1024)))
+            {
+                // Discard header lines
+            }
+
             byte[] bodyBytes;
 
-            if (path.StartsWith("/announce"))
+            if (path.StartsWith("/announce", StringComparison.OrdinalIgnoreCase))
             {
                 bodyBytes = HandleAnnounce(path, remoteEndpoint);
             }
-            else if (path.StartsWith("/scrape"))
+            else if (path.StartsWith("/scrape", StringComparison.OrdinalIgnoreCase))
             {
                 if (!_configService.TrackerEnableScrape)
                 {
@@ -269,6 +276,23 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         return (ParseQueryString(query), null);
     }
 
+    private static Dictionary<string, string> ParseQueryString(string query)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in query.Split('&'))
+        {
+            var eqIndex = pair.IndexOf('=');
+            if (eqIndex > 0)
+            {
+                var key = Uri.UnescapeDataString(pair[..eqIndex]);
+                var value = Uri.UnescapeDataString(pair[(eqIndex + 1)..]);
+                result[key] = value;
+            }
+        }
+
+        return result;
+    }
+
     private byte[] HandleAnnounce(string path, IPEndPoint remoteEndpoint)
     {
         var (parameters, error) = ParseRequest(path);
@@ -289,9 +313,8 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         var peerIp = remoteEndpoint.Address.ToString();
-
-        parameters.TryGetValue("peer_id", out var peerId);
-        parameters.TryGetValue("event", out var eventType);
+        var peerId = parameters.GetValueOrDefault("peer_id", "");
+        var eventType = parameters.GetValueOrDefault("event", "");
 
         if (eventType == "stopped")
         {
@@ -299,7 +322,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
         else
         {
-            _peerDatabase.AddPeer(infoHash, peerIp, port, peerId ?? "");
+            _peerDatabase.AddPeer(infoHash, peerIp, port, peerId);
         }
 
         var peers = _peerDatabase.GetPeers(infoHash);
@@ -314,7 +337,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
                 infoHash,
                 peerIp,
                 port,
-                eventType ?? "",
+                eventType,
                 compactPeers.Length / 6);
         }
 
@@ -347,20 +370,6 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             return Encoding.ASCII.GetBytes("d14:failure reason18:Missing info_hashe");
         }
 
-        if (infoHash.Length != 20)
-        {
-            return Encoding.ASCII.GetBytes("d14:failure reason15:Invalid info_hashe");
-        }
-
-        // Uri.UnescapeDataString maps each %XX to the Unicode code point equal to
-        // the byte value, so casting char → byte recovers the original raw bytes
-        // without the ASCII-encoding truncation that corrupts values > 0x7F.
-        var infoHashBytes = new byte[20];
-        for (var i = 0; i < 20; i++)
-        {
-            infoHashBytes[i] = (byte)infoHash[i];
-        }
-
         var stats = _peerDatabase.GetStats(infoHash);
         var scrapeInterval = _configService.ScrapeIntervalSeconds;
 
@@ -372,7 +381,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         };
 
         var files = new BDictionary();
-        files.Add(new BString(infoHashBytes), fileDict);
+        files.Add(infoHash, fileDict);
 
         var response = new BDictionary
         {
@@ -401,23 +410,6 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         return chunks.ToArray();
-    }
-
-    private static Dictionary<string, string> ParseQueryString(string query)
-    {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in query.Split('&'))
-        {
-            var eqIndex = pair.IndexOf('=');
-            if (eqIndex > 0)
-            {
-                var key = Uri.UnescapeDataString(pair[..eqIndex]);
-                var value = Uri.UnescapeDataString(pair[(eqIndex + 1)..]);
-                result[key] = value;
-            }
-        }
-
-        return result;
     }
 
     private bool IsRateLimited(string ip)

@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using NLog;
@@ -226,47 +227,26 @@ public class UdpTrackerProvider : ITrackerProvider
 
     private static void WriteInt64BigEndian(byte[] buffer, int offset, long value)
     {
-        buffer[offset] = (byte)(value >> 56);
-        buffer[offset + 1] = (byte)(value >> 48);
-        buffer[offset + 2] = (byte)(value >> 40);
-        buffer[offset + 3] = (byte)(value >> 32);
-        buffer[offset + 4] = (byte)(value >> 24);
-        buffer[offset + 5] = (byte)(value >> 16);
-        buffer[offset + 6] = (byte)(value >> 8);
-        buffer[offset + 7] = (byte)value;
+        BinaryPrimitives.WriteInt64BigEndian(buffer.AsSpan(offset, 8), value);
     }
 
     private static void WriteInt32BigEndian(byte[] buffer, int offset, int value)
     {
-        buffer[offset] = (byte)(value >> 24);
-        buffer[offset + 1] = (byte)(value >> 16);
-        buffer[offset + 2] = (byte)(value >> 8);
-        buffer[offset + 3] = (byte)value;
+        BinaryPrimitives.WriteInt32BigEndian(buffer.AsSpan(offset, 4), value);
     }
 
     private static void WriteInt16BigEndian(byte[] buffer, int offset, short value)
     {
-        buffer[offset] = (byte)(value >> 8);
-        buffer[offset + 1] = (byte)value;
+        BinaryPrimitives.WriteInt16BigEndian(buffer.AsSpan(offset, 2), value);
     }
 
     private static long ReadInt64BigEndian(byte[] buffer, int offset)
     {
-        return ((long)buffer[offset] << 56) |
-            ((long)buffer[offset + 1] << 48) |
-            ((long)buffer[offset + 2] << 40) |
-            ((long)buffer[offset + 3] << 32) |
-            ((long)buffer[offset + 4] << 24) |
-            ((long)buffer[offset + 5] << 16) |
-            ((long)buffer[offset + 6] << 8) |
-            buffer[offset + 7];
+        return BinaryPrimitives.ReadInt64BigEndian(buffer.AsSpan(offset, 8));
     }
 
     private static int ReadInt32BigEndian(byte[] buffer, int offset)
     {
-        return (buffer[offset] << 24) |
-            (buffer[offset + 1] << 16) |
-            (buffer[offset + 2] << 8) |
-            buffer[offset + 3];
+        return BinaryPrimitives.ReadInt32BigEndian(buffer.AsSpan(offset, 4));
     }
 }

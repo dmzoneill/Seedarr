@@ -120,7 +120,8 @@ public class HttpTrackerProvider : ITrackerProvider
             var scrapeUrl = trackerUrl.Replace("/announce", "/scrape");
             var hashBytes = Convert.FromHexString(infoHash);
             var escapedHash = string.Join("", hashBytes.Select(b => $"%{b:X2}"));
-            scrapeUrl += $"?info_hash={escapedHash}";
+            var scrapeSep = scrapeUrl.Contains('?') ? "&" : "?";
+            scrapeUrl += $"{scrapeSep}info_hash={escapedHash}";
 
             _logger.Debug("HTTP scrape: {0}", RedactUrl(scrapeUrl));
 
@@ -183,9 +184,10 @@ public class HttpTrackerProvider : ITrackerProvider
         var hashBytes = Convert.FromHexString(request.InfoHash);
         var escapedHash = string.Join("", hashBytes.Select(b => $"%{b:X2}"));
         var escapedPeerId = HttpUtility.UrlEncode(request.PeerId);
+        var sep = request.TrackerUrl.Contains('?') ? "&" : "?";
 
         return $"{request.TrackerUrl}" +
-            $"?info_hash={escapedHash}" +
+            $"{sep}info_hash={escapedHash}" +
             $"&peer_id={escapedPeerId}" +
             $"&port={request.Port}" +
             $"&uploaded={request.Uploaded}" +

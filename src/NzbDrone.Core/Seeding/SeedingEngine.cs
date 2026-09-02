@@ -269,7 +269,8 @@ public class SeedingEngine : BackgroundService
             if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed > 0 && torrent.TotalSize > 0)
             {
                 var remaining = torrent.TotalSize - torrent.Downloaded;
-                torrent.Eta = remaining > 0 ? (int)(remaining / torrent.DownloadSpeed) : 0;
+                var etaSeconds = remaining > 0 ? remaining / torrent.DownloadSpeed : 0;
+                torrent.Eta = (int)Math.Min((long)int.MaxValue, etaSeconds);
             }
             else
             {

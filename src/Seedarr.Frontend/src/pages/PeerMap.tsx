@@ -364,12 +364,12 @@ function PeerMap() {
 
     simulation.on("tick", () => {
       link
-        .attr("x1", (d) => (d.source as SimNode).x || 0)
-        .attr("y1", (d) => (d.source as SimNode).y || 0)
-        .attr("x2", (d) => (d.target as SimNode).x || 0)
-        .attr("y2", (d) => (d.target as SimNode).y || 0);
+        .attr("x1", (d) => (typeof d.source === "object" && d.source !== null ? (d.source as SimNode).x ?? 0 : 0))
+        .attr("y1", (d) => (typeof d.source === "object" && d.source !== null ? (d.source as SimNode).y ?? 0 : 0))
+        .attr("x2", (d) => (typeof d.target === "object" && d.target !== null ? (d.target as SimNode).x ?? 0 : 0))
+        .attr("y2", (d) => (typeof d.target === "object" && d.target !== null ? (d.target as SimNode).y ?? 0 : 0));
 
-      node.attr("transform", (d) => `translate(${d.x || 0},${d.y || 0})`);
+      node.attr("transform", (d) => `translate(${d.x ?? 0},${d.y ?? 0})`);
     });
 
     return () => {

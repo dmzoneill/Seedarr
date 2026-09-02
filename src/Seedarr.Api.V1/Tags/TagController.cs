@@ -36,12 +36,22 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
     public ActionResult<TagResource> Get(int id)
     {
         var tag = _tagService.Get(id);
+        if (tag == null)
+        {
+            return NotFound();
+        }
+
         return ToResource(tag);
     }
 
     [HttpPost]
     public ActionResult<TagResource> Create([FromBody] TagResource resource)
     {
+        if (resource == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
         var result = _validator.Validate(resource);
         if (!result.IsValid)
         {
@@ -56,6 +66,11 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
     [HttpPut]
     public ActionResult<TagResource> Update([FromBody] TagResource resource)
     {
+        if (resource == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
         var result = _validator.Validate(resource);
         if (!result.IsValid)
         {
@@ -76,6 +91,11 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
 
     private static TagResource ToResource(Tag model)
     {
+        if (model == null)
+        {
+            return null;
+        }
+
         return new TagResource
         {
             Id = model.Id,

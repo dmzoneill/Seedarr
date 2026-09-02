@@ -493,6 +493,8 @@ public class PeerServer : BackgroundService
                 connection.IsEncrypted,
                 connection.EncryptionMethod);
 
+            _connectionManager.Add(connection);
+
             // Send bitfield (all pieces)
             connection.SendBitfield(torrent.PieceCount);
 
@@ -521,6 +523,10 @@ public class PeerServer : BackgroundService
         catch (Exception ex)
         {
             _logger.Debug(ex, "Peer connection error: {0}", connection.RemoteIp);
+        }
+        finally
+        {
+            _connectionManager.Remove(connection);
         }
     }
 

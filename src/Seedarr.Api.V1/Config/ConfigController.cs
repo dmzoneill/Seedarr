@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Configuration;
@@ -26,11 +27,27 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
 
     public override ActionResult<GeneralConfigResource> SaveConfig([FromBody] GeneralConfigResource resource)
     {
-        // If the masked API key was sent back, preserve the existing value
-        if (resource.ApiKey != null && resource.ApiKey.Contains('*'))
+        if (resource == null)
+        {
+            return BadRequest();
+        }
+
+        // If the masked API key was sent back or empty, preserve the existing value
+        if (string.IsNullOrWhiteSpace(resource.ApiKey) || resource.ApiKey.Contains('*'))
         {
             resource.ApiKey = _configFileProvider.ApiKey;
         }
+
+        var xmlValues = new Dictionary<string, object>
+        {
+            { "BindAddress", resource.BindAddress },
+            { "Port", resource.Port },
+            { "ApiKey", resource.ApiKey },
+            { "AuthenticationEnabled", resource.AuthenticationEnabled },
+            { "UrlBase", resource.UrlBase }
+        };
+
+        _configFileProvider.SaveConfigDictionary(xmlValues);
 
         return base.SaveConfig(resource);
     }

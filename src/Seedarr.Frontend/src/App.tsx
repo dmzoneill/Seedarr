@@ -555,7 +555,7 @@ function App() {
               <Route path="/torrents/history" element={<DownloadHistory />} />
               <Route path="/history" element={<DownloadHistory />} />
               <Route path="/activity/torrents" element={<TorrentIndex />} />
-              <Route path="/torrents" element={<DownloadHistory />} />
+              <Route path="/torrents" element={<TorrentIndex />} />
               <Route path="/torrents/:id" element={<TorrentDetails />} />
               <Route
                 path="/activity/torrents/:id"

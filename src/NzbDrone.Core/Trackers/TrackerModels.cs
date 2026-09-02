@@ -3,6 +3,12 @@ using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.Trackers;
 
+public interface ITrackerResponse
+{
+    bool Success { get; }
+    string FailureReason { get; }
+}
+
 public class TrackerAnnounceRequest
 {
     public string InfoHash { get; set; }
@@ -17,7 +23,7 @@ public class TrackerAnnounceRequest
     public int NumWant { get; set; } = 50;
 }
 
-public class TrackerAnnounceResponse
+public class TrackerAnnounceResponse : ITrackerResponse
 {
     public bool Success { get; set; }
     public int Interval { get; set; }
@@ -36,7 +42,7 @@ public class TrackerPeer
     public string PeerId { get; set; }
 }
 
-public class TrackerScrapeResponse
+public class TrackerScrapeResponse : ITrackerResponse
 {
     public bool Success { get; set; }
     public int Complete { get; set; }

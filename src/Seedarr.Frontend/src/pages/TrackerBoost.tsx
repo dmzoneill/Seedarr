@@ -92,7 +92,7 @@ function TrackerBoost() {
     250,
     logCategoryFilter,
     logLevelFilter,
-    logAutoRefresh ? 3000 : false,
+    activeTab === "logs" && logAutoRefresh ? 3000 : false,
   );
   const clearLogs = useClearTrackerBoostLogs();
 
@@ -141,9 +141,9 @@ function TrackerBoost() {
           totalSize: h.totalSize,
           ratio: 0,
           seeders: 0,
-          isPrivate: h.isPrivate,
+          isPrivate: false,
           sourceType: "real_client",
-          clientName: h.clientName || "Download Client",
+          clientName: h.source || "Download Client",
         });
       }
     });
@@ -180,7 +180,7 @@ function TrackerBoost() {
         map.set(h.infoHash.toLowerCase(), {
           posterUrl: h.metadata?.posterUrl,
           mediaTitle: h.metadata?.title || h.title,
-          source: h.metadata?.source,
+          source: h.source,
           year: h.metadata?.year,
           totalSize: h.totalSize,
         });
@@ -196,11 +196,11 @@ function TrackerBoost() {
       const q = matrixSearch.toLowerCase();
       const meta = torrentMetaMap.get((t.infoHash || "").toLowerCase());
       return (
-        t.torrentName.toLowerCase().includes(q) ||
+        (t.torrentName || "").toLowerCase().includes(q) ||
         (meta?.mediaTitle && meta.mediaTitle.toLowerCase().includes(q)) ||
-        t.infoHash.toLowerCase().includes(q) ||
-        t.trackers.some((tr) =>
-          (tr.trackerHost || tr.trackerUrl).toLowerCase().includes(q),
+        (t.infoHash || "").toLowerCase().includes(q) ||
+        (t.trackers || []).some((tr) =>
+          (tr.trackerHost || tr.trackerUrl || "").toLowerCase().includes(q),
         )
       );
     });
@@ -211,9 +211,9 @@ function TrackerBoost() {
       if (!matrixSearch.trim()) return true;
       const q = matrixSearch.toLowerCase();
       return (
-        tr.trackerUrl.toLowerCase().includes(q) ||
-        tr.host.toLowerCase().includes(q) ||
-        tr.registeredTorrentNames.some((n) => n.toLowerCase().includes(q))
+        (tr.trackerUrl || "").toLowerCase().includes(q) ||
+        (tr.host || "").toLowerCase().includes(q) ||
+        (tr.registeredTorrentNames || []).some((n) => (n || "").toLowerCase().includes(q))
       );
     });
   }, [matrixData?.trackers, matrixSearch]);

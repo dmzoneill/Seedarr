@@ -13,24 +13,6 @@ namespace NzbDrone.Core.Test.ArrIntegration;
 public class SonarrConnectionTest
 {
     private SonarrConnection _connection;
-    private static HttpClient _originalClient;
-    private static ResiliencePipeline _originalPolicy;
-    private static bool _canReplaceStaticFields;
-
-    [OneTimeSetUp]
-    public void FixtureSetup()
-    {
-        _canReplaceStaticFields = TryGetStaticFields(out _originalClient, out _originalPolicy);
-    }
-
-    [OneTimeTearDown]
-    public void FixtureTearDown()
-    {
-        if (_canReplaceStaticFields)
-        {
-            RestoreStaticFields(_originalClient, _originalPolicy);
-        }
-    }
 
     [SetUp]
     public void Setup()
@@ -38,62 +20,9 @@ public class SonarrConnectionTest
         _connection = new SonarrConnection();
     }
 
-    private static bool TryGetStaticFields(out HttpClient client, out ResiliencePipeline policy)
+    private void InjectMockClient(MockHttpMessageHandler handler)
     {
-        try
-        {
-            var clientField = typeof(SonarrConnection).GetField("Client",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var policyField = typeof(SonarrConnection).GetField("Policy",
-                BindingFlags.NonPublic | BindingFlags.Static);
-
-            client = (HttpClient)clientField.GetValue(null);
-            policy = (ResiliencePipeline)policyField.GetValue(null);
-            return true;
-        }
-        catch
-        {
-            client = null;
-            policy = null;
-            return false;
-        }
-    }
-
-    private static void RestoreStaticFields(HttpClient client, ResiliencePipeline policy)
-    {
-        try
-        {
-            var clientField = typeof(SonarrConnection).GetField("Client",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var policyField = typeof(SonarrConnection).GetField("Policy",
-                BindingFlags.NonPublic | BindingFlags.Static);
-
-            clientField.SetValue(null, client);
-            policyField.SetValue(null, policy);
-        }
-        catch
-        {
-            // Restoration failed; static fields are unchanged.
-        }
-    }
-
-    private bool InjectMockClient(MockHttpMessageHandler handler)
-    {
-        try
-        {
-            var clientField = typeof(SonarrConnection).GetField("Client",
-                BindingFlags.NonPublic | BindingFlags.Static);
-            var policyField = typeof(SonarrConnection).GetField("Policy",
-                BindingFlags.NonPublic | BindingFlags.Static);
-
-            clientField.SetValue(null, new HttpClient(handler));
-            policyField.SetValue(null, new ResiliencePipelineBuilder().Build());
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
+        _connection = new SonarrConnection(new HttpClient(handler), new ResiliencePipelineBuilder().Build());
     }
 
     [Test]
@@ -166,11 +95,7 @@ public class SonarrConnectionTest
         handler.Enqueue(HttpStatusCode.OK,
             @"{""records"":[{""eventType"":""grabbed"",""sourceTitle"":""Show S01E01"",""downloadId"":""dl-123"",""date"":""2024-02-20T14:00:00Z"",""data"":{""torrentInfoHash"":""sonarrhash123"",""indexer"":""SonarrIndexer"",""downloadClient"":""Transmission"",""downloadUrl"":""https://example.com/s""}}]}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -196,11 +121,7 @@ public class SonarrConnectionTest
             @"{""eventType"":""grabbed"",""sourceTitle"":""Grabbed"",""downloadId"":""dl-2"",""date"":""2024-02-20T10:30:00Z"",""data"":{""torrentInfoHash"":""hash2""}}" +
             @"]}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -221,11 +142,7 @@ public class SonarrConnectionTest
             @"{""eventType"":""grabbed"",""sourceTitle"":""Has Hash"",""downloadId"":""dl-2"",""date"":""2024-02-20T10:30:00Z"",""data"":{""torrentInfoHash"":""validhash""}}" +
             @"]}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -243,11 +160,7 @@ public class SonarrConnectionTest
         handler.Enqueue(HttpStatusCode.OK,
             @"{""records"":[{""eventType"":""grabbed"",""sourceTitle"":""No Data"",""downloadId"":""dl-1"",""date"":""2024-02-20T10:00:00Z""}]}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -263,11 +176,7 @@ public class SonarrConnectionTest
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.Unauthorized, @"{}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "bad-key";
@@ -284,11 +193,7 @@ public class SonarrConnectionTest
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""page"":1}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -306,11 +211,7 @@ public class SonarrConnectionTest
         handler.Enqueue(HttpStatusCode.OK,
             @"{""records"":[{""eventType"":""grabbed"",""data"":{""torrentInfoHash"":""abc""}}]}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -329,11 +230,7 @@ public class SonarrConnectionTest
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""version"":""4.0""}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -349,11 +246,7 @@ public class SonarrConnectionTest
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.Unauthorized, @"{}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "bad-key";
@@ -369,11 +262,7 @@ public class SonarrConnectionTest
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""records"":[]}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -391,11 +280,7 @@ public class SonarrConnectionTest
         handler.Enqueue(HttpStatusCode.OK,
             @"{""records"":[{""eventType"":""grabbed"",""sourceTitle"":""Show"",""downloadId"":""dl-1"",""date"":""2024-02-20T10:00:00Z"",""data"":{""torrentInfoHash"":""""}}]}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -413,11 +298,7 @@ public class SonarrConnectionTest
         handler.Enqueue(HttpStatusCode.OK,
             @"{""records"":[{""eventType"":""grabbed"",""sourceTitle"":""Show S02E05"",""downloadId"":""dl-y"",""date"":""2024-03-10T08:00:00Z"",""data"":{""torrentInfoHash"":""tvhashval"",""indexer"":""TorrentLeech"",""downloadClient"":""Transmission"",""downloadUrl"":""https://tracker2.example.com/dl""}}]}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -438,11 +319,7 @@ public class SonarrConnectionTest
         handler.Enqueue(HttpStatusCode.OK,
             @"{""records"":[{""eventType"":""grabbed"",""data"":{""torrentInfoHash"":""nodatehash""}}]}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";
@@ -461,11 +338,7 @@ public class SonarrConnectionTest
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.InternalServerError, @"{}");
 
-        if (!InjectMockClient(handler))
-        {
-            Assert.Ignore("Cannot replace static readonly fields in this runtime");
-            return;
-        }
+        InjectMockClient(handler);
 
         _connection.Url = "http://localhost:19999";
         _connection.ApiKey = "test-key";

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Torrents;
@@ -19,6 +20,7 @@ public class TrackerServerController : Controller
     private readonly ITorrentService _torrentService;
     private readonly IConfigService _configService;
     private readonly IDownloadHistoryRepository _downloadHistoryRepository;
+    private readonly Logger _logger;
     private static readonly DateTime StartTime = DateTime.UtcNow;
     private static long _totalAnnounces;
     private static long _totalScrapes;
@@ -33,6 +35,7 @@ public class TrackerServerController : Controller
         _torrentService = torrentService;
         _configService = configService;
         _downloadHistoryRepository = downloadHistoryRepository;
+        _logger = LogManager.GetCurrentClassLogger();
     }
 
     [HttpGet("stats")]
@@ -76,6 +79,11 @@ public class TrackerServerController : Controller
             }
         }
 
+        var historyByHash = _downloadHistoryRepository?.All()
+            .GroupBy(h => h.InfoHash, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First(), StringComparer.OrdinalIgnoreCase)
+            ?? new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase);
+
         var result = infoHashes.Select(hash =>
         {
             var stats = _peerDatabase.GetStats(hash);
@@ -94,35 +102,31 @@ public class TrackerServerController : Controller
             var genres = new List<string>();
             var source = torrent != null ? (torrent.IsPrivate ? "Private Tracker" : "Public Tracker") : "External";
 
-            if (_downloadHistoryRepository != null)
+            if (historyByHash.TryGetValue(hash, out var hist) && hist != null)
             {
-                try
+                source = hist.Source ?? source;
+                if (!string.IsNullOrEmpty(hist.DataJson))
                 {
-                    var hist = _downloadHistoryRepository.FindByInfoHash(hash);
-                    if (hist != null)
+                    try
                     {
-                        source = hist.Source ?? source;
-                        if (!string.IsNullOrEmpty(hist.DataJson))
-                        {
-                            var meta = JsonSerializer.Deserialize<MediaMetadata>(
-                                hist.DataJson,
-                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                        var meta = JsonSerializer.Deserialize<MediaMetadata>(
+                            hist.DataJson,
+                            new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-                            if (meta != null)
-                            {
-                                posterUrl = meta.PosterUrl;
-                                fanartUrl = meta.FanartUrl;
-                                mediaTitle = meta.Title;
-                                year = meta.Year;
-                                rating = meta.Rating;
-                                genres = meta.Genres ?? new();
-                            }
+                        if (meta != null)
+                        {
+                            posterUrl = meta.PosterUrl;
+                            fanartUrl = meta.FanartUrl;
+                            mediaTitle = meta.Title;
+                            year = meta.Year;
+                            rating = meta.Rating;
+                            genres = meta.Genres ?? new();
                         }
                     }
-                }
-                catch
-                {
-                    // Graceful fallback
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(ex, "Failed to deserialize media metadata for tracked torrent {0}", hash);
+                    }
                 }
             }
 

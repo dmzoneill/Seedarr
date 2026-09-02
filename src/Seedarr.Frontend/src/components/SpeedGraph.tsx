@@ -31,7 +31,7 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] =
     useState<number>(DEFAULT_SVG_WIDTH);
-  const historyRef = useRef<SpeedDataPoint[]>([]);
+  const [history, setHistory] = useState<SpeedDataPoint[]>([]);
   const seededRef = useRef(false);
   const prevRef = useRef<{
     totalUploaded: number;
@@ -71,7 +71,7 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
         uploadSpeed: s.uploadSpeed,
         downloadSpeed: s.downloadSpeed,
       }));
-    historyRef.current = points;
+    setHistory(points);
 
     if (serverHistory.length > 0) {
       const last = serverHistory[serverHistory.length - 1];
@@ -101,11 +101,13 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
           (stats.totalDownloaded - prev.totalDownloaded) / timeDelta,
         );
 
-        const next = [...historyRef.current, { uploadSpeed, downloadSpeed }];
-        if (next.length > maxPoints) {
-          next.splice(0, next.length - maxPoints);
-        }
-        historyRef.current = next;
+        setHistory((prevHistory) => {
+          const next = [...prevHistory, { uploadSpeed, downloadSpeed }];
+          if (next.length > maxPoints) {
+            next.splice(0, next.length - maxPoints);
+          }
+          return next;
+        });
       }
     }
 
@@ -115,8 +117,6 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
       timestamp: now,
     };
   }, [stats, maxPoints]);
-
-  const history = historyRef.current;
   const svgWidth = Math.max(300, containerWidth);
   const chartWidth = Math.max(100, svgWidth - PADDING.left - PADDING.right);
   const chartHeight = SVG_HEIGHT - PADDING.top - PADDING.bottom;

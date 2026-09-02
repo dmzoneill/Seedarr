@@ -14,6 +14,7 @@ import {
   formatSpeed,
   formatRatio,
   formatDate,
+  extractTrackerDomain,
 } from "../utils/formatters";
 import { getMediaDeepLink } from "../utils/arrLinks";
 import { calculateAchievements, calculateHnrStatus } from "../utils/milestones";
@@ -731,7 +732,7 @@ function Dashboard() {
                   >
                     <span>{formatBytes(t.totalSize)}</span>
                     {t.trackerUrl && (
-                      <span>• {new URL(t.trackerUrl).hostname}</span>
+                      <span>• {extractTrackerDomain(t.trackerUrl)}</span>
                     )}
                   </div>
                 </div>
