@@ -25,6 +25,7 @@ public class RoutingTable
     private readonly int _maxNodes;
     private readonly byte[] _localNodeId;
     private readonly List<List<DhtNode>> _buckets;
+    private readonly object _lock = new();
 
     public RoutingTable(byte[] localNodeId, int bucketSize = 8, int idBits = 160, int maxNodes = 0)
     {
@@ -42,49 +43,74 @@ public class RoutingTable
 
     public void AddNode(DhtNode node)
     {
-        var bucketIndex = GetBucketIndex(node.NodeId);
-        var bucket = _buckets[bucketIndex];
-
-        var existing = bucket.FirstOrDefault(n => n.NodeId.SequenceEqual(node.NodeId));
-        if (existing != null)
-        {
-            existing.LastSeen = DateTime.UtcNow;
-            existing.FailCount = 0;
-            return;
-        }
-
-        // Check max nodes cap
-        if (_maxNodes > 0 && NodeCount >= _maxNodes)
+        if (node == null || node.NodeId == null)
         {
             return;
         }
 
-        if (bucket.Count < _bucketSize)
+        lock (_lock)
         {
-            bucket.Add(node);
-            return;
-        }
+            var bucketIndex = GetBucketIndex(node.NodeId);
+            var bucket = _buckets[bucketIndex];
 
-        // Evict bad nodes
-        var bad = bucket.FirstOrDefault(n => !n.IsGood);
-        if (bad != null)
-        {
-            bucket.Remove(bad);
-            bucket.Add(node);
+            var existing = bucket.FirstOrDefault(n => n.NodeId.SequenceEqual(node.NodeId));
+            if (existing != null)
+            {
+                existing.LastSeen = DateTime.UtcNow;
+                existing.FailCount = 0;
+                return;
+            }
+
+            // Check max nodes cap
+            if (_maxNodes > 0 && _buckets.Sum(b => b.Count) >= _maxNodes)
+            {
+                return;
+            }
+
+            if (bucket.Count < _bucketSize)
+            {
+                bucket.Add(node);
+                return;
+            }
+
+            // Evict bad nodes
+            var bad = bucket.FirstOrDefault(n => !n.IsGood);
+            if (bad != null)
+            {
+                bucket.Remove(bad);
+                bucket.Add(node);
+            }
         }
     }
 
     public List<DhtNode> GetClosestNodes(byte[] targetId, int count = 0)
     {
-        var take = count > 0 ? count : _bucketSize;
-        return _buckets.SelectMany(b => b)
-            .Where(n => n.IsGood)
-            .OrderBy(n => Distance(n.NodeId, targetId), _byteComparer)
-            .Take(take)
-            .ToList();
+        if (targetId == null)
+        {
+            return new List<DhtNode>();
+        }
+
+        lock (_lock)
+        {
+            var take = count > 0 ? count : _bucketSize;
+            return _buckets.SelectMany(b => b)
+                .Where(n => n.IsGood)
+                .OrderBy(n => Distance(n.NodeId, targetId), _byteComparer)
+                .Take(take)
+                .ToList();
+        }
     }
 
-    public int NodeCount => _buckets.Sum(b => b.Count);
+    public int NodeCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _buckets.Sum(b => b.Count);
+            }
+        }
+    }
 
     private int GetBucketIndex(byte[] nodeId)
     {

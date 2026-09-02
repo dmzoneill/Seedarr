@@ -42,6 +42,8 @@ clean:
 
 test:
 	dotnet test $(UNIT_TEST) --configuration Release --no-build \
+		--settings .runsettings \
+		-maxcpucount:4 \
 		--logger "trx;LogFileName=test-results.trx" \
 		--collect:"XPlat Code Coverage"
 
@@ -51,12 +53,16 @@ integration: stack-clean stack-build stack-up stack-healthy stack-configure
 	@echo ""
 	@echo "Running .NET integration tests..."
 	dotnet test $(INTEGRATION_TEST) --no-build \
+		--settings .runsettings \
+		-maxcpucount:4 \
 		--logger "trx;LogFileName=integration-test-results.trx" \
 		--collect:"XPlat Code Coverage"
 	@echo ""
 	@echo "Running automation tests..."
 	$(eval SEEDARR_API_KEY := $(shell podman exec seedarr sh -c "grep -o '<ApiKey>[^<]*</ApiKey>' /config/config.xml 2>/dev/null" | sed 's/<[^>]*>//g'))
 	SEEDARR_URL=http://localhost:9898 SEEDARR_API_KEY=$(SEEDARR_API_KEY) dotnet test $(AUTOMATION_TEST) --no-build \
+		--settings .runsettings \
+		-maxcpucount:4 \
 		--logger "trx;LogFileName=automation-results.trx"
 	@echo ""
 	@echo "Extracting automation coverage..."

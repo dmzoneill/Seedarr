@@ -1114,7 +1114,7 @@ export function useBoostTorrent() {
         queryKey: ["trackerboost", "check", torrentId],
       });
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
-      queryClient.invalidateQueries({ queryKey: ["trackers", torrentId] });
+      queryClient.invalidateQueries({ queryKey: ["torrents", torrentId, "trackers"] });
     },
   });
 }

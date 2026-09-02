@@ -142,7 +142,8 @@ public class LocalPeerDiscovery : BackgroundService
                         continue;
                     }
 
-                    var data = BuildAnnouncement(torrent.InfoHash, PeerPort);
+                    var port = _configService.ListeningPort > 0 ? _configService.ListeningPort : PeerPort;
+                    var data = BuildAnnouncement(torrent.InfoHash, port);
                     await sender.SendAsync(data, endpoint, stoppingToken);
                     _logger.Debug("LPD: announced {0}", torrent.InfoHash);
                 }

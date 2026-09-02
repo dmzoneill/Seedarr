@@ -49,19 +49,19 @@ export function TrackerMetrics() {
   };
 
   const handleReset = (metric: TrackerMetric) => {
-    if (confirm(`Reset all metrics history for ${metric.Domain || metric.TrackerUrl}?`)) {
+    if (confirm(`Reset all metrics history for ${metric.domain || metric.trackerUrl}?`)) {
       resetMetric.mutate(metric.id, {
-        onSuccess: () => showToast(`Reset stats for ${metric.Domain}`, "success"),
+        onSuccess: () => showToast(`Reset stats for ${metric.domain || metric.host}`, "success"),
         onError: (err) => showToast(`Failed to reset: ${err.message}`, "error"),
       });
     }
   };
 
   const handleDelete = (metric: TrackerMetric) => {
-    if (confirm(`Delete tracking data for ${metric.Domain || metric.TrackerUrl}?`)) {
+    if (confirm(`Delete tracking data for ${metric.domain || metric.trackerUrl}?`)) {
       deleteMetric.mutate(metric.id, {
         onSuccess: () => {
-          showToast(`Deleted ${metric.Domain}`, "success");
+          showToast(`Deleted ${metric.domain || metric.host}`, "success");
           if (selectedMetric?.id === metric.id) setSelectedMetric(null);
         },
         onError: (err) => showToast(`Failed to delete: ${err.message}`, "error"),

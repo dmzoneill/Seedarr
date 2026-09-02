@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography;
@@ -64,7 +65,7 @@ public class FastExtensionHandler : IFastExtensionHandler
         //    When all 5 chunks are consumed, x = SHA-1(x) and repeat.
         var allowedSet = new HashSet<int>();
 
-        if (pieceCount <= 0)
+        if (pieceCount <= 0 || infoHash == null || infoHash.Length == 0 || string.IsNullOrWhiteSpace(ipAddress))
         {
             return allowedSet;
         }
@@ -183,10 +184,16 @@ public class FastExtensionHandler : IFastExtensionHandler
                     return null;
                 }
 
+                var pieceIndex = ReadInt32BigEndian(message.Payload, 0);
+                if (pieceIndex < 0)
+                {
+                    return null;
+                }
+
                 return new FastMessage
                 {
                     Type = fastType,
-                    PieceIndex = ReadInt32BigEndian(message.Payload, 0)
+                    PieceIndex = pieceIndex
                 };
 
             case FastMessageType.RejectRequest:
@@ -196,12 +203,20 @@ public class FastExtensionHandler : IFastExtensionHandler
                     return null;
                 }
 
+                var rejectPieceIndex = ReadInt32BigEndian(message.Payload, 0);
+                var begin = ReadInt32BigEndian(message.Payload, 4);
+                var length = ReadInt32BigEndian(message.Payload, 8);
+                if (rejectPieceIndex < 0 || begin < 0 || length <= 0)
+                {
+                    return null;
+                }
+
                 return new FastMessage
                 {
                     Type = fastType,
-                    PieceIndex = ReadInt32BigEndian(message.Payload, 0),
-                    Begin = ReadInt32BigEndian(message.Payload, 4),
-                    Length = ReadInt32BigEndian(message.Payload, 8)
+                    PieceIndex = rejectPieceIndex,
+                    Begin = begin,
+                    Length = length
                 };
 
             default:
@@ -368,16 +383,12 @@ public class FastExtensionHandler : IFastExtensionHandler
 
     private static void WriteInt32BigEndian(byte[] buffer, int offset, int value)
     {
-        buffer[offset] = (byte)(value >> 24);
-        buffer[offset + 1] = (byte)(value >> 16);
-        buffer[offset + 2] = (byte)(value >> 8);
-        buffer[offset + 3] = (byte)value;
+        BinaryPrimitives.WriteInt32BigEndian(buffer.AsSpan(offset, 4), value);
     }
 
     private static int ReadInt32BigEndian(byte[] buffer, int offset)
     {
-        return (buffer[offset] << 24) | (buffer[offset + 1] << 16) |
-            (buffer[offset + 2] << 8) | buffer[offset + 3];
+        return BinaryPrimitives.ReadInt32BigEndian(buffer.AsSpan(offset, 4));
     }
 
     private static string PeerKey(PeerConnection connection)

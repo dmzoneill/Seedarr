@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -18,8 +19,8 @@ public class WatchFolderService : BackgroundService
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IConfigService _configService;
     private readonly Logger _logger;
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _fileDebounceTokens = new(StringComparer.OrdinalIgnoreCase);
     private FileSystemWatcher _watcher;
-    private CancellationTokenSource _debounceCts;
 
     public WatchFolderService(ITorrentFileParser parser, ITorrentService torrentService, ITrackerEntryService trackerEntryService, IAppFolderInfo appFolderInfo, IConfigService configService)
     {
@@ -69,31 +70,28 @@ public class WatchFolderService : BackgroundService
 
         stoppingToken.Register(() =>
         {
-            _watcher?.Dispose();
-            _logger.Info("Watch folder service stopped");
+            if (_watcher != null)
+            {
+                _watcher.EnableRaisingEvents = false;
+                _watcher.Dispose();
+            }
         });
-
-        var scanInterval = _configService.WatchFolderScanIntervalSeconds;
-
-        if (scanInterval < 1)
-        {
-            scanInterval = 10;
-        }
-
-        _logger.Info("Periodic scan interval: {0} seconds", scanInterval);
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            PeriodicScan(watchPath);
+
+            var scanInterval = Math.Max(1, _configService.WatchFolderScanIntervalSeconds);
+            var interval = TimeSpan.FromSeconds(scanInterval);
+
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(scanInterval), stoppingToken);
+                await Task.Delay(interval, stoppingToken);
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException)
             {
                 break;
             }
-
-            PeriodicScan(watchPath);
         }
     }
 
@@ -121,26 +119,42 @@ public class WatchFolderService : BackgroundService
 
     private async void OnTorrentFileCreated(object sender, FileSystemEventArgs e)
     {
+        var filePath = e.FullPath;
+        var newCts = new CancellationTokenSource();
+
+        var oldCts = _fileDebounceTokens.AddOrUpdate(
+            filePath,
+            newCts,
+            (_, existing) =>
+            {
+                existing.Cancel();
+                existing.Dispose();
+                return newCts;
+            });
+
+        if (oldCts != newCts)
+        {
+            oldCts?.Cancel();
+            oldCts?.Dispose();
+        }
+
         try
         {
-            var cts = new CancellationTokenSource();
-            var old = Interlocked.Exchange(ref _debounceCts, cts);
-            old?.Cancel();
-            old?.Dispose();
-
-            try
-            {
-                await Task.Delay(500, cts.Token);
-                ProcessTorrentFile(e.FullPath);
-            }
-            catch (OperationCanceledException)
-            {
-                // A newer event superseded this one; processing skipped.
-            }
+            await Task.Delay(500, newCts.Token);
+            _fileDebounceTokens.TryRemove(filePath, out _);
+            ProcessTorrentFile(filePath);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer event superseded this one for the same file path.
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Unhandled error in watch folder file created handler");
+            _logger.Error(ex, "Unhandled error in watch folder file created handler for {0}", filePath);
+        }
+        finally
+        {
+            newCts.Dispose();
         }
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -136,25 +137,12 @@ public class UtpConnection : IUtpConnection
         packet[0] = (byte)(((byte)type << 4) | 1);
         packet[1] = 0;
 
-        packet[2] = (byte)(_connectionId >> 8);
-        packet[3] = (byte)_connectionId;
-
-        var timestamp = GetMicroseconds();
-        packet[4] = (byte)(timestamp >> 24);
-        packet[5] = (byte)(timestamp >> 16);
-        packet[6] = (byte)(timestamp >> 8);
-        packet[7] = (byte)timestamp;
-
-        packet[12] = (byte)(DefaultWindowSize >> 24);
-        packet[13] = (byte)(DefaultWindowSize >> 16);
-        packet[14] = (byte)(DefaultWindowSize >> 8);
-        packet[15] = (byte)(DefaultWindowSize & 0xFF);
-
-        packet[16] = (byte)(_sequenceNumber >> 8);
-        packet[17] = (byte)_sequenceNumber;
-
-        packet[18] = (byte)(_ackNumber >> 8);
-        packet[19] = (byte)_ackNumber;
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(2, 2), _connectionId);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(4, 4), GetMicroseconds());
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(8, 4), 0);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(12, 4), DefaultWindowSize);
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(16, 2), _sequenceNumber);
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(18, 2), _ackNumber);
 
         if (payload.Length > 0)
         {
@@ -171,12 +159,12 @@ public class UtpConnection : IUtpConnection
             Type = (UtpPacketType)(data[0] >> 4),
             Version = (byte)(data[0] & 0x0F),
             Extension = data[1],
-            ConnectionId = (ushort)((data[2] << 8) | data[3]),
-            Timestamp = (uint)((data[4] << 24) | (data[5] << 16) | (data[6] << 8) | data[7]),
-            TimestampDiff = (uint)((data[8] << 24) | (data[9] << 16) | (data[10] << 8) | data[11]),
-            WindowSize = (uint)((data[12] << 24) | (data[13] << 16) | (data[14] << 8) | data[15]),
-            SequenceNumber = (ushort)((data[16] << 8) | data[17]),
-            AckNumber = (ushort)((data[18] << 8) | data[19])
+            ConnectionId = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(2, 2)),
+            Timestamp = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(4, 4)),
+            TimestampDiff = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(8, 4)),
+            WindowSize = BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(12, 4)),
+            SequenceNumber = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(16, 2)),
+            AckNumber = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(18, 2))
         };
     }
 

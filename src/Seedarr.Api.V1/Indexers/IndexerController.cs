@@ -63,6 +63,11 @@ public class IndexerController : Controller
     [HttpPost]
     public ActionResult<IndexerDefinition> Create([FromBody] IndexerDefinition definition)
     {
+        if (definition == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
         if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
             definition.Implementation = $"{definition.IndexerType}Indexer";
@@ -73,15 +78,6 @@ public class IndexerController : Controller
             definition.ConfigContract = "IndexerDefinition";
         }
 
-        try
-        {
-            CreateIndexer(definition);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new { message = ex.Message });
-        }
-
         var created = _indexerFactory.Create(definition);
         return Ok(MaskApiKey(created));
     }
@@ -89,6 +85,17 @@ public class IndexerController : Controller
     [HttpPut("{id}")]
     public ActionResult Update(int id, [FromBody] IndexerDefinition definition)
     {
+        if (definition == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        var existing = _indexerFactory.Get(id);
+        if (existing == null)
+        {
+            return NotFound();
+        }
+
         definition.Id = id;
 
         if (string.IsNullOrWhiteSpace(definition.Implementation))
@@ -101,15 +108,9 @@ public class IndexerController : Controller
             definition.ConfigContract = "IndexerDefinition";
         }
 
-        // If the masked API key was sent back, preserve the existing value
-        if (definition.ApiKey != null && definition.ApiKey.Contains('*'))
+        // If API key is omitted, empty, or masked, preserve existing value
+        if (string.IsNullOrWhiteSpace(definition.ApiKey) || definition.ApiKey.Contains('*'))
         {
-            var existing = _indexerFactory.Get(id);
-            if (existing == null)
-            {
-                return NotFound();
-            }
-
             definition.ApiKey = existing.ApiKey;
         }
 

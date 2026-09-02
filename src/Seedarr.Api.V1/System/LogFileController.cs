@@ -55,9 +55,13 @@ public class LogFileController : ControllerBase
         }
 
         var logDir = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "logs"));
+        var logDirWithSep = logDir.EndsWith(Path.DirectorySeparatorChar)
+            ? logDir
+            : logDir + Path.DirectorySeparatorChar;
+
         var fullPath = Path.GetFullPath(Path.Combine(logDir, sanitized));
 
-        if (!fullPath.StartsWith(logDir, StringComparison.OrdinalIgnoreCase))
+        if (!fullPath.StartsWith(logDirWithSep, StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest("Invalid filename");
         }

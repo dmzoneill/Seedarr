@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import {
   useSeedingStats,
   useNetworkStatus,
@@ -36,7 +36,7 @@ function StatusBar() {
     totalDownloaded: number;
     timestamp: number;
   } | null>(null);
-  const speedRef = useRef({ uploadSpeed: 0, downloadSpeed: 0 });
+  const [speed, setSpeed] = useState({ uploadSpeed: 0, downloadSpeed: 0 });
 
   useEffect(() => {
     if (!stats) return;
@@ -47,7 +47,7 @@ function StatusBar() {
     if (prev) {
       const timeDelta = (now - prev.timestamp) / 1000;
       if (timeDelta >= 1) {
-        speedRef.current = {
+        setSpeed({
           uploadSpeed: Math.max(
             0,
             (stats.totalUploaded - prev.totalUploaded) / timeDelta,
@@ -56,7 +56,7 @@ function StatusBar() {
             0,
             (stats.totalDownloaded - prev.totalDownloaded) / timeDelta,
           ),
-        };
+        });
       }
     }
 
@@ -67,7 +67,7 @@ function StatusBar() {
     };
   }, [stats]);
 
-  const { uploadSpeed, downloadSpeed } = speedRef.current;
+  const { uploadSpeed, downloadSpeed } = speed;
 
   // Aggregate peer counts across all torrents
   const totalSeeders = (torrents ?? []).reduce(

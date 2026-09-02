@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -25,6 +24,7 @@ public class DhtService : BackgroundService, IDhtService
     private readonly Logger _logger;
     private readonly byte[] _nodeId;
     private readonly DhtPeerStore _peerStore;
+    private readonly object _secretLock = new();
     private UdpClient _udpClient;
 
     private byte[] _tokenSecret;
@@ -587,23 +587,39 @@ public class DhtService : BackgroundService, IDhtService
 
     private byte[] GenerateToken(IPAddress address)
     {
-        var ipBytes = address.GetAddressBytes();
-        var input = new byte[ipBytes.Length + _tokenSecret.Length];
-        Array.Copy(ipBytes, 0, input, 0, ipBytes.Length);
-        Array.Copy(_tokenSecret, 0, input, ipBytes.Length, _tokenSecret.Length);
-        return SHA1.HashData(input);
+        byte[] secret;
+        lock (_secretLock)
+        {
+            secret = _tokenSecret;
+        }
+
+        return GenerateTokenWithSecret(address, secret);
     }
 
     private bool ValidateToken(byte[] token, IPAddress address)
     {
-        var currentToken = GenerateTokenWithSecret(address, _tokenSecret);
-        if (token.SequenceEqual(currentToken))
+        if (token == null || token.Length == 0)
+        {
+            return false;
+        }
+
+        byte[] currentSecret;
+        byte[] previousSecret;
+
+        lock (_secretLock)
+        {
+            currentSecret = _tokenSecret;
+            previousSecret = _previousTokenSecret;
+        }
+
+        var currentToken = GenerateTokenWithSecret(address, currentSecret);
+        if (CryptographicOperations.FixedTimeEquals(token, currentToken))
         {
             return true;
         }
 
-        var previousToken = GenerateTokenWithSecret(address, _previousTokenSecret);
-        return token.SequenceEqual(previousToken);
+        var previousToken = GenerateTokenWithSecret(address, previousSecret);
+        return CryptographicOperations.FixedTimeEquals(token, previousToken);
     }
 
     private byte[] GenerateTokenWithSecret(IPAddress address, byte[] secret)
@@ -617,14 +633,17 @@ public class DhtService : BackgroundService, IDhtService
 
     private void RotateSecretIfNeeded()
     {
-        if ((DateTime.UtcNow - _lastSecretRotation).TotalMinutes < SecretRotationMinutes)
+        lock (_secretLock)
         {
-            return;
-        }
+            if ((DateTime.UtcNow - _lastSecretRotation).TotalMinutes < SecretRotationMinutes)
+            {
+                return;
+            }
 
-        _previousTokenSecret = _tokenSecret;
-        _tokenSecret = RandomNumberGenerator.GetBytes(16);
-        _lastSecretRotation = DateTime.UtcNow;
-        _logger.Debug("DHT token secret rotated");
+            _previousTokenSecret = _tokenSecret;
+            _tokenSecret = RandomNumberGenerator.GetBytes(16);
+            _lastSecretRotation = DateTime.UtcNow;
+            _logger.Debug("DHT token secret rotated");
+        }
     }
 }

@@ -102,6 +102,27 @@ public class ConfigFileProvider : IConfigFileProvider
         return value != null && bool.TryParse(value, out var result) ? result : defaultValue;
     }
 
+    public void SaveConfigDictionary(Dictionary<string, object> configValues)
+    {
+        if (configValues == null)
+        {
+            return;
+        }
+
+        lock (Mutex)
+        {
+            foreach (var kvp in configValues)
+            {
+                if (kvp.Value != null)
+                {
+                    _config[kvp.Key] = kvp.Value.ToString();
+                }
+            }
+
+            SaveToFile();
+        }
+    }
+
     private static string GenerateApiKey()
     {
         return Guid.NewGuid().ToString("N");

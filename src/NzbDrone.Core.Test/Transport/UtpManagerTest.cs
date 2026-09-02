@@ -179,8 +179,7 @@ public class UtpManagerTest
         var task = (Task)method.Invoke(_subject, new object[] { CancellationToken.None });
         await task;
 
-        // If we get here without hanging, the method returned immediately
-        Assert.Pass();
+        Assert.That(task.IsCompletedSuccessfully, Is.True);
     }
 
     [Test]
@@ -193,11 +192,9 @@ public class UtpManagerTest
         var method = typeof(UtpManager).GetMethod("ExecuteAsync", BindingFlags.NonPublic | BindingFlags.Instance);
 
         var task = (Task)method.Invoke(_subject, new object[] { cts.Token });
-
-        // Should complete once cancellation is triggered
         await task;
 
-        Assert.Pass();
+        Assert.That(task.IsCompleted, Is.True);
     }
 
     [Test]
@@ -209,11 +206,9 @@ public class UtpManagerTest
 
         var method = typeof(UtpManager).GetMethod("ExecuteAsync", BindingFlags.NonPublic | BindingFlags.Instance);
         var task = (Task)method.Invoke(_subject, new object[] { CancellationToken.None });
-
-        // Should complete without throwing
         await task;
 
-        Assert.Pass();
+        Assert.That(task.IsCompletedSuccessfully, Is.True);
     }
 
     [Test]
@@ -225,11 +220,9 @@ public class UtpManagerTest
 
         var method = typeof(UtpManager).GetMethod("ExecuteAsync", BindingFlags.NonPublic | BindingFlags.Instance);
         var task = (Task)method.Invoke(_subject, new object[] { CancellationToken.None });
-
-        // Should complete without throwing even without TCP fallback
         await task;
 
-        Assert.Pass();
+        Assert.That(task.IsCompletedSuccessfully, Is.True);
     }
 
     // --- HandleIncoming tests (private method, via reflection) ---
@@ -246,10 +239,7 @@ public class UtpManagerTest
         var data = new byte[19];
         var sender = new IPEndPoint(IPAddress.Loopback, 12345);
 
-        // Should not throw
-        InvokeHandleIncoming(data, sender);
-
-        Assert.Pass();
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
 
     [Test]
@@ -258,9 +248,7 @@ public class UtpManagerTest
         var data = Array.Empty<byte>();
         var sender = new IPEndPoint(IPAddress.Loopback, 12345);
 
-        InvokeHandleIncoming(data, sender);
-
-        Assert.Pass();
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
 
     [Test]
@@ -274,10 +262,7 @@ public class UtpManagerTest
 
         var sender = new IPEndPoint(IPAddress.Parse("192.168.1.1"), 54321);
 
-        // Should process without error
-        InvokeHandleIncoming(data, sender);
-
-        Assert.Pass();
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
 
     [Test]
@@ -288,9 +273,7 @@ public class UtpManagerTest
 
         var sender = new IPEndPoint(IPAddress.Loopback, 12345);
 
-        InvokeHandleIncoming(data, sender);
-
-        Assert.Pass();
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
 
     [Test]
@@ -301,9 +284,7 @@ public class UtpManagerTest
 
         var sender = new IPEndPoint(IPAddress.Loopback, 12345);
 
-        InvokeHandleIncoming(data, sender);
-
-        Assert.Pass();
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
 
     [Test]
@@ -314,9 +295,7 @@ public class UtpManagerTest
 
         var sender = new IPEndPoint(IPAddress.Loopback, 12345);
 
-        InvokeHandleIncoming(data, sender);
-
-        Assert.Pass();
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
 
     [Test]
@@ -327,9 +306,7 @@ public class UtpManagerTest
 
         var sender = new IPEndPoint(IPAddress.Loopback, 12345);
 
-        InvokeHandleIncoming(data, sender);
-
-        Assert.Pass();
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
 
     [Test]
@@ -342,10 +319,7 @@ public class UtpManagerTest
 
         var sender = new IPEndPoint(IPAddress.Loopback, 12345);
 
-        // Should not throw; verifies parsing of connection ID
-        InvokeHandleIncoming(data, sender);
-
-        Assert.Pass();
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
 
     [Test]
@@ -356,9 +330,7 @@ public class UtpManagerTest
 
         var sender = new IPEndPoint(IPAddress.Loopback, 12345);
 
-        InvokeHandleIncoming(data, sender);
-
-        Assert.Pass();
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
 
     [Test]
@@ -369,8 +341,6 @@ public class UtpManagerTest
 
         var sender = new IPEndPoint(IPAddress.Loopback, 12345);
 
-        InvokeHandleIncoming(data, sender);
-
-        Assert.Pass();
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
 }

@@ -49,6 +49,11 @@ public class ArrConnectionController : Controller
     [HttpPost]
     public ActionResult<ArrConnectionDefinition> Create([FromBody] ArrConnectionDefinition definition)
     {
+        if (definition == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
         if (string.IsNullOrWhiteSpace(definition.Name))
         {
             definition.Name = definition.ArrType ?? "ArrConnection";
@@ -74,6 +79,11 @@ public class ArrConnectionController : Controller
     [HttpPut("{id}")]
     public ActionResult Update(int id, [FromBody] ArrConnectionDefinition definition)
     {
+        if (definition == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
         definition.Id = id;
 
         var existing = _connectionFactory.Get(id);
@@ -87,15 +97,9 @@ public class ArrConnectionController : Controller
             definition.Name = existing.Name ?? definition.ArrType ?? "ArrConnection";
         }
 
-        if (definition.ApiKey != null)
+        if (string.IsNullOrWhiteSpace(definition.ApiKey) || definition.ApiKey.Contains('*'))
         {
-            var maskedKey = existing.ApiKey?.Length > 4
-                ? new string('*', existing.ApiKey.Length - 4) + existing.ApiKey[^4..]
-                : new string('*', existing.ApiKey?.Length ?? 0);
-            if (definition.ApiKey == maskedKey)
-            {
-                definition.ApiKey = existing.ApiKey;
-            }
+            definition.ApiKey = existing.ApiKey;
         }
 
         _connectionFactory.Update(definition);

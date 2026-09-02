@@ -242,11 +242,15 @@ export function CommandPalette({
       onSelect: () => {
         onClose();
         boostAll.mutate(undefined, {
-          onSuccess: (res) =>
+          onSuccess: (res) => {
+            const count = Array.isArray(res)
+              ? res.reduce((acc, r) => acc + (r.addedTrackersCount || r.addedTrackers?.length || 0), 0)
+              : 0;
             showToast(
-              `Swarm boost complete: ${res.totalInjected} trackers injected!`,
+              `Swarm boost complete: ${count} trackers injected across swarms!`,
               "success",
-            ),
+            );
+          },
           onError: (err) => showToast(`Boost failed: ${err.message}`, "error"),
         });
       },
@@ -264,7 +268,7 @@ export function CommandPalette({
         harvestSwarm.mutate(undefined, {
           onSuccess: (res) =>
             showToast(
-              `Harvested ${res.discoveredCount} new tracker endpoints!`,
+              `Harvested ${res.harvestedCount ?? 0} new tracker endpoints!`,
               "success",
             ),
           onError: (err) =>
@@ -285,7 +289,7 @@ export function CommandPalette({
         syncProwlarr.mutate(undefined, {
           onSuccess: (res) =>
             showToast(
-              `Synced ${res.discoveredCount} trackers from Prowlarr!`,
+              `Synced ${res.harvestedCount ?? 0} trackers from Prowlarr!`,
               "success",
             ),
           onError: (err) => showToast(`Sync failed: ${err.message}`, "error"),
@@ -305,7 +309,7 @@ export function CommandPalette({
         scanTrackers.mutate(undefined, {
           onSuccess: (res) =>
             showToast(
-              `Probed ${res.totalScanned} trackers (${res.aliveCount} alive)!`,
+              `Probed ${res.testedCount ?? 0} trackers!`,
               "success",
             ),
           onError: (err) => showToast(`Probe failed: ${err.message}`, "error"),
