@@ -16,17 +16,25 @@ public class WatchFolderService : BackgroundService
     private readonly ITorrentFileParser _parser;
     private readonly ITorrentService _torrentService;
     private readonly ITrackerEntryService _trackerEntryService;
+    private readonly ITorrentFileService _torrentFileService;
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IConfigService _configService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _fileDebounceTokens = new(StringComparer.OrdinalIgnoreCase);
     private FileSystemWatcher _watcher;
 
-    public WatchFolderService(ITorrentFileParser parser, ITorrentService torrentService, ITrackerEntryService trackerEntryService, IAppFolderInfo appFolderInfo, IConfigService configService)
+    public WatchFolderService(
+        ITorrentFileParser parser,
+        ITorrentService torrentService,
+        ITrackerEntryService trackerEntryService,
+        ITorrentFileService torrentFileService,
+        IAppFolderInfo appFolderInfo,
+        IConfigService configService)
     {
         _parser = parser;
         _torrentService = torrentService;
         _trackerEntryService = trackerEntryService;
+        _torrentFileService = torrentFileService;
         _appFolderInfo = appFolderInfo;
         _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
@@ -202,6 +210,7 @@ public class WatchFolderService : BackgroundService
             var added = _torrentService.Add(torrent);
 
             CreateTrackerEntries(added.Id, parsed);
+            SaveTorrentFiles(added.Id, parsed);
 
             if (deleteAfterAdd)
             {
@@ -219,6 +228,22 @@ public class WatchFolderService : BackgroundService
         catch (Exception ex)
         {
             _logger.Error(ex, "Error processing torrent file: {0}", fileName);
+        }
+    }
+
+    private void SaveTorrentFiles(int torrentId, ParsedTorrent parsed)
+    {
+        if (_torrentFileService != null && parsed.Files != null && parsed.Files.Count > 0)
+        {
+            foreach (var file in parsed.Files)
+            {
+                _torrentFileService.Add(new TorrentFile
+                {
+                    TorrentId = torrentId,
+                    Path = file.Path,
+                    Size = file.Size
+                });
+            }
         }
     }
 
