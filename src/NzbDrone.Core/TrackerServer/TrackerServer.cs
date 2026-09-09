@@ -250,12 +250,12 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
             if (b == -1)
             {
-                return position > 0 ? Encoding.ASCII.GetString(buffer, 0, position) : null;
+                return position > 0 ? Encoding.Latin1.GetString(buffer, 0, position) : null;
             }
 
             if (b == '\n')
             {
-                return Encoding.ASCII.GetString(buffer, 0, position).TrimEnd('\r');
+                return Encoding.Latin1.GetString(buffer, 0, position).TrimEnd('\r');
             }
 
             buffer[position++] = (byte)b;
@@ -279,18 +279,115 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     private static Dictionary<string, string> ParseQueryString(string query)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrEmpty(query))
+        {
+            return result;
+        }
+
         foreach (var pair in query.Split('&'))
         {
             var eqIndex = pair.IndexOf('=');
             if (eqIndex > 0)
             {
-                var key = Uri.UnescapeDataString(pair[..eqIndex]);
-                var value = Uri.UnescapeDataString(pair[(eqIndex + 1)..]);
-                result[key] = value;
+                string key;
+                try
+                {
+                    key = Uri.UnescapeDataString(pair[..eqIndex]);
+                }
+                catch (UriFormatException)
+                {
+                    key = pair[..eqIndex];
+                }
+
+                var rawValue = pair[(eqIndex + 1)..];
+
+                if (string.Equals(key, "info_hash", StringComparison.OrdinalIgnoreCase))
+                {
+                    var rawBytes = DecodeUrlBytes(rawValue);
+                    result[key] = NormalizeInfoHashToHex(rawBytes);
+                }
+                else
+                {
+                    try
+                    {
+                        result[key] = Uri.UnescapeDataString(rawValue);
+                    }
+                    catch (UriFormatException)
+                    {
+                        result[key] = rawValue;
+                    }
+                }
             }
         }
 
         return result;
+    }
+
+    private static byte[] DecodeUrlBytes(string encoded)
+    {
+        if (string.IsNullOrEmpty(encoded))
+        {
+            return Array.Empty<byte>();
+        }
+
+        var result = new List<byte>(encoded.Length);
+        for (var i = 0; i < encoded.Length; i++)
+        {
+            if (encoded[i] == '%' && i + 2 < encoded.Length)
+            {
+                var h1 = GetHexValue(encoded[i + 1]);
+                var h2 = GetHexValue(encoded[i + 2]);
+                if (h1 >= 0 && h2 >= 0)
+                {
+                    result.Add((byte)((h1 << 4) | h2));
+                    i += 2;
+                    continue;
+                }
+            }
+
+            result.Add((byte)encoded[i]);
+        }
+
+        return result.ToArray();
+    }
+
+    private static int GetHexValue(char c)
+    {
+        return c switch
+        {
+            >= '0' and <= '9' => c - '0',
+            >= 'a' and <= 'f' => c - 'a' + 10,
+            >= 'A' and <= 'F' => c - 'A' + 10,
+            _ => -1
+        };
+    }
+
+    private static string NormalizeInfoHashToHex(byte[] rawBytes)
+    {
+        if (rawBytes.Length == 20)
+        {
+            return Convert.ToHexString(rawBytes).ToLowerInvariant();
+        }
+
+        if (rawBytes.Length == 40 && IsHexBytes(rawBytes))
+        {
+            return Encoding.ASCII.GetString(rawBytes).ToLowerInvariant();
+        }
+
+        return Convert.ToHexString(rawBytes).ToLowerInvariant();
+    }
+
+    private static bool IsHexBytes(byte[] bytes)
+    {
+        foreach (var b in bytes)
+        {
+            if (!((b >= '0' && b <= '9') || (b >= 'a' && b <= 'f') || (b >= 'A' && b <= 'F')))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private byte[] HandleAnnounce(string path, IPEndPoint remoteEndpoint)
@@ -370,7 +467,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             return Encoding.ASCII.GetBytes("d14:failure reason18:Missing info_hashe");
         }
 
-        var stats = _peerDatabase.GetStats(infoHash);
+        var stats = _peerDatabase.GetStats(infoHash) ?? new ScrapeStats();
         var scrapeInterval = _configService.ScrapeIntervalSeconds;
 
         var fileDict = new BDictionary
@@ -381,7 +478,17 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         };
 
         var files = new BDictionary();
-        files.Add(infoHash, fileDict);
+        byte[] hashKeyBytes;
+        try
+        {
+            hashKeyBytes = Convert.FromHexString(infoHash);
+        }
+        catch (FormatException)
+        {
+            hashKeyBytes = Encoding.Latin1.GetBytes(infoHash);
+        }
+
+        files.Add(new BString(hashKeyBytes), fileDict);
 
         var response = new BDictionary
         {
