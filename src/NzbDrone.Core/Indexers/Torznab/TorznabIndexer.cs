@@ -150,82 +150,102 @@ public class TorznabIndexer : IIndexer
             }
 
             var xml = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            var doc = new System.Xml.XmlDocument();
-            doc.LoadXml(xml);
-
-            var items = doc.SelectNodes("//item");
-            if (items != null)
-            {
-                foreach (System.Xml.XmlNode item in items)
-                {
-                    var titleNode = item.SelectSingleNode("title");
-                    var linkNode = item.SelectSingleNode("link");
-                    var enclosureNode = item.SelectSingleNode("enclosure");
-                    var sizeNode = item.SelectSingleNode("size");
-                    var pubDateNode = item.SelectSingleNode("pubDate");
-
-                    var release = new ReleaseInfo
-                    {
-                        IndexerId = definition.Id,
-                        Indexer = definition.Name,
-                        Title = titleNode?.InnerText ?? string.Empty,
-                        DownloadUrl = enclosureNode?.Attributes?["url"]?.Value ?? linkNode?.InnerText
-                    };
-
-                    if (enclosureNode?.Attributes?["length"] != null && long.TryParse(enclosureNode.Attributes["length"].Value, out var encSize))
-                    {
-                        release.Size = encSize;
-                    }
-                    else if (sizeNode != null && long.TryParse(sizeNode.InnerText, out var sVal))
-                    {
-                        release.Size = sVal;
-                    }
-
-                    if (pubDateNode != null && DateTime.TryParse(pubDateNode.InnerText, out var pDate))
-                    {
-                        release.PublishDate = pDate;
-                    }
-
-                    var attrNodes = item.SelectNodes("*[local-name()='attr']");
-                    if (attrNodes != null)
-                    {
-                        foreach (System.Xml.XmlNode attr in attrNodes)
-                        {
-                            var name = attr.Attributes?["name"]?.Value?.ToLowerInvariant();
-                            var val = attr.Attributes?["value"]?.Value;
-                            if (name == "seeders" && int.TryParse(val, out var seeds))
-                            {
-                                release.Seeders = seeds;
-                            }
-                            else if (name == "peers" && int.TryParse(val, out var peers))
-                            {
-                                release.Leechers = peers;
-                            }
-                            else if (name == "infohash")
-                            {
-                                release.InfoHash = val;
-                            }
-                            else if (name == "magneturl")
-                            {
-                                release.MagnetUrl = val;
-                            }
-                            else if (name == "category" && !string.IsNullOrEmpty(val))
-                            {
-                                release.Categories.Add(val);
-                            }
-                        }
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(release.Title))
-                    {
-                        results.Add(release);
-                    }
-                }
-            }
+            return ParseResponse(xml, definition);
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to search Torznab at {0} for query '{1}'", definition.Url, query);
+        }
+
+        return results;
+    }
+
+    public System.Collections.Generic.List<ReleaseInfo> ParseResponse(string xml, IndexerDefinition definition = null)
+    {
+        var results = new System.Collections.Generic.List<ReleaseInfo>();
+        if (string.IsNullOrWhiteSpace(xml))
+        {
+            return results;
+        }
+
+        var doc = new System.Xml.XmlDocument();
+        doc.LoadXml(xml);
+
+        var items = doc.SelectNodes("//item");
+        if (items != null)
+        {
+            foreach (System.Xml.XmlNode item in items)
+            {
+                var titleNode = item.SelectSingleNode("title");
+                var linkNode = item.SelectSingleNode("link");
+                var enclosureNode = item.SelectSingleNode("enclosure");
+                var sizeNode = item.SelectSingleNode("size");
+                var pubDateNode = item.SelectSingleNode("pubDate");
+
+                var release = new ReleaseInfo
+                {
+                    IndexerId = definition?.Id ?? 0,
+                    Indexer = definition?.Name,
+                    Title = titleNode?.InnerText ?? string.Empty,
+                    DownloadUrl = enclosureNode?.Attributes?["url"]?.Value ?? linkNode?.InnerText
+                };
+
+                if (enclosureNode?.Attributes?["length"] != null && long.TryParse(enclosureNode.Attributes["length"].Value, out var encSize))
+                {
+                    release.Size = encSize;
+                }
+                else if (sizeNode != null && long.TryParse(sizeNode.InnerText, out var sVal))
+                {
+                    release.Size = sVal;
+                }
+
+                if (pubDateNode != null && DateTime.TryParse(pubDateNode.InnerText, out var pDate))
+                {
+                    release.PublishDate = pDate;
+                }
+
+                var attrNodes = item.SelectNodes("*[local-name()='attr']");
+                if (attrNodes != null)
+                {
+                    foreach (System.Xml.XmlNode attr in attrNodes)
+                    {
+                        var name = attr.Attributes?["name"]?.Value?.ToLowerInvariant();
+                        var val = attr.Attributes?["value"]?.Value;
+                        if (name == "seeders" && int.TryParse(val, out var seeds))
+                        {
+                            release.Seeders = seeds;
+                        }
+                        else if (name == "leechers" && int.TryParse(val, out var leechers))
+                        {
+                            release.Leechers = leechers;
+                        }
+                        else if (name == "peers" && int.TryParse(val, out var peers))
+                        {
+                            if (!release.Leechers.HasValue)
+                            {
+                                release.Leechers = peers;
+                            }
+                        }
+                        else if (name == "infohash")
+                        {
+                            release.InfoHash = val;
+                        }
+                        else if (name == "magneturl")
+                        {
+                            release.MagnetUrl = val;
+                        }
+                        else if (name == "category" && !string.IsNullOrEmpty(val))
+                        {
+                            release.Categories.Add(val);
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(release.Title))
+                {
+                    results.Add(release);
+                }
+            }
         }
 
         return results;
