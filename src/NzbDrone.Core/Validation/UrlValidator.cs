@@ -48,12 +48,22 @@ public static class UrlValidator
 
     private static bool IsPrivateIp(IPAddress ip)
     {
+        if (ip.IsIPv4MappedToIPv6)
+        {
+            ip = ip.MapToIPv4();
+        }
+
         var bytes = ip.GetAddressBytes();
 
         return ip.Equals(IPAddress.Loopback) ||
             ip.Equals(IPAddress.IPv6Loopback) ||
+            ip.Equals(IPAddress.Any) ||
+            ip.Equals(IPAddress.IPv6Any) ||
+            ip.Equals(IPAddress.IPv6None) ||
             ip.IsIPv6LinkLocal ||
             ip.IsIPv6SiteLocal ||
+            (bytes.Length == 16 && bytes[0] >= 0xFC && bytes[0] <= 0xFD) ||
+            (bytes.Length == 4 && bytes[0] == 0) ||
             (bytes.Length == 4 && bytes[0] == 10) ||
             (bytes.Length == 4 && bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) ||
             (bytes.Length == 4 && bytes[0] == 192 && bytes[1] == 168) ||
