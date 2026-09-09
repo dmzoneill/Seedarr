@@ -250,15 +250,15 @@ public class ArrSyncService : IArrSyncService
     {
         IArrConnection provider;
 
-        switch (definition.ArrType)
+        switch (definition.ArrType?.ToLowerInvariant())
         {
-            case "Sonarr":
+            case "sonarr":
                 provider = new SonarrConnection();
                 break;
-            case "Radarr":
+            case "radarr":
                 provider = new RadarrConnection();
                 break;
-            case "Lidarr":
+            case "lidarr":
                 provider = new LidarrConnection();
                 break;
             default:

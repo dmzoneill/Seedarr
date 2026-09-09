@@ -266,18 +266,18 @@ namespace NzbDrone.Core.ArrIntegration
             return clean;
         }
 
-        private IArrConnection CreateProvider(ArrConnectionDefinition definition)
+        protected virtual IArrConnection CreateProvider(ArrConnectionDefinition definition)
         {
             IArrConnection provider;
-            switch (definition.ArrType)
+            switch (definition.ArrType?.ToLowerInvariant())
             {
-                case "Sonarr":
+                case "sonarr":
                     provider = new SonarrConnection();
                     break;
-                case "Radarr":
+                case "radarr":
                     provider = new RadarrConnection();
                     break;
-                case "Lidarr":
+                case "lidarr":
                     provider = new LidarrConnection();
                     break;
                 default:
