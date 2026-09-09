@@ -131,4 +131,70 @@ public class UrlValidatorTest
     {
         Assert.That(UrlValidator.IsSafeUrl("http://10.255.255.255/api"), Is.False);
     }
+
+    [Test]
+    public void IsSafeUrl_should_return_false_for_ipv4_any_0_0_0_0()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://0.0.0.0/api"), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://0.0.0.0:8080/api"), Is.False);
+    }
+
+    [Test]
+    public void IsSafeUrl_should_return_false_for_ipv4_0_x_network()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://0.1.2.3/api"), Is.False);
+    }
+
+    [Test]
+    public void IsSafeUrl_should_return_false_for_ipv6_any()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://[::]/api"), Is.False);
+    }
+
+    [Test]
+    public void IsSafeUrl_should_return_false_for_ipv4_mapped_ipv6_loopback()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://[::ffff:127.0.0.1]/api"), Is.False);
+    }
+
+    [Test]
+    public void IsSafeUrl_should_return_false_for_ipv4_mapped_ipv6_private()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://[::ffff:10.0.0.1]/api"), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://[::ffff:172.16.0.1]/api"), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://[::ffff:192.168.1.1]/api"), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://[::ffff:169.254.1.1]/api"), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://[::ffff:0.0.0.0]/api"), Is.False);
+    }
+
+    [Test]
+    public void IsSafeUrl_should_return_false_for_rfc4193_ula()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://[fd00::1]/api"), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://[fc00::1]/api"), Is.False);
+    }
+
+    [Test]
+    public void IsSafeUrl_should_return_false_for_ipv6_link_local()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://[fe80::1]/api"), Is.False);
+    }
+
+    [Test]
+    public void IsSafeUrl_should_return_false_for_ipv6_site_local()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://[fec0::1]/api"), Is.False);
+    }
+
+    [Test]
+    public void IsSafeUrl_should_return_true_for_ipv4_mapped_ipv6_public()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://[::ffff:8.8.8.8]/api"), Is.True);
+    }
+
+    [Test]
+    public void IsSafeUrl_should_return_true_for_ipv6_public()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://[2606:4700:4700::1111]/api"), Is.True);
+    }
 }
