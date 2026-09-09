@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.InteropServices;
 
 namespace NzbDrone.Common.EnvironmentInfo;
@@ -8,5 +9,5 @@ public static class OsInfo
     public static bool IsLinux => RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
     public static bool IsOsx => RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
     public static string Os => RuntimeInformation.OSDescription;
-    public static string Version => RuntimeInformation.FrameworkDescription;
+    public static string Version => Environment.OSVersion.Version.ToString();
 }
