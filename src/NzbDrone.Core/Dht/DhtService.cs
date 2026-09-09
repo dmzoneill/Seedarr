@@ -246,7 +246,7 @@ public class DhtService : BackgroundService, IDhtService
                 SendPingResponse(sender, transactionId);
                 break;
             case "find_node":
-                SendFindNodeResponse(sender, transactionId);
+                HandleFindNodeQuery(args, sender, transactionId);
                 break;
             case "get_peers":
                 HandleGetPeersQuery(args, sender, transactionId);
@@ -447,9 +447,13 @@ public class DhtService : BackgroundService, IDhtService
         _udpClient.Send(bytes, bytes.Length, target);
     }
 
-    private void SendFindNodeResponse(IPEndPoint target, BString transactionId)
+    private void HandleFindNodeQuery(BDictionary args, IPEndPoint sender, BString transactionId)
     {
-        var closest = _routingTable.GetClosestNodes(_nodeId);
+        var targetId = args.ContainsKey("target") && args["target"] is BString targetStr
+            ? targetStr.Value.ToArray()
+            : _nodeId;
+
+        var closest = _routingTable.GetClosestNodes(targetId);
 
         var response = new BDictionary
         {
@@ -463,7 +467,7 @@ public class DhtService : BackgroundService, IDhtService
         };
 
         var bytes = response.EncodeAsBytes();
-        _udpClient.Send(bytes, bytes.Length, target);
+        _udpClient.Send(bytes, bytes.Length, sender);
     }
 
     private void SendErrorResponse(IPEndPoint target, BString transactionId, int code, string message)
