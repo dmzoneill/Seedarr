@@ -497,6 +497,7 @@ public class PeerConnectionTest
         var received = server.ReceiveMessage();
 
         Assert.That(received, Is.Null);
+        Assert.That(server.IsConnected, Is.False);
     }
 
     [Test]
@@ -704,6 +705,7 @@ public class PeerConnectionTest
         var received = server.ReceiveMessage();
 
         Assert.That(received, Is.Null);
+        Assert.That(server.IsConnected, Is.True);
     }
 
     [Test]
@@ -988,6 +990,7 @@ public class PeerConnectionTest
         var received = conn.ReceiveMessage();
 
         Assert.That(received, Is.Null);
+        Assert.That(conn.IsConnected, Is.False);
     }
 
     // Verify message length encoding for large payloads
