@@ -747,6 +747,18 @@ public class ArrSyncServiceTest
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
     }
 
+    private class ExposeProviderArrSyncService : ArrSyncService
+    {
+        public ExposeProviderArrSyncService(
+            IArrConnectionFactory connectionFactory,
+            ITorrentService torrentService)
+            : base(connectionFactory, torrentService)
+        {
+        }
+
+        public IArrConnection ExposeCreateProvider(ArrConnectionDefinition definition) => CreateProvider(definition);
+    }
+
     [Test]
     public void Sync_should_process_multiple_records_mixed_results()
     {
@@ -769,5 +781,61 @@ public class ArrSyncServiceTest
         Assert.That(result.Added, Is.EqualTo(2));
         Assert.That(result.Skipped, Is.EqualTo(1));
         Assert.That(result.Failed, Is.EqualTo(0));
+    }
+
+    [TestCase("sonarr", typeof(SonarrConnection))]
+    [TestCase("Sonarr", typeof(SonarrConnection))]
+    [TestCase("SONARR", typeof(SonarrConnection))]
+    [TestCase("sOnArR", typeof(SonarrConnection))]
+    [TestCase("radarr", typeof(RadarrConnection))]
+    [TestCase("Radarr", typeof(RadarrConnection))]
+    [TestCase("RADARR", typeof(RadarrConnection))]
+    [TestCase("lidarr", typeof(LidarrConnection))]
+    [TestCase("Lidarr", typeof(LidarrConnection))]
+    [TestCase("LIDARR", typeof(LidarrConnection))]
+    public void CreateProvider_should_handle_case_insensitive_arr_type(string arrType, Type expectedType)
+    {
+        var exposeService = new ExposeProviderArrSyncService(_connectionFactory, _torrentService);
+        var def = new ArrConnectionDefinition { ArrType = arrType, Url = "http://localhost:8989", ApiKey = "xyz" };
+
+        var provider = exposeService.ExposeCreateProvider(def);
+
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider, Is.InstanceOf(expectedType));
+        Assert.That(provider.Url, Is.EqualTo("http://localhost:8989"));
+        Assert.That(provider.ApiKey, Is.EqualTo("xyz"));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("unknown")]
+    [TestCase("invalid")]
+    public void CreateProvider_should_return_null_for_unrecognized_arr_type(string arrType)
+    {
+        var exposeService = new ExposeProviderArrSyncService(_connectionFactory, _torrentService);
+        var def = new ArrConnectionDefinition { ArrType = arrType, Url = "http://localhost:8989", ApiKey = "xyz" };
+
+        var provider = exposeService.ExposeCreateProvider(def);
+
+        Assert.That(provider, Is.Null);
+    }
+
+    [TestCase("sonarr")]
+    [TestCase("radarr")]
+    [TestCase("lidarr")]
+    public void TestConnectionDetailedDirect_should_create_provider_for_lowercase_arr_types(string arrType)
+    {
+        var def = new ArrConnectionDefinition
+        {
+            ArrType = arrType,
+            Name = "Test",
+            Url = "http://nonexistent.invalid:8989",
+            ApiKey = "test-key"
+        };
+
+        var result = _service.TestConnectionDetailedDirect(def);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Message, Does.Not.Contain("Unknown ArrType"));
     }
 }
