@@ -40,6 +40,10 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 | Manual ratio management is tedious         | Automated scheduling, distribution, and profiles |
 | Want integration with Sonarr/Radarr/Lidarr | Native \*arr API integration for auto-seeding    |
 
+<p align="center">
+  <img src="logo/ss.png" alt="Seedarr UI Screenshot" width="100%"/>
+</p>
+
 ---
 
 ## Features
