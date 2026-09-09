@@ -50,15 +50,22 @@ internal class MockHttpMessageHandler : HttpMessageHandler
         });
     }
 
+    public HttpRequestMessage LastRequest { get; private set; }
+    public List<HttpRequestMessage> Requests { get; } = new();
+
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        LastRequest = request;
+        Requests.Add(request);
         return Task.FromResult(GetNext());
     }
 
     protected override HttpResponseMessage Send(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        LastRequest = request;
+        Requests.Add(request);
         return GetNext();
     }
 
