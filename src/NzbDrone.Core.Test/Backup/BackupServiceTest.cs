@@ -27,8 +27,9 @@ public class BackupServiceTest
         _appFolderInfo.AppDataFolder.Returns(_tempDir);
 
         _connectionStringFactory = Substitute.For<IConnectionStringFactory>();
-        _connectionStringFactory.DatabaseType.Returns(DatabaseType.PostgreSQL);
-        _connectionStringFactory.MainDbConnectionString.Returns("Host=localhost;Database=seedarr");
+        _connectionStringFactory.DatabaseType.Returns(DatabaseType.SQLite);
+        var dbPath = Path.Combine(_tempDir, "seedarr.db");
+        _connectionStringFactory.MainDbConnectionString.Returns($"Data Source={dbPath}");
 
         _subject = new BackupService(_appFolderInfo, _connectionStringFactory);
     }
@@ -42,8 +43,18 @@ public class BackupServiceTest
         }
     }
 
+    private void CreateTestSqliteDatabase()
+    {
+        var dbPath = Path.Combine(_tempDir, "seedarr.db");
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath}");
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "CREATE TABLE Test (Id INT);";
+        cmd.ExecuteNonQuery();
+    }
+
     [Test]
-    public void CreateBackup_should_return_null_when_db_file_not_found()
+    public void CreateBackup_sqlite_should_return_null_when_db_file_not_found()
     {
         var result = _subject.CreateBackup();
 
@@ -51,9 +62,9 @@ public class BackupServiceTest
     }
 
     [Test]
-    public void CreateBackup_should_create_zip_when_db_exists()
+    public void CreateBackup_sqlite_should_create_zip_when_db_exists()
     {
-        File.WriteAllText(Path.Combine(_tempDir, "seedarr.db"), "test db content");
+        CreateTestSqliteDatabase();
 
         var result = _subject.CreateBackup();
 
@@ -61,12 +72,15 @@ public class BackupServiceTest
         Assert.That(result.Name, Does.StartWith("seedarr_backup_"));
         Assert.That(result.Name, Does.EndWith(".zip"));
         Assert.That(File.Exists(result.Path), Is.True);
+
+        using var zip = ZipFile.OpenRead(result.Path);
+        Assert.That(zip.GetEntry("seedarr.db"), Is.Not.Null);
     }
 
     [Test]
-    public void CreateBackup_should_include_config_when_it_exists()
+    public void CreateBackup_sqlite_should_include_config_when_it_exists()
     {
-        File.WriteAllText(Path.Combine(_tempDir, "seedarr.db"), "test db");
+        CreateTestSqliteDatabase();
         File.WriteAllText(Path.Combine(_tempDir, "config.xml"), "<config />");
 
         var result = _subject.CreateBackup();
@@ -77,15 +91,65 @@ public class BackupServiceTest
     }
 
     [Test]
-    public void CreateBackup_should_work_without_config_file()
+    public void CreateBackup_sqlite_should_work_without_config_file()
     {
-        File.WriteAllText(Path.Combine(_tempDir, "seedarr.db"), "test db");
+        CreateTestSqliteDatabase();
 
         var result = _subject.CreateBackup();
 
         using var zip = ZipFile.OpenRead(result.Path);
         Assert.That(zip.GetEntry("seedarr.db"), Is.Not.Null);
         Assert.That(zip.GetEntry("config.xml"), Is.Null);
+    }
+
+    [Test]
+    public void CreateBackup_sqlite_should_succeed_when_staging_file_already_exists()
+    {
+        CreateTestSqliteDatabase();
+        var stagingPath = Path.Combine(_tempDir, "seedarr.db.backup-staging");
+        File.WriteAllText(stagingPath, "stale staging file");
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(File.Exists(stagingPath), Is.False);
+        using var zip = ZipFile.OpenRead(result.Path);
+        Assert.That(zip.GetEntry("seedarr.db"), Is.Not.Null);
+    }
+
+    [Test]
+    public void CreateBackup_postgres_should_create_zip_with_config_when_config_exists()
+    {
+        _connectionStringFactory.DatabaseType.Returns(DatabaseType.PostgreSQL);
+        _connectionStringFactory.MainDbConnectionString.Returns("Host=localhost;Database=seedarr");
+        File.WriteAllText(Path.Combine(_tempDir, "config.xml"), "<config />");
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Name, Does.StartWith("seedarr_backup_"));
+        Assert.That(result.Name, Does.EndWith(".zip"));
+        Assert.That(File.Exists(result.Path), Is.True);
+
+        using var zip = ZipFile.OpenRead(result.Path);
+        Assert.That(zip.GetEntry("config.xml"), Is.Not.Null);
+        Assert.That(zip.GetEntry("seedarr.db"), Is.Null);
+    }
+
+    [Test]
+    public void CreateBackup_postgres_should_create_zip_even_without_config_file()
+    {
+        _connectionStringFactory.DatabaseType.Returns(DatabaseType.PostgreSQL);
+        _connectionStringFactory.MainDbConnectionString.Returns("Host=localhost;Database=seedarr");
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(File.Exists(result.Path), Is.True);
+
+        using var zip = ZipFile.OpenRead(result.Path);
+        Assert.That(zip.GetEntry("config.xml"), Is.Null);
+        Assert.That(zip.GetEntry("seedarr.db"), Is.Null);
     }
 
     [Test]
@@ -174,6 +238,30 @@ public class BackupServiceTest
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
         Assert.That(File.Exists(dbRestorePath), Is.True);
         Assert.That(File.ReadAllText(dbRestorePath), Is.EqualTo("restored db content"));
+    }
+
+    [Test]
+    public void RestoreBackup_should_extract_config_file_without_db_file()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        var backupPath = Path.Combine(backupDir, "restore_postgres_test.zip");
+
+        using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+        {
+            var entry = zip.CreateEntry("config.xml");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("<Config><Port>8989</Port></Config>");
+        }
+
+        _subject.RestoreBackup("restore_postgres_test.zip");
+
+        var configPath = Path.Combine(_tempDir, "config.xml");
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+
+        Assert.That(File.Exists(configPath), Is.True);
+        Assert.That(File.ReadAllText(configPath), Is.EqualTo("<Config><Port>8989</Port></Config>"));
+        Assert.That(File.Exists(dbRestorePath), Is.False);
     }
 
     [Test]
