@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
@@ -12,6 +13,18 @@ namespace NzbDrone.Core.Test.ArrIntegration
         private IArrConnectionFactory _connectionFactory;
         private IDownloadHistoryRepository _downloadHistoryRepository;
         private ArrMetadataEnricherService _subject;
+
+        private class TestableArrMetadataEnricherService : ArrMetadataEnricherService
+        {
+            public TestableArrMetadataEnricherService(
+                IArrConnectionFactory connectionFactory,
+                IDownloadHistoryRepository downloadHistoryRepository)
+                : base(connectionFactory, downloadHistoryRepository)
+            {
+            }
+
+            public IArrConnection ExposeCreateProvider(ArrConnectionDefinition definition) => CreateProvider(definition);
+        }
 
         [SetUp]
         public void Setup()
@@ -86,6 +99,43 @@ namespace NzbDrone.Core.Test.ArrIntegration
 
             Assert.That(result, Is.GreaterThanOrEqualTo(1));
             _downloadHistoryRepository.Received(1).Insert(Arg.Is<DownloadHistory>(h => h.InfoHash == "abc12345"));
+        }
+
+        [TestCase("sonarr", typeof(SonarrConnection))]
+        [TestCase("Sonarr", typeof(SonarrConnection))]
+        [TestCase("SONARR", typeof(SonarrConnection))]
+        [TestCase("sOnArR", typeof(SonarrConnection))]
+        [TestCase("radarr", typeof(RadarrConnection))]
+        [TestCase("Radarr", typeof(RadarrConnection))]
+        [TestCase("RADARR", typeof(RadarrConnection))]
+        [TestCase("lidarr", typeof(LidarrConnection))]
+        [TestCase("Lidarr", typeof(LidarrConnection))]
+        [TestCase("LIDARR", typeof(LidarrConnection))]
+        public void CreateProvider_should_handle_case_insensitive_arr_type(string arrType, Type expectedType)
+        {
+            var service = new TestableArrMetadataEnricherService(_connectionFactory, _downloadHistoryRepository);
+            var def = new ArrConnectionDefinition { ArrType = arrType, Url = "http://localhost:8989", ApiKey = "xyz" };
+
+            var provider = service.ExposeCreateProvider(def);
+
+            Assert.That(provider, Is.Not.Null);
+            Assert.That(provider, Is.InstanceOf(expectedType));
+            Assert.That(provider.Url, Is.EqualTo("http://localhost:8989"));
+            Assert.That(provider.ApiKey, Is.EqualTo("xyz"));
+        }
+
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("unknown")]
+        [TestCase("invalid")]
+        public void CreateProvider_should_return_null_for_unrecognized_arr_type(string arrType)
+        {
+            var service = new TestableArrMetadataEnricherService(_connectionFactory, _downloadHistoryRepository);
+            var def = new ArrConnectionDefinition { ArrType = arrType, Url = "http://localhost:8989", ApiKey = "xyz" };
+
+            var provider = service.ExposeCreateProvider(def);
+
+            Assert.That(provider, Is.Null);
         }
     }
 }
