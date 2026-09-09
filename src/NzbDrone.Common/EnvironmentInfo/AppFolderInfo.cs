@@ -19,9 +19,11 @@ public class AppFolderInfo : IAppFolderInfo
         }
         else
         {
-            AppDataFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "Seedarr");
+            var appDataParent = OsInfo.IsWindows
+                ? Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
+                : Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+            AppDataFolder = Path.Combine(appDataParent, "Seedarr");
         }
 
         StartUpFolder = AppDomain.CurrentDomain.BaseDirectory;
