@@ -835,6 +835,67 @@ public class PeerServerTest
         Assert.DoesNotThrow(() => InvokeHandleConnection(serverTcp, cts.Token));
     }
 
+    [Test]
+    [CancelAfter(5000)]
+    public void HandleConnection_should_exit_immediately_when_peer_disconnects_eof()
+    {
+        var (clientTcp, serverTcp) = CreateRawTcpPair();
+        _clients.Add(clientTcp);
+
+        var infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = infoHash,
+            PieceCount = 10,
+            PieceLength = 16384,
+            Name = "Test"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var handshake = BuildBtHandshake(infoHash, "-SD0001-012345678901");
+        var stream = clientTcp.GetStream();
+        stream.Write(handshake, 0, handshake.Length);
+        stream.Flush();
+
+        // Remote peer closes the TCP connection immediately after handshake
+        clientTcp.Close();
+
+        using var cts = new CancellationTokenSource();
+        Assert.DoesNotThrow(() => InvokeHandleConnection(serverTcp, cts.Token));
+        _connectionManager.Received().Remove(Arg.Any<PeerConnection>());
+    }
+
+    private void InvokeHandlePeerSession(PeerConnection connection, Torrent torrent)
+    {
+        var method = typeof(PeerServer).GetMethod(
+            "HandlePeerSession",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_server, new object[] { connection, torrent });
+    }
+
+    [Test]
+    [CancelAfter(5000)]
+    public void HandlePeerSession_should_exit_immediately_when_peer_disconnects_eof()
+    {
+        var (client, server) = CreateTestPair();
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            PieceCount = 10,
+            PieceLength = 16384,
+            Name = "Test"
+        };
+
+        _connectionManager.Add(server);
+        client.Dispose();
+
+        Assert.DoesNotThrow(() => InvokeHandlePeerSession(server, torrent));
+        _connectionManager.Received().Remove(server);
+        Assert.That(server.IsConnected, Is.False);
+    }
+
     private static byte[] BuildBtHandshake(string infoHash, string peerId)
     {
         var buf = new byte[68];
