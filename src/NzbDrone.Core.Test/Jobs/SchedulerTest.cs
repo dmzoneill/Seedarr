@@ -122,7 +122,7 @@ public class SchedulerTest
     }
 
     [Test]
-    public async Task ExecuteAsync_should_skip_when_no_task_instance_found()
+    public async Task ExecuteAsync_should_update_last_execution_when_no_task_instance_found()
     {
         var scheduled = new ScheduledTask
         {
@@ -139,6 +139,34 @@ public class SchedulerTest
         await _subject.StartAsync(cts.Token);
         await Task.Delay(500);
 
-        _taskManager.DidNotReceive().UpdateLastExecution(Arg.Any<string>());
+        _taskManager.Received().UpdateLastExecution("NonExistent.TaskType");
+    }
+
+    [Test]
+    public async Task ExecuteAsync_should_not_starve_subsequent_tasks_when_unregistered_task_encountered()
+    {
+        var orphanedTask = new ScheduledTask
+        {
+            TypeName = "NonExistent.TaskType",
+            Interval = 1,
+            LastExecution = DateTime.UtcNow.AddMinutes(-10)
+        };
+        var validTask = new TestScheduledTask();
+        var validScheduled = new ScheduledTask
+        {
+            TypeName = typeof(TestScheduledTask).FullName,
+            Interval = 1,
+            LastExecution = DateTime.UtcNow.AddMinutes(-5)
+        };
+
+        _taskManager.GetNextScheduled().Returns(orphanedTask, validScheduled, (ScheduledTask)null);
+        _subject = new Scheduler(_taskManager, new List<IScheduledTask> { validTask });
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        await _subject.StartAsync(cts.Token);
+        await Task.Delay(500);
+
+        _taskManager.Received().UpdateLastExecution("NonExistent.TaskType");
     }
 }

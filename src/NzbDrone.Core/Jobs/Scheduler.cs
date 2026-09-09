@@ -39,28 +39,28 @@ public class Scheduler : BackgroundService
                     {
                         _logger.Debug("Executing scheduled task: {0}", next.TypeName);
 
-                        var taskInstance = _scheduledTasks.FirstOrDefault(t =>
-                            string.Equals(t.GetType().FullName, next.TypeName, StringComparison.OrdinalIgnoreCase));
-
-                        if (taskInstance != null)
+                        try
                         {
-                            try
+                            var taskInstance = _scheduledTasks.FirstOrDefault(t =>
+                                string.Equals(t.GetType().FullName, next.TypeName, StringComparison.OrdinalIgnoreCase));
+
+                            if (taskInstance != null)
                             {
                                 await Task.Run(() => taskInstance.Execute(), stoppingToken);
                                 _logger.Debug("Scheduled task completed: {0}", next.TypeName);
                             }
-                            catch (Exception ex)
+                            else
                             {
-                                _logger.Error(ex, "Scheduled task failed: {0}", next.TypeName);
-                            }
-                            finally
-                            {
-                                _taskManager.UpdateLastExecution(next.TypeName);
+                                _logger.Warn("No task instance found for scheduled type: {0}", next.TypeName);
                             }
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            _logger.Warn("No task instance found for scheduled type: {0}", next.TypeName);
+                            _logger.Error(ex, "Scheduled task failed: {0}", next.TypeName);
+                        }
+                        finally
+                        {
+                            _taskManager.UpdateLastExecution(next.TypeName);
                         }
                     }
                 }
