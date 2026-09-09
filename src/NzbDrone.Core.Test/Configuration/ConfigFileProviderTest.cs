@@ -115,4 +115,50 @@ public class ConfigFileProviderTest
     {
         Assert.That(_subject.PostgresMainDb, Is.EqualTo(string.Empty));
     }
+
+    [Test]
+    public void SaveConfigDictionary_should_update_values()
+    {
+        _subject.SaveConfigDictionary(new System.Collections.Generic.Dictionary<string, object>
+        {
+            { "Port", 9000 },
+            { "LogLevel", "debug" },
+            { "EnableSsl", true }
+        });
+
+        Assert.That(_subject.Port, Is.EqualTo(9000));
+        Assert.That(_subject.LogLevel, Is.EqualTo("debug"));
+        Assert.That(_subject.EnableSsl, Is.True);
+    }
+
+    [Test]
+    public void Concurrent_reads_and_writes_should_not_throw()
+    {
+        var exceptions = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+        const int iterations = 50;
+
+        System.Threading.Tasks.Parallel.For(0, iterations, i =>
+        {
+            try
+            {
+                _subject.SaveConfigDictionary(new System.Collections.Generic.Dictionary<string, object>
+                {
+                    { $"CustomKey_{i % 5}", $"Value_{i}" },
+                    { "Port", 9000 + (i % 10) }
+                });
+
+                _ = _subject.Port;
+                _ = _subject.ApiKey;
+                _ = _subject.BindAddress;
+                _ = _subject.LogLevel;
+                _ = _subject.EnableSsl;
+            }
+            catch (Exception ex)
+            {
+                exceptions.Add(ex);
+            }
+        });
+
+        Assert.That(exceptions, Is.Empty);
+    }
 }

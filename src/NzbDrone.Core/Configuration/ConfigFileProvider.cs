@@ -66,8 +66,11 @@ public class ConfigFileProvider : IConfigFileProvider
 
     private void SetValue(string key, string value)
     {
-        _config[key] = value;
-        SaveToFile();
+        lock (Mutex)
+        {
+            _config[key] = value;
+            SaveToFile();
+        }
     }
 
     private void SaveToFile()
@@ -87,7 +90,10 @@ public class ConfigFileProvider : IConfigFileProvider
 
     private string GetValue(string key, string defaultValue)
     {
-        return _config.TryGetValue(key, out var value) ? value : defaultValue;
+        lock (Mutex)
+        {
+            return _config.TryGetValue(key, out var value) ? value : defaultValue;
+        }
     }
 
     private int GetValueInt(string key, int defaultValue)
