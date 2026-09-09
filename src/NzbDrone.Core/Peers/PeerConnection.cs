@@ -26,7 +26,7 @@ public class PeerConnection : IDisposable
     public int RemotePort { get; }
     public string InfoHash { get; private set; }
     public string PeerId { get; private set; }
-    public bool IsConnected => _client?.Connected ?? false;
+    public bool IsConnected => !_isDisposed && (_client?.Connected ?? false);
     public bool IsEncrypted { get; private set; }
     public CryptoMethod EncryptionMethod { get; private set; }
     public bool AmChoking { get; set; } = true;
@@ -255,6 +255,11 @@ public class PeerConnection : IDisposable
     {
         try
         {
+            if (_isDisposed)
+            {
+                return null;
+            }
+
             if (MessageReadTimeoutMs > 0)
             {
                 _client.Client.ReceiveTimeout = MessageReadTimeoutMs;
@@ -263,6 +268,7 @@ public class PeerConnection : IDisposable
             var lengthBuffer = new byte[4];
             if (!ReadExact(lengthBuffer, 4))
             {
+                Dispose();
                 return null;
             }
 
@@ -271,6 +277,7 @@ public class PeerConnection : IDisposable
 
             if (length == 0)
             {
+                LastActivity = DateTime.UtcNow;
                 return null; // keep-alive
             }
 
@@ -284,6 +291,7 @@ public class PeerConnection : IDisposable
             var messageBuffer = new byte[length];
             if (!ReadExact(messageBuffer, length))
             {
+                Dispose();
                 return null;
             }
 
@@ -307,6 +315,12 @@ public class PeerConnection : IDisposable
         }
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
         {
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Error reading message from peer {0}:{1}", RemoteIp, RemotePort);
+            Dispose();
             return null;
         }
     }

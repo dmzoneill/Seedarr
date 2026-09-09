@@ -424,6 +424,11 @@ public class PeerServer : BackgroundService
                 var message = connection.ReceiveMessage();
                 if (message == null)
                 {
+                    if (!connection.IsConnected)
+                    {
+                        break;
+                    }
+
                     var elapsed = DateTime.UtcNow - connection.LastActivity;
                     if (elapsed.TotalSeconds >= connection.KeepAliveIntervalSeconds)
                     {
@@ -443,6 +448,7 @@ public class PeerServer : BackgroundService
         finally
         {
             _connectionManager.Remove(connection);
+            connection.Dispose();
         }
     }
 
@@ -508,6 +514,11 @@ public class PeerServer : BackgroundService
                 var message = connection.ReceiveMessage();
                 if (message == null)
                 {
+                    if (!connection.IsConnected)
+                    {
+                        break;
+                    }
+
                     var elapsed = DateTime.UtcNow - connection.LastActivity;
                     if (elapsed.TotalSeconds >= connection.KeepAliveIntervalSeconds)
                     {
