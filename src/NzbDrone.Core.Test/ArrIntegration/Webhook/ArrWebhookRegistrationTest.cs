@@ -940,4 +940,100 @@ public class ArrWebhookRegistrationTest
         var expectedHost = Dns.GetHostName();
         Assert.That(result, Is.EqualTo($"http://{expectedHost}:9898"));
     }
+
+    [Test]
+    public void RegisterWebhook_with_trailing_slash_in_url_should_not_generate_double_slash_when_registering()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"[]");
+        handler.Enqueue(HttpStatusCode.Created, @"{""id"":99,""name"":""Seedarr""}");
+
+        var registration = CreateWithMockClient(handler);
+        var connection = new ArrConnectionDefinition
+        {
+            WebhookEnabled = true,
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989/",
+            ApiKey = "test-key"
+        };
+
+        var result = registration.RegisterWebhook(connection);
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(2));
+        Assert.That(handler.Requests[0].RequestUri?.ToString(), Is.EqualTo("http://sonarr:8989/api/v3/notification"));
+        Assert.That(handler.Requests[1].RequestUri?.ToString(), Is.EqualTo("http://sonarr:8989/api/v3/notification"));
+    }
+
+    [Test]
+    public void RegisterWebhook_with_trailing_slash_in_url_should_not_generate_double_slash_when_updating()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            @"[{""id"":42,""name"":""Seedarr"",""fields"":[{""name"":""url"",""value"":""http://different-host:9898/api/v1/webhook/arr""}]}]");
+        handler.Enqueue(HttpStatusCode.OK, @"{""id"":42,""name"":""Seedarr""}");
+
+        var registration = CreateWithMockClient(handler);
+        var connection = new ArrConnectionDefinition
+        {
+            WebhookEnabled = true,
+            ArrType = "Radarr",
+            Url = "http://radarr:7878/",
+            ApiKey = "test-key"
+        };
+
+        var result = registration.RegisterWebhook(connection);
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(2));
+        Assert.That(handler.Requests[0].RequestUri?.ToString(), Is.EqualTo("http://radarr:7878/api/v3/notification"));
+        Assert.That(handler.Requests[1].RequestUri?.ToString(), Is.EqualTo("http://radarr:7878/api/v3/notification/42"));
+    }
+
+    [Test]
+    public void UnregisterWebhook_with_trailing_slash_in_url_should_not_generate_double_slash()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            @"[{""id"":77,""name"":""Seedarr"",""fields"":[{""name"":""url"",""value"":""http://localhost:9898/api/v1/webhook/arr""}]}]");
+        handler.Enqueue(HttpStatusCode.OK, @"{}");
+
+        var registration = CreateWithMockClient(handler);
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989/",
+            ApiKey = "test-key"
+        };
+
+        var result = registration.UnregisterWebhook(connection);
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(2));
+        Assert.That(handler.Requests[0].RequestUri?.ToString(), Is.EqualTo("http://sonarr:8989/api/v3/notification"));
+        Assert.That(handler.Requests[1].RequestUri?.ToString(), Is.EqualTo("http://sonarr:8989/api/v3/notification/77"));
+    }
+
+    [Test]
+    public void FindExistingWebhook_with_trailing_slash_in_url_should_not_generate_double_slash()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            @"[{""id"":15,""name"":""Seedarr"",""fields"":[{""name"":""url"",""value"":""http://localhost:9898/api/v1/webhook/arr""}]}]");
+
+        var registration = CreateWithMockClient(handler);
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = "Lidarr",
+            Url = "http://lidarr:8686/",
+            ApiKey = "test-key"
+        };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("FindExistingWebhook",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = method.Invoke(registration, new object[] { connection, "v1" });
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(handler.LastRequest?.RequestUri?.ToString(), Is.EqualTo("http://lidarr:8686/api/v1/notification"));
+    }
 }
