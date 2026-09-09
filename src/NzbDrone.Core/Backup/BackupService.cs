@@ -45,47 +45,61 @@ public class BackupService : IBackupService
         var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd_HH-mm-ss-fff");
         var backupFileName = $"seedarr_backup_{version}_{timestamp}.zip";
         var backupPath = Path.Combine(backupFolder, backupFileName);
-        var dbPath = Path.Combine(_appFolderInfo.AppDataFolder, DbFileName);
         var configPath = Path.Combine(_appFolderInfo.AppDataFolder, ConfigFileName);
 
-        if (!File.Exists(dbPath))
+        if (_connectionStringFactory.DatabaseType == DatabaseType.SQLite)
         {
-            _logger.Warn("Database file not found at {0}, skipping backup", dbPath);
-            return null;
-        }
+            var dbPath = Path.Combine(_appFolderInfo.AppDataFolder, DbFileName);
 
-        var dbStagingPath = dbPath + ".backup-staging";
-
-        try
-        {
-            if (_connectionStringFactory.DatabaseType == DatabaseType.SQLite)
+            if (!File.Exists(dbPath))
             {
+                _logger.Warn("Database file not found at {0}, skipping backup", dbPath);
+                return null;
+            }
+
+            var dbStagingPath = dbPath + ".backup-staging";
+
+            try
+            {
+                if (File.Exists(dbStagingPath))
+                {
+                    File.Delete(dbStagingPath);
+                }
+
                 using var conn = new SqliteConnection(_connectionStringFactory.MainDbConnectionString);
                 conn.Open();
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"VACUUM INTO '{dbStagingPath.Replace("'", "''")}';";
                 cmd.ExecuteNonQuery();
+
+                using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+                {
+                    zip.CreateEntryFromFile(dbStagingPath, DbFileName);
+
+                    if (File.Exists(configPath))
+                    {
+                        zip.CreateEntryFromFile(configPath, ConfigFileName);
+                    }
+                }
             }
-            else
+            finally
             {
-                File.Copy(dbPath, dbStagingPath, overwrite: true);
+                if (File.Exists(dbStagingPath))
+                {
+                    File.Delete(dbStagingPath);
+                }
             }
+        }
+        else
+        {
+            _logger.Info("Creating PostgreSQL backup: config exported (external database dump required)");
 
             using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
             {
-                zip.CreateEntryFromFile(dbStagingPath, DbFileName);
-
                 if (File.Exists(configPath))
                 {
                     zip.CreateEntryFromFile(configPath, ConfigFileName);
                 }
-            }
-        }
-        finally
-        {
-            if (File.Exists(dbStagingPath))
-            {
-                File.Delete(dbStagingPath);
             }
         }
 
