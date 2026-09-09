@@ -285,7 +285,7 @@ public class SeedingEngine : BackgroundService
 
     private void TickDownloading(List<Torrent> torrents, long maxDownloadSpeed, double variationMin, double variationMax, double threshold)
     {
-        var stoppedIndices = SelectDownloadStoppedTorrents(torrents.Count);
+        var stoppedIndices = SelectDownloadStoppedTorrents(torrents);
         var priorityWeights = GetPriorityWeights(torrents);
         var speeds = maxDownloadSpeed == SpeedLimits.Unlimited
             ? Enumerable.Repeat(1_000_000_000L, torrents.Count).ToArray()
@@ -501,8 +501,9 @@ public class SeedingEngine : BackgroundService
         return stopped;
     }
 
-    private HashSet<int> SelectDownloadStoppedTorrents(int torrentCount)
+    private HashSet<int> SelectDownloadStoppedTorrents(List<Torrent> torrents)
     {
+        var torrentCount = torrents.Count;
         var minPct = _configService.DownloadStoppedMinPercentage;
         var maxPct = _configService.DownloadStoppedMaxPercentage;
 
@@ -511,32 +512,43 @@ public class SeedingEngine : BackgroundService
             return new HashSet<int>();
         }
 
-        var stoppedPct = minPct + (Random.Shared.NextDouble() * (maxPct - minPct));
-        var stoppedCount = (int)Math.Ceiling(torrentCount * (stoppedPct / 100.0));
+        // Build list of indices eligible for stopping (ForceStart torrents are never stopped)
+        var eligibleIndices = new List<int>();
+        for (var i = 0; i < torrentCount; i++)
+        {
+            if (!torrents[i].ForceStart)
+            {
+                eligibleIndices.Add(i);
+            }
+        }
 
-        stoppedCount = Math.Min(stoppedCount, torrentCount - 1);
+        if (eligibleIndices.Count == 0)
+        {
+            return new HashSet<int>();
+        }
+
+        var stoppedPct = minPct + (Random.Shared.NextDouble() * (maxPct - minPct));
+        var stoppedCount = (int)Math.Ceiling(eligibleIndices.Count * (stoppedPct / 100.0));
+
+        // Ensure at least one torrent remains active among eligible ones
+        stoppedCount = Math.Min(stoppedCount, eligibleIndices.Count - 1);
 
         if (stoppedCount <= 0)
         {
             return new HashSet<int>();
         }
 
-        var indices = new int[torrentCount];
-        for (var i = 0; i < torrentCount; i++)
-        {
-            indices[i] = i;
-        }
-
-        for (var j = torrentCount - 1; j > 0; j--)
+        // Shuffle eligible indices
+        for (var j = eligibleIndices.Count - 1; j > 0; j--)
         {
             var k = Random.Shared.Next(j + 1);
-            (indices[j], indices[k]) = (indices[k], indices[j]);
+            (eligibleIndices[j], eligibleIndices[k]) = (eligibleIndices[k], eligibleIndices[j]);
         }
 
         var stopped = new HashSet<int>();
         for (var i = 0; i < stoppedCount; i++)
         {
-            stopped.Add(indices[i]);
+            stopped.Add(eligibleIndices[i]);
         }
 
         return stopped;

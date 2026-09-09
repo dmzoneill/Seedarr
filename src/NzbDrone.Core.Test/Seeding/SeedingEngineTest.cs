@@ -1542,10 +1542,36 @@ public class SeedingEngineTest
         var method = typeof(SeedingEngine).GetMethod("SelectDownloadStoppedTorrents",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Status = TorrentStatus.Downloading },
+            new Torrent { Id = 2, Status = TorrentStatus.Downloading }
+        };
+
         _configService.DownloadStoppedMinPercentage.Returns(0);
         _configService.DownloadStoppedMaxPercentage.Returns(0);
 
-        var result = (HashSet<int>)method.Invoke(_engine, new object[] { 5 });
+        var result = (HashSet<int>)method.Invoke(_engine, new object[] { torrents });
+
+        Assert.That(result.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void SelectDownloadStoppedTorrents_should_return_empty_when_all_are_force_start()
+    {
+        var method = typeof(SeedingEngine).GetMethod("SelectDownloadStoppedTorrents",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Status = TorrentStatus.Downloading, ForceStart = true },
+            new Torrent { Id = 2, Status = TorrentStatus.Downloading, ForceStart = true }
+        };
+
+        _configService.DownloadStoppedMinPercentage.Returns(50);
+        _configService.DownloadStoppedMaxPercentage.Returns(50);
+
+        var result = (HashSet<int>)method.Invoke(_engine, new object[] { torrents });
 
         Assert.That(result.Count, Is.EqualTo(0));
     }
@@ -1556,13 +1582,43 @@ public class SeedingEngineTest
         var method = typeof(SeedingEngine).GetMethod("SelectDownloadStoppedTorrents",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
+        var torrents = new List<Torrent>();
+        for (var i = 0; i < 10; i++)
+        {
+            torrents.Add(new Torrent { Id = i + 1, Status = TorrentStatus.Downloading });
+        }
+
         _configService.DownloadStoppedMinPercentage.Returns(50);
         _configService.DownloadStoppedMaxPercentage.Returns(50);
 
-        var result = (HashSet<int>)method.Invoke(_engine, new object[] { 10 });
+        var result = (HashSet<int>)method.Invoke(_engine, new object[] { torrents });
 
         Assert.That(result.Count, Is.GreaterThan(0));
         Assert.That(result.Count, Is.LessThan(10), "At least one torrent must remain active");
+    }
+
+    [Test]
+    public void SelectDownloadStoppedTorrents_should_stop_some_non_force_start_with_percentage()
+    {
+        var method = typeof(SeedingEngine).GetMethod("SelectDownloadStoppedTorrents",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Status = TorrentStatus.Downloading, ForceStart = true },
+            new Torrent { Id = 2, Status = TorrentStatus.Downloading, ForceStart = false },
+            new Torrent { Id = 3, Status = TorrentStatus.Downloading, ForceStart = false },
+            new Torrent { Id = 4, Status = TorrentStatus.Downloading, ForceStart = false },
+            new Torrent { Id = 5, Status = TorrentStatus.Downloading, ForceStart = false }
+        };
+
+        _configService.DownloadStoppedMinPercentage.Returns(50);
+        _configService.DownloadStoppedMaxPercentage.Returns(50);
+
+        var result = (HashSet<int>)method.Invoke(_engine, new object[] { torrents });
+
+        Assert.That(result.Count, Is.GreaterThan(0), "Should stop some non-ForceStart torrents");
+        Assert.That(result, Does.Not.Contain(0), "ForceStart torrent at index 0 should never be stopped");
     }
 
     [Test]
@@ -1571,15 +1627,55 @@ public class SeedingEngineTest
         var method = typeof(SeedingEngine).GetMethod("SelectDownloadStoppedTorrents",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Status = TorrentStatus.Downloading }
+        };
+
         _configService.DownloadStoppedMinPercentage.Returns(100);
         _configService.DownloadStoppedMaxPercentage.Returns(100);
 
-        var result = (HashSet<int>)method.Invoke(_engine, new object[] { 1 });
+        var result = (HashSet<int>)method.Invoke(_engine, new object[] { torrents });
 
         Assert.That(
             result.Count,
             Is.EqualTo(0),
             "Single torrent should never be stopped (stoppedCount capped at torrentCount - 1)");
+    }
+
+    [Test]
+    public void Tick_should_not_stop_force_start_downloading_torrent_when_download_stopped_percentage_set()
+    {
+        _configService.DownloadStoppedMinPercentage.Returns(100);
+        _configService.DownloadStoppedMaxPercentage.Returns(100);
+
+        var forceStartTorrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1_000_000_000,
+            Downloaded = 0,
+            ForceStart = true,
+            InfoHash = "hash1"
+        };
+        var regularTorrent = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1_000_000_000,
+            Downloaded = 0,
+            ForceStart = false,
+            InfoHash = "hash2"
+        };
+
+        var torrents = new List<Torrent> { forceStartTorrent, regularTorrent };
+        _torrentService.GetAll().Returns(torrents);
+        _distributionManager.DistributeDownloadSpeeds(Arg.Any<int>(), Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 100_000, 100_000 });
+
+        CallTick();
+
+        Assert.That(forceStartTorrent.Downloaded, Is.GreaterThan(0), "ForceStart torrent should never have zero download speed or be stopped");
     }
 
     [Test]
