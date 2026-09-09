@@ -30,389 +30,56 @@ Seedarr is a **BitTorrent seeding simulator** built on the proven Sonarr/Radarr 
 
 Think of it as Sonarr for seeding: a polished web UI, REST API, real-time updates via SignalR, and deep integration with the \*arr ecosystem.
 
-### Why Seedarr?
-
-| Problem                                    | Seedarr Solution                                 |
-| ------------------------------------------ | ------------------------------------------------ |
-| Ratio requirements on private trackers     | Simulates realistic upload traffic patterns      |
-| Need to keep rare torrents alive           | Announces to trackers and responds to peers      |
-| Running a real client wastes bandwidth     | Zero actual data transfer                        |
-| Manual ratio management is tedious         | Automated scheduling, distribution, and profiles |
-| Want integration with Sonarr/Radarr/Lidarr | Native \*arr API integration for auto-seeding    |
-
 <p align="center">
   <img src="logo/ss.png" alt="Seedarr UI Screenshot" width="100%"/>
 </p>
 
----
+### Why Seedarr?
 
-## Features
-
-<table>
-<tr>
-<td width="50%" valign="top">
-
-### Core Simulation
-
-- Load `.torrent` files or magnet links
-- Configurable upload/download speed simulation
-- Multiple speed distribution algorithms (Pareto, Power Law, Log-Normal, Equal)
-- Time-of-day speed scheduling with day-of-week support
-- Client behavior profiles (qBittorrent, Deluge, Transmission, uTorrent, BiglyBT)
-- Traffic pattern simulation (burst/idle states, congestion modeling)
-- Per-torrent speed limits, priority weighting, super-seeding boost
-- Global and per-torrent seed ratio limits
-- Force start and force complete support
-
-### Protocol Support
-
-- HTTP & UDP tracker announce/scrape (BEP 3, BEP 15)
-- Multi-tracker failover with tier support (BEP 12)
-- TCP peer connections with full handshake
-- MSE/PE stream encryption (RC4 + DH key exchange)
-- DHT distributed hash table (BEP 5)
-- Peer Exchange (BEP 11)
-- Metadata Exchange (BEP 9)
-- Fast Extension (BEP 6)
-- Local Peer Discovery (BEP 14)
-- uTP transport (BEP 29)
-
-</td>
-<td width="50%" valign="top">
-
-### Web Interface
-
-- Sonarr-style UI with chunky card layouts
-- Real-time dashboard with aggregate speed display
-- Torrent management (table & grid views)
-- Detailed torrent panel (Status, Details, Files, Peers, Trackers, Options, Monitoring, Log)
-- Context menus: update tracker, force recheck, queue position, remove with/without data
-- Provider card tiles for connections and download clients
-- Drag-and-drop torrent upload
-- Dark/light theme with system detection and custom scrollbars
-- Responsive design (desktop, tablet, mobile)
-- SignalR real-time updates
-
-### Infrastructure
-
-- Built-in HTTP + UDP tracker server
-- Download client integration (qBittorrent, Transmission, Deluge)
-- Sonarr/Radarr/Lidarr integration (auto-seed downloads)
-- System pages: Status, Tasks, Backup, Updates, Events, Log Files
-- Swagger/OpenAPI documentation
-- Health monitoring system
-- Notification system (webhook, email, Discord)
-- UPnP port mapping
-- Proxy support (HTTP/SOCKS)
-- Tag-based organization
-- Automated backup/restore
-- SQLite (default) or PostgreSQL
-
-</td>
-</tr>
-</table>
+| Problem                                    | Seedarr Solution                                 |
+| ------------------------------------------ | ------------------------------------------------ |
+| Ratio requirements on private trackers | Simulates realistic upload traffic patterns |
+| Need to keep rare torrents alive | Announces to trackers and responds to peers |
+| Running a real client wastes bandwidth | Zero actual data transfer |
+| Manual ratio management is tedious | Automated scheduling, distribution, and profiles |
+| Want integration with Sonarr/Radarr/Lidarr | Native \*arr API integration for auto-seeding |
 
 ---
 
-## Quick Start
+## Key Features
 
-### Docker (Recommended)
+### ⚡ Seeding Simulation & Swarm Behavior
 
-```bash
-docker pull feeditout/seedarr:latest
-docker run -d \
-  --name seedarr \
-  -p 9898:9898 \
-  -v seedarr-config:/config \
-  -v seedarr-data:/data \
-  --restart unless-stopped \
-  feeditout/seedarr:latest
-```
+- **Realistic Client Emulation:** Impersonates qBittorrent, Deluge, Transmission, uTorrent, and BiglyBT with authentic peer IDs, handshake keys, and protocol extensions.
+- **Traffic Pattern Simulation:** Configurable upload/download speeds, burst/idle states, congestion modeling, and priority weighting.
+- **Statistical Speed Distribution:** Pareto (80/20), Power Law, Log-Normal, and Equal distribution algorithms.
+- **24/7 Speed Scheduling:** Time-of-day and day-of-week throttling schedules and speed limits.
+- **Built-in Tracker Server:** Lightweight embedded HTTP & UDP tracker server for local swarms.
 
-Then open **<http://localhost:9898>**
+### 🌐 Comprehensive BitTorrent Protocol Suite
 
-### Docker Compose / Podman Compose
+- **Tracker Protocols:** HTTP & UDP tracker announce and scrape (BEP 3, BEP 15) with multi-tracker tier failover (BEP 12).
+- **Peer Wire Protocol:** Full TCP peer connections, real handshake negotiations, and message parsing.
+- **MSE/PE Stream Encryption:** Diffie-Hellman 768-bit key exchange and RC4 stream cipher.
+- **Distributed Networks:** DHT distributed hash table (BEP 5), Peer Exchange (BEP 11), and Local Peer Discovery (BEP 14).
+- **Extensions & Transport:** Metadata Exchange / `ut_metadata` (BEP 9), Fast Extension (BEP 6), and uTP transport (BEP 29).
 
-```yaml
-services:
-  seedarr:
-    image: feeditout/seedarr:latest
-    container_name: seedarr
-    ports:
-      - "9898:9898"
-    volumes:
-      - seedarr-config:/config
-      - seedarr-data:/data
-    restart: unless-stopped
-    environment:
-      - TZ=UTC
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9898/api/v1/system/status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+### 🔌 Servarr (*arr) Integration & Download Clients
 
-volumes:
-  seedarr-config:
-  seedarr-data:
-```
-
-```bash
-docker compose up -d
-# or
-podman-compose up -d
-```
-
-### GHCR Alternative
-
-```bash
-docker pull ghcr.io/dmzoneill/seedarr:latest
-```
-
-### From Source
-
-```bash
-git clone https://github.com/dmzoneill/Seedarr.git
-cd Seedarr
-
-# Backend
-dotnet run --project src/NzbDrone.Console/Seedarr.Console.csproj
-
-# Frontend (dev server)
-cd src/Seedarr.Frontend && npm install && npm start
-```
+- **Sonarr, Radarr & Lidarr Sync:** Connects to existing \*arr libraries to automatically grab and seed completed torrent history.
+- **Download Client Integration:** Monitors active downloads in qBittorrent, Transmission, and Deluge.
+- **Native REST API v1 & SignalR:** Real-time push updates for torrent states, tracker pulses, speed charts, and health checks.
+- **Automated Backup & Health Monitoring:** Built-in scheduled database backups, Polly retry resilience, and system diagnostics.
 
 ---
 
-## Settings
+## Documentation
 
-Seedarr provides 14 settings tabs with 120+ configurable properties:
-
-| Tab                  | Key Settings                                                                         |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| **General**          | Auto-start, theme, color scheme, log level                                           |
-| **Seeding**          | Max upload/download speed, global ratio limit, speed variation, activity probability |
-| **BitTorrent**       | Peer ID prefix, client key, user agent, protocol features                            |
-| **Network**          | External IP, UPnP, proxy (HTTP/SOCKS), DNS                                           |
-| **Peer Protocol**    | Max connections, request pipeline, idle timeout, encryption                          |
-| **Protocols**        | DHT, PEX, metadata exchange, fast extension, LPD, uTP                                |
-| **Simulation**       | Swarm analysis, traffic patterns, seeding profiles                                   |
-| **Tracker Server**   | Built-in HTTP/UDP tracker, scrape, announce intervals, rate limiting                 |
-| **Scheduler**        | Time-of-day speed schedules, alternative speeds, day-of-week                         |
-| **Advanced**         | Download threshold, stopped percentages, force settings                              |
-| **Connections**      | Sonarr/Radarr/Lidarr integration with sync and auto-add                              |
-| **Download Clients** | qBittorrent, Transmission, Deluge with test and status                               |
-| **Notifications**    | Webhook, email, Discord with event triggers                                          |
-| **Web UI**           | Refresh interval, items per page, date/time format                                   |
-
----
-
-## Configuration
-
-### Volumes
-
-| Path      | Purpose                              |
-| --------- | ------------------------------------ |
-| `/config` | Application database, settings, logs |
-| `/data`   | Torrent files and watch folder       |
-
-### Environment Variables
-
-| Variable            | Default   | Description           |
-| ------------------- | --------- | --------------------- |
-| `SEEDARR__APP_DATA` | `/config` | Config/data directory |
-| `TZ`                | `UTC`     | Container timezone    |
-
-### Ports
-
-| Port   | Protocol | Purpose      |
-| ------ | -------- | ------------ |
-| `9898` | TCP      | Web UI + API |
-
----
-
-## API
-
-Seedarr exposes a full REST API at `/api/v1/`. Interactive documentation is available at `/swagger` when the application is running.
-
-### Key Endpoints
-
-```text
-GET    /api/v1/system/status          # System info
-GET    /api/v1/system/task            # Scheduled tasks
-GET    /api/v1/system/command         # Command queue
-GET    /api/v1/torrent                # List torrents
-POST   /api/v1/torrent                # Add torrent (.torrent or magnet)
-GET    /api/v1/torrent/{id}           # Torrent details
-PUT    /api/v1/torrent/{id}           # Update torrent
-DELETE /api/v1/torrent/{id}           # Remove torrent
-GET    /api/v1/torrent/{id}/peer      # List peers
-POST   /api/v1/torrent/{id}/announce  # Update tracker
-POST   /api/v1/torrent/{id}/recheck   # Force recheck
-GET    /api/v1/config                 # All settings
-PUT    /api/v1/config                 # Save settings
-GET    /api/v1/backup                 # List backups
-POST   /api/v1/backup                 # Create backup
-GET    /api/v1/diskspace              # Disk space info
-GET    /api/v1/update                 # Check for updates
-GET    /api/v1/logfile                # List log files
-GET    /api/v1/speedschedule          # Speed schedules
-GET    /api/v1/health                 # Health checks
-GET    /api/v1/tag                    # List tags
-```
-
-### SignalR
-
-Real-time updates via SignalR at `/signalr/messages`:
-
-- `TorrentUpdated` / `TorrentAdded` / `TorrentDeleted`
-- `SeedingStatusChanged`
-- `TrackerStatusChanged`
-- `HealthCheckCompleted`
-
----
-
-## Architecture
-
-```text
-Seedarr.Console          Entry point (Kestrel host)
-  +-- Seedarr.Host       ASP.NET middleware, Swagger, auth
-       +-- Seedarr.Api.V1    REST controllers + SignalR
-       +-- Seedarr.Http      REST framework, middleware
-       +-- Seedarr.SignalR    Real-time messaging hub
-       +-- Seedarr.Core      Domain logic
-            +-- Torrents/          Torrent management
-            +-- Seeding/           Simulation engine + distribution
-            +-- Trackers/          HTTP/UDP tracker clients
-            +-- Peers/             Peer connections + encryption
-            +-- Simulation/        Client profiles + traffic
-            +-- Dht/               Distributed hash table
-            +-- TrackerServer/     Built-in tracker
-            +-- ArrIntegration/    Sonarr/Radarr/Lidarr sync
-            +-- DownloadClients/   qBittorrent/Transmission/Deluge
-            +-- DiskSpace/         Disk space monitoring
-            +-- Backup/            Backup/restore system
-            +-- Notifications/     Webhook, email, Discord
-            +-- HealthCheck/       System monitoring
-```
-
-### Tech Stack
-
-| Layer               | Technology                        |
-| ------------------- | --------------------------------- |
-| **Runtime**         | .NET 10 / ASP.NET Core            |
-| **Frontend**        | React 18, TypeScript 5, webpack 5 |
-| **Real-time**       | ASP.NET SignalR                   |
-| **Database**        | SQLite (default) / PostgreSQL     |
-| **ORM**             | Dapper + FluentMigrator           |
-| **DI**              | DryIoc                            |
-| **Validation**      | FluentValidation                  |
-| **Resilience**      | Polly 8 (retry + circuit breaker) |
-| **Logging**         | NLog                              |
-| **Encryption**      | BouncyCastle (RC4/DH for MSE/PE)  |
-| **Torrent Parsing** | BencodeNET                        |
-| **Container**       | Podman / Docker                   |
-
----
-
-## Client Profiles
-
-Seedarr can impersonate multiple BitTorrent clients, generating authentic peer IDs, user agents, and protocol behavior:
-
-| Client       | Peer ID Prefix | Version |
-| ------------ | -------------- | ------- |
-| qBittorrent  | `-qB4420-`     | 4.4.2   |
-| Deluge       | `-DE2030-`     | 2.0.3   |
-| Transmission | `-TR3000-`     | 3.00    |
-| uTorrent     | `-UT3550-`     | 3.5.5   |
-| BiglyBT      | `-BG2700-`     | 2.7.0.0 |
-
----
-
-## Speed Distribution
-
-Choose how upload bandwidth is distributed across torrents:
-
-| Algorithm      | Behavior                                            |
-| -------------- | --------------------------------------------------- |
-| **Pareto**     | 80/20 rule &mdash; most bandwidth to a few torrents |
-| **Power Law**  | Heavy-tailed &mdash; gradual falloff                |
-| **Log-Normal** | Bell curve with right skew                          |
-| **Equal**      | Even split across all active torrents               |
-
----
-
-## Integration with \*arr Apps
-
-Seedarr can connect to your existing Sonarr, Radarr, and Lidarr instances to automatically seed torrents from your download history:
-
-1. Go to **Settings > Connections**
-2. Click the **+** card to add a new connection
-3. Select your \*arr type, enter URL and API key
-4. Enable sync and auto-add
-5. Seedarr periodically syncs and begins simulating seeds
-
----
-
-## System Pages
-
-| Page          | Description                                             |
-| ------------- | ------------------------------------------------------- |
-| **Status**    | Health checks, disk space with progress bars, app info  |
-| **Tasks**     | Scheduled tasks with last/next execution, command queue |
-| **Backup**    | Create/restore/download database backups                |
-| **Updates**   | Version changelog with installed version badge          |
-| **Events**    | Structured event log with severity-colored icons        |
-| **Log Files** | Log file listing with download links                    |
-
----
-
-## Development
-
-### Prerequisites
-
-- .NET 10 SDK
-- Node.js 20+
-- npm
-
-### Build
-
-```bash
-# Full solution
-dotnet build src/Seedarr.sln
-
-# Run tests
-dotnet test src/Seedarr.sln
-
-# Frontend dev server (hot reload)
-cd src/Seedarr.Frontend && npm install && npm start
-```
-
-### Makefile Targets
-
-```bash
-make setup              # Restore .NET + npm dependencies
-make test-setup         # Build solution
-make test               # Run all tests
-make integration        # Integration tests (podman-compose stack)
-make build              # Build release
-make publish            # Publish release artifacts
-make frontend           # Build frontend production bundle
-make clean              # Clean build artifacts
-```
-
----
-
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- [Architecture Guide](docs/architecture.md)
+- [Domain Model](docs/domain-model.md)
+- [BitTorrent Protocols](docs/protocols.md)
+- [REST API Reference](docs/api.md)
+- [Development & Setup Guide](docs/development.md)
 
 ---
 
@@ -429,3 +96,4 @@ Distributed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details
   <br>
   <sub><a href="https://www.seedarr.net">www.seedarr.net</a></sub>
 </p>
+
