@@ -38,11 +38,11 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 
 | Problem                                    | Seedarr Solution                                 |
 | ------------------------------------------ | ------------------------------------------------ |
-| Ratio requirements on private trackers | Simulates realistic upload traffic patterns |
-| Need to keep rare torrents alive | Announces to trackers and responds to peers |
-| Running a real client wastes bandwidth | Zero actual data transfer |
-| Manual ratio management is tedious | Automated scheduling, distribution, and profiles |
-| Want integration with Sonarr/Radarr/Lidarr | Native \*arr API integration for auto-seeding |
+| Ratio requirements on private trackers     | Simulates realistic upload traffic patterns      |
+| Need to keep rare torrents alive           | Announces to trackers and responds to peers      |
+| Running a real client wastes bandwidth     | Zero actual data transfer                        |
+| Manual ratio management is tedious         | Automated scheduling, distribution, and profiles |
+| Want integration with Sonarr/Radarr/Lidarr | Native \*arr API integration for auto-seeding    |
 
 ---
 
@@ -96,4 +96,3 @@ Distributed under the **Apache License 2.0**. See [LICENSE](LICENSE) for details
   <br>
   <sub><a href="https://www.seedarr.net">www.seedarr.net</a></sub>
 </p>
-
