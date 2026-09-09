@@ -104,8 +104,8 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             return _policy.Execute(ct =>
             {
                 var url = isUpdate
-                    ? $"{connection.Url}/api/{apiVersion}/notification/{existing.Id}"
-                    : $"{connection.Url}/api/{apiVersion}/notification";
+                    ? $"{connection.Url?.TrimEnd('/')}/api/{apiVersion}/notification/{existing.Id}"
+                    : $"{connection.Url?.TrimEnd('/')}/api/{apiVersion}/notification";
                 var method = isUpdate ? HttpMethod.Put : HttpMethod.Post;
 
                 using var request = new HttpRequestMessage(method, url);
@@ -153,7 +153,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             return _policy.Execute(ct =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Delete,
-                    $"{connection.Url}/api/{apiVersion}/notification/{existing.Id}");
+                    $"{connection.Url?.TrimEnd('/')}/api/{apiVersion}/notification/{existing.Id}");
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
 
                 using var response = _client.Send(request, ct);
@@ -181,7 +181,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             return _policy.Execute(ct =>
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get,
-                    $"{connection.Url}/api/{apiVersion}/notification");
+                    $"{connection.Url?.TrimEnd('/')}/api/{apiVersion}/notification");
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
 
                 using var response = _client.Send(request, ct);
