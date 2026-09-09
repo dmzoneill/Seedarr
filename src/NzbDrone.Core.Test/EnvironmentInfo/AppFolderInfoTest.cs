@@ -61,13 +61,16 @@ public class AppFolderInfoTest
     [Test]
     public void AppDataFolder_uses_default_path_when_no_data_arg()
     {
-        var commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        Assume.That(CanCreateDirectory(commonData), "CommonApplicationData is not writable on this system");
+        var expectedParent = OsInfo.IsWindows
+            ? Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
+            : Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+        Assume.That(CanCreateDirectory(expectedParent), "Default AppData parent folder is not writable on this system");
 
         var context = new StartupContext();
         var subject = new AppFolderInfo(context);
 
-        var expected = Path.Combine(commonData, "Seedarr");
+        var expected = Path.Combine(expectedParent, "Seedarr");
         Assert.That(subject.AppDataFolder, Is.EqualTo(expected));
 
         // Cleanup to avoid leaving test artifacts
@@ -80,8 +83,11 @@ public class AppFolderInfoTest
     [Test]
     public void AppDataFolder_ends_with_seedarr_for_default_path()
     {
-        var commonData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
-        Assume.That(CanCreateDirectory(commonData), "CommonApplicationData is not writable on this system");
+        var expectedParent = OsInfo.IsWindows
+            ? Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
+            : Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+
+        Assume.That(CanCreateDirectory(expectedParent), "Default AppData parent folder is not writable on this system");
 
         var context = new StartupContext();
         var subject = new AppFolderInfo(context);
