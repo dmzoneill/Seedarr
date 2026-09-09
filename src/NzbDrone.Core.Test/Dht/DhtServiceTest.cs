@@ -1165,7 +1165,7 @@ public class DhtServiceTest
             method.Invoke(_service, new object[] { target, targetId, CancellationToken.None }));
     }
 
-    // ── SendPingResponse / SendFindNodeResponse / SendErrorResponse ──
+    // ── SendPingResponse / HandleFindNodeQuery / SendErrorResponse ──
 
     [Test]
     public void SendPingResponse_should_send_without_throwing()
@@ -1180,15 +1180,53 @@ public class DhtServiceTest
     }
 
     [Test]
-    public void SendFindNodeResponse_should_send_without_throwing()
+    public void HandleFindNodeQuery_should_send_without_throwing()
     {
         SetUdpClient();
         var transactionId = new BString(new byte[] { 0x01, 0x02 });
-        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        var sender = new IPEndPoint(IPAddress.Loopback, 6881);
+        var args = new BDictionary
+        {
+            ["id"] = new BString(CreateNodeId(0x42)),
+            ["target"] = new BString(CreateNodeId(0x99))
+        };
 
-        var method = typeof(DhtService).GetMethod("SendFindNodeResponse", BindingFlags.NonPublic | BindingFlags.Instance);
+        var method = typeof(DhtService).GetMethod("HandleFindNodeQuery", BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.DoesNotThrow(() =>
-            method.Invoke(_service, new object[] { target, transactionId }));
+            method.Invoke(_service, new object[] { args, sender, transactionId }));
+    }
+
+    [Test]
+    public void HandleFindNodeQuery_when_target_missing_should_fallback_to_local_node_id()
+    {
+        SetUdpClient();
+        var transactionId = new BString(new byte[] { 0x01, 0x02 });
+        var sender = new IPEndPoint(IPAddress.Loopback, 6881);
+        var args = new BDictionary
+        {
+            ["id"] = new BString(CreateNodeId(0x42))
+        };
+
+        var method = typeof(DhtService).GetMethod("HandleFindNodeQuery", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.DoesNotThrow(() =>
+            method.Invoke(_service, new object[] { args, sender, transactionId }));
+    }
+
+    [Test]
+    public void HandleFindNodeQuery_when_target_not_bstring_should_fallback_to_local_node_id()
+    {
+        SetUdpClient();
+        var transactionId = new BString(new byte[] { 0x01, 0x02 });
+        var sender = new IPEndPoint(IPAddress.Loopback, 6881);
+        var args = new BDictionary
+        {
+            ["id"] = new BString(CreateNodeId(0x42)),
+            ["target"] = new BNumber(12345)
+        };
+
+        var method = typeof(DhtService).GetMethod("HandleFindNodeQuery", BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.DoesNotThrow(() =>
+            method.Invoke(_service, new object[] { args, sender, transactionId }));
     }
 
     [Test]
@@ -1584,6 +1622,30 @@ public class DhtServiceTest
         SetUdpClient();
         var nodeId = CreateNodeId(0x43);
         var message = BuildQueryMessage("find_node", nodeId);
+        var sender = new IPEndPoint(IPAddress.Parse("10.0.0.2"), 6881);
+
+        InvokeHandleMessage(message.EncodeAsBytes(), sender);
+
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void HandleQuery_find_node_with_target_should_respond_and_add_node()
+    {
+        SetUdpClient();
+        var nodeId = CreateNodeId(0x43);
+        var targetId = CreateNodeId(0x88);
+        var message = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02 }),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("find_node"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(nodeId),
+                ["target"] = new BString(targetId)
+            }
+        };
         var sender = new IPEndPoint(IPAddress.Parse("10.0.0.2"), 6881);
 
         InvokeHandleMessage(message.EncodeAsBytes(), sender);
