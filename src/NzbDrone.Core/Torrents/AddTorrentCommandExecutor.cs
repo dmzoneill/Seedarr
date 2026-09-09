@@ -10,6 +10,7 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
     private readonly ITorrentFileParser _parser;
     private readonly ITorrentService _torrentService;
     private readonly ITrackerEntryService _trackerEntryService;
+    private readonly ITorrentFileService _torrentFileService;
     private readonly IConfigService _configService;
     private readonly Logger _logger;
 
@@ -17,11 +18,13 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
         ITorrentFileParser parser,
         ITorrentService torrentService,
         ITrackerEntryService trackerEntryService,
+        ITorrentFileService torrentFileService,
         IConfigService configService)
     {
         _parser = parser;
         _torrentService = torrentService;
         _trackerEntryService = trackerEntryService;
+        _torrentFileService = torrentFileService;
         _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -62,6 +65,19 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
         };
 
         var added = _torrentService.Add(torrent);
+
+        if (_torrentFileService != null && parsed.Files != null && parsed.Files.Count > 0)
+        {
+            foreach (var file in parsed.Files)
+            {
+                _torrentFileService.Add(new TorrentFile
+                {
+                    TorrentId = added.Id,
+                    Path = file.Path,
+                    Size = file.Size
+                });
+            }
+        }
 
         var urls = new System.Collections.Generic.HashSet<string>();
 

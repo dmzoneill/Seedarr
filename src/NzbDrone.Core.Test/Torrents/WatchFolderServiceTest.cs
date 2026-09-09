@@ -19,6 +19,7 @@ public class WatchFolderServiceTest
     private ITorrentFileParser _parser;
     private ITorrentService _torrentService;
     private ITrackerEntryService _trackerEntryService;
+    private ITorrentFileService _torrentFileService;
     private IAppFolderInfo _appFolderInfo;
     private IConfigService _configService;
     private WatchFolderService _subject;
@@ -33,6 +34,7 @@ public class WatchFolderServiceTest
         _parser = Substitute.For<ITorrentFileParser>();
         _torrentService = Substitute.For<ITorrentService>();
         _trackerEntryService = Substitute.For<ITrackerEntryService>();
+        _torrentFileService = Substitute.For<ITorrentFileService>();
         _appFolderInfo = Substitute.For<IAppFolderInfo>();
         _configService = Substitute.For<IConfigService>();
 
@@ -43,7 +45,7 @@ public class WatchFolderServiceTest
         _configService.WatchFolderAutoStartTorrents.Returns(true);
         _configService.WatchFolderDeleteAddedTorrents.Returns(false);
 
-        _subject = new WatchFolderService(_parser, _torrentService, _trackerEntryService, _appFolderInfo, _configService);
+        _subject = new WatchFolderService(_parser, _torrentService, _trackerEntryService, _torrentFileService, _appFolderInfo, _configService);
     }
 
     [TearDown]
@@ -471,6 +473,88 @@ public class WatchFolderServiceTest
         await Task.Delay(1500);
 
         _parser.DidNotReceive().Parse(Arg.Any<string>());
+    }
+
+    [Test]
+    public void ProcessTorrentFile_should_persist_torrent_files_when_parsed_files_present()
+    {
+        var torrentPath = Path.Combine(_tempDir, "multifile.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "MultiFileTorrent",
+            InfoHash = "multifile123",
+            TotalSize = 3000,
+            PieceCount = 3,
+            PieceLength = 1000,
+            Files = new List<ParsedTorrentFile>
+            {
+                new() { Path = "folder/file1.mkv", Size = 2000 },
+                new() { Path = "folder/file2.nfo", Size = 1000 }
+            }
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 42, Name = "MultiFileTorrent" });
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath });
+
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 42 && f.Path == "folder/file1.mkv" && f.Size == 2000));
+        _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
+            f.TorrentId == 42 && f.Path == "folder/file2.nfo" && f.Size == 1000));
+    }
+
+    [Test]
+    public void ProcessTorrentFile_should_not_persist_files_when_files_list_is_empty()
+    {
+        var torrentPath = Path.Combine(_tempDir, "nofiles.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "NoFilesTorrent",
+            InfoHash = "nofiles123",
+            TotalSize = 1024,
+            PieceCount = 1,
+            PieceLength = 1024,
+            Files = new List<ParsedTorrentFile>()
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 43, Name = "NoFilesTorrent" });
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath });
+
+        _torrentFileService.DidNotReceive().Add(Arg.Any<TorrentFile>());
+    }
+
+    [Test]
+    public void ProcessTorrentFile_should_not_persist_files_when_files_list_is_null()
+    {
+        var torrentPath = Path.Combine(_tempDir, "nullfiles.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "NullFilesTorrent",
+            InfoHash = "nullfiles123",
+            TotalSize = 1024,
+            PieceCount = 1,
+            PieceLength = 1024,
+            Files = null
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 44, Name = "NullFilesTorrent" });
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath });
+
+        _torrentFileService.DidNotReceive().Add(Arg.Any<TorrentFile>());
     }
 
     private static void CreateDummyTorrentFile(string path)
