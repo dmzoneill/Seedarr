@@ -34,12 +34,21 @@ public interface IConfigService
     bool WatchFolderAutoStartTorrents { get; }
     bool WatchFolderDeleteAddedTorrents { get; }
 
-    // Connection
+    // Connection & Network
     int ListeningPort { get; }
     bool UpnpEnabled { get; }
+    bool EnableIPv6 { get; }
+    string BindInterface { get; }
+    bool EnableVpnKillSwitch { get; }
     int MaxGlobalConnections { get; }
     int MaxPerTorrentConnections { get; }
     int MaxUploadSlots { get; }
+    int MaxConnectionsPerIp { get; }
+    int MaximumHalfOpenConnections { get; }
+    bool AnonymousMode { get; }
+    bool ForceProxy { get; }
+    int PeerDscp { get; }
+    int PeerTos { get; }
 
     // Proxy
     string ProxyType { get; }
@@ -328,12 +337,21 @@ public class ConfigService : IConfigService
     public bool WatchFolderAutoStartTorrents => GetValueBoolean("WatchFolderAutoStartTorrents", true);
     public bool WatchFolderDeleteAddedTorrents => GetValueBoolean("WatchFolderDeleteAddedTorrents", false);
 
-    // Connection
+    // Connection & Network
     public int ListeningPort => GetValueInt("ListeningPort", 6881);
     public bool UpnpEnabled => GetValueBoolean("UpnpEnabled", true);
+    public bool EnableIPv6 => GetValueBoolean("EnableIPv6", true);
+    public string BindInterface => GetValue("BindInterface", string.Empty);
+    public bool EnableVpnKillSwitch => GetValueBoolean("EnableVpnKillSwitch", false);
     public int MaxGlobalConnections => GetValueInt("MaxGlobalConnections", 200);
     public int MaxPerTorrentConnections => GetValueInt("MaxPerTorrentConnections", 50);
     public int MaxUploadSlots => GetValueInt("MaxUploadSlots", 4);
+    public int MaxConnectionsPerIp => GetValueInt("MaxConnectionsPerIp", 5);
+    public int MaximumHalfOpenConnections => GetValueInt("MaximumHalfOpenConnections", 50);
+    public bool AnonymousMode => GetValueBoolean("AnonymousMode", false);
+    public bool ForceProxy => GetValueBoolean("ForceProxy", false);
+    public int PeerDscp => GetValueInt("PeerDscp", 0);
+    public int PeerTos => GetValueInt("PeerTos", 0);
 
     // Proxy
     public string ProxyType => GetValue("ProxyType", "none");

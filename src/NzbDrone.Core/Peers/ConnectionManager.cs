@@ -18,6 +18,8 @@ public interface IConnectionManager
     int ActiveCount { get; }
     bool CanAddConnectionForTorrent(string infoHash);
     int GetUploadSlotCount();
+    List<PeerConnection> GetAllConnections();
+    void DisconnectAll();
     void ProcessDropouts();
     void RotateConnections();
 }
@@ -112,6 +114,38 @@ public class ConnectionManager : IConnectionManager
             return _connections
                 .Where(c => string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase))
                 .ToList();
+        }
+    }
+
+    public List<PeerConnection> GetAllConnections()
+    {
+        lock (_lock)
+        {
+            return _connections.ToList();
+        }
+    }
+
+    public void DisconnectAll()
+    {
+        List<PeerConnection> toDisconnect;
+        lock (_lock)
+        {
+            toDisconnect = _connections.ToList();
+            _connections.Clear();
+        }
+
+        foreach (var conn in toDisconnect)
+        {
+            try
+            {
+                _fastExtensionHandler.UnregisterPeer(conn);
+                conn.Dispose();
+                LogDisconnect(conn);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error disconnecting peer {0}", conn.RemoteIp);
+            }
         }
     }
 
