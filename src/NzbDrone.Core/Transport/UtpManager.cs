@@ -1,4 +1,7 @@
 using System;
+using System.Buffers.Binary;
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -21,8 +24,9 @@ public class UtpManager : BackgroundService, IUtpManager
 {
     private readonly IConfigService _configService;
     private readonly Logger _logger;
+    private readonly ConcurrentDictionary<string, IUtpConnection> _activeConnections = new();
 
-    public int ActiveConnections => 0;
+    public int ActiveConnections => _activeConnections.Values.Count(c => c.IsConnected);
     public bool IsEnabled => _configService.UtpEnabled;
     public bool TcpFallbackEnabled => _configService.TcpFallback;
 
@@ -40,7 +44,12 @@ public class UtpManager : BackgroundService, IUtpManager
         }
 
         var timeoutSeconds = _configService.TransportConnectionTimeoutSeconds;
-        return new UtpConnection(timeoutSeconds);
+        var connection = new UtpConnection(timeoutSeconds);
+        var key = Guid.NewGuid().ToString();
+        _activeConnections[key] = connection;
+        connection.OnClosed = _ => _activeConnections.TryRemove(key, out _);
+
+        return connection;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -100,12 +109,49 @@ public class UtpManager : BackgroundService, IUtpManager
             return;
         }
 
+        var version = (byte)(data[0] & 0x0F);
         var type = (UtpPacketType)(data[0] >> 4);
-        var connectionId = (ushort)((data[2] << 8) | data[3]);
+
+        if (version != 1 || (byte)type > 4)
+        {
+            return;
+        }
+
+        var connectionId = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(2, 2));
 
         if (type == UtpPacketType.Syn)
         {
             _logger.Debug("uTP SYN from {0}, connection {1}", sender, connectionId);
+            var key = $"{sender}_{connectionId}";
+            var conn = new UtpConnection(null, (ushort)(connectionId + 1), sender, _configService.TransportConnectionTimeoutSeconds);
+            _activeConnections[key] = conn;
+            conn.OnClosed = _ => _activeConnections.TryRemove(key, out _);
+            conn.HandleIncomingPacket(data, sender);
+            return;
+        }
+
+        var matchKey = $"{sender}_{connectionId}";
+        if (_activeConnections.TryGetValue(matchKey, out var activeConn) && activeConn is UtpConnection matchedUtp)
+        {
+            matchedUtp.HandleIncomingPacket(data, sender);
+            return;
+        }
+
+        if (type == UtpPacketType.Data)
+        {
+            _logger.Debug("uTP DATA from {0}, connection {1}", sender, connectionId);
+        }
+        else if (type == UtpPacketType.Fin)
+        {
+            _logger.Debug("uTP FIN from {0}, connection {1}", sender, connectionId);
+        }
+        else if (type == UtpPacketType.State)
+        {
+            _logger.Debug("uTP STATE from {0}, connection {1}", sender, connectionId);
+        }
+        else if (type == UtpPacketType.Reset)
+        {
+            _logger.Debug("uTP RESET from {0}, connection {1}", sender, connectionId);
         }
     }
 }

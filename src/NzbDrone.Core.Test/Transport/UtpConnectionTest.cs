@@ -878,6 +878,184 @@ public class UtpConnectionTest
         Assert.That(connId, Is.EqualTo(0x1235));
     }
 
+    // ---- Loopback and Retransmission tests ----
+
+    [Test]
+    public void Loopback_should_transfer_100KB_bidirectionally_over_real_udp_sockets()
+    {
+        using var serverUdp = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)serverUdp.Client.LocalEndPoint!).Port;
+
+        var serverReceivedData = new byte[100 * 1024];
+        var clientReceivedData = new byte[100 * 1024];
+
+        var clientPayload = new byte[100 * 1024];
+        var serverPayload = new byte[100 * 1024];
+        for (var i = 0; i < clientPayload.Length; i++)
+        {
+            clientPayload[i] = (byte)(i % 251);
+            serverPayload[i] = (byte)(((i * 3) + 7) % 251);
+        }
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+            var synData = serverUdp.Receive(ref ep);
+            var synHeader = (UtpHeader)typeof(UtpConnection).GetMethod("ParseHeader", BindingFlags.NonPublic | BindingFlags.Static)!
+                .Invoke(null, new object[] { synData })!;
+
+            // Send State response
+            var response = new byte[20];
+            response[0] = ((byte)UtpPacketType.State << 4) | 1;
+            response[2] = (byte)(synHeader.ConnectionId >> 8);
+            response[3] = (byte)synHeader.ConnectionId;
+            response[16] = 0x00;
+            response[17] = 0x01; // server initial seq
+            response[18] = (byte)(synHeader.SequenceNumber >> 8);
+            response[19] = (byte)synHeader.SequenceNumber;
+            serverUdp.Send(response, response.Length, ep);
+
+            using var serverConn = new UtpConnection(serverUdp, synHeader.ConnectionId, ep, connectionTimeoutSeconds: 5);
+            SetConnected(serverConn, true);
+
+            var read = 0;
+            while (read < serverReceivedData.Length)
+            {
+                var r = serverConn.Receive(serverReceivedData, read, serverReceivedData.Length - read);
+                if (r <= 0) break;
+                read += r;
+            }
+
+            var written = 0;
+            while (written < serverPayload.Length)
+            {
+                var w = serverConn.Send(serverPayload, written, serverPayload.Length - written);
+                if (w <= 0) break;
+                written += w;
+            }
+        });
+
+        using var clientConn = new UtpConnection(connectionTimeoutSeconds: 5);
+        clientConn.Connect(new IPEndPoint(IPAddress.Loopback, serverPort));
+
+        Assert.That(clientConn.IsConnected, Is.True);
+
+        var clientSendTask = Task.Run(() =>
+        {
+            var written = 0;
+            while (written < clientPayload.Length)
+            {
+                var w = clientConn.Send(clientPayload, written, clientPayload.Length - written);
+                if (w <= 0) break;
+                written += w;
+            }
+        });
+
+        var clientRecvTask = Task.Run(() =>
+        {
+            var read = 0;
+            while (read < clientReceivedData.Length)
+            {
+                var r = clientConn.Receive(clientReceivedData, read, clientReceivedData.Length - read);
+                if (r <= 0) break;
+                read += r;
+            }
+        });
+
+        Task.WaitAll(new[] { serverTask, clientSendTask, clientRecvTask }, TimeSpan.FromSeconds(10));
+
+        Assert.That(serverReceivedData, Is.EqualTo(clientPayload));
+        Assert.That(clientReceivedData, Is.EqualTo(serverPayload));
+    }
+
+    [Test]
+    public void Retransmit_should_complete_transfer_when_30_percent_packets_are_dropped()
+    {
+        using var serverUdp = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)serverUdp.Client.LocalEndPoint!).Port;
+
+        var transferSize = 10 * 1024;
+        var clientPayload = new byte[transferSize];
+        var serverReceivedData = new byte[transferSize];
+        for (var i = 0; i < transferSize; i++)
+        {
+            clientPayload[i] = (byte)(i % 256);
+        }
+
+        var packetIndex = 0;
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+            var synData = serverUdp.Receive(ref ep);
+            var synHeader = (UtpHeader)typeof(UtpConnection).GetMethod("ParseHeader", BindingFlags.NonPublic | BindingFlags.Static)!
+                .Invoke(null, new object[] { synData })!;
+
+            var response = new byte[20];
+            response[0] = ((byte)UtpPacketType.State << 4) | 1;
+            response[2] = (byte)(synHeader.ConnectionId >> 8);
+            response[3] = (byte)synHeader.ConnectionId;
+            response[16] = 0x00;
+            response[17] = 0x01;
+            response[18] = (byte)(synHeader.SequenceNumber >> 8);
+            response[19] = (byte)synHeader.SequenceNumber;
+            serverUdp.Send(response, response.Length, ep);
+
+            using var serverConn = new UtpConnection(serverUdp, synHeader.ConnectionId, ep, connectionTimeoutSeconds: 5);
+            SetConnected(serverConn, true);
+
+            var read = 0;
+            while (read < serverReceivedData.Length)
+            {
+                var r = serverConn.Receive(serverReceivedData, read, serverReceivedData.Length - read);
+                if (r <= 0) break;
+                read += r;
+            }
+        });
+
+        using var clientConn = new UtpConnection(connectionTimeoutSeconds: 5);
+        // Drop ~30% of data packets deterministically
+        clientConn.PacketDropFilter = (data, _) =>
+        {
+            if (data.Length > 20)
+            {
+                packetIndex++;
+                return packetIndex % 3 == 0;
+            }
+
+            return false;
+        };
+
+        clientConn.Connect(new IPEndPoint(IPAddress.Loopback, serverPort));
+        Assert.That(clientConn.IsConnected, Is.True);
+
+        var written = 0;
+        while (written < clientPayload.Length)
+        {
+            var w = clientConn.Send(clientPayload, written, clientPayload.Length - written);
+            if (w <= 0) break;
+            written += w;
+        }
+
+        serverTask.Wait(TimeSpan.FromSeconds(10));
+        Assert.That(serverReceivedData, Is.EqualTo(clientPayload));
+    }
+
+    [Test]
+    public void UtpStream_should_wrap_connection_read_write()
+    {
+        using var connection = new UtpConnection();
+        using var stream = connection.GetStream();
+
+        Assert.That(stream.CanSeek, Is.False);
+        Assert.That(stream.CanTimeout, Is.True);
+        Assert.Throws<NotSupportedException>(() => _ = stream.Length);
+        Assert.Throws<NotSupportedException>(() => _ = stream.Position);
+        Assert.Throws<NotSupportedException>(() => stream.Position = 0);
+        Assert.Throws<NotSupportedException>(() => stream.Seek(0, System.IO.SeekOrigin.Begin));
+        Assert.Throws<NotSupportedException>(() => stream.SetLength(0));
+    }
+
     // ---- helpers ----
 
     private static void SetConnected(UtpConnection connection, bool value)
