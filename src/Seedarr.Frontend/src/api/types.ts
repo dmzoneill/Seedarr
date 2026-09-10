@@ -368,9 +368,18 @@ export interface NetworkConfig {
   id: number;
   listeningPort: number;
   upnpEnabled: boolean;
+  enableIPv6: boolean;
+  bindInterface: string;
+  enableVpnKillSwitch: boolean;
   maxGlobalConnections: number;
   maxPerTorrentConnections: number;
   maxUploadSlots: number;
+  maxConnectionsPerIp: number;
+  maximumHalfOpenConnections: number;
+  anonymousMode: boolean;
+  forceProxy: boolean;
+  peerDscp: number;
+  peerTos: number;
   proxyType: string;
   proxyHost: string;
   proxyPort: number;

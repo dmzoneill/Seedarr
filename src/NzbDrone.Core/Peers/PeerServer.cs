@@ -11,6 +11,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
@@ -19,7 +20,6 @@ namespace NzbDrone.Core.Peers;
 
 public class PeerServer : BackgroundService
 {
-    private const int MaxConnectionsPerIp = 5;
     private const int OutgoingConnectTimeoutMs = 5000;
     private readonly IConfigService _configService;
     private readonly ITorrentService _torrentService;
@@ -33,7 +33,9 @@ public class PeerServer : BackgroundService
     private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
     private readonly IRandomNumberGenerator _random;
     private readonly Transport.IUtpManager _utpManager;
+    private readonly IVpnKillSwitchService _vpnKillSwitchService;
     private readonly SemaphoreSlim _connectionSemaphore;
+    private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
     private readonly Logger _logger;
 
@@ -49,7 +51,8 @@ public class PeerServer : BackgroundService
         Trackers.ITrackerAnnounceService trackerAnnounceService = null,
         IRandomNumberGenerator random = null,
         Transport.IUtpManager utpManager = null,
-        IClientBehaviorSimulator clientBehaviorSimulator = null)
+        IClientBehaviorSimulator clientBehaviorSimulator = null,
+        IVpnKillSwitchService vpnKillSwitchService = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -66,13 +69,43 @@ public class PeerServer : BackgroundService
         _clientBehaviorSimulator = clientBehaviorSimulator;
         _random = random ?? new RandomNumberGenerator();
         _utpManager = utpManager;
-        _connectionSemaphore = new SemaphoreSlim(configService.MaxGlobalConnections);
+        _vpnKillSwitchService = vpnKillSwitchService;
+
+        var maxGlobal = configService.MaxGlobalConnections > 0 ? configService.MaxGlobalConnections : 200;
+        var maxHalfOpen = configService.MaximumHalfOpenConnections > 0 ? configService.MaximumHalfOpenConnections : 50;
+
+        _connectionSemaphore = new SemaphoreSlim(maxGlobal);
+        _halfOpenSemaphore = new SemaphoreSlim(maxHalfOpen);
         _logger = LogManager.GetCurrentClassLogger();
+
+        if (_vpnKillSwitchService != null)
+        {
+            _vpnKillSwitchService.VpnDropped += OnVpnDropped;
+        }
+    }
+
+    private void OnVpnDropped(string iface)
+    {
+        _logger.Warn("VPN kill switch engaged (interface '{0}' dropped). Terminating all active peer connections.", iface);
+        try
+        {
+            _connectionManager?.DisconnectAll();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Error disconnecting peers after VPN kill switch triggered");
+        }
     }
 
     public override void Dispose()
     {
+        if (_vpnKillSwitchService != null)
+        {
+            _vpnKillSwitchService.VpnDropped -= OnVpnDropped;
+        }
+
         _connectionSemaphore?.Dispose();
+        _halfOpenSemaphore?.Dispose();
         base.Dispose();
     }
 
@@ -86,6 +119,64 @@ public class PeerServer : BackgroundService
         };
     }
 
+    private IPAddress GetListenAddress()
+    {
+        if (_vpnKillSwitchService != null)
+        {
+            var ifaceIp = _vpnKillSwitchService.GetVpnInterfaceIpAddress(
+                _configService.EnableIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork);
+
+            if (ifaceIp != null)
+            {
+                return ifaceIp;
+            }
+
+            ifaceIp = _vpnKillSwitchService.GetVpnInterfaceIpAddress(AddressFamily.InterNetwork);
+            if (ifaceIp != null)
+            {
+                return ifaceIp;
+            }
+        }
+
+        var bindIface = _configService.BindInterface?.Trim();
+        if (!string.IsNullOrWhiteSpace(bindIface) &&
+            !bindIface.Equals("Any", StringComparison.OrdinalIgnoreCase) &&
+            !bindIface.Equals("all", StringComparison.OrdinalIgnoreCase) &&
+            !bindIface.Equals("*", StringComparison.OrdinalIgnoreCase))
+        {
+            if (IPAddress.TryParse(bindIface, out var parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return _configService.EnableIPv6 ? IPAddress.IPv6Any : IPAddress.Any;
+    }
+
+    private void ApplySocketQos(Socket socket)
+    {
+        if (socket == null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (_configService.PeerDscp > 0)
+            {
+                socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.TypeOfService, _configService.PeerDscp << 2);
+            }
+            else if (_configService.PeerTos > 0)
+            {
+                socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.TypeOfService, _configService.PeerTos);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Trace(ex, "Failed to apply DSCP/TOS socket options");
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var listenerTask = RunListenerAsync(stoppingToken);
@@ -96,36 +187,62 @@ public class PeerServer : BackgroundService
     private async Task RunListenerAsync(CancellationToken stoppingToken)
     {
         var listeningPort = _configService.ListeningPort;
-        var listener = new TcpListener(IPAddress.Any, listeningPort);
+        var bindAddress = GetListenAddress();
+        var listener = new TcpListener(bindAddress, listeningPort);
 
         try
         {
             try
             {
+                if (bindAddress.Equals(IPAddress.IPv6Any))
+                {
+                    listener.Server.DualMode = true;
+                }
+
                 listener.Start();
             }
             catch (SocketException ex)
             {
-                _logger.Warn(ex, "Peer server failed to bind port {0}, skipping", listeningPort);
-                return;
+                _logger.Warn(ex, "Peer server failed to bind {0}:{1}, attempting fallback to IPv4 Any", bindAddress, listeningPort);
+                try
+                {
+                    listener = new TcpListener(IPAddress.Any, listeningPort);
+                    listener.Start();
+                }
+                catch (Exception fallbackEx)
+                {
+                    _logger.Warn(fallbackEx, "Peer server failed fallback bind on port {0}, skipping", listeningPort);
+                    return;
+                }
             }
 
-            _logger.Info("Peer server listening on port {0}", listeningPort);
+            _logger.Info("Peer server listening on {0}:{1}", bindAddress, listeningPort);
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 var client = await listener.AcceptTcpClientAsync(stoppingToken);
+
+                if (_vpnKillSwitchService?.IsFailClosedActive == true)
+                {
+                    _logger.Debug("VPN fail-closed engaged; rejecting incoming peer connection");
+                    client.Dispose();
+                    continue;
+                }
+
                 _ = Task.Run(
                     async () =>
                     {
+                        var maxPerIp = _configService.MaxConnectionsPerIp > 0 ? _configService.MaxConnectionsPerIp : 5;
                         var clientIp = ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString();
                         var currentCount = _connectionsPerIp.AddOrUpdate(clientIp, 1, (_, count) => count + 1);
-                        if (currentCount > MaxConnectionsPerIp)
+                        if (currentCount > maxPerIp)
                         {
                             _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
                             client.Dispose();
                             return;
                         }
+
+                        ApplySocketQos(client.Client);
 
                         try
                         {
@@ -174,6 +291,13 @@ public class PeerServer : BackgroundService
             await Task.Delay(TimeSpan.FromSeconds(startupDelay), stoppingToken);
             while (!stoppingToken.IsCancellationRequested)
             {
+                if (_vpnKillSwitchService?.IsFailClosedActive == true)
+                {
+                    _logger.Debug("VPN fail-closed active, suppressing peer contact loop");
+                    await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+                    continue;
+                }
+
                 var intervalSeconds = _configService.PeerContactIntervalSeconds;
 
                 var torrents = _torrentService.GetAll()
@@ -185,7 +309,7 @@ public class PeerServer : BackgroundService
 
                 foreach (var torrent in torrents)
                 {
-                    if (stoppingToken.IsCancellationRequested)
+                    if (stoppingToken.IsCancellationRequested || _vpnKillSwitchService?.IsFailClosedActive == true)
                     {
                         break;
                     }
@@ -204,6 +328,11 @@ public class PeerServer : BackgroundService
 
     private void DiscoverPeersFromTracker(Torrent torrent)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            return;
+        }
+
         try
         {
             _trackerAnnounceService?.AnnounceTorrent(torrent, force: false);
@@ -216,6 +345,11 @@ public class PeerServer : BackgroundService
 
     private void ConnectToDiscoveredPeers(Torrent torrent, CancellationToken stoppingToken)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            return;
+        }
+
         if (!_connectionManager.CanAddConnectionForTorrent(torrent.InfoHash))
         {
             return;
@@ -229,22 +363,61 @@ public class PeerServer : BackgroundService
 
         foreach (var candidate in candidates)
         {
-            if (stoppingToken.IsCancellationRequested || !_connectionManager.CanAddConnectionForTorrent(torrent.InfoHash))
+            if (stoppingToken.IsCancellationRequested ||
+                _vpnKillSwitchService?.IsFailClosedActive == true ||
+                !_connectionManager.CanAddConnectionForTorrent(torrent.InfoHash))
             {
                 break;
             }
 
-            _ = Task.Run(() => ConnectToPeer(torrent, candidate), stoppingToken);
+            _ = Task.Run(() => ConnectToPeer(torrent, candidate, stoppingToken), stoppingToken);
         }
     }
 
-    private void ConnectToPeer(Torrent torrent, DiscoveredPeer candidate)
+    private async Task ConnectToPeer(Torrent torrent, DiscoveredPeer candidate, CancellationToken stoppingToken)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            return;
+        }
+
+        if (!_configService.EnableIPv6 &&
+            IPAddress.TryParse(candidate.Ip, out var candIp) &&
+            candIp.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            _logger.Debug("IPv6 disabled, skipping IPv6 peer {0}:{1}", candidate.Ip, candidate.Port);
+            return;
+        }
+
+        var maxPerIp = _configService.MaxConnectionsPerIp > 0 ? _configService.MaxConnectionsPerIp : 5;
+        var currentCount = _connectionsPerIp.AddOrUpdate(candidate.Ip, 1, (_, count) => count + 1);
+        if (currentCount > maxPerIp)
+        {
+            _connectionsPerIp.AddOrUpdate(candidate.Ip, 0, (_, count) => Math.Max(0, count - 1));
+            return;
+        }
+
+        try
+        {
+            if (!await _halfOpenSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+            {
+                _connectionsPerIp.AddOrUpdate(candidate.Ip, 0, (_, count) => Math.Max(0, count - 1));
+                return;
+            }
+        }
+        catch
+        {
+            _connectionsPerIp.AddOrUpdate(candidate.Ip, 0, (_, count) => Math.Max(0, count - 1));
+            return;
+        }
+
         PeerConnection connection = null;
         try
         {
             _logger.Debug("Connecting to peer {0}:{1} for {2}", candidate.Ip, candidate.Port, torrent.Name);
             _eventLogService?.Debug(torrent.Id, "Peers", $"Attempting connection to peer {candidate.Ip}:{candidate.Port} (source: {candidate.Source})");
+
+            var localBind = _vpnKillSwitchService?.GetVpnInterfaceIpAddress();
 
             if (_utpManager != null && _utpManager.IsEnabled)
             {
@@ -266,12 +439,12 @@ public class PeerServer : BackgroundService
                 if (connection == null && _utpManager.TcpFallbackEnabled)
                 {
                     _logger.Debug("Falling back to TCP for peer {0}:{1}", candidate.Ip, candidate.Port);
-                    connection = new PeerConnection(candidate.Ip, candidate.Port);
+                    connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos);
                 }
             }
             else
             {
-                connection = new PeerConnection(candidate.Ip, candidate.Port);
+                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos);
             }
 
             if (connection == null)
@@ -297,7 +470,7 @@ public class PeerServer : BackgroundService
                 return;
             }
 
-            var peerId = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled)
+            var peerId = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
                 ? (_clientBehaviorSimulator.GetActiveProfile()?.GeneratePeerId() ?? "-SD1000-000000000000")
                 : "-SD1000-000000000000";
             connection.SendHandshake(torrent.InfoHash, peerId);
@@ -339,6 +512,11 @@ public class PeerServer : BackgroundService
             _eventLogService?.Debug(torrent.Id, "Peers", $"Failed to connect to peer {candidate.Ip}:{candidate.Port}: {ex.Message}");
             connection?.Dispose();
         }
+        finally
+        {
+            _halfOpenSemaphore.Release();
+            _connectionsPerIp.AddOrUpdate(candidate.Ip, 0, (_, count) => Math.Max(0, count - 1));
+        }
     }
 
     private void HandlePeerSession(PeerConnection connection, Torrent torrent)
@@ -347,6 +525,12 @@ public class PeerServer : BackgroundService
         {
             while (connection.IsConnected)
             {
+                if (_vpnKillSwitchService?.IsFailClosedActive == true)
+                {
+                    _logger.Debug("VPN fail-closed engaged; terminating session with {0}:{1}", connection.RemoteIp, connection.RemotePort);
+                    break;
+                }
+
                 var message = connection.ReceiveMessage();
                 if (message == null)
                 {
@@ -393,7 +577,6 @@ public class PeerServer : BackgroundService
 
         try
         {
-            // Attempt MSE/PE negotiation - this will detect plain BT handshakes and fall through
             var negotiated = connection.NegotiateEncryptionIncoming(ValidateInfoHash, GetEncryptionMode());
             if (!negotiated)
             {
@@ -407,7 +590,6 @@ public class PeerServer : BackgroundService
                 return;
             }
 
-            // Find matching torrent
             var torrents = _torrentService.GetAll();
             var torrent = torrents.Find(t => string.Equals(t.InfoHash, connection.InfoHash, StringComparison.OrdinalIgnoreCase));
 
@@ -417,7 +599,6 @@ public class PeerServer : BackgroundService
                 return;
             }
 
-            // Send our handshake back
             var peerId = "-SD1000-000000000000";
             connection.SendHandshake(torrent.InfoHash, peerId);
 
@@ -428,17 +609,18 @@ public class PeerServer : BackgroundService
                 connection.EncryptionMethod);
 
             _connectionManager.Add(connection);
-
-            // Send bitfield (all pieces)
             connection.SendBitfield(torrent.PieceCount);
-
-            // Unchoke
             connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
             connection.AmChoking = false;
 
-            // Handle messages with keep-alive support
             while (connection.IsConnected && !stoppingToken.IsCancellationRequested)
             {
+                if (_vpnKillSwitchService?.IsFailClosedActive == true)
+                {
+                    _logger.Debug("VPN fail-closed engaged; terminating incoming session with {0}", connection.RemoteIp);
+                    break;
+                }
+
                 var message = connection.ReceiveMessage();
                 if (message == null)
                 {
@@ -534,7 +716,7 @@ public class PeerServer : BackgroundService
         var begin = (int)(((uint)payload[4] << 24) | ((uint)payload[5] << 16) | ((uint)payload[6] << 8) | payload[7]);
         var length = (int)(((uint)payload[8] << 24) | ((uint)payload[9] << 16) | ((uint)payload[10] << 8) | payload[11]);
 
-        const int MaxBlockSize = 32768; // 2x standard 16KB block size
+        const int MaxBlockSize = 32768;
         if (length <= 0 || length > MaxBlockSize)
         {
             return;
