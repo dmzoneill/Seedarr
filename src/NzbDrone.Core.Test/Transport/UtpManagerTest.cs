@@ -343,4 +343,31 @@ public class UtpManagerTest
 
         Assert.DoesNotThrow(() => InvokeHandleIncoming(data, sender));
     }
+
+    [Test]
+    public void ActiveConnections_should_track_connected_connections()
+    {
+        var conn = (UtpConnection)_subject.CreateConnection();
+        var backingField = typeof(UtpConnection).GetField("<IsConnected>k__BackingField", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        backingField.SetValue(conn, true);
+
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(1));
+
+        conn.Dispose();
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleIncoming_should_track_incoming_syn_connection()
+    {
+        var data = new byte[20];
+        data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        data[2] = 0x12;
+        data[3] = 0x34;
+
+        var sender = new IPEndPoint(IPAddress.Loopback, 54321);
+        InvokeHandleIncoming(data, sender);
+
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(1));
+    }
 }

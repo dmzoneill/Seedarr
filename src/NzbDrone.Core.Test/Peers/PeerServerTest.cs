@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
@@ -12,6 +13,7 @@ using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers.MultiTracker;
+using NzbDrone.Core.Transport;
 
 namespace NzbDrone.Core.Test.Peers;
 
@@ -970,5 +972,73 @@ public class PeerServerTest
         await Task.Delay(3500);
 
         _torrentService.Received().GetAll();
+    }
+
+    [Test]
+    public void ConnectToPeer_should_fallback_to_tcp_when_utp_fails_and_tcp_fallback_enabled()
+    {
+        var utpManager = Substitute.For<IUtpManager>();
+        utpManager.IsEnabled.Returns(true);
+        utpManager.TcpFallbackEnabled.Returns(true);
+
+        var mockUtp = Substitute.For<IUtpConnection>();
+        mockUtp.IsConnected.Returns(false);
+        utpManager.CreateConnection().Returns(mockUtp);
+
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var tcpPort = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        var serverWithUtp = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            utpManager: utpManager);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = tcpPort,
+            Source = "tracker"
+        };
+
+        var acceptTask = Task.Run(() =>
+        {
+            var acceptedClient = listener.AcceptTcpClient();
+            _clients.Add(acceptedClient);
+            var stream = acceptedClient.GetStream();
+
+            // Receive handshake from PeerServer
+            var buf = new byte[68];
+            stream.Read(buf, 0, 68);
+
+            // Send handshake response
+            var response = new byte[68];
+            response[0] = 19;
+            Encoding.ASCII.GetBytes("BitTorrent protocol", 0, 19, response, 1);
+            var hashBytes = Convert.FromHexString(torrent.InfoHash);
+            Array.Copy(hashBytes, 0, response, 28, 20);
+            Encoding.ASCII.GetBytes("-SD1000-000000000000", 0, 20, response, 48);
+            stream.Write(response, 0, 68);
+            stream.Flush();
+        });
+
+        var connectMethod = typeof(PeerServer).GetMethod("ConnectToPeer", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        connectMethod.Invoke(serverWithUtp, new object[] { torrent, candidate });
+
+        acceptTask.Wait(TimeSpan.FromSeconds(5));
+
+        _connectionManager.Received().Add(Arg.Any<PeerConnection>());
     }
 }
