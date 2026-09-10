@@ -134,8 +134,8 @@ public class CsrfProtectionMiddleware
                     context.Request.Query.ContainsKey("apikey") ||
                     context.Request.Query.ContainsKey("api_key") ||
                     (context.Request.Headers.TryGetValue("Authorization", out var authHeader) &&
-                     (authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ||
-                      authHeader.ToString().StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))) ||
+                        (authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ||
+                        authHeader.ToString().StartsWith("Basic ", StringComparison.OrdinalIgnoreCase))) ||
                     context.Request.Headers.ContainsKey("X-Transmission-Session-Id");
 
                 if (!hasExplicitAuthHeader && !IsAuthPath(path, context.Request.PathBase.Value) && !IsRpcPath(path, context.Request.PathBase.Value))
@@ -237,8 +237,8 @@ public class CsrfProtectionMiddleware
     private static bool IsLoopbackHost(string host)
     {
         return host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
-               host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
-               host.Equals("::1", StringComparison.OrdinalIgnoreCase) ||
-               host.Equals("[::1]", StringComparison.OrdinalIgnoreCase);
+            host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+            host.Equals("::1", StringComparison.OrdinalIgnoreCase) ||
+            host.Equals("[::1]", StringComparison.OrdinalIgnoreCase);
     }
 }

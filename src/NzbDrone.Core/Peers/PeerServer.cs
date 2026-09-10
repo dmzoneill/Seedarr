@@ -370,16 +370,16 @@ public class PeerServer : BackgroundService
                 break;
             }
 
-            _ = Task.Run(() => ConnectToPeer(torrent, candidate, stoppingToken), stoppingToken);
+            _ = Task.Run(() => ConnectToPeerAsync(torrent, candidate, stoppingToken), stoppingToken);
         }
     }
 
     private Task ConnectToPeer(Torrent torrent, DiscoveredPeer candidate)
     {
-        return ConnectToPeer(torrent, candidate, CancellationToken.None);
+        return ConnectToPeerAsync(torrent, candidate, CancellationToken.None);
     }
 
-    private async Task ConnectToPeer(Torrent torrent, DiscoveredPeer candidate, CancellationToken stoppingToken)
+    private async Task ConnectToPeerAsync(Torrent torrent, DiscoveredPeer candidate, CancellationToken stoppingToken)
     {
         if (_vpnKillSwitchService?.IsFailClosedActive == true)
         {
