@@ -41,6 +41,9 @@ export function useTorrentIndexState() {
   const [isFilterCollapsed, setIsFilterCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("seedarr_filter_collapsed") === "true";
   });
+  const [isQuickControlsOpen, setIsQuickControlsOpen] = useState<boolean>(() => {
+    return localStorage.getItem("seedarr_quick_controls_open") === "true";
+  });
 
   const toggleFilterCollapse = useCallback(() => {
     setIsFilterCollapsed((prev) => {
@@ -48,6 +51,19 @@ export function useTorrentIndexState() {
       localStorage.setItem("seedarr_filter_collapsed", String(next));
       return next;
     });
+  }, []);
+
+  const toggleQuickControls = useCallback(() => {
+    setIsQuickControlsOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem("seedarr_quick_controls_open", String(next));
+      return next;
+    });
+  }, []);
+
+  const closeQuickControls = useCallback(() => {
+    setIsQuickControlsOpen(false);
+    localStorage.setItem("seedarr_quick_controls_open", "false");
   }, []);
 
   // Consume ?q= from URL then clean it so the URL stays tidy
@@ -169,5 +185,8 @@ export function useTorrentIndexState() {
     handleSelectAll,
     isFilterCollapsed,
     toggleFilterCollapse,
+    isQuickControlsOpen,
+    toggleQuickControls,
+    closeQuickControls,
   };
 }

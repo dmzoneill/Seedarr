@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import TorrentTable from "../components/TorrentTable";
 import TorrentGrid from "../components/TorrentGrid";
 import TorrentDetailPanel from "../components/TorrentDetailPanel";
 import AddTorrentModal from "../components/AddTorrentModal";
+import { QuickSettingsDrawer } from "../components/quicksettings";
 import { TorrentToolbar } from "./torrentindex/TorrentToolbar";
 import { TorrentFilterPanel } from "./torrentindex/TorrentFilterPanel";
 import { useTorrentIndexState } from "./torrentindex/useTorrentIndexState";
@@ -39,9 +40,32 @@ function TorrentIndex() {
     handleSelectAll,
     isFilterCollapsed,
     toggleFilterCollapse,
+    isQuickControlsOpen,
+    toggleQuickControls,
+    closeQuickControls,
   } = useTorrentIndexState();
 
   const [bulkPending, setBulkPending] = useState(false);
+
+  // Global 'Q' hotkey listener to toggle quick controls drawer
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement ||
+        (e.target as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+      if (e.key === "q" || e.key === "Q") {
+        e.preventDefault();
+        toggleQuickControls();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [toggleQuickControls]);
 
   async function handleBulkStart() {
     setBulkPending(true);
@@ -105,6 +129,12 @@ function TorrentIndex() {
         onBulkClear={() => setSelectedIds(new Set())}
         isFilterCollapsed={isFilterCollapsed}
         onToggleFilter={toggleFilterCollapse}
+        isQuickControlsOpen={isQuickControlsOpen}
+        onToggleQuickControls={toggleQuickControls}
+      />
+      <QuickSettingsDrawer
+        isOpen={isQuickControlsOpen}
+        onClose={closeQuickControls}
       />
       <div className="torrent-content-layout">
         <TorrentFilterPanel
