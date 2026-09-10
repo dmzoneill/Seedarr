@@ -49,10 +49,12 @@ public class HostHeaderValidationMiddleware
             cleanHost = cleanHost.Substring(1, cleanHost.Length - 2).Trim();
         }
 
-        // Loopback is always allowed
+        // Loopback and container network local domains are always allowed
         if (cleanHost.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
             cleanHost.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
-            cleanHost.Equals("::1", StringComparison.OrdinalIgnoreCase))
+            cleanHost.Equals("::1", StringComparison.OrdinalIgnoreCase) ||
+            cleanHost.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
+            cleanHost.Equals("seedarr", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
