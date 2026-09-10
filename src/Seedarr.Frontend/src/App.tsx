@@ -556,7 +556,7 @@ function App() {
                           <NavLink
                             key={page.id}
                             to={`/settings/${page.id}`}
-                            className={`sidebar-settings-subitem ${isPageActive ? "active" : ""}`}
+                            className={`sidebar-settings-subitem sidebar-nav-sub ${isPageActive ? "active" : ""}`}
                             title={page.description}
                           >
                             <span
