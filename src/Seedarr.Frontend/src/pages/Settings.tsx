@@ -2,7 +2,8 @@ import { useParams } from "react-router";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SeedingTab } from "./settings/SeedingTab";
 import { BitTorrentTab } from "./settings/BitTorrentTab";
-import { NetworkTab } from "./settings/NetworkTab";
+import { NetworkSettingsTab } from "./settings/NetworkSettingsTab";
+import { ProxySettingsTab } from "./settings/ProxySettingsTab";
 import { PeerProtocolTab } from "./settings/PeerProtocolTab";
 import { ProtocolsTab } from "./settings/ProtocolsTab";
 import { SimulationTab } from "./settings/SimulationTab";
@@ -15,7 +16,7 @@ import { DownloadClientsTab } from "./settings/DownloadClientsTab";
 import { NotificationsTab } from "./settings/NotificationsTab";
 import { CategorySettingsTab } from "./settings/CategorySettingsTab";
 import { CustomScriptsTab } from "./settings/CustomScriptsTab";
-import { WebUITab } from "./settings/WebUITab";
+import { WebUiSettingsTab } from "./settings/WebUiSettingsTab";
 import { SecurityTab } from "./settings/SecurityTab";
 
 const sectionTitles: Record<string, string> = {
@@ -28,6 +29,7 @@ const sectionTitles: Record<string, string> = {
   seeding: "Seeding",
   bittorrent: "BitTorrent",
   network: "Network",
+  proxy: "Proxy",
   "peer-protocol": "Peer Protocol",
   protocols: "Protocols",
   simulation: "Simulation",
@@ -57,7 +59,9 @@ const sectionDescriptions: Record<string, string> = {
   bittorrent:
     "Manage core BitTorrent protocol features, client identities, and tracker timing",
   network:
-    "Network interface binding, listening ports, global rate throttles, and proxy routing",
+    "Network interface binding, listening ports, IPv6, VPN kill switch, and socket limits",
+  proxy:
+    "Outbound SOCKS5 / HTTP proxy tunnel, strict enforcement kill switch, and anonymous privacy routing",
   "peer-protocol":
     "Peer handshake timeouts, keepalive intervals, and connection behavior",
   protocols:
@@ -116,14 +120,15 @@ function Settings() {
       </div>
 
       {activeSection === "general" && <GeneralTab />}
-      {activeSection === "webui" && <WebUITab />}
+      {activeSection === "webui" && <WebUiSettingsTab />}
       {activeSection === "security" && <SecurityTab />}
       {activeSection === "notifications" && <NotificationsTab />}
       {activeSection === "categories" && <CategorySettingsTab />}
       {activeSection === "custom-scripts" && <CustomScriptsTab />}
       {activeSection === "seeding" && <SeedingTab />}
       {activeSection === "bittorrent" && <BitTorrentTab />}
-      {activeSection === "network" && <NetworkTab />}
+      {activeSection === "network" && <NetworkSettingsTab />}
+      {activeSection === "proxy" && <ProxySettingsTab />}
       {activeSection === "peer-protocol" && <PeerProtocolTab />}
       {activeSection === "protocols" && <ProtocolsTab />}
       {activeSection === "simulation" && <SimulationTab />}

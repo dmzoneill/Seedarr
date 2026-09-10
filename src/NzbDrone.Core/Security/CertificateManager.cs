@@ -475,6 +475,24 @@ public class CertificateManager : ICertificateManager
 
         public string PostgresPassword => string.Empty;
 
+        public string BindInterface => string.Empty;
+
+        public bool EnableVpnKillSwitch => false;
+
+        public bool ForceProxy => false;
+
+        public bool AnonymousMode => false;
+
+        public bool EnableIPv6 => true;
+
+        public int MaxConnectionsPerIp => 5;
+
+        public int MaximumHalfOpenConnections => 50;
+
+        public int PeerDscp => 0;
+
+        public int PeerTos => 0;
+
         public void SaveConfigDictionary(Dictionary<string, object> configValues)
         {
         }

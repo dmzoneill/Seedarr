@@ -7,9 +7,18 @@ public class NetworkConfigResource : RestResource
 {
     public int ListeningPort { get; set; }
     public bool UpnpEnabled { get; set; }
+    public bool EnableIPv6 { get; set; } = true;
+    public string BindInterface { get; set; }
+    public bool EnableVpnKillSwitch { get; set; }
     public int MaxGlobalConnections { get; set; }
     public int MaxPerTorrentConnections { get; set; }
     public int MaxUploadSlots { get; set; }
+    public int MaxConnectionsPerIp { get; set; }
+    public int MaximumHalfOpenConnections { get; set; }
+    public bool AnonymousMode { get; set; }
+    public bool ForceProxy { get; set; }
+    public int PeerDscp { get; set; }
+    public int PeerTos { get; set; }
     public string ProxyType { get; set; }
     public string ProxyHost { get; set; }
     public int ProxyPort { get; set; }
@@ -26,9 +35,18 @@ public static class NetworkConfigResourceMapper
         {
             ListeningPort = model.ListeningPort,
             UpnpEnabled = model.UpnpEnabled,
+            EnableIPv6 = model.EnableIPv6,
+            BindInterface = model.BindInterface,
+            EnableVpnKillSwitch = model.EnableVpnKillSwitch,
             MaxGlobalConnections = model.MaxGlobalConnections,
             MaxPerTorrentConnections = model.MaxPerTorrentConnections,
             MaxUploadSlots = model.MaxUploadSlots,
+            MaxConnectionsPerIp = model.MaxConnectionsPerIp,
+            MaximumHalfOpenConnections = model.MaximumHalfOpenConnections,
+            AnonymousMode = model.AnonymousMode,
+            ForceProxy = model.ForceProxy,
+            PeerDscp = model.PeerDscp,
+            PeerTos = model.PeerTos,
             ProxyType = model.ProxyType,
             ProxyHost = model.ProxyHost,
             ProxyPort = model.ProxyPort,

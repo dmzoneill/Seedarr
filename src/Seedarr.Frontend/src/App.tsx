@@ -74,7 +74,6 @@ import {
   KeyIcon,
 } from "./components/icons/AppIcons";
 import { useTheme } from "./context/ThemeContext";
-import { apiClient } from "./api/client";
 import { useGeneralConfig, useDownloadClients } from "./api/hooks";
 import { useTranslation } from "./i18n";
 import LanguageSelector from "./components/LanguageSelector";
@@ -100,6 +99,7 @@ const settingsSubItems = [
   { path: "/settings/seeding", label: "Seeding" },
   { path: "/settings/bittorrent", label: "BitTorrent" },
   { path: "/settings/network", label: "Network" },
+  { path: "/settings/proxy", label: "Proxy" },
   { path: "/settings/peer-protocol", label: "Peer Protocol" },
   { path: "/settings/protocols", label: "Protocols" },
   { path: "/settings/simulation", label: "Simulation" },

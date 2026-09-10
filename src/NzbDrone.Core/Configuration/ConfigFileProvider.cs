@@ -71,6 +71,24 @@ public class ConfigFileProvider : IConfigFileProvider
 
     public string PostgresPassword => GetValue("PostgresPassword", string.Empty);
 
+    public string BindInterface => GetValue("BindInterface", string.Empty);
+
+    public bool EnableVpnKillSwitch => GetValueBool("EnableVpnKillSwitch", false);
+
+    public bool ForceProxy => GetValueBool("ForceProxy", false);
+
+    public bool AnonymousMode => GetValueBool("AnonymousMode", false);
+
+    public bool EnableIPv6 => GetValueBool("EnableIPv6", true);
+
+    public int MaxConnectionsPerIp => GetValueInt("MaxConnectionsPerIp", 5);
+
+    public int MaximumHalfOpenConnections => GetValueInt("MaximumHalfOpenConnections", 50);
+
+    public int PeerDscp => GetValueInt("PeerDscp", 0);
+
+    public int PeerTos => GetValueInt("PeerTos", 0);
+
     private void LoadFromFile()
     {
         lock (Mutex)
