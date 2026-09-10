@@ -6,11 +6,11 @@ namespace NzbDrone.Automation.Test.Tests;
 public class NavigationTests : AutomationTestBase
 {
     [Test]
-    public void Clicking_Library_nav_navigates_to_torrents()
+    public void Clicking_Torrents_nav_navigates_to_torrents()
     {
         NavigateTo("/");
-        var libraryLink = Driver.FindElement(By.CssSelector("a[href='/torrents']"));
-        libraryLink.Click();
+        var torrentsLink = Driver.FindElement(By.CssSelector("a[href='/torrents']"));
+        torrentsLink.Click();
         Assert.That(Driver.Url, Does.Contain("/torrents"));
     }
 
@@ -23,11 +23,34 @@ public class NavigationTests : AutomationTestBase
     }
 
     [Test]
+    public void Clicking_Activity_nav_navigates_to_activity_history()
+    {
+        NavigateTo("/");
+        var activityLink = Driver.FindElement(By.CssSelector("a[href='/activity/history']"));
+        activityLink.Click();
+        Assert.That(Driver.Url, Does.Contain("/activity/history"));
+    }
+
+    [Test]
     public void Activity_nav_expands_subitems()
     {
-        NavigateTo("/activity/torrents");
+        NavigateTo("/activity/history");
         var subItems = Driver.FindElements(By.CssSelector(".sidebar-nav-sub"));
         Assert.That(subItems.Count, Is.GreaterThanOrEqualTo(2));
+    }
+
+    [Test]
+    public void Legacy_activity_torrents_redirects_to_torrents()
+    {
+        NavigateTo("/activity/torrents");
+        Assert.That(Driver.Url, Does.Contain("/torrents"));
+    }
+
+    [Test]
+    public void Legacy_torrents_history_redirects_to_activity_history()
+    {
+        NavigateTo("/torrents/history");
+        Assert.That(Driver.Url, Does.Contain("/activity/history"));
     }
 
     [Test]
