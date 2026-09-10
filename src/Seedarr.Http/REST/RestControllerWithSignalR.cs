@@ -17,6 +17,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
         _signalRBroadcaster = signalRBroadcaster;
     }
 
+    [Microsoft.AspNetCore.Mvc.NonAction]
     public void Handle(ModelEvent<TModel> message)
     {
         if (!_signalRBroadcaster.IsConnected)

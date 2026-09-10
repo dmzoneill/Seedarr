@@ -12,11 +12,5 @@ public class TorrentResourceValidator : ResourceValidator<TorrentResource>
         RuleFor(t => t.Name)
             .NotEmpty()
             .WithMessage("'Name' must not be empty.");
-
-        RuleFor(t => t.InfoHash)
-            .NotEmpty()
-            .WithMessage("'InfoHash' must not be empty.")
-            .Matches(InfoHashPattern)
-            .WithMessage("'InfoHash' must be a 40-character hexadecimal string.");
     }
 }

@@ -22,6 +22,7 @@ public class SeedingController : Controller, IHandle<SeedingTickEvent>
         _signalRBroadcaster = signalRBroadcaster;
     }
 
+    [NonAction]
     public void Handle(SeedingTickEvent message)
     {
         if (!_signalRBroadcaster.IsConnected)

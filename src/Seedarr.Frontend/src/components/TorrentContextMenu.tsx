@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useArrConnections, useDownloadHistory } from "../api/hooks";
 import { getMediaDeepLink } from "../utils/arrLinks";
+import { useTranslation } from "../i18n";
+import { COLUMN_I18N_KEYS } from "./TorrentTable";
 import type { Torrent } from "../api/types";
 
 export interface TorrentContextMenuProps {
@@ -48,6 +50,7 @@ function TorrentContextMenu({
   onMoveQueue,
   onSearchIndexers,
 }: TorrentContextMenuProps) {
+  const { t } = useTranslation();
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
   const navigate = useNavigate();
 
@@ -120,7 +123,7 @@ function TorrentContextMenu({
                 onClose();
               }}
             >
-              Pause
+              {t("torrents.pause", undefined, "Pause")}
             </button>
           ) : (
             <button
@@ -130,7 +133,7 @@ function TorrentContextMenu({
                 onClose();
               }}
             >
-              Resume
+              {t("torrents.resume", undefined, "Resume")}
             </button>
           )}
           <button
@@ -140,7 +143,7 @@ function TorrentContextMenu({
               onClose();
             }}
           >
-            {ct.forceStart ? "✓ " : ""}Force Start
+            {ct.forceStart ? "✓ " : ""}{t("torrents.forceStart", undefined, "Force Start")}
           </button>
           <button
             className="context-menu-item"
@@ -149,7 +152,7 @@ function TorrentContextMenu({
               onClose();
             }}
           >
-            Update Tracker
+            {t("torrents.updateTracker", undefined, "Update Tracker")}
           </button>
           <button
             className="context-menu-item"
@@ -158,7 +161,7 @@ function TorrentContextMenu({
               onClose();
             }}
           >
-            Force Recheck
+            {t("torrents.forceRecheck", undefined, "Force Recheck")}
           </button>
           {ct.progress < 1.0 && (
             <button
@@ -168,7 +171,7 @@ function TorrentContextMenu({
                 onClose();
               }}
             >
-              Force Complete
+              {t("torrents.forceComplete", undefined, "Force Complete")}
             </button>
           )}
 
@@ -184,7 +187,7 @@ function TorrentContextMenu({
               onClose();
             }}
           >
-            🔍 Search on Indexers
+            🔍 {t("torrents.searchIndexers", undefined, "Search on Indexers")}
           </button>
 
           <button
@@ -194,7 +197,7 @@ function TorrentContextMenu({
               onClose();
             }}
           >
-            🗺️ Track in Peer Map
+            🗺️ {t("torrents.trackInPeerMap", undefined, "Track in Peer Map")}
           </button>
 
           <div className="context-menu-separator" />
@@ -205,32 +208,32 @@ function TorrentContextMenu({
             onMouseEnter={() => setOpenSubmenu("copy")}
             onMouseLeave={() => setOpenSubmenu(null)}
           >
-            Copy ▶
+            {t("common.copy", undefined, "Copy")} ▶
             {openSubmenu === "copy" && (
               <div className="context-menu context-menu-submenu">
                 <button
                   className="context-menu-item"
                   onClick={() => handleCopy(ct.name)}
                 >
-                  Name
+                  {t("common.name", undefined, "Name")}
                 </button>
                 <button
                   className="context-menu-item"
                   onClick={() => handleCopy(ct.infoHash)}
                 >
-                  Info Hash
+                  {t("torrents.table.infoHash", undefined, "Info Hash")}
                 </button>
                 <button
                   className="context-menu-item"
                   onClick={() => handleCopy(buildMagnetLink(ct))}
                 >
-                  Magnet Link
+                  {t("modals.addTorrent.byMagnet", undefined, "Magnet Link")}
                 </button>
                 <button
                   className="context-menu-item"
                   onClick={() => handleCopy(ct.trackerUrl ?? "")}
                 >
-                  Tracker URL
+                  {t("torrents.table.tracker", undefined, "Tracker URL")}
                 </button>
               </div>
             )}
@@ -242,7 +245,7 @@ function TorrentContextMenu({
             onMouseEnter={() => setOpenSubmenu("priority")}
             onMouseLeave={() => setOpenSubmenu(null)}
           >
-            Priority ▶
+            {t("torrents.priority", undefined, "Priority")} ▶
             {openSubmenu === "priority" && (
               <div className="context-menu context-menu-submenu">
                 <button
@@ -338,7 +341,7 @@ function TorrentContextMenu({
             onMouseEnter={() => setOpenSubmenu("queue")}
             onMouseLeave={() => setOpenSubmenu(null)}
           >
-            Queue ▶
+            {t("torrents.queue", undefined, "Queue")} ▶
             {openSubmenu === "queue" && (
               <div className="context-menu context-menu-submenu">
                 <button
@@ -348,7 +351,7 @@ function TorrentContextMenu({
                     onClose();
                   }}
                 >
-                  Top
+                  {t("common.top", undefined, "Top")}
                 </button>
                 <button
                   className="context-menu-item"
@@ -357,7 +360,7 @@ function TorrentContextMenu({
                     onClose();
                   }}
                 >
-                  Up
+                  {t("common.up", undefined, "Up")}
                 </button>
                 <button
                   className="context-menu-item"
@@ -366,7 +369,7 @@ function TorrentContextMenu({
                     onClose();
                   }}
                 >
-                  Down
+                  {t("common.down", undefined, "Down")}
                 </button>
                 <button
                   className="context-menu-item"
@@ -375,7 +378,7 @@ function TorrentContextMenu({
                     onClose();
                   }}
                 >
-                  Bottom
+                  {t("common.bottom", undefined, "Bottom")}
                 </button>
               </div>
             )}
@@ -392,7 +395,7 @@ function TorrentContextMenu({
               onClose();
             }}
           >
-            Rename...
+            {t("torrents.rename", undefined, "Rename...")}
           </button>
           <button
             className="context-menu-item"
@@ -402,7 +405,7 @@ function TorrentContextMenu({
               onClose();
             }}
           >
-            Set Label...{ct.label ? ` (${ct.label})` : ""}
+            {t("torrents.setLabel", undefined, "Set Label...")}{ct.label ? ` (${ct.label})` : ""}
           </button>
 
           <div className="context-menu-separator" />
@@ -414,7 +417,7 @@ function TorrentContextMenu({
               onClose();
             }}
           >
-            {ct.superSeeding ? "Disable" : "Enable"} Super Seeding
+            {ct.superSeeding ? "Disable" : "Enable"} {t("torrents.superSeeding", undefined, "Super Seeding")}
           </button>
           <button
             className="context-menu-item"
@@ -423,7 +426,7 @@ function TorrentContextMenu({
               onClose();
             }}
           >
-            {ct.sequentialDownload ? "Disable" : "Enable"} Sequential Download
+            {ct.sequentialDownload ? "Disable" : "Enable"} {t("torrents.sequentialDownload", undefined, "Sequential Download")}
           </button>
 
           <div className="context-menu-separator" />
@@ -434,7 +437,7 @@ function TorrentContextMenu({
             onMouseEnter={() => setOpenSubmenu("remove")}
             onMouseLeave={() => setOpenSubmenu(null)}
           >
-            Remove ▶
+            {t("common.remove", undefined, "Remove")} ▶
             {openSubmenu === "remove" && (
               <div className="context-menu context-menu-submenu">
                 <button
@@ -445,7 +448,7 @@ function TorrentContextMenu({
                     onClose();
                   }}
                 >
-                  Remove Torrent
+                  {t("torrents.removeTorrent", undefined, "Remove Torrent")}
                 </button>
                 <button
                   className="context-menu-item context-menu-item-danger"
@@ -455,7 +458,7 @@ function TorrentContextMenu({
                     onClose();
                   }}
                 >
-                  Remove Torrent and Data
+                  {t("torrents.removeTorrentAndData", undefined, "Remove Torrent and Data")}
                 </button>
               </div>
             )}
@@ -471,7 +474,7 @@ function TorrentContextMenu({
         onMouseEnter={() => setOpenSubmenu("columns")}
         onMouseLeave={() => setOpenSubmenu(null)}
       >
-        Columns ▶
+        {t("torrents.columns", undefined, "Columns")} ▶
         {openSubmenu === "columns" && (
           <div className="context-menu context-menu-submenu context-menu-columns">
             {allColumns.map((col) => (
@@ -481,7 +484,7 @@ function TorrentContextMenu({
                   checked={visibleColumns.has(col.key)}
                   onChange={() => onToggleColumn(col.key)}
                 />
-                {col.label}
+                {t(COLUMN_I18N_KEYS[col.key as keyof typeof COLUMN_I18N_KEYS] || `torrents.table.${col.key}`, undefined, col.label)}
               </label>
             ))}
           </div>

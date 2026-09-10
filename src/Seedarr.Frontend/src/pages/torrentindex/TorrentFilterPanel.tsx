@@ -7,6 +7,7 @@ import {
   ChevronsLeftIcon,
 } from "../../components/icons/UIIcons";
 import TrackerFavicon from "../../components/TrackerFavicon";
+import { useTranslation } from "../../i18n";
 
 const STATE_FILTERS = ["All", "Seeding", "Stopped", "Queued", "Error"] as const;
 
@@ -41,10 +42,12 @@ export function TorrentFilterPanel({
   isCollapsed = false,
   onToggleCollapse,
 }: TorrentFilterPanelProps) {
+  const { t } = useTranslation();
+
   return (
     <div className={`filter-panel ${isCollapsed ? "collapsed" : ""}`}>
       <div className="filter-panel-header">
-        <div className="filter-panel-section">State</div>
+        <div className="filter-panel-section">{t("torrents.filterState", undefined, "State")}</div>
         {onToggleCollapse && (
           <button
             type="button"
@@ -65,7 +68,7 @@ export function TorrentFilterPanel({
               onClick={() => onSelectState(state)}
             >
               <span className="filter-panel-label">
-                {STATE_FILTER_ICONS[state]} {state}
+                {STATE_FILTER_ICONS[state]} {state === "All" ? t("common.all", undefined, "All") : t(`torrents.${state.toLowerCase()}`, undefined, state)}
               </span>
               <span className="filter-panel-count">
                 {stateCounts[state] ?? 0}
@@ -74,7 +77,7 @@ export function TorrentFilterPanel({
           </li>
         ))}
       </ul>
-      <div className="filter-panel-section">Tracker</div>
+      <div className="filter-panel-section">{t("torrents.filterTracker", undefined, "Tracker")}</div>
       <ul className="filter-panel-list">
         <li>
           <button
@@ -82,7 +85,7 @@ export function TorrentFilterPanel({
             onClick={() => onSelectTracker("All")}
           >
             <span className="filter-panel-label">
-              <AllIcon size={13} /> All
+              <AllIcon size={13} /> {t("common.all", undefined, "All")}
             </span>
             <span className="filter-panel-count">{count}</span>
           </button>

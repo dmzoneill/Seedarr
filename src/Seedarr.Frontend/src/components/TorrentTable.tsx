@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "../i18n";
 import {
   useTorrents,
   useStartSeeding,
@@ -72,6 +73,47 @@ interface ColumnDef {
   label: string;
   sortable: boolean;
 }
+
+export const COLUMN_I18N_KEYS: Record<ColumnKey, string> = {
+  "#": "torrents.table.index",
+  name: "torrents.table.name",
+  status: "torrents.table.status",
+  progress: "torrents.table.progress",
+  totalSize: "torrents.table.size",
+  uploaded: "torrents.table.uploaded",
+  downloaded: "torrents.table.downloaded",
+  sessionUploaded: "torrents.table.sessionUploaded",
+  sessionDownloaded: "torrents.table.sessionDownloaded",
+  uploadSpeed: "torrents.table.uploadSpeed",
+  downloadSpeed: "torrents.table.downloadSpeed",
+  ratio: "torrents.table.ratio",
+  seeders: "torrents.table.seeders",
+  leechers: "torrents.table.leechers",
+  trackerUrl: "torrents.table.tracker",
+  announceInterval: "torrents.table.announceInterval",
+  nextUpdate: "torrents.table.nextUpdate",
+  priority: "torrents.table.priority",
+  label: "torrents.table.label",
+  active: "torrents.table.active",
+  uploadLimit: "torrents.table.uploadLimit",
+  downloadLimit: "torrents.table.downloadLimit",
+  superSeeding: "torrents.table.superSeeding",
+  sequentialDownload: "torrents.table.sequentialDownload",
+  forceStart: "torrents.table.forceStart",
+  availability: "torrents.table.availability",
+  eta: "torrents.table.eta",
+  threshold: "torrents.table.threshold",
+  smallTorrentLimit: "torrents.table.smallTorrentLimit",
+  dateAdded: "torrents.table.added",
+  lastActive: "torrents.table.lastActive",
+  creationDate: "torrents.table.creationDate",
+  createdBy: "torrents.table.createdBy",
+  comment: "torrents.table.comment",
+  pieceCount: "torrents.table.pieceCount",
+  pieceLength: "torrents.table.pieceLength",
+  isPrivate: "torrents.table.isPrivate",
+  infoHash: "torrents.table.infoHash",
+};
 
 const ALL_COLUMNS: ColumnDef[] = [
   { key: "#", label: "#", sortable: true },
@@ -176,6 +218,7 @@ function TorrentTable({
   onToggleSelect,
   onSelectAll,
 }: TorrentTableProps) {
+  const { t } = useTranslation();
   const { data: torrents, isLoading, isError } = useTorrents();
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
@@ -225,7 +268,7 @@ function TorrentTable({
               <th className="torrent-table-th" style={{ width: 36 }} />
               {columns.map((c) => (
                 <th key={c.key} className="torrent-table-th">
-                  {c.label}
+                  {t(COLUMN_I18N_KEYS[c.key] || `torrents.table.${c.key}`, undefined, c.label)}
                 </th>
               ))}
             </tr>
@@ -318,23 +361,23 @@ function TorrentTable({
   const priorityLabel = (p: number) =>
     p === 2 ? "High" : p === 1 ? "Normal" : "Low";
 
-  function renderCell(t: Torrent, key: ColumnKey, index: number) {
+  function renderCell(torrent: Torrent, key: ColumnKey, index: number) {
     switch (key) {
       case "#":
         return index + 1;
       case "name": {
         const historyMatch = history?.find(
           (h) =>
-            (t.infoHash &&
-              h.infoHash?.toLowerCase() === t.infoHash.toLowerCase()) ||
-            h.title?.toLowerCase() === t.name?.toLowerCase(),
+            (torrent.infoHash &&
+              h.infoHash?.toLowerCase() === torrent.infoHash.toLowerCase()) ||
+            h.title?.toLowerCase() === torrent.name?.toLowerCase(),
         );
         const meta = historyMatch?.metadata;
         const arrLink = historyMatch
           ? getMediaDeepLink(historyMatch, arrConnections)
           : null;
 
-        const badges = getTorrentBadges(t);
+        const badges = getTorrentBadges(torrent);
 
         return (
           <div
@@ -366,7 +409,7 @@ function TorrentTable({
                 whiteSpace: "nowrap",
               }}
             >
-              {meta?.title || t.name} {meta?.year ? `(${meta.year})` : ""}
+              {meta?.title || torrent.name} {meta?.year ? `(${meta.year})` : ""}
             </span>
             {badges.map((b, i) => (
               <span
@@ -406,34 +449,34 @@ function TorrentTable({
       }
       case "status":
         return (
-          <span className={`badge badge-${t.status.toLowerCase()}`}>
-            {t.status}
+          <span className={`badge badge-${torrent.status.toLowerCase()}`}>
+            {t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status)}
           </span>
         );
       case "totalSize":
-        return formatBytes(t.totalSize);
+        return formatBytes(torrent.totalSize);
       case "uploaded":
-        return formatBytes(t.uploaded);
+        return formatBytes(torrent.uploaded);
       case "downloaded":
-        return formatBytes(t.downloaded);
+        return formatBytes(torrent.downloaded);
       case "sessionUploaded":
-        return formatBytes(t.sessionUploaded);
+        return formatBytes(torrent.sessionUploaded);
       case "sessionDownloaded":
-        return formatBytes(t.sessionDownloaded);
+        return formatBytes(torrent.sessionDownloaded);
       case "uploadSpeed":
-        return formatSpeed(t.uploadSpeed);
+        return formatSpeed(torrent.uploadSpeed);
       case "downloadSpeed":
-        return formatSpeed(t.downloadSpeed);
+        return formatSpeed(torrent.downloadSpeed);
       case "ratio":
         return (
           <span
-            className={`badge ${t.ratio >= 2.0 ? "badge-success" : t.ratio >= 1.0 ? "badge-primary" : "badge-secondary"}`}
+            className={`badge ${torrent.ratio >= 2.0 ? "badge-success" : torrent.ratio >= 1.0 ? "badge-primary" : "badge-secondary"}`}
           >
-            {formatRatio(t.ratio)}
+            {formatRatio(torrent.ratio)}
           </span>
         );
       case "progress": {
-        const pct = Math.min(t.progress * 100, 100);
+        const pct = Math.min(torrent.progress * 100, 100);
         return (
           <div className="torrent-progress">
             <div
@@ -441,17 +484,17 @@ function TorrentTable({
               style={{ width: `${pct}%` }}
             />
             <span className="torrent-progress-text">
-              {pct.toFixed(1)}% ({formatRatio(t.ratio)})
+              {pct.toFixed(1)}% ({formatRatio(torrent.ratio)})
             </span>
           </div>
         );
       }
       case "seeders":
-        return t.seeders;
+        return torrent.seeders;
       case "leechers":
-        return t.leechers;
+        return torrent.leechers;
       case "trackerUrl": {
-        const domain = extractTrackerDomain(t.trackerUrl);
+        const domain = extractTrackerDomain(torrent.trackerUrl);
         return (
           <div
             style={{
@@ -460,61 +503,61 @@ function TorrentTable({
               gap: "0.35rem",
             }}
           >
-            <TrackerFavicon urlOrHost={t.trackerUrl || domain} size={14} />
+            <TrackerFavicon urlOrHost={torrent.trackerUrl || domain} size={14} />
             <span>{domain}</span>
           </div>
         );
       }
       case "announceInterval":
-        return formatSeconds(t.announceInterval);
+        return formatSeconds(torrent.announceInterval);
       case "nextUpdate":
-        return formatSeconds(t.nextUpdate);
+        return formatSeconds(torrent.nextUpdate);
       case "dateAdded":
-        return formatDate(t.dateAdded);
+        return formatDate(torrent.dateAdded);
       case "lastActive":
-        return formatDate(t.lastActive);
+        return formatDate(torrent.lastActive);
       case "creationDate":
-        return formatDate(t.creationDate);
+        return formatDate(torrent.creationDate);
       case "pieceCount":
-        return t.pieceCount.toLocaleString();
+        return torrent.pieceCount.toLocaleString();
       case "pieceLength":
-        return formatBytes(t.pieceLength);
+        return formatBytes(torrent.pieceLength);
       case "comment":
-        return t.comment ?? "-";
+        return torrent.comment ?? "-";
       case "createdBy":
-        return t.createdBy ?? "-";
+        return torrent.createdBy ?? "-";
       case "isPrivate":
-        return t.isPrivate ? "Yes" : "No";
+        return torrent.isPrivate ? "Yes" : "No";
       case "infoHash":
         return (
           <span className="mono" style={{ fontSize: "0.75rem" }}>
-            {t.infoHash}
+            {torrent.infoHash}
           </span>
         );
       case "priority":
-        return priorityLabel(t.priority);
+        return priorityLabel(torrent.priority);
       case "uploadLimit":
-        return t.uploadLimit > 0 ? `${t.uploadLimit} KB/s` : "Global";
+        return torrent.uploadLimit > 0 ? `${torrent.uploadLimit} KB/s` : "Global";
       case "downloadLimit":
-        return t.downloadLimit > 0 ? `${t.downloadLimit} KB/s` : "Global";
+        return torrent.downloadLimit > 0 ? `${torrent.downloadLimit} KB/s` : "Global";
       case "superSeeding":
-        return t.superSeeding ? "Yes" : "No";
+        return torrent.superSeeding ? "Yes" : "No";
       case "sequentialDownload":
-        return t.sequentialDownload ? "Yes" : "No";
+        return torrent.sequentialDownload ? "Yes" : "No";
       case "forceStart":
-        return t.forceStart ? "Yes" : "No";
+        return torrent.forceStart ? "Yes" : "No";
       case "label":
-        return t.label ?? "-";
+        return torrent.label ?? "-";
       case "active":
-        return t.active ? "Yes" : "No";
+        return torrent.active ? "Yes" : "No";
       case "availability":
-        return t.availability.toFixed(2);
+        return torrent.availability.toFixed(2);
       case "eta":
-        return formatSeconds(t.eta);
+        return formatSeconds(torrent.eta);
       case "threshold":
-        return `${t.threshold}%`;
+        return `${torrent.threshold}%`;
       case "smallTorrentLimit":
-        return formatBytes(t.smallTorrentLimit);
+        return formatBytes(torrent.smallTorrentLimit);
       default:
         return null;
     }
@@ -541,7 +584,7 @@ function TorrentTable({
                 onClick={() => col.sortable && handleSort(col.key)}
                 className={`torrent-table-th${col.key === "#" ? " torrent-table-index" : ""}`}
               >
-                {col.label}
+                {t(COLUMN_I18N_KEYS[col.key] || `torrents.table.${col.key}`, undefined, col.label)}
                 {sortKey === col.key && (sortAsc ? " ▲" : " ▼")}
               </th>
             ))}
@@ -581,7 +624,7 @@ function TorrentTable({
           {sorted.length === 0 && (
             <tr>
               <td colSpan={columns.length + 1} className="torrent-table-empty">
-                No torrents found
+                {t("torrents.noTorrents", undefined, "No torrents found")}
               </td>
             </tr>
           )}

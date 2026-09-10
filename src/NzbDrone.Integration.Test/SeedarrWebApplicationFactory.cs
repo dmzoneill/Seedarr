@@ -24,6 +24,8 @@ public sealed class SeedarrWebApplicationFactory : IDisposable
 
     public HttpClient Client { get; }
 
+    public IServiceProvider Services => _app.Services;
+
     public SeedarrWebApplicationFactory()
     {
         _tempDir = Path.Combine(
