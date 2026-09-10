@@ -840,12 +840,18 @@ body {
   background-color: var(--sidebar-bg);
   border-top: 1px solid var(--border-light);
   padding: 0.6rem 1.5rem;
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 .status-bar-content {
   display: flex;
-  gap: 2rem;
+  align-items: center;
+  width: 100%;
+  gap: 1.5rem;
   font-size: 0.85rem;
   font-weight: 500;
 }
@@ -853,8 +859,9 @@ body {
 .status-bar-item {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  color: var(--text-color);
+  gap: 0.35rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .status-bar-upload {
@@ -862,7 +869,7 @@ body {
 }
 
 .status-bar-download {
-  color: var(--danger);
+  color: var(--success);
 }
 
 /* ============================================
