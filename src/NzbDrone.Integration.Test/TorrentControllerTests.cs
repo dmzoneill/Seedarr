@@ -4,6 +4,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Text.Json;
 using System.Threading.Tasks;
 using NUnit.Framework;
@@ -214,12 +215,17 @@ public class TorrentControllerTests : IntegrationTestBase
     [Test]
     public async Task Announce_with_builtin_tracker_server_successfully_announces_and_updates_status()
     {
-        // 1. Enable built-in tracker server
+        // 1. Enable built-in tracker server on an available dynamic port
         var configResponse = await GetAsync("/api/v1/config/trackerserver");
         Assert.That(configResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var configJson = await configResponse.Content.ReadAsStringAsync();
-        using var configDoc = Deserialize<JsonDocument>(configJson);
-        var trackerPort = configDoc.RootElement.TryGetProperty("trackerHttpPort", out var portProp) ? portProp.GetInt32() : 9696;
+
+        int trackerPort;
+        using (var tempListener = new TcpListener(IPAddress.Loopback, 0))
+        {
+            tempListener.Start();
+            trackerPort = ((IPEndPoint)tempListener.LocalEndpoint).Port;
+            tempListener.Stop();
+        }
 
         var trackerConfigUpdate = new Dictionary<string, object>
         {

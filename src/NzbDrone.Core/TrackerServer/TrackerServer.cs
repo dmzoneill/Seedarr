@@ -40,12 +40,21 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
         lock (_listenerLock)
         {
-            if (isEnabled && !_wasEnabled)
+            if (isEnabled)
             {
-                _logger.Info("Tracker server enabled via config change, starting listener");
-                StartListener();
+                var currentPort = (_listener?.LocalEndpoint as IPEndPoint)?.Port;
+                if (_listener != null && currentPort != _configService.TrackerHttpPort)
+                {
+                    StopListener();
+                }
+
+                if (_listener == null)
+                {
+                    _logger.Info("Tracker server starting listener");
+                    StartListener();
+                }
             }
-            else if (!isEnabled && _wasEnabled)
+            else if (_wasEnabled)
             {
                 _logger.Info("Tracker server disabled via config change, stopping listener");
                 StopListener();
