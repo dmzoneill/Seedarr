@@ -11,6 +11,7 @@ import {
 } from "../api/hooks";
 import { useTheme } from "../context/ThemeContext";
 import { useToast } from "../context/ToastContext";
+import { apiClient } from "../api/client";
 import { formatBytes } from "../utils/formatters";
 
 interface CommandItem {
@@ -342,10 +343,21 @@ export function CommandPalette({
       title: "Copy API Key to Clipboard",
       subtitle: "Copy Seedarr API key for Arr or API integration",
       icon: "🔑",
-      onSelect: () => {
-        if (generalConfig?.apiKey) {
-          navigator.clipboard.writeText(generalConfig.apiKey);
-          showToast("API Key copied to clipboard!", "info");
+      onSelect: async () => {
+        try {
+          let key = generalConfig?.apiKey;
+          if (!key || key.includes("*")) {
+            const res = await apiClient.getApiKey();
+            key = res.apiKey;
+          }
+          if (key && !key.includes("*")) {
+            await navigator.clipboard.writeText(key);
+            showToast("API Key copied to clipboard!", "info");
+          } else {
+            showToast("No API Key available", "error");
+          }
+        } catch {
+          showToast("Failed to copy API Key", "error");
         }
         onClose();
       },

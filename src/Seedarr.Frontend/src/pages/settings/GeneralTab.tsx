@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import { useGeneralConfig, useSaveGeneralConfig } from "../../api/hooks";
+import { apiClient } from "../../api/client";
+import { useToast } from "../../context/ToastContext";
 import type { GeneralConfig } from "../../api/types";
 import {
   SaveBar,
@@ -13,6 +16,8 @@ import {
 export function GeneralTab() {
   const { data: config, isLoading } = useGeneralConfig();
   const save = useSaveGeneralConfig();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
   const [form, setForm] = useState<GeneralConfig>({
     id: 1,
     autoStart: false,
@@ -30,11 +35,17 @@ export function GeneralTab() {
     apiKey: "",
   });
   const [dirty, setDirty] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [revealedApiKey, setRevealedApiKey] = useState<string | null>(null);
+  const [loadingApiKey, setLoadingApiKey] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (config) {
       setForm(config);
       setDirty(false);
+      setRevealedApiKey(null);
+      setShowApiKey(false);
     }
   }, [config]);
 
@@ -44,6 +55,63 @@ export function GeneralTab() {
   ) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
+  };
+
+  const handleToggleShowApiKey = async () => {
+    if (showApiKey) {
+      setShowApiKey(false);
+      return;
+    }
+    if (revealedApiKey || !form.apiKey.includes("*")) {
+      setShowApiKey(true);
+      return;
+    }
+    try {
+      setLoadingApiKey(true);
+      const res = await apiClient.getApiKey();
+      if (res?.apiKey) {
+        setRevealedApiKey(res.apiKey);
+        setShowApiKey(true);
+      }
+    } catch (_err) {
+      showToast("Failed to retrieve unmasked API key", "error");
+    } finally {
+      setLoadingApiKey(false);
+    }
+  };
+
+  const handleCopyApiKey = async () => {
+    try {
+      let keyToCopy = form.apiKey;
+      if (revealedApiKey && form.apiKey.includes("*")) {
+        keyToCopy = revealedApiKey;
+      } else if (!keyToCopy || keyToCopy.includes("*")) {
+        const res = await apiClient.getApiKey();
+        keyToCopy = res.apiKey;
+        setRevealedApiKey(res.apiKey);
+      }
+      if (!keyToCopy) {
+        showToast("No API key available", "error");
+        return;
+      }
+      await navigator.clipboard.writeText(keyToCopy);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      showToast("API key copied to clipboard", "success");
+    } catch (_err) {
+      showToast("Failed to copy API key", "error");
+    }
+  };
+
+  const generateApiKey = () => {
+    const bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    const key = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(
+      "",
+    );
+    setRevealedApiKey(key);
+    setShowApiKey(true);
+    set("apiKey", key);
   };
 
   if (isLoading) return <div className="loading">Loading configuration...</div>;
@@ -127,11 +195,69 @@ export function GeneralTab() {
           hint="Require user login credentials for Web UI and API access"
         />
         <TextInput
-          label="API Key"
-          value={form.apiKey}
-          onChange={(v) => set("apiKey", v)}
-          hint="Secret token for Arr apps (Radarr/Sonarr) and 3rd party scripts"
+          label="API Key (X-Api-Key)"
+          type={showApiKey ? "text" : "password"}
+          value={
+            showApiKey
+              ? (revealedApiKey || (form.apiKey.includes("*") ? "" : form.apiKey))
+              : (revealedApiKey || form.apiKey)
+          }
+          onChange={(v) => {
+            setRevealedApiKey(null);
+            set("apiKey", v);
+          }}
+          hint="Secret token for Arr apps (Radarr/Sonarr) and REST API access"
+          rightElement={
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={handleToggleShowApiKey}
+              style={{
+                whiteSpace: "nowrap",
+                height: "36px",
+                padding: "0 0.75rem",
+              }}
+              disabled={loadingApiKey}
+              title={showApiKey ? "Hide API Key" : "Show unmasked API Key"}
+            >
+              {loadingApiKey ? "..." : showApiKey ? "🙈 Hide" : "👁️ Show"}
+            </button>
+          }
         />
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            marginTop: "-0.5rem",
+            marginBottom: "1rem",
+            flexWrap: "wrap",
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={handleCopyApiKey}
+            style={{ whiteSpace: "nowrap" }}
+          >
+            📋 {copied ? "Copied!" : "Copy"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={generateApiKey}
+            style={{ whiteSpace: "nowrap" }}
+          >
+            🔄 Regenerate
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => navigate("/system/api")}
+            style={{ whiteSpace: "nowrap" }}
+          >
+            📖 API Docs (OpenAPI)
+          </button>
+        </div>
       </SectionCard>
 
       <SectionCard

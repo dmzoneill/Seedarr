@@ -99,6 +99,10 @@ class ApiClient {
     return this.request<T>(endpoint, { method: "DELETE" });
   }
 
+  getApiKey(): Promise<{ apiKey: string }> {
+    return this.get<{ apiKey: string }>("/config/general/api-key");
+  }
+
   async postForm<T>(endpoint: string, formData: FormData): Promise<T> {
     const headers: Record<string, string> = {};
     if (this.apiKey) {

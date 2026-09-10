@@ -51,6 +51,13 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
 
         return base.SaveConfig(resource);
     }
+
+    [HttpGet("api-key")]
+    [Produces("application/json")]
+    public ActionResult<ApiKeyResource> GetApiKey()
+    {
+        return Ok(new ApiKeyResource { ApiKey = _configFileProvider.ApiKey ?? string.Empty });
+    }
 }
 
 [V1ApiController("config/seeding")]

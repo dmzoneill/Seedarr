@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useGeneralConfig } from "../api/hooks";
+import { apiClient } from "../api/client";
 import { useToast } from "../context/ToastContext";
 
 function ApiDocsPage() {
@@ -7,14 +8,23 @@ function ApiDocsPage() {
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
 
-  const handleCopyKey = () => {
-    if (generalConfig?.apiKey) {
-      navigator.clipboard.writeText(generalConfig.apiKey);
-      setCopied(true);
-      showToast("API Key copied to clipboard!", "success");
-      setTimeout(() => setCopied(false), 2000);
-    } else {
-      showToast("No API Key available", "error");
+  const handleCopyKey = async () => {
+    try {
+      let key = generalConfig?.apiKey;
+      if (!key || key.includes("*")) {
+        const res = await apiClient.getApiKey();
+        key = res.apiKey;
+      }
+      if (key && !key.includes("*")) {
+        await navigator.clipboard.writeText(key);
+        setCopied(true);
+        showToast("API Key copied to clipboard!", "success");
+        setTimeout(() => setCopied(false), 2000);
+      } else {
+        showToast("No API Key available", "error");
+      }
+    } catch {
+      showToast("Failed to copy API Key", "error");
     }
   };
 
