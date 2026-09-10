@@ -1,3 +1,9 @@
+import type {
+  IdentityProviderDefinition,
+  SslTestRequest,
+  SslCertificateValidationResult,
+} from "./types";
+
 const BASE_URL = "/api/v1";
 
 class ApiClient {
@@ -103,6 +109,53 @@ class ApiClient {
     return this.get<{ apiKey: string }>("/config/general/api-key");
   }
 
+  getIdProviders(): Promise<IdentityProviderDefinition[]> {
+    return this.get<IdentityProviderDefinition[]>("/config/auth/providers");
+  }
+
+  getIdProvider(id: number): Promise<IdentityProviderDefinition> {
+    return this.get<IdentityProviderDefinition>(`/config/auth/providers/${id}`);
+  }
+
+  createIdProvider(
+    provider: Partial<IdentityProviderDefinition>,
+  ): Promise<IdentityProviderDefinition> {
+    return this.post<IdentityProviderDefinition>(
+      "/config/auth/providers",
+      provider,
+    );
+  }
+
+  updateIdProvider(
+    id: number,
+    provider: Partial<IdentityProviderDefinition>,
+  ): Promise<IdentityProviderDefinition> {
+    return this.put<IdentityProviderDefinition>(
+      `/config/auth/providers/${id}`,
+      provider,
+    );
+  }
+
+  deleteIdProvider(id: number): Promise<void> {
+    return this.delete<void>(`/config/auth/providers/${id}`);
+  }
+
+  testIdProvider(
+    provider: Partial<IdentityProviderDefinition>,
+  ): Promise<{ success: boolean; message: string }> {
+    return this.post<{ success: boolean; message: string }>(
+      "/config/auth/providers/test",
+      provider,
+    );
+  }
+
+  testSsl(request: SslTestRequest): Promise<SslCertificateValidationResult> {
+    return this.post<SslCertificateValidationResult>(
+      "/config/general/test-ssl",
+      request,
+    );
+  }
+
   async postForm<T>(endpoint: string, formData: FormData): Promise<T> {
     const headers: Record<string, string> = {};
     if (this.apiKey) {
@@ -122,3 +175,4 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient();
+export const api = apiClient;

@@ -93,6 +93,7 @@ const systemSubItems = [
 const settingsSubItems = [
   { path: "/settings/general", label: "General" },
   { path: "/settings/webui", label: "Web UI" },
+  { path: "/settings/security", label: "Security" },
   { path: "/settings/notifications", label: "Notifications" },
   { path: "/settings/seeding", label: "Seeding" },
   { path: "/settings/bittorrent", label: "BitTorrent" },

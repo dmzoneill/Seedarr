@@ -1,3 +1,5 @@
+// Copyright (c) PlaceholderCompany. All rights reserved.
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -17,6 +19,11 @@ public class ConfigFileProvider : IConfigFileProvider
 
     public ConfigFileProvider(IAppFolderInfo appFolderInfo)
     {
+        if (appFolderInfo == null)
+        {
+            throw new ArgumentNullException(nameof(appFolderInfo));
+        }
+
         _configFile = Path.Combine(appFolderInfo.AppDataFolder, ConfigFileName);
         _config = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -29,16 +36,39 @@ public class ConfigFileProvider : IConfigFileProvider
     }
 
     public string BindAddress => GetValue("BindAddress", "*");
+
     public int Port => GetValueInt("Port", 9898);
+
     public bool EnableSsl => GetValueBool("EnableSsl", false);
+
+    public int SslPort => GetValueInt("SslPort", 9899);
+
+    public string SslCertPath => GetValue("SslCertPath", string.Empty);
+
+    public string SslKeyPath => GetValue("SslKeyPath", string.Empty);
+
+    public string SslCertPassword => GetValue("SslCertPassword", string.Empty);
+
+    public bool RedirectHttpToHttps => GetValueBool("RedirectHttpToHttps", false);
+
     public string ApiKey => GetValue("ApiKey", string.Empty);
+
     public bool AuthenticationEnabled => GetValueBool("AuthenticationEnabled", false);
+
+    public bool TerminalAccessEnabled => GetValueBool("TerminalAccessEnabled", true);
+
     public string LogLevel => GetValue("LogLevel", "info");
+
     public string UrlBase => GetValue("UrlBase", string.Empty);
+
     public string PostgresHost => GetValue("PostgresHost", string.Empty);
+
     public int PostgresPort => GetValueInt("PostgresPort", 5432);
+
     public string PostgresMainDb => GetValue("PostgresMainDb", string.Empty);
+
     public string PostgresUser => GetValue("PostgresUser", string.Empty);
+
     public string PostgresPassword => GetValue("PostgresPassword", string.Empty);
 
     private void LoadFromFile()
@@ -90,10 +120,37 @@ public class ConfigFileProvider : IConfigFileProvider
 
     private string GetValue(string key, string defaultValue)
     {
+        var snakeKey = ToSnakeCaseUpper(key);
+        var upperKey = key.ToUpperInvariant();
+
+        var envVal = Environment.GetEnvironmentVariable("SEEDARR__" + snakeKey)
+            ?? Environment.GetEnvironmentVariable("SEEDARR_" + snakeKey)
+            ?? Environment.GetEnvironmentVariable("SEEDARR__" + upperKey)
+            ?? Environment.GetEnvironmentVariable("SEEDARR_" + upperKey)
+            ?? Environment.GetEnvironmentVariable("SEEDARR__" + key)
+            ?? Environment.GetEnvironmentVariable("SEEDARR_" + key);
+
+        if (!string.IsNullOrWhiteSpace(envVal))
+        {
+            return envVal;
+        }
+
         lock (Mutex)
         {
             return _config.TryGetValue(key, out var value) ? value : defaultValue;
         }
+    }
+
+    private static string ToSnakeCaseUpper(string input)
+    {
+        if (string.IsNullOrEmpty(input))
+        {
+            return input;
+        }
+
+        var result = System.Text.RegularExpressions.Regex.Replace(input, @"([a-z0-9])([A-Z])", "$1_$2");
+        result = System.Text.RegularExpressions.Regex.Replace(result, @"([A-Z]+)([A-Z][a-z])", "$1_$2");
+        return result.ToUpperInvariant();
     }
 
     private int GetValueInt(string key, int defaultValue)

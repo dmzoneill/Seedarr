@@ -275,6 +275,62 @@ export interface GeneralConfig {
   urlBase: string;
   authenticationEnabled: boolean;
   apiKey: string;
+  csrfProtectionEnabled?: boolean;
+  hostHeaderValidationEnabled?: boolean;
+  allowedHosts?: string;
+  terminalAccessEnabled?: boolean;
+  enableSsl?: boolean;
+  sslPort?: number;
+  sslCertPath?: string;
+  sslKeyPath?: string;
+  sslCertPassword?: string;
+  redirectHttpToHttps?: boolean;
+}
+
+export interface SslTestRequest {
+  enableSsl: boolean;
+  sslPort: number;
+  sslCertPath?: string;
+  sslKeyPath?: string;
+  sslCertPassword?: string;
+  bindAddress?: string;
+}
+
+export interface SslCertificateValidationResult {
+  isValid: boolean;
+  subject: string;
+  issuer: string;
+  validFrom: string;
+  validTo: string;
+  thumbprint: string;
+  hasPrivateKey: boolean;
+  subjectAlternativeNames: string[];
+  handshakeSucceeded: boolean;
+  message: string;
+}
+
+export enum IdentityProviderType {
+  Oidc = 0,
+  Saml = 1,
+  Social = 2,
+  ForwardAuth = 3,
+}
+
+export interface IdentityProviderDefinition {
+  id: number;
+  providerId: string;
+  name: string;
+  providerType: IdentityProviderType;
+  isEnabled: boolean;
+  clientId?: string | null;
+  clientSecret?: string | null;
+  issuerUrl?: string | null;
+  metadataUrl?: string | null;
+  scopes?: string | null;
+  certificate?: string | null;
+  roleMappingRules?: string | null;
+  iconUrl?: string | null;
+  buttonText?: string | null;
 }
 
 export interface ApiKeyResource {

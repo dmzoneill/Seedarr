@@ -23,6 +23,9 @@ public interface IConfigService
     bool AutoPruneRemovedArtwork { get; }
     string ThemeStyle { get; }
     string ColorScheme { get; }
+    bool CsrfProtectionEnabled { get; }
+    bool HostHeaderValidationEnabled { get; }
+    string AllowedHosts { get; }
 
     // Watch Folder
     bool WatchFolderEnabled { get; }
@@ -314,6 +317,9 @@ public class ConfigService : IConfigService
     public bool AutoPruneRemovedArtwork => GetValueBoolean("AutoPruneRemovedArtwork", true);
     public string ThemeStyle => GetValue("ThemeStyle", "system");
     public string ColorScheme => GetValue("ColorScheme", "auto");
+    public bool CsrfProtectionEnabled => GetValueBoolean("CsrfProtectionEnabled", true);
+    public bool HostHeaderValidationEnabled => GetValueBoolean("HostHeaderValidationEnabled", false);
+    public string AllowedHosts => GetValue("AllowedHosts", "");
 
     // Watch Folder
     public bool WatchFolderEnabled => GetValueBoolean("WatchFolderEnabled", false);

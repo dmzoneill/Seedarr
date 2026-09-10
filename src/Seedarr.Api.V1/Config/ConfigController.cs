@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Security;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.Config;
@@ -10,14 +12,30 @@ namespace Seedarr.Api.V1.Config;
 public class GeneralConfigController : ConfigController<GeneralConfigResource>
 {
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly ICertificateManager _certificateManager;
 
-    public GeneralConfigController(IConfigService configService, IConfigFileProvider configFileProvider)
+    public GeneralConfigController(
+        IConfigService configService,
+        IConfigFileProvider configFileProvider,
+        ICertificateManager certificateManager)
         : base(configService)
     {
         _configFileProvider = configFileProvider;
+        _certificateManager = certificateManager;
 
         SharedValidator.RuleFor(c => c.WatchFolderScanIntervalSeconds)
             .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.Port)
+            .InclusiveBetween(1, 65535);
+
+        SharedValidator.RuleFor(c => c.SslPort)
+            .InclusiveBetween(1, 65535);
+
+        SharedValidator.RuleFor(c => c.SslPort)
+            .NotEqual(c => c.Port)
+            .When(c => c.EnableSsl)
+            .WithMessage("SSL Port cannot be the same as HTTP Port.");
     }
 
     protected override GeneralConfigResource ToResource(IConfigService model)
@@ -29,13 +47,18 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
     {
         if (resource == null)
         {
-            return BadRequest();
+            return BadRequest("Request body cannot be empty.");
         }
 
         // If the masked API key was sent back or empty, preserve the existing value
-        if (string.IsNullOrWhiteSpace(resource.ApiKey) || resource.ApiKey.Contains('*'))
+        if (resource.ApiKey != null && resource.ApiKey.Contains('*'))
         {
             resource.ApiKey = _configFileProvider.ApiKey;
+        }
+
+        if (resource.SslCertPassword != null && resource.SslCertPassword.Contains('*'))
+        {
+            resource.SslCertPassword = _configFileProvider.SslCertPassword;
         }
 
         var xmlValues = new Dictionary<string, object>
@@ -44,7 +67,14 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             { "Port", resource.Port },
             { "ApiKey", resource.ApiKey },
             { "AuthenticationEnabled", resource.AuthenticationEnabled },
-            { "UrlBase", resource.UrlBase }
+            { "TerminalAccessEnabled", resource.TerminalAccessEnabled },
+            { "UrlBase", resource.UrlBase },
+            { "EnableSsl", resource.EnableSsl },
+            { "SslPort", resource.SslPort },
+            { "SslCertPath", resource.SslCertPath ?? string.Empty },
+            { "SslKeyPath", resource.SslKeyPath ?? string.Empty },
+            { "SslCertPassword", resource.SslCertPassword ?? string.Empty },
+            { "RedirectHttpToHttps", resource.RedirectHttpToHttps }
         };
 
         _configFileProvider.SaveConfigDictionary(xmlValues);
@@ -57,6 +87,33 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
     public ActionResult<ApiKeyResource> GetApiKey()
     {
         return Ok(new ApiKeyResource { ApiKey = _configFileProvider.ApiKey ?? string.Empty });
+    }
+
+    [HttpPost("test-ssl")]
+    [Produces("application/json")]
+    [ProducesResponseType(typeof(SslCertificateValidationResult), 200)]
+    public async Task<ActionResult<SslCertificateValidationResult>> TestSsl([FromBody] SslTestRequest request)
+    {
+        if (request == null)
+        {
+            return BadRequest();
+        }
+
+        var password = request.SslCertPassword;
+        if (password != null && password.Contains('*'))
+        {
+            password = _configFileProvider.SslCertPassword;
+        }
+
+        var result = await _certificateManager.ValidateCertificateAsync(
+            request.SslCertPath,
+            request.SslKeyPath,
+            password,
+            request.BindAddress,
+            request.SslPort,
+            testTlsHandshake: true);
+
+        return Ok(result);
     }
 }
 
