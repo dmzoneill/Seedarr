@@ -706,8 +706,31 @@ function App() {
                 className="topbar-btn"
                 onClick={() => setShowActionsMenu(!showActionsMenu)}
                 title={t("topbar.actions", undefined, "Actions")}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "2px",
+                }}
               >
-                <UserIcon />
+                <div
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "24px",
+                    height: "24px",
+                    borderRadius: "50%",
+                    backgroundColor: "var(--bg-hover-elevated, #4a4438)",
+                    color: "var(--accent, #c8a84e)",
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    border: "1px solid var(--border, #3a352e)",
+                    overflow: "hidden",
+                  }}
+                >
+                  A
+                </div>
               </button>
               {showActionsMenu && (
                 <div
