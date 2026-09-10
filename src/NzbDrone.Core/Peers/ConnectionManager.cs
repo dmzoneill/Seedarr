@@ -5,6 +5,7 @@ using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers.Extensions;
+using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
@@ -33,6 +34,8 @@ public class ConnectionManager : IConnectionManager
     private readonly object _lock = new();
     private readonly Logger _logger;
 
+    private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
+
     public int ActiveCount
     {
         get
@@ -50,7 +53,8 @@ public class ConnectionManager : IConnectionManager
         ITorrentService torrentService,
         IFastExtensionHandler fastExtensionHandler,
         ITorrentEventLogService eventLogService,
-        IRandomNumberGenerator random = null)
+        IRandomNumberGenerator random = null,
+        IClientBehaviorSimulator clientBehaviorSimulator = null)
     {
         _configService = configService;
         _connectionLogService = connectionLogService;
@@ -58,6 +62,7 @@ public class ConnectionManager : IConnectionManager
         _fastExtensionHandler = fastExtensionHandler;
         _eventLogService = eventLogService;
         _random = random ?? new RandomNumberGenerator();
+        _clientBehaviorSimulator = clientBehaviorSimulator;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -133,7 +138,9 @@ public class ConnectionManager : IConnectionManager
         double dropoutProbability;
         lock (_lock)
         {
-            dropoutProbability = _configService.PeerDropoutProbability;
+            dropoutProbability = _clientBehaviorSimulator != null
+                ? _clientBehaviorSimulator.GetEffectiveDropoutProbability(_configService.PeerDropoutProbability)
+                : _configService.PeerDropoutProbability;
 
             if (dropoutProbability <= 0 || _connections.Count == 0)
             {
@@ -168,7 +175,9 @@ public class ConnectionManager : IConnectionManager
         double rotationPct;
         lock (_lock)
         {
-            rotationPct = _configService.ConnectionRotationPercentage;
+            rotationPct = _clientBehaviorSimulator != null
+                ? _clientBehaviorSimulator.GetEffectiveRotationPercentage(_configService.ConnectionRotationPercentage)
+                : _configService.ConnectionRotationPercentage;
             var rotateCount = (int)Math.Ceiling(_connections.Count * rotationPct);
 
             if (rotateCount <= 0 || _connections.Count == 0)
