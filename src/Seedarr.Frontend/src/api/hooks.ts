@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
 import type {
   Torrent,
+  Category,
   TorrentFileInfo,
   SeedingStats,
   SpeedSnapshot,
@@ -516,6 +517,54 @@ export function useAdvancedConfig() {
 
 export function useSaveAdvancedConfig() {
   return useConfigMutation<AdvancedConfig>("advanced");
+}
+
+export function useCategories() {
+  return useQuery<Category[]>({
+    queryKey: ["categories"],
+    queryFn: () => apiClient.getCategories(),
+  });
+}
+
+export function useCategory(id: number) {
+  return useQuery<Category>({
+    queryKey: ["categories", id],
+    queryFn: () => apiClient.getCategory(id),
+    enabled: id > 0,
+  });
+}
+
+export function useCreateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation<Category, Error, Partial<Category>>({
+    mutationFn: (category) => apiClient.createCategory(category),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
+export function useUpdateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation<Category, Error, { id: number; data: Partial<Category> }>({
+    mutationFn: ({ id, data }) => apiClient.updateCategory(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
+export function useDeleteCategory() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, number>({
+    mutationFn: (id: number) => apiClient.deleteCategory(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
 }
 
 export function useArrConnections() {

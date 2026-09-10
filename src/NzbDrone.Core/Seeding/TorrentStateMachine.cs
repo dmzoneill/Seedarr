@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NLog;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Seeding;
@@ -7,11 +8,13 @@ namespace NzbDrone.Core.Seeding;
 public class TorrentStateMachine : ITorrentStateMachine
 {
     private readonly ITorrentEventLogService _eventLogService;
+    private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
 
-    public TorrentStateMachine(ITorrentEventLogService eventLogService)
+    public TorrentStateMachine(ITorrentEventLogService eventLogService, IEventAggregator eventAggregator = null)
     {
         _eventLogService = eventLogService;
+        _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -24,6 +27,7 @@ public class TorrentStateMachine : ITorrentStateMachine
                 torrent.Status = TorrentStatus.Seeding;
                 _logger.Info("Torrent {0} is force-completed, switching to seeding", torrent.Name);
                 _eventLogService.Info(torrent.Id, "Seeding", "Force-completed (100%), switched to seeding");
+                _eventAggregator?.PublishEvent(new TorrentDownloadCompletedEvent(torrent));
                 return true;
             }
         }
@@ -39,6 +43,7 @@ public class TorrentStateMachine : ITorrentStateMachine
             _logger.Info("Torrent {0} reached download threshold ({1}%), switching to seeding", torrent.Name, (int)(effectiveThreshold * 100));
             _eventLogService.Info(torrent.Id, "Seeding", $"Download reached threshold ({(int)(effectiveThreshold * 100)}%), switching to seeding");
             torrent.Status = TorrentStatus.Seeding;
+            _eventAggregator?.PublishEvent(new TorrentDownloadCompletedEvent(torrent));
             return true;
         }
 
@@ -64,6 +69,7 @@ public class TorrentStateMachine : ITorrentStateMachine
                 torrent.DownloadSpeed = 0;
                 torrent.Active = false;
                 seedingTorrents.RemoveAt(i);
+                _eventAggregator?.PublishEvent(new TorrentSeedGoalReachedEvent(torrent));
             }
         }
     }

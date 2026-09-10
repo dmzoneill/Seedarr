@@ -23,3 +23,23 @@ public class TorrentDeletedEvent : IEvent
         Torrent = torrent;
     }
 }
+
+public class TorrentDownloadCompletedEvent : IEvent
+{
+    public Torrent Torrent { get; }
+
+    public TorrentDownloadCompletedEvent(Torrent torrent)
+    {
+        Torrent = torrent;
+    }
+}
+
+public class TorrentSeedGoalReachedEvent : IEvent
+{
+    public Torrent Torrent { get; }
+
+    public TorrentSeedGoalReachedEvent(Torrent torrent)
+    {
+        Torrent = torrent;
+    }
+}

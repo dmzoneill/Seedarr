@@ -95,6 +95,8 @@ const settingsSubItems = [
   { path: "/settings/webui", label: "Web UI" },
   { path: "/settings/security", label: "Security" },
   { path: "/settings/notifications", label: "Notifications" },
+  { path: "/settings/categories", label: "Categories" },
+  { path: "/settings/custom-scripts", label: "Custom Scripts" },
   { path: "/settings/seeding", label: "Seeding" },
   { path: "/settings/bittorrent", label: "BitTorrent" },
   { path: "/settings/network", label: "Network" },
