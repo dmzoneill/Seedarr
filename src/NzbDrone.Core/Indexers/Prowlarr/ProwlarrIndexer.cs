@@ -100,8 +100,8 @@ public class ProwlarrIndexer : IIndexer
                 return null;
             }
 
-            var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            using var document = System.Text.Json.JsonDocument.Parse(json);
+            using var stream = response.Content.ReadAsStream();
+            using var document = System.Text.Json.JsonDocument.Parse(stream);
 
             if (document.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
             {
@@ -116,7 +116,9 @@ public class ProwlarrIndexer : IIndexer
                             using var dlResponse = Client.Send(dlRequest);
                             if (dlResponse.IsSuccessStatusCode)
                             {
-                                return dlResponse.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+                                using var ms = new System.IO.MemoryStream();
+                                dlResponse.Content.ReadAsStream().CopyTo(ms);
+                                return ms.ToArray();
                             }
                         }
                     }
@@ -161,8 +163,8 @@ public class ProwlarrIndexer : IIndexer
                 return results;
             }
 
-            var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            using var document = System.Text.Json.JsonDocument.Parse(json);
+            using var searchStream = response.Content.ReadAsStream();
+            using var document = System.Text.Json.JsonDocument.Parse(searchStream);
 
             if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Array)
             {

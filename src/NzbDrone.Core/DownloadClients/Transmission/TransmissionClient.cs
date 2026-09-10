@@ -64,7 +64,7 @@ public class TransmissionClient : IDownloadClient, IDisposable
     private JsonDocument SendRequest(string method, object arguments)
     {
         var request = CreateRequest(method, arguments);
-        var response = Task.Run(() => _client.SendAsync(request)).GetAwaiter().GetResult();
+        var response = _client.Send(request);
 
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
@@ -75,12 +75,15 @@ public class TransmissionClient : IDownloadClient, IDisposable
 
             response.Dispose();
             request = CreateRequest(method, arguments);
-            response = Task.Run(() => _client.SendAsync(request)).GetAwaiter().GetResult();
+            response = _client.Send(request);
         }
 
-        response.EnsureSuccessStatusCode();
-        var body = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
-        return JsonDocument.Parse(body);
+        using (response)
+        {
+            response.EnsureSuccessStatusCode();
+            using var stream = response.Content.ReadAsStream();
+            return JsonDocument.Parse(stream);
+        }
     }
 
     public List<DownloadClientItem> GetItems()

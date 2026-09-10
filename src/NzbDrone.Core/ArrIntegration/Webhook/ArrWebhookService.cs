@@ -392,8 +392,8 @@ public class ArrWebhookService : IArrWebhookService
                     return null;
                 }
 
-                var json = response.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult();
-                using var doc = JsonDocument.Parse(json);
+                using var stream = response.Content.ReadAsStream(ct);
+                using var doc = JsonDocument.Parse(stream);
 
                 if (!doc.RootElement.TryGetProperty("records", out var records))
                 {
@@ -447,7 +447,9 @@ public class ArrWebhookService : IArrWebhookService
                     return null;
                 }
 
-                return response.Content.ReadAsByteArrayAsync(ct).GetAwaiter().GetResult();
+                using var ms = new MemoryStream();
+                response.Content.ReadAsStream(ct).CopyTo(ms);
+                return ms.ToArray();
             });
         }
         catch (Exception ex)

@@ -50,11 +50,12 @@ public class DelugeClient : IDownloadClient, IDisposable
 
         var json = JsonSerializer.Serialize(payload);
         using var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var response = Task.Run(() => _client.PostAsync(JsonUrl, content)).GetAwaiter().GetResult();
+        using var request = new HttpRequestMessage(HttpMethod.Post, JsonUrl) { Content = content };
+        using var response = _client.Send(request);
         response.EnsureSuccessStatusCode();
 
-        var body = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
-        return JsonDocument.Parse(body);
+        using var stream = response.Content.ReadAsStream();
+        return JsonDocument.Parse(stream);
     }
 
     private bool Authenticate()

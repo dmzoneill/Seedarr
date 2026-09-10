@@ -39,14 +39,16 @@ public class UpdateService : IUpdateService
 
     private static readonly HttpClient SharedClient = CreateHttpClient();
     private readonly HttpClient _client;
+    private readonly ISystemClock _clock;
     private readonly Logger _logger;
     private readonly object _cacheLock = new();
     private UpdateInfo _cachedResult;
     private DateTime _cacheExpiry = DateTime.MinValue;
 
-    public UpdateService(HttpClient httpClient = null)
+    public UpdateService(HttpClient httpClient = null, ISystemClock clock = null)
     {
         _client = httpClient ?? SharedClient;
+        _clock = clock ?? new SystemClock();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -54,7 +56,7 @@ public class UpdateService : IUpdateService
     {
         lock (_cacheLock)
         {
-            if (_cachedResult != null && DateTime.UtcNow < _cacheExpiry)
+            if (_cachedResult != null && _clock.UtcNow < _cacheExpiry)
             {
                 return _cachedResult;
             }
@@ -66,8 +68,8 @@ public class UpdateService : IUpdateService
         {
             _cachedResult = result;
             _cacheExpiry = result.Releases.Count > 0
-                ? DateTime.UtcNow.Add(CacheDuration)
-                : DateTime.UtcNow.AddHours(1);
+                ? _clock.UtcNow.Add(CacheDuration)
+                : _clock.UtcNow.AddHours(1);
         }
 
         return result;
@@ -102,8 +104,8 @@ public class UpdateService : IUpdateService
                 return BuildResult(currentVersion, null, new List<ReleaseInfo>());
             }
 
-            var json = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-            using var doc = JsonDocument.Parse(json);
+            using var stream = response.Content.ReadAsStream();
+            using var doc = JsonDocument.Parse(stream);
             var releases = doc.RootElement;
 
             if (releases.ValueKind != JsonValueKind.Array)

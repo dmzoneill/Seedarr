@@ -125,9 +125,13 @@ public class WatchFolderService : BackgroundService
         }
     }
 
-    private async void OnTorrentFileCreated(object sender, FileSystemEventArgs e)
+    private void OnTorrentFileCreated(object sender, FileSystemEventArgs e)
     {
-        var filePath = e.FullPath;
+        _ = HandleTorrentFileCreatedAsync(e.FullPath);
+    }
+
+    private async Task HandleTorrentFileCreatedAsync(string filePath)
+    {
         var newCts = new CancellationTokenSource();
 
         var oldCts = _fileDebounceTokens.AddOrUpdate(
@@ -140,10 +144,10 @@ public class WatchFolderService : BackgroundService
                 return newCts;
             });
 
-        if (oldCts != newCts)
+        if (oldCts != null && oldCts != newCts)
         {
-            oldCts?.Cancel();
-            oldCts?.Dispose();
+            await oldCts.CancelAsync();
+            oldCts.Dispose();
         }
 
         try

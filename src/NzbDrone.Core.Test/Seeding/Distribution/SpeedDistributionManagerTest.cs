@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Seeding.Distribution;
 
@@ -13,6 +15,7 @@ public class SpeedDistributionManagerTest
     private IConfigService _configService;
     private ISpeedDistributor _equalDistributor;
     private ISpeedDistributor _paretoDistributor;
+    private ISystemClock _clock;
     private SpeedDistributionManager _manager;
 
     [SetUp]
@@ -21,6 +24,8 @@ public class SpeedDistributionManagerTest
         _configService = Substitute.For<IConfigService>();
         _equalDistributor = Substitute.For<ISpeedDistributor>();
         _paretoDistributor = Substitute.For<ISpeedDistributor>();
+        _clock = Substitute.For<ISystemClock>();
+        _clock.UtcNow.Returns(new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc));
 
         _equalDistributor.Name.Returns("Equal");
         _paretoDistributor.Name.Returns("Pareto");
@@ -70,7 +75,8 @@ public class SpeedDistributionManagerTest
 
         _manager = new SpeedDistributionManager(
             new List<ISpeedDistributor> { _equalDistributor, _paretoDistributor },
-            _configService);
+            _configService,
+            _clock);
     }
 
     [Test]
@@ -334,9 +340,40 @@ public class SpeedDistributionManagerTest
         _equalDistributor.Received(1).Distribute(Arg.Any<long>(), 3);
     }
 
-    // The elapsed-interval branch of "interval" mode depends on DateTime.UtcNow, which is not
-    // injectable; asserting a redistribution after the boundary would require either a flaky
-    // real-time sleep or restructuring the manager around a clock abstraction. The cache-identity
-    // tests above cover the redistribution decision indirectly (cached array returned when the
-    // gate suppresses redistribution), so only the pre-boundary case is asserted here.
+    [Test]
+    public void DistributeUploadSpeeds_interval_mode_should_redistribute_after_interval()
+    {
+        var baseTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        _clock.UtcNow.Returns(baseTime);
+        _configService.UploadRedistributionMode.Returns("interval");
+        _configService.UploadCustomIntervalMinutes.Returns(5);
+
+        _manager.DistributeUploadSpeeds(3, 500_000L);
+        _equalDistributor.Received(1).Distribute(Arg.Any<long>(), 3);
+
+        // Advance clock past the interval without sleeps
+        _clock.UtcNow.Returns(baseTime.AddMinutes(6));
+
+        _manager.DistributeUploadSpeeds(3, 500_000L);
+        _equalDistributor.Received(2).Distribute(Arg.Any<long>(), 3);
+    }
+
+    [Test]
+    public void DistributeDownloadSpeeds_interval_mode_should_redistribute_after_interval()
+    {
+        var baseTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        _clock.UtcNow.Returns(baseTime);
+        _configService.DownloadDistributionAlgorithm.Returns("Equal");
+        _configService.DownloadRedistributionMode.Returns("interval");
+        _configService.DownloadCustomIntervalMinutes.Returns(5);
+
+        _manager.DistributeDownloadSpeeds(3, 500_000L);
+        _equalDistributor.Received(1).Distribute(Arg.Any<long>(), 3);
+
+        // Advance clock past the interval without sleeps
+        _clock.UtcNow.Returns(baseTime.AddMinutes(6));
+
+        _manager.DistributeDownloadSpeeds(3, 500_000L);
+        _equalDistributor.Received(2).Distribute(Arg.Any<long>(), 3);
+    }
 }

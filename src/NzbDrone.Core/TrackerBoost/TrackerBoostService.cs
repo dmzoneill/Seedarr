@@ -13,6 +13,7 @@ using System.Threading.Tasks;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NLog;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Indexers;
@@ -92,6 +93,8 @@ public class TrackerBoostService : ITrackerBoostService
     private readonly IConfigService _configService;
     private readonly ITorrentFileParser _torrentFileParser;
     private readonly ITorrentEventLogService _eventLogService;
+    private readonly IRandomNumberGenerator _random;
+    private readonly ISystemClock _clock;
     private readonly Logger _logger;
 
     public TrackerBoostService(
@@ -102,7 +105,9 @@ public class TrackerBoostService : ITrackerBoostService
         IDownloadClientFactory downloadClientFactory,
         IConfigService configService,
         ITorrentFileParser torrentFileParser = null,
-        ITorrentEventLogService eventLogService = null)
+        ITorrentEventLogService eventLogService = null,
+        IRandomNumberGenerator random = null,
+        ISystemClock clock = null)
     {
         _trackerRepository = trackerRepository;
         _torrentService = torrentService;
@@ -112,6 +117,8 @@ public class TrackerBoostService : ITrackerBoostService
         _configService = configService;
         _torrentFileParser = torrentFileParser;
         _eventLogService = eventLogService;
+        _random = random ?? new RandomNumberGenerator();
+        _clock = clock ?? new SystemClock();
         _logger = LogManager.GetCurrentClassLogger();
 
         EnsureDefaultTrackersBootstrapped();
@@ -768,7 +775,7 @@ public class TrackerBoostService : ITrackerBoostService
             client.Client.ReceiveTimeout = 2000;
             client.Client.SendTimeout = 2000;
 
-            var transactionId = Random.Shared.Next();
+            var transactionId = _random.Next();
             var packet = new byte[16];
             BinaryPrimitivesWriteInt64BigEndian(packet, 0, 0x41727101980L);
             BinaryPrimitivesWriteInt32BigEndian(packet, 8, 0);
@@ -858,7 +865,7 @@ public class TrackerBoostService : ITrackerBoostService
 
             var endpoint = new IPEndPoint(addresses[0], port);
 
-            var connectTxId = Random.Shared.Next();
+            var connectTxId = _random.Next();
             var connectPacket = new byte[16];
             BinaryPrimitivesWriteInt64BigEndian(connectPacket, 0, 0x41727101980L);
             BinaryPrimitivesWriteInt32BigEndian(connectPacket, 8, 0);
@@ -887,7 +894,7 @@ public class TrackerBoostService : ITrackerBoostService
 
             var connectionId = ReadInt64BigEndian(connectResult.Buffer, 8);
 
-            var scrapeTxId = Random.Shared.Next();
+            var scrapeTxId = _random.Next();
             var hashBytes = Convert.FromHexString(hexHash);
             var scrapePacket = new byte[36];
             BinaryPrimitivesWriteInt64BigEndian(scrapePacket, 0, connectionId);
