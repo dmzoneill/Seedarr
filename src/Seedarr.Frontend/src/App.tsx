@@ -574,6 +574,20 @@ function App() {
                   : "Collapse sidebar (Alt+M)"
               }
               aria-label="Toggle navigation sidebar"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "28px",
+                height: "28px",
+                border: "1px solid var(--border-light, #3a352e)",
+                borderRadius: "4px",
+                background: "transparent",
+                color: "var(--text-secondary)",
+                cursor: "pointer",
+                fontSize: "0.95rem",
+                padding: 0,
+              }}
             >
               <MenuIcon size={16} />
             </button>
@@ -584,7 +598,7 @@ function App() {
               title={t(
                 "topbar.searchPlaceholder",
                 undefined,
-                "Quick Jump / Search... (Ctrl+k)",
+                "Quick Jump / Search... (Ctrl+K)",
               )}
             >
               <SearchIcon size={14} />
@@ -593,7 +607,7 @@ function App() {
                 placeholder={t(
                   "topbar.searchPlaceholder",
                   undefined,
-                  "Quick Jump / Search... (Ctrl+k)",
+                  "Quick Jump / Search... (Ctrl+K)",
                 )}
                 className="topbar-search-input"
                 value={searchTerm}
@@ -612,7 +626,7 @@ function App() {
                   fontFamily: "monospace",
                 }}
               >
-                ⌘K
+                Ctrl+K
               </kbd>
             </div>
           </div>

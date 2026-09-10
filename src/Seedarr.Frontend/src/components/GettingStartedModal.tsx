@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useTranslation } from "../i18n";
 import {
   useCreateDownloadClient,
   useTestDirectDownloadClient,
@@ -42,36 +43,97 @@ interface StepMeta {
   title: string;
 }
 
-const STEPS: StepMeta[] = [
-  {
-    id: "welcome",
-    stepNum: 0,
-    shortName: "Welcome",
-    title: "Welcome to Seedarr",
-  },
-  {
-    id: "client",
-    stepNum: 1,
-    shortName: "Download Client",
-    title: "Add Download Client",
-  },
-  { id: "prowlarr", stepNum: 2, shortName: "Prowlarr", title: "Add Indexer" },
-  { id: "sonarr", stepNum: 3, shortName: "Sonarr", title: "Add Connection" },
-  { id: "radarr", stepNum: 4, shortName: "Radarr", title: "Add Connection" },
-  { id: "lidarr", stepNum: 5, shortName: "Lidarr", title: "Add Connection" },
-  { id: "finish", stepNum: 6, shortName: "Finished", title: "Setup Complete" },
-];
-
 export function GettingStartedModal({
   isOpen,
   onClose,
 }: GettingStartedModalProps) {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [mode, setMode] = useState<GuideMode>("readonly");
   const [dontShowAgain, setDontShowAgain] = useState<boolean>(() => {
     return localStorage.getItem(STORAGE_KEY_HIDE_GUIDE) === "true";
   });
+
+  const steps: StepMeta[] = useMemo(
+    () => [
+      {
+        id: "welcome",
+        stepNum: 0,
+        shortName: t("gettingStarted.stepWelcome", undefined, "Welcome"),
+        title: t(
+          "gettingStarted.stepWelcomeTitle",
+          undefined,
+          "Welcome to Seedarr",
+        ),
+      },
+      {
+        id: "client",
+        stepNum: 1,
+        shortName: t(
+          "gettingStarted.stepClient",
+          undefined,
+          "Download Client",
+        ),
+        title: t(
+          "gettingStarted.stepClientTitle",
+          undefined,
+          "Add Download Client",
+        ),
+      },
+      {
+        id: "prowlarr",
+        stepNum: 2,
+        shortName: t("gettingStarted.stepProwlarr", undefined, "Prowlarr"),
+        title: t(
+          "gettingStarted.stepProwlarrTitle",
+          undefined,
+          "Add Indexer",
+        ),
+      },
+      {
+        id: "sonarr",
+        stepNum: 3,
+        shortName: t("gettingStarted.stepSonarr", undefined, "Sonarr"),
+        title: t(
+          "gettingStarted.stepSonarrTitle",
+          undefined,
+          "Add Connection",
+        ),
+      },
+      {
+        id: "radarr",
+        stepNum: 4,
+        shortName: t("gettingStarted.stepRadarr", undefined, "Radarr"),
+        title: t(
+          "gettingStarted.stepRadarrTitle",
+          undefined,
+          "Add Connection",
+        ),
+      },
+      {
+        id: "lidarr",
+        stepNum: 5,
+        shortName: t("gettingStarted.stepLidarr", undefined, "Lidarr"),
+        title: t(
+          "gettingStarted.stepLidarrTitle",
+          undefined,
+          "Add Connection",
+        ),
+      },
+      {
+        id: "finish",
+        stepNum: 6,
+        shortName: t("gettingStarted.stepFinished", undefined, "Finished"),
+        title: t(
+          "gettingStarted.stepFinishedTitle",
+          undefined,
+          "Setup Complete",
+        ),
+      },
+    ],
+    [t],
+  );
 
   // Download Client Form State
   const [clientForm, setClientForm] = useState<
@@ -195,7 +257,7 @@ export function GettingStartedModal({
   };
 
   const handleNext = () => {
-    if (currentStep < STEPS.length - 1) {
+    if (currentStep < steps.length - 1) {
       setCurrentStep((p) => p + 1);
     } else {
       handleClose();
@@ -232,7 +294,9 @@ export function GettingStartedModal({
       {
         ...clientForm,
         name:
-          clientForm.name?.trim() || clientForm.clientType || "Download Client",
+          clientForm.name?.trim() ||
+          clientForm.clientType ||
+          t("gettingStarted.stepClient", undefined, "Download Client"),
         implementation: `${clientForm.clientType || "QBitTorrent"}DownloadClient`,
         configContract: "DownloadClientDefinition",
       },
@@ -326,7 +390,13 @@ export function GettingStartedModal({
             gap: "0.5rem",
           }}
         >
-          <span>Testing connection to {targetName}...</span>
+          <span>
+            {t(
+              "gettingStarted.testingTo",
+              { target: targetName },
+              `Testing connection to ${targetName}...`,
+            )}
+          </span>
         </div>
       );
     }
@@ -363,7 +433,17 @@ export function GettingStartedModal({
           </span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 600 }}>
-              {result.success ? "Connection Successful" : "Connection Failed"}
+              {result.success
+                ? t(
+                    "gettingStarted.connectionSuccess",
+                    undefined,
+                    "Connection Successful",
+                  )
+                : t(
+                    "gettingStarted.connectionFailed",
+                    undefined,
+                    "Connection Failed",
+                  )}
             </div>
             {result.message && (
               <div
@@ -442,9 +522,13 @@ export function GettingStartedModal({
                 fontWeight: mode === "readonly" ? 600 : 400,
                 cursor: "pointer",
               }}
-              title="Tour mode with example preview"
+              title={t(
+                "gettingStarted.guideMode",
+                undefined,
+                "Tour mode with example preview",
+              )}
             >
-              👁️ Tour / Example
+              👁️ {t("gettingStarted.guideMode", undefined, "Tour / Example")}
             </button>
             <button
               type="button"
@@ -462,9 +546,13 @@ export function GettingStartedModal({
                 fontWeight: mode === "interactive" ? 600 : 400,
                 cursor: "pointer",
               }}
-              title="Live setup to test and save credentials"
+              title={t(
+                "gettingStarted.liveSetupMode",
+                undefined,
+                "Live setup to test and save credentials",
+              )}
             >
-              ⚡ Live Setup
+              ⚡ {t("gettingStarted.liveSetupMode", undefined, "Live Setup")}
             </button>
           </div>
 
@@ -481,7 +569,7 @@ export function GettingStartedModal({
                 lineHeight: 1,
               }}
               onClick={handleClose}
-              title="Close Setup Guide (Esc)"
+              title={t("gettingStarted.close", undefined, "Close Setup Guide (Esc)")}
             >
               ✕
             </button>
@@ -502,7 +590,7 @@ export function GettingStartedModal({
             overflowX: "auto",
           }}
         >
-          {STEPS.map((s, idx) => {
+          {steps.map((s, idx) => {
             const isActive = idx === currentStep;
             const isCompleted = idx < currentStep;
             return (
@@ -546,7 +634,7 @@ export function GettingStartedModal({
             fontWeight: 600,
           }}
         >
-          {STEPS[currentStep].title}
+          {steps[currentStep]?.title}
         </div>
 
         {/* ========================================================================= */}
@@ -568,11 +656,11 @@ export function GettingStartedModal({
                 margin: "0 0 1.5rem",
               }}
             >
-              Seedarr connects to your <strong>Download Agent</strong>{" "}
-              (qBittorrent, Transmission, Deluge),
-              <strong>Prowlarr Indexer</strong>, and{" "}
-              <strong>*Arr Media Managers</strong> (Sonarr, Radarr, Lidarr) for
-              automated cross-seeding and swarm optimization.
+              {t(
+                "gettingStarted.welcomeDescription",
+                undefined,
+                "Seedarr connects to your Download Agent (qBittorrent, Transmission, Deluge), Prowlarr Indexer, and *Arr Media Managers (Sonarr, Radarr, Lidarr) for automated cross-seeding and swarm optimization.",
+              )}
             </p>
 
             <div
@@ -591,16 +679,31 @@ export function GettingStartedModal({
               }}
             >
               <div>
-                <strong>1. Download Agent:</strong> Captures downloads &
-                monitors torrent swarms.
+                <strong>
+                  {t(
+                    "gettingStarted.welcomeAgent",
+                    undefined,
+                    "1. Download Agent: Captures downloads & monitors torrent swarms.",
+                  )}
+                </strong>
               </div>
               <div>
-                <strong>2. Prowlarr:</strong> Syncs indexers and trackers
-                automatically.
+                <strong>
+                  {t(
+                    "gettingStarted.welcomeProwlarr",
+                    undefined,
+                    "2. Prowlarr: Syncs indexers and trackers automatically.",
+                  )}
+                </strong>
               </div>
               <div>
-                <strong>3. Sonarr / Radarr / Lidarr:</strong> Connects TV,
-                movies, and music libraries.
+                <strong>
+                  {t(
+                    "gettingStarted.welcomeArr",
+                    undefined,
+                    "3. Sonarr / Radarr / Lidarr: Connects TV, movies, and music libraries.",
+                  )}
+                </strong>
               </div>
             </div>
 
@@ -624,7 +727,7 @@ export function GettingStartedModal({
                   color: "var(--text-muted, #aaa)",
                 }}
               >
-                🌐 Language:
+                🌐 {t("gettingStarted.language", undefined, "Language:")}
               </span>
               <LanguageSelector />
             </div>
@@ -645,7 +748,11 @@ export function GettingStartedModal({
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >
-                Start Example Tour →
+                {t(
+                  "gettingStarted.startExampleTour",
+                  undefined,
+                  "Start Example Tour →",
+                )}
               </button>
               <button
                 type="button"
@@ -656,19 +763,24 @@ export function GettingStartedModal({
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >
-                ⚡ Start Live Setup
+                ⚡{" "}
+                {t(
+                  "gettingStarted.startLiveSetup",
+                  undefined,
+                  "Start Live Setup",
+                )}
               </button>
             </div>
           </div>
         )}
 
         {/* ========================================================================= */}
-        {/* STEP 1: Download Client Form (Matches Screenshot 3) */}
+        {/* STEP 1: Download Client Form */}
         {/* ========================================================================= */}
         {currentStep === 1 && (
           <div>
             <TextInput
-              label="Name"
+              label={t("gettingStarted.name", undefined, "Name")}
               value={clientForm.name || ""}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -678,7 +790,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label="Client Type"
+              label={t("gettingStarted.clientType", undefined, "Client Type")}
               value={clientForm.clientType || "QBitTorrent"}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -696,7 +808,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="Host"
+              label={t("gettingStarted.host", undefined, "Host")}
               value={clientForm.host || ""}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -706,7 +818,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <NumberInput
-              label="Port"
+              label={t("gettingStarted.port", undefined, "Port")}
               value={clientForm.port || 8080}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -717,7 +829,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Use SSL"
+              label={t("gettingStarted.useSsl", undefined, "Use SSL")}
               checked={clientForm.useSsl ?? false}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -726,7 +838,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="Username"
+              label={t("gettingStarted.username", undefined, "Username")}
               value={clientForm.username || ""}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -735,7 +847,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="Password"
+              label={t("gettingStarted.password", undefined, "Password")}
               value={isReadOnly ? "••••••••••••" : clientForm.password || ""}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -745,17 +857,21 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="Category"
+              label={t("gettingStarted.category", undefined, "Category")}
               value={clientForm.category || ""}
               onChange={(v) => {
                 setClientTestResult(null);
                 setClientForm({ ...clientForm, category: v });
               }}
-              hint="Filter by category"
+              hint={t(
+                "gettingStarted.categoryHint",
+                undefined,
+                "Filter by category",
+              )}
               disabled={isReadOnly}
             />
             <Toggle
-              label="Enabled"
+              label={t("gettingStarted.enabled", undefined, "Enabled")}
               checked={clientForm.enable ?? true}
               onChange={(v) => {
                 setClientTestResult(null);
@@ -786,8 +902,12 @@ export function GettingStartedModal({
                 disabled={testClientMutation.isPending || isReadOnly}
               >
                 {testClientMutation.isPending
-                  ? "Testing..."
-                  : "Test Connection"}
+                  ? t("gettingStarted.testing", undefined, "Testing...")
+                  : t(
+                      "gettingStarted.testConnection",
+                      undefined,
+                      "Test Connection",
+                    )}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -795,7 +915,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  Previous
+                  {t("gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -805,10 +925,18 @@ export function GettingStartedModal({
                     disabled={createClientMutation.isPending}
                   >
                     {createClientMutation.isPending
-                      ? "Saving..."
+                      ? t("gettingStarted.saving", undefined, "Saving...")
                       : clientSaved
-                        ? "Saved ✓ Next"
-                        : "Save & Next"}
+                        ? t(
+                            "gettingStarted.savedNext",
+                            undefined,
+                            "Saved ✓ Next",
+                          )
+                        : t(
+                            "gettingStarted.saveAndNext",
+                            undefined,
+                            "Save & Next",
+                          )}
                   </button>
                 ) : (
                   <button
@@ -816,7 +944,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    Next
+                    {t("gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -825,12 +953,12 @@ export function GettingStartedModal({
         )}
 
         {/* ========================================================================= */}
-        {/* STEP 2: Prowlarr Indexer Form (Matches Screenshot 2) */}
+        {/* STEP 2: Prowlarr Indexer Form */}
         {/* ========================================================================= */}
         {currentStep === 2 && (
           <div>
             <TextInput
-              label="Name"
+              label={t("gettingStarted.name", undefined, "Name")}
               value={indexerForm.name || ""}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -840,7 +968,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label="Type"
+              label={t("gettingStarted.type", undefined, "Type")}
               value={indexerForm.indexerType || "Prowlarr"}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -857,7 +985,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="URL"
+              label={t("gettingStarted.url", undefined, "URL")}
               value={indexerForm.url || ""}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -867,7 +995,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="API Key"
+              label={t("gettingStarted.apiKey", undefined, "API Key")}
               value={
                 isReadOnly
                   ? "••••••••••••••••••••••••••••••••"
@@ -881,7 +1009,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="API Path"
+              label={t("gettingStarted.apiPath", undefined, "API Path")}
               value={indexerForm.apiPath || "/api"}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -891,7 +1019,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="Categories"
+              label={t("gettingStarted.categories", undefined, "Categories")}
               value={indexerForm.categories || ""}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -901,7 +1029,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Enable"
+              label={t("gettingStarted.enable", undefined, "Enable")}
               checked={indexerForm.enable ?? true}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -910,7 +1038,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="RSS"
+              label={t("gettingStarted.enableRss", undefined, "RSS")}
               checked={indexerForm.enableRss ?? true}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -919,7 +1047,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Search"
+              label={t("gettingStarted.enableSearch", undefined, "Search")}
               checked={indexerForm.enableSearch ?? true}
               onChange={(v) => {
                 setIndexerTestResult(null);
@@ -950,8 +1078,12 @@ export function GettingStartedModal({
                 disabled={testIndexerMutation.isPending || isReadOnly}
               >
                 {testIndexerMutation.isPending
-                  ? "Testing..."
-                  : "Test Connection"}
+                  ? t("gettingStarted.testing", undefined, "Testing...")
+                  : t(
+                      "gettingStarted.testConnection",
+                      undefined,
+                      "Test Connection",
+                    )}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -959,7 +1091,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  Previous
+                  {t("gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -969,10 +1101,18 @@ export function GettingStartedModal({
                     disabled={createIndexerMutation.isPending}
                   >
                     {createIndexerMutation.isPending
-                      ? "Saving..."
+                      ? t("gettingStarted.saving", undefined, "Saving...")
                       : indexerSaved
-                        ? "Saved ✓ Next"
-                        : "Save & Next"}
+                        ? t(
+                            "gettingStarted.savedNext",
+                            undefined,
+                            "Saved ✓ Next",
+                          )
+                        : t(
+                            "gettingStarted.saveAndNext",
+                            undefined,
+                            "Save & Next",
+                          )}
                   </button>
                 ) : (
                   <button
@@ -980,7 +1120,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    Next
+                    {t("gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -989,12 +1129,12 @@ export function GettingStartedModal({
         )}
 
         {/* ========================================================================= */}
-        {/* STEP 3: Sonarr Connection Form (Matches Screenshot 1) */}
+        {/* STEP 3: Sonarr Connection Form */}
         {/* ========================================================================= */}
         {currentStep === 3 && (
           <div>
             <TextInput
-              label="Name"
+              label={t("gettingStarted.name", undefined, "Name")}
               value={sonarrForm.name || ""}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1004,7 +1144,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label="Type"
+              label={t("gettingStarted.type", undefined, "Type")}
               value={sonarrForm.arrType || "Sonarr"}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1018,7 +1158,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="URL"
+              label={t("gettingStarted.url", undefined, "URL")}
               value={sonarrForm.url || ""}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1028,7 +1168,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="API Key"
+              label={t("gettingStarted.apiKey", undefined, "API Key")}
               value={
                 isReadOnly
                   ? "••••••••••••••••••••••••••••••••"
@@ -1042,7 +1182,11 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Enable Connection"
+              label={t(
+                "gettingStarted.enableConnection",
+                undefined,
+                "Enable Connection",
+              )}
               checked={sonarrForm.enable ?? true}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1051,7 +1195,11 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Sync Enabled"
+              label={t(
+                "gettingStarted.syncEnabled",
+                undefined,
+                "Sync Enabled",
+              )}
               checked={sonarrForm.syncEnabled ?? true}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1060,7 +1208,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Auto Add"
+              label={t("gettingStarted.autoAdd", undefined, "Auto Add")}
               checked={sonarrForm.enableAutomaticAdd ?? true}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1069,7 +1217,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Webhook"
+              label={t("gettingStarted.webhook", undefined, "Webhook")}
               checked={sonarrForm.webhookEnabled ?? true}
               onChange={(v) => {
                 setSonarrTestResult(null);
@@ -1079,14 +1227,22 @@ export function GettingStartedModal({
             />
             {sonarrForm.webhookEnabled !== false && (
               <TextInput
-                label="Webhook Host"
+                label={t(
+                  "gettingStarted.webhookHost",
+                  undefined,
+                  "Webhook Host",
+                )}
                 value={sonarrForm.webhookHost || ""}
                 onChange={(v) => {
                   setSonarrTestResult(null);
                   setSonarrForm({ ...sonarrForm, webhookHost: v });
                 }}
                 placeholder="seedarr"
-                hint="Hostname or IP for *arr to reach Seedarr (leave empty to use default)"
+                hint={t(
+                  "gettingStarted.webhookHostHint",
+                  undefined,
+                  "Hostname or IP for *arr to reach Seedarr (leave empty to use default)",
+                )}
                 disabled={isReadOnly}
               />
             )}
@@ -1112,7 +1268,13 @@ export function GettingStartedModal({
                 onClick={() => handleTestArr(sonarrForm, setSonarrTestResult)}
                 disabled={testArrMutation.isPending || isReadOnly}
               >
-                {testArrMutation.isPending ? "Testing..." : "Test Connection"}
+                {testArrMutation.isPending
+                  ? t("gettingStarted.testing", undefined, "Testing...")
+                  : t(
+                      "gettingStarted.testConnection",
+                      undefined,
+                      "Test Connection",
+                    )}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -1120,7 +1282,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  Previous
+                  {t("gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -1132,10 +1294,18 @@ export function GettingStartedModal({
                     disabled={createArrMutation.isPending}
                   >
                     {createArrMutation.isPending
-                      ? "Saving..."
+                      ? t("gettingStarted.saving", undefined, "Saving...")
                       : sonarrSaved
-                        ? "Saved ✓ Next"
-                        : "Save & Next"}
+                        ? t(
+                            "gettingStarted.savedNext",
+                            undefined,
+                            "Saved ✓ Next",
+                          )
+                        : t(
+                            "gettingStarted.saveAndNext",
+                            undefined,
+                            "Save & Next",
+                          )}
                   </button>
                 ) : (
                   <button
@@ -1143,7 +1313,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    Next
+                    {t("gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -1152,12 +1322,12 @@ export function GettingStartedModal({
         )}
 
         {/* ========================================================================= */}
-        {/* STEP 4: Radarr Connection Form (Matches Screenshot 1) */}
+        {/* STEP 4: Radarr Connection Form */}
         {/* ========================================================================= */}
         {currentStep === 4 && (
           <div>
             <TextInput
-              label="Name"
+              label={t("gettingStarted.name", undefined, "Name")}
               value={radarrForm.name || ""}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1167,7 +1337,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label="Type"
+              label={t("gettingStarted.type", undefined, "Type")}
               value={radarrForm.arrType || "Radarr"}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1181,7 +1351,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="URL"
+              label={t("gettingStarted.url", undefined, "URL")}
               value={radarrForm.url || ""}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1191,7 +1361,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="API Key"
+              label={t("gettingStarted.apiKey", undefined, "API Key")}
               value={
                 isReadOnly
                   ? "••••••••••••••••••••••••••••••••"
@@ -1205,7 +1375,11 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Enable Connection"
+              label={t(
+                "gettingStarted.enableConnection",
+                undefined,
+                "Enable Connection",
+              )}
               checked={radarrForm.enable ?? true}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1214,7 +1388,11 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Sync Enabled"
+              label={t(
+                "gettingStarted.syncEnabled",
+                undefined,
+                "Sync Enabled",
+              )}
               checked={radarrForm.syncEnabled ?? true}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1223,7 +1401,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Auto Add"
+              label={t("gettingStarted.autoAdd", undefined, "Auto Add")}
               checked={radarrForm.enableAutomaticAdd ?? true}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1232,7 +1410,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Webhook"
+              label={t("gettingStarted.webhook", undefined, "Webhook")}
               checked={radarrForm.webhookEnabled ?? true}
               onChange={(v) => {
                 setRadarrTestResult(null);
@@ -1242,14 +1420,22 @@ export function GettingStartedModal({
             />
             {radarrForm.webhookEnabled !== false && (
               <TextInput
-                label="Webhook Host"
+                label={t(
+                  "gettingStarted.webhookHost",
+                  undefined,
+                  "Webhook Host",
+                )}
                 value={radarrForm.webhookHost || ""}
                 onChange={(v) => {
                   setRadarrTestResult(null);
                   setRadarrForm({ ...radarrForm, webhookHost: v });
                 }}
                 placeholder="seedarr"
-                hint="Hostname or IP for *arr to reach Seedarr (leave empty to use default)"
+                hint={t(
+                  "gettingStarted.webhookHostHint",
+                  undefined,
+                  "Hostname or IP for *arr to reach Seedarr (leave empty to use default)",
+                )}
                 disabled={isReadOnly}
               />
             )}
@@ -1275,7 +1461,13 @@ export function GettingStartedModal({
                 onClick={() => handleTestArr(radarrForm, setRadarrTestResult)}
                 disabled={testArrMutation.isPending || isReadOnly}
               >
-                {testArrMutation.isPending ? "Testing..." : "Test Connection"}
+                {testArrMutation.isPending
+                  ? t("gettingStarted.testing", undefined, "Testing...")
+                  : t(
+                      "gettingStarted.testConnection",
+                      undefined,
+                      "Test Connection",
+                    )}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -1283,7 +1475,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  Previous
+                  {t("gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -1295,10 +1487,18 @@ export function GettingStartedModal({
                     disabled={createArrMutation.isPending}
                   >
                     {createArrMutation.isPending
-                      ? "Saving..."
+                      ? t("gettingStarted.saving", undefined, "Saving...")
                       : radarrSaved
-                        ? "Saved ✓ Next"
-                        : "Save & Next"}
+                        ? t(
+                            "gettingStarted.savedNext",
+                            undefined,
+                            "Saved ✓ Next",
+                          )
+                        : t(
+                            "gettingStarted.saveAndNext",
+                            undefined,
+                            "Save & Next",
+                          )}
                   </button>
                 ) : (
                   <button
@@ -1306,7 +1506,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    Next
+                    {t("gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -1315,12 +1515,12 @@ export function GettingStartedModal({
         )}
 
         {/* ========================================================================= */}
-        {/* STEP 5: Lidarr Connection Form (Matches Screenshot 1) */}
+        {/* STEP 5: Lidarr Connection Form */}
         {/* ========================================================================= */}
         {currentStep === 5 && (
           <div>
             <TextInput
-              label="Name"
+              label={t("gettingStarted.name", undefined, "Name")}
               value={lidarrForm.name || ""}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -1330,7 +1530,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <SelectInput
-              label="Type"
+              label={t("gettingStarted.type", undefined, "Type")}
               value={lidarrForm.arrType || "Lidarr"}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -1344,7 +1544,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="URL"
+              label={t("gettingStarted.url", undefined, "URL")}
               value={lidarrForm.url || ""}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -1354,7 +1554,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <TextInput
-              label="API Key"
+              label={t("gettingStarted.apiKey", undefined, "API Key")}
               value={
                 isReadOnly
                   ? "••••••••••••••••••••••••••••••••"
@@ -1368,7 +1568,11 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Enable Connection"
+              label={t(
+                "gettingStarted.enableConnection",
+                undefined,
+                "Enable Connection",
+              )}
               checked={lidarrForm.enable ?? true}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -1377,7 +1581,11 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Sync Enabled"
+              label={t(
+                "gettingStarted.syncEnabled",
+                undefined,
+                "Sync Enabled",
+              )}
               checked={lidarrForm.syncEnabled ?? true}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -1386,7 +1594,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Auto Add"
+              label={t("gettingStarted.autoAdd", undefined, "Auto Add")}
               checked={lidarrForm.enableAutomaticAdd ?? true}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -1395,7 +1603,7 @@ export function GettingStartedModal({
               disabled={isReadOnly}
             />
             <Toggle
-              label="Webhook"
+              label={t("gettingStarted.webhook", undefined, "Webhook")}
               checked={lidarrForm.webhookEnabled ?? true}
               onChange={(v) => {
                 setLidarrTestResult(null);
@@ -1405,14 +1613,22 @@ export function GettingStartedModal({
             />
             {lidarrForm.webhookEnabled !== false && (
               <TextInput
-                label="Webhook Host"
+                label={t(
+                  "gettingStarted.webhookHost",
+                  undefined,
+                  "Webhook Host",
+                )}
                 value={lidarrForm.webhookHost || ""}
                 onChange={(v) => {
                   setLidarrTestResult(null);
                   setLidarrForm({ ...lidarrForm, webhookHost: v });
                 }}
                 placeholder="seedarr"
-                hint="Hostname or IP for *arr to reach Seedarr (leave empty to use default)"
+                hint={t(
+                  "gettingStarted.webhookHostHint",
+                  undefined,
+                  "Hostname or IP for *arr to reach Seedarr (leave empty to use default)",
+                )}
                 disabled={isReadOnly}
               />
             )}
@@ -1438,7 +1654,13 @@ export function GettingStartedModal({
                 onClick={() => handleTestArr(lidarrForm, setLidarrTestResult)}
                 disabled={testArrMutation.isPending || isReadOnly}
               >
-                {testArrMutation.isPending ? "Testing..." : "Test Connection"}
+                {testArrMutation.isPending
+                  ? t("gettingStarted.testing", undefined, "Testing...")
+                  : t(
+                      "gettingStarted.testConnection",
+                      undefined,
+                      "Test Connection",
+                    )}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -1446,7 +1668,7 @@ export function GettingStartedModal({
                   className="btn btn-outline btn-small"
                   onClick={handlePrev}
                 >
-                  Previous
+                  {t("gettingStarted.previous", undefined, "Previous")}
                 </button>
                 {mode === "interactive" ? (
                   <button
@@ -1458,10 +1680,18 @@ export function GettingStartedModal({
                     disabled={createArrMutation.isPending}
                   >
                     {createArrMutation.isPending
-                      ? "Saving..."
+                      ? t("gettingStarted.saving", undefined, "Saving...")
                       : lidarrSaved
-                        ? "Saved ✓ Next"
-                        : "Save & Next"}
+                        ? t(
+                            "gettingStarted.savedNext",
+                            undefined,
+                            "Saved ✓ Next",
+                          )
+                        : t(
+                            "gettingStarted.saveAndNext",
+                            undefined,
+                            "Save & Next",
+                          )}
                   </button>
                 ) : (
                   <button
@@ -1469,7 +1699,7 @@ export function GettingStartedModal({
                     className="btn btn-primary btn-small"
                     onClick={handleNext}
                   >
-                    Next
+                    {t("gettingStarted.next", undefined, "Next")}
                   </button>
                 )}
               </div>
@@ -1491,8 +1721,11 @@ export function GettingStartedModal({
                 margin: "0 0 1.5rem",
               }}
             >
-              Your connections are set! Seedarr is ready to harvest swarm
-              trackers, coordinate seeding, and sync with your media library.
+              {t(
+                "gettingStarted.finishDescription",
+                undefined,
+                "Your connections are set! Seedarr is ready to harvest swarm trackers, coordinate seeding, and sync with your media library.",
+              )}
             </p>
 
             <div
@@ -1512,7 +1745,12 @@ export function GettingStartedModal({
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >
-                📊 Go to Dashboard
+                📊{" "}
+                {t(
+                  "gettingStarted.goToDashboard",
+                  undefined,
+                  "Go to Dashboard",
+                )}
               </button>
               <button
                 type="button"
@@ -1523,7 +1761,12 @@ export function GettingStartedModal({
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >
-                📦 View Torrents
+                📦{" "}
+                {t(
+                  "gettingStarted.viewTorrents",
+                  undefined,
+                  "View Torrents",
+                )}
               </button>
               <button
                 type="button"
@@ -1534,7 +1777,7 @@ export function GettingStartedModal({
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >
-                ⚙️ Settings
+                ⚙️ {t("gettingStarted.settings", undefined, "Settings")}
               </button>
             </div>
           </div>
@@ -1574,14 +1817,26 @@ export function GettingStartedModal({
                 accentColor: "var(--accent, #c8a84e)",
               }}
             />
-            <span>Don't show this guide on startup</span>
+            <span>
+              {t(
+                "gettingStarted.dontShowAgain",
+                undefined,
+                "Don't show this guide on startup",
+              )}
+            </span>
           </label>
 
           <span>
-            Step {currentStep + 1} of {STEPS.length}
+            {t(
+              "gettingStarted.stepCount",
+              { current: currentStep + 1, total: steps.length },
+              `Step ${currentStep + 1} of ${steps.length}`,
+            )}
           </span>
         </div>
       </div>
     </div>
   );
 }
+
+export default GettingStartedModal;
