@@ -12,6 +12,7 @@ using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers.Encryption;
+using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
@@ -29,6 +30,7 @@ public class PeerServer : BackgroundService
     private readonly ITorrentEventLogService _eventLogService;
     private readonly Trackers.Metrics.ITrackerMetricService _trackerMetricService;
     private readonly Trackers.ITrackerAnnounceService _trackerAnnounceService;
+    private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
     private readonly IRandomNumberGenerator _random;
     private readonly Transport.IUtpManager _utpManager;
     private readonly SemaphoreSlim _connectionSemaphore;
@@ -46,7 +48,8 @@ public class PeerServer : BackgroundService
         Trackers.Metrics.ITrackerMetricService trackerMetricService = null,
         Trackers.ITrackerAnnounceService trackerAnnounceService = null,
         IRandomNumberGenerator random = null,
-        Transport.IUtpManager utpManager = null)
+        Transport.IUtpManager utpManager = null,
+        IClientBehaviorSimulator clientBehaviorSimulator = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -60,6 +63,7 @@ public class PeerServer : BackgroundService
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
                 : null);
+        _clientBehaviorSimulator = clientBehaviorSimulator;
         _random = random ?? new RandomNumberGenerator();
         _utpManager = utpManager;
         _connectionSemaphore = new SemaphoreSlim(configService.MaxGlobalConnections);
@@ -280,7 +284,9 @@ public class PeerServer : BackgroundService
             connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
             connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
             connection.MaxPipelinedRequests = _configService.PeerRequestCount;
-            connection.IdleChance = _configService.PeerIdleChance;
+            connection.IdleChance = _clientBehaviorSimulator != null
+                ? _clientBehaviorSimulator.GetEffectiveIdleChance(_configService.PeerIdleChance)
+                : _configService.PeerIdleChance;
 
             if (!connection.NegotiateEncryptionOutgoing(torrent.InfoHash, GetEncryptionMode()))
             {
@@ -291,7 +297,9 @@ public class PeerServer : BackgroundService
                 return;
             }
 
-            var peerId = "-SD1000-000000000000";
+            var peerId = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled)
+                ? (_clientBehaviorSimulator.GetActiveProfile()?.GeneratePeerId() ?? "-SD1000-000000000000")
+                : "-SD1000-000000000000";
             connection.SendHandshake(torrent.InfoHash, peerId);
 
             if (!connection.ReceiveHandshake())
@@ -377,7 +385,9 @@ public class PeerServer : BackgroundService
         connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
         connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
         connection.MaxPipelinedRequests = _configService.PeerRequestCount;
-        connection.IdleChance = _configService.PeerIdleChance;
+        connection.IdleChance = _clientBehaviorSimulator != null
+            ? _clientBehaviorSimulator.GetEffectiveIdleChance(_configService.PeerIdleChance)
+            : _configService.PeerIdleChance;
 
         _logger.Debug("Incoming peer: {0}:{1}", connection.RemoteIp, connection.RemotePort);
 

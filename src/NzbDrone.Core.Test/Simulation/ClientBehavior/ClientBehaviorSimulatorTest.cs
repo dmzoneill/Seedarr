@@ -189,4 +189,53 @@ public class ClientBehaviorSimulatorTest
         Assert.That(profile2.Name, Is.Not.EqualTo(profile1.Name));
         Assert.That(profile2.Name, Is.AnyOf("qBittorrent 4.4.2", "Deluge 2.0.3", "Transmission 3.00"));
     }
+
+    [Test]
+    public void GetEffectiveDropoutProbability_should_return_base_when_disabled()
+    {
+        _configService.ClientBehaviorEngineEnabled.Returns(false);
+
+        var result = _simulator.GetEffectiveDropoutProbability(0.1);
+
+        Assert.That(result, Is.EqualTo(0.1));
+    }
+
+    [Test]
+    public void GetEffectiveDropoutProbability_should_modulate_by_profile()
+    {
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.PrimaryClient.Returns("Transmission");
+        _configService.BehaviorVariation.Returns(0.0);
+
+        var transmissionSimulator = new ClientBehaviorSimulator(_configService, _profileFactory);
+        var result = transmissionSimulator.GetEffectiveDropoutProbability(0.1);
+
+        Assert.That(result, Is.EqualTo(0.08).Within(0.001));
+    }
+
+    [Test]
+    public void GetEffectiveRotationPercentage_should_modulate_by_profile()
+    {
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.PrimaryClient.Returns("Deluge");
+        _configService.BehaviorVariation.Returns(0.0);
+
+        var delugeSimulator = new ClientBehaviorSimulator(_configService, _profileFactory);
+        var result = delugeSimulator.GetEffectiveRotationPercentage(0.1);
+
+        Assert.That(result, Is.EqualTo(0.12).Within(0.001));
+    }
+
+    [Test]
+    public void GetEffectiveIdleChance_should_modulate_by_profile()
+    {
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.PrimaryClient.Returns("Transmission");
+        _configService.BehaviorVariation.Returns(0.0);
+
+        var transmissionSimulator = new ClientBehaviorSimulator(_configService, _profileFactory);
+        var result = transmissionSimulator.GetEffectiveIdleChance(0.3);
+
+        Assert.That(result, Is.EqualTo(0.33).Within(0.001));
+    }
 }
