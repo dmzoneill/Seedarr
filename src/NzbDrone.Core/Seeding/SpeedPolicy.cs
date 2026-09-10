@@ -4,6 +4,7 @@ using System.Linq;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Seeding.Distribution;
 using NzbDrone.Core.Seeding.Scheduling;
 using NzbDrone.Core.Simulation.Swarm;
@@ -23,6 +24,7 @@ public class SpeedPolicy : ISpeedPolicy
     private readonly IStopPolicy _stopPolicy;
     private readonly IRandomNumberGenerator _random;
     private readonly ISwarmAnalyzer _swarmAnalyzer;
+    private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
 
     public SpeedPolicy(
@@ -33,7 +35,8 @@ public class SpeedPolicy : ISpeedPolicy
         ITorrentStateMachine stateMachine,
         IStopPolicy stopPolicy,
         IRandomNumberGenerator random = null,
-        ISwarmAnalyzer swarmAnalyzer = null)
+        ISwarmAnalyzer swarmAnalyzer = null,
+        IEventAggregator eventAggregator = null)
     {
         _distributionManager = distributionManager;
         _speedScheduler = speedScheduler;
@@ -43,6 +46,7 @@ public class SpeedPolicy : ISpeedPolicy
         _stopPolicy = stopPolicy;
         _random = random ?? new RandomNumberGenerator();
         _swarmAnalyzer = swarmAnalyzer ?? new SwarmAnalyzer(configService);
+        _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -113,6 +117,7 @@ public class SpeedPolicy : ISpeedPolicy
                 if (!wasComplete && torrent.Progress >= 1.0)
                 {
                     _eventLogService.Info(torrent.Id, "Download", $"Download complete ({FormatBytes(torrent.TotalSize)})");
+                    _eventAggregator?.PublishEvent(new TorrentDownloadCompletedEvent(torrent));
                 }
             }
 

@@ -77,12 +77,12 @@ public class SeedingEngine : BackgroundService
         _eventLogService = eventLogService;
         _clock = clock ?? new SystemClock();
         _random = random ?? new NzbDrone.Common.EnvironmentInfo.RandomNumberGenerator();
-        _stateMachine = stateMachine ?? new TorrentStateMachine(eventLogService);
+        _stateMachine = stateMachine ?? new TorrentStateMachine(eventLogService, eventAggregator);
         _stopPolicy = stopPolicy ?? new StopPolicy(configService, _random);
         _swarmAnalyzer = swarmAnalyzer ?? new SwarmAnalyzer(configService);
         _trafficPatternSimulator = trafficPatternSimulator ?? new TrafficPatternSimulator(configService, _random, _clock);
         _clientBehaviorSimulator = clientBehaviorSimulator;
-        _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer);
+        _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator);
         _logger = LogManager.GetCurrentClassLogger();
     }
 

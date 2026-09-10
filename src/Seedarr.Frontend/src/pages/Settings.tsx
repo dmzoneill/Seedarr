@@ -13,6 +13,8 @@ import { IndexersTab } from "./settings/IndexersTab";
 import { ConnectionsTab } from "./settings/ConnectionsTab";
 import { DownloadClientsTab } from "./settings/DownloadClientsTab";
 import { NotificationsTab } from "./settings/NotificationsTab";
+import { CategorySettingsTab } from "./settings/CategorySettingsTab";
+import { CustomScriptsTab } from "./settings/CustomScriptsTab";
 import { WebUITab } from "./settings/WebUITab";
 import { SecurityTab } from "./settings/SecurityTab";
 
@@ -21,6 +23,8 @@ const sectionTitles: Record<string, string> = {
   webui: "Web UI",
   security: "Security",
   notifications: "Notifications",
+  categories: "Categories",
+  "custom-scripts": "Custom Scripts",
   seeding: "Seeding",
   bittorrent: "BitTorrent",
   network: "Network",
@@ -44,6 +48,10 @@ const sectionDescriptions: Record<string, string> = {
     "Configure authentication, CSRF protection, identity providers (SSO), and REST API keys",
   notifications:
     "Set up alerting and webhooks for download, swarm, and tracker events",
+  categories:
+    "Organize torrents into categories with dedicated save paths, ratio goals, and speed limits",
+  "custom-scripts":
+    "Execute custom shell scripts or executables on torrent lifecycle events and Transmission hooks",
   seeding:
     "Fine-tune upload/download ratios, seeding limits, and distribution engines",
   bittorrent:
@@ -111,6 +119,8 @@ function Settings() {
       {activeSection === "webui" && <WebUITab />}
       {activeSection === "security" && <SecurityTab />}
       {activeSection === "notifications" && <NotificationsTab />}
+      {activeSection === "categories" && <CategorySettingsTab />}
+      {activeSection === "custom-scripts" && <CustomScriptsTab />}
       {activeSection === "seeding" && <SeedingTab />}
       {activeSection === "bittorrent" && <BitTorrentTab />}
       {activeSection === "network" && <NetworkTab />}
