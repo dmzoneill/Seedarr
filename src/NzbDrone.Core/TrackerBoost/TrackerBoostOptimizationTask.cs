@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Lifecycle;
@@ -21,25 +22,23 @@ public class TrackerBoostOptimizationTask : IScheduledTask, IHandle<ApplicationS
 
     public void Execute()
     {
-        try
-        {
-            _trackerBoostService.RunOptimizationCycleAsync().GetAwaiter().GetResult();
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn(ex, "TrackerBoost background optimization cycle encountered an issue");
-        }
+        _ = RunOptimizationCycleSafelyAsync("background");
     }
 
     public void Handle(ApplicationStartedEvent message)
     {
+        _ = RunOptimizationCycleSafelyAsync("startup");
+    }
+
+    private async Task RunOptimizationCycleSafelyAsync(string context)
+    {
         try
         {
-            _trackerBoostService.RunOptimizationCycleAsync().GetAwaiter().GetResult();
+            await _trackerBoostService.RunOptimizationCycleAsync();
         }
         catch (Exception ex)
         {
-            _logger.Warn(ex, "TrackerBoost startup optimization cycle encountered an issue");
+            _logger.Warn(ex, "TrackerBoost {0} optimization cycle encountered an issue", context);
         }
     }
 }

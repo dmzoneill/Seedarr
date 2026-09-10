@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Torrents;
@@ -27,6 +28,7 @@ public class ConnectionManager : IConnectionManager
     private readonly ITorrentService _torrentService;
     private readonly IFastExtensionHandler _fastExtensionHandler;
     private readonly ITorrentEventLogService _eventLogService;
+    private readonly IRandomNumberGenerator _random;
     private readonly List<PeerConnection> _connections = new();
     private readonly object _lock = new();
     private readonly Logger _logger;
@@ -42,13 +44,20 @@ public class ConnectionManager : IConnectionManager
         }
     }
 
-    public ConnectionManager(IConfigService configService, IPeerConnectionLogService connectionLogService, ITorrentService torrentService, IFastExtensionHandler fastExtensionHandler, ITorrentEventLogService eventLogService)
+    public ConnectionManager(
+        IConfigService configService,
+        IPeerConnectionLogService connectionLogService,
+        ITorrentService torrentService,
+        IFastExtensionHandler fastExtensionHandler,
+        ITorrentEventLogService eventLogService,
+        IRandomNumberGenerator random = null)
     {
         _configService = configService;
         _connectionLogService = connectionLogService;
         _torrentService = torrentService;
         _fastExtensionHandler = fastExtensionHandler;
         _eventLogService = eventLogService;
+        _random = random ?? new RandomNumberGenerator();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -132,7 +141,7 @@ public class ConnectionManager : IConnectionManager
             }
 
             toRemove = _connections
-                .Where(_ => Random.Shared.NextDouble() < dropoutProbability)
+                .Where(_ => _random.NextDouble() < dropoutProbability)
                 .ToList();
 
             foreach (var conn in toRemove)

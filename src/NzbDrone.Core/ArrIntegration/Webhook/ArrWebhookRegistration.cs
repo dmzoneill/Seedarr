@@ -190,8 +190,8 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                     return (ExistingWebhookInfo)null;
                 }
 
-                var json = response.Content.ReadAsStringAsync(ct).GetAwaiter().GetResult();
-                using var doc = JsonDocument.Parse(json);
+                using var stream = response.Content.ReadAsStream(ct);
+                using var doc = JsonDocument.Parse(stream);
 
                 foreach (var notification in doc.RootElement.EnumerateArray())
                 {

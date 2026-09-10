@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Seeding.Scheduling;
@@ -41,18 +42,23 @@ public class SpeedScheduler : ISpeedScheduler
 
     private readonly ISpeedScheduleRepository _repository;
     private readonly IConfigService _configService;
+    private readonly ISystemClock _clock;
     private readonly Logger _logger;
 
-    public SpeedScheduler(ISpeedScheduleRepository repository, IConfigService configService)
+    public SpeedScheduler(
+        ISpeedScheduleRepository repository,
+        IConfigService configService,
+        ISystemClock clock = null)
     {
         _repository = repository;
         _configService = configService;
+        _clock = clock ?? new SystemClock();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
     public SpeedLimits GetCurrentLimits()
     {
-        return GetLimitsAt(DateTime.UtcNow);
+        return GetLimitsAt(_clock.UtcNow);
     }
 
     public SpeedLimits GetLimitsAt(DateTime utcTime)

@@ -70,7 +70,8 @@ public class DiscordNotification : INotificationService
 
             var json = JsonSerializer.Serialize(payload);
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
-            using var response = _httpClient.PostAsync(WebhookUrl, content).GetAwaiter().GetResult();
+            using var request = new HttpRequestMessage(HttpMethod.Post, WebhookUrl) { Content = content };
+            using var response = _httpClient.Send(request);
             _logger.Debug("Discord notification sent, status: {0}", response.StatusCode);
         }
         catch (Exception ex)

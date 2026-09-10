@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -283,8 +282,7 @@ public class IndexerController : Controller
                     return BadRequest($"Failed to download torrent file from indexer (HTTP {(int)httpResponse.StatusCode})");
                 }
 
-                var bytes = httpResponse.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
-                using var stream = new MemoryStream(bytes);
+                using var stream = httpResponse.Content.ReadAsStream();
                 var parsed = _torrentFileParser.Parse(stream);
 
                 if (_torrentService.ExistsByInfoHash(parsed.InfoHash))

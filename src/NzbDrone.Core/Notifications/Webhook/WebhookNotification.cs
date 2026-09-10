@@ -79,7 +79,8 @@ public class WebhookNotification : INotificationService
             {
                 var json = JsonSerializer.Serialize(payload);
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");
-                using var response = _httpClient.PostAsync(WebhookUrl, content, ct).GetAwaiter().GetResult();
+                using var request = new HttpRequestMessage(HttpMethod.Post, WebhookUrl) { Content = content };
+                using var response = _httpClient.Send(request, ct);
                 _logger.Debug("Webhook sent to {0}, status: {1}", WebhookUrl, response.StatusCode);
             });
         }
