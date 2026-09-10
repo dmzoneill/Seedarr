@@ -305,6 +305,7 @@ body {
   width: var(--sidebar-width);
   min-width: var(--sidebar-width);
   background-color: var(--sidebar-bg);
+  border-right: 1px solid var(--border-light);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -316,7 +317,8 @@ body {
   overflow-x: hidden;
   transition:
     width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.2s ease;
 }
 
 .app.sidebar-collapsed .sidebar {
