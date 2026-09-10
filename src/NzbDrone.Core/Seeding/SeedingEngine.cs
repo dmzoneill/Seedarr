@@ -86,6 +86,10 @@ public class SeedingEngine : BackgroundService
         _logger = LogManager.GetCurrentClassLogger();
     }
 
+    private HashSet<int> SelectStoppedTorrents(List<Torrent> torrents) => _stopPolicy.SelectStoppedTorrents(torrents);
+
+    private HashSet<int> SelectDownloadStoppedTorrents(List<Torrent> torrents) => _stopPolicy.SelectDownloadStoppedTorrents(torrents);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!_configService.AutoStart)

@@ -93,6 +93,8 @@ public class UtpConnection : IUtpConnection
         _remoteEndpoint = remoteEndpoint;
         _sequenceNumber = 1;
         _connectionTimeoutSeconds = connectionTimeoutSeconds;
+        _udpClient.Client.ReceiveTimeout = _connectionTimeoutSeconds * 1000;
+        _udpClient.Client.SendTimeout = _connectionTimeoutSeconds * 1000;
     }
 
     public void Connect(IPEndPoint endpoint)
@@ -259,6 +261,7 @@ public class UtpConnection : IUtpConnection
             }
 
             HandleIncomingPacket(data, receiveEndpoint);
+            startTime = DateTime.UtcNow;
 
             lock (_receiveLock)
             {
@@ -500,15 +503,15 @@ public class UtpConnection : IUtpConnection
         }
 
         var now = Environment.TickCount64;
-        foreach (var kvp in _inFlightPackets)
+        var unacked = new List<InFlightPacket>(_inFlightPackets.Values);
+        unacked.Sort((a, b) => (short)(a.SequenceNumber - b.SequenceNumber));
+
+        var head = unacked[0];
+        if (now - head.SentTimestamp >= 50)
         {
-            var packet = kvp.Value;
-            if (now - packet.SentTimestamp >= 50)
-            {
-                packet.Retries++;
-                packet.SentTimestamp = now;
-                SendUdpPacket(packet.PacketData, packet.PacketData.Length, _remoteEndpoint);
-            }
+            head.Retries++;
+            head.SentTimestamp = now;
+            SendUdpPacket(head.PacketData, head.PacketData.Length, _remoteEndpoint);
         }
     }
 

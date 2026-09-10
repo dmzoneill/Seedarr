@@ -1021,19 +1021,28 @@ public class PeerServerTest
             _clients.Add(acceptedClient);
             var stream = acceptedClient.GetStream();
 
+            var hashBytes = Convert.FromHexString(torrent.InfoHash);
+            var expectedSkeyHash = MseKeyDerivation.DeriveKey(hashBytes, Encoding.ASCII.GetBytes("req2"));
+            var incomingHandshake = new MseHandshake(hashBytes, EncryptionMode.PreferPlainText);
+            var negotiatedStream = incomingHandshake.NegotiateIncoming(stream, h => System.Linq.Enumerable.SequenceEqual(h, expectedSkeyHash));
+
             // Receive handshake from PeerServer
             var buf = new byte[68];
-            stream.Read(buf, 0, 68);
+            negotiatedStream.Read(buf, 0, 68);
 
             // Send handshake response
             var response = new byte[68];
             response[0] = 19;
             Encoding.ASCII.GetBytes("BitTorrent protocol", 0, 19, response, 1);
-            var hashBytes = Convert.FromHexString(torrent.InfoHash);
             Array.Copy(hashBytes, 0, response, 28, 20);
             Encoding.ASCII.GetBytes("-SD1000-000000000000", 0, 20, response, 48);
-            stream.Write(response, 0, 68);
-            stream.Flush();
+            negotiatedStream.Write(response, 0, 68);
+            negotiatedStream.Flush();
+
+            // Read the bitfield message header sent by ConnectToPeer after successful handshake
+            var msgLen = new byte[4];
+            negotiatedStream.Read(msgLen, 0, 4);
+            acceptedClient.Close();
         });
 
         var connectMethod = typeof(PeerServer).GetMethod("ConnectToPeer", BindingFlags.NonPublic | BindingFlags.Instance)!;

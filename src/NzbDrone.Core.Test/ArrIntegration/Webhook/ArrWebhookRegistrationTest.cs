@@ -26,7 +26,7 @@ public class ArrWebhookRegistrationTest
         _configFileProvider.BindAddress.Returns("localhost");
         _configFileProvider.Port.Returns(9898);
         _configFileProvider.UrlBase.Returns("");
-        _registration = new ArrWebhookRegistration(_configFileProvider, _configService);
+        _registration = new ArrWebhookRegistration(_configFileProvider, _configService, policy: ResiliencePipeline.Empty);
     }
 
     [Test]

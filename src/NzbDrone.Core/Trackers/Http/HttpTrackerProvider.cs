@@ -15,7 +15,7 @@ namespace NzbDrone.Core.Trackers.Http;
 
 public class HttpTrackerProvider : ITrackerProvider
 {
-    private static readonly ResiliencePipeline Policy = ResiliencePolicies.GetTrackerPolicy();
+    public ResiliencePipeline ResiliencePipeline { get; set; } = ResiliencePolicies.GetTrackerPolicy();
 
     private readonly IConfigService _configService;
     private readonly HttpClient _client;
@@ -44,10 +44,10 @@ public class HttpTrackerProvider : ITrackerProvider
             var url = BuildAnnounceUrl(request);
             _logger.Debug("HTTP announce: {0}", RedactUrl(url));
 
-            var responseBytes = Policy.Execute(ct =>
+            var responseBytes = (ResiliencePipeline ?? ResiliencePipeline.Empty).Execute(ct =>
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                using var response = _client.Send(request, ct);
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                using var response = _client.Send(req, ct);
                 response.EnsureSuccessStatusCode();
                 using var ms = new MemoryStream();
                 response.Content.ReadAsStream(ct).CopyTo(ms);
@@ -133,10 +133,10 @@ public class HttpTrackerProvider : ITrackerProvider
 
             _logger.Debug("HTTP scrape: {0}", RedactUrl(scrapeUrl));
 
-            var responseBytes = Policy.Execute(ct =>
+            var responseBytes = (ResiliencePipeline ?? ResiliencePipeline.Empty).Execute(ct =>
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, scrapeUrl);
-                using var response = _client.Send(request, ct);
+                using var req = new HttpRequestMessage(HttpMethod.Get, scrapeUrl);
+                using var response = _client.Send(req, ct);
                 response.EnsureSuccessStatusCode();
                 using var ms = new MemoryStream();
                 response.Content.ReadAsStream(ct).CopyTo(ms);
