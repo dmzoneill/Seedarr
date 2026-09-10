@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import TorrentTable from "../components/TorrentTable";
 import TorrentGrid from "../components/TorrentGrid";
 import TorrentDetailPanel from "../components/TorrentDetailPanel";
@@ -9,6 +10,7 @@ import { TorrentFilterPanel } from "./torrentindex/TorrentFilterPanel";
 import { useTorrentIndexState } from "./torrentindex/useTorrentIndexState";
 
 function TorrentIndex() {
+  const navigate = useNavigate();
   const {
     torrents,
     startSeeding,
@@ -119,6 +121,7 @@ function TorrentIndex() {
         viewMode={viewMode}
         onViewModeChange={handleViewMode}
         onAddTorrent={() => setShowAddModal(true)}
+        onSearchIndexers={() => navigate("/settings/indexers")}
         onStartAll={() => startAll.mutate()}
         onStopAll={() => stopAll.mutate()}
         selectedCount={selectedIds.size}
