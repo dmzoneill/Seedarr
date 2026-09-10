@@ -1,9 +1,12 @@
+// Copyright (c) PlaceholderCompany. All rights reserved.
+
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using DryIoc;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -11,8 +14,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi;
 using NzbDrone.Common.Serializer;
+using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Security;
 using NzbDrone.SignalR;
 using Seedarr.Http.Authentication;
+using Seedarr.Http.Security;
 
 namespace NzbDrone.Host;
 
@@ -45,10 +51,95 @@ public class Startup
             });
 
         services.AddSignalR();
+        services.AddDataProtection();
+        services.AddHttpClient();
+        services.AddSingleton<ICertificateManager, CertificateManager>();
 
-        services.AddAuthentication(ApiKeyAuthenticationOptions.DefaultScheme)
-            .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
-                ApiKeyAuthenticationOptions.DefaultScheme, _ => { });
+        var configFileProvider = this._container.Resolve<IConfigFileProvider>();
+        if (configFileProvider.EnableSsl && configFileProvider.RedirectHttpToHttps)
+        {
+            services.AddHttpsRedirection(options =>
+            {
+                options.HttpsPort = configFileProvider.SslPort;
+            });
+        }
+
+        services.AddAuthentication(options =>
+        {
+            options.DefaultScheme = "SmartAuth";
+            options.DefaultChallengeScheme = "SmartAuth";
+        })
+        .AddPolicyScheme("SmartAuth", "Smart Authentication Router", options =>
+        {
+            options.ForwardDefaultSelector = context =>
+            {
+                var req = context.Request;
+                var configFileProvider = context.RequestServices.GetService<NzbDrone.Core.Configuration.IConfigFileProvider>();
+
+                // 0. When authentication is disabled, automatically grant local access
+                if (configFileProvider != null && !configFileProvider.AuthenticationEnabled)
+                {
+                    return ApiKeyAuthenticationOptions.DefaultScheme;
+                }
+
+                // 1. API Key present in header, query parameter, or Bearer token
+                var hasApiKeyHeader = (req.Headers.TryGetValue("X-Api-Key", out var headerKey) && !string.IsNullOrWhiteSpace(headerKey)) ||
+                                      (req.Headers.TryGetValue("ApiKey", out var headerKey2) && !string.IsNullOrWhiteSpace(headerKey2));
+                var hasApiKeyQuery = (req.Query.TryGetValue("apikey", out var qKey) && !string.IsNullOrWhiteSpace(qKey)) ||
+                                     (req.Query.TryGetValue("access_token", out var qToken) && !string.IsNullOrWhiteSpace(qToken)) ||
+                                     (req.Query.TryGetValue("api_key", out var qApiKey) && !string.IsNullOrWhiteSpace(qApiKey));
+                var hasBearerToken = req.Headers.TryGetValue("Authorization", out var authHeader) &&
+                                     authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) &&
+                                     !string.IsNullOrWhiteSpace(authHeader.ToString()["Bearer ".Length..].Trim());
+
+                if (hasApiKeyHeader || hasApiKeyQuery || hasBearerToken)
+                {
+                    return ApiKeyAuthenticationOptions.DefaultScheme;
+                }
+
+                // 2. HTTP Basic Auth header
+                if (req.Headers.TryGetValue("Authorization", out var basicHeader) &&
+                    basicHeader.ToString().StartsWith("Basic ", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(basicHeader.ToString()["Basic ".Length..].Trim()))
+                {
+                    return ApiKeyAuthenticationOptions.DefaultScheme;
+                }
+
+                // 3. Forward-Auth reverse proxy headers
+                if ((req.Headers.TryGetValue("Remote-User", out var rUser) && !string.IsNullOrWhiteSpace(rUser)) ||
+                    (req.Headers.TryGetValue("X-authentik-username", out var aUser) && !string.IsNullOrWhiteSpace(aUser)) ||
+                    (req.Headers.TryGetValue("X-Forwarded-User", out var fUser) && !string.IsNullOrWhiteSpace(fUser)))
+                {
+                    return ApiKeyAuthenticationOptions.DefaultScheme;
+                }
+
+                // 4. Cookie for interactive browser session or login flow
+                if (req.Cookies.ContainsKey("Seedarr_Auth") ||
+                    req.Path.StartsWithSegments("/login") ||
+                    req.Path.StartsWithSegments("/auth"))
+                {
+                    return "Cookies";
+                }
+
+                // 5. Default to ApiKey handler
+                return ApiKeyAuthenticationOptions.DefaultScheme;
+            };
+        })
+        .AddCookie("Cookies", options =>
+        {
+            options.Cookie.Name = "Seedarr_Auth";
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
+            options.ExpireTimeSpan = TimeSpan.FromDays(30);
+            options.SlidingExpiration = true;
+            options.LoginPath = "/login";
+            options.AccessDeniedPath = "/login?accessDenied=true";
+        })
+        .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
+            ApiKeyAuthenticationOptions.DefaultScheme, _ => { });
+
+        services.AddOptions<OpenIdConnectOptions>();
+        services.AddSingleton<IDynamicAuthSchemeManager, DynamicAuthSchemeManager>();
 
         services.AddAuthorization(options =>
         {
@@ -66,7 +157,7 @@ public class Startup
             {
                 Title = "Seedarr REST API v1",
                 Version = "v1",
-                Description = "BitTorrent Seeding Simulator API"
+                Description = "BitTorrent Seeding Simulator API",
             });
 
             c.AddSecurityDefinition("ApiKeyHeader", new OpenApiSecurityScheme
@@ -74,7 +165,7 @@ public class Startup
                 Name = "X-Api-Key",
                 Type = SecuritySchemeType.ApiKey,
                 In = ParameterLocation.Header,
-                Description = "API Key authentication via X-Api-Key header"
+                Description = "API Key authentication via X-Api-Key header",
             });
 
             c.AddSecurityDefinition("ApiKeyQuery", new OpenApiSecurityScheme
@@ -82,7 +173,7 @@ public class Startup
                 Name = "apikey",
                 Type = SecuritySchemeType.ApiKey,
                 In = ParameterLocation.Query,
-                Description = "API Key authentication via apikey query parameter"
+                Description = "API Key authentication via apikey query parameter",
             });
 
             c.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
@@ -94,7 +185,7 @@ public class Startup
                 {
                     new OpenApiSecuritySchemeReference("ApiKeyQuery", doc),
                     new List<string>()
-                }
+                },
             });
 
             var apiAssembly = Assembly.Load("Seedarr.Api.V1");
@@ -124,23 +215,37 @@ public class Startup
                             return false;
                         }
 
-                        return uri.Host == "localhost" || uri.Host == "127.0.0.1" || uri.Host == "::1";
+                        var isLoopback = uri.Host == "localhost" || uri.Host == "127.0.0.1" || uri.Host == "::1";
+                        if (!isLoopback)
+                        {
+                            return false;
+                        }
+
+                        return uri.Port == configFileProvider.Port ||
+                               (configFileProvider.EnableSsl && uri.Port == configFileProvider.SslPort);
                     })
                     .AllowAnyMethod()
                     .AllowAnyHeader()
                     .AllowCredentials();
             });
         });
+
+        services.AddHostedService<AppLifetime>();
     }
 
     public void Configure(WebApplication app)
     {
         app.UseForwardedHeaders(new ForwardedHeadersOptions
         {
-            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
         });
 
+        var configFileProvider = app.Services.GetRequiredService<IConfigFileProvider>();
+
         app.UseCors();
+
+        app.UseMiddleware<HostHeaderValidationMiddleware>();
+        app.UseMiddleware<CsrfProtectionMiddleware>();
 
         app.UseDefaultFiles();
         app.UseStaticFiles(new StaticFileOptions
@@ -157,7 +262,7 @@ public class Startup
                 {
                     ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
                 }
-            }
+            },
         });
 
         var wwwroot = Path.Combine(System.AppContext.BaseDirectory, "wwwroot");
@@ -178,7 +283,7 @@ public class Startup
                     {
                         ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
                     }
-                }
+                },
             });
         }
 
@@ -189,8 +294,13 @@ public class Startup
             FileProvider = new PhysicalFileProvider(fixturesPath),
             RequestPath = "/fixtures",
             ServeUnknownFileTypes = true,
-            DefaultContentType = "application/octet-stream"
+            DefaultContentType = "application/octet-stream",
         });
+
+        if (configFileProvider.EnableSsl && configFileProvider.RedirectHttpToHttps)
+        {
+            app.UseHttpsRedirection();
+        }
 
         app.UseRouting();
 

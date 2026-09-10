@@ -1,4 +1,5 @@
 using NzbDrone.Core.ArrIntegration;
+using NzbDrone.Core.Authentication;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Indexers;
@@ -40,5 +41,6 @@ public static class TableRegistration
         TableMapping.Register<Trackers.Metrics.TrackerMetric>("TrackerMetrics");
         TableMapping.Register<Trackers.Metrics.TrackerMetricSnapshot>("TrackerMetricSnapshots");
         TableMapping.Register<TorrentMediaMetadata>("TorrentMediaMetadata");
+        TableMapping.Register<IdentityProviderDefinition>("IdentityProviders");
     }
 }

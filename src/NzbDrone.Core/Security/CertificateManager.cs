@@ -1,0 +1,482 @@
+// Copyright (c) PlaceholderCompany. All rights reserved.
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Threading.Tasks;
+using NLog;
+using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Configuration;
+
+namespace NzbDrone.Core.Security;
+
+public class CertificateManager : ICertificateManager
+{
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
+    private readonly IAppFolderInfo _appFolderInfo;
+
+    public CertificateManager(IAppFolderInfo appFolderInfo)
+    {
+        _appFolderInfo = appFolderInfo ?? throw new ArgumentNullException(nameof(appFolderInfo));
+    }
+
+    public X509Certificate2 GetOrCreateCertificate(IConfigFileProvider config)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+
+        if (!string.IsNullOrWhiteSpace(config.SslCertPath))
+        {
+            var certPath = config.SslCertPath.Trim();
+            if (File.Exists(certPath))
+            {
+                try
+                {
+                    var loadedCert = LoadCustomCertificate(certPath, config.SslKeyPath, config.SslCertPassword);
+                    if (loadedCert != null)
+                    {
+                        Logger.Info("Successfully loaded custom SSL certificate from '{0}'", certPath);
+                        return loadedCert;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to load custom SSL certificate from '{0}'. Falling back to self-signed certificate.", certPath);
+                }
+            }
+            else
+            {
+                Logger.Warn("Configured SSL certificate path '{0}' was not found. Falling back to self-signed certificate.", certPath);
+            }
+        }
+
+        return GetOrCreateSelfSignedCertificate(config);
+    }
+
+    public async Task<SslCertificateValidationResult> ValidateCertificateAsync(
+        string certPath,
+        string keyPath,
+        string password,
+        string bindAddress,
+        int sslPort,
+        bool testTlsHandshake = true)
+    {
+        var result = new SslCertificateValidationResult();
+
+        try
+        {
+            X509Certificate2 cert = null;
+            if (!string.IsNullOrWhiteSpace(certPath))
+            {
+                var trimmedPath = certPath.Trim();
+                if (!File.Exists(trimmedPath))
+                {
+                    result.IsValid = false;
+                    result.Message = $"Certificate file not found at '{trimmedPath}'.";
+                    return result;
+                }
+
+                cert = LoadCustomCertificate(trimmedPath, keyPath, password);
+            }
+            else
+            {
+                var dummyConfig = new DummySslConfig(bindAddress);
+                cert = GetOrCreateSelfSignedCertificate(dummyConfig);
+            }
+
+            if (cert == null)
+            {
+                result.IsValid = false;
+                result.Message = "Failed to load or generate a valid certificate.";
+                return result;
+            }
+
+            result.Subject = cert.Subject;
+            result.Issuer = cert.Issuer;
+            result.ValidFrom = cert.NotBefore.ToUniversalTime();
+            result.ValidTo = cert.NotAfter.ToUniversalTime();
+            result.Thumbprint = cert.Thumbprint;
+            result.HasPrivateKey = cert.HasPrivateKey;
+
+            foreach (var ext in cert.Extensions)
+            {
+                if (ext is X509SubjectAlternativeNameExtension sanExt)
+                {
+                    foreach (var dns in sanExt.EnumerateDnsNames())
+                    {
+                        result.SubjectAlternativeNames.Add(dns);
+                    }
+
+                    foreach (var ip in sanExt.EnumerateIPAddresses())
+                    {
+                        result.SubjectAlternativeNames.Add(ip.ToString());
+                    }
+                }
+            }
+
+            if (!cert.HasPrivateKey)
+            {
+                result.IsValid = false;
+                result.Message = "The certificate was loaded, but it does not contain a private key.";
+                return result;
+            }
+
+            if (DateTime.UtcNow > cert.NotAfter.ToUniversalTime())
+            {
+                result.IsValid = false;
+                result.Message = $"The certificate has expired on {cert.NotAfter.ToUniversalTime():yyyy-MM-dd HH:mm:ss} UTC.";
+                return result;
+            }
+
+            if (DateTime.UtcNow < cert.NotBefore.ToUniversalTime())
+            {
+                result.IsValid = false;
+                result.Message = $"The certificate is not yet valid (valid starting {cert.NotBefore.ToUniversalTime():yyyy-MM-dd HH:mm:ss} UTC).";
+                return result;
+            }
+
+            result.IsValid = true;
+            result.Message = "Certificate is valid and cryptographically verified.";
+
+            if (testTlsHandshake && sslPort is >= 1 and <= 65535)
+            {
+                try
+                {
+                    using var handler = new SocketsHttpHandler
+                    {
+                        ConnectTimeout = TimeSpan.FromSeconds(2),
+                        SslOptions = new SslClientAuthenticationOptions
+                        {
+                            RemoteCertificateValidationCallback = (sender, serverCert, chain, errors) => true,
+                        },
+                    };
+
+                    using var httpClient = new HttpClient(handler)
+                    {
+                        Timeout = TimeSpan.FromSeconds(2),
+                    };
+
+                    var probeHost = bindAddress switch
+                    {
+                        null or "" or "*" or "0.0.0.0" => "127.0.0.1",
+                        "::" => "[::1]",
+                        var addr => addr,
+                    };
+
+                    var testUrl = $"https://{probeHost}:{sslPort}/";
+                    using var response = await httpClient.GetAsync(testUrl);
+                    result.HandshakeSucceeded = true;
+                    result.Message = $"Certificate is valid and active on HTTPS port {sslPort} (TLS handshake succeeded).";
+                }
+                catch
+                {
+                    result.HandshakeSucceeded = false;
+                    result.Message = $"Certificate is valid. (HTTPS listener will activate on port {sslPort} once the server is restarted).";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            result.IsValid = false;
+            result.Message = $"Certificate validation failed: {ex.Message}";
+        }
+
+        return result;
+    }
+
+    private static X509Certificate2 LoadCustomCertificate(string certPath, string keyPath, string password)
+    {
+        var ext = Path.GetExtension(certPath).ToLowerInvariant();
+
+        if (ext is ".pfx" or ".p12")
+        {
+            var pass = string.IsNullOrEmpty(password) ? null : password;
+            return X509CertificateLoader.LoadPkcs12FromFile(
+                certPath,
+                pass,
+                X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+        }
+
+        var collection = new X509Certificate2Collection();
+        collection.ImportFromPemFile(certPath);
+
+        if (collection.Count == 0)
+        {
+            throw new InvalidOperationException($"Certificate file '{certPath}' does not contain any valid certificates.");
+        }
+
+        var hasExplicitKey = !string.IsNullOrWhiteSpace(keyPath) && File.Exists(keyPath.Trim());
+        var effectiveKeyPath = hasExplicitKey ? keyPath.Trim() : certPath;
+
+        if (!hasExplicitKey)
+        {
+            var pemContent = File.ReadAllText(certPath);
+            if (!pemContent.Contains("PRIVATE KEY", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"Certificate file '{certPath}' does not contain a private key and no private key file was provided.");
+            }
+        }
+
+        X509Certificate2 leafWithKey;
+        if (!string.IsNullOrEmpty(password))
+        {
+            try
+            {
+                leafWithKey = X509Certificate2.CreateFromEncryptedPemFile(certPath, password, effectiveKeyPath);
+            }
+            catch
+            {
+                leafWithKey = X509Certificate2.CreateFromPemFile(certPath, effectiveKeyPath);
+            }
+        }
+        else
+        {
+            leafWithKey = X509Certificate2.CreateFromPemFile(certPath, effectiveKeyPath);
+        }
+
+        var fullCollection = new X509Certificate2Collection { leafWithKey };
+        foreach (var cert in collection)
+        {
+            if (!cert.Thumbprint.Equals(leafWithKey.Thumbprint, StringComparison.OrdinalIgnoreCase))
+            {
+                fullCollection.Add(cert);
+            }
+        }
+
+        var pfxBytes = fullCollection.Export(X509ContentType.Pkcs12, string.Empty);
+        return X509CertificateLoader.LoadPkcs12(
+            pfxBytes,
+            string.Empty,
+            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+    }
+
+    private X509Certificate2 GetOrCreateSelfSignedCertificate(IConfigFileProvider config)
+    {
+        var cachePath = Path.Combine(_appFolderInfo.AppDataFolder, "seedarr-selfsigned.pfx");
+        var passwordPath = Path.Combine(_appFolderInfo.AppDataFolder, "seedarr-selfsigned.pwd");
+        var pfxPassword = GetOrGenerateSelfSignedPassword(config, passwordPath);
+
+        if (File.Exists(cachePath))
+        {
+            try
+            {
+                var cached = X509CertificateLoader.LoadPkcs12FromFile(
+                    cachePath,
+                    pfxPassword,
+                    X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+
+                if (DateTime.UtcNow < cached.NotAfter.ToUniversalTime().AddDays(-30))
+                {
+                    Logger.Info("Using existing cached self-signed SSL certificate: {0} (Expires: {1:yyyy-MM-dd})", cached.Subject, cached.NotAfter);
+                    return cached;
+                }
+
+                Logger.Info("Cached self-signed SSL certificate is expired or expiring soon. Regenerating.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Failed to load cached self-signed certificate from '{0}'. Regenerating.", cachePath);
+            }
+        }
+
+        return GenerateAndSaveSelfSignedCertificate(config, cachePath, pfxPassword);
+    }
+
+    private static string GetOrGenerateSelfSignedPassword(IConfigFileProvider config, string passwordPath)
+    {
+        if (!string.IsNullOrWhiteSpace(config.SslCertPassword))
+        {
+            return config.SslCertPassword;
+        }
+
+        if (File.Exists(passwordPath))
+        {
+            try
+            {
+                var storedPassword = File.ReadAllText(passwordPath).Trim();
+                if (!string.IsNullOrEmpty(storedPassword))
+                {
+                    return storedPassword;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(ex, "Could not read self-signed password file at '{0}'. Generating a new one.", passwordPath);
+            }
+        }
+
+        var randomBytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+        var generatedPassword = Convert.ToBase64String(randomBytes);
+
+        try
+        {
+            var dir = Path.GetDirectoryName(passwordPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            File.WriteAllText(passwordPath, generatedPassword);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Could not persist self-signed SSL password to disk at '{0}'", passwordPath);
+        }
+
+        return generatedPassword;
+    }
+
+    private static X509Certificate2 GenerateAndSaveSelfSignedCertificate(IConfigFileProvider config, string cachePath, string pfxPassword)
+    {
+        Logger.Info("Generating new self-signed RSA-2048 SSL certificate for Seedarr...");
+
+        using var rsa = RSA.Create(2048);
+        var req = new CertificateRequest(
+            "CN=Seedarr, O=Seedarr, OU=BitTorrent Seeding Simulator",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+
+        var sanBuilder = new SubjectAlternativeNameBuilder();
+        sanBuilder.AddDnsName("localhost");
+        try
+        {
+            sanBuilder.AddDnsName(Environment.MachineName);
+        }
+        catch
+        {
+            // Ignore invalid hostname characters
+        }
+
+        sanBuilder.AddIpAddress(IPAddress.Loopback);
+        sanBuilder.AddIpAddress(IPAddress.IPv6Loopback);
+
+        if (!string.IsNullOrWhiteSpace(config.BindAddress) && config.BindAddress != "*")
+        {
+            if (IPAddress.TryParse(config.BindAddress, out var bindIp))
+            {
+                if (!IPAddress.Any.Equals(bindIp) &&
+                    !IPAddress.IPv6Any.Equals(bindIp) &&
+                    !IPAddress.Loopback.Equals(bindIp) &&
+                    !IPAddress.IPv6Loopback.Equals(bindIp))
+                {
+                    sanBuilder.AddIpAddress(bindIp);
+                }
+            }
+            else
+            {
+                try
+                {
+                    sanBuilder.AddDnsName(config.BindAddress);
+                }
+                catch
+                {
+                    // Ignore invalid DNS name characters
+                }
+            }
+        }
+
+        req.CertificateExtensions.Add(
+            new X509BasicConstraintsExtension(
+                certificateAuthority: false,
+                hasPathLengthConstraint: false,
+                pathLengthConstraint: 0,
+                critical: true));
+
+        req.CertificateExtensions.Add(
+            new X509SubjectKeyIdentifierExtension(
+                req.PublicKey,
+                critical: false));
+
+        req.CertificateExtensions.Add(sanBuilder.Build());
+
+        req.CertificateExtensions.Add(
+            new X509KeyUsageExtension(
+                X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment,
+                critical: true));
+
+        req.CertificateExtensions.Add(
+            new X509EnhancedKeyUsageExtension(
+                new OidCollection { new Oid("1.3.6.1.5.5.7.3.1") },
+                critical: false));
+
+        var notBefore = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var notAfter = DateTimeOffset.UtcNow.AddDays(397);
+
+        using var cert = req.CreateSelfSigned(notBefore, notAfter);
+        var pfxBytes = cert.Export(X509ContentType.Pfx, pfxPassword);
+
+        try
+        {
+            var dir = Path.GetDirectoryName(cachePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            File.WriteAllBytes(cachePath, pfxBytes);
+            Logger.Info("Saved generated self-signed SSL certificate to '{0}'", cachePath);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Could not persist self-signed SSL certificate to disk at '{0}'", cachePath);
+        }
+
+        return X509CertificateLoader.LoadPkcs12(
+            pfxBytes,
+            pfxPassword,
+            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+    }
+
+    private sealed class DummySslConfig : IConfigFileProvider
+    {
+        public DummySslConfig(string bindAddress)
+        {
+            BindAddress = string.IsNullOrWhiteSpace(bindAddress) ? "*" : bindAddress;
+        }
+
+        public string BindAddress { get; }
+
+        public int Port => 9898;
+
+        public bool EnableSsl => true;
+
+        public int SslPort => 9899;
+
+        public string SslCertPath => string.Empty;
+
+        public string SslKeyPath => string.Empty;
+
+        public string SslCertPassword => string.Empty;
+
+        public bool RedirectHttpToHttps => false;
+
+        public string ApiKey => string.Empty;
+
+        public bool AuthenticationEnabled => false;
+
+        public bool TerminalAccessEnabled => true;
+
+        public string LogLevel => "info";
+
+        public string UrlBase => string.Empty;
+
+        public string PostgresHost => string.Empty;
+
+        public int PostgresPort => 5432;
+
+        public string PostgresMainDb => string.Empty;
+
+        public string PostgresUser => string.Empty;
+
+        public string PostgresPassword => string.Empty;
+
+        public void SaveConfigDictionary(Dictionary<string, object> configValues)
+        {
+        }
+    }
+}

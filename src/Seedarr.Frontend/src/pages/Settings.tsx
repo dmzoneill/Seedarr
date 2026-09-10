@@ -14,10 +14,12 @@ import { ConnectionsTab } from "./settings/ConnectionsTab";
 import { DownloadClientsTab } from "./settings/DownloadClientsTab";
 import { NotificationsTab } from "./settings/NotificationsTab";
 import { WebUITab } from "./settings/WebUITab";
+import { SecurityTab } from "./settings/SecurityTab";
 
 const sectionTitles: Record<string, string> = {
   general: "General",
   webui: "Web UI",
+  security: "Security",
   notifications: "Notifications",
   seeding: "Seeding",
   bittorrent: "BitTorrent",
@@ -38,6 +40,8 @@ const sectionDescriptions: Record<string, string> = {
     "Configure application behavior, host endpoints, and watch folder automation",
   webui:
     "Configure web user interface access, port bindings, and session security",
+  security:
+    "Configure authentication, CSRF protection, identity providers (SSO), and REST API keys",
   notifications:
     "Set up alerting and webhooks for download, swarm, and tracker events",
   seeding:
@@ -105,6 +109,7 @@ function Settings() {
 
       {activeSection === "general" && <GeneralTab />}
       {activeSection === "webui" && <WebUITab />}
+      {activeSection === "security" && <SecurityTab />}
       {activeSection === "notifications" && <NotificationsTab />}
       {activeSection === "seeding" && <SeedingTab />}
       {activeSection === "bittorrent" && <BitTorrentTab />}

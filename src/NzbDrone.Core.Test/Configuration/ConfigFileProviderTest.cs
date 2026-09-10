@@ -81,6 +81,36 @@ public class ConfigFileProviderTest
     }
 
     [Test]
+    public void SslPort_should_default_to_9899()
+    {
+        Assert.That(_subject.SslPort, Is.EqualTo(9899));
+    }
+
+    [Test]
+    public void SslCertPath_should_default_to_empty()
+    {
+        Assert.That(_subject.SslCertPath, Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public void SslKeyPath_should_default_to_empty()
+    {
+        Assert.That(_subject.SslKeyPath, Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public void SslCertPassword_should_default_to_empty()
+    {
+        Assert.That(_subject.SslCertPassword, Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public void RedirectHttpToHttps_should_default_to_false()
+    {
+        Assert.That(_subject.RedirectHttpToHttps, Is.False);
+    }
+
+    [Test]
     public void AuthenticationEnabled_should_default_to_false()
     {
         Assert.That(_subject.AuthenticationEnabled, Is.False);
@@ -123,12 +153,32 @@ public class ConfigFileProviderTest
         {
             { "Port", 9000 },
             { "LogLevel", "debug" },
-            { "EnableSsl", true }
+            { "EnableSsl", true },
+            { "SslPort", 9900 },
+            { "SslCertPath", "/path/to/cert.pfx" },
+            { "RedirectHttpToHttps", true }
         });
 
         Assert.That(_subject.Port, Is.EqualTo(9000));
         Assert.That(_subject.LogLevel, Is.EqualTo("debug"));
         Assert.That(_subject.EnableSsl, Is.True);
+        Assert.That(_subject.SslPort, Is.EqualTo(9900));
+        Assert.That(_subject.SslCertPath, Is.EqualTo("/path/to/cert.pfx"));
+        Assert.That(_subject.RedirectHttpToHttps, Is.True);
+    }
+
+    [Test]
+    public void Environment_variable_should_override_config_file()
+    {
+        Environment.SetEnvironmentVariable("SEEDARR__SSL_PORT", "9911");
+        try
+        {
+            Assert.That(_subject.SslPort, Is.EqualTo(9911));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SEEDARR__SSL_PORT", null);
+        }
     }
 
     [Test]

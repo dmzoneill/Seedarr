@@ -43,6 +43,33 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
 
         var apiKey = Request.Headers[Options.HeaderName].FirstOrDefault();
 
+        if (string.IsNullOrWhiteSpace(apiKey) && Request.Headers.TryGetValue("ApiKey", out var altHeader))
+        {
+            apiKey = altHeader.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey) && Request.Query.TryGetValue("apikey", out var qKey))
+        {
+            apiKey = qKey.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey) && Request.Query.TryGetValue("api_key", out var qKey2))
+        {
+            apiKey = qKey2.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey) && Request.Query.TryGetValue("access_token", out var qToken))
+        {
+            apiKey = qToken.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey) &&
+            Request.Headers.TryGetValue("Authorization", out var authHeader) &&
+            authHeader.ToString().StartsWith("Bearer ", System.StringComparison.OrdinalIgnoreCase))
+        {
+            apiKey = authHeader.ToString()["Bearer ".Length..].Trim();
+        }
+
         if (string.IsNullOrWhiteSpace(apiKey))
         {
             return Task.FromResult(AuthenticateResult.NoResult());
