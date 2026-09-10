@@ -1,11 +1,29 @@
+using System.Collections.Generic;
 using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.Notifications;
 
 public class NotificationDefinition : ProviderDefinition
 {
-    public bool OnTorrentAdded { get; set; }
-    public bool OnSeedingStarted { get; set; }
-    public bool OnSeedingStopped { get; set; }
-    public bool OnHealthIssue { get; set; }
+    public bool OnGrab { get; set; } = true;
+
+    public bool OnDownloadComplete { get; set; } = true;
+
+    public bool OnMediaInspected { get; set; }
+
+    public bool OnExtractComplete { get; set; }
+
+    public bool OnSeedGoalReached { get; set; } = true;
+
+    public bool OnTorrentDeleted { get; set; }
+
+    public bool OnHealthIssue { get; set; } = true;
+
+    public bool OnHealthRestored { get; set; } = true;
+
+    public bool OnManualInteractionRequired { get; set; } = true;
+
+    public bool OnApplicationUpdate { get; set; }
+
+    public List<int> Tags { get; set; } = new();
 }

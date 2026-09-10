@@ -57,6 +57,9 @@ import type {
   TrackerMetric,
   TrackerMetricsSummary,
   TrackerMetricSnapshot,
+  NotificationResource,
+  NotificationTestResult,
+  RssRule,
 } from "./types";
 
 const DEFAULT_REFETCH_MS = 5000;
@@ -1316,3 +1319,102 @@ export function useAllMediaMetadata() {
     queryFn: () => apiClient.get("/mediacover"),
   });
 }
+
+export function useNotifications() {
+  return useQuery<NotificationResource[]>({
+    queryKey: ["notifications"],
+    queryFn: () => apiClient.get("/notifications"),
+  });
+}
+
+export function useCreateNotification() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    NotificationResource,
+    Error,
+    Partial<NotificationResource>
+  >({
+    mutationFn: (notification) =>
+      apiClient.post("/notifications", notification),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+export function useUpdateNotification() {
+  const queryClient = useQueryClient();
+  return useMutation<NotificationResource, Error, NotificationResource>({
+    mutationFn: (notification) =>
+      apiClient.put(`/notifications/${notification.id}`, notification),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+export function useDeleteNotification() {
+  const queryClient = useQueryClient();
+  return useMutation<void, Error, number>({
+    mutationFn: (id: number) => apiClient.delete(`/notifications/${id}`),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+export function useTestNotification() {
+  return useMutation<NotificationTestResult, Error, number>({
+    mutationFn: (id: number) => apiClient.post(`/notifications/${id}/test`),
+  });
+}
+
+export function useTestDirectNotification() {
+  return useMutation<
+    NotificationTestResult,
+    Error,
+    Partial<NotificationResource>
+  >({
+    mutationFn: (notification) =>
+      apiClient.post("/notifications/test", notification),
+  });
+}
+
+export function useRssRules() {
+  return useQuery<RssRule[]>({
+    queryKey: ["rssrules"],
+    queryFn: () => apiClient.get("/rssrules"),
+  });
+}
+
+export function useCreateRssRule() {
+  const queryClient = useQueryClient();
+  return useMutation<RssRule, Error, Partial<RssRule>>({
+    mutationFn: (rule) => apiClient.post("/rssrules", rule),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rssrules"] }),
+  });
+}
+
+export function useUpdateRssRule() {
+  const queryClient = useQueryClient();
+  return useMutation<RssRule, Error, RssRule>({
+    mutationFn: (rule) => apiClient.put(`/rssrules/${rule.id}`, rule),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rssrules"] }),
+  });
+}
+
+export function useDeleteRssRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/rssrules/${id}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["rssrules"] }),
+  });
+}
+
+export function useSyncRss() {
+  const queryClient = useQueryClient();
+  return useMutation<{ success: boolean; grabbedCount: number }, Error, void>({
+    mutationFn: () => apiClient.post("/rssrules/sync"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+

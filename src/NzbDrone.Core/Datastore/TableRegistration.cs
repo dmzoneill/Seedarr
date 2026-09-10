@@ -42,5 +42,6 @@ public static class TableRegistration
         TableMapping.Register<Trackers.Metrics.TrackerMetricSnapshot>("TrackerMetricSnapshots");
         TableMapping.Register<TorrentMediaMetadata>("TorrentMediaMetadata");
         TableMapping.Register<IdentityProviderDefinition>("IdentityProviders");
+        TableMapping.Register<RssRule>("RssRules");
     }
 }
