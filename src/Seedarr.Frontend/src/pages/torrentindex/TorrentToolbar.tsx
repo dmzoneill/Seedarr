@@ -6,6 +6,7 @@ import {
   StopIcon,
   TableIcon,
   GridIcon,
+  FilterIcon,
 } from "../../components/icons/UIIcons";
 import { ViewMode } from "./types";
 
@@ -31,6 +32,8 @@ interface TorrentToolbarProps {
   onBulkStop: () => void;
   onBulkDelete: () => void;
   onBulkClear: () => void;
+  isFilterCollapsed?: boolean;
+  onToggleFilter?: () => void;
 }
 
 export function TorrentToolbar({
@@ -52,10 +55,25 @@ export function TorrentToolbar({
   onBulkStop,
   onBulkDelete,
   onBulkClear,
+  isFilterCollapsed = false,
+  onToggleFilter,
 }: TorrentToolbarProps) {
   return (
     <div className="page-header">
       <div className="page-header-group">
+        {onToggleFilter && (
+          <button
+            type="button"
+            className={`btn btn-small toggle-filter-btn${isFilterCollapsed ? " active" : ""}`}
+            onClick={onToggleFilter}
+            title={isFilterCollapsed ? "Show filter sidebar" : "Hide filter sidebar"}
+            aria-label="Toggle filter sidebar"
+            style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
+          >
+            <FilterIcon size={12} />
+            <span>{isFilterCollapsed ? "▶ Filter" : "◀ Filter"}</span>
+          </button>
+        )}
         <h1 className="page-heading">Torrents ({count})</h1>
         <button className="btn btn-success" onClick={onAddTorrent}>
           <PlusIcon size={13} /> Add Torrent

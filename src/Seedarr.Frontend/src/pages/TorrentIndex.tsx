@@ -37,6 +37,8 @@ function TorrentIndex() {
     handleViewMode,
     handleToggleSelect,
     handleSelectAll,
+    isFilterCollapsed,
+    toggleFilterCollapse,
   } = useTorrentIndexState();
 
   const [bulkPending, setBulkPending] = useState(false);
@@ -101,6 +103,8 @@ function TorrentIndex() {
         onBulkStop={handleBulkStop}
         onBulkDelete={handleBulkDelete}
         onBulkClear={() => setSelectedIds(new Set())}
+        isFilterCollapsed={isFilterCollapsed}
+        onToggleFilter={toggleFilterCollapse}
       />
       <div className="torrent-content-layout">
         <TorrentFilterPanel
@@ -111,6 +115,8 @@ function TorrentIndex() {
           stateCounts={stateCounts}
           trackerGroups={trackerGroups}
           count={count}
+          isCollapsed={isFilterCollapsed}
+          onToggleCollapse={toggleFilterCollapse}
         />
         <div className="filter-content">
           <div className="torrent-split-pane">
