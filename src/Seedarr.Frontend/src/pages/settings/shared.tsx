@@ -393,7 +393,9 @@ export function Toggle({
         <div className="form-toggle-row">
           <label
             className="toggle-switch"
-            style={disabled ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
+            style={
+              disabled ? { opacity: 0.6, cursor: "not-allowed" } : undefined
+            }
           >
             <input
               type="checkbox"

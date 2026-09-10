@@ -23,17 +23,37 @@ function levelBadgeClass(level: string): string {
 function sourceBadgeStyle(source: string): React.CSSProperties {
   switch (source.toLowerCase()) {
     case "tracker":
-      return { backgroundColor: "rgba(59, 130, 246, 0.2)", color: "#60a5fa", borderColor: "rgba(59, 130, 246, 0.4)" };
+      return {
+        backgroundColor: "rgba(59, 130, 246, 0.2)",
+        color: "#60a5fa",
+        borderColor: "rgba(59, 130, 246, 0.4)",
+      };
     case "peers":
     case "peer":
-      return { backgroundColor: "rgba(168, 85, 247, 0.2)", color: "#c084fc", borderColor: "rgba(168, 85, 247, 0.4)" };
+      return {
+        backgroundColor: "rgba(168, 85, 247, 0.2)",
+        color: "#c084fc",
+        borderColor: "rgba(168, 85, 247, 0.4)",
+      };
     case "seeding":
     case "seeder":
-      return { backgroundColor: "rgba(34, 197, 94, 0.2)", color: "#4ade80", borderColor: "rgba(34, 197, 94, 0.4)" };
+      return {
+        backgroundColor: "rgba(34, 197, 94, 0.2)",
+        color: "#4ade80",
+        borderColor: "rgba(34, 197, 94, 0.4)",
+      };
     case "trackerboost":
-      return { backgroundColor: "rgba(245, 158, 11, 0.2)", color: "#fbbf24", borderColor: "rgba(245, 158, 11, 0.4)" };
+      return {
+        backgroundColor: "rgba(245, 158, 11, 0.2)",
+        color: "#fbbf24",
+        borderColor: "rgba(245, 158, 11, 0.4)",
+      };
     default:
-      return { backgroundColor: "rgba(148, 163, 184, 0.2)", color: "#cbd5e1", borderColor: "rgba(148, 163, 184, 0.4)" };
+      return {
+        backgroundColor: "rgba(148, 163, 184, 0.2)",
+        color: "#cbd5e1",
+        borderColor: "rgba(148, 163, 184, 0.4)",
+      };
   }
 }
 
@@ -44,7 +64,12 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [copied, setCopied] = useState(false);
 
-  const { data: rawLogs, isLoading, isError, refetch } = useTorrentLogs(torrent.id, {
+  const {
+    data: rawLogs,
+    isLoading,
+    isError,
+    refetch,
+  } = useTorrentLogs(torrent.id, {
     polling: isLive,
   });
 
@@ -66,7 +91,10 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
       if (levelFilter !== "ALL" && entry.level.toUpperCase() !== levelFilter) {
         return false;
       }
-      if (sourceFilter !== "ALL" && entry.source.toLowerCase() !== sourceFilter.toLowerCase()) {
+      if (
+        sourceFilter !== "ALL" &&
+        entry.source.toLowerCase() !== sourceFilter.toLowerCase()
+      ) {
         return false;
       }
       if (searchTerm) {
@@ -94,7 +122,10 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
   }
 
   return (
-    <div className="card" style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+    <div
+      className="card"
+      style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}
+    >
       {/* Header & Controls Toolbar */}
       <div
         style={{
@@ -108,7 +139,9 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-          <h3 style={{ margin: 0, fontSize: "1.1rem" }}>Seeder & Tracker Log</h3>
+          <h3 style={{ margin: 0, fontSize: "1.1rem" }}>
+            Seeder & Tracker Log
+          </h3>
           <span
             style={{
               display: "inline-flex",
@@ -118,7 +151,9 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
               fontWeight: 500,
               padding: "0.2rem 0.5rem",
               borderRadius: "12px",
-              backgroundColor: isLive ? "rgba(34, 197, 94, 0.15)" : "rgba(148, 163, 184, 0.15)",
+              backgroundColor: isLive
+                ? "rgba(34, 197, 94, 0.15)"
+                : "rgba(148, 163, 184, 0.15)",
               color: isLive ? "#4ade80" : "#94a3b8",
               border: `1px solid ${isLive ? "rgba(34, 197, 94, 0.3)" : "rgba(148, 163, 184, 0.3)"}`,
             }}
@@ -135,7 +170,8 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
             {isLive ? "Live (3s)" : "Paused"}
           </span>
           <span style={{ fontSize: "0.78rem", color: "var(--text-dim, #888)" }}>
-            Showing {filteredLogs.length} of latest {logs.length} (capped at 100)
+            Showing {filteredLogs.length} of latest {logs.length} (capped at
+            100)
           </span>
         </div>
 
@@ -198,7 +234,9 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
 
         {/* Level Filters */}
         <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
-          <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Level:</span>
+          <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+            Level:
+          </span>
           {["ALL", "INFO", "DEBUG", "WARN", "ERROR"].map((lvl) => (
             <button
               key={lvl}
@@ -217,8 +255,12 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
 
         {/* Source Filters */}
         {sources.length > 0 && (
-          <div style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Source:</span>
+          <div
+            style={{ display: "flex", gap: "0.25rem", alignItems: "center" }}
+          >
+            <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+              Source:
+            </span>
             <button
               className={`btn btn-sm ${sourceFilter === "ALL" ? "btn-primary" : "btn-outline"}`}
               style={{
@@ -259,31 +301,89 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           border: "1px solid rgba(255,255,255,0.08)",
         }}
       >
-        <table className="torrent-table" style={{ fontSize: "0.8rem", width: "100%", borderCollapse: "collapse" }}>
+        <table
+          className="torrent-table"
+          style={{
+            fontSize: "0.8rem",
+            width: "100%",
+            borderCollapse: "collapse",
+          }}
+        >
           <thead>
-            <tr style={{ backgroundColor: "#161b22", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-              <th className="torrent-table-th" style={{ width: "160px", padding: "0.4rem 0.6rem" }}>Timestamp</th>
-              <th className="torrent-table-th" style={{ width: "80px", padding: "0.4rem 0.6rem" }}>Level</th>
-              <th className="torrent-table-th" style={{ width: "110px", padding: "0.4rem 0.6rem" }}>Source</th>
-              <th className="torrent-table-th" style={{ padding: "0.4rem 0.6rem" }}>Event Details</th>
+            <tr
+              style={{
+                backgroundColor: "#161b22",
+                borderBottom: "1px solid rgba(255,255,255,0.1)",
+              }}
+            >
+              <th
+                className="torrent-table-th"
+                style={{ width: "160px", padding: "0.4rem 0.6rem" }}
+              >
+                Timestamp
+              </th>
+              <th
+                className="torrent-table-th"
+                style={{ width: "80px", padding: "0.4rem 0.6rem" }}
+              >
+                Level
+              </th>
+              <th
+                className="torrent-table-th"
+                style={{ width: "110px", padding: "0.4rem 0.6rem" }}
+              >
+                Source
+              </th>
+              <th
+                className="torrent-table-th"
+                style={{ padding: "0.4rem 0.6rem" }}
+              >
+                Event Details
+              </th>
             </tr>
           </thead>
-          <tbody style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}>
+          <tbody
+            style={{
+              fontFamily:
+                "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+            }}
+          >
             {isLoading && logs.length === 0 ? (
               <tr className="torrent-table-row">
-                <td colSpan={4} style={{ color: "var(--text-dim)", textAlign: "center", padding: "2rem" }}>
+                <td
+                  colSpan={4}
+                  style={{
+                    color: "var(--text-dim)",
+                    textAlign: "center",
+                    padding: "2rem",
+                  }}
+                >
                   Loading latest seeder & tracker log entries...
                 </td>
               </tr>
             ) : isError && logs.length === 0 ? (
               <tr className="torrent-table-row">
-                <td colSpan={4} style={{ color: "var(--danger, #ef4444)", textAlign: "center", padding: "2rem" }}>
+                <td
+                  colSpan={4}
+                  style={{
+                    color: "var(--danger, #ef4444)",
+                    textAlign: "center",
+                    padding: "2rem",
+                  }}
+                >
                   Failed to load seeder log entries
                 </td>
               </tr>
             ) : filteredLogs.length === 0 ? (
               <tr className="torrent-table-row">
-                <td colSpan={4} style={{ color: "var(--text-dim)", textAlign: "center", padding: "2rem" }}>
+                <td
+                  colSpan={4}
+                  style={{
+                    color: "var(--text-dim)",
+                    textAlign: "center",
+                    padding: "2rem",
+                  }}
+                >
                   {logs.length === 0
                     ? "No seeder or tracker events recorded yet"
                     : "No log events match current search/filter criteria"}
@@ -304,11 +404,19 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
                           : "transparent",
                   }}
                 >
-                  <td style={{ color: "#8b949e", whiteSpace: "nowrap", padding: "0.35rem 0.6rem" }}>
+                  <td
+                    style={{
+                      color: "#8b949e",
+                      whiteSpace: "nowrap",
+                      padding: "0.35rem 0.6rem",
+                    }}
+                  >
                     {formatDate(entry.timeStamp)}
                   </td>
                   <td style={{ padding: "0.35rem 0.6rem" }}>
-                    <span className={`torrent-log-level ${levelBadgeClass(entry.level)}`}>
+                    <span
+                      className={`torrent-log-level ${levelBadgeClass(entry.level)}`}
+                    >
                       {entry.level.toUpperCase()}
                     </span>
                   </td>
@@ -329,7 +437,10 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
                   </td>
                   <td
                     style={{
-                      color: entry.level.toUpperCase() === "ERROR" ? "#fca5a5" : "#e6edf3",
+                      color:
+                        entry.level.toUpperCase() === "ERROR"
+                          ? "#fca5a5"
+                          : "#e6edf3",
                       wordBreak: "break-word",
                       lineHeight: "1.35",
                       padding: "0.35rem 0.6rem",

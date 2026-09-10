@@ -11,7 +11,7 @@ import { dictionaries } from "./locales";
 
 function getNestedValue(
   obj: TranslationDictionary | undefined,
-  path: string
+  path: string,
 ): string | undefined {
   if (!obj) return undefined;
   const parts = path.split(".");
@@ -58,11 +58,7 @@ function syncDomAttributes(locale: LocaleCode) {
 export interface I18nState {
   locale: LocaleCode;
   setLocale: (locale: LocaleCode) => void;
-  t: (
-    key: string,
-    params?: TranslationParams,
-    defaultVal?: string
-  ) => string;
+  t: (key: string, params?: TranslationParams, defaultVal?: string) => string;
 }
 
 const initialLocale: LocaleCode = detectBrowserLanguage();

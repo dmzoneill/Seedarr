@@ -24,7 +24,10 @@ export function SeedingAutomationCard() {
   }, [config]);
 
   useEffect(() => {
-    localStorage.setItem("seedarr_sequential_default", String(sequentialDefault));
+    localStorage.setItem(
+      "seedarr_sequential_default",
+      String(sequentialDefault),
+    );
   }, [sequentialDefault]);
 
   const handleRatioChange = (val: number) => {
@@ -45,10 +48,13 @@ export function SeedingAutomationCard() {
 
   // Pick primary disk space
   const primaryDisk = diskList && diskList.length > 0 ? diskList[0] : null;
-  const usedSpace = primaryDisk ? primaryDisk.totalSpace - primaryDisk.freeSpace : 0;
-  const usedPercent = primaryDisk && primaryDisk.totalSpace > 0
-    ? Math.round((usedSpace / primaryDisk.totalSpace) * 100)
+  const usedSpace = primaryDisk
+    ? primaryDisk.totalSpace - primaryDisk.freeSpace
     : 0;
+  const usedPercent =
+    primaryDisk && primaryDisk.totalSpace > 0
+      ? Math.round((usedSpace / primaryDisk.totalSpace) * 100)
+      : 0;
 
   if (isLoading) {
     return (
@@ -56,7 +62,9 @@ export function SeedingAutomationCard() {
         <div className="quick-settings-card-header">
           <span className="quick-settings-card-title">Seeding & Storage</span>
         </div>
-        <div className="quick-settings-loading">Loading seeding settings...</div>
+        <div className="quick-settings-loading">
+          Loading seeding settings...
+        </div>
       </div>
     );
   }
@@ -129,7 +137,11 @@ export function SeedingAutomationCard() {
           <div className="quick-settings-disk-bar-bg">
             <div
               className={`quick-settings-disk-bar-fill ${
-                usedPercent > 90 ? "danger" : usedPercent > 75 ? "warning" : "normal"
+                usedPercent > 90
+                  ? "danger"
+                  : usedPercent > 75
+                    ? "warning"
+                    : "normal"
               }`}
               style={{ width: `${Math.min(100, Math.max(0, usedPercent))}%` }}
             />

@@ -12,7 +12,7 @@ export function useTranslation() {
     (key: string, params?: TranslationParams, defaultVal?: string) => {
       return rawT(key, params, defaultVal);
     },
-    [rawT, locale]
+    [rawT, locale],
   );
 
   const currentLanguage = getLanguageMetadata(locale);
@@ -29,7 +29,7 @@ export function useTranslation() {
 export function translate(
   key: string,
   params?: TranslationParams,
-  defaultVal?: string
+  defaultVal?: string,
 ): string {
   return useI18nStore.getState().t(key, params, defaultVal);
 }

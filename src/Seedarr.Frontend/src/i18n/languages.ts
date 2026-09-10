@@ -4,7 +4,12 @@ export const STORAGE_KEY_LANGUAGE = "seedarr_lang";
 
 export const SUPPORTED_LANGUAGES: Language[] = [
   { code: "en", name: "English", nativeName: "English", flag: "🇬🇧" },
-  { code: "zh-CN", name: "Chinese (Simplified)", nativeName: "简体中文", flag: "🇨🇳" },
+  {
+    code: "zh-CN",
+    name: "Chinese (Simplified)",
+    nativeName: "简体中文",
+    flag: "🇨🇳",
+  },
   { code: "es", name: "Spanish", nativeName: "Español", flag: "🇪🇸" },
   { code: "de", name: "German", nativeName: "Deutsch", flag: "🇩🇪" },
   { code: "fr", name: "French", nativeName: "Français", flag: "🇫🇷" },
@@ -15,7 +20,12 @@ export const SUPPORTED_LANGUAGES: Language[] = [
   { code: "ko", name: "Korean", nativeName: "한국어", flag: "🇰🇷" },
   { code: "hi", name: "Hindi", nativeName: "हिन्दी", flag: "🇮🇳" },
   { code: "ar", name: "Arabic", nativeName: "العربية", flag: "🇸🇦", rtl: true },
-  { code: "id", name: "Indonesian", nativeName: "Bahasa Indonesia", flag: "🇮🇩" },
+  {
+    code: "id",
+    name: "Indonesian",
+    nativeName: "Bahasa Indonesia",
+    flag: "🇮🇩",
+  },
   { code: "tr", name: "Turkish", nativeName: "Türkçe", flag: "🇹🇷" },
   { code: "vi", name: "Vietnamese", nativeName: "Tiếng Việt", flag: "🇻🇳" },
   { code: "bn", name: "Bengali", nativeName: "বাংলা", flag: "🇧🇩" },
@@ -74,7 +84,7 @@ export function detectBrowserLanguage(): LocaleCode {
     // Case-insensitive exact match
     const lower = cleanLang.toLowerCase();
     const caseMatch = SUPPORTED_LANGUAGES.find(
-      (l) => l.code.toLowerCase() === lower
+      (l) => l.code.toLowerCase() === lower,
     );
     if (caseMatch) {
       return caseMatch.code;
@@ -86,7 +96,7 @@ export function detectBrowserLanguage(): LocaleCode {
       return "zh-CN";
     }
     const prefixMatch = SUPPORTED_LANGUAGES.find(
-      (l) => l.code.toLowerCase() === primary
+      (l) => l.code.toLowerCase() === primary,
     );
     if (prefixMatch) {
       return prefixMatch.code;

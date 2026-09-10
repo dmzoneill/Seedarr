@@ -213,7 +213,9 @@ function TrackerBoost() {
       return (
         (tr.trackerUrl || "").toLowerCase().includes(q) ||
         (tr.host || "").toLowerCase().includes(q) ||
-        (tr.registeredTorrentNames || []).some((n) => (n || "").toLowerCase().includes(q))
+        (tr.registeredTorrentNames || []).some((n) =>
+          (n || "").toLowerCase().includes(q),
+        )
       );
     });
   }, [matrixData?.trackers, matrixSearch]);

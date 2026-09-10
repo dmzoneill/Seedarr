@@ -18,11 +18,13 @@ export function BandwidthCard() {
     }
   }, [config]);
 
-  const handleUpdate = (updates: Partial<{
-    maxDownloadSpeedKbps: number;
-    maxUploadSpeedKbps: number;
-    alternativeSpeedEnabled: boolean;
-  }>) => {
+  const handleUpdate = (
+    updates: Partial<{
+      maxDownloadSpeedKbps: number;
+      maxUploadSpeedKbps: number;
+      alternativeSpeedEnabled: boolean;
+    }>,
+  ) => {
     if (!config) return;
     const newConfig = {
       ...config,
@@ -97,14 +99,26 @@ export function BandwidthCard() {
             step={100}
             value={downloadLimit}
             onChange={(e) => setDownloadLimit(Number(e.target.value))}
-            onMouseUp={() => handleUpdate({ maxDownloadSpeedKbps: downloadLimit })}
-            onTouchEnd={() => handleUpdate({ maxDownloadSpeedKbps: downloadLimit })}
+            onMouseUp={() =>
+              handleUpdate({ maxDownloadSpeedKbps: downloadLimit })
+            }
+            onTouchEnd={() =>
+              handleUpdate({ maxDownloadSpeedKbps: downloadLimit })
+            }
           />
           <div className="quick-settings-slider-ticks">
-            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 0 })}>0 (∞)</span>
-            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 1250 })}>1.2M</span>
-            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 10240 })}>10M</span>
-            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 50000 })}>50M</span>
+            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 0 })}>
+              0 (∞)
+            </span>
+            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 1250 })}>
+              1.2M
+            </span>
+            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 10240 })}>
+              10M
+            </span>
+            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 50000 })}>
+              50M
+            </span>
           </div>
         </div>
 
@@ -128,10 +142,18 @@ export function BandwidthCard() {
             onTouchEnd={() => handleUpdate({ maxUploadSpeedKbps: uploadLimit })}
           />
           <div className="quick-settings-slider-ticks">
-            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 0 })}>0 (∞)</span>
-            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 625 })}>625K</span>
-            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 5120 })}>5M</span>
-            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 50000 })}>50M</span>
+            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 0 })}>
+              0 (∞)
+            </span>
+            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 625 })}>
+              625K
+            </span>
+            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 5120 })}>
+              5M
+            </span>
+            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 50000 })}>
+              50M
+            </span>
           </div>
         </div>
 
@@ -144,7 +166,9 @@ export function BandwidthCard() {
                 key={p.label}
                 type="button"
                 className={`quick-settings-chip ${
-                  downloadLimit === p.dl && uploadLimit === p.ul ? "selected" : ""
+                  downloadLimit === p.dl && uploadLimit === p.ul
+                    ? "selected"
+                    : ""
                 }`}
                 onClick={() =>
                   handleUpdate({

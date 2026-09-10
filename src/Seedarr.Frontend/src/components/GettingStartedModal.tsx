@@ -16,7 +16,12 @@ import type {
   ArrConnection,
   ArrTestResult,
 } from "../api/types";
-import { TextInput, SelectInput, Toggle, NumberInput } from "../pages/settings/shared";
+import {
+  TextInput,
+  SelectInput,
+  Toggle,
+  NumberInput,
+} from "../pages/settings/shared";
 import SeedarrLogo from "./icons/SeedarrLogo";
 import SeedarrText from "./icons/SeedarrText";
 
@@ -37,8 +42,18 @@ interface StepMeta {
 }
 
 const STEPS: StepMeta[] = [
-  { id: "welcome", stepNum: 0, shortName: "Welcome", title: "Welcome to Seedarr" },
-  { id: "client", stepNum: 1, shortName: "Download Client", title: "Add Download Client" },
+  {
+    id: "welcome",
+    stepNum: 0,
+    shortName: "Welcome",
+    title: "Welcome to Seedarr",
+  },
+  {
+    id: "client",
+    stepNum: 1,
+    shortName: "Download Client",
+    title: "Add Download Client",
+  },
   { id: "prowlarr", stepNum: 2, shortName: "Prowlarr", title: "Add Indexer" },
   { id: "sonarr", stepNum: 3, shortName: "Sonarr", title: "Add Connection" },
   { id: "radarr", stepNum: 4, shortName: "Radarr", title: "Add Connection" },
@@ -46,7 +61,10 @@ const STEPS: StepMeta[] = [
   { id: "finish", stepNum: 6, shortName: "Finished", title: "Setup Complete" },
 ];
 
-export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProps) {
+export function GettingStartedModal({
+  isOpen,
+  onClose,
+}: GettingStartedModalProps) {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
   const [mode, setMode] = useState<GuideMode>("readonly");
@@ -55,7 +73,9 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
   });
 
   // Download Client Form State
-  const [clientForm, setClientForm] = useState<Partial<DownloadClientDefinition>>({
+  const [clientForm, setClientForm] = useState<
+    Partial<DownloadClientDefinition>
+  >({
     name: "My qBittorrent",
     clientType: "QBitTorrent",
     host: "localhost",
@@ -66,7 +86,8 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
     category: "",
     enable: true,
   });
-  const [clientTestResult, setClientTestResult] = useState<DownloadClientTestResult | null>(null);
+  const [clientTestResult, setClientTestResult] =
+    useState<DownloadClientTestResult | null>(null);
   const [clientSaved, setClientSaved] = useState(false);
 
   // Prowlarr Indexer Form State
@@ -81,7 +102,8 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
     enableRss: true,
     enableSearch: true,
   });
-  const [indexerTestResult, setIndexerTestResult] = useState<IndexerTestResult | null>(null);
+  const [indexerTestResult, setIndexerTestResult] =
+    useState<IndexerTestResult | null>(null);
   const [indexerSaved, setIndexerSaved] = useState(false);
 
   // Sonarr Form State
@@ -96,7 +118,8 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
     webhookEnabled: true,
     webhookHost: "seedarr",
   });
-  const [sonarrTestResult, setSonarrTestResult] = useState<ArrTestResult | null>(null);
+  const [sonarrTestResult, setSonarrTestResult] =
+    useState<ArrTestResult | null>(null);
   const [sonarrSaved, setSonarrSaved] = useState(false);
 
   // Radarr Form State
@@ -111,7 +134,8 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
     webhookEnabled: true,
     webhookHost: "seedarr",
   });
-  const [radarrTestResult, setRadarrTestResult] = useState<ArrTestResult | null>(null);
+  const [radarrTestResult, setRadarrTestResult] =
+    useState<ArrTestResult | null>(null);
   const [radarrSaved, setRadarrSaved] = useState(false);
 
   // Lidarr Form State
@@ -126,7 +150,8 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
     webhookEnabled: true,
     webhookHost: "seedarr",
   });
-  const [lidarrTestResult, setLidarrTestResult] = useState<ArrTestResult | null>(null);
+  const [lidarrTestResult, setLidarrTestResult] =
+    useState<ArrTestResult | null>(null);
   const [lidarrSaved, setLidarrSaved] = useState(false);
 
   // API Mutations
@@ -196,7 +221,8 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
     setClientTestResult(null);
     testClientMutation.mutate(clientForm, {
       onSuccess: (data) => setClientTestResult(data),
-      onError: (err) => setClientTestResult({ success: false, message: err.message }),
+      onError: (err) =>
+        setClientTestResult({ success: false, message: err.message }),
     });
   };
 
@@ -204,7 +230,8 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
     createClientMutation.mutate(
       {
         ...clientForm,
-        name: clientForm.name?.trim() || clientForm.clientType || "Download Client",
+        name:
+          clientForm.name?.trim() || clientForm.clientType || "Download Client",
         implementation: `${clientForm.clientType || "QBitTorrent"}DownloadClient`,
         configContract: "DownloadClientDefinition",
       },
@@ -213,7 +240,7 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
           setClientSaved(true);
           handleNext();
         },
-      }
+      },
     );
   };
 
@@ -221,7 +248,8 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
     setIndexerTestResult(null);
     testIndexerMutation.mutate(indexerForm, {
       onSuccess: (data) => setIndexerTestResult(data),
-      onError: (err) => setIndexerTestResult({ success: false, message: err.message }),
+      onError: (err) =>
+        setIndexerTestResult({ success: false, message: err.message }),
     });
   };
 
@@ -238,11 +266,14 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
           setIndexerSaved(true);
           handleNext();
         },
-      }
+      },
     );
   };
 
-  const handleTestArr = (form: Partial<ArrConnection>, setResult: (res: ArrTestResult | null) => void) => {
+  const handleTestArr = (
+    form: Partial<ArrConnection>,
+    setResult: (res: ArrTestResult | null) => void,
+  ) => {
     setResult(null);
     testArrMutation.mutate(form, {
       onSuccess: (data) => setResult(data),
@@ -253,7 +284,7 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
   const handleSaveArr = (
     form: Partial<ArrConnection>,
     setSaved: (saved: boolean) => void,
-    arrType: string
+    arrType: string,
   ) => {
     createArrMutation.mutate(
       {
@@ -268,7 +299,7 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
           setSaved(true);
           handleNext();
         },
-      }
+      },
     );
   };
 
@@ -276,7 +307,7 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
   const renderTestAlert = (
     isPending: boolean,
     result: { success: boolean; message?: string } | null,
-    targetName: string
+    targetName: string,
   ) => {
     if (isPending) {
       return (
@@ -314,13 +345,19 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
             backgroundColor: result.success
               ? "rgba(40, 167, 69, 0.15)"
               : "rgba(220, 53, 69, 0.15)",
-            color: result.success ? "var(--success, #28a745)" : "var(--danger, #dc3545)",
+            color: result.success
+              ? "var(--success, #28a745)"
+              : "var(--danger, #dc3545)",
             border: `1px solid ${
-              result.success ? "rgba(40, 167, 69, 0.35)" : "rgba(220, 53, 69, 0.35)"
+              result.success
+                ? "rgba(40, 167, 69, 0.35)"
+                : "rgba(220, 53, 69, 0.35)"
             }`,
           }}
         >
-          <span style={{ fontWeight: "bold", fontSize: "1.1rem", lineHeight: "1" }}>
+          <span
+            style={{ fontWeight: "bold", fontSize: "1.1rem", lineHeight: "1" }}
+          >
             {result.success ? "✓" : "✕"}
           </span>
           <div style={{ flex: 1 }}>
@@ -328,7 +365,13 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
               {result.success ? "Connection Successful" : "Connection Failed"}
             </div>
             {result.message && (
-              <div style={{ marginTop: "0.25rem", opacity: 0.95, wordBreak: "break-word" }}>
+              <div
+                style={{
+                  marginTop: "0.25rem",
+                  opacity: 0.95,
+                  wordBreak: "break-word",
+                }}
+              >
                 {result.message}
               </div>
             )}
@@ -387,7 +430,10 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
               type="button"
               onClick={() => setMode("readonly")}
               style={{
-                background: mode === "readonly" ? "var(--accent, #c8a84e)" : "transparent",
+                background:
+                  mode === "readonly"
+                    ? "var(--accent, #c8a84e)"
+                    : "transparent",
                 color: mode === "readonly" ? "#000" : "var(--text-muted, #aaa)",
                 border: "none",
                 padding: "3px 10px",
@@ -403,8 +449,12 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
               type="button"
               onClick={() => setMode("interactive")}
               style={{
-                background: mode === "interactive" ? "var(--accent, #c8a84e)" : "transparent",
-                color: mode === "interactive" ? "#000" : "var(--text-muted, #aaa)",
+                background:
+                  mode === "interactive"
+                    ? "var(--accent, #c8a84e)"
+                    : "transparent",
+                color:
+                  mode === "interactive" ? "#000" : "var(--text-muted, #aaa)",
                 border: "none",
                 padding: "3px 10px",
                 borderRadius: "16px",
@@ -442,7 +492,8 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
             justifyContent: "space-between",
             marginBottom: "1.25rem",
             paddingBottom: "0.75rem",
-            borderBottom: "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
+            borderBottom:
+              "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
             gap: "0.25rem",
             overflowX: "auto",
           }}
@@ -459,9 +510,13 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                   background: isActive
                     ? "var(--accent, #c8a84e)"
                     : isCompleted
-                    ? "rgba(255, 255, 255, 0.08)"
-                    : "transparent",
-                  color: isActive ? "#000" : isCompleted ? "var(--text-primary)" : "var(--text-muted)",
+                      ? "rgba(255, 255, 255, 0.08)"
+                      : "transparent",
+                  color: isActive
+                    ? "#000"
+                    : isCompleted
+                      ? "var(--text-primary)"
+                      : "var(--text-muted)",
                   border: "none",
                   borderRadius: "12px",
                   padding: "2px 8px",
@@ -509,9 +564,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                 margin: "0 0 1.5rem",
               }}
             >
-              Seedarr connects to your <strong>Download Agent</strong> (qBittorrent, Transmission, Deluge),
-              <strong>Prowlarr Indexer</strong>, and <strong>*Arr Media Managers</strong> (Sonarr, Radarr, Lidarr)
-              for automated cross-seeding and swarm optimization.
+              Seedarr connects to your <strong>Download Agent</strong>{" "}
+              (qBittorrent, Transmission, Deluge),
+              <strong>Prowlarr Indexer</strong>, and{" "}
+              <strong>*Arr Media Managers</strong> (Sonarr, Radarr, Lidarr) for
+              automated cross-seeding and swarm optimization.
             </p>
 
             <div
@@ -523,17 +580,33 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                 backgroundColor: "var(--bg-secondary)",
                 padding: "1rem",
                 borderRadius: "6px",
-                border: "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
+                border:
+                  "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
                 marginBottom: "1.5rem",
                 fontSize: "0.85rem",
               }}
             >
-              <div><strong>1. Download Agent:</strong> Captures downloads & monitors torrent swarms.</div>
-              <div><strong>2. Prowlarr:</strong> Syncs indexers and trackers automatically.</div>
-              <div><strong>3. Sonarr / Radarr / Lidarr:</strong> Connects TV, movies, and music libraries.</div>
+              <div>
+                <strong>1. Download Agent:</strong> Captures downloads &
+                monitors torrent swarms.
+              </div>
+              <div>
+                <strong>2. Prowlarr:</strong> Syncs indexers and trackers
+                automatically.
+              </div>
+              <div>
+                <strong>3. Sonarr / Radarr / Lidarr:</strong> Connects TV,
+                movies, and music libraries.
+              </div>
             </div>
 
-            <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: "0.75rem",
+              }}
+            >
               <button
                 type="button"
                 className="btn btn-primary btn-small"
@@ -662,7 +735,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
               disabled={isReadOnly}
             />
 
-            {renderTestAlert(testClientMutation.isPending, clientTestResult, clientForm.host || "client")}
+            {renderTestAlert(
+              testClientMutation.isPending,
+              clientTestResult,
+              clientForm.host || "client",
+            )}
 
             <div
               className="modal-actions"
@@ -679,7 +756,9 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                 onClick={handleTestClient}
                 disabled={testClientMutation.isPending || isReadOnly}
               >
-                {testClientMutation.isPending ? "Testing..." : "Test Connection"}
+                {testClientMutation.isPending
+                  ? "Testing..."
+                  : "Test Connection"}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -696,7 +775,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                     onClick={handleSaveClient}
                     disabled={createClientMutation.isPending}
                   >
-                    {createClientMutation.isPending ? "Saving..." : clientSaved ? "Saved ✓ Next" : "Save & Next"}
+                    {createClientMutation.isPending
+                      ? "Saving..."
+                      : clientSaved
+                        ? "Saved ✓ Next"
+                        : "Save & Next"}
                   </button>
                 ) : (
                   <button
@@ -756,7 +839,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
             />
             <TextInput
               label="API Key"
-              value={isReadOnly ? "••••••••••••••••••••••••••••••••" : indexerForm.apiKey || ""}
+              value={
+                isReadOnly
+                  ? "••••••••••••••••••••••••••••••••"
+                  : indexerForm.apiKey || ""
+              }
               onChange={(v) => {
                 setIndexerTestResult(null);
                 setIndexerForm({ ...indexerForm, apiKey: v });
@@ -812,7 +899,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
               disabled={isReadOnly}
             />
 
-            {renderTestAlert(testIndexerMutation.isPending, indexerTestResult, indexerForm.url || "Prowlarr")}
+            {renderTestAlert(
+              testIndexerMutation.isPending,
+              indexerTestResult,
+              indexerForm.url || "Prowlarr",
+            )}
 
             <div
               className="modal-actions"
@@ -829,7 +920,9 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                 onClick={handleTestIndexer}
                 disabled={testIndexerMutation.isPending || isReadOnly}
               >
-                {testIndexerMutation.isPending ? "Testing..." : "Test Connection"}
+                {testIndexerMutation.isPending
+                  ? "Testing..."
+                  : "Test Connection"}
               </button>
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <button
@@ -846,7 +939,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                     onClick={handleSaveIndexer}
                     disabled={createIndexerMutation.isPending}
                   >
-                    {createIndexerMutation.isPending ? "Saving..." : indexerSaved ? "Saved ✓ Next" : "Save & Next"}
+                    {createIndexerMutation.isPending
+                      ? "Saving..."
+                      : indexerSaved
+                        ? "Saved ✓ Next"
+                        : "Save & Next"}
                   </button>
                 ) : (
                   <button
@@ -903,7 +1000,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
             />
             <TextInput
               label="API Key"
-              value={isReadOnly ? "••••••••••••••••••••••••••••••••" : sonarrForm.apiKey || ""}
+              value={
+                isReadOnly
+                  ? "••••••••••••••••••••••••••••••••"
+                  : sonarrForm.apiKey || ""
+              }
               onChange={(v) => {
                 setSonarrTestResult(null);
                 setSonarrForm({ ...sonarrForm, apiKey: v });
@@ -961,7 +1062,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
               />
             )}
 
-            {renderTestAlert(testArrMutation.isPending, sonarrTestResult, sonarrForm.url || "Sonarr")}
+            {renderTestAlert(
+              testArrMutation.isPending,
+              sonarrTestResult,
+              sonarrForm.url || "Sonarr",
+            )}
 
             <div
               className="modal-actions"
@@ -992,10 +1097,16 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                   <button
                     type="button"
                     className="btn btn-primary btn-small"
-                    onClick={() => handleSaveArr(sonarrForm, setSonarrSaved, "Sonarr")}
+                    onClick={() =>
+                      handleSaveArr(sonarrForm, setSonarrSaved, "Sonarr")
+                    }
                     disabled={createArrMutation.isPending}
                   >
-                    {createArrMutation.isPending ? "Saving..." : sonarrSaved ? "Saved ✓ Next" : "Save & Next"}
+                    {createArrMutation.isPending
+                      ? "Saving..."
+                      : sonarrSaved
+                        ? "Saved ✓ Next"
+                        : "Save & Next"}
                   </button>
                 ) : (
                   <button
@@ -1052,7 +1163,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
             />
             <TextInput
               label="API Key"
-              value={isReadOnly ? "••••••••••••••••••••••••••••••••" : radarrForm.apiKey || ""}
+              value={
+                isReadOnly
+                  ? "••••••••••••••••••••••••••••••••"
+                  : radarrForm.apiKey || ""
+              }
               onChange={(v) => {
                 setRadarrTestResult(null);
                 setRadarrForm({ ...radarrForm, apiKey: v });
@@ -1110,7 +1225,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
               />
             )}
 
-            {renderTestAlert(testArrMutation.isPending, radarrTestResult, radarrForm.url || "Radarr")}
+            {renderTestAlert(
+              testArrMutation.isPending,
+              radarrTestResult,
+              radarrForm.url || "Radarr",
+            )}
 
             <div
               className="modal-actions"
@@ -1141,10 +1260,16 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                   <button
                     type="button"
                     className="btn btn-primary btn-small"
-                    onClick={() => handleSaveArr(radarrForm, setRadarrSaved, "Radarr")}
+                    onClick={() =>
+                      handleSaveArr(radarrForm, setRadarrSaved, "Radarr")
+                    }
                     disabled={createArrMutation.isPending}
                   >
-                    {createArrMutation.isPending ? "Saving..." : radarrSaved ? "Saved ✓ Next" : "Save & Next"}
+                    {createArrMutation.isPending
+                      ? "Saving..."
+                      : radarrSaved
+                        ? "Saved ✓ Next"
+                        : "Save & Next"}
                   </button>
                 ) : (
                   <button
@@ -1201,7 +1326,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
             />
             <TextInput
               label="API Key"
-              value={isReadOnly ? "••••••••••••••••••••••••••••••••" : lidarrForm.apiKey || ""}
+              value={
+                isReadOnly
+                  ? "••••••••••••••••••••••••••••••••"
+                  : lidarrForm.apiKey || ""
+              }
               onChange={(v) => {
                 setLidarrTestResult(null);
                 setLidarrForm({ ...lidarrForm, apiKey: v });
@@ -1259,7 +1388,11 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
               />
             )}
 
-            {renderTestAlert(testArrMutation.isPending, lidarrTestResult, lidarrForm.url || "Lidarr")}
+            {renderTestAlert(
+              testArrMutation.isPending,
+              lidarrTestResult,
+              lidarrForm.url || "Lidarr",
+            )}
 
             <div
               className="modal-actions"
@@ -1290,10 +1423,16 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                   <button
                     type="button"
                     className="btn btn-primary btn-small"
-                    onClick={() => handleSaveArr(lidarrForm, setLidarrSaved, "Lidarr")}
+                    onClick={() =>
+                      handleSaveArr(lidarrForm, setLidarrSaved, "Lidarr")
+                    }
                     disabled={createArrMutation.isPending}
                   >
-                    {createArrMutation.isPending ? "Saving..." : lidarrSaved ? "Saved ✓ Next" : "Save & Next"}
+                    {createArrMutation.isPending
+                      ? "Saving..."
+                      : lidarrSaved
+                        ? "Saved ✓ Next"
+                        : "Save & Next"}
                   </button>
                 ) : (
                   <button
@@ -1323,11 +1462,18 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
                 margin: "0 0 1.5rem",
               }}
             >
-              Your connections are set! Seedarr is ready to harvest swarm trackers, coordinate seeding,
-              and sync with your media library.
+              Your connections are set! Seedarr is ready to harvest swarm
+              trackers, coordinate seeding, and sync with your media library.
             </p>
 
-            <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: "0.75rem",
+                flexWrap: "wrap",
+              }}
+            >
               <button
                 type="button"
                 className="btn btn-primary btn-small"
@@ -1375,7 +1521,8 @@ export function GettingStartedModal({ isOpen, onClose }: GettingStartedModalProp
             alignItems: "center",
             marginTop: "1.25rem",
             paddingTop: "0.75rem",
-            borderTop: "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
+            borderTop:
+              "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
             fontSize: "0.8rem",
             color: "var(--text-muted)",
           }}

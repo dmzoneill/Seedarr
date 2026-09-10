@@ -31,12 +31,20 @@ export function TrackerMetrics() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] = useState<SortField>("upload");
   const [sortAsc, setSortAsc] = useState(false);
-  const [selectedMetric, setSelectedMetric] = useState<TrackerMetric | null>(null);
+  const [selectedMetric, setSelectedMetric] = useState<TrackerMetric | null>(
+    null,
+  );
 
-  const { data: metrics = [], isLoading: isLoadingMetrics, refetch: refetchMetrics } =
-    useTrackerMetrics(isLive ? 4000 : false);
-  const { data: summary, isLoading: isLoadingSummary, refetch: refetchSummary } =
-    useTrackerMetricsSummary(isLive ? 4000 : false);
+  const {
+    data: metrics = [],
+    isLoading: isLoadingMetrics,
+    refetch: refetchMetrics,
+  } = useTrackerMetrics(isLive ? 4000 : false);
+  const {
+    data: summary,
+    isLoading: isLoadingSummary,
+    refetch: refetchSummary,
+  } = useTrackerMetricsSummary(isLive ? 4000 : false);
 
   const resetMetric = useResetTrackerMetric();
   const deleteMetric = useDeleteTrackerMetric();
@@ -49,22 +57,33 @@ export function TrackerMetrics() {
   };
 
   const handleReset = (metric: TrackerMetric) => {
-    if (confirm(`Reset all metrics history for ${metric.domain || metric.trackerUrl}?`)) {
+    if (
+      confirm(
+        `Reset all metrics history for ${metric.domain || metric.trackerUrl}?`,
+      )
+    ) {
       resetMetric.mutate(metric.id, {
-        onSuccess: () => showToast(`Reset stats for ${metric.domain || metric.host}`, "success"),
+        onSuccess: () =>
+          showToast(
+            `Reset stats for ${metric.domain || metric.host}`,
+            "success",
+          ),
         onError: (err) => showToast(`Failed to reset: ${err.message}`, "error"),
       });
     }
   };
 
   const handleDelete = (metric: TrackerMetric) => {
-    if (confirm(`Delete tracking data for ${metric.domain || metric.trackerUrl}?`)) {
+    if (
+      confirm(`Delete tracking data for ${metric.domain || metric.trackerUrl}?`)
+    ) {
       deleteMetric.mutate(metric.id, {
         onSuccess: () => {
           showToast(`Deleted ${metric.domain || metric.host}`, "success");
           if (selectedMetric?.id === metric.id) setSelectedMetric(null);
         },
-        onError: (err) => showToast(`Failed to delete: ${err.message}`, "error"),
+        onError: (err) =>
+          showToast(`Failed to delete: ${err.message}`, "error"),
       });
     }
   };
@@ -73,10 +92,16 @@ export function TrackerMetrics() {
   const filteredMetrics = useMemo(() => {
     return metrics
       .filter((m) => {
-        if (protocolFilter !== "ALL" && (m.protocol || "").toUpperCase() !== protocolFilter) {
+        if (
+          protocolFilter !== "ALL" &&
+          (m.protocol || "").toUpperCase() !== protocolFilter
+        ) {
           return false;
         }
-        if (statusFilter !== "ALL" && (m.status || "").toLowerCase() !== statusFilter.toLowerCase()) {
+        if (
+          statusFilter !== "ALL" &&
+          (m.status || "").toLowerCase() !== statusFilter.toLowerCase()
+        ) {
           return false;
         }
         if (searchTerm) {
@@ -132,7 +157,15 @@ export function TrackerMetrics() {
   }, [metrics]);
 
   return (
-    <div className="content-area" style={{ display: "flex", flexDirection: "column", gap: "1.25rem", paddingBottom: "3rem" }}>
+    <div
+      className="content-area"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "1.25rem",
+        paddingBottom: "3rem",
+      }}
+    >
       {/* Top Header */}
       <div
         className="page-header"
@@ -158,7 +191,9 @@ export function TrackerMetrics() {
                 fontWeight: 600,
                 padding: "0.2rem 0.55rem",
                 borderRadius: "12px",
-                backgroundColor: isLive ? "rgba(34, 197, 94, 0.15)" : "rgba(148, 163, 184, 0.15)",
+                backgroundColor: isLive
+                  ? "rgba(34, 197, 94, 0.15)"
+                  : "rgba(148, 163, 184, 0.15)",
                 color: isLive ? "#4ade80" : "#94a3b8",
                 border: `1px solid ${isLive ? "rgba(34, 197, 94, 0.3)" : "rgba(148, 163, 184, 0.3)"}`,
               }}
@@ -175,8 +210,15 @@ export function TrackerMetrics() {
               {isLive ? "Live Telemetry" : "Paused"}
             </span>
           </div>
-          <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.85rem", color: "var(--text-secondary)" }}>
-            Telemetry, traffic statistics, scrape responses, and latency metrics for all interacted trackers.
+          <p
+            style={{
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.85rem",
+              color: "var(--text-secondary)",
+            }}
+          >
+            Telemetry, traffic statistics, scrape responses, and latency metrics
+            for all interacted trackers.
           </p>
         </div>
 
@@ -188,7 +230,11 @@ export function TrackerMetrics() {
           >
             {isLive ? "⏸ Pause" : "▶ Resume"}
           </button>
-          <button className="btn btn-outline btn-sm" onClick={handleRefresh} title="Refresh metrics">
+          <button
+            className="btn btn-outline btn-sm"
+            onClick={handleRefresh}
+            title="Refresh metrics"
+          >
             🔄 Refresh
           </button>
         </div>
@@ -203,135 +249,415 @@ export function TrackerMetrics() {
         }}
       >
         {/* Total Uploaded */}
-        <div className="card" style={{ padding: "1.1rem", borderRadius: "8px", position: "relative", overflow: "hidden" }}>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>
+        <div
+          className="card"
+          style={{
+            padding: "1.1rem",
+            borderRadius: "8px",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-secondary)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+            }}
+          >
             Total Upload Reported
           </div>
-          <div style={{ fontSize: "1.65rem", fontWeight: 700, color: "#4ade80", marginTop: "0.3rem" }}>
+          <div
+            style={{
+              fontSize: "1.65rem",
+              fontWeight: 700,
+              color: "#4ade80",
+              marginTop: "0.3rem",
+            }}
+          >
             {formatBytes(summary?.totalUploaded ?? 0)}
           </div>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-muted)",
+              marginTop: "0.25rem",
+            }}
+          >
             Across {summary?.totalTrackers ?? 0} swarms
           </div>
         </div>
 
         {/* Total Downloaded */}
-        <div className="card" style={{ padding: "1.1rem", borderRadius: "8px" }}>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>
+        <div
+          className="card"
+          style={{ padding: "1.1rem", borderRadius: "8px" }}
+        >
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-secondary)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+            }}
+          >
             Total Download Reported
           </div>
-          <div style={{ fontSize: "1.65rem", fontWeight: 700, color: "#60a5fa", marginTop: "0.3rem" }}>
+          <div
+            style={{
+              fontSize: "1.65rem",
+              fontWeight: 700,
+              color: "#60a5fa",
+              marginTop: "0.3rem",
+            }}
+          >
             {formatBytes(summary?.totalDownloaded ?? 0)}
           </div>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-            Global Ratio: <strong style={{ color: "#fbbf24" }}>{summary?.globalRatio ?? 0}x</strong>
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-muted)",
+              marginTop: "0.25rem",
+            }}
+          >
+            Global Ratio:{" "}
+            <strong style={{ color: "#fbbf24" }}>
+              {summary?.globalRatio ?? 0}x
+            </strong>
           </div>
         </div>
 
         {/* Success Rate */}
-        <div className="card" style={{ padding: "1.1rem", borderRadius: "8px" }}>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>
+        <div
+          className="card"
+          style={{ padding: "1.1rem", borderRadius: "8px" }}
+        >
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-secondary)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+            }}
+          >
             Announce Success Rate
           </div>
-          <div style={{ fontSize: "1.65rem", fontWeight: 700, color: "#22c55e", marginTop: "0.3rem" }}>
+          <div
+            style={{
+              fontSize: "1.65rem",
+              fontWeight: 700,
+              color: "#22c55e",
+              marginTop: "0.3rem",
+            }}
+          >
             {summary?.announceSuccessRate ?? 100}%
           </div>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-            {summary?.successfulAnnounces?.toLocaleString() ?? 0} ok / {summary?.failedAnnounces ?? 0} fail
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-muted)",
+              marginTop: "0.25rem",
+            }}
+          >
+            {summary?.successfulAnnounces?.toLocaleString() ?? 0} ok /{" "}
+            {summary?.failedAnnounces ?? 0} fail
           </div>
         </div>
 
         {/* Avg Response Time */}
-        <div className="card" style={{ padding: "1.1rem", borderRadius: "8px" }}>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>
+        <div
+          className="card"
+          style={{ padding: "1.1rem", borderRadius: "8px" }}
+        >
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-secondary)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+            }}
+          >
             Avg Response Latency
           </div>
-          <div style={{ fontSize: "1.65rem", fontWeight: 700, color: "#e2e8f0", marginTop: "0.3rem" }}>
-            {Math.round(summary?.avgResponseTimeMs ?? 0)} <span style={{ fontSize: "1rem", fontWeight: 400 }}>ms</span>
+          <div
+            style={{
+              fontSize: "1.65rem",
+              fontWeight: 700,
+              color: "#e2e8f0",
+              marginTop: "0.3rem",
+            }}
+          >
+            {Math.round(summary?.avgResponseTimeMs ?? 0)}{" "}
+            <span style={{ fontSize: "1rem", fontWeight: 400 }}>ms</span>
           </div>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-muted)",
+              marginTop: "0.25rem",
+            }}
+          >
             Round-trip UDP/HTTP
           </div>
         </div>
 
         {/* Trackers Health Breakdown */}
-        <div className="card" style={{ padding: "1.1rem", borderRadius: "8px" }}>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>
+        <div
+          className="card"
+          style={{ padding: "1.1rem", borderRadius: "8px" }}
+        >
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-secondary)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+            }}
+          >
             Active Tracker Swarms
           </div>
-          <div style={{ fontSize: "1.65rem", fontWeight: 700, marginTop: "0.3rem" }}>
+          <div
+            style={{
+              fontSize: "1.65rem",
+              fontWeight: 700,
+              marginTop: "0.3rem",
+            }}
+          >
             {summary?.totalTrackers ?? 0}
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem", fontSize: "0.76rem" }}>
-            <span style={{ color: "#4ade80" }}>● {summary?.healthyTrackers ?? 0} ok</span>
-            <span style={{ color: "#fbbf24" }}>● {summary?.degradedTrackers ?? 0} slow</span>
-            <span style={{ color: "#f87171" }}>● {summary?.offlineTrackers ?? 0} down</span>
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              marginTop: "0.25rem",
+              fontSize: "0.76rem",
+            }}
+          >
+            <span style={{ color: "#4ade80" }}>
+              ● {summary?.healthyTrackers ?? 0} ok
+            </span>
+            <span style={{ color: "#fbbf24" }}>
+              ● {summary?.degradedTrackers ?? 0} slow
+            </span>
+            <span style={{ color: "#f87171" }}>
+              ● {summary?.offlineTrackers ?? 0} down
+            </span>
           </div>
         </div>
 
         {/* Peers Discovered */}
-        <div className="card" style={{ padding: "1.1rem", borderRadius: "8px" }}>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>
+        <div
+          className="card"
+          style={{ padding: "1.1rem", borderRadius: "8px" }}
+        >
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-secondary)",
+              fontWeight: 600,
+              textTransform: "uppercase",
+            }}
+          >
             Total Peers Discovered
           </div>
-          <div style={{ fontSize: "1.65rem", fontWeight: 700, color: "#c084fc", marginTop: "0.3rem" }}>
+          <div
+            style={{
+              fontSize: "1.65rem",
+              fontWeight: 700,
+              color: "#c084fc",
+              marginTop: "0.3rem",
+            }}
+          >
             {(summary?.totalPeersDiscovered ?? 0).toLocaleString()}
           </div>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+          <div
+            style={{
+              fontSize: "0.78rem",
+              color: "var(--text-muted)",
+              marginTop: "0.25rem",
+            }}
+          >
             Candidates harvested
           </div>
         </div>
       </div>
 
       {/* Visual Charts & Diagrams Section */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "1rem" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
+          gap: "1rem",
+        }}
+      >
         {/* Chart 1: 24h Hourly Activity Timeline */}
-        <div className="card" style={{ padding: "1.25rem", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ margin: 0, fontSize: "0.98rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+        <div
+          className="card"
+          style={{
+            padding: "1.25rem",
+            borderRadius: "8px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "0.98rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.4rem",
+              }}
+            >
               <span>📈</span> 24-Hour Announce & Traffic Activity
             </h3>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Last 24 Hours</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              Last 24 Hours
+            </span>
           </div>
 
-          <div style={{ height: "180px", width: "100%", position: "relative", marginTop: "0.5rem" }}>
+          <div
+            style={{
+              height: "180px",
+              width: "100%",
+              position: "relative",
+              marginTop: "0.5rem",
+            }}
+          >
             <HourlyActivitySvgChart data={summary?.hourlyHistory ?? []} />
           </div>
 
-          <div style={{ display: "flex", justifyContent: "center", gap: "1.25rem", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              <span style={{ width: "10px", height: "10px", backgroundColor: "#4ade80", borderRadius: "2px" }} />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: "1.25rem",
+              fontSize: "0.75rem",
+              color: "var(--text-secondary)",
+            }}
+          >
+            <span
+              style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+            >
+              <span
+                style={{
+                  width: "10px",
+                  height: "10px",
+                  backgroundColor: "#4ade80",
+                  borderRadius: "2px",
+                }}
+              />
               Upload Volume
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              <span style={{ width: "10px", height: "10px", backgroundColor: "#60a5fa", borderRadius: "2px" }} />
+            <span
+              style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+            >
+              <span
+                style={{
+                  width: "10px",
+                  height: "10px",
+                  backgroundColor: "#60a5fa",
+                  borderRadius: "2px",
+                }}
+              />
               Download Volume
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              <span style={{ width: "10px", height: "10px", backgroundColor: "#f59e0b", borderRadius: "2px" }} />
+            <span
+              style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+            >
+              <span
+                style={{
+                  width: "10px",
+                  height: "10px",
+                  backgroundColor: "#f59e0b",
+                  borderRadius: "2px",
+                }}
+              />
               Announce Count
             </span>
           </div>
         </div>
 
         {/* Chart 2: Top Upload Trackers & Protocols Breakdown */}
-        <div className="card" style={{ padding: "1.25rem", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <h3 style={{ margin: 0, fontSize: "0.98rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+        <div
+          className="card"
+          style={{
+            padding: "1.25rem",
+            borderRadius: "8px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+          }}
+        >
+          <h3
+            style={{
+              margin: 0,
+              fontSize: "0.98rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
+            }}
+          >
             <span>🏆</span> Top Swarms by Upload Traffic
           </h3>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", flex: 1, justifyContent: "center" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: "0.6rem",
+              flex: 1,
+              justifyContent: "center",
+            }}
+          >
             {(summary?.topUploadTrackers ?? []).length === 0 ? (
-              <div style={{ textAlign: "center", color: "var(--text-muted)", fontSize: "0.85rem", padding: "2rem" }}>
+              <div
+                style={{
+                  textAlign: "center",
+                  color: "var(--text-muted)",
+                  fontSize: "0.85rem",
+                  padding: "2rem",
+                }}
+              >
                 No tracker traffic recorded yet
               </div>
             ) : (
               (summary?.topUploadTrackers ?? []).map((t, idx) => {
-                const pct = maxUpload > 0 ? (t.totalUploaded / maxUpload) * 100 : 0;
+                const pct =
+                  maxUpload > 0 ? (t.totalUploaded / maxUpload) * 100 : 0;
                 return (
-                  <div key={t.id || idx} style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem" }}>
-                      <span style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                  <div
+                    key={t.id || idx}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.2rem",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        fontSize: "0.8rem",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontWeight: 600,
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                        }}
+                      >
                         <TrackerFavicon urlOrHost={t.trackerUrl} size={14} />
                         {t.domain || t.trackerUrl}
                         <span
@@ -351,12 +677,27 @@ export function TrackerMetrics() {
                       </span>
                     </div>
                     {/* Progress visual bar */}
-                    <div style={{ height: "6px", width: "100%", backgroundColor: "rgba(255,255,255,0.06)", borderRadius: "3px", overflow: "hidden" }}>
+                    <div
+                      style={{
+                        height: "6px",
+                        width: "100%",
+                        backgroundColor: "rgba(255,255,255,0.06)",
+                        borderRadius: "3px",
+                        overflow: "hidden",
+                      }}
+                    >
                       <div
                         style={{
                           height: "100%",
                           width: `${Math.max(4, Math.min(100, pct))}%`,
-                          backgroundColor: idx === 0 ? "#22c55e" : idx === 1 ? "#3b82f6" : idx === 2 ? "#a855f7" : "#eab308",
+                          backgroundColor:
+                            idx === 0
+                              ? "#22c55e"
+                              : idx === 1
+                                ? "#3b82f6"
+                                : idx === 2
+                                  ? "#a855f7"
+                                  : "#eab308",
                           borderRadius: "3px",
                         }}
                       />
@@ -370,7 +711,16 @@ export function TrackerMetrics() {
       </div>
 
       {/* Main Trackers Table Section */}
-      <div className="card" style={{ padding: "1.25rem", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+      <div
+        className="card"
+        style={{
+          padding: "1.25rem",
+          borderRadius: "8px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.85rem",
+        }}
+      >
         {/* Controls, Filters & Search Bar */}
         <div
           style={{
@@ -381,7 +731,15 @@ export function TrackerMetrics() {
             gap: "0.75rem",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flex: "1 1 240px", minWidth: "200px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              flex: "1 1 240px",
+              minWidth: "200px",
+            }}
+          >
             <input
               type="text"
               className="form-control"
@@ -398,26 +756,45 @@ export function TrackerMetrics() {
             />
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
+          >
             {/* Protocol Filter */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-              <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Protocol:</span>
-              {(["ALL", "UDP", "HTTP", "HTTPS"] as ProtocolFilter[]).map((p) => (
-                <button
-                  key={p}
-                  className={`btn btn-xs ${protocolFilter === p ? "btn-primary" : "btn-outline"}`}
-                  style={{ fontSize: "0.72rem", padding: "0.18rem 0.45rem" }}
-                  onClick={() => setProtocolFilter(p)}
-                >
-                  {p}
-                </button>
-              ))}
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}
+            >
+              <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                Protocol:
+              </span>
+              {(["ALL", "UDP", "HTTP", "HTTPS"] as ProtocolFilter[]).map(
+                (p) => (
+                  <button
+                    key={p}
+                    className={`btn btn-xs ${protocolFilter === p ? "btn-primary" : "btn-outline"}`}
+                    style={{ fontSize: "0.72rem", padding: "0.18rem 0.45rem" }}
+                    onClick={() => setProtocolFilter(p)}
+                  >
+                    {p}
+                  </button>
+                ),
+              )}
             </div>
 
             {/* Status Filter */}
-            <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
-              <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Status:</span>
-              {(["ALL", "Working", "Degraded", "Offline"] as StatusFilter[]).map((s) => (
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}
+            >
+              <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                Status:
+              </span>
+              {(
+                ["ALL", "Working", "Degraded", "Offline"] as StatusFilter[]
+              ).map((s) => (
                 <button
                   key={s}
                   className={`btn btn-xs ${statusFilter === s ? "btn-primary" : "btn-outline"}`}
@@ -433,14 +810,34 @@ export function TrackerMetrics() {
 
         {/* Results summary count */}
         <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-          Showing {filteredMetrics.length} of {metrics.length} tracked tracker servers
+          Showing {filteredMetrics.length} of {metrics.length} tracked tracker
+          servers
         </div>
 
         {/* Interactive Data Table */}
-        <div className="torrent-table-wrapper" style={{ overflowX: "auto", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <table className="torrent-table" style={{ fontSize: "0.8rem", width: "100%", borderCollapse: "collapse" }}>
+        <div
+          className="torrent-table-wrapper"
+          style={{
+            overflowX: "auto",
+            borderRadius: "6px",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <table
+            className="torrent-table"
+            style={{
+              fontSize: "0.8rem",
+              width: "100%",
+              borderCollapse: "collapse",
+            }}
+          >
             <thead>
-              <tr style={{ backgroundColor: "#161b22", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+              <tr
+                style={{
+                  backgroundColor: "#161b22",
+                  borderBottom: "1px solid rgba(255,255,255,0.1)",
+                }}
+              >
                 <th
                   className="torrent-table-th"
                   style={{ cursor: "pointer", padding: "0.5rem 0.65rem" }}
@@ -452,14 +849,22 @@ export function TrackerMetrics() {
                     }
                   }}
                 >
-                  Tracker Domain / Host {sortField === "domain" && (sortAsc ? "▲" : "▼")}
+                  Tracker Domain / Host{" "}
+                  {sortField === "domain" && (sortAsc ? "▲" : "▼")}
                 </th>
-                <th className="torrent-table-th" style={{ width: "90px", padding: "0.5rem 0.65rem" }}>
+                <th
+                  className="torrent-table-th"
+                  style={{ width: "90px", padding: "0.5rem 0.65rem" }}
+                >
                   Status
                 </th>
                 <th
                   className="torrent-table-th"
-                  style={{ cursor: "pointer", padding: "0.5rem 0.65rem", textAlign: "right" }}
+                  style={{
+                    cursor: "pointer",
+                    padding: "0.5rem 0.65rem",
+                    textAlign: "right",
+                  }}
                   onClick={() => {
                     if (sortField === "upload") setSortAsc(!sortAsc);
                     else {
@@ -472,7 +877,11 @@ export function TrackerMetrics() {
                 </th>
                 <th
                   className="torrent-table-th"
-                  style={{ cursor: "pointer", padding: "0.5rem 0.65rem", textAlign: "right" }}
+                  style={{
+                    cursor: "pointer",
+                    padding: "0.5rem 0.65rem",
+                    textAlign: "right",
+                  }}
                   onClick={() => {
                     if (sortField === "download") setSortAsc(!sortAsc);
                     else {
@@ -485,7 +894,11 @@ export function TrackerMetrics() {
                 </th>
                 <th
                   className="torrent-table-th"
-                  style={{ cursor: "pointer", padding: "0.5rem 0.65rem", textAlign: "center" }}
+                  style={{
+                    cursor: "pointer",
+                    padding: "0.5rem 0.65rem",
+                    textAlign: "center",
+                  }}
                   onClick={() => {
                     if (sortField === "successRate") setSortAsc(!sortAsc);
                     else {
@@ -494,11 +907,16 @@ export function TrackerMetrics() {
                     }
                   }}
                 >
-                  Success Rate {sortField === "successRate" && (sortAsc ? "▲" : "▼")}
+                  Success Rate{" "}
+                  {sortField === "successRate" && (sortAsc ? "▲" : "▼")}
                 </th>
                 <th
                   className="torrent-table-th"
-                  style={{ cursor: "pointer", padding: "0.5rem 0.65rem", textAlign: "center" }}
+                  style={{
+                    cursor: "pointer",
+                    padding: "0.5rem 0.65rem",
+                    textAlign: "center",
+                  }}
                   onClick={() => {
                     if (sortField === "announces") setSortAsc(!sortAsc);
                     else {
@@ -511,7 +929,11 @@ export function TrackerMetrics() {
                 </th>
                 <th
                   className="torrent-table-th"
-                  style={{ cursor: "pointer", padding: "0.5rem 0.65rem", textAlign: "right" }}
+                  style={{
+                    cursor: "pointer",
+                    padding: "0.5rem 0.65rem",
+                    textAlign: "right",
+                  }}
                   onClick={() => {
                     if (sortField === "latency") setSortAsc(!sortAsc);
                     else {
@@ -524,7 +946,11 @@ export function TrackerMetrics() {
                 </th>
                 <th
                   className="torrent-table-th"
-                  style={{ cursor: "pointer", padding: "0.5rem 0.65rem", textAlign: "right" }}
+                  style={{
+                    cursor: "pointer",
+                    padding: "0.5rem 0.65rem",
+                    textAlign: "right",
+                  }}
                   onClick={() => {
                     if (sortField === "peers") setSortAsc(!sortAsc);
                     else {
@@ -546,9 +972,17 @@ export function TrackerMetrics() {
                     }
                   }}
                 >
-                  Last Active {sortField === "lastAnnounce" && (sortAsc ? "▲" : "▼")}
+                  Last Active{" "}
+                  {sortField === "lastAnnounce" && (sortAsc ? "▲" : "▼")}
                 </th>
-                <th className="torrent-table-th" style={{ textAlign: "right", width: "100px", padding: "0.5rem 0.65rem" }}>
+                <th
+                  className="torrent-table-th"
+                  style={{
+                    textAlign: "right",
+                    width: "100px",
+                    padding: "0.5rem 0.65rem",
+                  }}
+                >
                   Actions
                 </th>
               </tr>
@@ -556,13 +990,27 @@ export function TrackerMetrics() {
             <tbody>
               {isLoadingMetrics && metrics.length === 0 ? (
                 <tr className="torrent-table-row">
-                  <td colSpan={10} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-muted)" }}>
+                  <td
+                    colSpan={10}
+                    style={{
+                      textAlign: "center",
+                      padding: "2.5rem",
+                      color: "var(--text-muted)",
+                    }}
+                  >
                     Loading tracker metrics telemetry...
                   </td>
                 </tr>
               ) : filteredMetrics.length === 0 ? (
                 <tr className="torrent-table-row">
-                  <td colSpan={10} style={{ textAlign: "center", padding: "2.5rem", color: "var(--text-muted)" }}>
+                  <td
+                    colSpan={10}
+                    style={{
+                      textAlign: "center",
+                      padding: "2.5rem",
+                      color: "var(--text-muted)",
+                    }}
+                  >
                     {metrics.length === 0
                       ? "No tracker announces or scrapes recorded yet"
                       : "No trackers match current filter criteria"}
@@ -589,10 +1037,23 @@ export function TrackerMetrics() {
                     >
                       {/* Domain / URL */}
                       <td style={{ padding: "0.45rem 0.65rem" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                          }}
+                        >
                           <TrackerFavicon urlOrHost={m.trackerUrl} size={16} />
-                          <div style={{ display: "flex", flexDirection: "column" }}>
-                            <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                          <div
+                            style={{ display: "flex", flexDirection: "column" }}
+                          >
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                color: "var(--text-primary)",
+                              }}
+                            >
                               {m.domain || m.host || "Unknown"}
                             </span>
                             <span
@@ -615,8 +1076,17 @@ export function TrackerMetrics() {
 
                       {/* Status */}
                       <td style={{ padding: "0.45rem 0.65rem" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-                          <span className={`badge ${statusClass}`} style={{ fontSize: "0.72rem" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.2rem",
+                          }}
+                        >
+                          <span
+                            className={`badge ${statusClass}`}
+                            style={{ fontSize: "0.72rem" }}
+                          >
                             {m.status}
                           </span>
                           <span
@@ -635,18 +1105,43 @@ export function TrackerMetrics() {
                       </td>
 
                       {/* Uploaded */}
-                      <td style={{ textAlign: "right", padding: "0.45rem 0.65rem", fontWeight: 600, color: "#4ade80" }}>
+                      <td
+                        style={{
+                          textAlign: "right",
+                          padding: "0.45rem 0.65rem",
+                          fontWeight: 600,
+                          color: "#4ade80",
+                        }}
+                      >
                         {formatBytes(m.totalUploaded)}
                       </td>
 
                       {/* Downloaded */}
-                      <td style={{ textAlign: "right", padding: "0.45rem 0.65rem", color: "#60a5fa" }}>
+                      <td
+                        style={{
+                          textAlign: "right",
+                          padding: "0.45rem 0.65rem",
+                          color: "#60a5fa",
+                        }}
+                      >
                         {formatBytes(m.totalDownloaded)}
                       </td>
 
                       {/* Success Rate */}
-                      <td style={{ textAlign: "center", padding: "0.45rem 0.65rem" }}>
-                        <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "0.15rem" }}>
+                      <td
+                        style={{
+                          textAlign: "center",
+                          padding: "0.45rem 0.65rem",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "inline-flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "0.15rem",
+                          }}
+                        >
                           <span
                             style={{
                               fontWeight: 600,
@@ -660,7 +1155,15 @@ export function TrackerMetrics() {
                           >
                             {m.announceSuccessRate}%
                           </span>
-                          <div style={{ width: "42px", height: "4px", backgroundColor: "rgba(255,255,255,0.1)", borderRadius: "2px", overflow: "hidden" }}>
+                          <div
+                            style={{
+                              width: "42px",
+                              height: "4px",
+                              backgroundColor: "rgba(255,255,255,0.1)",
+                              borderRadius: "2px",
+                              overflow: "hidden",
+                            }}
+                          >
                             <div
                               style={{
                                 height: "100%",
@@ -678,13 +1181,33 @@ export function TrackerMetrics() {
                       </td>
 
                       {/* Announces */}
-                      <td style={{ textAlign: "center", padding: "0.45rem 0.65rem" }}>
-                        <span style={{ color: "#e2e8f0" }}>{m.successfulAnnounces}</span>
-                        <span style={{ color: "var(--text-dim)", fontSize: "0.75rem" }}> / {m.totalAnnounces}</span>
+                      <td
+                        style={{
+                          textAlign: "center",
+                          padding: "0.45rem 0.65rem",
+                        }}
+                      >
+                        <span style={{ color: "#e2e8f0" }}>
+                          {m.successfulAnnounces}
+                        </span>
+                        <span
+                          style={{
+                            color: "var(--text-dim)",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          {" "}
+                          / {m.totalAnnounces}
+                        </span>
                       </td>
 
                       {/* Latency */}
-                      <td style={{ textAlign: "right", padding: "0.45rem 0.65rem" }}>
+                      <td
+                        style={{
+                          textAlign: "right",
+                          padding: "0.45rem 0.65rem",
+                        }}
+                      >
                         <span
                           style={{
                             fontWeight: 600,
@@ -701,23 +1224,45 @@ export function TrackerMetrics() {
                       </td>
 
                       {/* Peers Discovered */}
-                      <td style={{ textAlign: "right", padding: "0.45rem 0.65rem", color: "#c084fc", fontWeight: 500 }}>
+                      <td
+                        style={{
+                          textAlign: "right",
+                          padding: "0.45rem 0.65rem",
+                          color: "#c084fc",
+                          fontWeight: 500,
+                        }}
+                      >
                         {m.totalPeersDiscovered.toLocaleString()}
                       </td>
 
                       {/* Last Active */}
-                      <td style={{ padding: "0.45rem 0.65rem", color: "var(--text-muted)", fontSize: "0.75rem" }}>
+                      <td
+                        style={{
+                          padding: "0.45rem 0.65rem",
+                          color: "var(--text-muted)",
+                          fontSize: "0.75rem",
+                        }}
+                      >
                         {formatDate(m.lastAnnounce || m.lastScrape)}
                       </td>
 
                       {/* Actions */}
-                      <td style={{ textAlign: "right", padding: "0.45rem 0.65rem" }} onClick={(e) => e.stopPropagation()}>
+                      <td
+                        style={{
+                          textAlign: "right",
+                          padding: "0.45rem 0.65rem",
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div style={{ display: "inline-flex", gap: "0.3rem" }}>
                           <button
                             className="btn btn-outline btn-xs"
                             onClick={() => setSelectedMetric(m)}
                             title="Inspect tracker history"
-                            style={{ fontSize: "0.72rem", padding: "0.15rem 0.4rem" }}
+                            style={{
+                              fontSize: "0.72rem",
+                              padding: "0.15rem 0.4rem",
+                            }}
                           >
                             📊
                           </button>
@@ -725,7 +1270,10 @@ export function TrackerMetrics() {
                             className="btn btn-outline btn-xs"
                             onClick={() => handleReset(m)}
                             title="Reset statistics"
-                            style={{ fontSize: "0.72rem", padding: "0.15rem 0.4rem" }}
+                            style={{
+                              fontSize: "0.72rem",
+                              padding: "0.15rem 0.4rem",
+                            }}
                           >
                             🔄
                           </button>
@@ -733,7 +1281,10 @@ export function TrackerMetrics() {
                             className="btn btn-danger btn-xs"
                             onClick={() => handleDelete(m)}
                             title="Delete tracker metric"
-                            style={{ fontSize: "0.72rem", padding: "0.15rem 0.4rem" }}
+                            style={{
+                              fontSize: "0.72rem",
+                              padding: "0.15rem 0.4rem",
+                            }}
                           >
                             ✕
                           </button>
@@ -764,7 +1315,16 @@ export function TrackerMetrics() {
 function HourlyActivitySvgChart({ data }: { data: any[] }) {
   if (!data || data.length === 0) {
     return (
-      <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+      <div
+        style={{
+          height: "100%",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "var(--text-muted)",
+          fontSize: "0.85rem",
+        }}
+      >
         Collecting 24-hour activity telemetry...
       </div>
     );
@@ -779,7 +1339,10 @@ function HourlyActivitySvgChart({ data }: { data: any[] }) {
   const pointsUpload = data
     .map((d, i) => {
       const x = padding + (i / (data.length - 1 || 1)) * (width - 2 * padding);
-      const y = height - padding - ((d.uploaded || 0) / maxUpload) * (height - 2 * padding);
+      const y =
+        height -
+        padding -
+        ((d.uploaded || 0) / maxUpload) * (height - 2 * padding);
       return `${x},${y}`;
     })
     .join(" ");
@@ -787,28 +1350,73 @@ function HourlyActivitySvgChart({ data }: { data: any[] }) {
   const pointsAnnounce = data
     .map((d, i) => {
       const x = padding + (i / (data.length - 1 || 1)) * (width - 2 * padding);
-      const y = height - padding - ((d.announces || 0) / maxAnnounce) * (height - 2 * padding);
+      const y =
+        height -
+        padding -
+        ((d.announces || 0) / maxAnnounce) * (height - 2 * padding);
       return `${x},${y}`;
     })
     .join(" ");
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "100%", overflow: "visible" }}>
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      style={{ width: "100%", height: "100%", overflow: "visible" }}
+    >
       {/* Background Grid Lines */}
-      <line x1={padding} y1={padding} x2={width - padding} y2={padding} stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-      <line x1={padding} y1={height / 2} x2={width - padding} y2={height / 2} stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
-      <line x1={padding} y1={height - padding} x2={width - padding} y2={height - padding} stroke="rgba(255,255,255,0.12)" />
+      <line
+        x1={padding}
+        y1={padding}
+        x2={width - padding}
+        y2={padding}
+        stroke="rgba(255,255,255,0.06)"
+        strokeDasharray="3 3"
+      />
+      <line
+        x1={padding}
+        y1={height / 2}
+        x2={width - padding}
+        y2={height / 2}
+        stroke="rgba(255,255,255,0.06)"
+        strokeDasharray="3 3"
+      />
+      <line
+        x1={padding}
+        y1={height - padding}
+        x2={width - padding}
+        y2={height - padding}
+        stroke="rgba(255,255,255,0.12)"
+      />
 
       {/* Upload Line */}
-      <polyline fill="none" stroke="#4ade80" strokeWidth="2.5" points={pointsUpload} strokeLinecap="round" strokeLinejoin="round" />
+      <polyline
+        fill="none"
+        stroke="#4ade80"
+        strokeWidth="2.5"
+        points={pointsUpload}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
 
       {/* Announce Line */}
-      <polyline fill="none" stroke="#f59e0b" strokeWidth="2" strokeDasharray="4 3" points={pointsAnnounce} strokeLinecap="round" strokeLinejoin="round" />
+      <polyline
+        fill="none"
+        stroke="#f59e0b"
+        strokeWidth="2"
+        strokeDasharray="4 3"
+        points={pointsAnnounce}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
 
       {/* Data Points */}
       {data.map((d, i) => {
-        const x = padding + (i / (data.length - 1 || 1)) * (width - 2 * padding);
-        const yUp = height - padding - ((d.uploaded || 0) / maxUpload) * (height - 2 * padding);
+        const x =
+          padding + (i / (data.length - 1 || 1)) * (width - 2 * padding);
+        const yUp =
+          height -
+          padding -
+          ((d.uploaded || 0) / maxUpload) * (height - 2 * padding);
         return (
           <circle key={i} cx={x} cy={yUp} r="3" fill="#22c55e">
             <title>{`${d.timeLabel}: ${formatBytes(d.uploaded)} uploaded, ${d.announces} announces`}</title>
@@ -829,7 +1437,10 @@ function TrackerMetricDetailModal({
   onClose: () => void;
   onReset: () => void;
 }) {
-  const { data: history = [], isLoading } = useTrackerMetricHistory(metric.id, 24);
+  const { data: history = [], isLoading } = useTrackerMetricHistory(
+    metric.id,
+    24,
+  );
 
   return (
     <div
@@ -864,12 +1475,27 @@ function TrackerMetricDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+          }}
+        >
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
             <TrackerFavicon urlOrHost={metric.trackerUrl} size={22} />
             <div>
-              <h2 style={{ margin: 0, fontSize: "1.2rem" }}>{metric.domain || metric.host}</h2>
-              <div style={{ fontFamily: "monospace", fontSize: "0.78rem", color: "var(--text-muted)", wordBreak: "break-all" }}>
+              <h2 style={{ margin: 0, fontSize: "1.2rem" }}>
+                {metric.domain || metric.host}
+              </h2>
+              <div
+                style={{
+                  fontFamily: "monospace",
+                  fontSize: "0.78rem",
+                  color: "var(--text-muted)",
+                  wordBreak: "break-all",
+                }}
+              >
                 {metric.trackerUrl}
               </div>
             </div>
@@ -891,34 +1517,59 @@ function TrackerMetricDetailModal({
           }}
         >
           <div>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Status</div>
-            <div style={{ fontWeight: 600, color: metric.status === "Working" ? "#4ade80" : "#f87171" }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+              Status
+            </div>
+            <div
+              style={{
+                fontWeight: 600,
+                color: metric.status === "Working" ? "#4ade80" : "#f87171",
+              }}
+            >
               {metric.status} ({metric.protocol.toUpperCase()}:{metric.port})
             </div>
           </div>
           <div>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Total Upload</div>
-            <div style={{ fontWeight: 600, color: "#4ade80" }}>{formatBytes(metric.totalUploaded)}</div>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+              Total Upload
+            </div>
+            <div style={{ fontWeight: 600, color: "#4ade80" }}>
+              {formatBytes(metric.totalUploaded)}
+            </div>
           </div>
           <div>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Total Download</div>
-            <div style={{ fontWeight: 600, color: "#60a5fa" }}>{formatBytes(metric.totalDownloaded)}</div>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+              Total Download
+            </div>
+            <div style={{ fontWeight: 600, color: "#60a5fa" }}>
+              {formatBytes(metric.totalDownloaded)}
+            </div>
           </div>
           <div>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Announce Success</div>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+              Announce Success
+            </div>
             <div style={{ fontWeight: 600, color: "#22c55e" }}>
-              {metric.announceSuccessRate}% ({metric.successfulAnnounces}/{metric.totalAnnounces})
+              {metric.announceSuccessRate}% ({metric.successfulAnnounces}/
+              {metric.totalAnnounces})
             </div>
           </div>
           <div>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Latency (Avg / Last)</div>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+              Latency (Avg / Last)
+            </div>
             <div style={{ fontWeight: 600, color: "#fbbf24" }}>
-              {Math.round(metric.avgResponseTimeMs)}ms / {metric.lastResponseTimeMs}ms
+              {Math.round(metric.avgResponseTimeMs)}ms /{" "}
+              {metric.lastResponseTimeMs}ms
             </div>
           </div>
           <div>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>Peers Discovered</div>
-            <div style={{ fontWeight: 600, color: "#c084fc" }}>{metric.totalPeersDiscovered.toLocaleString()}</div>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+              Peers Discovered
+            </div>
+            <div style={{ fontWeight: 600, color: "#c084fc" }}>
+              {metric.totalPeersDiscovered.toLocaleString()}
+            </div>
           </div>
         </div>
 
@@ -934,13 +1585,16 @@ function TrackerMetricDetailModal({
               color: "#fca5a5",
             }}
           >
-            <strong>Last Error:</strong> {metric.lastErrorMessage} ({formatDate(metric.lastErrorTime)})
+            <strong>Last Error:</strong> {metric.lastErrorMessage} (
+            {formatDate(metric.lastErrorTime)})
           </div>
         )}
 
         {/* History Snapshots List */}
         <div>
-          <h4 style={{ margin: "0.5rem 0 0.5rem 0", fontSize: "0.9rem" }}>Recent 24h Interaction Snapshots ({history.length})</h4>
+          <h4 style={{ margin: "0.5rem 0 0.5rem 0", fontSize: "0.9rem" }}>
+            Recent 24h Interaction Snapshots ({history.length})
+          </h4>
           <div
             style={{
               maxHeight: "240px",
@@ -950,41 +1604,85 @@ function TrackerMetricDetailModal({
               border: "1px solid rgba(255,255,255,0.08)",
             }}
           >
-            <table className="torrent-table" style={{ fontSize: "0.75rem", width: "100%" }}>
+            <table
+              className="torrent-table"
+              style={{ fontSize: "0.75rem", width: "100%" }}
+            >
               <thead>
                 <tr style={{ backgroundColor: "#161b22" }}>
                   <th className="torrent-table-th">Time</th>
                   <th className="torrent-table-th">Operation</th>
                   <th className="torrent-table-th">Outcome</th>
-                  <th className="torrent-table-th" style={{ textAlign: "right" }}>Latency</th>
-                  <th className="torrent-table-th" style={{ textAlign: "right" }}>Peers</th>
+                  <th
+                    className="torrent-table-th"
+                    style={{ textAlign: "right" }}
+                  >
+                    Latency
+                  </th>
+                  <th
+                    className="torrent-table-th"
+                    style={{ textAlign: "right" }}
+                  >
+                    Peers
+                  </th>
                 </tr>
               </thead>
               <tbody style={{ fontFamily: "monospace" }}>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: "center", padding: "1.5rem", color: "var(--text-muted)" }}>
+                    <td
+                      colSpan={5}
+                      style={{
+                        textAlign: "center",
+                        padding: "1.5rem",
+                        color: "var(--text-muted)",
+                      }}
+                    >
                       Loading interaction snapshots...
                     </td>
                   </tr>
                 ) : history.length === 0 ? (
                   <tr>
-                    <td colSpan={5} style={{ textAlign: "center", padding: "1.5rem", color: "var(--text-muted)" }}>
+                    <td
+                      colSpan={5}
+                      style={{
+                        textAlign: "center",
+                        padding: "1.5rem",
+                        color: "var(--text-muted)",
+                      }}
+                    >
                       No snapshots recorded yet in the last 24 hours.
                     </td>
                   </tr>
                 ) : (
                   history.map((h: TrackerMetricSnapshot) => (
-                    <tr key={h.id} className="torrent-table-row" style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                      <td style={{ color: "#8b949e" }}>{formatDate(h.timestamp)}</td>
+                    <tr
+                      key={h.id}
+                      className="torrent-table-row"
+                      style={{
+                        borderBottom: "1px solid rgba(255,255,255,0.04)",
+                      }}
+                    >
+                      <td style={{ color: "#8b949e" }}>
+                        {formatDate(h.timestamp)}
+                      </td>
                       <td>{h.operation}</td>
                       <td>
-                        <span style={{ color: h.isSuccess ? "#4ade80" : "#f87171", fontWeight: 600 }}>
+                        <span
+                          style={{
+                            color: h.isSuccess ? "#4ade80" : "#f87171",
+                            fontWeight: 600,
+                          }}
+                        >
                           {h.isSuccess ? "✓ SUCCESS" : "✗ FAILED"}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right", color: "#fbbf24" }}>{h.responseTimeMs} ms</td>
-                      <td style={{ textAlign: "right", color: "#c084fc" }}>{h.peersDiscovered}</td>
+                      <td style={{ textAlign: "right", color: "#fbbf24" }}>
+                        {h.responseTimeMs} ms
+                      </td>
+                      <td style={{ textAlign: "right", color: "#c084fc" }}>
+                        {h.peersDiscovered}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -994,7 +1692,14 @@ function TrackerMetricDetailModal({
         </div>
 
         {/* Modal Actions */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.5rem" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: "0.5rem",
+          }}
+        >
           <button className="btn btn-danger btn-sm" onClick={onReset}>
             Reset Stats
           </button>

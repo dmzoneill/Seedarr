@@ -28,7 +28,8 @@ export interface Language {
   rtl?: boolean;
 }
 
-export type TranslationParams = Record<string, string | number> | (string | number)[];
+export type TranslationParams =
+  Record<string, string | number> | (string | number)[];
 
 export type TranslationDictionary = {
   [key: string]: string | TranslationDictionary;
