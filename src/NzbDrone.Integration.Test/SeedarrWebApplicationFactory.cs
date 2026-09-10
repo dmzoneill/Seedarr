@@ -1,10 +1,12 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Threading;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Host;
 
@@ -29,15 +31,21 @@ public sealed class SeedarrWebApplicationFactory : IDisposable
             "seedarr-test-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
 
-        var port = FindFreePort();
-        BaseUrl = $"http://127.0.0.1:{port}";
-
         var startupContext = new StartupContext("--data=" + _tempDir);
-        _app = Bootstrap.CreateApplication(startupContext, new[] { BaseUrl });
+        _app = Bootstrap.CreateApplication(startupContext, new[] { "http://127.0.0.1:0" });
         _app.StartAsync().GetAwaiter().GetResult();
+
+        var server = _app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
+        var addressesFeature = server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
+        BaseUrl = addressesFeature?.Addresses?.FirstOrDefault() ?? "http://127.0.0.1:0";
 
         LoadApiKey();
         Client = new HttpClient { BaseAddress = new Uri(BaseUrl) };
+        if (!string.IsNullOrEmpty(ApiKey))
+        {
+            Client.DefaultRequestHeaders.Add("X-Api-Key", ApiKey);
+        }
+
         WaitForHealthy();
     }
 

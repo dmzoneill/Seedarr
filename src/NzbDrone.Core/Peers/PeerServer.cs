@@ -244,7 +244,7 @@ public class PeerServer : BackgroundService
         try
         {
             _logger.Debug("Connecting to peer {0}:{1} for {2}", candidate.Ip, candidate.Port, torrent.Name);
-            _eventLogService.Debug(torrent.Id, "Peers", $"Attempting connection to peer {candidate.Ip}:{candidate.Port} (source: {candidate.Source})");
+            _eventLogService?.Debug(torrent.Id, "Peers", $"Attempting connection to peer {candidate.Ip}:{candidate.Port} (source: {candidate.Source})");
 
             if (_utpManager != null && _utpManager.IsEnabled)
             {
@@ -292,7 +292,7 @@ public class PeerServer : BackgroundService
             {
                 _logger.Debug("Outgoing encryption failed to {0}:{1}", candidate.Ip, candidate.Port);
                 _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
-                _eventLogService.Debug(torrent.Id, "Peers", $"Encryption negotiation rejected by peer {candidate.Ip}:{candidate.Port}");
+                _eventLogService?.Debug(torrent.Id, "Peers", $"Encryption negotiation rejected by peer {candidate.Ip}:{candidate.Port}");
                 connection.Dispose();
                 return;
             }
@@ -306,7 +306,7 @@ public class PeerServer : BackgroundService
             {
                 _logger.Debug("Outgoing handshake failed from {0}:{1}", candidate.Ip, candidate.Port);
                 _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
-                _eventLogService.Debug(torrent.Id, "Peers", $"BitTorrent handshake rejected/timed out from {candidate.Ip}:{candidate.Port}");
+                _eventLogService?.Debug(torrent.Id, "Peers", $"BitTorrent handshake rejected/timed out from {candidate.Ip}:{candidate.Port}");
                 connection.Dispose();
                 return;
             }
@@ -325,7 +325,7 @@ public class PeerServer : BackgroundService
                 torrent.Name,
                 connection.IsEncrypted);
 
-            _eventLogService.Info(
+            _eventLogService?.Info(
                 torrent.Id,
                 "Peers",
                 $"Peer connected & active: {candidate.Ip}:{candidate.Port} (encrypted: {connection.IsEncrypted})");
@@ -336,7 +336,7 @@ public class PeerServer : BackgroundService
         {
             _logger.Debug(ex, "Failed to connect to peer {0}:{1}", candidate.Ip, candidate.Port);
             _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
-            _eventLogService.Debug(torrent.Id, "Peers", $"Failed to connect to peer {candidate.Ip}:{candidate.Port}: {ex.Message}");
+            _eventLogService?.Debug(torrent.Id, "Peers", $"Failed to connect to peer {candidate.Ip}:{candidate.Port}: {ex.Message}");
             connection?.Dispose();
         }
     }

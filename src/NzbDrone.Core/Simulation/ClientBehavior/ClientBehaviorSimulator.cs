@@ -3,6 +3,7 @@ using System.Linq;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Simulation.ClientBehavior.Profiles;
 
 namespace NzbDrone.Core.Simulation.ClientBehavior;
 
@@ -17,6 +18,8 @@ public interface IClientBehaviorSimulator
 
 public class ClientBehaviorSimulator : IClientBehaviorSimulator
 {
+    private static readonly IClientProfile FallbackProfile = new QBittorrentProfile();
+
     private readonly IConfigService _configService;
     private readonly IClientProfileFactory _profileFactory;
     private readonly Logger _logger;
@@ -50,7 +53,7 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator
         {
             if (_currentProfile == null)
             {
-                _currentProfile = ResolveProfileByName(_configService.PrimaryClient);
+                _currentProfile = ResolveProfileByName(_configService.PrimaryClient) ?? FallbackProfile;
                 _logger.Debug("Initialized client profile: {0}", _currentProfile.Name);
             }
 
@@ -61,12 +64,12 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator
                 if (_random.NextDouble() < switchProbability)
                 {
                     var previous = _currentProfile;
-                    _currentProfile = SelectRandomAlternateProfile(_currentProfile);
+                    _currentProfile = SelectRandomAlternateProfile(_currentProfile) ?? _currentProfile;
                     _logger.Debug("Switched client profile from {0} to {1}", previous?.Name, _currentProfile?.Name);
                 }
             }
 
-            return _currentProfile ?? GetDefaultProfile();
+            return _currentProfile ?? FallbackProfile;
         }
     }
 
@@ -221,29 +224,32 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator
 
     private IClientProfile GetDefaultProfile()
     {
-        return ResolveProfileByName(_configService.PrimaryClient);
+        return ResolveProfileByName(_configService.PrimaryClient) ?? FallbackProfile;
     }
 
     private IClientProfile ResolveProfileByName(string clientName)
     {
         var available = _profileFactory.GetAvailableProviders();
 
-        if (available.Count == 0)
+        if (available == null || available.Count == 0)
         {
-            _logger.Warn("No client profiles available");
-            return null;
+            _logger.Debug("No client profiles configured, using fallback profile: {0}", FallbackProfile.Name);
+            return FallbackProfile;
         }
 
-        var match = available.FirstOrDefault(p =>
-            p.Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase));
-
-        if (match != null)
+        if (!string.IsNullOrWhiteSpace(clientName))
         {
-            return match;
+            var match = available.FirstOrDefault(p =>
+                p.Name.StartsWith(clientName, StringComparison.OrdinalIgnoreCase));
+
+            if (match != null)
+            {
+                return match;
+            }
         }
 
         _logger.Warn("No client profile matching '{0}', using first available: {1}", clientName, available[0].Name);
-        return available[0];
+        return available[0] ?? FallbackProfile;
     }
 
     private IClientProfile SelectRandomAlternateProfile(IClientProfile current)

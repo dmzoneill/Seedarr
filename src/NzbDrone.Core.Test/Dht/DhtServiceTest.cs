@@ -2027,7 +2027,7 @@ public class DhtServiceTest
         torrentService.GetAll().Returns(torrents);
 
         using var service = new DhtService(_configService, null, torrentService);
-        SetUdpClient();
+        SetUdpClient(service);
 
         // Add a node to routing table so AnnounceTorrent can query it
         service.RoutingTable.AddNode(new DhtNode
@@ -2042,7 +2042,7 @@ public class DhtServiceTest
 
         // Verify pending queries contains public hash but NOT private hash
         var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
-        var pendingDict = (System.Collections.Concurrent.ConcurrentDictionary<string, object>)pendingField.GetValue(service);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(service);
 
         var pendingType = typeof(DhtService).GetNestedType("PendingDhtQuery", BindingFlags.NonPublic);
         var infoHashProp = pendingType.GetProperty("InfoHash");
@@ -2109,11 +2109,12 @@ public class DhtServiceTest
     /// Creates a real UdpClient on an ephemeral port and injects it into the service.
     /// The UdpClient is needed for methods that call _udpClient.Send().
     /// </summary>
-    private void SetUdpClient()
+    private void SetUdpClient(DhtService svc = null)
     {
+        var target = svc ?? _service;
         var udpClient = new UdpClient(0); // bind to any available port
         var field = typeof(DhtService).GetField("_udpClient", BindingFlags.NonPublic | BindingFlags.Instance);
-        field.SetValue(_service, udpClient);
+        field.SetValue(target, udpClient);
     }
 
     private static BDictionary BuildQueryMessage(string queryType, byte[] nodeId)
