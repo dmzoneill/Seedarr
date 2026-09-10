@@ -77,6 +77,7 @@ import { useTheme } from "./context/ThemeContext";
 import { useGeneralConfig, useDownloadClients } from "./api/hooks";
 import { useTranslation } from "./i18n";
 import LanguageSelector from "./components/LanguageSelector";
+import { SETTINGS_GROUPS } from "./pages/settings/settingsNavData";
 
 const systemSubItems = [
   { path: "/system/status", label: "Status" },
@@ -144,6 +145,9 @@ function App() {
       }
       return localStorage.getItem(STORAGE_KEY_HIDE_GUIDE) !== "true";
     });
+  const [openSettingsGroups, setOpenSettingsGroups] = useState<
+    Record<string, boolean>
+  >({});
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("seedarr_sidebar_collapsed") === "true";
   });
@@ -520,23 +524,116 @@ function App() {
           </NavLink>
           <NavLink
             to="/settings/general"
-            className={`sidebar-nav-item ${isSettingsRoute ? "active" : ""}`}
+            className={`sidebar-nav-item ${isSettingsRoute ? "active-parent active" : ""}`}
             title={t("nav.settings", undefined, "Settings")}
           >
             <SettingsIcon />{" "}
             <span>{t("nav.settings", undefined, "Settings")}</span>
           </NavLink>
-          {isSettingsRoute &&
-            settingsSubItems.map((item) => (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className="sidebar-nav-item sidebar-nav-sub"
-                title={item.label}
-              >
-                <span>{item.label}</span>
-              </NavLink>
-            ))}
+          {isSettingsRoute && (
+            <div className="sidebar-settings-tree">
+              {SETTINGS_GROUPS.map((group) => {
+                const isGroupActive = group.pages.some(
+                  (p) =>
+                    location.pathname === `/settings/${p.id}` ||
+                    (p.id === "general" &&
+                      (location.pathname === "/settings" ||
+                        location.pathname === "/settings/general")),
+                );
+                const isOpen = openSettingsGroups[group.id] ?? isGroupActive;
+                return (
+                  <div key={group.id} className="sidebar-group-container">
+                    <div
+                      className="sidebar-group-header"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenSettingsGroups((prev) => ({
+                          ...prev,
+                          [group.id]: !isOpen,
+                        }));
+                      }}
+                      title={`Toggle ${group.title}`}
+                    >
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.4rem",
+                        }}
+                      >
+                        <span>{group.icon}</span>
+                        <span>{group.shortLabel}</span>
+                      </span>
+                      <span
+                        className={`sidebar-group-chevron ${isOpen ? "open" : ""}`}
+                      >
+                        ▶
+                      </span>
+                    </div>
+                    {isOpen &&
+                      group.pages.map((page) => {
+                        const isPageActive =
+                          location.pathname === `/settings/${page.id}` ||
+                          (page.id === "general" &&
+                            (location.pathname === "/settings" ||
+                              location.pathname === "/settings/general"));
+                        return (
+                          <NavLink
+                            key={page.id}
+                            to={`/settings/${page.id}`}
+                            className={`sidebar-settings-subitem ${isPageActive ? "active" : ""}`}
+                            title={page.description}
+                          >
+                            <span
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "0.45rem",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: "0.85rem",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                {page.icon}
+                              </span>
+                              <span
+                                style={{
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
+                                {page.shortLabel}
+                              </span>
+                            </span>
+                            {page.badge && (
+                              <span
+                                className="sidebar-badge"
+                                style={{
+                                  backgroundColor: isPageActive
+                                    ? "var(--accent)"
+                                    : "rgba(255,255,255,0.06)",
+                                  color: isPageActive
+                                    ? "#10111a"
+                                    : "var(--text-muted)",
+                                }}
+                              >
+                                {page.badge}
+                              </span>
+                            )}
+                          </NavLink>
+                        );
+                      })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <NavLink
             to="/system/status"
             className={`sidebar-nav-item ${isSystemRoute ? "active" : ""}`}

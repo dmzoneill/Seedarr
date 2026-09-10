@@ -21,6 +21,7 @@ import { SecurityTab } from "./settings/SecurityTab";
 
 const sectionTitles: Record<string, string> = {
   general: "General",
+  "watch-folder": "Watch Folder",
   webui: "Web UI",
   security: "Security",
   notifications: "Notifications",
@@ -44,6 +45,8 @@ const sectionTitles: Record<string, string> = {
 const sectionDescriptions: Record<string, string> = {
   general:
     "Configure application behavior, host endpoints, and watch folder automation",
+  "watch-folder":
+    "Automated torrent directory drop monitoring, scanning intervals, and auto-start",
   webui:
     "Configure web user interface access, port bindings, and session security",
   security:
@@ -119,7 +122,9 @@ function Settings() {
         </div>
       </div>
 
-      {activeSection === "general" && <GeneralTab />}
+      {(activeSection === "general" || activeSection === "watch-folder") && (
+        <GeneralTab />
+      )}
       {activeSection === "webui" && <WebUiSettingsTab />}
       {activeSection === "security" && <SecurityTab />}
       {activeSection === "notifications" && <NotificationsTab />}
