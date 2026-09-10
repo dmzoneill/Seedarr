@@ -1,6 +1,7 @@
 :root {
   --sidebar-bg: #1a1815;
   --sidebar-width: 210px;
+  --sidebar-collapsed-width: 60px;
   --topbar-bg: #2a2620;
   --bg-primary: #222018;
   --bg-secondary: #2a2620;
@@ -169,6 +170,58 @@ body {
   bottom: 0;
   z-index: 100;
   overflow-y: auto;
+  overflow-x: hidden;
+  transition:
+    width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app.sidebar-collapsed .sidebar {
+  width: var(--sidebar-collapsed-width);
+  min-width: var(--sidebar-collapsed-width);
+}
+
+.sidebar-header {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 0.5rem 0;
+}
+
+.sidebar-toggle-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.15s ease;
+  z-index: 2;
+}
+
+.sidebar-toggle-btn:hover {
+  background: var(--bg-hover-elevated);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.app.sidebar-collapsed .sidebar-header {
+  padding: 0.5rem 0.25rem 0;
+}
+
+.app.sidebar-collapsed .sidebar-toggle-btn {
+  position: static;
+  margin: 0 auto 0.4rem;
 }
 
 .sidebar-logo {
@@ -176,17 +229,24 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: 0.75rem 0.5rem;
   gap: 0.25rem;
-  min-height: 140px;
-  height: 140px;
+  min-height: 120px;
   flex-shrink: 0;
   text-decoration: none;
   color: inherit;
+  transition: all 0.25s ease;
+}
+
+.app.sidebar-collapsed .sidebar-logo {
+  padding: 0.25rem 0;
+  min-height: 48px;
+  gap: 0;
 }
 
 .sidebar-logo svg {
   animation: logo-pulse 3s ease-in-out infinite;
+  transition: transform 0.25s ease;
 }
 
 @keyframes logo-pulse {
@@ -206,6 +266,7 @@ body {
   display: flex;
   flex-direction: column;
   padding: 0;
+  overflow-x: hidden;
 }
 
 .sidebar-nav-item {
@@ -218,8 +279,10 @@ body {
   font-size: 0.9rem;
   transition:
     background-color 0.15s,
-    color 0.15s;
+    color 0.15s,
+    padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   border-left: 3px solid transparent;
+  white-space: nowrap;
 }
 
 .sidebar-nav-item svg {
@@ -243,6 +306,24 @@ body {
   font-size: 0.85rem;
 }
 
+.app.sidebar-collapsed .sidebar-nav-item {
+  padding: 0.65rem 0;
+  justify-content: center;
+  border-left: 3px solid transparent;
+}
+
+.app.sidebar-collapsed .sidebar-nav-item.active {
+  border-left-color: var(--accent);
+}
+
+.app.sidebar-collapsed .sidebar-nav-item span {
+  display: none;
+}
+
+.app.sidebar-collapsed .sidebar-nav-sub {
+  display: none;
+}
+
 /* Main Wrapper */
 .main-wrapper {
   flex: 1;
@@ -253,6 +334,22 @@ body {
   max-height: 100vh;
   overflow: hidden;
   max-width: calc(100vw - var(--sidebar-width));
+  min-width: 0;
+  transition:
+    margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    max-width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.app.sidebar-collapsed .main-wrapper {
+  margin-left: var(--sidebar-collapsed-width);
+  max-width: calc(100vw - var(--sidebar-collapsed-width));
+}
+
+.topbar-sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 /* Top Bar */
@@ -2289,7 +2386,54 @@ body {
   background-color: var(--bg-secondary);
   border-right: 1px solid var(--border-light);
   overflow-y: auto;
+  overflow-x: hidden;
   flex-shrink: 0;
+  transition:
+    width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    min-width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.25s ease;
+}
+
+.filter-panel.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  border-right-color: transparent !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+
+.filter-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 0.5rem;
+}
+
+.filter-panel-collapse-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.filter-panel-collapse-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-light);
+}
+
+.toggle-filter-btn {
+  font-weight: 500;
+  font-size: 0.8rem;
+  padding: 0.25rem 0.55rem;
 }
 
 .filter-panel-section {

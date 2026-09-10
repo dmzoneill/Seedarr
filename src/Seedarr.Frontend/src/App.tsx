@@ -44,7 +44,12 @@ import {
   SystemIcon,
   DownloadAgentIcon,
 } from "./components/icons/NavIcons";
-import { ActivityIcon } from "./components/icons/UIIcons";
+import {
+  ActivityIcon,
+  MenuIcon,
+  ChevronsLeftIcon,
+  ChevronsRightIcon,
+} from "./components/icons/UIIcons";
 import {
   TrackerIcon,
   SunIcon,
@@ -110,6 +115,17 @@ function App() {
     }
     return localStorage.getItem(STORAGE_KEY_HIDE_GUIDE) !== "true";
   });
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem("seedarr_sidebar_collapsed") === "true";
+  });
+
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("seedarr_sidebar_collapsed", String(next));
+      return next;
+    });
+  };
 
   const isTorrentsRoute =
     location.pathname.startsWith("/torrents") ||
@@ -140,6 +156,13 @@ function App() {
           activeEl.tagName === "TEXTAREA" ||
           activeEl.tagName === "SELECT" ||
           (activeEl as HTMLElement).isContentEditable);
+
+      // Alt+M toggles sidebar collapse
+      if (e.altKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        toggleSidebar();
+        return;
+      }
 
       // Cmd+K / Ctrl+K
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -212,19 +235,36 @@ function App() {
   }, [navigate]);
 
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <a
-          href="https://www.seedarr.net"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="sidebar-logo"
-        >
-          <SeedarrLogo size={96} />
-          <SeedarrText width={140} />
-        </a>
+    <div className={`app ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      <aside className="sidebar" aria-label="Main Navigation">
+        <div className="sidebar-header">
+          <a
+            href="https://www.seedarr.net"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="sidebar-logo"
+            title="Seedarr"
+          >
+            <SeedarrLogo size={isSidebarCollapsed ? 36 : 96} />
+            {!isSidebarCollapsed && <SeedarrText width={140} />}
+          </a>
+          <button
+            type="button"
+            className="sidebar-toggle-btn"
+            onClick={toggleSidebar}
+            title={isSidebarCollapsed ? "Expand sidebar (Alt+M)" : "Collapse sidebar (Alt+M)"}
+            aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isSidebarCollapsed ? <ChevronsRightIcon size={14} /> : <ChevronsLeftIcon size={14} />}
+          </button>
+        </div>
         <nav className="sidebar-nav">
-          <NavLink to="/" end className="sidebar-nav-item">
+          <NavLink
+            to="/"
+            end
+            className="sidebar-nav-item"
+            title={t("nav.dashboard", undefined, "Dashboard")}
+          >
             <DashboardIcon /> <span>{t("nav.dashboard", undefined, "Dashboard")}</span>
           </NavLink>
 
@@ -232,6 +272,7 @@ function App() {
           <NavLink
             to="/torrents"
             className={`sidebar-nav-item ${isTorrentsRoute ? "active" : ""}`}
+            title={t("nav.torrents", undefined, "Torrents")}
           >
             <TorrentIcon /> <span>{t("nav.torrents", undefined, "Torrents")}</span>
           </NavLink>
@@ -240,12 +281,14 @@ function App() {
               <NavLink
                 to="/torrents/history"
                 className="sidebar-nav-item sidebar-nav-sub"
+                title={t("nav.history", undefined, "History")}
               >
                 <HistoryIcon /> <span>{t("nav.history", undefined, "History")}</span>
               </NavLink>
               <NavLink
                 to="/torrents/add"
                 className="sidebar-nav-item sidebar-nav-sub"
+                title={t("nav.addTorrent", undefined, "Add Torrent")}
               >
                 <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>+</span>{" "}
                 <span>{t("nav.addTorrent", undefined, "Add Torrent")}</span>
@@ -257,6 +300,7 @@ function App() {
           <NavLink
             to="/activity/torrents"
             className={`sidebar-nav-item ${isActivityRoute ? "active" : ""}`}
+            title={t("nav.activity", undefined, "Activity")}
           >
             <ActivityIcon /> <span>{t("nav.activity", undefined, "Activity")}</span>
           </NavLink>
@@ -265,6 +309,7 @@ function App() {
               <NavLink
                 to="/activity/torrents"
                 className="sidebar-nav-item sidebar-nav-sub"
+                title={t("nav.torrents", undefined, "Torrents")}
               >
                 <DashboardIcon /> <span>{t("nav.torrents", undefined, "Torrents")}</span>
               </NavLink>
@@ -275,6 +320,7 @@ function App() {
                     key={client.id}
                     to={`/activity/client/${client.id}`}
                     className="sidebar-nav-item sidebar-nav-sub"
+                    title={client.name}
                   >
                     <DownloadAgentIcon /> <span>{client.name}</span>
                   </NavLink>
@@ -282,6 +328,7 @@ function App() {
               <NavLink
                 to="/activity/metrics"
                 className="sidebar-nav-item sidebar-nav-sub"
+                title={t("nav.metrics", undefined, "Metrics")}
               >
                 <StatsIcon /> <span>{t("nav.metrics", undefined, "Metrics")}</span>
               </NavLink>
@@ -292,6 +339,7 @@ function App() {
           <NavLink
             to="/tracker"
             className={`sidebar-nav-item ${isTrackerRoute ? "active" : ""}`}
+            title={t("nav.tracker", undefined, "Tracker")}
           >
             <TrackerIcon /> <span>{t("nav.tracker", undefined, "Tracker")}</span>
           </NavLink>
@@ -305,6 +353,7 @@ function App() {
                     ? "active"
                     : ""
                 }`}
+                title={t("nav.trackerInbuilt", undefined, "Inbuilt")}
               >
                 <span>{t("nav.trackerInbuilt", undefined, "Inbuilt")}</span>
               </NavLink>
@@ -319,6 +368,7 @@ function App() {
                     ? "active"
                     : ""
                 }`}
+                title={t("nav.trackerBoost", undefined, "Tracker Boost")}
               >
                 <span>{t("nav.trackerBoost", undefined, "Tracker Boost")}</span>
               </NavLink>
@@ -330,23 +380,37 @@ function App() {
                     ? "active"
                     : ""
                 }`}
+                title={t("nav.trackerMetrics", undefined, "Tracker Metrics")}
               >
                 <span>{t("nav.trackerMetrics", undefined, "Tracker Metrics")}</span>
               </NavLink>
             </>
           )}
-          <NavLink to="/peermap" className="sidebar-nav-item">
+          <NavLink
+            to="/peermap"
+            className="sidebar-nav-item"
+            title={t("nav.peerMap", undefined, "Peer Map")}
+          >
             <PeerMapIcon /> <span>{t("nav.peerMap", undefined, "Peer Map")}</span>
           </NavLink>
-          <NavLink to="/schedule" className="sidebar-nav-item">
+          <NavLink
+            to="/schedule"
+            className="sidebar-nav-item"
+            title={t("nav.schedule", undefined, "Schedule")}
+          >
             <ScheduleIcon /> <span>{t("nav.schedule", undefined, "Schedule")}</span>
           </NavLink>
-          <NavLink to="/statistics" className="sidebar-nav-item">
+          <NavLink
+            to="/statistics"
+            className="sidebar-nav-item"
+            title={t("nav.statistics", undefined, "Statistics")}
+          >
             <StatsIcon /> <span>{t("nav.statistics", undefined, "Statistics")}</span>
           </NavLink>
           <NavLink
             to="/settings/general"
             className={`sidebar-nav-item ${isSettingsRoute ? "active" : ""}`}
+            title={t("nav.settings", undefined, "Settings")}
           >
             <SettingsIcon /> <span>{t("nav.settings", undefined, "Settings")}</span>
           </NavLink>
@@ -356,6 +420,7 @@ function App() {
                 key={item.path}
                 to={item.path}
                 className="sidebar-nav-item sidebar-nav-sub"
+                title={item.label}
               >
                 <span>{item.label}</span>
               </NavLink>
@@ -363,6 +428,7 @@ function App() {
           <NavLink
             to="/system/status"
             className={`sidebar-nav-item ${isSystemRoute ? "active" : ""}`}
+            title={t("nav.system", undefined, "System")}
           >
             <SystemIcon /> <span>{t("nav.system", undefined, "System")}</span>
           </NavLink>
@@ -372,6 +438,7 @@ function App() {
                 key={item.path}
                 to={item.path}
                 className="sidebar-nav-item sidebar-nav-sub"
+                title={item.label}
               >
                 <span>{item.label}</span>
               </NavLink>
@@ -381,41 +448,52 @@ function App() {
 
       <div className="main-wrapper">
         <header className="topbar">
-          <div
-            className="topbar-search"
-            onClick={() => setShowCommandPalette(true)}
-            style={{
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}
-            title={t("topbar.searchPlaceholder", undefined, "Search & Quick Jump (Ctrl+K or /)")}
-          >
-            <SearchIcon />
-            <input
-              type="text"
-              placeholder={t("topbar.searchPlaceholder", undefined, "Quick Jump / Search... (Ctrl+K or /)")}
-              className="topbar-search-input"
-              value={searchTerm}
-              readOnly
-              onClick={() => setShowCommandPalette(true)}
-              style={{ cursor: "pointer" }}
-            />
-            <kbd
-              style={{
-                backgroundColor: "rgba(255, 255, 255, 0.08)",
-                border: "1px solid rgba(255, 255, 255, 0.16)",
-                borderRadius: "4px",
-                padding: "0.1rem 0.4rem",
-                fontSize: "0.7rem",
-                color: "var(--text-muted)",
-                fontFamily: "monospace",
-                marginRight: "0.4rem",
-              }}
+          <div className="topbar-left" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <button
+              type="button"
+              className="topbar-btn topbar-sidebar-toggle"
+              onClick={toggleSidebar}
+              title={isSidebarCollapsed ? "Expand sidebar (Alt+M)" : "Collapse sidebar (Alt+M)"}
+              aria-label="Toggle navigation sidebar"
             >
-              ⌘K
-            </kbd>
+              <MenuIcon size={16} />
+            </button>
+            <div
+              className="topbar-search"
+              onClick={() => setShowCommandPalette(true)}
+              style={{
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+              title={t("topbar.searchPlaceholder", undefined, "Search & Quick Jump (Ctrl+K or /)")}
+            >
+              <SearchIcon />
+              <input
+                type="text"
+                placeholder={t("topbar.searchPlaceholder", undefined, "Quick Jump / Search... (Ctrl+K or /)")}
+                className="topbar-search-input"
+                value={searchTerm}
+                readOnly
+                onClick={() => setShowCommandPalette(true)}
+                style={{ cursor: "pointer" }}
+              />
+              <kbd
+                style={{
+                  backgroundColor: "rgba(255, 255, 255, 0.08)",
+                  border: "1px solid rgba(255, 255, 255, 0.16)",
+                  borderRadius: "4px",
+                  padding: "0.1rem 0.4rem",
+                  fontSize: "0.7rem",
+                  color: "var(--text-muted)",
+                  fontFamily: "monospace",
+                  marginRight: "0.4rem",
+                }}
+              >
+                ⌘K
+              </kbd>
+            </div>
           </div>
           <div className="topbar-actions">
             <LanguageSelector />
