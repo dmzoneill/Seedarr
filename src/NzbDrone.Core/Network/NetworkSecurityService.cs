@@ -33,7 +33,7 @@ public class NetworkSecurityService : INetworkSecurityService
         {
             return NetworkInterface.GetAllNetworkInterfaces()
                 .Where(nic => nic.OperationalStatus == OperationalStatus.Up &&
-                              nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                    nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
                 .Select(nic => nic.Name)
                 .Distinct()
                 .ToList();
@@ -61,7 +61,7 @@ public class NetworkSecurityService : INetworkSecurityService
         {
             var nic = NetworkInterface.GetAllNetworkInterfaces()
                 .FirstOrDefault(n => string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
-                                     string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
 
             return nic != null && nic.OperationalStatus == OperationalStatus.Up;
         }
