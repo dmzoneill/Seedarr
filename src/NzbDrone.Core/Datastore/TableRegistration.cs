@@ -3,6 +3,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Jobs;
+using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Peers;
@@ -38,5 +39,6 @@ public static class TableRegistration
         TableMapping.Register<TrackerBoostTracker>("TrackerBoostTrackers");
         TableMapping.Register<Trackers.Metrics.TrackerMetric>("TrackerMetrics");
         TableMapping.Register<Trackers.Metrics.TrackerMetricSnapshot>("TrackerMetricSnapshots");
+        TableMapping.Register<TorrentMediaMetadata>("TorrentMediaMetadata");
     }
 }

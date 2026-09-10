@@ -34,9 +34,11 @@ Thumbs.db
 *.db-shm
 *.db-wal
 config.xml
-logs/
-MediaCover/
-Backups/
+/logs/
+/MediaCover/
+/MediaCache/
+/Backups/
 
 # Secrets
 *.env
+
