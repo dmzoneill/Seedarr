@@ -31,7 +31,10 @@ public class ArrWebhookServiceTest
         _torrentFileParser = Substitute.For<ITorrentFileParser>();
         _connectionFactory.All().Returns(new List<ArrConnectionDefinition>());
         _torrentService.GetAll().Returns(new List<Torrent>());
-        _service = new ArrWebhookService(_connectionFactory, _torrentService, _torrentFileParser);
+        _service = new ArrWebhookService(_connectionFactory, _torrentService, _torrentFileParser, client: null, policy: ResiliencePipeline.Empty)
+        {
+            EnrichDelayMs = 0
+        };
     }
 
     [Test]
@@ -829,7 +832,10 @@ public class ArrWebhookServiceTest
             _torrentService,
             _torrentFileParser,
             httpClient,
-            policy);
+            policy)
+        {
+            EnrichDelayMs = 0
+        };
     }
 
     [Test]

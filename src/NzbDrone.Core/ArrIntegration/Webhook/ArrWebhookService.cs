@@ -10,6 +10,7 @@ using NLog;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Http;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Validation;
 using Polly;
 
 namespace NzbDrone.Core.ArrIntegration.Webhook;
@@ -86,6 +87,8 @@ public class ArrWebhookService : IArrWebhookService
         _policy = policy ?? SharedPolicy;
     }
 
+    public int EnrichDelayMs { get; set; } = 5000;
+
     public ArrWebhookResult ProcessWebhook(ArrWebhookPayload payload)
     {
         if (payload.EventType != "Grab")
@@ -139,7 +142,10 @@ public class ArrWebhookService : IArrWebhookService
     {
         try
         {
-            await Task.Delay(5000, cancellationToken);
+            if (EnrichDelayMs > 0)
+            {
+                await Task.Delay(EnrichDelayMs, cancellationToken);
+            }
 
             var downloadUrl = await GetDownloadUrlFromHistoryAsync(connection, downloadId, cancellationToken);
             if (string.IsNullOrEmpty(downloadUrl))
@@ -430,6 +436,12 @@ public class ArrWebhookService : IArrWebhookService
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
             _logger.Warn("Blocked non-HTTP torrent fetch URL: {0}", downloadUrl);
+            return null;
+        }
+
+        if (!UrlValidator.IsSafeUrl(downloadUrl))
+        {
+            _logger.Warn("Blocked unsafe torrent fetch URL: {0}", downloadUrl);
             return null;
         }
 

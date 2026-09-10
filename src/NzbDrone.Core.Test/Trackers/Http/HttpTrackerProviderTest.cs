@@ -24,7 +24,10 @@ public class HttpTrackerProviderTest
         _configService = Substitute.For<IConfigService>();
         _configService.HttpTrackerTimeoutSeconds.Returns(10);
         _configService.BitTorrentUserAgent.Returns("qBittorrent/4.4.2");
-        _provider = new HttpTrackerProvider(_configService);
+        _provider = new HttpTrackerProvider(_configService)
+        {
+            ResiliencePipeline = Polly.ResiliencePipeline.Empty
+        };
     }
 
     [Test]
@@ -455,7 +458,10 @@ public class HttpTrackerProviderTest
 
     private HttpTrackerProvider CreateProviderWithResponse(byte[] responseBytes)
     {
-        var provider = new HttpTrackerProvider(_configService);
+        var provider = new HttpTrackerProvider(_configService)
+        {
+            ResiliencePipeline = Polly.ResiliencePipeline.Empty
+        };
         var handler = new FixedResponseHandler(responseBytes);
         var client = new HttpClient(handler);
         var field = typeof(HttpTrackerProvider).GetField("_client",
@@ -776,6 +782,15 @@ public class HttpTrackerProviderTest
         public FixedResponseHandler(byte[] responseBytes)
         {
             _responseBytes = responseBytes;
+        }
+
+        protected override HttpResponseMessage Send(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(_responseBytes)
+            };
         }
 
         protected override Task<HttpResponseMessage> SendAsync(

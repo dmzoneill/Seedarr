@@ -103,14 +103,16 @@ public class ClientBehaviorSimulatorTest
     }
 
     [Test]
-    public void GetActiveProfile_should_throw_when_no_profiles_available()
+    public void GetActiveProfile_should_return_fallback_when_no_profiles_available()
     {
         _profileFactory.GetAvailableProviders().Returns(new List<IClientProfile>());
         _configService.PrimaryClient.Returns("qBittorrent");
 
         _simulator = new ClientBehaviorSimulator(_configService, _profileFactory);
 
-        Assert.That(() => _simulator.GetActiveProfile(), Throws.TypeOf<System.NullReferenceException>());
+        var profile = _simulator.GetActiveProfile();
+        Assert.That(profile, Is.Not.Null);
+        Assert.That(profile.Name, Does.Contain("qBittorrent"));
     }
 
     [Test]
