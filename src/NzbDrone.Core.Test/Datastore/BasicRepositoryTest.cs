@@ -200,4 +200,28 @@ public class BasicRepositoryTest
         Assert.That(result, Has.Count.EqualTo(2));
         Assert.That(result.Select(t => t.Label), Is.EquivalentTo(new[] { "One", "Three" }));
     }
+
+    [Test]
+    public void UpdateMany_persists_multiple_modified_records()
+    {
+        var tag1 = _subject.Insert(new Tag { Label = "Initial1" });
+        var tag2 = _subject.Insert(new Tag { Label = "Initial2" });
+
+        tag1.Label = "Updated1";
+        tag2.Label = "Updated2";
+
+        _subject.UpdateMany(new[] { tag1, tag2 });
+
+        var reloaded1 = _subject.Get(tag1.Id);
+        var reloaded2 = _subject.Get(tag2.Id);
+
+        Assert.That(reloaded1.Label, Is.EqualTo("Updated1"));
+        Assert.That(reloaded2.Label, Is.EqualTo("Updated2"));
+    }
+
+    [Test]
+    public void UpdateMany_handles_empty_collection_gracefully()
+    {
+        Assert.DoesNotThrow(() => _subject.UpdateMany(Array.Empty<Tag>()));
+    }
 }

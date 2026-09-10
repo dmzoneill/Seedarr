@@ -56,7 +56,7 @@ internal class StubCommandRepository : IBasicRepository<CommandModel>
 
     public IEnumerable<CommandModel> InsertMany(IEnumerable<CommandModel> models) => models;
 
-    public IEnumerable<CommandModel> UpdateMany(IEnumerable<CommandModel> models) => models;
+    public void UpdateMany(IEnumerable<CommandModel> models) { }
 
     public void DeleteMany(IEnumerable<int> ids)
     {

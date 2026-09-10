@@ -96,7 +96,7 @@ public class SeedingEngineTest
         Assert.That(stopped.UploadSpeed, Is.EqualTo(0));
         Assert.That(stopped.DownloadSpeed, Is.EqualTo(0));
         Assert.That(stopped.Active, Is.False);
-        _torrentService.Received(1).Update(stopped);
+        _torrentService.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(l => l.Contains(stopped)));
     }
 
     [Test]
@@ -108,6 +108,7 @@ public class SeedingEngineTest
         CallTick();
 
         _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+        _torrentService.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
     }
 
     [Test]
