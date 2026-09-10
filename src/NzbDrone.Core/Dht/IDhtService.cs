@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +9,12 @@ public interface IDhtService
 {
     RoutingTable RoutingTable { get; }
     DhtPeerStore PeerStore { get; }
+    event EventHandler<PeersDiscoveredEventArgs> PeersDiscovered;
     Task SendGetPeers(IPEndPoint target, byte[] infoHash, CancellationToken ct = default);
+    Task SendGetPeers(IPEndPoint target, string infoHash, CancellationToken ct = default);
     Task SendAnnouncePeer(IPEndPoint target, byte[] infoHash, int port, byte[] token, bool impliedPort = false, CancellationToken ct = default);
+    Task SendAnnouncePeer(IPEndPoint target, string infoHash, int port, byte[] token, bool impliedPort = false, CancellationToken ct = default);
+    Task AnnounceTorrent(byte[] infoHash, int port, CancellationToken ct = default);
+    Task AnnounceTorrent(string infoHash, int port, CancellationToken ct = default);
+    Task Bootstrap(IPEndPoint endpoint, CancellationToken ct = default);
 }

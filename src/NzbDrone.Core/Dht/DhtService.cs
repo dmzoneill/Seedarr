@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -10,6 +12,9 @@ using BencodeNET.Parsing;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Peers;
+using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Dht;
 
@@ -20,12 +25,17 @@ public class DhtService : BackgroundService, IDhtService
     private const int SecretRotationMinutes = 10;
 
     private readonly IConfigService _configService;
+    private readonly IPeerDiscoveryService _peerDiscovery;
+    private readonly ITorrentService _torrentService;
+    private readonly int? _customPort;
     private readonly RoutingTable _routingTable;
     private readonly Logger _logger;
     private readonly byte[] _nodeId;
     private readonly DhtPeerStore _peerStore;
     private readonly object _secretLock = new();
+    private readonly ConcurrentDictionary<string, PendingDhtQuery> _pendingQueries = new();
     private UdpClient _udpClient;
+    private int _boundPort;
 
     private byte[] _tokenSecret;
     private byte[] _previousTokenSecret;
@@ -36,9 +46,18 @@ public class DhtService : BackgroundService, IDhtService
     private DateTime _nextRefresh;
     private SemaphoreSlim _querySemaphore;
 
-    public DhtService(IConfigService configService)
+    public event EventHandler<PeersDiscoveredEventArgs> PeersDiscovered;
+
+    public DhtService(
+        IConfigService configService,
+        IPeerDiscoveryService peerDiscovery = null,
+        ITorrentService torrentService = null,
+        int? port = null)
     {
         _configService = configService;
+        _peerDiscovery = peerDiscovery;
+        _torrentService = torrentService;
+        _customPort = port;
         _nodeId = RandomNumberGenerator.GetBytes(20);
         _routingTable = new RoutingTable(
             _nodeId,
@@ -67,6 +86,10 @@ public class DhtService : BackgroundService, IDhtService
 
     public DhtPeerStore PeerStore => _peerStore;
 
+    public int BoundPort => _boundPort;
+
+    public IPEndPoint LocalEndPoint => _udpClient?.Client?.LocalEndPoint as IPEndPoint;
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!_configService.EnableDht)
@@ -75,17 +98,19 @@ public class DhtService : BackgroundService, IDhtService
             return;
         }
 
+        var portToBind = _customPort ?? DhtPort;
         try
         {
-            _udpClient = new UdpClient(DhtPort);
+            _udpClient = new UdpClient(portToBind);
+            _boundPort = ((IPEndPoint)_udpClient.Client.LocalEndPoint).Port;
         }
         catch (SocketException ex)
         {
-            _logger.Warn(ex, "DHT service failed to bind port {0}, skipping", DhtPort);
+            _logger.Warn(ex, "DHT service failed to bind port {0}, skipping", portToBind);
             return;
         }
 
-        _logger.Info("DHT service started on port {0}, node ID: {1}", DhtPort, Convert.ToHexString(_nodeId));
+        _logger.Info("DHT service started on port {0}, node ID: {1}", _boundPort, Convert.ToHexString(_nodeId));
 
         // Bootstrap with well-known nodes if enabled
         if (_configService.DhtAutoBootstrap)
@@ -109,6 +134,7 @@ public class DhtService : BackgroundService, IDhtService
             try
             {
                 RotateSecretIfNeeded();
+                CleanupExpiredQueries();
 
                 // Use query timeout so the loop wakes up periodically for maintenance
                 using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
@@ -143,7 +169,7 @@ public class DhtService : BackgroundService, IDhtService
                     // Query timeout — no messages received, continue to maintenance check
                 }
 
-                // Periodic routing table refresh at the configured announcement interval
+                // Periodic routing table refresh and torrent announce at the configured announcement interval
                 if (DateTime.UtcNow >= _nextRefresh)
                 {
                     if (_configService.DhtAutoBootstrap)
@@ -160,6 +186,8 @@ public class DhtService : BackgroundService, IDhtService
                         }
                     }
 
+                    await AnnounceTorrentsAsync(stoppingToken);
+
                     _nextRefresh = DateTime.UtcNow.AddSeconds(_configService.DhtAnnouncementInterval);
                 }
             }
@@ -174,6 +202,52 @@ public class DhtService : BackgroundService, IDhtService
         }
 
         _udpClient?.Dispose();
+    }
+
+    private async Task AnnounceTorrentsAsync(CancellationToken ct)
+    {
+        if (!_configService.EnableDht || _torrentService == null)
+        {
+            return;
+        }
+
+        List<Torrent> torrents;
+        try
+        {
+            torrents = _torrentService.GetAll();
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "DHT: failed to retrieve torrents for announce");
+            return;
+        }
+
+        var publicTorrents = torrents
+            .Where(t => !t.IsPrivate && !string.IsNullOrEmpty(t.InfoHash) && t.Status != TorrentStatus.Stopped && t.Status != TorrentStatus.Paused)
+            .ToList();
+
+        var port = _configService.ListeningPort > 0 ? _configService.ListeningPort : 6881;
+
+        foreach (var torrent in publicTorrents)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                break;
+            }
+
+            try
+            {
+                await AnnounceTorrent(torrent.InfoHash, port, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "DHT announce failed for torrent {0}", torrent.InfoHash);
+            }
+        }
     }
 
     private async Task Bootstrap(CancellationToken stoppingToken)
@@ -207,6 +281,16 @@ public class DhtService : BackgroundService, IDhtService
                 _logger.Debug(ex, "DHT bootstrap failed for {0}", node);
             }
         }
+    }
+
+    public async Task Bootstrap(IPEndPoint endpoint, CancellationToken ct = default)
+    {
+        if (_udpClient == null || endpoint == null)
+        {
+            return;
+        }
+
+        await SendFindNode(endpoint, _nodeId, ct);
     }
 
     private void HandleMessage(byte[] data, IPEndPoint sender)
@@ -296,7 +380,16 @@ public class DhtService : BackgroundService, IDhtService
             ParseCompactNodes(nodesData.Span);
         }
 
+        // Match pending query by transaction ID
+        PendingDhtQuery pending = null;
+        if (message.ContainsKey("t") && message["t"] is BString tStr)
+        {
+            var txKey = Convert.ToHexString(tStr.Value.ToArray());
+            _pendingQueries.TryRemove(txKey, out pending);
+        }
+
         // Parse peer values from get_peers responses
+        var discoveredPeers = new List<TrackerPeer>();
         if (response.ContainsKey("values"))
         {
             var values = (BList)response["values"];
@@ -307,9 +400,39 @@ public class DhtService : BackgroundService, IDhtService
                 {
                     var ip = new IPAddress(peerData.Slice(0, 4).Span);
                     var port = (peerData.Span[4] << 8) | peerData.Span[5];
+                    discoveredPeers.Add(new TrackerPeer { Ip = ip.ToString(), Port = port });
                     _logger.Debug("DHT get_peers response: peer {0}:{1}", ip, port);
                 }
             }
+        }
+
+        if (discoveredPeers.Count > 0)
+        {
+            var infoHashHex = pending?.InfoHash != null ? Convert.ToHexString(pending.InfoHash) : null;
+            if (!string.IsNullOrEmpty(infoHashHex))
+            {
+                _peerDiscovery?.AddPeers(infoHashHex, discoveredPeers, "dht");
+            }
+
+            PeersDiscovered?.Invoke(this, new PeersDiscoveredEventArgs(infoHashHex, discoveredPeers));
+        }
+
+        // If this was an announce query and we received a token, send announce_peer
+        if (pending?.IsAnnounce == true && response.ContainsKey("token") && pending.InfoHash != null)
+        {
+            var token = ((BString)response["token"]).Value.ToArray();
+            var announcePort = pending.Port > 0 ? pending.Port : (_configService.ListeningPort > 0 ? _configService.ListeningPort : 6881);
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await SendAnnouncePeer(sender, pending.InfoHash, announcePort, token, false, CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to send announce_peer after get_peers token to {0}", sender);
+                }
+            });
         }
     }
 
@@ -514,9 +637,24 @@ public class DhtService : BackgroundService, IDhtService
         }
     }
 
-    public async Task SendGetPeers(IPEndPoint target, byte[] infoHash, CancellationToken ct = default)
+    public Task SendGetPeers(IPEndPoint target, byte[] infoHash, CancellationToken ct = default)
     {
-        if (_udpClient == null)
+        return SendGetPeersInternal(target, infoHash, isAnnounce: false, port: 0, ct: ct);
+    }
+
+    public Task SendGetPeers(IPEndPoint target, string infoHash, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return Task.CompletedTask;
+        }
+
+        return SendGetPeers(target, Convert.FromHexString(infoHash), ct);
+    }
+
+    private async Task SendGetPeersInternal(IPEndPoint target, byte[] infoHash, bool isAnnounce, int port, CancellationToken ct = default)
+    {
+        if (_udpClient == null || infoHash == null)
         {
             return;
         }
@@ -525,6 +663,18 @@ public class DhtService : BackgroundService, IDhtService
         try
         {
             var transactionId = RandomNumberGenerator.GetBytes(2);
+            var txKey = Convert.ToHexString(transactionId);
+
+            _pendingQueries[txKey] = new PendingDhtQuery
+            {
+                QueryType = "get_peers",
+                InfoHash = infoHash,
+                Target = target,
+                IsAnnounce = isAnnounce,
+                Port = port,
+                SentAt = DateTime.UtcNow
+            };
+
             var query = new BDictionary
             {
                 ["t"] = new BString(transactionId),
@@ -547,9 +697,19 @@ public class DhtService : BackgroundService, IDhtService
         }
     }
 
+    public Task SendAnnouncePeer(IPEndPoint target, string infoHash, int port, byte[] token, bool impliedPort = false, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return Task.CompletedTask;
+        }
+
+        return SendAnnouncePeer(target, Convert.FromHexString(infoHash), port, token, impliedPort, ct);
+    }
+
     public async Task SendAnnouncePeer(IPEndPoint target, byte[] infoHash, int port, byte[] token, bool impliedPort = false, CancellationToken ct = default)
     {
-        if (_udpClient == null)
+        if (_udpClient == null || infoHash == null || token == null)
         {
             return;
         }
@@ -586,6 +746,75 @@ public class DhtService : BackgroundService, IDhtService
         finally
         {
             _querySemaphore.Release();
+        }
+    }
+
+    public async Task AnnounceTorrent(string infoHash, int port, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(infoHash) || _udpClient == null)
+        {
+            return;
+        }
+
+        byte[] infoHashBytes;
+        try
+        {
+            infoHashBytes = Convert.FromHexString(infoHash);
+        }
+        catch (Exception)
+        {
+            _logger.Debug("Invalid hex infoHash: {0}", infoHash);
+            return;
+        }
+
+        await AnnounceTorrent(infoHashBytes, port, ct);
+    }
+
+    public async Task AnnounceTorrent(byte[] infoHash, int port, CancellationToken ct = default)
+    {
+        if (infoHash == null || infoHash.Length != 20 || _udpClient == null)
+        {
+            return;
+        }
+
+        var closest = _routingTable.GetClosestNodes(infoHash);
+        if (closest.Count == 0)
+        {
+            _logger.Debug("DHT: no nodes in routing table to announce {0}", Convert.ToHexString(infoHash));
+            return;
+        }
+
+        foreach (var node in closest)
+        {
+            if (ct.IsCancellationRequested)
+            {
+                break;
+            }
+
+            try
+            {
+                await SendGetPeersInternal(node.EndPoint, infoHash, isAnnounce: true, port: port, ct: ct);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "DHT: error sending get_peers for announce to {0}", node.EndPoint);
+            }
+        }
+    }
+
+    private void CleanupExpiredQueries()
+    {
+        var cutoff = DateTime.UtcNow.AddMinutes(-2);
+        foreach (var kvp in _pendingQueries)
+        {
+            if (kvp.Value.SentAt < cutoff)
+            {
+                _pendingQueries.TryRemove(kvp.Key, out _);
+            }
         }
     }
 
@@ -649,5 +878,15 @@ public class DhtService : BackgroundService, IDhtService
             _lastSecretRotation = DateTime.UtcNow;
             _logger.Debug("DHT token secret rotated");
         }
+    }
+
+    private class PendingDhtQuery
+    {
+        public string QueryType { get; set; }
+        public byte[] InfoHash { get; set; }
+        public IPEndPoint Target { get; set; }
+        public bool IsAnnounce { get; set; }
+        public int Port { get; set; }
+        public DateTime SentAt { get; set; }
     }
 }
