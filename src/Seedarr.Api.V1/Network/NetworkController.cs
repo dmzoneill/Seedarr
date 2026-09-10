@@ -52,7 +52,7 @@ public class NetworkController : Controller
         {
             var ifaces = global::System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
                 .Where(nic => nic.OperationalStatus == global::System.Net.NetworkInformation.OperationalStatus.Up &&
-                              nic.NetworkInterfaceType != global::System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                    nic.NetworkInterfaceType != global::System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
                 .Select(nic => nic.Name)
                 .Distinct()
                 .ToList();

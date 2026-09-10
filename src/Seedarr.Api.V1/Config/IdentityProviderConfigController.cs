@@ -181,8 +181,8 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
         var model = ToModel(resource);
         if (resource.Id > 0 &&
             (string.IsNullOrEmpty(model.ClientSecretEncrypted) ||
-             model.ClientSecretEncrypted == MaskedSecret ||
-             model.ClientSecretEncrypted == AlternateMaskedSecret))
+                model.ClientSecretEncrypted == MaskedSecret ||
+                model.ClientSecretEncrypted == AlternateMaskedSecret))
         {
             var existing = _providerService.GetById(resource.Id);
             if (existing != null)
