@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
@@ -33,6 +33,8 @@ public class SeedingEngine : BackgroundService
     private readonly ITorrentStateMachine _stateMachine;
     private readonly ISpeedPolicy _speedPolicy;
     private readonly IStopPolicy _stopPolicy;
+    private readonly ISystemClock _clock;
+    private readonly IRandomNumberGenerator _random;
     private readonly Logger _logger;
     private readonly Dictionary<int, long> _prevUploaded = new();
     private readonly Dictionary<int, long> _prevDownloaded = new();
@@ -52,7 +54,9 @@ public class SeedingEngine : BackgroundService
         ITorrentEventLogService eventLogService,
         ITorrentStateMachine stateMachine = null,
         ISpeedPolicy speedPolicy = null,
-        IStopPolicy stopPolicy = null)
+        IStopPolicy stopPolicy = null,
+        ISystemClock clock = null,
+        IRandomNumberGenerator random = null)
     {
         _torrentService = torrentService;
         _distributionManager = distributionManager;
@@ -62,9 +66,11 @@ public class SeedingEngine : BackgroundService
         _peerDatabase = peerDatabase;
         _connectionManager = connectionManager;
         _eventLogService = eventLogService;
+        _clock = clock ?? new SystemClock();
+        _random = random ?? new NzbDrone.Common.EnvironmentInfo.RandomNumberGenerator();
         _stateMachine = stateMachine ?? new TorrentStateMachine(eventLogService);
-        _stopPolicy = stopPolicy ?? new StopPolicy(configService);
-        _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy);
+        _stopPolicy = stopPolicy ?? new StopPolicy(configService, _random);
+        _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random);
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -89,7 +95,7 @@ public class SeedingEngine : BackgroundService
 
         var prefix = _configService.PeerIdPrefix;
         var suffix = new char[20 - prefix.Length];
-        var suffixBytes = RandomNumberGenerator.GetBytes(suffix.Length);
+        var suffixBytes = System.Security.Cryptography.RandomNumberGenerator.GetBytes(suffix.Length);
         for (var i = 0; i < suffix.Length; i++)
         {
             suffix[i] = (char)('A' + (suffixBytes[i] % 26));
@@ -128,7 +134,7 @@ public class SeedingEngine : BackgroundService
 
         if (downloadingTorrents.Count == 0 && seedingTorrents.Count == 0)
         {
-            var modifiedDeactivated = new List<Torrent>();
+            var idleToUpdate = new List<Torrent>();
             foreach (var t in allTorrents)
             {
                 if (t.UploadSpeed != 0 || t.DownloadSpeed != 0 || t.Active)
@@ -136,29 +142,28 @@ public class SeedingEngine : BackgroundService
                     t.UploadSpeed = 0;
                     t.DownloadSpeed = 0;
                     t.Active = false;
-                    modifiedDeactivated.Add(t);
+                    idleToUpdate.Add(t);
                 }
             }
 
-            if (modifiedDeactivated.Count > 0)
+            if (idleToUpdate.Count > 0)
             {
-                _torrentService.UpdateMany(modifiedDeactivated);
+                _torrentService.UpdateMany(idleToUpdate);
             }
 
             return;
         }
 
         var limits = _speedPolicy.GetEffectiveLimits();
-        var tickInterval = TickInterval;
 
         if (downloadingTorrents.Count > 0)
         {
-            _speedPolicy.ProcessDownloading(downloadingTorrents, limits, tickInterval);
+            _speedPolicy.ProcessDownloading(downloadingTorrents, limits, TickInterval);
         }
 
         if (seedingTorrents.Count > 0)
         {
-            _speedPolicy.ProcessSeeding(seedingTorrents, limits, tickInterval);
+            _speedPolicy.ProcessSeeding(seedingTorrents, limits, TickInterval);
         }
 
         var globalRatioLimit = _configService.GlobalSeedRatioLimit;
@@ -174,7 +179,8 @@ public class SeedingEngine : BackgroundService
 
         UpdateComputedFields(activeTorrents, thresholdPercent);
 
-        var modifiedTorrents = new List<Torrent>(activeTorrents);
+        var dirtyTorrents = new List<Torrent>();
+        dirtyTorrents.AddRange(activeTorrents);
 
         foreach (var t in allTorrents.Where(t => t.Status != TorrentStatus.Seeding && t.Status != TorrentStatus.Downloading))
         {
@@ -183,13 +189,13 @@ public class SeedingEngine : BackgroundService
                 t.UploadSpeed = 0;
                 t.DownloadSpeed = 0;
                 t.Active = false;
-                modifiedTorrents.Add(t);
+                dirtyTorrents.Add(t);
             }
         }
 
-        if (modifiedTorrents.Count > 0)
+        if (dirtyTorrents.Count > 0)
         {
-            _torrentService.UpdateMany(modifiedTorrents);
+            _torrentService.UpdateMany(dirtyTorrents);
         }
 
         var activeIds = new HashSet<int>(activeTorrents.Select(t => t.Id));
@@ -258,7 +264,7 @@ public class SeedingEngine : BackgroundService
             }
 
             torrent.Active = true;
-            torrent.LastActive = DateTime.UtcNow;
+            torrent.LastActive = _clock.UtcNow;
             torrent.SeedingTime += (long)tickSeconds;
 
             if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed > 0 && torrent.TotalSize > 0)

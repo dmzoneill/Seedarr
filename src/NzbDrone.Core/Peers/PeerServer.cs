@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Torrents;
@@ -28,6 +29,7 @@ public class PeerServer : BackgroundService
     private readonly ITorrentEventLogService _eventLogService;
     private readonly Trackers.Metrics.ITrackerMetricService _trackerMetricService;
     private readonly Trackers.ITrackerAnnounceService _trackerAnnounceService;
+    private readonly IRandomNumberGenerator _random;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
     private readonly Logger _logger;
@@ -41,7 +43,8 @@ public class PeerServer : BackgroundService
         ITrackerEntryService trackerEntryService = null,
         ITorrentEventLogService eventLogService = null,
         Trackers.Metrics.ITrackerMetricService trackerMetricService = null,
-        Trackers.ITrackerAnnounceService trackerAnnounceService = null)
+        Trackers.ITrackerAnnounceService trackerAnnounceService = null,
+        IRandomNumberGenerator random = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -52,6 +55,7 @@ public class PeerServer : BackgroundService
         _eventLogService = eventLogService;
         _trackerMetricService = trackerMetricService;
         _trackerAnnounceService = trackerAnnounceService;
+        _random = random ?? new RandomNumberGenerator();
         _connectionSemaphore = new SemaphoreSlim(configService.MaxGlobalConnections);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -571,7 +575,7 @@ public class PeerServer : BackgroundService
                 break;
 
             case PeerMessageType.Request:
-                if (Random.Shared.NextDouble() < connection.IdleChance)
+                if (_random.NextDouble() < connection.IdleChance)
                 {
                     connection.SendKeepAlive();
                     break;

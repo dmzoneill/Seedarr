@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
-using System.Threading.Tasks;
 using NLog;
 
 namespace NzbDrone.Core.DownloadClients.QBitTorrent;
@@ -47,8 +47,10 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 new KeyValuePair<string, string>("password", Password),
             });
 
-            var response = Task.Run(() => _client.PostAsync($"{BaseUrl}/api/v2/auth/login", content)).GetAwaiter().GetResult();
-            var body = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/auth/login") { Content = content };
+            using var response = _client.Send(request);
+            using var reader = new StreamReader(response.Content.ReadAsStream());
+            var body = reader.ReadToEnd();
             return response.IsSuccessStatusCode && body.Contains("Ok");
         }
         catch (Exception ex)
@@ -75,14 +77,15 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 url += $"?category={Uri.EscapeDataString(Category)}";
             }
 
-            var response = Task.Run(() => _client.GetAsync(url)).GetAwaiter().GetResult();
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var response = _client.Send(request);
             if (!response.IsSuccessStatusCode)
             {
                 return items;
             }
 
-            var json = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
-            using var torrents = JsonDocument.Parse(json);
+            using var stream = response.Content.ReadAsStream();
+            using var torrents = JsonDocument.Parse(stream);
 
             foreach (var t in torrents.RootElement.EnumerateArray())
             {
@@ -119,14 +122,17 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
         try
         {
-            var response = Task.Run(() => _client.GetAsync($"{BaseUrl}/api/v2/torrents/export?hash={infoHash}")).GetAwaiter().GetResult();
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/torrents/export?hash={infoHash}");
+            using var response = _client.Send(request);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("qBittorrent export failed for {0}: {1}", infoHash, response.StatusCode);
                 return null;
             }
 
-            return Task.Run(() => response.Content.ReadAsByteArrayAsync()).GetAwaiter().GetResult();
+            using var ms = new MemoryStream();
+            response.Content.ReadAsStream().CopyTo(ms);
+            return ms.ToArray();
         }
         catch (Exception ex)
         {
@@ -145,14 +151,15 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
         try
         {
-            var response = Task.Run(() => _client.GetAsync($"{BaseUrl}/api/v2/torrents/trackers?hash={infoHash}")).GetAwaiter().GetResult();
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/torrents/trackers?hash={infoHash}");
+            using var response = _client.Send(request);
             if (!response.IsSuccessStatusCode)
             {
                 return trackers;
             }
 
-            var json = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
-            using var doc = JsonDocument.Parse(json);
+            using var stream = response.Content.ReadAsStream();
+            using var doc = JsonDocument.Parse(stream);
             foreach (var tr in doc.RootElement.EnumerateArray())
             {
                 if (tr.TryGetProperty("url", out var urlProp))
@@ -194,7 +201,8 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 new KeyValuePair<string, string>("urls", trackerList)
             });
 
-            var response = Task.Run(() => _client.PostAsync($"{BaseUrl}/api/v2/torrents/addTrackers", content)).GetAwaiter().GetResult();
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/addTrackers") { Content = content };
+            using var response = _client.Send(request);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -223,7 +231,8 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 new KeyValuePair<string, string>("hashes", infoHash)
             });
 
-            var response = Task.Run(() => _client.PostAsync($"{BaseUrl}/api/v2/torrents/reannounce", content)).GetAwaiter().GetResult();
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/reannounce") { Content = content };
+            using var response = _client.Send(request);
             return response.IsSuccessStatusCode;
         }
         catch (Exception ex)
@@ -247,10 +256,12 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
         try
         {
-            var versionResp = Task.Run(() => _client.GetAsync($"{BaseUrl}/api/v2/app/version")).GetAwaiter().GetResult();
+            using var versionReq = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/app/version");
+            using var versionResp = _client.Send(versionReq);
             if (versionResp.IsSuccessStatusCode)
             {
-                var version = Task.Run(() => versionResp.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
+                using var reader = new StreamReader(versionResp.Content.ReadAsStream());
+                var version = reader.ReadToEnd();
                 var verStr = string.IsNullOrWhiteSpace(version) ? "" : $" {version.Trim()}";
                 return DownloadClientTestResult.Ok($"Successfully connected to qBittorrent{verStr} at {BaseUrl}");
             }
@@ -261,13 +272,15 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 new KeyValuePair<string, string>("password", Password),
             });
 
-            var response = Task.Run(() => _client.PostAsync($"{BaseUrl}/api/v2/auth/login", content)).GetAwaiter().GetResult();
+            using var authReq = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/auth/login") { Content = content };
+            using var response = _client.Send(authReq);
             if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
             {
                 return DownloadClientTestResult.Fail($"Authentication failed (HTTP {(int)response.StatusCode} {response.ReasonPhrase}). Please check username and password.");
             }
 
-            var body = Task.Run(() => response.Content.ReadAsStringAsync()).GetAwaiter().GetResult();
+            using var bodyReader = new StreamReader(response.Content.ReadAsStream());
+            var body = bodyReader.ReadToEnd();
             if (response.IsSuccessStatusCode && body.Contains("Ok"))
             {
                 return DownloadClientTestResult.Ok($"Successfully connected to qBittorrent at {BaseUrl}");
@@ -283,10 +296,6 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         catch (HttpRequestException ex)
         {
             return DownloadClientTestResult.Fail($"Network error connecting to {BaseUrl}: {ex.Message}");
-        }
-        catch (TaskCanceledException)
-        {
-            return DownloadClientTestResult.Fail($"Connection timed out connecting to {BaseUrl} (exceeded 10s)");
         }
         catch (Exception ex)
         {

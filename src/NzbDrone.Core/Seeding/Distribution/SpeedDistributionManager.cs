@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Seeding.Distribution;
@@ -24,6 +25,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
     private readonly IEnumerable<ISpeedDistributor> _distributors;
     private readonly IConfigService _configService;
+    private readonly ISystemClock _clock;
     private readonly Logger _logger;
 
     private readonly object _uploadCacheLock = new object();
@@ -41,10 +43,14 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
     public string CurrentDistribution => _configService.UploadDistributionAlgorithm;
 
-    public SpeedDistributionManager(IEnumerable<ISpeedDistributor> distributors, IConfigService configService)
+    public SpeedDistributionManager(
+        IEnumerable<ISpeedDistributor> distributors,
+        IConfigService configService,
+        ISystemClock clock = null)
     {
         _distributors = distributors;
         _configService = configService;
+        _clock = clock ?? new SystemClock();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -84,7 +90,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
                 _cachedUploadSpeeds = DistributeWithConfig(torrentCount, maxSpeed, algorithm, spread);
                 _cachedUploadCount = torrentCount;
                 _cachedUploadMaxSpeed = maxSpeed;
-                _lastUploadRedistribution = DateTime.UtcNow;
+                _lastUploadRedistribution = _clock.UtcNow;
                 _logger.Debug(
                     "Redistributed upload speeds using {0} (spread {1}%) across {2} torrents",
                     algorithm,
@@ -124,7 +130,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
                 _cachedDownloadSpeeds = DistributeWithConfig(torrentCount, maxSpeed, algorithm, spread);
                 _cachedDownloadCount = torrentCount;
                 _cachedDownloadMaxSpeed = maxSpeed;
-                _lastDownloadRedistribution = DateTime.UtcNow;
+                _lastDownloadRedistribution = _clock.UtcNow;
                 _logger.Debug(
                     "Redistributed download speeds using {0} (spread {1}%) across {2} torrents",
                     algorithm,
@@ -211,7 +217,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
         return result;
     }
 
-    private static bool ShouldRedistribute(
+    private bool ShouldRedistribute(
         string mode,
         int intervalMinutes,
         DateTime lastRedistribution,
@@ -229,7 +235,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
         return mode switch
         {
             "tick" => true,
-            "interval" => DateTime.UtcNow - lastRedistribution >= TimeSpan.FromMinutes(intervalMinutes),
+            "interval" => _clock.UtcNow - lastRedistribution >= TimeSpan.FromMinutes(intervalMinutes),
             "fixed" => false,
             _ => true
         };

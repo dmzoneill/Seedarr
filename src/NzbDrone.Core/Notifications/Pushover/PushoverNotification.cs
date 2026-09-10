@@ -57,7 +57,8 @@ public class PushoverNotification : INotificationService
                 new KeyValuePair<string, string>("timestamp", DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
             });
 
-            using var response = _httpClient.PostAsync(PushoverApiUrl, formData).GetAwaiter().GetResult();
+            using var request = new HttpRequestMessage(HttpMethod.Post, PushoverApiUrl) { Content = formData };
+            using var response = _httpClient.Send(request);
             _logger.Debug("Pushover notification sent, status: {0}", response.StatusCode);
         }
         catch (Exception ex)

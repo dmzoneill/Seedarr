@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Torrents;
@@ -25,7 +26,7 @@ public class StopPolicyTest
         _configService.UploadStoppedMinPercentage.Returns(0);
         _configService.UploadStoppedMaxPercentage.Returns(0);
 
-        var subject = new StopPolicy(_configService, new Random(42));
+        var subject = new StopPolicy(_configService, new RandomNumberGenerator(42));
         var torrents = new List<Torrent>
         {
             new Torrent { Id = 1 },
@@ -43,7 +44,7 @@ public class StopPolicyTest
         _configService.UploadStoppedMinPercentage.Returns(100);
         _configService.UploadStoppedMaxPercentage.Returns(100);
 
-        var subject = new StopPolicy(_configService, new Random(42));
+        var subject = new StopPolicy(_configService, new RandomNumberGenerator(42));
         var torrents = new List<Torrent>
         {
             new Torrent { Id = 1, ForceStart = true },
@@ -61,7 +62,7 @@ public class StopPolicyTest
         _configService.UploadStoppedMinPercentage.Returns(100);
         _configService.UploadStoppedMaxPercentage.Returns(100);
 
-        var subject = new StopPolicy(_configService, new Random(42));
+        var subject = new StopPolicy(_configService, new RandomNumberGenerator(42));
         var torrents = new List<Torrent>
         {
             new Torrent { Id = 1 },
@@ -81,8 +82,8 @@ public class StopPolicyTest
         _configService.UploadStoppedMinPercentage.Returns(50);
         _configService.UploadStoppedMaxPercentage.Returns(50);
 
-        var subject1 = new StopPolicy(_configService, new Random(12345));
-        var subject2 = new StopPolicy(_configService, new Random(12345));
+        var subject1 = new StopPolicy(_configService, new RandomNumberGenerator(12345));
+        var subject2 = new StopPolicy(_configService, new RandomNumberGenerator(12345));
 
         var torrents = new List<Torrent>
         {

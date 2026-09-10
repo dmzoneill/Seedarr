@@ -94,9 +94,9 @@ public class TorznabIndexer : IIndexer
                 return null;
             }
 
-            var xml = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            using var stream = response.Content.ReadAsStream();
             var doc = new System.Xml.XmlDocument();
-            doc.LoadXml(xml);
+            doc.Load(stream);
 
             var enclosure = doc.SelectSingleNode("//item/enclosure");
             if (enclosure != null && enclosure.Attributes["url"] != null)
@@ -107,7 +107,9 @@ public class TorznabIndexer : IIndexer
                 using var dlResponse = Client.Send(dlRequest);
                 if (dlResponse.IsSuccessStatusCode)
                 {
-                    return dlResponse.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+                    using var ms = new System.IO.MemoryStream();
+                    dlResponse.Content.ReadAsStream().CopyTo(ms);
+                    return ms.ToArray();
                 }
             }
 
@@ -149,7 +151,8 @@ public class TorznabIndexer : IIndexer
                 return results;
             }
 
-            var xml = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            using var reader = new System.IO.StreamReader(response.Content.ReadAsStream());
+            var xml = reader.ReadToEnd();
             return ParseResponse(xml, definition);
         }
         catch (Exception ex)

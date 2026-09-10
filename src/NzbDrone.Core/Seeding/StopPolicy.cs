@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Torrents;
 
@@ -8,12 +9,12 @@ namespace NzbDrone.Core.Seeding;
 public class StopPolicy : IStopPolicy
 {
     private readonly IConfigService _configService;
-    private readonly Random _random;
+    private readonly IRandomNumberGenerator _random;
 
-    public StopPolicy(IConfigService configService, Random random = null)
+    public StopPolicy(IConfigService configService, IRandomNumberGenerator random = null)
     {
         _configService = configService;
-        _random = random ?? Random.Shared;
+        _random = random ?? new RandomNumberGenerator();
     }
 
     public HashSet<int> SelectStoppedTorrents(List<Torrent> torrents)
