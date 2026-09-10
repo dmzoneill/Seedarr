@@ -30,12 +30,26 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
   );
 
   const meta = historyMatch?.metadata;
+  const posterUrl = meta?.posterUrl || torrent.posterUrl || (torrent.id ? `/api/v1/mediacover/${torrent.id}/poster.jpg` : undefined);
+  const mediaTitle = meta?.title || torrent.mediaTitle || torrent.name;
+  const mediaYear = meta?.year || torrent.year;
+  const mediaGenres = meta?.genres?.length ? meta.genres : torrent.genres;
+
   const arrLink = historyMatch
     ? getMediaDeepLink(historyMatch, arrConnections)
-    : null;
-  const imdbUrl = getImdbUrl(meta?.imdbId, meta?.title || torrent.name);
+    : torrent.source
+      ? getMediaDeepLink(
+          {
+            source: torrent.source,
+            metadata: { title: mediaTitle, mediaId: 0 } as any,
+            title: torrent.name,
+          },
+          arrConnections,
+        )
+      : null;
+  const imdbUrl = getImdbUrl(meta?.imdbId, mediaTitle);
   const tmdbUrl = getTmdbUrl(meta?.tmdbId, meta?.mediaType);
-  const prowlarrUrl = getProwlarrUrl(indexers, meta?.title || torrent.name);
+  const prowlarrUrl = getProwlarrUrl(indexers, mediaTitle);
 
   const badges = getTorrentBadges(torrent);
   const hnr = calculateHnrStatus(torrent);
@@ -57,7 +71,7 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
       {/* Arr & Metadata Integration Banner */}
-      {(arrLink || meta || prowlarrUrl) && (
+      {(arrLink || meta || prowlarrUrl || torrent.mediaTitle || torrent.posterUrl) && (
         <div
           style={{
             display: "flex",
@@ -74,9 +88,9 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
           <div
             style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
           >
-            {meta?.posterUrl && (
+            {posterUrl && (
               <img
-                src={meta.posterUrl}
+                src={posterUrl}
                 alt=""
                 style={{
                   width: "32px",
@@ -88,17 +102,17 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
             )}
             <div>
               <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
-                {meta?.title || torrent.name}{" "}
-                {meta?.year ? `(${meta.year})` : ""}
+                {mediaTitle}{" "}
+                {mediaYear ? `(${mediaYear})` : ""}
               </div>
-              {meta?.genres && (
+              {mediaGenres && mediaGenres.length > 0 && (
                 <div
                   style={{
                     fontSize: "0.7rem",
                     color: "var(--text-muted, #888)",
                   }}
                 >
-                  {meta.genres.slice(0, 3).join(", ")}
+                  {mediaGenres.slice(0, 3).join(", ")}
                 </div>
               )}
             </div>

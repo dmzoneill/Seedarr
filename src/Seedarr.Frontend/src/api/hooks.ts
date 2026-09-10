@@ -1294,3 +1294,19 @@ export function useDeleteTrackerMetric() {
   });
 }
 
+export function useTorrentMedia(torrentId?: number | null) {
+  return useQuery<MediaMetadata>({
+    queryKey: ["torrentMedia", torrentId],
+    queryFn: () => apiClient.get(`/torrent/${torrentId}/media`),
+    enabled: Boolean(torrentId && torrentId > 0),
+  });
+}
+
+export function useAllMediaMetadata() {
+  return useQuery<MediaMetadata[]>({
+    queryKey: ["mediacover"],
+    queryFn: () => apiClient.get("/mediacover"),
+  });
+}
+
+
