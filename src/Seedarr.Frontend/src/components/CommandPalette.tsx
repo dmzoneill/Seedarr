@@ -203,6 +203,11 @@ export function CommandPalette({
         title: "System Logs",
         subtitle: "Real-time backend log streaming and level filters",
       },
+      {
+        path: "/system/api",
+        title: "API Reference (OpenAPI / Swagger)",
+        subtitle: "Interactive REST API explorer and OpenAPI v3 schemas",
+      },
     ];
 
     settingsSub.forEach((s) => {
