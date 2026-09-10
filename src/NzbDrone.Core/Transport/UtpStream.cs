@@ -42,6 +42,7 @@ public class UtpStream : Stream
 
     public override void Flush()
     {
+        _connection.Flush();
     }
 
     public override int Read(byte[] buffer, int offset, int count)

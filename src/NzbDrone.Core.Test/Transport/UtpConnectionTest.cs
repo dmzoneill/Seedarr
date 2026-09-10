@@ -1037,6 +1037,8 @@ public class UtpConnectionTest
             written += w;
         }
 
+        clientConn.Flush();
+
         serverTask.Wait(TimeSpan.FromSeconds(10));
         Assert.That(serverReceivedData, Is.EqualTo(clientPayload));
     }

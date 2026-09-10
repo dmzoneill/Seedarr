@@ -6,6 +6,7 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.Threading;
 using NLog;
 
 namespace NzbDrone.Core.Transport;
@@ -40,6 +41,7 @@ public interface IUtpConnection : IDisposable
     int Send(byte[] data, int offset, int length);
     int Receive(byte[] buffer, int offset, int length);
     Stream GetStream();
+    void Flush();
     void Close();
 }
 
@@ -55,6 +57,7 @@ public class UtpConnection : IUtpConnection
     private readonly ConcurrentDictionary<ushort, byte[]> _outOfOrderBuffer = new();
     private readonly Queue<byte> _receiveQueue = new();
     private readonly object _receiveLock = new();
+    private readonly object _socketLock = new();
     private readonly ConcurrentDictionary<ushort, InFlightPacket> _inFlightPackets = new();
 
     private ushort _connectionId;
@@ -133,7 +136,7 @@ public class UtpConnection : IUtpConnection
                         _ackNumber = header.SequenceNumber;
                         _connectionId = (ushort)(header.ConnectionId + 1);
                         _remoteWindowSize = header.WindowSize > 0 ? header.WindowSize : DefaultWindowSize;
-                        _expectedSeqNr = (ushort)(header.SequenceNumber + 1);
+                        _expectedSeqNr = header.SequenceNumber;
                         IsConnected = true;
                         _sequenceNumber = (ushort)(synSeq + 1);
                         _logger.Debug("uTP connected to {0}", endpoint);
@@ -191,6 +194,20 @@ public class UtpConnection : IUtpConnection
         return totalSent;
     }
 
+    public void Flush()
+    {
+        var sendStart = DateTime.UtcNow;
+        while (!_inFlightPackets.IsEmpty && IsConnected && (DateTime.UtcNow - sendStart).TotalSeconds < _connectionTimeoutSeconds)
+        {
+            TryReceiveUdpNonBlocking();
+            RetransmitUnackedPackets();
+            if (!_inFlightPackets.IsEmpty)
+            {
+                Thread.Sleep(5);
+            }
+        }
+    }
+
     public int Receive(byte[] buffer, int offset, int length)
     {
         if (!IsConnected || length <= 0)
@@ -221,7 +238,10 @@ public class UtpConnection : IUtpConnection
             byte[] data;
             try
             {
-                data = _udpClient.Receive(ref receiveEndpoint);
+                lock (_socketLock)
+                {
+                    data = _udpClient.Receive(ref receiveEndpoint);
+                }
             }
             catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
             {
@@ -238,98 +258,19 @@ public class UtpConnection : IUtpConnection
                 return 0;
             }
 
-            if (data.Length < HeaderSize)
-            {
-                continue;
-            }
+            HandleIncomingPacket(data, receiveEndpoint);
 
-            var header = ParseHeader(data);
-            if (header == null)
+            lock (_receiveLock)
             {
-                continue;
-            }
-
-            _remoteWindowSize = header.WindowSize > 0 ? header.WindowSize : DefaultWindowSize;
-            if (header.Timestamp > 0)
-            {
-                _lastTimestampDiff = GetMicroseconds() - header.Timestamp;
-            }
-
-            ProcessAck(header.AckNumber);
-
-            if (header.Type == UtpPacketType.Reset)
-            {
-                IsConnected = false;
-                return 0;
-            }
-
-            if (header.Type == UtpPacketType.Fin)
-            {
-                _ackNumber = header.SequenceNumber;
-                var ack = BuildPacket(UtpPacketType.State, Array.Empty<byte>());
-                SendUdpPacket(ack, ack.Length, _remoteEndpoint ?? receiveEndpoint);
-                IsConnected = false;
-                return 0;
-            }
-
-            if (header.Type == UtpPacketType.State)
-            {
-                RetransmitUnackedPackets();
-                continue;
-            }
-
-            if (header.Type == UtpPacketType.Data)
-            {
-                var payloadLen = data.Length - HeaderSize;
-                if (payloadLen <= 0)
+                if (_receiveQueue.Count > 0)
                 {
-                    _ackNumber = header.SequenceNumber;
-                    return 0;
-                }
-
-                var payload = new byte[payloadLen];
-                Array.Copy(data, HeaderSize, payload, 0, payloadLen);
-
-                lock (_receiveLock)
-                {
-                    if (_expectedSeqNr == 0 || header.SequenceNumber == _expectedSeqNr || (_sequenceNumber == 1 && _ackNumber == 0))
+                    var bytesToCopy = Math.Min(_receiveQueue.Count, length);
+                    for (var i = 0; i < bytesToCopy; i++)
                     {
-                        _expectedSeqNr = (ushort)(header.SequenceNumber + 1);
-                        _ackNumber = header.SequenceNumber;
-
-                        for (var i = 0; i < payloadLen; i++)
-                        {
-                            _receiveQueue.Enqueue(payload[i]);
-                        }
-
-                        while (_outOfOrderBuffer.TryRemove(_expectedSeqNr, out var nextPayload))
-                        {
-                            _ackNumber = _expectedSeqNr;
-                            _expectedSeqNr++;
-                            for (var i = 0; i < nextPayload.Length; i++)
-                            {
-                                _receiveQueue.Enqueue(nextPayload[i]);
-                            }
-                        }
-                    }
-                    else if (IsAhead(header.SequenceNumber, _expectedSeqNr))
-                    {
-                        _outOfOrderBuffer[header.SequenceNumber] = payload;
+                        buffer[offset + i] = _receiveQueue.Dequeue();
                     }
 
-                    var ack = BuildPacket(UtpPacketType.State, Array.Empty<byte>());
-                    SendUdpPacket(ack, ack.Length, _remoteEndpoint ?? receiveEndpoint);
-
-                    if (_receiveQueue.Count > 0)
-                    {
-                        var bytesToCopy = Math.Min(_receiveQueue.Count, length);
-                        for (var i = 0; i < bytesToCopy; i++)
-                        {
-                            buffer[offset + i] = _receiveQueue.Dequeue();
-                        }
-
-                        return bytesToCopy;
-                    }
+                    return bytesToCopy;
                 }
             }
         }
@@ -515,76 +456,23 @@ public class UtpConnection : IUtpConnection
 
     private void TryReceiveUdpNonBlocking()
     {
-        if (_udpClient.Client.Available <= 0)
+        lock (_socketLock)
         {
-            return;
-        }
-
-        try
-        {
-            var endpoint = new IPEndPoint(IPAddress.Any, 0);
-            var data = _udpClient.Receive(ref endpoint);
-            if (data.Length >= HeaderSize)
+            if (_udpClient.Client.Available <= 0)
             {
-                var header = ParseHeader(data);
-                if (header != null)
-                {
-                    if (header.Timestamp > 0)
-                    {
-                        _lastTimestampDiff = GetMicroseconds() - header.Timestamp;
-                    }
-
-                    _remoteWindowSize = header.WindowSize > 0 ? header.WindowSize : DefaultWindowSize;
-                    ProcessAck(header.AckNumber);
-
-                    if (header.Type == UtpPacketType.Data)
-                    {
-                        var payloadLen = data.Length - HeaderSize;
-                        if (payloadLen > 0)
-                        {
-                            var payload = new byte[payloadLen];
-                            Array.Copy(data, HeaderSize, payload, 0, payloadLen);
-                            lock (_receiveLock)
-                            {
-                                if (_expectedSeqNr == 0 || header.SequenceNumber == _expectedSeqNr)
-                                {
-                                    _expectedSeqNr = (ushort)(header.SequenceNumber + 1);
-                                    _ackNumber = header.SequenceNumber;
-                                    for (var i = 0; i < payloadLen; i++)
-                                    {
-                                        _receiveQueue.Enqueue(payload[i]);
-                                    }
-
-                                    while (_outOfOrderBuffer.TryRemove(_expectedSeqNr, out var nextPayload))
-                                    {
-                                        _ackNumber = _expectedSeqNr;
-                                        _expectedSeqNr++;
-                                        for (var i = 0; i < nextPayload.Length; i++)
-                                        {
-                                            _receiveQueue.Enqueue(nextPayload[i]);
-                                        }
-                                    }
-                                }
-                                else if (IsAhead(header.SequenceNumber, _expectedSeqNr))
-                                {
-                                    _outOfOrderBuffer[header.SequenceNumber] = payload;
-                                }
-
-                                var ack = BuildPacket(UtpPacketType.State, Array.Empty<byte>());
-                                SendUdpPacket(ack, ack.Length, _remoteEndpoint ?? endpoint);
-                            }
-                        }
-                    }
-                    else if (header.Type == UtpPacketType.Reset)
-                    {
-                        IsConnected = false;
-                    }
-                }
+                return;
             }
-        }
-        catch
-        {
-            // Non-blocking drain
+
+            try
+            {
+                var endpoint = new IPEndPoint(IPAddress.Any, 0);
+                var data = _udpClient.Receive(ref endpoint);
+                HandleIncomingPacket(data, endpoint);
+            }
+            catch
+            {
+                // Non-blocking drain
+            }
         }
     }
 
@@ -615,7 +503,7 @@ public class UtpConnection : IUtpConnection
         foreach (var kvp in _inFlightPackets)
         {
             var packet = kvp.Value;
-            if (now - packet.SentTimestamp >= 300)
+            if (now - packet.SentTimestamp >= 50)
             {
                 packet.Retries++;
                 packet.SentTimestamp = now;

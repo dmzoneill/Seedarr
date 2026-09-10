@@ -30,10 +30,6 @@ public class AddTorrentMediaMetadata : NzbDroneMigrationBase
             .WithColumn("ArtistName").AsString().Nullable()
             .WithColumn("AlbumTitle").AsString().Nullable()
             .WithColumn("Cast").AsString().Nullable();
-
-        Create.Index("IX_TorrentMediaMetadata_TorrentId")
-            .OnTable("TorrentMediaMetadata")
-            .OnColumn("TorrentId");
     }
 
     public override void Down()

@@ -981,6 +981,8 @@ public class PeerServerTest
         utpManager.IsEnabled.Returns(true);
         utpManager.TcpFallbackEnabled.Returns(true);
 
+        _configService.EncryptionMode.Returns("disabled");
+
         var mockUtp = Substitute.For<IUtpConnection>();
         mockUtp.IsConnected.Returns(false);
         utpManager.CreateConnection().Returns(mockUtp);
