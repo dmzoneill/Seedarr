@@ -428,5 +428,27 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(result, Is.Null);
             _repository.DidNotReceive().Update(Arg.Any<Torrent>());
         }
+
+        [Test]
+        public void UpdateMany_should_call_repository_UpdateMany()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 1, Name = "Torrent1" },
+                new Torrent { Id = 2, Name = "Torrent2" }
+            };
+
+            _subject.UpdateMany(torrents);
+
+            _repository.Received(1).UpdateMany(torrents);
+        }
+
+        [Test]
+        public void UpdateMany_should_not_call_repository_when_empty()
+        {
+            _subject.UpdateMany(new List<Torrent>());
+
+            _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+        }
     }
 }

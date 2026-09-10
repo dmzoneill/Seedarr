@@ -36,7 +36,7 @@ public static class TableMapping
         return $"INSERT INTO \"{table}\" ({columns}) VALUES ({parameters})";
     }
 
-    public static string GetUpdateSql<TModel>(string table, TModel model)
+    public static string GetUpdateSql<TModel>(string table, TModel model = null)
         where TModel : ModelBase
     {
         var properties = GetWritableProperties(typeof(TModel));

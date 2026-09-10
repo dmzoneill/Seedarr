@@ -16,6 +16,7 @@ public interface ITorrentService
     bool ExistsByInfoHash(string infoHash);
     Torrent Add(Torrent torrent);
     Torrent Update(Torrent torrent);
+    void UpdateMany(IEnumerable<Torrent> torrents);
     Torrent UpdateUserFields(int id, Torrent updates);
     void Delete(int id, bool deleteFiles = false);
     Torrent Recheck(int id);
@@ -73,6 +74,18 @@ public class TorrentService : ITorrentService
         var updated = _repository.Update(torrent);
         _eventAggregator.PublishEvent(new ModelEvent<Torrent>(updated, ModelAction.Updated));
         return updated;
+    }
+
+    public void UpdateMany(IEnumerable<Torrent> torrents)
+    {
+        var list = torrents as IList<Torrent> ?? torrents.ToList();
+        if (list.Count == 0)
+        {
+            return;
+        }
+
+        _logger.Debug("Batch updating {0} torrents", list.Count);
+        _repository.UpdateMany(list);
     }
 
     public Torrent UpdateUserFields(int id, Torrent updates)

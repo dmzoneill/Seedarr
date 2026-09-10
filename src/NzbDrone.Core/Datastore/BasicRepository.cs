@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Dapper;
 
 namespace NzbDrone.Core.Datastore;
@@ -10,6 +11,7 @@ public interface IBasicRepository<TModel>
     TModel Get(int id);
     TModel Insert(TModel model);
     TModel Update(TModel model);
+    void UpdateMany(IEnumerable<TModel> models);
     void Delete(int id);
     void Delete(TModel model);
 }
@@ -66,9 +68,26 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
     {
         using var connection = _database.OpenConnection();
         connection.Execute(
-            TableMapping.GetUpdateSql(_table, model),
+            TableMapping.GetUpdateSql<TModel>(_table, model),
             model);
         return model;
+    }
+
+    public void UpdateMany(IEnumerable<TModel> models)
+    {
+        var list = models as IList<TModel> ?? models.ToList();
+        if (list.Count == 0)
+        {
+            return;
+        }
+
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        connection.Execute(
+            TableMapping.GetUpdateSql<TModel>(_table),
+            list,
+            transaction);
+        transaction.Commit();
     }
 
     public void Delete(int id)
