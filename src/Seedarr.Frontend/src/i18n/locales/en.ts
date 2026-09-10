@@ -64,6 +64,8 @@ const en = {
     commandPalette: "🔍 Command Palette (⌘K)",
     keyboardShortcuts: "⌨️ Keyboard Shortcuts (?)",
     gettingStarted: "🚀 Getting Started Guide",
+    gettingStartedButton: "Getting Started",
+    gettingStartedTooltip: "Getting Started Setup Guide",
     restart: "Restart",
     restartConfirm: "Restart Seedarr?",
     shutdown: "Shutdown",

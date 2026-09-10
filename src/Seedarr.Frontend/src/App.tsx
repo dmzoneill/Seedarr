@@ -418,6 +418,26 @@ function App() {
             </kbd>
           </div>
           <div className="topbar-actions">
+            <LanguageSelector />
+            <button
+              className="topbar-btn topbar-getting-started"
+              onClick={() => setShowGettingStartedModal(true)}
+              title={t(
+                "topbar.gettingStartedTooltip",
+                undefined,
+                "Getting Started Setup Guide",
+              )}
+              aria-label={t(
+                "topbar.gettingStartedTooltip",
+                undefined,
+                "Getting Started Setup Guide",
+              )}
+            >
+              <span className="topbar-getting-started-icon">🚀</span>
+              <span className="topbar-getting-started-text">
+                {t("topbar.gettingStartedButton", undefined, "Getting Started")}
+              </span>
+            </button>
             {generalConfig?.apiKey && (
               <div
                 className="topbar-api-key"
@@ -425,7 +445,6 @@ function App() {
                   display: "flex",
                   alignItems: "center",
                   gap: "0.5rem",
-                  marginRight: "1rem",
                   color: "var(--text-dim)",
                   fontSize: "0.85rem",
                 }}
@@ -452,7 +471,6 @@ function App() {
                 </code>
               </div>
             )}
-            <LanguageSelector />
             <button
               className="topbar-btn"
               onClick={toggleTheme}
