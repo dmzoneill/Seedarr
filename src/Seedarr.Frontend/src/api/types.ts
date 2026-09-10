@@ -499,6 +499,33 @@ export interface NotificationSettings {
   showError: boolean;
 }
 
+export interface NotificationTestResult {
+  success: boolean;
+  message?: string;
+}
+
+export interface NotificationResource {
+  id: number;
+  name: string;
+  implementation: string;
+  configContract?: string;
+  settings: string;
+  enable: boolean;
+  onGrab: boolean;
+  onDownloadComplete: boolean;
+  onMediaInspected: boolean;
+  onExtractComplete: boolean;
+  onSeedGoalReached: boolean;
+  onTorrentDeleted: boolean;
+  onHealthIssue: boolean;
+  onHealthRestored: boolean;
+  onManualInteractionRequired: boolean;
+  onApplicationUpdate: boolean;
+  tags?: number[];
+}
+
+export type NotificationDefinition = NotificationResource;
+
 export interface ArrTestResult {
   success: boolean;
   message?: string;
@@ -572,6 +599,22 @@ export interface IndexerDefinition {
 export interface IndexerTestResult {
   success: boolean;
   message?: string;
+  responseTimeMs?: number;
+}
+
+export interface RssRule {
+  id: number;
+  name: string;
+  isEnabled: boolean;
+  mustContain: string;
+  mustNotContain: string;
+  minSeeders: number;
+  minSizeBytes: number;
+  maxSizeBytes: number;
+  maxAgeDays?: number;
+  freeleechOnly: boolean;
+  categoryId: number;
+  indexerIds: number[];
 }
 
 export interface TrackerEntry {

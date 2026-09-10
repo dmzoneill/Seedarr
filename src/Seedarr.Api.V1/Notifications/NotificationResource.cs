@@ -1,10 +1,25 @@
 using System.Collections.Generic;
-using NzbDrone.Core.ThingiProvider;
+using System.ComponentModel.DataAnnotations;
+using Seedarr.Http.REST;
 
-namespace NzbDrone.Core.Notifications;
+namespace Seedarr.Api.V1.Notifications;
 
-public class NotificationDefinition : ProviderDefinition
+public class NotificationResource : RestResource
 {
+    [Required]
+    [StringLength(255, MinimumLength = 1)]
+    public string Name { get; set; }
+
+    [StringLength(100)]
+    public string Implementation { get; set; } = "Webhook";
+
+    [StringLength(100)]
+    public string ConfigContract { get; set; }
+
+    public string Settings { get; set; }
+
+    public bool Enable { get; set; } = true;
+
     public bool OnGrab { get; set; } = true;
 
     public bool OnDownloadComplete { get; set; } = true;
@@ -26,4 +41,11 @@ public class NotificationDefinition : ProviderDefinition
     public bool OnApplicationUpdate { get; set; }
 
     public List<int> Tags { get; set; } = new();
+}
+
+public class NotificationTestResult
+{
+    public bool Success { get; set; }
+
+    public string Message { get; set; }
 }
