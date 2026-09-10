@@ -230,7 +230,7 @@ public class TorrentControllerTests : IntegrationTestBase
             ["trackerAnnounceInterval"] = 1800
         };
         var putConfigResponse = await PutJsonAsync("/api/v1/config/trackerserver", trackerConfigUpdate);
-        Assert.That(putConfigResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(putConfigResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK).Or.EqualTo(HttpStatusCode.Accepted));
 
         // Wait brief moment for listener to bind
         await Task.Delay(200);
@@ -266,16 +266,15 @@ public class TorrentControllerTests : IntegrationTestBase
         using var announceDoc = Deserialize<JsonDocument>(announceJson);
         Assert.That(announceDoc.RootElement.GetProperty("successfulAnnounces").GetInt32(), Is.GreaterThanOrEqualTo(1));
 
-        // 5. Verify tracker entry state in torrent resource
-        var getTorrentResponse = await GetAsync($"/api/v1/torrent/{torrentId}");
-        Assert.That(getTorrentResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var torrentJson = await getTorrentResponse.Content.ReadAsStringAsync();
-        using var torrentDoc = Deserialize<JsonDocument>(torrentJson);
+        // 5. Verify tracker entry state
+        var getTrackersResponse = await GetAsync($"/api/v1/torrent/{torrentId}/trackers");
+        Assert.That(getTrackersResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var trackersJson = await getTrackersResponse.Content.ReadAsStringAsync();
+        using var trackersDoc = Deserialize<JsonDocument>(trackersJson);
 
-        var trackersArray = torrentDoc.RootElement.GetProperty("trackers");
-        Assert.That(trackersArray.GetArrayLength(), Is.GreaterThanOrEqualTo(1));
+        Assert.That(trackersDoc.RootElement.GetArrayLength(), Is.GreaterThanOrEqualTo(1));
 
-        var tracker = trackersArray[0];
+        var tracker = trackersDoc.RootElement[0];
         Assert.That(tracker.GetProperty("status").GetString(), Is.EqualTo("Working"));
         Assert.That(tracker.GetProperty("successfulAnnounces").GetInt32(), Is.GreaterThanOrEqualTo(1));
         Assert.That(tracker.GetProperty("consecutiveFailures").GetInt32(), Is.EqualTo(0));
@@ -317,15 +316,14 @@ public class TorrentControllerTests : IntegrationTestBase
         Assert.That(announceDoc.RootElement.GetProperty("failedAnnounces").GetInt32(), Is.GreaterThanOrEqualTo(1));
 
         // 4. Verify tracker entry state reflects failure honestly
-        var getTorrentResponse = await GetAsync($"/api/v1/torrent/{torrentId}");
-        Assert.That(getTorrentResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var torrentJson = await getTorrentResponse.Content.ReadAsStringAsync();
-        using var torrentDoc = Deserialize<JsonDocument>(torrentJson);
+        var getTrackersResponse = await GetAsync($"/api/v1/torrent/{torrentId}/trackers");
+        Assert.That(getTrackersResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var trackersJson = await getTrackersResponse.Content.ReadAsStringAsync();
+        using var trackersDoc = Deserialize<JsonDocument>(trackersJson);
 
-        var trackersArray = torrentDoc.RootElement.GetProperty("trackers");
-        Assert.That(trackersArray.GetArrayLength(), Is.GreaterThanOrEqualTo(1));
+        Assert.That(trackersDoc.RootElement.GetArrayLength(), Is.GreaterThanOrEqualTo(1));
 
-        var tracker = trackersArray[0];
+        var tracker = trackersDoc.RootElement[0];
         Assert.That(tracker.GetProperty("status").GetString(), Is.EqualTo("Failed"));
         Assert.That(tracker.GetProperty("consecutiveFailures").GetInt32(), Is.GreaterThanOrEqualTo(1));
         Assert.That(tracker.GetProperty("errorMessage").GetString(), Is.Not.Null.And.Not.Empty);

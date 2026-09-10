@@ -463,6 +463,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return BadRequest(validationResult.Errors);
         }
 
+        if (string.IsNullOrWhiteSpace(resource.InfoHash) || !global::System.Text.RegularExpressions.Regex.IsMatch(resource.InfoHash, "^[a-fA-F0-9]{40}$"))
+        {
+            return BadRequest(new { message = "'InfoHash' must be a 40-character hexadecimal string." });
+        }
+
         var torrent = TorrentResourceMapper.ToModel(resource);
         torrent.DateAdded = DateTime.UtcNow;
         var added = _torrentService.Add(torrent);

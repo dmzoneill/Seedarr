@@ -1,5 +1,6 @@
 import { SeedingConfig } from "../../api/types";
 import { formatSpeed } from "../../utils/formatters";
+import { useTranslation } from "../../i18n";
 import {
   PlusIcon,
   PlayIcon,
@@ -63,6 +64,8 @@ export function TorrentToolbar({
   isQuickControlsOpen = false,
   onToggleQuickControls,
 }: TorrentToolbarProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="page-header">
       <div className="page-header-group">
@@ -78,12 +81,12 @@ export function TorrentToolbar({
             style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
           >
             <FilterIcon size={12} />
-            <span>{isFilterCollapsed ? "▶ Filter" : "◀ Filter"}</span>
+            <span>{isFilterCollapsed ? `▶ ${t("torrents.toggleFilter", undefined, "Filter")}` : `◀ ${t("torrents.toggleFilter", undefined, "Filter")}`}</span>
           </button>
         )}
-        <h1 className="page-heading">Torrents ({count})</h1>
+        <h1 className="page-heading">{t("torrents.title", undefined, "Torrents")} ({count})</h1>
         <button className="btn btn-success" onClick={onAddTorrent}>
-          <PlusIcon size={13} /> Add Torrent
+          <PlusIcon size={13} /> {t("torrents.addTorrent", undefined, "Add Torrent")}
         </button>
         {onToggleQuickControls && (
           <button
@@ -99,50 +102,50 @@ export function TorrentToolbar({
             style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
           >
             <SlidersIcon size={13} />
-            <span>Quick Controls</span>
+            <span>{t("torrents.quickControls", undefined, "Quick Controls")}</span>
             <kbd className="quick-controls-kbd">Q</kbd>
           </button>
         )}
         {selectedCount > 0 && (
           <div className="bulk-actions">
-            <span className="bulk-actions-count">{selectedCount} selected</span>
+            <span className="bulk-actions-count">{t("torrents.selectedCount", { count: selectedCount }, `${selectedCount} selected`)}</span>
             <button
               className="btn btn-small btn-success"
               onClick={onBulkStart}
               disabled={bulkPending}
             >
-              <PlayIcon size={12} /> Start
+              <PlayIcon size={12} /> {t("torrents.start", undefined, "Start")}
             </button>
             <button
               className="btn btn-small"
               onClick={onBulkStop}
               disabled={bulkPending}
             >
-              <StopIcon size={12} /> Stop
+              <StopIcon size={12} /> {t("torrents.stop", undefined, "Stop")}
             </button>
             <button
               className="btn btn-small btn-danger"
               onClick={onBulkDelete}
               disabled={bulkPending}
             >
-              Delete
+              {t("common.delete", undefined, "Delete")}
             </button>
             <button
               className="btn btn-small"
               onClick={onBulkClear}
               disabled={bulkPending}
             >
-              Clear
+              {t("common.clear", undefined, "Clear")}
             </button>
           </div>
         )}
       </div>
       <div className="page-header-actions">
         <button className="btn btn-success" onClick={onStartAll}>
-          <PlayIcon size={13} /> Start All
+          <PlayIcon size={13} /> {t("torrents.startAll", undefined, "Start All")}
         </button>
         <button className="btn btn-danger" onClick={onStopAll}>
-          <StopIcon size={13} /> Stop All
+          <StopIcon size={13} /> {t("torrents.stopAll", undefined, "Stop All")}
         </button>
         <div
           className="speed-controls"
@@ -190,7 +193,7 @@ export function TorrentToolbar({
         <input
           type="text"
           className="search-input"
-          placeholder="Filter torrents..."
+          placeholder={t("torrents.filterPlaceholder", undefined, "Filter torrents...")}
           value={filter}
           onChange={(e) => onFilterChange(e.target.value)}
         />
@@ -200,14 +203,14 @@ export function TorrentToolbar({
             onClick={() => onViewModeChange("table")}
             title="Table view"
           >
-            <TableIcon size={13} /> Table
+            <TableIcon size={13} /> {t("torrents.tableView", undefined, "Table")}
           </button>
           <button
             className={`view-toggle-btn${viewMode === "grid" ? " active" : ""}`}
             onClick={() => onViewModeChange("grid")}
             title="Grid view"
           >
-            <GridIcon size={13} /> Grid
+            <GridIcon size={13} /> {t("torrents.gridView", undefined, "Grid")}
           </button>
         </div>
       </div>

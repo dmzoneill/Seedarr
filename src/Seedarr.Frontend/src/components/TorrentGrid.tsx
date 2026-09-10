@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n";
 import {
   useTorrents,
   useStartSeeding,
@@ -29,6 +30,7 @@ function TorrentGrid({
   selectedTorrentId,
   onSelectTorrent,
 }: TorrentGridProps) {
+  const { t } = useTranslation();
   const { data: torrents, isLoading } = useTorrents();
   const { data: arrConnections } = useArrConnections();
   const startSeeding = useStartSeeding();
@@ -118,7 +120,7 @@ function TorrentGrid({
   });
 
   if (filtered.length === 0) {
-    return <div className="torrent-grid-empty">No torrents found</div>;
+    return <div className="torrent-grid-empty">{t("torrents.noTorrents", undefined, "No torrents found")}</div>;
   }
 
   return (
@@ -138,23 +140,23 @@ function TorrentGrid({
         width: "100%",
       }}
     >
-      {filtered.map((t) => {
-        const displayTitle = t.mediaTitle || t.name;
-        const hasPoster = Boolean(t.posterUrl);
-        const isSelected = selectedTorrentId === t.id;
-        const isSeeding = t.status === "Seeding";
+      {filtered.map((torrent) => {
+        const displayTitle = torrent.mediaTitle || torrent.name;
+        const hasPoster = Boolean(torrent.posterUrl);
+        const isSelected = selectedTorrentId === torrent.id;
+        const isSeeding = torrent.status === "Seeding";
         const arrLink = getMediaDeepLink(
           {
-            source: t.source,
-            metadata: { title: t.mediaTitle, mediaId: 0 } as any,
-            title: t.name,
+            source: torrent.source,
+            metadata: { title: torrent.mediaTitle, mediaId: 0 } as any,
+            title: torrent.name,
           },
           arrConnections,
         );
 
         return (
           <div
-            key={t.id}
+            key={torrent.id}
             className="card"
             style={{
               padding: 0,
@@ -178,7 +180,7 @@ function TorrentGrid({
                 "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
               cursor: "pointer",
             }}
-            onClick={() => onSelectTorrent?.(isSelected ? null : t.id)}
+            onClick={() => onSelectTorrent?.(isSelected ? null : torrent.id)}
           >
             {/* Poster Artwork Box */}
             <div
@@ -193,7 +195,7 @@ function TorrentGrid({
             >
               {hasPoster ? (
                 <img
-                  src={t.posterUrl || ""}
+                  src={torrent.posterUrl || ""}
                   alt={displayTitle}
                   style={{
                     position: "absolute",
@@ -224,11 +226,11 @@ function TorrentGrid({
                   }}
                 >
                   <span style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>
-                    {t.source === "Radarr"
+                    {torrent.source === "Radarr"
                       ? "🎬"
-                      : t.source === "Sonarr"
+                      : torrent.source === "Sonarr"
                         ? "📺"
-                        : t.source === "Lidarr"
+                        : torrent.source === "Lidarr"
                           ? "🎵"
                           : "📡"}
                   </span>
@@ -247,7 +249,7 @@ function TorrentGrid({
               )}
 
               {/* Source Badge (Top Left) */}
-              {t.source && (
+              {torrent.source && (
                 <div
                   style={{
                     position: "absolute",
@@ -278,10 +280,10 @@ function TorrentGrid({
                       borderRadius: "4px",
                     }}
                     title={
-                      arrLink ? `${arrLink.label} (${arrLink.url})` : t.source
+                      arrLink ? `${arrLink.label} (${arrLink.url})` : torrent.source
                     }
                   >
-                    {t.source} {arrLink ? "↗" : ""}
+                    {torrent.source} {arrLink ? "↗" : ""}
                   </span>
                 </div>
               )}
@@ -301,9 +303,9 @@ function TorrentGrid({
               >
                 <span
                   className={`badge ${
-                    t.ratio >= 2.0
+                    torrent.ratio >= 2.0
                       ? "badge-success"
-                      : t.ratio >= 1.0
+                      : torrent.ratio >= 1.0
                         ? "badge-primary"
                         : "badge-secondary"
                   }`}
@@ -314,9 +316,9 @@ function TorrentGrid({
                     borderRadius: "4px",
                   }}
                 >
-                  ★ {formatRatio(t.ratio)}
+                  ★ {formatRatio(torrent.ratio)}
                 </span>
-                {t.rating && (
+                {torrent.rating && (
                   <span
                     className="badge"
                     style={{
@@ -329,7 +331,7 @@ function TorrentGrid({
                       borderRadius: "4px",
                     }}
                   >
-                    ⭐ {t.rating}
+                    ⭐ {torrent.rating}
                   </span>
                 )}
               </div>
@@ -353,17 +355,17 @@ function TorrentGrid({
                 }}
               >
                 <span style={{ color: "#eee" }}>
-                  ↑ {formatBytes(t.uploaded)}
+                  ↑ {formatBytes(torrent.uploaded)}
                 </span>
                 <span
-                  className={`badge badge-${t.status.toLowerCase()}`}
+                  className={`badge badge-${torrent.status.toLowerCase()}`}
                   style={{
                     fontSize: "0.68rem",
                     padding: "0.15rem 0.45rem",
                     borderRadius: "3px",
                   }}
                 >
-                  {t.status}
+                  {t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status)}
                 </span>
               </div>
             </div>
@@ -374,97 +376,92 @@ function TorrentGrid({
                 padding: "0.75rem",
                 display: "flex",
                 flexDirection: "column",
-                flex: "0 0 auto",
-                gap: "0.4rem",
-                backgroundColor: "var(--bg-secondary)",
+                gap: "0.45rem",
+                flex: 1,
+                justifyContent: "space-between",
               }}
             >
-              <div
-                style={{
-                  fontWeight: 600,
-                  fontSize: "0.85rem",
-                  color: "var(--text-primary)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  display: "-webkit-box",
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: "vertical",
-                  lineHeight: "1.3",
-                  minHeight: "2.2em",
-                }}
-                title={t.name}
-              >
-                {displayTitle} {t.year ? `(${t.year})` : ""}
+              <div>
+                <h4
+                  style={{
+                    margin: "0 0 0.25rem 0",
+                    fontSize: "0.92rem",
+                    fontWeight: 600,
+                    lineHeight: 1.25,
+                    color: "var(--text-primary)",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                  title={displayTitle}
+                >
+                  {displayTitle} {torrent.year ? `(${torrent.year})` : ""}
+                </h4>
+                {torrent.overview && (
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "0.75rem",
+                      color: "var(--text-secondary)",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      lineHeight: 1.35,
+                    }}
+                    title={torrent.overview}
+                  >
+                    {torrent.overview}
+                  </p>
+                )}
               </div>
 
-              {/* Genres chips */}
-              {t.genres && t.genres.length > 0 && (
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "0.3rem",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  {t.genres.slice(0, 2).map((g) => (
-                    <span
-                      key={g}
-                      style={{
-                        fontSize: "0.65rem",
-                        padding: "0.1rem 0.35rem",
-                        backgroundColor: "rgba(255,255,255,0.06)",
-                        color: "var(--text-muted)",
-                        borderRadius: "3px",
-                      }}
-                    >
-                      {g}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Stats Bar */}
+              {/* Metrics Grid */}
               <div
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr 1fr",
-                  gap: "0.25rem 0.5rem",
+                  gap: "0.35rem 0.5rem",
                   fontSize: "0.72rem",
-                  color: "var(--text-muted)",
-                  marginTop: "auto",
-                  paddingTop: "0.4rem",
-                  borderTop: "1px solid var(--border-light)",
+                  color: "var(--text-secondary)",
+                  backgroundColor: "rgba(0, 0, 0, 0.2)",
+                  padding: "0.45rem",
+                  borderRadius: "4px",
+                  border: "1px solid rgba(255,255,255,0.04)",
                 }}
               >
                 <div>
-                  <span>Size: </span>
+                  <span>{t("common.size", undefined, "Size")}: </span>
                   <strong style={{ color: "var(--text-primary)" }}>
-                    {formatBytes(t.totalSize)}
+                    {formatBytes(torrent.totalSize)}
                   </strong>
                 </div>
                 <div>
-                  <span>Uploaded: </span>
+                  <span>{t("common.peers", undefined, "Peers")}: </span>
                   <strong style={{ color: "var(--text-primary)" }}>
-                    {formatBytes(t.uploaded)}
+                    {torrent.seeders} / {torrent.leechers}
                   </strong>
                 </div>
                 <div>
-                  <span>Ratio: </span>
+                  <span>{t("common.ratio", undefined, "Ratio")}: </span>
                   <strong
                     style={{
                       color:
-                        t.ratio >= 1.0
+                        torrent.ratio >= 1.0
                           ? "var(--success)"
                           : "var(--text-primary)",
                     }}
                   >
-                    {formatRatio(t.ratio)}
+                    {formatRatio(torrent.ratio)}
                   </strong>
                 </div>
                 <div>
-                  <span>Added: </span>
+                  <span>{t("torrents.table.added", undefined, "Added")}: </span>
                   <strong style={{ color: "var(--text-primary)" }}>
-                    {formatDate(t.dateAdded).split(" ")[0]}
+                    {formatDate(torrent.dateAdded).split(" ")[0]}
                   </strong>
                 </div>
               </div>
@@ -492,10 +489,10 @@ function TorrentGrid({
                       justifyContent: "center",
                       gap: "0.35rem",
                     }}
-                    onClick={() => stopSeeding.mutate(t.id)}
+                    onClick={() => stopSeeding.mutate(torrent.id)}
                     title="Stop seeding"
                   >
-                    <span>⏹</span> <span>Stop</span>
+                    <span>⏹</span> <span>{t("torrents.stop", undefined, "Stop")}</span>
                   </button>
                 ) : (
                   <button
@@ -509,10 +506,10 @@ function TorrentGrid({
                       justifyContent: "center",
                       gap: "0.35rem",
                     }}
-                    onClick={() => startSeeding.mutate(t.id)}
+                    onClick={() => startSeeding.mutate(torrent.id)}
                     title="Start seeding"
                   >
-                    <span>▶</span> <span>Start</span>
+                    <span>▶</span> <span>{t("torrents.start", undefined, "Start")}</span>
                   </button>
                 )}
                 <button
@@ -525,13 +522,13 @@ function TorrentGrid({
                     justifyContent: "center",
                   }}
                   onClick={() => {
-                    if (confirm(`Delete "${t.name}"?`)) {
-                      deleteTorrent.mutate({ id: t.id });
+                    if (confirm(`Delete "${torrent.name}"?`)) {
+                      deleteTorrent.mutate({ id: torrent.id });
                     }
                   }}
                   title="Delete torrent"
                 >
-                  🗑️
+                  <span>{t("common.delete", undefined, "Delete")}</span>
                 </button>
                 <button
                   className="btn btn-outline"
@@ -542,7 +539,7 @@ function TorrentGrid({
                     alignItems: "center",
                     justifyContent: "center",
                   }}
-                  onClick={() => onSelectTorrent?.(isSelected ? null : t.id)}
+                  onClick={() => onSelectTorrent?.(isSelected ? null : torrent.id)}
                   title="View full torrent details"
                 >
                   ℹ️

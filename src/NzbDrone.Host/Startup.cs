@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using DryIoc;
 using Microsoft.AspNetCore.Authorization;
@@ -59,6 +60,8 @@ public class Startup
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen(c =>
         {
+            c.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
+            c.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
             c.SwaggerDoc("v1", new OpenApiInfo
             {
                 Title = "Seedarr REST API v1",

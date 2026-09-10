@@ -14,8 +14,10 @@ public class SwaggerIntegrationTest : IntegrationTestBase
     public async Task SwaggerJson_returns_200_and_valid_openapi_v3_schema()
     {
         var response = await GetAsync("/swagger/v1/swagger.json");
+        var jsonBody = await response.Content.ReadAsStringAsync();
+        TestContext.WriteLine($"Swagger response: {response.StatusCode} -> {jsonBody}");
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), jsonBody);
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/json"));
 
         var json = await response.Content.ReadAsStringAsync();
