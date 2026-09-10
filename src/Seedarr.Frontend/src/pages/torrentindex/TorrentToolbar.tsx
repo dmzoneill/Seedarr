@@ -26,6 +26,7 @@ interface TorrentToolbarProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   onAddTorrent: () => void;
+  onSearchIndexers?: () => void;
   onStartAll: () => void;
   onStopAll: () => void;
   selectedCount: number;
@@ -51,6 +52,7 @@ export function TorrentToolbar({
   viewMode,
   onViewModeChange,
   onAddTorrent,
+  onSearchIndexers,
   onStartAll,
   onStopAll,
   selectedCount,
@@ -88,6 +90,16 @@ export function TorrentToolbar({
         <button className="btn btn-success" onClick={onAddTorrent}>
           <PlusIcon size={13} /> {t("torrents.addTorrent", undefined, "Add Torrent")}
         </button>
+        {onSearchIndexers && (
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={onSearchIndexers}
+            style={{ fontSize: "0.82rem" }}
+          >
+            🔍 {t("modals.indexerSearch", undefined, "Search Indexers")}
+          </button>
+        )}
         {onToggleQuickControls && (
           <button
             type="button"
