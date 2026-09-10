@@ -21,6 +21,7 @@ import TrackerBoost from "./pages/TrackerBoost";
 import TrackerMetrics from "./pages/TrackerMetrics";
 import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
+import ApiDocsPage from "./pages/ApiDocsPage";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
 import StatusBar from "./components/StatusBar";
 import ToastContainer from "./components/Toast";
@@ -69,6 +70,7 @@ const systemSubItems = [
   { path: "/system/events", label: "Events" },
   { path: "/system/logfiles", label: "Log Files" },
   { path: "/system/network", label: "Network" },
+  { path: "/system/api", label: "API Reference" },
 ];
 
 const settingsSubItems = [
@@ -593,6 +595,9 @@ function App() {
               <Route path="/system/events" element={<SystemEvents />} />
               <Route path="/system/logfiles" element={<SystemLogFiles />} />
               <Route path="/system/network" element={<SystemNetwork />} />
+              <Route path="/system/api" element={<ApiDocsPage />} />
+              <Route path="/system/swagger" element={<ApiDocsPage />} />
+              <Route path="/api-docs" element={<ApiDocsPage />} />
             </Routes>
           </ErrorBoundary>
         </main>
