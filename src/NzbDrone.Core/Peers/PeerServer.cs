@@ -374,6 +374,11 @@ public class PeerServer : BackgroundService
         }
     }
 
+    private Task ConnectToPeer(Torrent torrent, DiscoveredPeer candidate)
+    {
+        return ConnectToPeer(torrent, candidate, CancellationToken.None);
+    }
+
     private async Task ConnectToPeer(Torrent torrent, DiscoveredPeer candidate, CancellationToken stoppingToken)
     {
         if (_vpnKillSwitchService?.IsFailClosedActive == true)

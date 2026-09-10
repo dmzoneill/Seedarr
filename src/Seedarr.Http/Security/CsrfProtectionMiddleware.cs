@@ -151,19 +151,25 @@ public class CsrfProtectionMiddleware
                         return;
                     }
 
-                    // 2. Check Origin and Referer headers
+                    // 2. Check Origin and Referer headers (for browser requests)
                     var hasOrigin = context.Request.Headers.TryGetValue("Origin", out var originHeader) &&
-                                    !string.IsNullOrWhiteSpace(originHeader);
+                        !string.IsNullOrWhiteSpace(originHeader);
                     var hasReferer = context.Request.Headers.TryGetValue("Referer", out var refererHeader) &&
-                                     !string.IsNullOrWhiteSpace(refererHeader);
+                        !string.IsNullOrWhiteSpace(refererHeader);
+                    var hasAuthCookie = context.Request.Cookies.ContainsKey("SeedarrAuth") ||
+                        context.Request.Cookies.ContainsKey(".AspNetCore.Cookies") ||
+                        context.Request.Cookies.ContainsKey("AuthToken");
 
                     if (!hasOrigin && !hasReferer)
                     {
-                        _logger.Warn("CSRF blocked: missing both Origin and Referer headers on {0} {1}", method, context.Request.Path);
-                        context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                        context.Response.ContentType = "text/plain";
-                        await context.Response.WriteAsync("CSRF check failed: missing Origin and Referer.");
-                        return;
+                        if (hasAuthCookie)
+                        {
+                            _logger.Warn("CSRF blocked: missing both Origin and Referer headers on authenticated session {0} {1}", method, context.Request.Path);
+                            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                            context.Response.ContentType = "text/plain";
+                            await context.Response.WriteAsync("CSRF check failed: missing Origin and Referer.");
+                            return;
+                        }
                     }
 
                     if (hasOrigin)
