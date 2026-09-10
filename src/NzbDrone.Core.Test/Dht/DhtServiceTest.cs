@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -12,6 +13,9 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Dht;
+using NzbDrone.Core.Peers;
+using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Test.Dht;
 
@@ -1844,6 +1848,235 @@ public class DhtServiceTest
 
         var finished = await Task.WhenAny(task, Task.Delay(3000));
         Assert.That(finished, Is.EqualTo(task), "ExecuteAsync should complete within 3s after cancellation following a receive error");
+    }
+
+    // ── Peer Learning Integration & Discovery Pipeline ───────────────
+
+    [Test]
+    public void HandleResponse_should_raise_PeersDiscovered_and_route_to_peer_discovery()
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        using var service = new DhtService(_configService, peerDiscovery);
+
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+        var infoHashHex = Convert.ToHexString(infoHash);
+        var txId = new byte[] { 0x05, 0x06 };
+        var txKey = Convert.ToHexString(txId);
+
+        // Inject pending query
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = pendingField.GetValue(service);
+        var pendingType = typeof(DhtService).GetNestedType("PendingDhtQuery", BindingFlags.NonPublic);
+        var pendingInstance = Activator.CreateInstance(pendingType);
+        pendingType.GetProperty("QueryType").SetValue(pendingInstance, "get_peers");
+        pendingType.GetProperty("InfoHash").SetValue(pendingInstance, infoHash);
+        pendingType.GetProperty("SentAt").SetValue(pendingInstance, DateTime.UtcNow);
+
+        var addOrUpdateMethod = pendingDict.GetType().GetMethod("TryAdd");
+        addOrUpdateMethod.Invoke(pendingDict, new object[] { txKey, pendingInstance });
+
+        PeersDiscoveredEventArgs receivedEvent = null;
+        service.PeersDiscovered += (s, e) => receivedEvent = e;
+
+        var peerData = new byte[6];
+        peerData[0] = 192;
+        peerData[1] = 168;
+        peerData[2] = 1;
+        peerData[3] = 50;
+        peerData[4] = (byte)(51413 >> 8);
+        peerData[5] = (byte)(51413 & 0xFF);
+
+        var responderId = CreateNodeId(0xAA);
+        var message = new BDictionary
+        {
+            ["t"] = new BString(txId),
+            ["y"] = new BString("r"),
+            ["r"] = new BDictionary
+            {
+                ["id"] = new BString(responderId),
+                ["values"] = new BList { new BString(peerData) }
+            }
+        };
+
+        var handleMethod = typeof(DhtService).GetMethod("HandleMessage", BindingFlags.NonPublic | BindingFlags.Instance);
+        handleMethod.Invoke(service, new object[] { message.EncodeAsBytes(), new IPEndPoint(IPAddress.Loopback, 6881) });
+
+        // Verify event was raised
+        Assert.That(receivedEvent, Is.Not.Null);
+        Assert.That(receivedEvent.InfoHash, Is.EqualTo(infoHashHex));
+        Assert.That(receivedEvent.Peers.Count, Is.EqualTo(1));
+        Assert.That(receivedEvent.Peers[0].Ip, Is.EqualTo("192.168.1.50"));
+        Assert.That(receivedEvent.Peers[0].Port, Is.EqualTo(51413));
+
+        // Verify routed to IPeerDiscoveryService
+        peerDiscovery.Received(1).AddPeers(infoHashHex, Arg.Is<IEnumerable<TrackerPeer>>(p => p.Any(x => x.Ip == "192.168.1.50" && x.Port == 51413)), "dht");
+    }
+
+    [Test]
+    public async Task DhtNodes_ExchangePeers_InProcess_Loopback()
+    {
+        var config1 = Substitute.For<IConfigService>();
+        config1.EnableDht.Returns(true);
+        config1.DhtAutoBootstrap.Returns(false);
+        config1.DhtBucketSize.Returns(8);
+        config1.DhtRoutingTableSize.Returns(160);
+        config1.DhtMaxNodes.Returns(1000);
+        config1.DhtConcurrentQueries.Returns(3);
+        config1.DhtQueryTimeout.Returns(10);
+        config1.DhtAnnouncementInterval.Returns(3600);
+        config1.DhtRateLimitEnabled.Returns(false);
+
+        var config2 = Substitute.For<IConfigService>();
+        config2.EnableDht.Returns(true);
+        config2.DhtAutoBootstrap.Returns(false);
+        config2.DhtBucketSize.Returns(8);
+        config2.DhtRoutingTableSize.Returns(160);
+        config2.DhtMaxNodes.Returns(1000);
+        config2.DhtConcurrentQueries.Returns(3);
+        config2.DhtQueryTimeout.Returns(10);
+        config2.DhtAnnouncementInterval.Returns(3600);
+        config2.DhtRateLimitEnabled.Returns(false);
+
+        var discovery2 = new PeerDiscoveryService();
+
+        using var node1 = new DhtService(config1, null, null, port: 0);
+        using var node2 = new DhtService(config2, discovery2, null, port: 0);
+
+        using var cts = new CancellationTokenSource();
+        var task1 = node1.StartAsync(cts.Token);
+        var task2 = node2.StartAsync(cts.Token);
+
+        await Task.Delay(200);
+
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+        var infoHashHex = Convert.ToHexString(infoHash);
+
+        // Pre-populate node1 peer store with a peer for infoHash
+        node1.PeerStore.AddPeer(infoHash, IPAddress.Parse("127.0.0.1"), 51413);
+
+        var tcs = new TaskCompletionSource<PeersDiscoveredEventArgs>();
+        node2.PeersDiscovered += (s, e) =>
+        {
+            if (e.InfoHash == infoHashHex)
+            {
+                tcs.TrySetResult(e);
+            }
+        };
+
+        // Node2 queries Node1 for peers
+        var targetEndpoint = new IPEndPoint(IPAddress.Loopback, node1.BoundPort);
+        await node2.SendGetPeers(targetEndpoint, infoHash);
+
+        var completed = await Task.WhenAny(tcs.Task, Task.Delay(3000));
+        Assert.That(completed, Is.EqualTo(tcs.Task), "Node2 should receive PeersDiscovered event from Node1 response");
+
+        var eventArgs = await tcs.Task;
+        Assert.That(eventArgs.InfoHash, Is.EqualTo(infoHashHex));
+        Assert.That(eventArgs.Peers.Count, Is.EqualTo(1));
+        Assert.That(eventArgs.Peers[0].Ip, Is.EqualTo("127.0.0.1"));
+        Assert.That(eventArgs.Peers[0].Port, Is.EqualTo(51413));
+
+        // Verify discovery2 also received the peer with source "dht"
+        var discovered = discovery2.GetPeers(infoHashHex);
+        Assert.That(discovered.Count, Is.EqualTo(1));
+        Assert.That(discovered[0].Ip, Is.EqualTo("127.0.0.1"));
+        Assert.That(discovered[0].Port, Is.EqualTo(51413));
+        Assert.That(discovered[0].Source, Is.EqualTo("dht"));
+
+        await cts.CancelAsync();
+        await Task.WhenAll(task1, task2);
+    }
+
+    [Test]
+    public async Task AnnounceTorrentsAsync_should_announce_public_torrents_and_skip_private()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        var publicHash = RandomNumberGenerator.GetBytes(20);
+        var publicHashHex = Convert.ToHexString(publicHash);
+        var privateHash = RandomNumberGenerator.GetBytes(20);
+        var privateHashHex = Convert.ToHexString(privateHash);
+
+        var torrents = new List<Torrent>
+        {
+            new Torrent
+            {
+                Id = 1,
+                Name = "Public Torrent",
+                InfoHash = publicHashHex,
+                IsPrivate = false,
+                Status = TorrentStatus.Seeding
+            },
+            new Torrent
+            {
+                Id = 2,
+                Name = "Private Torrent",
+                InfoHash = privateHashHex,
+                IsPrivate = true,
+                Status = TorrentStatus.Seeding
+            },
+            new Torrent
+            {
+                Id = 3,
+                Name = "Stopped Public Torrent",
+                InfoHash = Convert.ToHexString(RandomNumberGenerator.GetBytes(20)),
+                IsPrivate = false,
+                Status = TorrentStatus.Stopped
+            }
+        };
+
+        torrentService.GetAll().Returns(torrents);
+
+        using var service = new DhtService(_configService, null, torrentService);
+        SetUdpClient();
+
+        // Add a node to routing table so AnnounceTorrent can query it
+        service.RoutingTable.AddNode(new DhtNode
+        {
+            NodeId = CreateNodeId(0x33),
+            EndPoint = new IPEndPoint(IPAddress.Loopback, 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        var announceMethod = typeof(DhtService).GetMethod("AnnounceTorrentsAsync", BindingFlags.NonPublic | BindingFlags.Instance);
+        await (Task)announceMethod.Invoke(service, new object[] { CancellationToken.None });
+
+        // Verify pending queries contains public hash but NOT private hash
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.Concurrent.ConcurrentDictionary<string, object>)pendingField.GetValue(service);
+
+        var pendingType = typeof(DhtService).GetNestedType("PendingDhtQuery", BindingFlags.NonPublic);
+        var infoHashProp = pendingType.GetProperty("InfoHash");
+
+        var hashes = new List<string>();
+        foreach (var val in pendingDict.Values)
+        {
+            var h = (byte[])infoHashProp.GetValue(val);
+            hashes.Add(Convert.ToHexString(h));
+        }
+
+        Assert.That(hashes, Contains.Item(publicHashHex));
+        Assert.That(hashes, Does.Not.Contain(privateHashHex));
+    }
+
+    [Test]
+    public async Task Bootstrap_with_endpoint_should_send_find_node()
+    {
+        SetUdpClient();
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+
+        Assert.DoesNotThrowAsync(async () => await _service.Bootstrap(target));
+    }
+
+    [Test]
+    public async Task SendGetPeers_and_SendAnnouncePeer_with_string_overloads_should_work()
+    {
+        SetUdpClient();
+        var infoHash = Convert.ToHexString(RandomNumberGenerator.GetBytes(20));
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        var token = RandomNumberGenerator.GetBytes(20);
+
+        Assert.DoesNotThrowAsync(async () => await _service.SendGetPeers(target, infoHash));
+        Assert.DoesNotThrowAsync(async () => await _service.SendAnnouncePeer(target, infoHash, 51413, token));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────
