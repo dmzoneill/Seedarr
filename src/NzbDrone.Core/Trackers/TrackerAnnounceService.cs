@@ -73,7 +73,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService
                 TorrentId = torrent.Id,
                 Url = torrent.TrackerUrl,
                 Tier = 1,
-                Status = TrackerStatus.Working,
+                Status = TrackerStatus.Unknown,
                 Enabled = true
             };
             entry = _trackerEntryService.Add(entry);
