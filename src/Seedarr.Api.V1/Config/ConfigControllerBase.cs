@@ -41,6 +41,11 @@ public abstract class ConfigController<TResource> : Controller
     [Produces("application/json")]
     public virtual ActionResult<TResource> SaveConfig([FromBody] TResource resource)
     {
+        if (resource == null)
+        {
+            return BadRequest("Request body cannot be empty.");
+        }
+
         if (SharedValidator != null)
         {
             var result = SharedValidator.Validate(resource);

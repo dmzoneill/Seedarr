@@ -69,7 +69,7 @@ public class NetworkController : Controller
     {
         var status = _networkStatusService.GetStatus();
         var now = global::System.DateTime.UtcNow;
-        var recentLogs = _peerLogService.GetByTimeRange(now.AddHours(-24), now);
+        var recentLogs = _peerLogService?.GetByTimeRange(now.AddHours(-24), now) ?? new List<NzbDrone.Core.Peers.PeerConnectionLog>();
 
         var encryptedCount = recentLogs.Count(l => l.IsEncrypted && l.EventType == "Connected");
         var plaintextCount = recentLogs.Count(l => !l.IsEncrypted && l.EventType == "Connected");
@@ -77,18 +77,18 @@ public class NetworkController : Controller
 
         return Ok(new NetworkDiagnostics
         {
-            LocalIp = status.LocalIp,
-            ExternalIp = status.ExternalIp,
-            LocalAddresses = _networkStatusService.GetLocalAddresses(),
-            UpnpAvailable = status.UpnpAvailable,
-            ProxyEnabled = status.ProxyEnabled,
-            PortMappings = status.PortMappings,
-            ListeningPort = _configService.ListeningPort,
-            ActiveConnections = _connectionManager.ActiveCount,
-            UploadSlots = _connectionManager.GetUploadSlotCount(),
-            DhtEnabled = _configService.EnableDht,
-            DhtNodeCount = _dhtService.RoutingTable.NodeCount,
-            EncryptionMode = _configService.EncryptionMode,
+            LocalIp = status?.LocalIp ?? "unknown",
+            ExternalIp = status?.ExternalIp,
+            LocalAddresses = _networkStatusService.GetLocalAddresses() ?? new List<string>(),
+            UpnpAvailable = status?.UpnpAvailable ?? false,
+            ProxyEnabled = status?.ProxyEnabled ?? false,
+            PortMappings = status?.PortMappings ?? new List<PortMapping>(),
+            ListeningPort = _configService?.ListeningPort ?? 6881,
+            ActiveConnections = _connectionManager?.ActiveCount ?? 0,
+            UploadSlots = _connectionManager?.GetUploadSlotCount() ?? 0,
+            DhtEnabled = _configService?.EnableDht ?? false,
+            DhtNodeCount = _dhtService?.RoutingTable?.NodeCount ?? 0,
+            EncryptionMode = _configService?.EncryptionMode ?? "enabled",
             EncryptedConnections = encryptedCount,
             PlaintextConnections = plaintextCount,
             EncryptionPercentage = totalConnections > 0

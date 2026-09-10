@@ -282,4 +282,34 @@ public class IdentityProviderConfigControllerTest
         await _providerService.Received(1).TestConnectionAsync(Arg.Is<IdentityProviderDefinition>(p =>
             p.ClientSecretEncrypted == "real-underlying-secret"));
     }
+
+    [Test]
+    public void Create_WhenValidationFails_ReturnsBadRequest()
+    {
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "", // Invalid
+            Name = "", // Invalid
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.DidNotReceive().Add(Arg.Any<IdentityProviderDefinition>());
+    }
+
+    [Test]
+    public void Update_WhenValidationFails_ReturnsBadRequest()
+    {
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "", // Invalid
+            Name = "", // Invalid
+        };
+
+        var result = _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.DidNotReceive().Update(Arg.Any<IdentityProviderDefinition>());
+    }
 }

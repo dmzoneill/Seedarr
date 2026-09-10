@@ -51,7 +51,7 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         }
 
         // If the masked API key was sent back or empty, preserve the existing value
-        if (resource.ApiKey != null && resource.ApiKey.Contains('*'))
+        if (string.IsNullOrWhiteSpace(resource.ApiKey) || resource.ApiKey.Contains('*'))
         {
             resource.ApiKey = _configFileProvider.ApiKey;
         }
@@ -143,6 +143,30 @@ public class SeedingConfigController : ConfigController<SeedingConfigResource>
 
         SharedValidator.RuleFor(c => c.DownloadDistributionSpreadPercentage)
             .InclusiveBetween(0, 100);
+
+        SharedValidator.RuleFor(c => c.UploadStoppedMinPercentage)
+            .InclusiveBetween(0, 100);
+
+        SharedValidator.RuleFor(c => c.UploadStoppedMaxPercentage)
+            .InclusiveBetween(0, 100);
+
+        SharedValidator.RuleFor(c => c.DownloadStoppedMinPercentage)
+            .InclusiveBetween(0, 100);
+
+        SharedValidator.RuleFor(c => c.DownloadStoppedMaxPercentage)
+            .InclusiveBetween(0, 100);
+
+        SharedValidator.RuleFor(c => c.UploadCustomIntervalMinutes)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.DownloadCustomIntervalMinutes)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.SpeedVariationMin)
+            .InclusiveBetween(0.0, 1.0);
+
+        SharedValidator.RuleFor(c => c.SpeedVariationMax)
+            .InclusiveBetween(0.0, 1.0);
     }
 
     protected override SeedingConfigResource ToResource(IConfigService model)
@@ -192,8 +216,13 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
 
     public override ActionResult<NetworkConfigResource> SaveConfig([FromBody] NetworkConfigResource resource)
     {
+        if (resource == null)
+        {
+            return BadRequest("Request body cannot be empty.");
+        }
+
         // If the masked proxy password was sent back, preserve the existing value
-        if (resource.ProxyPassword == "********")
+        if (resource.ProxyPassword != null && resource.ProxyPassword.Contains('*'))
         {
             resource.ProxyPassword = _configService.ProxyPassword;
         }
@@ -213,6 +242,10 @@ public class BitTorrentConfigController : ConfigController<BitTorrentConfigResou
 
         SharedValidator.RuleFor(c => c.MinAnnounceIntervalSeconds)
             .GreaterThanOrEqualTo(30);
+
+        SharedValidator.RuleFor(c => c.MinAnnounceIntervalSeconds)
+            .LessThanOrEqualTo(c => c.AnnounceIntervalSeconds)
+            .WithMessage("Min Announce Interval cannot be greater than Announce Interval.");
 
         SharedValidator.RuleFor(c => c.ScrapeIntervalSeconds)
             .GreaterThanOrEqualTo(60);

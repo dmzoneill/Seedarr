@@ -65,13 +65,20 @@ public class IdentityProviderService : IIdentityProviderService
 
     public async Task<bool> TestConnectionAsync(IdentityProviderDefinition provider)
     {
+        if (provider == null)
+        {
+            return false;
+        }
+
         try
         {
             var targetUrl = provider.ProviderType switch
             {
                 IdentityProviderType.Oidc => !string.IsNullOrEmpty(provider.IssuerUrl)
-                    ? (provider.IssuerUrl.EndsWith("/") ? provider.IssuerUrl + ".well-known/openid-configuration" : provider.IssuerUrl + "/.well-known/openid-configuration")
-                    : null,
+                    ? (provider.IssuerUrl.TrimEnd('/').EndsWith(".well-known/openid-configuration", StringComparison.OrdinalIgnoreCase)
+                        ? provider.IssuerUrl
+                        : (provider.IssuerUrl.EndsWith("/") ? provider.IssuerUrl + ".well-known/openid-configuration" : provider.IssuerUrl + "/.well-known/openid-configuration"))
+                    : provider.MetadataUrl,
                 IdentityProviderType.Saml => provider.MetadataUrl,
                 _ => provider.IssuerUrl,
             };

@@ -93,6 +93,12 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             return BadRequest();
         }
 
+        var validationResult = SharedValidator.Validate(resource);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(validationResult.Errors);
+        }
+
         var model = ToModel(resource);
         var created = _providerService.Add(model);
 
@@ -110,6 +116,12 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
         if (resource == null)
         {
             return BadRequest();
+        }
+
+        var validationResult = SharedValidator.Validate(resource);
+        if (!validationResult.IsValid)
+        {
+            return BadRequest(validationResult.Errors);
         }
 
         var existing = _providerService.GetById(id);
