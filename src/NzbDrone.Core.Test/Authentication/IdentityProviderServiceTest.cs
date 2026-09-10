@@ -100,4 +100,12 @@ public class IdentityProviderServiceTest
 
         Assert.That(result, Is.True);
     }
+
+    [Test]
+    public async Task TestConnectionAsync_WhenProviderNull_ReturnsFalse()
+    {
+        var result = await _service.TestConnectionAsync(null);
+
+        Assert.That(result, Is.False);
+    }
 }

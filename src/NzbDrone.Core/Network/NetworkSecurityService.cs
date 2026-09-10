@@ -52,7 +52,9 @@ public class NetworkSecurityService : INetworkSecurityService
             return true;
         }
 
-        if (_vpnKillSwitchService != null)
+        if (_vpnKillSwitchService != null &&
+            !string.IsNullOrWhiteSpace(_vpnKillSwitchService.VpnInterfaceName) &&
+            string.Equals(interfaceName, _vpnKillSwitchService.VpnInterfaceName, StringComparison.OrdinalIgnoreCase))
         {
             return _vpnKillSwitchService.IsVpnInterfaceUp;
         }

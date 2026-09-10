@@ -74,4 +74,38 @@ public class ConfigControllerTests : IntegrationTestBase
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
+
+    [Test]
+    public async Task PutBitTorrentConfig_with_min_greater_than_announce_returns_400()
+    {
+        var body = new
+        {
+            id = 1,
+            announceIntervalSeconds = 100,
+            minAnnounceIntervalSeconds = 200,
+            scrapeIntervalSeconds = 100
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/bittorrent/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task PutSeedingConfig_with_invalid_percentage_returns_400()
+    {
+        var body = new
+        {
+            id = 1,
+            maxUploadSpeedKbps = 100,
+            maxDownloadSpeedKbps = 100,
+            altUploadSpeedKbps = 50,
+            altDownloadSpeedKbps = 50,
+            uploadDistributionSpreadPercentage = 150 // Invalid > 100
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/seeding/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
 }
