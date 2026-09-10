@@ -50,6 +50,10 @@ export function KeyboardShortcutsModal({
       name: "Modals & Views",
       shortcuts: [
         {
+          keys: ["q"],
+          description: "Toggle Quick Controls drawer",
+        },
+        {
           keys: ["?"],
           description: "Show this Keyboard Shortcuts cheat sheet",
         },
