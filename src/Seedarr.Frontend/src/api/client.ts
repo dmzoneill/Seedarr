@@ -1,4 +1,5 @@
 import type {
+  Category,
   IdentityProviderDefinition,
   SslTestRequest,
   SslCertificateValidationResult,
@@ -138,6 +139,26 @@ class ApiClient {
 
   deleteIdProvider(id: number): Promise<void> {
     return this.delete<void>(`/config/auth/providers/${id}`);
+  }
+
+  getCategories(): Promise<Category[]> {
+    return this.get<Category[]>("/categories");
+  }
+
+  getCategory(id: number): Promise<Category> {
+    return this.get<Category>(`/categories/${id}`);
+  }
+
+  createCategory(category: Partial<Category>): Promise<Category> {
+    return this.post<Category>("/categories", category);
+  }
+
+  updateCategory(id: number, category: Partial<Category>): Promise<Category> {
+    return this.put<Category>(`/categories/${id}`, category);
+  }
+
+  deleteCategory(id: number): Promise<void> {
+    return this.delete<void>(`/categories/${id}`);
   }
 
   testIdProvider(

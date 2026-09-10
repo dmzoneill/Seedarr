@@ -32,6 +32,8 @@ public class Torrent : ModelBase
     public bool SuperSeeding { get; set; }
     public bool ForceStart { get; set; }
     public string Label { get; set; }
+    public string Category { get; set; }
+    public string SavePath { get; set; }
     public double Progress { get; set; }
     public bool SequentialDownload { get; set; }
     public int AnnounceInterval { get; set; }
@@ -68,6 +70,16 @@ public class Torrent : ModelBase
         if (updates.Label != null)
         {
             Label = updates.Label;
+        }
+
+        if (updates.Category != null)
+        {
+            Category = updates.Category;
+        }
+
+        if (updates.SavePath != null)
+        {
+            SavePath = updates.SavePath;
         }
 
         if (updates.TagIds != null)

@@ -60,6 +60,14 @@ public interface IConfigService
     int MinAnnounceIntervalSeconds { get; }
     int ScrapeIntervalSeconds { get; }
 
+    // Lifecycle Scripts
+    string OnDownloadCompleteScript { get; }
+    string OnSeedGoalReachedScript { get; }
+    string ScriptTorrentDoneFilename { get; }
+    string ScriptTorrentAddedFilename { get; }
+    string ScriptTorrentDoneSeedingFilename { get; }
+    int CustomScriptTimeoutSeconds { get; }
+
     // Speed
     int MaxUploadSpeedKbps { get; }
     int MaxDownloadSpeedKbps { get; }
@@ -353,6 +361,14 @@ public class ConfigService : IConfigService
     public int AnnounceIntervalSeconds => GetValueInt("AnnounceIntervalSeconds", 1800);
     public int MinAnnounceIntervalSeconds => GetValueInt("MinAnnounceIntervalSeconds", 300);
     public int ScrapeIntervalSeconds => GetValueInt("ScrapeIntervalSeconds", 900);
+
+    // Lifecycle Scripts
+    public string OnDownloadCompleteScript => GetValue("OnDownloadCompleteScript", string.Empty);
+    public string OnSeedGoalReachedScript => GetValue("OnSeedGoalReachedScript", string.Empty);
+    public string ScriptTorrentDoneFilename => GetValue("ScriptTorrentDoneFilename", string.Empty);
+    public string ScriptTorrentAddedFilename => GetValue("ScriptTorrentAddedFilename", string.Empty);
+    public string ScriptTorrentDoneSeedingFilename => GetValue("ScriptTorrentDoneSeedingFilename", string.Empty);
+    public int CustomScriptTimeoutSeconds => GetValueInt("CustomScriptTimeoutSeconds", 60);
 
     // Speed
     public const int DefaultMaxUploadSpeedKbps = 625;
