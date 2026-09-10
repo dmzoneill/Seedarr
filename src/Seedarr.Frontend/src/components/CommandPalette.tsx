@@ -88,7 +88,7 @@ export function CommandPalette({
         icon: "📦",
       },
       {
-        path: "/torrents/history",
+        path: "/activity/history",
         title: "Download History",
         subtitle: "Enriched media library history and captured downloads",
         icon: "📜",

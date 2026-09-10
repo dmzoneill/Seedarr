@@ -1,5 +1,13 @@
 import { useState, useEffect } from "react";
-import { Routes, Route, NavLink, useLocation, useNavigate } from "react-router";
+import {
+  Routes,
+  Route,
+  NavLink,
+  useLocation,
+  useNavigate,
+  Navigate,
+  useParams,
+} from "react-router";
 import Dashboard from "./pages/Dashboard";
 import TorrentIndex from "./pages/TorrentIndex";
 import TorrentDetails from "./pages/TorrentDetails";
@@ -94,6 +102,16 @@ const settingsSubItems = [
   { path: "/settings/advanced", label: "Advanced" },
 ];
 
+function LegacyTorrentRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={id ? `/torrents/${id}` : "/torrents"} replace />;
+}
+
+function LegacyClientRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={id ? `/activity/client/${id}` : "/activity/history"} replace />;
+}
+
 function App() {
   const { t } = useTranslation();
   const location = useLocation();
@@ -112,9 +130,15 @@ function App() {
   });
 
   const isTorrentsRoute =
-    location.pathname.startsWith("/torrents") ||
+    (location.pathname.startsWith("/torrents") &&
+      !location.pathname.startsWith("/torrents/history") &&
+      !location.pathname.startsWith("/torrents/client")) ||
+    location.pathname === "/add-torrent";
+  const isActivityRoute =
+    location.pathname.startsWith("/activity") ||
+    location.pathname.startsWith("/torrents/history") ||
+    location.pathname.startsWith("/torrents/client") ||
     location.pathname === "/history";
-  const isActivityRoute = location.pathname.startsWith("/activity");
   const isTrackerRoute =
     location.pathname.startsWith("/tracker") ||
     location.pathname.startsWith("/trackerboost") ||
@@ -187,7 +211,7 @@ function App() {
           navigate("/torrents");
         } else if (e.key === "h") {
           e.preventDefault();
-          navigate("/torrents/history");
+          navigate("/activity/history");
         } else if (e.key === "b") {
           e.preventDefault();
           navigate("/tracker/trackerboost");
@@ -228,7 +252,7 @@ function App() {
             <DashboardIcon /> <span>{t("nav.dashboard", undefined, "Dashboard")}</span>
           </NavLink>
 
-          {/* Torrents Top-Level with Historical History & Add Torrent */}
+          {/* Torrents Top-Level with Live Torrents & Add Torrent */}
           <NavLink
             to="/torrents"
             className={`sidebar-nav-item ${isTorrentsRoute ? "active" : ""}`}
@@ -238,10 +262,11 @@ function App() {
           {isTorrentsRoute && (
             <>
               <NavLink
-                to="/torrents/history"
+                to="/torrents"
+                end
                 className="sidebar-nav-item sidebar-nav-sub"
               >
-                <HistoryIcon /> <span>{t("nav.history", undefined, "History")}</span>
+                <TorrentIcon /> <span>{t("nav.torrents", undefined, "Torrents")}</span>
               </NavLink>
               <NavLink
                 to="/torrents/add"
@@ -253,9 +278,9 @@ function App() {
             </>
           )}
 
-          {/* Activity Top-Level with Active Torrents, Download Agents, & Metrics */}
+          {/* Activity Top-Level with Historical Downloads, Download Agents, & Metrics */}
           <NavLink
-            to="/activity/torrents"
+            to="/activity/history"
             className={`sidebar-nav-item ${isActivityRoute ? "active" : ""}`}
           >
             <ActivityIcon /> <span>{t("nav.activity", undefined, "Activity")}</span>
@@ -263,10 +288,10 @@ function App() {
           {isActivityRoute && (
             <>
               <NavLink
-                to="/activity/torrents"
+                to="/activity/history"
                 className="sidebar-nav-item sidebar-nav-sub"
               >
-                <DashboardIcon /> <span>{t("nav.torrents", undefined, "Torrents")}</span>
+                <HistoryIcon /> <span>{t("nav.history", undefined, "History")}</span>
               </NavLink>
               {downloadClients
                 ?.filter((c) => c.enable)
@@ -574,27 +599,46 @@ function App() {
           <ErrorBoundary>
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/torrents/add" element={<AddTorrentPage />} />
-              <Route path="/add-torrent" element={<AddTorrentPage />} />
-              <Route path="/torrents/history" element={<DownloadHistory />} />
-              <Route path="/history" element={<DownloadHistory />} />
-              <Route path="/activity/torrents" element={<TorrentIndex />} />
               <Route path="/torrents" element={<TorrentIndex />} />
-              <Route path="/torrents/:id" element={<TorrentDetails />} />
+              <Route path="/torrents/add" element={<AddTorrentPage />} />
               <Route
-                path="/activity/torrents/:id"
-                element={<TorrentDetails />}
+                path="/add-torrent"
+                element={<Navigate to="/torrents/add" replace />}
               />
+              <Route path="/torrents/:id" element={<TorrentDetails />} />
+
+              <Route
+                path="/activity"
+                element={<Navigate to="/activity/history" replace />}
+              />
+              <Route path="/activity/history" element={<DownloadHistory />} />
+              <Route path="/activity/metrics" element={<Activity />} />
               <Route
                 path="/activity/client/:id"
                 element={<DownloadClientTorrents />}
               />
+
+              {/* Legacy route redirects */}
+              <Route
+                path="/activity/torrents"
+                element={<Navigate to="/torrents" replace />}
+              />
+              <Route
+                path="/activity/torrents/:id"
+                element={<LegacyTorrentRedirect />}
+              />
+              <Route
+                path="/torrents/history"
+                element={<Navigate to="/activity/history" replace />}
+              />
+              <Route
+                path="/history"
+                element={<Navigate to="/activity/history" replace />}
+              />
               <Route
                 path="/torrents/client/:id"
-                element={<DownloadClientTorrents />}
+                element={<LegacyClientRedirect />}
               />
-              <Route path="/activity" element={<Activity />} />
-              <Route path="/activity/metrics" element={<Activity />} />
               <Route path="/downloadplusplus" element={<TrackerBoost />} />
               <Route path="/download++" element={<TrackerBoost />} />
               <Route path="/trackerboost" element={<TrackerBoost />} />
