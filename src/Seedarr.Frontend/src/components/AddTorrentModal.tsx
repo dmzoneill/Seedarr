@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import AddTorrentForm, { InputMode } from "./AddTorrentForm";
 
 interface AddTorrentModalProps {
@@ -11,6 +12,18 @@ function AddTorrentModal({
   initialQuery = "",
   onClose,
 }: AddTorrentModalProps) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       onClose();
@@ -18,7 +31,13 @@ function AddTorrentModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={handleBackdropClick}>
+    <div
+      className="modal-overlay"
+      onClick={handleBackdropClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-torrent-modal-title"
+    >
       <div
         className="modal"
         style={{
@@ -39,7 +58,11 @@ function AddTorrentModal({
             marginBottom: "1.25rem",
           }}
         >
-          <h2 className="modal-title" style={{ margin: 0, fontSize: "1.2rem" }}>
+          <h2
+            id="add-torrent-modal-title"
+            className="modal-title"
+            style={{ margin: 0, fontSize: "1.2rem" }}
+          >
             Add Torrent
           </h2>
           <button
@@ -52,6 +75,7 @@ function AddTorrentModal({
             }}
             onClick={onClose}
             title="Close dialog"
+            aria-label="Close add torrent dialog"
           >
             ✕
           </button>

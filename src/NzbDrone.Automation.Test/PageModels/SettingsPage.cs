@@ -13,7 +13,7 @@ public class SettingsPage : BasePage
     public override string Path => "/settings/general";
 
     public IList<IWebElement> SubNavItems =>
-        Driver.FindElements(By.CssSelector(".sidebar-nav-sub"));
+        Driver.FindElements(By.CssSelector(".sidebar-settings-subitem, .sidebar-nav-sub"));
 
     public bool FormPresent =>
         Driver.FindElements(By.CssSelector("form, .settings-form, [class*='settings']")).Count > 0;

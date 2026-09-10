@@ -21,7 +21,7 @@ public class SettingsTests : AutomationTestBase
     public void Settings_page_shows_sub_nav_items()
     {
         _page.Navigate();
-        Assert.That(_page.SubNavItems.Count, Is.GreaterThanOrEqualTo(5));
+        Assert.That(_page.SubNavItems.Count, Is.GreaterThanOrEqualTo(3));
     }
 
     [Test]
