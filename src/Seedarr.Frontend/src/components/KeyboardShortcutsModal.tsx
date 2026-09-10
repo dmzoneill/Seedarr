@@ -23,6 +23,10 @@ export function KeyboardShortcutsModal({
           description: "Open Command Palette / Quick Jump",
         },
         { keys: ["/"], description: "Focus Search / Quick Jump" },
+        {
+          keys: ["Alt", "M"],
+          description: "Toggle Main Navigation Sidebar",
+        },
         { keys: ["g", "d"], description: "Go to Dashboard" },
         { keys: ["g", "t"], description: "Go to Torrents Index" },
         { keys: ["g", "h"], description: "Go to Download History" },
