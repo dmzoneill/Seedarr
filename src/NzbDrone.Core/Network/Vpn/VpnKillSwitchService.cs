@@ -278,7 +278,7 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
         {
             var nic = NetworkInterface.GetAllNetworkInterfaces()
                 .FirstOrDefault(n => string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
-                                     string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
 
             if (nic == null || nic.OperationalStatus != OperationalStatus.Up)
             {
@@ -317,7 +317,7 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
 
             var nic = NetworkInterface.GetAllNetworkInterfaces()
                 .FirstOrDefault(n => string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
-                                     string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
+                    string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
 
             if (nic == null || nic.OperationalStatus != OperationalStatus.Up)
             {
@@ -333,14 +333,14 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
             var matching = props.UnicastAddresses
                 .Select(u => u.Address)
                 .FirstOrDefault(a => a.AddressFamily == family &&
-                                     !IPAddress.IsLoopback(a) &&
-                                     !a.Equals(IPAddress.Any) &&
-                                     !a.Equals(IPAddress.None) &&
-                                     !a.Equals(IPAddress.IPv6Any) &&
-                                     !a.Equals(IPAddress.IPv6None) &&
-                                     !a.IsIPv6LinkLocal &&
-                                     !a.IsIPv6SiteLocal &&
-                                     !a.IsIPv6Multicast);
+                    !IPAddress.IsLoopback(a) &&
+                    !a.Equals(IPAddress.Any) &&
+                    !a.Equals(IPAddress.None) &&
+                    !a.Equals(IPAddress.IPv6Any) &&
+                    !a.Equals(IPAddress.IPv6None) &&
+                    !a.IsIPv6LinkLocal &&
+                    !a.IsIPv6SiteLocal &&
+                    !a.IsIPv6Multicast);
 
             return matching;
         }

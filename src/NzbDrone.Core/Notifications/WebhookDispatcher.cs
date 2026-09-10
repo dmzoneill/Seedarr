@@ -213,7 +213,7 @@ public class WebhookDispatcher : IWebhookDispatcher
             content = new FormUrlEncodedContent(formPairs);
         }
         else if (targetUrl.Contains("pushover.net", StringComparison.OrdinalIgnoreCase) &&
-                 payload is IDictionary<string, string> stringDict)
+            payload is IDictionary<string, string> stringDict)
         {
             content = new FormUrlEncodedContent(stringDict);
         }
