@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,6 +14,20 @@ export function KeyboardShortcutsModal({
   isOpen,
   onClose,
 }: KeyboardShortcutsModalProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const groups: ShortcutGroup[] = [
@@ -19,7 +35,7 @@ export function KeyboardShortcutsModal({
       name: "Global Navigation",
       shortcuts: [
         {
-          keys: ["Ctrl", "K"],
+          keys: ["Ctrl / ⌘", "K"],
           description: "Open Command Palette / Quick Jump",
         },
         { keys: ["/"], description: "Focus Search / Quick Jump" },
@@ -64,6 +80,9 @@ export function KeyboardShortcutsModal({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="keyboard-shortcuts-title"
       style={{
         position: "fixed",
         top: 0,
@@ -112,7 +131,10 @@ export function KeyboardShortcutsModal({
           >
             <span style={{ fontSize: "1.25rem" }}>⌨️</span>
             <div>
-              <h2 style={{ margin: 0, fontSize: "1.05rem" }}>
+              <h2
+                id="keyboard-shortcuts-title"
+                style={{ margin: 0, fontSize: "1.05rem" }}
+              >
                 Keyboard Shortcuts
               </h2>
               <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
@@ -121,8 +143,10 @@ export function KeyboardShortcutsModal({
             </div>
           </div>
           <button
+            type="button"
             className="btn btn-sm btn-outline"
             onClick={onClose}
+            aria-label="Close keyboard shortcuts dialog"
             style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
           >
             ✕

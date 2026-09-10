@@ -65,13 +65,11 @@ import {
   SunIcon,
   MoonIcon,
   HeartIcon,
-  UserIcon,
   PeerMapIcon,
   ScheduleIcon,
   StatsIcon,
   HistoryIcon,
   SearchIcon,
-  KeyIcon,
 } from "./components/icons/AppIcons";
 import { useTheme } from "./context/ThemeContext";
 import { useGeneralConfig, useDownloadClients } from "./api/hooks";
@@ -88,29 +86,6 @@ const systemSubItems = [
   { path: "/system/logfiles", label: "Log Files" },
   { path: "/system/network", label: "Network" },
   { path: "/system/api", label: "API Reference" },
-];
-
-const settingsSubItems = [
-  { path: "/settings/general", label: "General" },
-  { path: "/settings/webui", label: "Web UI" },
-  { path: "/settings/security", label: "Security" },
-  { path: "/settings/notifications", label: "Notifications" },
-  { path: "/settings/categories", label: "Categories" },
-  { path: "/settings/custom-scripts", label: "Custom Scripts" },
-  { path: "/settings/seeding", label: "Seeding" },
-  { path: "/settings/bittorrent", label: "BitTorrent" },
-  { path: "/settings/network", label: "Network" },
-  { path: "/settings/proxy", label: "Proxy" },
-  { path: "/settings/peer-protocol", label: "Peer Protocol" },
-  { path: "/settings/protocols", label: "Protocols" },
-  { path: "/settings/simulation", label: "Simulation" },
-  { path: "/settings/tracker-server", label: "Tracker Server" },
-  { path: "/settings/scheduler", label: "Scheduler" },
-  { path: "/settings/indexers", label: "Indexers" },
-  { path: "/settings/connections", label: "Connections" },
-  { path: "/settings/download-clients", label: "Download Clients" },
-  { path: "/settings/tags", label: "Tags" },
-  { path: "/settings/advanced", label: "Advanced" },
 ];
 
 function LegacyTorrentRedirect() {
@@ -133,7 +108,6 @@ function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const [searchTerm, setSearchTerm] = useState("");
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showAddTorrentModal, setShowAddTorrentModal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -238,7 +212,7 @@ function App() {
   // Global Keyboard Shortcuts Listener
   useEffect(() => {
     let pendingGKey = false;
-    let pendingGTimer: any = null;
+    let pendingGTimer: ReturnType<typeof setTimeout> | null = null;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement;
@@ -283,7 +257,7 @@ function App() {
       // "g" sequence navigation (e.g. g then d => dashboard)
       if (e.key === "g" && !pendingGKey) {
         pendingGKey = true;
-        clearTimeout(pendingGTimer);
+        if (pendingGTimer) clearTimeout(pendingGTimer);
         pendingGTimer = setTimeout(() => {
           pendingGKey = false;
         }, 1000);
@@ -292,7 +266,7 @@ function App() {
 
       if (pendingGKey) {
         pendingGKey = false;
-        clearTimeout(pendingGTimer);
+        if (pendingGTimer) clearTimeout(pendingGTimer);
 
         if (e.key === "d") {
           e.preventDefault();
@@ -322,7 +296,7 @@ function App() {
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      clearTimeout(pendingGTimer);
+      if (pendingGTimer) clearTimeout(pendingGTimer);
     };
   }, [navigate]);
 
@@ -336,6 +310,7 @@ function App() {
             rel="noopener noreferrer"
             className="sidebar-logo"
             title="Seedarr"
+            aria-label="Seedarr Homepage"
           >
             <SeedarrLogo size={isSidebarCollapsed ? 36 : 96} />
             {!isSidebarCollapsed && <SeedarrText width={140} />}
@@ -386,7 +361,7 @@ function App() {
                 to="/torrents"
                 end
                 className="sidebar-nav-item sidebar-nav-sub"
-                title={t("nav.history", undefined, "History")}
+                title={t("nav.torrents", undefined, "Torrents")}
               >
                 <TorrentIcon />{" "}
                 <span>{t("nav.torrents", undefined, "Torrents")}</span>
@@ -416,7 +391,7 @@ function App() {
               <NavLink
                 to="/activity/history"
                 className="sidebar-nav-item sidebar-nav-sub"
-                title={t("nav.torrents", undefined, "Torrents")}
+                title={t("nav.history", undefined, "History")}
               >
                 <HistoryIcon />{" "}
                 <span>{t("nav.history", undefined, "History")}</span>
@@ -596,7 +571,7 @@ function App() {
                             >
                               <span
                                 style={{
-                                  fontSize: "0.85rem",
+                                 fontSize: "0.85rem",
                                   flexShrink: 0,
                                 }}
                               >
@@ -707,9 +682,14 @@ function App() {
                   "Quick Jump / Search... (Ctrl+K)",
                 )}
                 className="topbar-search-input"
-                value={searchTerm}
+                value=""
                 readOnly
                 onClick={() => setShowCommandPalette(true)}
+                aria-label={t(
+                  "topbar.searchPlaceholder",
+                  undefined,
+                  "Quick Jump / Search... (Ctrl+K)",
+                )}
                 style={{ cursor: "pointer" }}
               />
               <kbd
@@ -747,6 +727,7 @@ function App() {
                 fontWeight: 600,
               }}
               title={t("nav.gettingStarted", undefined, "Getting Started")}
+              aria-label={t("nav.gettingStarted", undefined, "Getting Started Guide")}
             >
               🚀 {t("nav.gettingStarted", undefined, "Getting Started")}
             </button>
@@ -758,6 +739,11 @@ function App() {
                 onMouseEnter={handleMouseEnterApiKey}
                 onMouseLeave={handleMouseLeaveApiKey}
                 title={t(
+                  "topbar.copyApiKey",
+                  undefined,
+                  "Click to copy API Key to clipboard",
+                )}
+                aria-label={t(
                   "topbar.copyApiKey",
                   undefined,
                   "Click to copy API Key to clipboard",
@@ -786,6 +772,11 @@ function App() {
                   ? t("topbar.switchLight", undefined, "Switch to light theme")
                   : t("topbar.switchDark", undefined, "Switch to dark theme")
               }
+              aria-label={
+                theme === "dark"
+                  ? t("topbar.switchLight", undefined, "Switch to light theme")
+                  : t("topbar.switchDark", undefined, "Switch to dark theme")
+              }
             >
               {theme === "dark" ? <SunIcon /> : <MoonIcon />}
             </button>
@@ -795,6 +786,7 @@ function App() {
               target="_blank"
               rel="noopener noreferrer"
               title={t("topbar.supportSeedarr", undefined, "Support Seedarr")}
+              aria-label={t("topbar.supportSeedarr", undefined, "Support Seedarr")}
             >
               <HeartIcon />
             </a>
@@ -803,6 +795,9 @@ function App() {
                 className="topbar-btn"
                 onClick={() => setShowActionsMenu(!showActionsMenu)}
                 title={t("topbar.actions", undefined, "Actions")}
+                aria-label={t("topbar.actions", undefined, "Actions menu")}
+                aria-expanded={showActionsMenu}
+                aria-haspopup="menu"
                 style={{
                   display: "inline-flex",
                   alignItems: "center",
@@ -832,32 +827,37 @@ function App() {
               {showActionsMenu && (
                 <div
                   className="topbar-dropdown"
+                  role="menu"
                   onClick={() => setShowActionsMenu(false)}
                 >
                   <button
                     className="topbar-dropdown-item"
+                    role="menuitem"
                     onClick={() => navigate("/system/status")}
                   >
                     {t("topbar.systemStatus", undefined, "System Status")}
                   </button>
                   <button
                     className="topbar-dropdown-item"
+                    role="menuitem"
                     onClick={() => navigate("/settings/general")}
                   >
                     {t("topbar.settings", undefined, "Settings")}
                   </button>
                   <button
                     className="topbar-dropdown-item"
+                    role="menuitem"
                     onClick={() => setShowCommandPalette(true)}
                   >
                     {t(
                       "topbar.commandPalette",
                       undefined,
-                      "🔍 Command Palette (⌘K)",
+                      "🔍 Command Palette (⌘K / Ctrl+K)",
                     )}
                   </button>
                   <button
                     className="topbar-dropdown-item"
+                    role="menuitem"
                     onClick={() => setShowShortcutsModal(true)}
                   >
                     {t(
@@ -868,6 +868,7 @@ function App() {
                   </button>
                   <button
                     className="topbar-dropdown-item"
+                    role="menuitem"
                     onClick={() => setShowGettingStartedModal(true)}
                   >
                     {t(
@@ -879,6 +880,7 @@ function App() {
                   <div className="topbar-dropdown-separator" />
                   <button
                     className="topbar-dropdown-item"
+                    role="menuitem"
                     onClick={() => {
                       if (
                         confirm(
@@ -901,6 +903,7 @@ function App() {
                   </button>
                   <button
                     className="topbar-dropdown-item topbar-dropdown-danger"
+                    role="menuitem"
                     onClick={() => {
                       if (
                         confirm(
@@ -997,6 +1000,7 @@ function App() {
               <Route path="/system/api" element={<ApiDocsPage />} />
               <Route path="/system/swagger" element={<ApiDocsPage />} />
               <Route path="/api-docs" element={<ApiDocsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </ErrorBoundary>
         </main>

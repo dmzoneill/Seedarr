@@ -63,8 +63,18 @@ export function CommandPalette({
       setQuery("");
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 50);
+
+      const handleGlobalKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onClose();
+        }
+      };
+
+      window.addEventListener("keydown", handleGlobalKeyDown);
+      return () => window.removeEventListener("keydown", handleGlobalKeyDown);
     }
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   const items = useMemo<CommandItem[]>(() => {
     const list: CommandItem[] = [];
@@ -495,6 +505,9 @@ export function CommandPalette({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command Palette"
       style={{
         position: "fixed",
         top: 0,
@@ -545,6 +558,11 @@ export function CommandPalette({
             type="text"
             className="form-control"
             placeholder="Type a command, page name, setting, or torrent title..."
+            aria-label="Search commands, pages, and torrents"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls="command-palette-results"
+            aria-autocomplete="list"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             style={{
@@ -569,6 +587,8 @@ export function CommandPalette({
 
         {/* Results List */}
         <div
+          id="command-palette-results"
+          role="listbox"
           ref={listRef}
           style={{
             overflowY: "auto",
@@ -595,6 +615,8 @@ export function CommandPalette({
               return (
                 <div
                   key={item.id}
+                  role="option"
+                  aria-selected={isSelected}
                   onClick={item.onSelect}
                   onMouseEnter={() => setSelectedIndex(idx)}
                   style={{

@@ -66,7 +66,7 @@ public class NavigationTests : AutomationTestBase
     public void Settings_nav_expands_subitems()
     {
         NavigateTo("/settings/general");
-        var subItems = Driver.FindElements(By.CssSelector(".sidebar-nav-sub"));
+        var subItems = Driver.FindElements(By.CssSelector(".sidebar-settings-subitem, .sidebar-nav-sub"));
         Assert.That(subItems.Count, Is.GreaterThanOrEqualTo(3));
     }
 

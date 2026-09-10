@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import TrackerFavicon from "./TrackerFavicon";
 
 export interface TrackerPickerItem {
@@ -42,6 +42,20 @@ export default function TrackerMultiSelectModal({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [customUrl, setCustomUrl] = useState("");
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Sort trackers: Active / Verified -> Online -> Slow -> Untested -> Offline, then alphabetically
   const sortedTrackers = useMemo(() => {
@@ -123,6 +137,9 @@ export default function TrackerMultiSelectModal({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tracker-picker-title"
       style={{
         position: "fixed",
         top: 0,
@@ -169,7 +186,10 @@ export default function TrackerMultiSelectModal({
           <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
             <span style={{ fontSize: "1.3rem" }}>🎯</span>
             <div>
-              <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600 }}>
+              <h3
+                id="tracker-picker-title"
+                style={{ margin: 0, fontSize: "1.05rem", fontWeight: 600 }}
+              >
                 Select Trackers to Add & Announce
               </h3>
               <p
@@ -185,8 +205,10 @@ export default function TrackerMultiSelectModal({
             </div>
           </div>
           <button
+            type="button"
             className="btn btn-sm btn-outline"
             onClick={onClose}
+            aria-label="Close dialog"
             style={{ padding: "0.2rem 0.5rem" }}
           >
             ✕
@@ -216,6 +238,7 @@ export default function TrackerMultiSelectModal({
               type="text"
               className="form-control"
               placeholder="🔍 Search by domain, protocol, status..."
+              aria-label="Search candidate trackers"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -228,6 +251,7 @@ export default function TrackerMultiSelectModal({
 
             <select
               className="form-control"
+              aria-label="Filter trackers by health status"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               style={{
@@ -366,6 +390,7 @@ export default function TrackerMultiSelectModal({
                     type="checkbox"
                     checked={isSelected || isAttached}
                     disabled={isAttached}
+                    aria-label={`Select tracker ${item.url}`}
                     onChange={() => {
                       if (!isAttached) onToggleUrl(item.url);
                     }}
@@ -518,6 +543,7 @@ export default function TrackerMultiSelectModal({
             type="text"
             className="form-control"
             placeholder="Or enter custom URL (e.g. udp://tracker.example.com:1337/announce)"
+            aria-label="Enter custom tracker URL"
             value={customUrl}
             onChange={(e) => setCustomUrl(e.target.value)}
             style={{ flex: 1, fontSize: "0.82rem", padding: "0.35rem 0.6rem" }}
