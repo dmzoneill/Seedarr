@@ -142,4 +142,95 @@ public class TrackerAnnounceServiceTest
             "Tracker",
             Arg.Is<string>(s => s.Contains("Tracker announce failed: http://badtracker.com/announce") && s.Contains("Connection timed out")));
     }
+
+    [Test]
+    public void AnnounceTracker_should_update_tracker_entry_state_on_success()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Test.Movie",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = 1,
+            Url = "http://goodtracker.com/announce",
+            Enabled = true,
+            Status = TrackerStatus.Unknown,
+            ConsecutiveFailures = 2,
+            SuccessfulAnnounces = 0,
+            TotalAnnounces = 0
+        };
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = true,
+                Complete = 15,
+                Incomplete = 3,
+                Interval = 1800,
+                MinInterval = 900
+            });
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(tracker.Status, Is.EqualTo(TrackerStatus.Working));
+        Assert.That(tracker.Seeders, Is.EqualTo(15));
+        Assert.That(tracker.Leechers, Is.EqualTo(3));
+        Assert.That(tracker.SuccessfulAnnounces, Is.EqualTo(1));
+        Assert.That(tracker.TotalAnnounces, Is.EqualTo(1));
+        Assert.That(tracker.ConsecutiveFailures, Is.EqualTo(0));
+        Assert.That(tracker.ErrorMessage, Is.Null);
+        Assert.That(tracker.LastAnnounce, Is.Not.Null);
+
+        _trackerEntryService.Received(1).Update(tracker);
+    }
+
+    [Test]
+    public void AnnounceTracker_should_update_tracker_entry_state_on_failure()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Test.Movie",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Status = TorrentStatus.Downloading
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = 1,
+            Url = "http://unreachable.com/announce",
+            Enabled = true,
+            Status = TrackerStatus.Working,
+            ConsecutiveFailures = 1,
+            SuccessfulAnnounces = 5,
+            TotalAnnounces = 6
+        };
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = false,
+                FailureReason = "Connection refused"
+            });
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(tracker.Status, Is.EqualTo(TrackerStatus.Failed));
+        Assert.That(tracker.ConsecutiveFailures, Is.EqualTo(2));
+        Assert.That(tracker.ErrorMessage, Is.EqualTo("Connection refused"));
+        Assert.That(tracker.LastErrorTime, Is.Not.Null);
+        Assert.That(tracker.TotalAnnounces, Is.EqualTo(7));
+        Assert.That(tracker.SuccessfulAnnounces, Is.EqualTo(5));
+
+        _trackerEntryService.Received(1).Update(tracker);
+    }
 }
