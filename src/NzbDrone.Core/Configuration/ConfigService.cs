@@ -20,6 +20,7 @@ public interface IConfigService
 
     // General
     bool AutoStart { get; }
+    bool AutoPruneRemovedArtwork { get; }
     string ThemeStyle { get; }
     string ColorScheme { get; }
 
@@ -310,6 +311,7 @@ public class ConfigService : IConfigService
 
     // General
     public bool AutoStart => GetValueBoolean("AutoStart", true);
+    public bool AutoPruneRemovedArtwork => GetValueBoolean("AutoPruneRemovedArtwork", true);
     public string ThemeStyle => GetValue("ThemeStyle", "system");
     public string ColorScheme => GetValue("ColorScheme", "auto");
 

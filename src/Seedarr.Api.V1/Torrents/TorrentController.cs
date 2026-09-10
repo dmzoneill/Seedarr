@@ -7,11 +7,13 @@ using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerBoost;
 using NzbDrone.Core.Trackers;
 using NzbDrone.SignalR;
+using Seedarr.Api.V1.MediaCover;
 using Seedarr.Http;
 using Seedarr.Http.REST;
 
@@ -31,6 +33,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly IDownloadHistoryRepository _downloadHistoryRepository;
     private readonly ITrackerBoostService _trackerBoostService;
     private readonly ITrackerAnnounceService _trackerAnnounceService;
+    private readonly IMediaEnrichmentService _mediaEnrichmentService;
 
     public TorrentController(
         ITorrentService torrentService,
@@ -44,7 +47,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         TorrentResourceValidator torrentResourceValidator,
         IDownloadHistoryRepository downloadHistoryRepository = null,
         ITrackerBoostService trackerBoostService = null,
-        ITrackerAnnounceService trackerAnnounceService = null)
+        ITrackerAnnounceService trackerAnnounceService = null,
+        IMediaEnrichmentService mediaEnrichmentService = null)
         : base(signalRBroadcaster)
     {
         _torrentService = torrentService;
@@ -57,6 +61,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _downloadHistoryRepository = downloadHistoryRepository;
         _trackerBoostService = trackerBoostService;
         _trackerAnnounceService = trackerAnnounceService;
+        _mediaEnrichmentService = mediaEnrichmentService;
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -68,7 +73,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return MapTorrentToResource(torrent, trackers);
     }
 
-    private TorrentResource MapTorrentToResource(Torrent torrent, List<TrackerEntry> trackers, Dictionary<string, DownloadHistory> histories = null)
+    private TorrentResource MapTorrentToResource(
+        Torrent torrent,
+        List<TrackerEntry> trackers,
+        Dictionary<string, DownloadHistory> histories = null,
+        Dictionary<int, TorrentMediaMetadata> mediaMetas = null)
     {
         var torrentTrackers = trackers.Where(t => t.TorrentId == torrent.Id).ToList();
         var resource = TorrentResourceMapper.ToResource(torrent, torrentTrackers.Select(t => t.Url));
@@ -98,6 +107,74 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             resource.NextUpdate = 0;
         }
 
+        // 1. Direct Media Enrichment metadata
+        TorrentMediaMetadata mediaMetadata = null;
+        if (mediaMetas != null)
+        {
+            mediaMetas.TryGetValue(torrent.Id, out mediaMetadata);
+        }
+        else if (_mediaEnrichmentService != null && torrent.Id > 0)
+        {
+            mediaMetadata = _mediaEnrichmentService.GetMetadata(torrent.Id);
+        }
+
+        if (mediaMetadata != null)
+        {
+            if (!string.IsNullOrEmpty(mediaMetadata.Title))
+            {
+                resource.MediaTitle = mediaMetadata.Title;
+            }
+
+            if (mediaMetadata.Year > 0)
+            {
+                resource.Year = mediaMetadata.Year;
+            }
+
+            if (!string.IsNullOrEmpty(mediaMetadata.Overview))
+            {
+                resource.Overview = mediaMetadata.Overview;
+            }
+
+            if (mediaMetadata.Rating > 0)
+            {
+                resource.Rating = mediaMetadata.Rating;
+            }
+
+            if (!string.IsNullOrEmpty(mediaMetadata.ArrType))
+            {
+                resource.Source = mediaMetadata.ArrType;
+            }
+
+            if (!string.IsNullOrEmpty(mediaMetadata.PosterLocalPath))
+            {
+                resource.PosterUrl = $"/api/v1/mediacover/{mediaMetadata.TorrentId}/poster.jpg";
+            }
+            else if (!string.IsNullOrEmpty(mediaMetadata.PosterUrl))
+            {
+                resource.PosterUrl = mediaMetadata.PosterUrl;
+            }
+
+            if (!string.IsNullOrEmpty(mediaMetadata.BackdropLocalPath))
+            {
+                resource.FanartUrl = $"/api/v1/mediacover/{mediaMetadata.TorrentId}/backdrop.jpg";
+            }
+            else if (!string.IsNullOrEmpty(mediaMetadata.BackdropUrl))
+            {
+                resource.FanartUrl = mediaMetadata.BackdropUrl;
+            }
+
+            if (!string.IsNullOrEmpty(mediaMetadata.BannerUrl))
+            {
+                resource.BannerUrl = mediaMetadata.BannerUrl;
+            }
+
+            if (!string.IsNullOrEmpty(mediaMetadata.Genres))
+            {
+                resource.Genres = mediaMetadata.Genres.Split(',').Select(g => g.Trim()).Where(g => g.Length > 0).ToList();
+            }
+        }
+
+        // 2. DownloadHistory metadata fallback
         if (!string.IsNullOrEmpty(torrent.InfoHash))
         {
             try
@@ -114,7 +191,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
                 if (history != null)
                 {
-                    resource.Source = history.Source;
+                    if (string.IsNullOrEmpty(resource.Source))
+                    {
+                        resource.Source = history.Source;
+                    }
+
                     if (!string.IsNullOrEmpty(history.DataJson))
                     {
                         var metadata = JsonSerializer.Deserialize<MediaMetadata>(
@@ -123,14 +204,45 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
                         if (metadata != null)
                         {
-                            resource.PosterUrl = metadata.PosterUrl;
-                            resource.FanartUrl = metadata.FanartUrl;
-                            resource.BannerUrl = metadata.BannerUrl;
-                            resource.MediaTitle = metadata.Title;
-                            resource.Year = metadata.Year;
-                            resource.Overview = metadata.Overview;
-                            resource.Rating = metadata.Rating;
-                            resource.Genres = metadata.Genres ?? new();
+                            if (string.IsNullOrEmpty(resource.PosterUrl))
+                            {
+                                resource.PosterUrl = metadata.PosterUrl;
+                            }
+
+                            if (string.IsNullOrEmpty(resource.FanartUrl))
+                            {
+                                resource.FanartUrl = metadata.FanartUrl;
+                            }
+
+                            if (string.IsNullOrEmpty(resource.BannerUrl))
+                            {
+                                resource.BannerUrl = metadata.BannerUrl;
+                            }
+
+                            if (string.IsNullOrEmpty(resource.MediaTitle))
+                            {
+                                resource.MediaTitle = metadata.Title;
+                            }
+
+                            if (!resource.Year.HasValue)
+                            {
+                                resource.Year = metadata.Year;
+                            }
+
+                            if (string.IsNullOrEmpty(resource.Overview))
+                            {
+                                resource.Overview = metadata.Overview;
+                            }
+
+                            if (!resource.Rating.HasValue)
+                            {
+                                resource.Rating = metadata.Rating;
+                            }
+
+                            if (resource.Genres == null || resource.Genres.Count == 0)
+                            {
+                                resource.Genres = metadata.Genres ?? new();
+                            }
                         }
                     }
                 }
@@ -157,8 +269,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         var histories = _downloadHistoryRepository?.All()
             .GroupBy(h => h.InfoHash, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First(), StringComparer.OrdinalIgnoreCase);
+        var mediaMetas = _mediaEnrichmentService?.GetAllMetadata();
 
-        return torrents.Select(t => MapTorrentToResource(t, trackers, histories)).ToList();
+        return torrents.Select(t => MapTorrentToResource(t, trackers, histories, mediaMetas)).ToList();
     }
 
     [HttpGet("{id:int}")]
@@ -171,6 +284,24 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         return MapTorrentToResource(torrent);
+    }
+
+    [HttpGet("{torrentId:int}/media")]
+    public ActionResult<MediaMetadataResource> GetMedia(int torrentId)
+    {
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var meta = _mediaEnrichmentService?.GetMetadata(torrentId);
+        if (meta == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(MediaMetadataResourceMapper.ToResource(meta));
     }
 
     [HttpGet("{torrentId:int}/files")]
