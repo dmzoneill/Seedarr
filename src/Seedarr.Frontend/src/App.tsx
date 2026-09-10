@@ -43,6 +43,8 @@ import {
   STORAGE_KEY_HIDE_GUIDE,
 } from "./components/GettingStartedModal";
 import AddTorrentPage from "./pages/AddTorrentPage";
+import { useToast } from "./context/ToastContext";
+import { apiClient } from "./api/client";
 import SeedarrLogo from "./components/icons/SeedarrLogo";
 import SeedarrText from "./components/icons/SeedarrText";
 import {
@@ -171,7 +173,60 @@ function App() {
   const isSystemRoute = location.pathname.startsWith("/system");
   const { data: generalConfig } = useGeneralConfig();
   const { data: downloadClients } = useDownloadClients();
+  const { showToast } = useToast();
   const [showApiKey, setShowApiKey] = useState(false);
+  const [unmaskedApiKey, setUnmaskedApiKey] = useState<string | null>(null);
+
+  const fetchUnmaskedKey = async () => {
+    if (unmaskedApiKey) return unmaskedApiKey;
+    try {
+      const res = await apiClient.getApiKey();
+      if (res?.apiKey) {
+        setUnmaskedApiKey(res.apiKey);
+        return res.apiKey;
+      }
+    } catch {
+      // Fallback
+    }
+    return generalConfig?.apiKey || "";
+  };
+
+  const handleCopyApiKey = async () => {
+    try {
+      let key = unmaskedApiKey;
+      if (!key) {
+        key = await fetchUnmaskedKey();
+      }
+      if (key && !key.includes("*")) {
+        await navigator.clipboard.writeText(key);
+        showToast(
+          t("topbar.apiKeyCopied", undefined, "API Key copied to clipboard"),
+          "success",
+        );
+      } else {
+        showToast(
+          t("topbar.failedToCopyApiKey", undefined, "Failed to copy API Key"),
+          "error",
+        );
+      }
+    } catch {
+      showToast(
+        t("topbar.failedToCopyApiKey", undefined, "Failed to copy API Key"),
+        "error",
+      );
+    }
+  };
+
+  const handleMouseEnterApiKey = async () => {
+    setShowApiKey(true);
+    if (!unmaskedApiKey) {
+      await fetchUnmaskedKey();
+    }
+  };
+
+  const handleMouseLeaveApiKey = () => {
+    setShowApiKey(false);
+  };
 
   // Global Keyboard Shortcuts Listener
   useEffect(() => {
@@ -604,12 +659,12 @@ function App() {
                     borderRadius: "4px",
                     cursor: "pointer",
                     userSelect: "none",
+                    fontFamily: "monospace",
+                    letterSpacing: showApiKey ? "0.5px" : "1.5px",
                   }}
-                  onClick={() => {
-                    navigator.clipboard.writeText(generalConfig.apiKey);
-                  }}
-                  onMouseEnter={() => setShowApiKey(true)}
-                  onMouseLeave={() => setShowApiKey(false)}
+                  onClick={handleCopyApiKey}
+                  onMouseEnter={handleMouseEnterApiKey}
+                  onMouseLeave={handleMouseLeaveApiKey}
                   title={t(
                     "topbar.copyApiKey",
                     undefined,
@@ -617,7 +672,7 @@ function App() {
                   )}
                 >
                   {showApiKey
-                    ? generalConfig.apiKey
+                    ? (unmaskedApiKey || (generalConfig.apiKey.includes("*") ? "••••••••••••••••••••••••••••••••" : generalConfig.apiKey))
                     : "••••••••••••••••••••••••••••••••"}
                 </code>
               </div>

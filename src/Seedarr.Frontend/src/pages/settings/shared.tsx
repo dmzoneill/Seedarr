@@ -345,6 +345,7 @@ export function TextInput({
   hint,
   disabled,
   type,
+  rightElement,
 }: {
   label: string;
   value: string;
@@ -353,20 +354,43 @@ export function TextInput({
   hint?: string;
   disabled?: boolean;
   type?: string;
+  rightElement?: React.ReactNode;
 }) {
   return (
     <div className="form-group">
       <label className="form-label">{label}</label>
       <div className="form-input-wrapper">
-        <input
-          type={type || "text"}
-          className="form-input"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          disabled={disabled}
-          style={{ borderRadius: "6px" }}
-        />
+        {rightElement ? (
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              alignItems: "center",
+              width: "100%",
+            }}
+          >
+            <input
+              type={type || "text"}
+              className="form-input"
+              value={value ?? ""}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder={placeholder}
+              disabled={disabled}
+              style={{ borderRadius: "6px", flex: 1, minWidth: 0 }}
+            />
+            <div style={{ flexShrink: 0 }}>{rightElement}</div>
+          </div>
+        ) : (
+          <input
+            type={type || "text"}
+            className="form-input"
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            disabled={disabled}
+            style={{ borderRadius: "6px" }}
+          />
+        )}
         {hint && <span className="form-hint">{hint}</span>}
       </div>
     </div>

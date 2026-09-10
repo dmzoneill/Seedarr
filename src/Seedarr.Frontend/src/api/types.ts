@@ -277,6 +277,10 @@ export interface GeneralConfig {
   apiKey: string;
 }
 
+export interface ApiKeyResource {
+  apiKey: string;
+}
+
 export interface SeedingConfig {
   id: number;
   maxUploadSpeedKbps: number;

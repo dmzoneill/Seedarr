@@ -24,6 +24,7 @@ import {
 } from "../pages/settings/shared";
 import SeedarrLogo from "./icons/SeedarrLogo";
 import SeedarrText from "./icons/SeedarrText";
+import { LanguageSelector } from "./LanguageSelector";
 
 export const STORAGE_KEY_HIDE_GUIDE = "seedarr_hide_getting_started";
 
@@ -467,21 +468,24 @@ export function GettingStartedModal({
             </button>
           </div>
 
-          {/* Close Button */}
-          <button
-            type="button"
-            className="btn btn-outline"
-            style={{
-              padding: "0.2rem 0.5rem",
-              fontSize: "0.85rem",
-              borderRadius: "4px",
-              lineHeight: 1,
-            }}
-            onClick={handleClose}
-            title="Close Setup Guide (Esc)"
-          >
-            ✕
-          </button>
+          {/* Right Controls: Language Selector & Close Button */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <LanguageSelector />
+            <button
+              type="button"
+              className="btn btn-outline"
+              style={{
+                padding: "0.2rem 0.5rem",
+                fontSize: "0.85rem",
+                borderRadius: "4px",
+                lineHeight: 1,
+              }}
+              onClick={handleClose}
+              title="Close Setup Guide (Esc)"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Step Indicator Breadcrumbs */}
@@ -598,6 +602,31 @@ export function GettingStartedModal({
                 <strong>3. Sonarr / Radarr / Lidarr:</strong> Connects TV,
                 movies, and music libraries.
               </div>
+            </div>
+
+            {/* Language Choice Selection Row */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                marginBottom: "1.5rem",
+                padding: "0.3rem 0.75rem",
+                backgroundColor: "var(--bg-secondary, rgba(0, 0, 0, 0.2))",
+                borderRadius: "6px",
+                border:
+                  "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--text-muted, #aaa)",
+                }}
+              >
+                🌐 Language:
+              </span>
+              <LanguageSelector />
             </div>
 
             <div
