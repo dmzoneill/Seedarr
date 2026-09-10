@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Web;
 
-namespace Seedarr.Api.V1.Torrents;
+namespace NzbDrone.Core.Torrents;
 
 public record ParsedMagnetLink(string InfoHash, string Name, string[] Trackers);
 
@@ -66,10 +66,11 @@ public static class MagnetLinkParser
         var inputIndex = 0;
         var outputBits = 0;
         var outputIndex = 0;
+        var base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
 
         while (inputIndex < input.Length)
         {
-            var byteIndex = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".IndexOf(input[inputIndex]);
+            var byteIndex = base32Alphabet.IndexOf(input[inputIndex]);
             if (byteIndex < 0)
             {
                 return null;

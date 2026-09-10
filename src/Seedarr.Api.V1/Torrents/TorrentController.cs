@@ -24,7 +24,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileService _torrentFileService;
     private readonly ITrackerEntryService _trackerEntryService;
-    private readonly ITorrentFileParser _torrentFileParser;
+    private readonly ITorrentImportService _torrentImportService;
     private readonly IConnectionManager _connectionManager;
     private readonly ITorrentEventLogService _eventLogService;
     private readonly IConfigService _configService;
@@ -36,7 +36,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         ITorrentService torrentService,
         ITorrentFileService torrentFileService,
         ITrackerEntryService trackerEntryService,
-        ITorrentFileParser torrentFileParser,
+        ITorrentImportService torrentImportService,
         IConnectionManager connectionManager,
         ITorrentEventLogService eventLogService,
         IConfigService configService,
@@ -50,7 +50,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
         _trackerEntryService = trackerEntryService;
-        _torrentFileParser = torrentFileParser;
+        _torrentImportService = torrentImportService;
         _connectionManager = connectionManager;
         _eventLogService = eventLogService;
         _configService = configService;
@@ -313,7 +313,19 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     {
         if (!string.IsNullOrEmpty(resource.MagnetLink))
         {
-            return CreateFromMagnet(resource);
+            try
+            {
+                var imported = _torrentImportService.ImportFromMagnet(resource.MagnetLink);
+                return Created($"/api/v1/torrent/{imported.Id}", TorrentResourceMapper.ToResource(imported));
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
         }
 
         var validationResult = SharedValidator.Validate(resource);
@@ -349,7 +361,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
             try
             {
-                added.Add(AddTorrentFromFile(file));
+                using var stream = file.OpenReadStream();
+                var torrent = _torrentImportService.ImportFromFile(stream, file.FileName);
+                added.Add(TorrentResourceMapper.ToResource(torrent));
             }
             catch (Exception ex)
             {
@@ -514,68 +528,6 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return Ok();
     }
 
-    private TorrentResource AddTorrentFromFile(IFormFile file)
-    {
-        ParsedTorrent parsed;
-        using (var stream = file.OpenReadStream())
-        {
-            parsed = _torrentFileParser.Parse(stream);
-        }
-
-        if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
-        {
-            throw new InvalidOperationException("Torrent with this info hash already exists");
-        }
-
-        var torrent = new Torrent
-        {
-            Name = parsed.Name,
-            InfoHash = parsed.InfoHash,
-            TotalSize = parsed.TotalSize,
-            PieceCount = parsed.PieceCount,
-            PieceLength = parsed.PieceLength,
-            Comment = parsed.Comment,
-            CreatedBy = parsed.CreatedBy,
-            CreationDate = parsed.CreationDate,
-            IsPrivate = parsed.IsPrivate,
-            TrackerUrl = parsed.AnnounceUrl,
-            Status = TorrentStatus.Queued,
-            DateAdded = DateTime.UtcNow
-        };
-
-        var addedTorrent = _torrentService.Add(torrent);
-
-        _eventLogService.Info(addedTorrent.Id, "Add", $"Torrent '{parsed.Name}' added from file '{file.FileName}' ({file.Length} bytes)");
-
-        if (parsed.Files != null)
-        {
-            foreach (var f in parsed.Files)
-            {
-                _torrentFileService.Add(new TorrentFile { TorrentId = addedTorrent.Id, Path = f.Path, Size = f.Size });
-            }
-        }
-
-        if (parsed.AnnounceList != null)
-        {
-            var tier = 0;
-            foreach (var tierUrls in parsed.AnnounceList)
-            {
-                foreach (var url in tierUrls)
-                {
-                    _trackerEntryService.Add(new TrackerEntry { TorrentId = addedTorrent.Id, Url = url, Tier = tier, Enabled = true });
-                }
-
-                tier++;
-            }
-        }
-        else if (!string.IsNullOrEmpty(parsed.AnnounceUrl))
-        {
-            _trackerEntryService.Add(new TrackerEntry { TorrentId = addedTorrent.Id, Url = parsed.AnnounceUrl, Tier = 0, Enabled = true });
-        }
-
-        return TorrentResourceMapper.ToResource(addedTorrent);
-    }
-
     private void LogUpdateTransitions(Torrent existing, TorrentResource resource)
     {
         if (resource.ForceCompleted && !existing.ForceCompleted)
@@ -691,50 +643,6 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             Source = log.Source,
             Message = log.Message
         };
-    }
-
-    private ActionResult<TorrentResource> CreateFromMagnet(TorrentResource resource)
-    {
-        ParsedMagnetLink parsed;
-        try
-        {
-            parsed = MagnetLinkParser.Parse(resource.MagnetLink);
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(ex.Message);
-        }
-
-        if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
-        {
-            return Conflict(new { message = "Torrent with this info hash already exists" });
-        }
-
-        var torrent = new Torrent
-        {
-            Name = parsed.Name,
-            InfoHash = parsed.InfoHash,
-            TrackerUrl = parsed.Trackers.Length > 0 ? parsed.Trackers[0] : null,
-            Status = TorrentStatus.Queued,
-            DateAdded = DateTime.UtcNow
-        };
-
-        var added = _torrentService.Add(torrent);
-        _eventLogService.Info(added.Id, "Add", $"Torrent '{parsed.Name}' added from magnet link");
-
-        var tier = 0;
-        foreach (var url in parsed.Trackers)
-        {
-            _trackerEntryService.Add(new TrackerEntry
-            {
-                TorrentId = added.Id,
-                Url = url,
-                Tier = tier++,
-                Enabled = true
-            });
-        }
-
-        return Created($"/api/v1/torrent/{added.Id}", TorrentResourceMapper.ToResource(added));
     }
 }
 
