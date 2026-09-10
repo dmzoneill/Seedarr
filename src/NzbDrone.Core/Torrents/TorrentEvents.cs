@@ -194,3 +194,23 @@ public class ApplicationUpdatedEvent : IEvent
         this.NewVersion = newVersion;
     }
 }
+
+public class TorrentDownloadCompletedEvent : IEvent
+{
+    public Torrent Torrent { get; }
+
+    public TorrentDownloadCompletedEvent(Torrent torrent)
+    {
+        Torrent = torrent;
+    }
+}
+
+public class TorrentSeedGoalReachedEvent : IEvent
+{
+    public Torrent Torrent { get; }
+
+    public TorrentSeedGoalReachedEvent(Torrent torrent)
+    {
+        Torrent = torrent;
+    }
+}

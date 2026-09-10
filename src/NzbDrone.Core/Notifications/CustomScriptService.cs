@@ -20,28 +20,22 @@ public interface ICustomScriptService
 
 public class CustomScriptService : ICustomScriptService
 {
-    private readonly IMediaEnrichmentService _mediaEnrichmentService;
+    private readonly ITorrentMediaMetadataRepository _mediaMetadataRepository;
     private readonly TimeSpan _scriptTimeout;
     private readonly TimeSpan _streamDrainTimeout;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     public CustomScriptService(
-        IMediaEnrichmentService mediaEnrichmentService = null,
+        ITorrentMediaMetadataRepository mediaMetadataRepository = null,
         IConfigService configService = null,
         IConfigFileProvider configFileProvider = null,
         TimeSpan? scriptTimeout = null,
         TimeSpan? streamDrainTimeout = null)
     {
-        _mediaEnrichmentService = mediaEnrichmentService;
-        var timeoutSec = 60;
-        if (configService != null)
-        {
-            var val = configService.GetValueInt("CustomScriptTimeoutSeconds", 0);
-            if (val > 0)
-            {
-                timeoutSec = val;
-            }
-        }
+        _mediaMetadataRepository = mediaMetadataRepository;
+        var timeoutSec = configService != null && configService.CustomScriptTimeoutSeconds > 0
+            ? configService.CustomScriptTimeoutSeconds
+            : 60;
 
         _scriptTimeout = scriptTimeout ?? TimeSpan.FromSeconds(timeoutSec);
         _streamDrainTimeout = streamDrainTimeout ?? TimeSpan.FromSeconds(3);
@@ -160,8 +154,8 @@ public class CustomScriptService : ICustomScriptService
             env["TORRENT_ID"] = torrent.Id.ToString(CultureInfo.InvariantCulture);
             env["TORRENT_NAME"] = torrent.Name ?? string.Empty;
             env["TORRENT_INFOHASH"] = torrent.InfoHash ?? string.Empty;
-            env["TORRENT_CATEGORY"] = torrent.Label ?? string.Empty;
-            env["TORRENT_PATH"] = torrent.SourcePath ?? string.Empty;
+            env["TORRENT_CATEGORY"] = torrent.Category ?? string.Empty;
+            env["TORRENT_PATH"] = torrent.SavePath ?? string.Empty;
             env["TORRENT_SIZE"] = torrent.TotalSize.ToString(CultureInfo.InvariantCulture);
             env["TORRENT_RATIO"] = torrent.Ratio.ToString("F2", CultureInfo.InvariantCulture);
             env["TORRENT_STATUS"] = torrent.Status.ToString();
@@ -169,14 +163,23 @@ public class CustomScriptService : ICustomScriptService
             env["SEEDARR_TORRENT_ID"] = torrent.Id.ToString(CultureInfo.InvariantCulture);
             env["SEEDARR_TORRENT_NAME"] = torrent.Name ?? string.Empty;
             env["SEEDARR_TORRENT_INFOHASH"] = torrent.InfoHash ?? string.Empty;
-            env["SEEDARR_TORRENT_CATEGORY"] = torrent.Label ?? string.Empty;
-            env["SEEDARR_TORRENT_PATH"] = torrent.SourcePath ?? string.Empty;
+            env["SEEDARR_TORRENT_CATEGORY"] = torrent.Category ?? string.Empty;
+            env["SEEDARR_TORRENT_PATH"] = torrent.SavePath ?? string.Empty;
             env["SEEDARR_TORRENT_SIZE"] = torrent.TotalSize.ToString(CultureInfo.InvariantCulture);
             env["SEEDARR_TORRENT_RATIO"] = torrent.Ratio.ToString("F2", CultureInfo.InvariantCulture);
             env["SEEDARR_TORRENT_STATUS"] = torrent.Status.ToString();
 
+            env["LEECHARR_TORRENT_ID"] = torrent.Id.ToString(CultureInfo.InvariantCulture);
+            env["LEECHARR_TORRENT_NAME"] = torrent.Name ?? string.Empty;
+            env["LEECHARR_TORRENT_INFOHASH"] = torrent.InfoHash ?? string.Empty;
+            env["LEECHARR_TORRENT_CATEGORY"] = torrent.Category ?? string.Empty;
+            env["LEECHARR_TORRENT_PATH"] = torrent.SavePath ?? string.Empty;
+            env["LEECHARR_TORRENT_SIZE"] = torrent.TotalSize.ToString(CultureInfo.InvariantCulture);
+            env["LEECHARR_TORRENT_RATIO"] = torrent.Ratio.ToString("F2", CultureInfo.InvariantCulture);
+            env["LEECHARR_TORRENT_STATUS"] = torrent.Status.ToString();
+
             // Transmission compatibility environment variables
-            env["TR_TORRENT_DIR"] = torrent.SourcePath ?? string.Empty;
+            env["TR_TORRENT_DIR"] = torrent.SavePath ?? string.Empty;
             env["TR_TORRENT_NAME"] = torrent.Name ?? string.Empty;
             env["TR_TORRENT_HASH"] = torrent.InfoHash ?? string.Empty;
             env["TR_TORRENT_ID"] = torrent.Id.ToString(CultureInfo.InvariantCulture);
@@ -191,6 +194,13 @@ public class CustomScriptService : ICustomScriptService
                 env["SEEDARR_MEDIA_GENRES"] = meta.Genres ?? string.Empty;
                 env["SEEDARR_MEDIA_RATING"] = meta.Rating > 0 ? meta.Rating.ToString("F1", CultureInfo.InvariantCulture) : string.Empty;
                 env["SEEDARR_MEDIA_IMDB_ID"] = meta.ImdbId ?? string.Empty;
+
+                env["LEECHARR_MEDIA_TITLE"] = meta.Title ?? string.Empty;
+                env["LEECHARR_MEDIA_YEAR"] = meta.Year > 0 ? meta.Year.ToString(CultureInfo.InvariantCulture) : string.Empty;
+                env["LEECHARR_MEDIA_OVERVIEW"] = meta.Overview ?? string.Empty;
+                env["LEECHARR_MEDIA_GENRES"] = meta.Genres ?? string.Empty;
+                env["LEECHARR_MEDIA_RATING"] = meta.Rating > 0 ? meta.Rating.ToString("F1", CultureInfo.InvariantCulture) : string.Empty;
+                env["LEECHARR_MEDIA_IMDB_ID"] = meta.ImdbId ?? string.Empty;
             }
         }
 
@@ -247,6 +257,7 @@ public class CustomScriptService : ICustomScriptService
             }
             catch
             {
+                // Fall back to query string / raw string
             }
         }
 
@@ -296,8 +307,8 @@ public class CustomScriptService : ICustomScriptService
 
         try
         {
-            var workingDir = !string.IsNullOrWhiteSpace(torrent?.SourcePath) && Directory.Exists(torrent.SourcePath)
-                ? torrent.SourcePath
+            var workingDir = !string.IsNullOrWhiteSpace(torrent?.SavePath) && Directory.Exists(torrent.SavePath)
+                ? torrent.SavePath
                 : (Path.GetDirectoryName(resolvedScriptPath) ?? Environment.CurrentDirectory);
 
             var (resolvedFileName, resolvedArgs) = ResolveInterpreter(resolvedScriptPath, resolvedArguments);
@@ -313,9 +324,11 @@ public class CustomScriptService : ICustomScriptService
                 CreateNoWindow = true,
             };
 
+            // Sanitize inherited environment variables
             SanitizeEnvironment(startInfo.EnvironmentVariables);
 
-            var meta = torrent != null ? _mediaEnrichmentService?.GetMetadata(torrent.Id) : null;
+            // Inject Servarr / Seedarr standard environment variables
+            var meta = torrent != null ? _mediaMetadataRepository?.GetByTorrentId(torrent.Id) : null;
             var envVars = BuildEnvironmentVariables(eventType, torrent, meta);
             foreach (var kvp in envVars)
             {
@@ -347,6 +360,7 @@ public class CustomScriptService : ICustomScriptService
                 }
                 catch
                 {
+                    // Ignore kill exception
                 }
 
                 return false;

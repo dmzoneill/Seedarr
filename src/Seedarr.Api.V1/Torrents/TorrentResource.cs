@@ -30,6 +30,14 @@ public class TorrentResource : RestResource
     public bool SuperSeeding { get; set; }
     public bool ForceStart { get; set; }
     public string Label { get; set; }
+    public string Category { get; set; }
+    public string SavePath { get; set; }
+    public string DownloadPath
+    {
+        get => SavePath;
+        set => SavePath = value;
+    }
+
     public double Progress { get; set; }
     public bool SequentialDownload { get; set; }
     public int AnnounceInterval { get; set; }

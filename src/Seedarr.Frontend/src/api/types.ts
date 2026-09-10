@@ -26,6 +26,9 @@ export interface Torrent {
   superSeeding: boolean;
   forceStart: boolean;
   label: string | null;
+  category?: string | null;
+  savePath?: string | null;
+  downloadPath?: string | null;
   sequentialDownload: boolean;
   announceInterval: number;
   nextUpdate: number;
@@ -376,6 +379,18 @@ export interface NetworkConfig {
   proxyPassword: string;
 }
 
+export interface Category {
+  id: number;
+  name: string;
+  savePath?: string;
+  defaultUploadLimit?: number;
+  defaultDownloadLimit?: number;
+  targetRatio?: number;
+  targetSeedTimeMinutes?: number;
+  autoStop?: boolean;
+  isDefault?: boolean;
+}
+
 export interface BitTorrentConfig {
   id: number;
   enableDht: boolean;
@@ -387,6 +402,14 @@ export interface BitTorrentConfig {
   announceIntervalSeconds: number;
   minAnnounceIntervalSeconds: number;
   scrapeIntervalSeconds: number;
+
+  // Swarm & Scripts
+  onDownloadCompleteScript?: string;
+  onSeedGoalReachedScript?: string;
+  scriptTorrentDoneFilename?: string;
+  scriptTorrentAddedFilename?: string;
+  scriptTorrentDoneSeedingFilename?: string;
+  customScriptTimeoutSeconds?: number;
 }
 
 export interface PeerProtocolConfig {

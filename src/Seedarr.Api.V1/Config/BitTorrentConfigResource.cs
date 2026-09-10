@@ -14,6 +14,14 @@ public class BitTorrentConfigResource : RestResource
     public int AnnounceIntervalSeconds { get; set; }
     public int MinAnnounceIntervalSeconds { get; set; }
     public int ScrapeIntervalSeconds { get; set; }
+
+    // Lifecycle Scripts
+    public string OnDownloadCompleteScript { get; set; }
+    public string OnSeedGoalReachedScript { get; set; }
+    public string ScriptTorrentDoneFilename { get; set; }
+    public string ScriptTorrentAddedFilename { get; set; }
+    public string ScriptTorrentDoneSeedingFilename { get; set; }
+    public int CustomScriptTimeoutSeconds { get; set; }
 }
 
 public static class BitTorrentConfigResourceMapper
@@ -30,7 +38,13 @@ public static class BitTorrentConfigResourceMapper
             PeerIdPrefix = model.PeerIdPrefix,
             AnnounceIntervalSeconds = model.AnnounceIntervalSeconds,
             MinAnnounceIntervalSeconds = model.MinAnnounceIntervalSeconds,
-            ScrapeIntervalSeconds = model.ScrapeIntervalSeconds
+            ScrapeIntervalSeconds = model.ScrapeIntervalSeconds,
+            OnDownloadCompleteScript = model.OnDownloadCompleteScript,
+            OnSeedGoalReachedScript = model.OnSeedGoalReachedScript,
+            ScriptTorrentDoneFilename = model.ScriptTorrentDoneFilename,
+            ScriptTorrentAddedFilename = model.ScriptTorrentAddedFilename,
+            ScriptTorrentDoneSeedingFilename = model.ScriptTorrentDoneSeedingFilename,
+            CustomScriptTimeoutSeconds = model.CustomScriptTimeoutSeconds
         };
     }
 }
