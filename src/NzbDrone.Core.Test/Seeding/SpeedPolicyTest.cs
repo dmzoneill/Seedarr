@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Seeding.Distribution;
@@ -52,7 +53,7 @@ public class SpeedPolicyTest
             _eventLogService,
             _stateMachine,
             _stopPolicy,
-            new Random(42));
+            new RandomNumberGenerator(42));
     }
 
     [Test]

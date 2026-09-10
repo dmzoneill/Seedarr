@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Seeding.Distribution;
 using NzbDrone.Core.Seeding.Scheduling;
@@ -19,7 +20,7 @@ public class SpeedPolicy : ISpeedPolicy
     private readonly ITorrentEventLogService _eventLogService;
     private readonly ITorrentStateMachine _stateMachine;
     private readonly IStopPolicy _stopPolicy;
-    private readonly Random _random;
+    private readonly IRandomNumberGenerator _random;
     private readonly Logger _logger;
 
     public SpeedPolicy(
@@ -29,7 +30,7 @@ public class SpeedPolicy : ISpeedPolicy
         ITorrentEventLogService eventLogService,
         ITorrentStateMachine stateMachine,
         IStopPolicy stopPolicy,
-        Random random = null)
+        IRandomNumberGenerator random = null)
     {
         _distributionManager = distributionManager;
         _speedScheduler = speedScheduler;
@@ -37,7 +38,7 @@ public class SpeedPolicy : ISpeedPolicy
         _eventLogService = eventLogService;
         _stateMachine = stateMachine;
         _stopPolicy = stopPolicy;
-        _random = random ?? Random.Shared;
+        _random = random ?? new RandomNumberGenerator();
         _logger = LogManager.GetCurrentClassLogger();
     }
 

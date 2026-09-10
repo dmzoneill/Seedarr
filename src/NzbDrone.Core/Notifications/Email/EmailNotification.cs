@@ -119,6 +119,6 @@ public class EmailNotification : INotificationService
             client.Credentials = new NetworkCredential(Settings.Username, Settings.Password);
         }
 
-        client.SendMailAsync(message).GetAwaiter().GetResult();
+        client.Send(message);
     }
 }
