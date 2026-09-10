@@ -6,6 +6,7 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Seeding.Distribution;
 using NzbDrone.Core.Seeding.Scheduling;
+using NzbDrone.Core.Simulation.Swarm;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Seeding;
@@ -21,6 +22,7 @@ public class SpeedPolicy : ISpeedPolicy
     private readonly ITorrentStateMachine _stateMachine;
     private readonly IStopPolicy _stopPolicy;
     private readonly IRandomNumberGenerator _random;
+    private readonly ISwarmAnalyzer _swarmAnalyzer;
     private readonly Logger _logger;
 
     public SpeedPolicy(
@@ -30,7 +32,8 @@ public class SpeedPolicy : ISpeedPolicy
         ITorrentEventLogService eventLogService,
         ITorrentStateMachine stateMachine,
         IStopPolicy stopPolicy,
-        IRandomNumberGenerator random = null)
+        IRandomNumberGenerator random = null,
+        ISwarmAnalyzer swarmAnalyzer = null)
     {
         _distributionManager = distributionManager;
         _speedScheduler = speedScheduler;
@@ -39,6 +42,7 @@ public class SpeedPolicy : ISpeedPolicy
         _stateMachine = stateMachine;
         _stopPolicy = stopPolicy;
         _random = random ?? new RandomNumberGenerator();
+        _swarmAnalyzer = swarmAnalyzer ?? new SwarmAnalyzer(configService);
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -182,6 +186,38 @@ public class SpeedPolicy : ISpeedPolicy
                 if (torrent.SuperSeeding)
                 {
                     bytesPerSecond = (long)(bytesPerSecond * SuperSeedingBoost);
+                }
+
+                if (_swarmAnalyzer != null && _configService.SwarmIntelligenceEnabled)
+                {
+                    var snapshot = new SwarmSnapshot
+                    {
+                        SeedCount = torrent.Seeders,
+                        LeechCount = torrent.Leechers,
+                        PieceAvailability = torrent.Availability > 0 ? torrent.Availability : (torrent.Progress >= 1.0 ? 1.0 : torrent.Progress),
+                        TorrentSizeBytes = torrent.TotalSize,
+                        UploadRateBytesPerSec = torrent.UploadSpeed,
+                        DownloadRateBytesPerSec = torrent.DownloadSpeed,
+                        ShareRatio = torrent.Ratio,
+                        SeedingDuration = TimeSpan.FromSeconds(torrent.SeedingTime)
+                    };
+
+                    var rec = _swarmAnalyzer.Analyze(snapshot);
+                    switch (rec.Recommendation)
+                    {
+                        case SeedingRecommendation.Boost:
+                            bytesPerSecond = (long)(bytesPerSecond * (1.0 + (0.5 * rec.Confidence)));
+                            break;
+                        case SeedingRecommendation.Reduce:
+                            bytesPerSecond = (long)(bytesPerSecond * Math.Max(0.1, 1.0 - (0.5 * rec.Confidence)));
+                            break;
+                        case SeedingRecommendation.Pause:
+                            bytesPerSecond = (long)(bytesPerSecond * Math.Max(0.0, 1.0 - rec.Confidence));
+                            break;
+                        case SeedingRecommendation.Maintain:
+                        default:
+                            break;
+                    }
                 }
 
                 var variationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
