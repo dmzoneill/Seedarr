@@ -144,4 +144,70 @@ public class TorrentControllerTests : IntegrationTestBase
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
+
+    [Test]
+    public async Task Put_updates_user_fields_without_clobbering_engine_stats()
+    {
+        var fixturePath = Path.Combine(AppContext.BaseDirectory, "fixtures", "test.torrent");
+        Assume.That(File.Exists(fixturePath), "test.torrent fixture not found");
+
+        using var content = new MultipartFormDataContent();
+        var fileBytes = await File.ReadAllBytesAsync(fixturePath);
+        var fileContent = new ByteArrayContent(fileBytes);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/x-bittorrent");
+        content.Add(fileContent, "file", "put-invariant-test.torrent");
+
+        var uploadResponse = await Client.PostAsync("/api/v1/torrent/upload", content);
+        Assume.That(uploadResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var uploadJson = await uploadResponse.Content.ReadAsStringAsync();
+        using var uploadDoc = Deserialize<JsonDocument>(uploadJson);
+        var torrentId = uploadDoc.RootElement.GetProperty("added")[0].GetProperty("id").GetInt32();
+
+        // Get the existing torrent
+        var getResponse = await GetAsync($"/api/v1/torrent/{torrentId}");
+        Assert.That(getResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var originalJson = await getResponse.Content.ReadAsStringAsync();
+        using var originalDoc = Deserialize<JsonDocument>(originalJson);
+        var infoHash = originalDoc.RootElement.GetProperty("infoHash").GetString();
+
+        // Perform PUT with updated user fields and malicious stats payload
+        var updatePayload = new Dictionary<string, object>
+        {
+            ["id"] = torrentId,
+            ["name"] = "Updated Torrent Name",
+            ["priority"] = 5,
+            ["uploadLimit"] = 1048576,
+            ["downloadLimit"] = 2097152,
+            ["label"] = "MyCategory",
+            // Attempt to mutate engine-owned fields (should be ignored)
+            ["infoHash"] = "malicious_clobber_hash",
+            ["uploaded"] = 999999999L,
+            ["downloaded"] = 888888888L,
+            ["seeders"] = 1234,
+            ["leechers"] = 5678,
+            ["sessionUploaded"] = 777777L
+        };
+
+        var putResponse = await PutJsonAsync($"/api/v1/torrent/{torrentId}", updatePayload);
+        Assert.That(putResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var putJson = await putResponse.Content.ReadAsStringAsync();
+        using var putDoc = Deserialize<JsonDocument>(putJson);
+
+        // User controllable fields should be updated
+        Assert.That(putDoc.RootElement.GetProperty("name").GetString(), Is.EqualTo("Updated Torrent Name"));
+        Assert.That(putDoc.RootElement.GetProperty("priority").GetInt32(), Is.EqualTo(5));
+        Assert.That(putDoc.RootElement.GetProperty("uploadLimit").GetInt32(), Is.EqualTo(1048576));
+        Assert.That(putDoc.RootElement.GetProperty("downloadLimit").GetInt32(), Is.EqualTo(2097152));
+        Assert.That(putDoc.RootElement.GetProperty("label").GetString(), Is.EqualTo("MyCategory"));
+
+        // Engine-owned / immutable fields should NOT be clobbered
+        Assert.That(putDoc.RootElement.GetProperty("infoHash").GetString(), Is.EqualTo(infoHash));
+        Assert.That(putDoc.RootElement.GetProperty("uploaded").GetInt64(), Is.EqualTo(0L));
+        Assert.That(putDoc.RootElement.GetProperty("downloaded").GetInt64(), Is.EqualTo(0L));
+        Assert.That(putDoc.RootElement.GetProperty("seeders").GetInt32(), Is.EqualTo(0));
+        Assert.That(putDoc.RootElement.GetProperty("leechers").GetInt32(), Is.EqualTo(0));
+        Assert.That(putDoc.RootElement.GetProperty("sessionUploaded").GetInt64(), Is.EqualTo(0L));
+    }
 }

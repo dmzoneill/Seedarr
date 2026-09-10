@@ -397,21 +397,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         LogUpdateTransitions(existing, resource);
 
-        var torrent = TorrentResourceMapper.ToModel(resource);
-        torrent.Id = id;
-
-        // Preserve internal statistics fields — not settable via API
-        torrent.Uploaded = existing.Uploaded;
-        torrent.Downloaded = existing.Downloaded;
-        torrent.Ratio = existing.Ratio;
-        torrent.Seeders = existing.Seeders;
-        torrent.Leechers = existing.Leechers;
-        torrent.SessionUploaded = existing.SessionUploaded;
-        torrent.SessionDownloaded = existing.SessionDownloaded;
-        torrent.UploadSpeed = existing.UploadSpeed;
-        torrent.DownloadSpeed = existing.DownloadSpeed;
-
-        var updated = _torrentService.Update(torrent);
+        var updates = TorrentResourceMapper.ToModel(resource);
+        var updated = _torrentService.UpdateUserFields(id, updates);
         return MapTorrentToResource(updated);
     }
 
