@@ -28,6 +28,7 @@ public class PeerServer : BackgroundService
     private readonly ITorrentEventLogService _eventLogService;
     private readonly Trackers.Metrics.ITrackerMetricService _trackerMetricService;
     private readonly Trackers.ITrackerAnnounceService _trackerAnnounceService;
+    private readonly Transport.IUtpManager _utpManager;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
     private readonly Logger _logger;
@@ -41,7 +42,8 @@ public class PeerServer : BackgroundService
         ITrackerEntryService trackerEntryService = null,
         ITorrentEventLogService eventLogService = null,
         Trackers.Metrics.ITrackerMetricService trackerMetricService = null,
-        Trackers.ITrackerAnnounceService trackerAnnounceService = null)
+        Trackers.ITrackerAnnounceService trackerAnnounceService = null,
+        Transport.IUtpManager utpManager = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -52,6 +54,7 @@ public class PeerServer : BackgroundService
         _eventLogService = eventLogService;
         _trackerMetricService = trackerMetricService;
         _trackerAnnounceService = trackerAnnounceService;
+        _utpManager = utpManager;
         _connectionSemaphore = new SemaphoreSlim(configService.MaxGlobalConnections);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -357,7 +360,40 @@ public class PeerServer : BackgroundService
             _logger.Debug("Connecting to peer {0}:{1} for {2}", candidate.Ip, candidate.Port, torrent.Name);
             _eventLogService.Debug(torrent.Id, "Peers", $"Attempting connection to peer {candidate.Ip}:{candidate.Port} (source: {candidate.Source})");
 
-            connection = new PeerConnection(candidate.Ip, candidate.Port);
+            if (_utpManager != null && _utpManager.IsEnabled)
+            {
+                try
+                {
+                    var utp = _utpManager.CreateConnection();
+                    var endpoint = new IPEndPoint(IPAddress.Parse(candidate.Ip), candidate.Port);
+                    utp.Connect(endpoint);
+                    if (utp.IsConnected)
+                    {
+                        connection = new PeerConnection(utp.GetStream(), candidate.Ip, candidate.Port);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "uTP connection attempt to {0}:{1} failed", candidate.Ip, candidate.Port);
+                }
+
+                if (connection == null && _utpManager.TcpFallbackEnabled)
+                {
+                    _logger.Debug("Falling back to TCP for peer {0}:{1}", candidate.Ip, candidate.Port);
+                    connection = new PeerConnection(candidate.Ip, candidate.Port);
+                }
+            }
+            else
+            {
+                connection = new PeerConnection(candidate.Ip, candidate.Port);
+            }
+
+            if (connection == null)
+            {
+                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                return;
+            }
+
             connection.HandshakeTimeoutMs = Math.Min(_configService.HandshakeTimeoutSeconds * 1000, OutgoingConnectTimeoutMs);
             connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
             connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;

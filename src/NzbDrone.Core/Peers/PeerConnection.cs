@@ -26,7 +26,7 @@ public class PeerConnection : IDisposable
     public int RemotePort { get; }
     public string InfoHash { get; private set; }
     public string PeerId { get; private set; }
-    public bool IsConnected => !_isDisposed && (_client?.Connected ?? false);
+    public bool IsConnected => !_isDisposed && (_client != null ? _client.Connected : (_activeStream != null));
     public bool IsEncrypted { get; private set; }
     public CryptoMethod EncryptionMethod { get; private set; }
     public bool AmChoking { get; set; } = true;
@@ -51,6 +51,16 @@ public class PeerConnection : IDisposable
         var endpoint = (IPEndPoint)client.Client.RemoteEndPoint;
         RemoteIp = endpoint.Address.ToString();
         RemotePort = endpoint.Port;
+        ConnectedAt = DateTime.UtcNow;
+        LastActivity = DateTime.UtcNow;
+    }
+
+    public PeerConnection(Stream stream, string remoteIp, int remotePort)
+    {
+        _activeStream = stream ?? throw new ArgumentNullException(nameof(stream));
+        _logger = LogManager.GetCurrentClassLogger();
+        RemoteIp = remoteIp;
+        RemotePort = remotePort;
         ConnectedAt = DateTime.UtcNow;
         LastActivity = DateTime.UtcNow;
     }
@@ -161,7 +171,14 @@ public class PeerConnection : IDisposable
         {
             if (HandshakeTimeoutMs > 0)
             {
-                _client.Client.ReceiveTimeout = HandshakeTimeoutMs;
+                if (_client?.Client != null)
+                {
+                    _client.Client.ReceiveTimeout = HandshakeTimeoutMs;
+                }
+                else if (_activeStream.CanTimeout)
+                {
+                    _activeStream.ReadTimeout = HandshakeTimeoutMs;
+                }
             }
 
             var buffer = new byte[68];
@@ -262,7 +279,14 @@ public class PeerConnection : IDisposable
 
             if (MessageReadTimeoutMs > 0)
             {
-                _client.Client.ReceiveTimeout = MessageReadTimeoutMs;
+                if (_client?.Client != null)
+                {
+                    _client.Client.ReceiveTimeout = MessageReadTimeoutMs;
+                }
+                else if (_activeStream.CanTimeout)
+                {
+                    _activeStream.ReadTimeout = MessageReadTimeoutMs;
+                }
             }
 
             var lengthBuffer = new byte[4];
