@@ -3329,3 +3329,53 @@ body {
 .sidebar-nav-item.active svg {
   opacity: 1;
 }
+
+/* RTL Layout Support */
+html[dir="rtl"] {
+  direction: rtl;
+}
+
+html[dir="rtl"] .sidebar-nav-item {
+  text-align: right;
+}
+
+html[dir="rtl"] .topbar-dropdown {
+  right: auto;
+  left: 0;
+}
+
+html[dir="rtl"] .topbar-dropdown-item {
+  text-align: right;
+}
+
+html[dir="rtl"] .topbar-search {
+  flex-direction: row-reverse;
+}
+
+/* Language Selector */
+.language-selector-container {
+  display: inline-flex;
+  align-items: center;
+}
+
+.language-selector-btn {
+  background: transparent;
+  border: 1px solid var(--border, rgba(200, 168, 78, 0.2));
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.language-selector-btn:hover {
+  background: var(--bg-hover, rgba(200, 168, 78, 0.1));
+  border-color: var(--accent, #c8a84e);
+}
+
+.language-dropdown {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  scrollbar-width: thin;
+}
+
+.language-dropdown-item {
+  transition: background-color 0.15s ease;
+}
