@@ -24,11 +24,20 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     public MultiTrackerManager(
         IEnumerable<ITrackerProvider> trackerProviders,
-        IConfigService configService)
+        IConfigService configService,
+        ITrackerProviderFactory trackerProviderFactory = null)
     {
-        var providers = trackerProviders.ToList();
+        var providers = trackerProviders?.ToList() ?? new List<ITrackerProvider>();
         _httpTracker = providers.FirstOrDefault(p => p.Name == "HTTP");
         _udpTracker = providers.FirstOrDefault(p => p.Name == "UDP");
+
+        if ((_httpTracker == null || _udpTracker == null) && trackerProviderFactory != null)
+        {
+            var factoryProviders = trackerProviderFactory.GetAvailableProviders();
+            _httpTracker ??= factoryProviders.FirstOrDefault(p => p.Name == "HTTP");
+            _udpTracker ??= factoryProviders.FirstOrDefault(p => p.Name == "UDP");
+        }
+
         _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
     }
