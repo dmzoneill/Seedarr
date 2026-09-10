@@ -64,6 +64,8 @@ const de = {
     "commandPalette": "🔍 Befehlspalette (⌘K)",
     "keyboardShortcuts": "⌨️ Tastenkombinationen (?)",
     "gettingStarted": "🚀 Erste Schritte",
+    "gettingStartedButton": "Erste Schritte",
+    "gettingStartedTooltip": "Erste Schritte Einrichtungsassistent",
     "restart": "Neu starten",
     "restartConfirm": "Seedarr neu starten?",
     "shutdown": "Herunterfahren",

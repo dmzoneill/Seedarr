@@ -64,6 +64,8 @@ const zhCN = {
     commandPalette: "🔍 命令面板 (⌘K)",
     keyboardShortcuts: "⌨️ 快捷键 (?)",
     gettingStarted: "🚀 新手指南",
+    gettingStartedButton: "新手指南",
+    gettingStartedTooltip: "新手设置向导",
     restart: "重启",
     restartConfirm: "确定要重启 Seedarr 吗？",
     shutdown: "关机",
