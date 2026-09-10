@@ -61,10 +61,67 @@ public class Startup
         {
             c.SwaggerDoc("v1", new OpenApiInfo
             {
-                Title = "Seedarr API",
+                Title = "Seedarr REST API v1",
                 Version = "v1",
                 Description = "BitTorrent Seeding Simulator API"
             });
+
+            c.AddSecurityDefinition("ApiKeyHeader", new OpenApiSecurityScheme
+            {
+                Name = "X-Api-Key",
+                Type = SecuritySchemeType.ApiKey,
+                In = ParameterLocation.Header,
+                Description = "API Key authentication via X-Api-Key header"
+            });
+
+            c.AddSecurityDefinition("ApiKeyQuery", new OpenApiSecurityScheme
+            {
+                Name = "apikey",
+                Type = SecuritySchemeType.ApiKey,
+                In = ParameterLocation.Query,
+                Description = "API Key authentication via apikey query parameter"
+            });
+
+            c.AddSecurityRequirement(new OpenApiSecurityRequirement
+            {
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "ApiKeyHeader"
+                        }
+                    },
+                    Array.Empty<string>()
+                },
+                {
+                    new OpenApiSecurityScheme
+                    {
+                        Reference = new OpenApiReference
+                        {
+                            Type = ReferenceType.SecurityScheme,
+                            Id = "ApiKeyQuery"
+                        }
+                    },
+                    Array.Empty<string>()
+                }
+            });
+
+            var apiAssembly = Assembly.Load("Seedarr.Api.V1");
+            var xmlFile = $"{apiAssembly.GetName().Name}.xml";
+            var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+            if (File.Exists(xmlPath))
+            {
+                c.IncludeXmlComments(xmlPath);
+            }
+
+            var hostXmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+            var hostXmlPath = Path.Combine(AppContext.BaseDirectory, hostXmlFile);
+            if (File.Exists(hostXmlPath))
+            {
+                c.IncludeXmlComments(hostXmlPath);
+            }
         });
 
         services.AddCors(options =>
@@ -114,6 +171,28 @@ public class Startup
             }
         });
 
+        var wwwroot = Path.Combine(System.AppContext.BaseDirectory, "wwwroot");
+        if (Directory.Exists(wwwroot))
+        {
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(wwwroot),
+                OnPrepareResponse = ctx =>
+                {
+                    if (ctx.File.Name.Equals("index.html", StringComparison.OrdinalIgnoreCase))
+                    {
+                        ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+                        ctx.Context.Response.Headers.Pragma = "no-cache";
+                        ctx.Context.Response.Headers.Expires = "0";
+                    }
+                    else
+                    {
+                        ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+                    }
+                }
+            });
+        }
+
         var fixturesPath = Path.Combine(System.AppContext.BaseDirectory, "fixtures");
         Directory.CreateDirectory(fixturesPath);
         app.UseStaticFiles(new StaticFileOptions
@@ -129,14 +208,17 @@ public class Startup
         app.UseAuthentication();
         app.UseAuthorization();
 
-        if (app.Environment.IsDevelopment())
+        app.UseSwagger();
+        app.UseSwaggerUI(c =>
         {
-            app.UseSwagger();
-            app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Seedarr API V1"));
-        }
+            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Seedarr REST API v1");
+            c.RoutePrefix = "swagger";
+            c.InjectStylesheet("/swagger-custom.css");
+        });
 
         app.MapControllers();
         app.MapHub<MessageHub>("/signalr/messages");
+        app.MapGet("/swagger-custom.css", () => Microsoft.AspNetCore.Http.Results.Content(SwaggerTheme.Css, "text/css")).AllowAnonymous();
 
         app.MapFallbackToFile("index.html");
     }
