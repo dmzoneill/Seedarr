@@ -7,6 +7,7 @@ import {
   TableIcon,
   GridIcon,
   FilterIcon,
+  SlidersIcon,
 } from "../../components/icons/UIIcons";
 import { ViewMode } from "./types";
 
@@ -34,6 +35,8 @@ interface TorrentToolbarProps {
   onBulkClear: () => void;
   isFilterCollapsed?: boolean;
   onToggleFilter?: () => void;
+  isQuickControlsOpen?: boolean;
+  onToggleQuickControls?: () => void;
 }
 
 export function TorrentToolbar({
@@ -57,6 +60,8 @@ export function TorrentToolbar({
   onBulkClear,
   isFilterCollapsed = false,
   onToggleFilter,
+  isQuickControlsOpen = false,
+  onToggleQuickControls,
 }: TorrentToolbarProps) {
   return (
     <div className="page-header">
@@ -78,6 +83,20 @@ export function TorrentToolbar({
         <button className="btn btn-success" onClick={onAddTorrent}>
           <PlusIcon size={13} /> Add Torrent
         </button>
+        {onToggleQuickControls && (
+          <button
+            type="button"
+            className={`btn btn-small quick-controls-toggle-btn${isQuickControlsOpen ? " active" : ""}`}
+            onClick={onToggleQuickControls}
+            title={isQuickControlsOpen ? "Hide Quick Controls (Q)" : "Show Quick Controls (Q)"}
+            aria-label="Toggle Quick Controls drawer"
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+          >
+            <SlidersIcon size={13} />
+            <span>Quick Controls</span>
+            <kbd className="quick-controls-kbd">Q</kbd>
+          </button>
+        )}
         {selectedCount > 0 && (
           <div className="bulk-actions">
             <span className="bulk-actions-count">{selectedCount} selected</span>
