@@ -519,9 +519,9 @@ body {
 }
 
 .topbar-search-input {
-  background: rgb(200 168 78 / 8%);
+  background: var(--accent-bg-subtle, rgba(200, 168, 78, 0.08));
   border: none;
-  border-radius: 3px;
+  border-radius: 4px;
   padding: 0.3rem 0.6rem;
   color: var(--text-primary);
   font-size: 0.85rem;
@@ -534,13 +534,13 @@ body {
 }
 
 .topbar-search-input:focus {
-  background: rgb(200 168 78 / 14%);
+  background: var(--accent-bg-medium, rgba(200, 168, 78, 0.14));
 }
 
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
 .topbar-btn {
@@ -552,17 +552,57 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 3px;
-  transition: color 0.15s;
+  border-radius: 4px;
+  transition: all 0.15s ease;
 }
 
 .topbar-btn:hover {
   color: var(--text-primary);
+  background-color: var(--bg-hover);
 }
 
 .topbar-heart {
-  color: #b5443a;
+  color: #f87171;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.topbar-heart:hover {
+  transform: scale(1.18);
+  opacity: 0.9;
+}
+
+.topbar-apikey-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--bg-hover, rgba(200, 168, 78, 0.08));
+  border: 1px solid var(--border, rgba(200, 168, 78, 0.2));
+  border-radius: 6px;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary, #c8b89a);
+  cursor: pointer;
+  font-family: monospace;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.topbar-apikey-btn:hover {
+  background: var(--bg-hover-elevated, rgba(200, 168, 78, 0.16));
+  border-color: var(--accent, #c8a84e);
+  color: var(--text-primary, #f1f5f9);
+}
+
+.topbar-apikey-btn:active {
+  transform: scale(0.98);
 }
 
 .topbar-getting-started {
