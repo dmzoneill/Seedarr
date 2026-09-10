@@ -45,6 +45,25 @@ public class NetworkController : Controller
         return Ok(addresses);
     }
 
+    [HttpGet("interfaces")]
+    public ActionResult<List<string>> GetInterfaces()
+    {
+        try
+        {
+            var ifaces = global::System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+                .Where(nic => nic.OperationalStatus == global::System.Net.NetworkInformation.OperationalStatus.Up &&
+                              nic.NetworkInterfaceType != global::System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                .Select(nic => nic.Name)
+                .Distinct()
+                .ToList();
+            return Ok(ifaces);
+        }
+        catch
+        {
+            return Ok(new List<string>());
+        }
+    }
+
     [HttpGet("diagnostics")]
     public ActionResult<NetworkDiagnostics> GetDiagnostics()
     {

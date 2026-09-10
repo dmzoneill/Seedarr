@@ -42,5 +42,23 @@ public interface IConfigFileProvider
 
     string PostgresPassword { get; }
 
+    string BindInterface { get; }
+
+    bool EnableVpnKillSwitch { get; }
+
+    bool ForceProxy { get; }
+
+    bool AnonymousMode { get; }
+
+    bool EnableIPv6 { get; }
+
+    int MaxConnectionsPerIp { get; }
+
+    int MaximumHalfOpenConnections { get; }
+
+    int PeerDscp { get; }
+
+    int PeerTos { get; }
+
     void SaveConfigDictionary(Dictionary<string, object> configValues);
 }

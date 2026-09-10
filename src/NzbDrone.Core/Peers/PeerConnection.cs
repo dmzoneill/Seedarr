@@ -65,11 +65,41 @@ public class PeerConnection : IDisposable
         LastActivity = DateTime.UtcNow;
     }
 
-    public PeerConnection(string host, int port)
+    public PeerConnection(string host, int port, IPAddress localBindAddress = null, int dscp = 0, int tos = 0)
     {
-        _client = new TcpClient();
+        if (localBindAddress != null)
+        {
+            var localEp = new IPEndPoint(localBindAddress, 0);
+            _client = new TcpClient(localEp);
+        }
+        else
+        {
+            _client = new TcpClient();
+        }
+
         try
         {
+            if (dscp > 0)
+            {
+                try
+                {
+                    _client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.TypeOfService, dscp << 2);
+                }
+                catch
+                {
+                }
+            }
+            else if (tos > 0)
+            {
+                try
+                {
+                    _client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.TypeOfService, tos);
+                }
+                catch
+                {
+                }
+            }
+
             _client.Connect(host, port);
             _networkStream = _client.GetStream();
             _activeStream = _networkStream;

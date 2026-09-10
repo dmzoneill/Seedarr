@@ -169,6 +169,18 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
         SharedValidator.RuleFor(c => c.MaxUploadSlots)
             .GreaterThanOrEqualTo(1);
 
+        SharedValidator.RuleFor(c => c.MaxConnectionsPerIp)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.MaximumHalfOpenConnections)
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.PeerDscp)
+            .InclusiveBetween(0, 63);
+
+        SharedValidator.RuleFor(c => c.PeerTos)
+            .InclusiveBetween(0, 255);
+
         SharedValidator.RuleFor(c => c.ProxyPort)
             .InclusiveBetween(1, 65535);
     }
