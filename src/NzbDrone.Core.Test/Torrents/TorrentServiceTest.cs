@@ -385,5 +385,48 @@ namespace NzbDrone.Core.Test.Torrents
 
             _repository.DidNotReceive().Update(Arg.Any<Torrent>());
         }
+
+        [Test]
+        public void UpdateUserFields_should_apply_user_fields_and_update_repository()
+        {
+            var existing = new Torrent
+            {
+                Id = 1,
+                Name = "Original",
+                Uploaded = 5000,
+                Downloaded = 10000,
+                Priority = 1
+            };
+            _repository.Get(1).Returns(existing);
+            _repository.Update(existing).Returns(existing);
+
+            var updates = new Torrent
+            {
+                Name = "Updated Name",
+                Priority = 5,
+                Uploaded = 0,
+                Downloaded = 0
+            };
+
+            var result = _subject.UpdateUserFields(1, updates);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Name, Is.EqualTo("Updated Name"));
+            Assert.That(result.Priority, Is.EqualTo(5));
+            Assert.That(result.Uploaded, Is.EqualTo(5000));
+            Assert.That(result.Downloaded, Is.EqualTo(10000));
+            _repository.Received(1).Update(existing);
+        }
+
+        [Test]
+        public void UpdateUserFields_should_return_null_when_not_found()
+        {
+            _repository.Get(99).Returns((Torrent)null);
+
+            var result = _subject.UpdateUserFields(99, new Torrent { Name = "Updated" });
+
+            Assert.That(result, Is.Null);
+            _repository.DidNotReceive().Update(Arg.Any<Torrent>());
+        }
     }
 }

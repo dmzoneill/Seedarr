@@ -16,6 +16,7 @@ public interface ITorrentService
     bool ExistsByInfoHash(string infoHash);
     Torrent Add(Torrent torrent);
     Torrent Update(Torrent torrent);
+    Torrent UpdateUserFields(int id, Torrent updates);
     void Delete(int id, bool deleteFiles = false);
     Torrent Recheck(int id);
     void MoveQueue(int id, string position);
@@ -72,6 +73,18 @@ public class TorrentService : ITorrentService
         var updated = _repository.Update(torrent);
         _eventAggregator.PublishEvent(new ModelEvent<Torrent>(updated, ModelAction.Updated));
         return updated;
+    }
+
+    public Torrent UpdateUserFields(int id, Torrent updates)
+    {
+        var existing = _repository.Get(id);
+        if (existing == null)
+        {
+            return null;
+        }
+
+        existing.ApplyUserFields(updates);
+        return Update(existing);
     }
 
     public void Delete(int id, bool deleteFiles = false)
