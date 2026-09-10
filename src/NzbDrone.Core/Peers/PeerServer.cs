@@ -51,7 +51,10 @@ public class PeerServer : BackgroundService
         _trackerEntryService = trackerEntryService;
         _eventLogService = eventLogService;
         _trackerMetricService = trackerMetricService;
-        _trackerAnnounceService = trackerAnnounceService;
+        _trackerAnnounceService = trackerAnnounceService ??
+            (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
+                ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
+                : null);
         _connectionSemaphore = new SemaphoreSlim(configService.MaxGlobalConnections);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -192,132 +195,7 @@ public class PeerServer : BackgroundService
     {
         try
         {
-            if (_trackerAnnounceService != null)
-            {
-                _trackerAnnounceService.AnnounceTorrent(torrent, force: false);
-                return;
-            }
-
-            var trackerEntries = _trackerEntryService.GetByTorrentId(torrent.Id);
-            if (trackerEntries.Count == 0 && !string.IsNullOrEmpty(torrent.TrackerUrl))
-            {
-                var entry = new TrackerEntry
-                {
-                    TorrentId = torrent.Id,
-                    Url = torrent.TrackerUrl,
-                    Tier = 1,
-                    Status = TrackerStatus.Working,
-                    Enabled = true
-                };
-                entry = _trackerEntryService.Add(entry);
-                trackerEntries = new System.Collections.Generic.List<TrackerEntry> { entry };
-            }
-
-            var enabledTrackers = trackerEntries.Where(t => t.Enabled && !string.IsNullOrWhiteSpace(t.Url)).ToList();
-            if (enabledTrackers.Count == 0)
-            {
-                return;
-            }
-
-            foreach (var entry in enabledTrackers)
-            {
-                var isFirstAnnounce = entry.TotalAnnounces == 0 || !entry.LastAnnounce.HasValue;
-                if (!isFirstAnnounce && entry.NextAnnounce.HasValue && entry.NextAnnounce.Value > DateTime.UtcNow)
-                {
-                    continue;
-                }
-
-                var eventName = isFirstAnnounce ? "started" : (torrent.Status == TorrentStatus.Stopped ? "stopped" : "regular");
-                _eventLogService.Info(
-                    torrent.Id,
-                    "Tracker",
-                    $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {torrent.Uploaded:N0} bytes, left: {Math.Max(0, torrent.TotalSize - torrent.Downloaded):N0} bytes)");
-
-                var request = new Trackers.TrackerAnnounceRequest
-                {
-                    InfoHash = torrent.InfoHash,
-                    PeerId = "-SD1000-000000000000",
-                    Port = _configService.ListeningPort,
-                    Uploaded = torrent.Uploaded,
-                    Downloaded = torrent.Downloaded,
-                    Left = Math.Max(0, torrent.TotalSize - torrent.Downloaded),
-                    Event = isFirstAnnounce ? "started" : null,
-                    TrackerUrl = entry.Url,
-                    Compact = true,
-                    NumWant = 50
-                };
-
-                var announceList = new System.Collections.Generic.List<System.Collections.Generic.List<string>>
-                {
-                    new() { entry.Url }
-                };
-
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                var response = _multiTracker.Announce(request, announceList);
-                sw.Stop();
-
-                _trackerMetricService?.RecordAnnounce(
-                    entry.Url,
-                    torrent.Id,
-                    torrent.Uploaded,
-                    torrent.Downloaded,
-                    Math.Max(0, torrent.TotalSize - torrent.Downloaded),
-                    sw.ElapsedMilliseconds,
-                    response.Success,
-                    response.Complete,
-                    response.Incomplete,
-                    response.Peers?.Count ?? 0,
-                    response.FailureReason);
-
-                entry.TotalAnnounces++;
-                entry.LastResponseTime = sw.ElapsedMilliseconds;
-
-                if (response.Success)
-                {
-                    entry.Status = TrackerStatus.Working;
-                    entry.Seeders = response.Complete;
-                    entry.Leechers = response.Incomplete;
-                    entry.LastAnnounce = DateTime.UtcNow;
-                    var interval = response.Interval > 0 ? response.Interval : (_configService.AnnounceIntervalSeconds > 0 ? _configService.AnnounceIntervalSeconds : 1800);
-                    entry.AnnounceInterval = interval;
-                    entry.MinAnnounceInterval = response.MinInterval > 0 ? response.MinInterval : 900;
-                    entry.NextAnnounce = DateTime.UtcNow.AddSeconds(interval);
-                    entry.SuccessfulAnnounces++;
-                    entry.ConsecutiveFailures = 0;
-                    entry.ErrorMessage = null;
-                    _trackerEntryService.Update(entry);
-
-                    _eventLogService.Info(
-                        torrent.Id,
-                        "Tracker",
-                        $"Tracker announce succeeded: {entry.Url} -> Seeders: {response.Complete}, Leechers: {response.Incomplete}, Peers: {response.Peers.Count}, Interval: {interval}s ({sw.ElapsedMilliseconds}ms)");
-
-                    if (response.Peers.Count > 0)
-                    {
-                        _peerDiscovery.AddPeers(torrent.InfoHash, response.Peers, "tracker");
-                        var peerSample = string.Join(", ", response.Peers.Take(5).Select(p => $"{p.Ip}:{p.Port}"));
-                        _eventLogService.Info(
-                            torrent.Id,
-                            "Peers",
-                            $"Discovered {response.Peers.Count} peer candidate(s) from {entry.Url} ({peerSample}{(response.Peers.Count > 5 ? ", ..." : "")})");
-                    }
-                }
-                else
-                {
-                    entry.Status = TrackerStatus.Failed;
-                    entry.ConsecutiveFailures++;
-                    entry.ErrorMessage = response.FailureReason;
-                    entry.LastErrorTime = DateTime.UtcNow;
-                    var backoffSeconds = Math.Min(1800, 60 * Math.Pow(2, Math.Min(5, entry.ConsecutiveFailures)));
-                    entry.NextAnnounce = DateTime.UtcNow.AddSeconds(backoffSeconds);
-                    _trackerEntryService.Update(entry);
-
-                    _eventLogService.Warn(
-                        torrent.Id,
-                        "Tracker",
-                        $"Tracker announce failed: {entry.Url} -> {response.FailureReason ?? "Unreachable"} (failure #{entry.ConsecutiveFailures}, next retry in {(int)backoffSeconds}s)");
-                }
-            }
+            _trackerAnnounceService?.AnnounceTorrent(torrent, force: false);
         }
         catch (Exception ex)
         {

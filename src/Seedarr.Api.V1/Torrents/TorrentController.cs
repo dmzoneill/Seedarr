@@ -229,14 +229,10 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                 TorrentId = torrentId,
                 Url = clean,
                 Tier = resource.Tier > 0 ? resource.Tier : 1,
-                Status = TrackerStatus.Working,
+                Status = TrackerStatus.Unknown,
                 Enabled = true,
                 Seeders = 0,
                 Leechers = 0,
-                LastAnnounce = DateTime.UtcNow,
-                NextAnnounce = DateTime.UtcNow,
-                TotalAnnounces = 1,
-                SuccessfulAnnounces = 1,
                 AnnounceInterval = 1800,
                 MinAnnounceInterval = 900
             };
@@ -258,7 +254,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         TriggerAnnounceInternal(torrent);
         _eventLogService.Info(torrentId, "Tracker", $"Added tracker {clean} and triggered announce");
 
-        return Ok(TorrentResourceMapper.ToTrackerResource(entry));
+        var updatedEntry = _trackerEntryService.GetByTorrentId(torrentId).FirstOrDefault(t => t.Id == entry.Id) ?? entry;
+
+        return Ok(TorrentResourceMapper.ToTrackerResource(updatedEntry));
     }
 
     [HttpDelete("{torrentId:int}/trackers/{trackerId:int}")]
@@ -425,24 +423,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
         else
         {
-            var trackers = _trackerEntryService.GetByTorrentId(torrent.Id);
-            foreach (var tracker in trackers)
-            {
-                if (!tracker.Enabled)
-                {
-                    continue;
-                }
-
-                tracker.NextAnnounce = DateTime.UtcNow;
-                tracker.LastAnnounce = DateTime.UtcNow;
-                tracker.TotalAnnounces++;
-                tracker.SuccessfulAnnounces++;
-                tracker.Status = TrackerStatus.Working;
-                tracker.ConsecutiveFailures = 0;
-                _trackerEntryService.Update(tracker);
-            }
-
-            _eventLogService.Info(torrent.Id, "Tracker", $"Announce triggered for {trackers.Count(t => t.Enabled)} enabled tracker(s)");
+            _logger.Warn("TrackerAnnounceService is not available; skipping announce for torrent {0}", torrent.Id);
+            results = new List<TrackerAnnounceResult>();
         }
 
         torrent.LastActive = DateTime.UtcNow;
@@ -468,16 +450,18 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         var results = TriggerAnnounceInternal(torrent);
 
         var trackers = _trackerEntryService.GetByTorrentId(id);
+        var successfulCount = results.Count(r => r.Success);
+        var failedCount = results.Count(r => !r.Success);
         return Ok(new
         {
-            success = true,
+            success = results.Count == 0 || successfulCount > 0,
             torrentId = id,
             torrentName = torrent.Name,
             trackersCount = trackers.Count(t => t.Enabled),
-            successfulAnnounces = results.Count(r => r.Success),
-            failedAnnounces = results.Count(r => !r.Success),
+            successfulAnnounces = successfulCount,
+            failedAnnounces = failedCount,
             results,
-            message = $"Announce completed for {results.Count} tracker(s): {results.Count(r => r.Success)} succeeded, {results.Count(r => !r.Success)} failed"
+            message = $"Announce completed for {results.Count} tracker(s): {successfulCount} succeeded, {failedCount} failed"
         });
     }
 
@@ -559,10 +543,10 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         var res = results.FirstOrDefault();
         return Ok(new
         {
-            success = res?.Success ?? true,
+            success = res?.Success ?? false,
             message = res != null
                 ? (res.Success ? $"Announced to {target.Url} successfully ({res.Seeders} seeders, {res.Leechers} leechers, {res.PeersDiscovered} peers)" : $"Announce failed for {target.Url}: {res.FailureReason}")
-                : $"Announce queued for {target.Url}",
+                : $"Announce skipped for {target.Url}",
             result = res
         });
     }

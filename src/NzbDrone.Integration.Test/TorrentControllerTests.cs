@@ -210,4 +210,124 @@ public class TorrentControllerTests : IntegrationTestBase
         Assert.That(putDoc.RootElement.GetProperty("leechers").GetInt32(), Is.EqualTo(0));
         Assert.That(putDoc.RootElement.GetProperty("sessionUploaded").GetInt64(), Is.EqualTo(0L));
     }
+
+    [Test]
+    public async Task Announce_with_builtin_tracker_server_successfully_announces_and_updates_status()
+    {
+        // 1. Enable built-in tracker server
+        var configResponse = await GetAsync("/api/v1/config/trackerserver");
+        Assert.That(configResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var configJson = await configResponse.Content.ReadAsStringAsync();
+        using var configDoc = Deserialize<JsonDocument>(configJson);
+        var trackerPort = configDoc.RootElement.TryGetProperty("trackerHttpPort", out var portProp) ? portProp.GetInt32() : 9696;
+
+        var trackerConfigUpdate = new Dictionary<string, object>
+        {
+            ["trackerServerEnabled"] = true,
+            ["trackerHttpEnabled"] = true,
+            ["trackerHttpPort"] = trackerPort,
+            ["trackerBindAddress"] = "127.0.0.1",
+            ["trackerAnnounceInterval"] = 1800
+        };
+        var putConfigResponse = await PutJsonAsync("/api/v1/config/trackerserver", trackerConfigUpdate);
+        Assert.That(putConfigResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        // Wait brief moment for listener to bind
+        await Task.Delay(200);
+
+        // 2. Create a torrent
+        var createPayload = new Dictionary<string, object>
+        {
+            ["name"] = "Builtin Tracker Test Torrent",
+            ["infoHash"] = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2",
+            ["totalSize"] = 1000000L
+        };
+        var createResponse = await PostJsonAsync("/api/v1/torrent", createPayload);
+        Assert.That(createResponse.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var createJson = await createResponse.Content.ReadAsStringAsync();
+        using var createDoc = Deserialize<JsonDocument>(createJson);
+        var torrentId = createDoc.RootElement.GetProperty("id").GetInt32();
+
+        // 3. Add tracker pointing to built-in tracker server
+        var trackerUrl = $"http://127.0.0.1:{trackerPort}/announce";
+        var addTrackerPayload = new Dictionary<string, object>
+        {
+            ["url"] = trackerUrl,
+            ["tier"] = 1
+        };
+        var addTrackerResponse = await PostJsonAsync($"/api/v1/torrent/{torrentId}/trackers", addTrackerPayload);
+        Assert.That(addTrackerResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        // 4. Trigger announce
+        var announceResponse = await Client.PostAsync($"/api/v1/torrent/{torrentId}/announce", null);
+        Assert.That(announceResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var announceJson = await announceResponse.Content.ReadAsStringAsync();
+        using var announceDoc = Deserialize<JsonDocument>(announceJson);
+        Assert.That(announceDoc.RootElement.GetProperty("successfulAnnounces").GetInt32(), Is.GreaterThanOrEqualTo(1));
+
+        // 5. Verify tracker entry state in torrent resource
+        var getTorrentResponse = await GetAsync($"/api/v1/torrent/{torrentId}");
+        Assert.That(getTorrentResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var torrentJson = await getTorrentResponse.Content.ReadAsStringAsync();
+        using var torrentDoc = Deserialize<JsonDocument>(torrentJson);
+
+        var trackersArray = torrentDoc.RootElement.GetProperty("trackers");
+        Assert.That(trackersArray.GetArrayLength(), Is.GreaterThanOrEqualTo(1));
+
+        var tracker = trackersArray[0];
+        Assert.That(tracker.GetProperty("status").GetString(), Is.EqualTo("Working"));
+        Assert.That(tracker.GetProperty("successfulAnnounces").GetInt32(), Is.GreaterThanOrEqualTo(1));
+        Assert.That(tracker.GetProperty("consecutiveFailures").GetInt32(), Is.EqualTo(0));
+        Assert.That(tracker.GetProperty("lastAnnounce").GetString(), Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public async Task Announce_with_unreachable_tracker_records_failure_and_increments_consecutive_failures()
+    {
+        // 1. Create a torrent
+        var createPayload = new Dictionary<string, object>
+        {
+            ["name"] = "Unreachable Tracker Test Torrent",
+            ["infoHash"] = "f1e2d3c4b5a6f1e2d3c4b5a6f1e2d3c4b5a6f1e2",
+            ["totalSize"] = 500000L
+        };
+        var createResponse = await PostJsonAsync("/api/v1/torrent", createPayload);
+        Assert.That(createResponse.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        var createJson = await createResponse.Content.ReadAsStringAsync();
+        using var createDoc = Deserialize<JsonDocument>(createJson);
+        var torrentId = createDoc.RootElement.GetProperty("id").GetInt32();
+
+        // 2. Add unreachable tracker
+        var unreachableUrl = "http://127.0.0.1:59999/announce";
+        var addTrackerPayload = new Dictionary<string, object>
+        {
+            ["url"] = unreachableUrl,
+            ["tier"] = 1
+        };
+        var addTrackerResponse = await PostJsonAsync($"/api/v1/torrent/{torrentId}/trackers", addTrackerPayload);
+        Assert.That(addTrackerResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        // 3. Trigger announce
+        var announceResponse = await Client.PostAsync($"/api/v1/torrent/{torrentId}/announce", null);
+        Assert.That(announceResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var announceJson = await announceResponse.Content.ReadAsStringAsync();
+        using var announceDoc = Deserialize<JsonDocument>(announceJson);
+        Assert.That(announceDoc.RootElement.GetProperty("failedAnnounces").GetInt32(), Is.GreaterThanOrEqualTo(1));
+
+        // 4. Verify tracker entry state reflects failure honestly
+        var getTorrentResponse = await GetAsync($"/api/v1/torrent/{torrentId}");
+        Assert.That(getTorrentResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var torrentJson = await getTorrentResponse.Content.ReadAsStringAsync();
+        using var torrentDoc = Deserialize<JsonDocument>(torrentJson);
+
+        var trackersArray = torrentDoc.RootElement.GetProperty("trackers");
+        Assert.That(trackersArray.GetArrayLength(), Is.GreaterThanOrEqualTo(1));
+
+        var tracker = trackersArray[0];
+        Assert.That(tracker.GetProperty("status").GetString(), Is.EqualTo("Failed"));
+        Assert.That(tracker.GetProperty("consecutiveFailures").GetInt32(), Is.GreaterThanOrEqualTo(1));
+        Assert.That(tracker.GetProperty("errorMessage").GetString(), Is.Not.Null.And.Not.Empty);
+    }
 }
