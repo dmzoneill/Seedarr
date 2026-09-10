@@ -21,11 +21,14 @@ export function QuickSettingsDrawer({
       <div className="quick-settings-drawer-header">
         <div className="quick-settings-drawer-title-area">
           <div className="quick-settings-drawer-heading">
-            <span className="quick-settings-drawer-badge">⚡ Quick Controls</span>
+            <span className="quick-settings-drawer-badge">
+              ⚡ Quick Controls
+            </span>
             <span className="quick-settings-hotkey-badge">Hotkey: Q</span>
           </div>
           <p className="quick-settings-drawer-subtitle">
-            Live transfer limits, queue concurrency, protocol swarms & seeding automation
+            Live transfer limits, queue concurrency, protocol swarms & seeding
+            automation
           </p>
         </div>
         <div className="quick-settings-drawer-actions">

@@ -2,7 +2,9 @@
 body {
   background-color: #222018 !important;
   color: #f8f6f0 !important;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif !important;
   margin: 0;
   padding: 0;
 }
@@ -43,7 +45,7 @@ body {
   font-weight: 700 !important;
 }
 
-.swagger-ui .topbar .download-url-wrapper input[type=text] {
+.swagger-ui .topbar .download-url-wrapper input[type="text"] {
   background-color: #2a2620 !important;
   border: 1px solid #3a352e !important;
   color: #f8f6f0 !important;
@@ -267,10 +269,10 @@ body {
 }
 
 /* Form Controls */
-.swagger-ui input[type=text],
-.swagger-ui input[type=password],
-.swagger-ui input[type=search],
-.swagger-ui input[type=email],
+.swagger-ui input[type="text"],
+.swagger-ui input[type="password"],
+.swagger-ui input[type="search"],
+.swagger-ui input[type="email"],
 .swagger-ui select,
 .swagger-ui textarea {
   background-color: #2a2620 !important;

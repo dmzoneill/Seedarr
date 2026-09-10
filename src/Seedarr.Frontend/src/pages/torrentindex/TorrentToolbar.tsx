@@ -71,7 +71,9 @@ export function TorrentToolbar({
             type="button"
             className={`btn btn-small toggle-filter-btn${isFilterCollapsed ? " active" : ""}`}
             onClick={onToggleFilter}
-            title={isFilterCollapsed ? "Show filter sidebar" : "Hide filter sidebar"}
+            title={
+              isFilterCollapsed ? "Show filter sidebar" : "Hide filter sidebar"
+            }
             aria-label="Toggle filter sidebar"
             style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}
           >
@@ -88,7 +90,11 @@ export function TorrentToolbar({
             type="button"
             className={`btn btn-small quick-controls-toggle-btn${isQuickControlsOpen ? " active" : ""}`}
             onClick={onToggleQuickControls}
-            title={isQuickControlsOpen ? "Hide Quick Controls (Q)" : "Show Quick Controls (Q)"}
+            title={
+              isQuickControlsOpen
+                ? "Hide Quick Controls (Q)"
+                : "Show Quick Controls (Q)"
+            }
             aria-label="Toggle Quick Controls drawer"
             style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
           >

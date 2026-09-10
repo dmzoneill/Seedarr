@@ -326,7 +326,13 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                     <td>{formatDate(tracker.lastAnnounce)}</td>
                     <td>{formatDate(tracker.nextAnnounce)}</td>
                     <td style={{ textAlign: "right" }}>
-                      <div style={{ display: "inline-flex", gap: "0.35rem", justifyContent: "flex-end" }}>
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          gap: "0.35rem",
+                          justifyContent: "flex-end",
+                        }}
+                      >
                         <button
                           className="btn btn-sm btn-primary"
                           style={{
@@ -338,10 +344,16 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                               { torrentId: torrent.id, trackerId: tracker.id },
                               {
                                 onSuccess: (data) => {
-                                  showToast(data.message || "Announce queued", "success");
+                                  showToast(
+                                    data.message || "Announce queued",
+                                    "success",
+                                  );
                                 },
                                 onError: (err) => {
-                                  showToast(`Announce failed: ${err.message}`, "error");
+                                  showToast(
+                                    `Announce failed: ${err.message}`,
+                                    "error",
+                                  );
                                 },
                               },
                             );

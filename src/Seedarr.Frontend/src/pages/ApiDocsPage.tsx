@@ -63,7 +63,8 @@ function ApiDocsPage() {
               marginTop: "0.2rem",
             }}
           >
-            Interactive REST API explorer, parameter definitions, and endpoint schemas
+            Interactive REST API explorer, parameter definitions, and endpoint
+            schemas
           </div>
         </div>
 

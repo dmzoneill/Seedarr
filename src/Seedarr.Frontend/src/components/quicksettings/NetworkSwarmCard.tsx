@@ -8,10 +8,12 @@ import {
 } from "../../api/hooks";
 
 export function NetworkSwarmCard() {
-  const { data: networkConfig, isLoading: isNetworkLoading } = useNetworkConfig();
+  const { data: networkConfig, isLoading: isNetworkLoading } =
+    useNetworkConfig();
   const saveNetworkConfig = useSaveNetworkConfig();
 
-  const { data: bitTorrentConfig, isLoading: isBtLoading } = useBitTorrentConfig();
+  const { data: bitTorrentConfig, isLoading: isBtLoading } =
+    useBitTorrentConfig();
   const saveBitTorrentConfig = useSaveBitTorrentConfig();
 
   const { data: networkStatus } = useNetworkStatus();
@@ -41,7 +43,9 @@ export function NetworkSwarmCard() {
     });
   };
 
-  const handleToggleBtFlag = (flag: "enableDht" | "enablePex" | "enableLpd") => {
+  const handleToggleBtFlag = (
+    flag: "enableDht" | "enablePex" | "enableLpd",
+  ) => {
     if (!bitTorrentConfig) return;
     saveBitTorrentConfig.mutate({
       ...bitTorrentConfig,
@@ -55,7 +59,9 @@ export function NetworkSwarmCard() {
         <div className="quick-settings-card-header">
           <span className="quick-settings-card-title">Network & Swarms</span>
         </div>
-        <div className="quick-settings-loading">Loading network settings...</div>
+        <div className="quick-settings-loading">
+          Loading network settings...
+        </div>
       </div>
     );
   }
@@ -113,7 +119,9 @@ export function NetworkSwarmCard() {
             <select
               className="quick-settings-select"
               value={perTorrentConns}
-              onChange={(e) => handlePerTorrentConnChange(Number(e.target.value))}
+              onChange={(e) =>
+                handlePerTorrentConnChange(Number(e.target.value))
+              }
             >
               <option value={20}>20</option>
               <option value={50}>50</option>
@@ -126,7 +134,9 @@ export function NetworkSwarmCard() {
 
         {/* Swarm Protocol Chips (DHT, PEX, LPD) */}
         <div className="quick-settings-protocols-section">
-          <span className="quick-settings-sublabel">Swarm Discovery Protocols:</span>
+          <span className="quick-settings-sublabel">
+            Swarm Discovery Protocols:
+          </span>
           <div className="quick-settings-protocol-chips">
             <button
               type="button"
@@ -160,8 +170,13 @@ export function NetworkSwarmCard() {
 
         {/* Status info */}
         <div className="quick-settings-network-info">
-          <span>IP: {networkStatus?.externalIp || networkStatus?.localIp || "127.0.0.1"}</span>
-          <span>UPnP: {networkConfig?.upnpEnabled ? "Active" : "Disabled"}</span>
+          <span>
+            IP:{" "}
+            {networkStatus?.externalIp || networkStatus?.localIp || "127.0.0.1"}
+          </span>
+          <span>
+            UPnP: {networkConfig?.upnpEnabled ? "Active" : "Disabled"}
+          </span>
         </div>
       </div>
     </div>

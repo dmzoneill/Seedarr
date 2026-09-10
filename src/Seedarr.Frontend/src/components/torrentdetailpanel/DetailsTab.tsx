@@ -30,7 +30,10 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
   );
 
   const meta = historyMatch?.metadata;
-  const posterUrl = meta?.posterUrl || torrent.posterUrl || (torrent.id ? `/api/v1/mediacover/${torrent.id}/poster.jpg` : undefined);
+  const posterUrl =
+    meta?.posterUrl ||
+    torrent.posterUrl ||
+    (torrent.id ? `/api/v1/mediacover/${torrent.id}/poster.jpg` : undefined);
   const mediaTitle = meta?.title || torrent.mediaTitle || torrent.name;
   const mediaYear = meta?.year || torrent.year;
   const mediaGenres = meta?.genres?.length ? meta.genres : torrent.genres;
@@ -71,7 +74,11 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
       {/* Arr & Metadata Integration Banner */}
-      {(arrLink || meta || prowlarrUrl || torrent.mediaTitle || torrent.posterUrl) && (
+      {(arrLink ||
+        meta ||
+        prowlarrUrl ||
+        torrent.mediaTitle ||
+        torrent.posterUrl) && (
         <div
           style={{
             display: "flex",
@@ -102,8 +109,7 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
             )}
             <div>
               <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
-                {mediaTitle}{" "}
-                {mediaYear ? `(${mediaYear})` : ""}
+                {mediaTitle} {mediaYear ? `(${mediaYear})` : ""}
               </div>
               {mediaGenres && mediaGenres.length > 0 && (
                 <div

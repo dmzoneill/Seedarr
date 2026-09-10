@@ -385,7 +385,13 @@ export function AddTorrentForm({
           />
 
           {files.length > 0 && (
-            <div style={{ marginTop: "1rem", width: "100%", maxWidth: isModal ? "100%" : "640px" }}>
+            <div
+              style={{
+                marginTop: "1rem",
+                width: "100%",
+                maxWidth: isModal ? "100%" : "640px",
+              }}
+            >
               <div
                 style={{
                   fontSize: "0.8rem",
@@ -546,7 +552,10 @@ export function AddTorrentForm({
                     : "1px solid rgba(239, 68, 68, 0.6)"
                   : "1px solid var(--border-light, rgba(255, 255, 255, 0.15))",
                 backgroundColor: "var(--bg-primary)",
-                boxShadow: magnetLink.trim() && isMagnetValid ? "0 0 0 1px rgba(34, 197, 94, 0.2)" : "none",
+                boxShadow:
+                  magnetLink.trim() && isMagnetValid
+                    ? "0 0 0 1px rgba(34, 197, 94, 0.2)"
+                    : "none",
                 transition: "all 0.2s ease",
               }}
             >
@@ -567,7 +576,8 @@ export function AddTorrentForm({
                   outline: "none",
                   boxShadow: "none",
                   color: "inherit",
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                  fontFamily:
+                    "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
                   fontSize: "0.85rem",
                   lineHeight: "1.45",
                   resize: isModal ? "vertical" : "none",
@@ -591,7 +601,9 @@ export function AddTorrentForm({
               {magnetLink.trim() && (
                 <span
                   style={{
-                    color: isMagnetValid ? "var(--success, #22c55e)" : "var(--danger, #ef4444)",
+                    color: isMagnetValid
+                      ? "var(--success, #22c55e)"
+                      : "var(--danger, #ef4444)",
                     fontWeight: 600,
                   }}
                 >
@@ -619,28 +631,47 @@ export function AddTorrentForm({
               >
                 {magnetPreview?.name && (
                   <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <span style={{ color: "var(--text-muted)", minWidth: "75px" }}>Name:</span>
-                    <span style={{ fontWeight: 600, color: "var(--text-primary)", wordBreak: "break-all" }}>
+                    <span
+                      style={{ color: "var(--text-muted)", minWidth: "75px" }}
+                    >
+                      Name:
+                    </span>
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        color: "var(--text-primary)",
+                        wordBreak: "break-all",
+                      }}
+                    >
                       {magnetPreview.name}
                     </span>
                   </div>
                 )}
                 {magnetPreview?.hash && (
                   <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <span style={{ color: "var(--text-muted)", minWidth: "75px" }}>Info Hash:</span>
+                    <span
+                      style={{ color: "var(--text-muted)", minWidth: "75px" }}
+                    >
+                      Info Hash:
+                    </span>
                     <span style={{ fontFamily: "monospace", color: "#60a5fa" }}>
                       {magnetPreview.hash}
                     </span>
                   </div>
                 )}
-                {magnetPreview?.trackerCount !== undefined && magnetPreview.trackerCount > 0 && (
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
-                    <span style={{ color: "var(--text-muted)", minWidth: "75px" }}>Trackers:</span>
-                    <span style={{ color: "#4ade80" }}>
-                      {magnetPreview.trackerCount} bundled tracker(s)
-                    </span>
-                  </div>
-                )}
+                {magnetPreview?.trackerCount !== undefined &&
+                  magnetPreview.trackerCount > 0 && (
+                    <div style={{ display: "flex", gap: "0.5rem" }}>
+                      <span
+                        style={{ color: "var(--text-muted)", minWidth: "75px" }}
+                      >
+                        Trackers:
+                      </span>
+                      <span style={{ color: "#4ade80" }}>
+                        {magnetPreview.trackerCount} bundled tracker(s)
+                      </span>
+                    </div>
+                  )}
               </div>
             )}
           </div>

@@ -33,11 +33,15 @@ export function QueueConcurrencyCard() {
 
   // Compute live active downloads and seeds
   const activeDownloads = (torrents ?? []).filter(
-    (t) => (t.status === "Downloading" || (t.downloadSpeed ?? 0) > 0) && t.status !== "Stopped"
+    (t) =>
+      (t.status === "Downloading" || (t.downloadSpeed ?? 0) > 0) &&
+      t.status !== "Stopped",
   ).length;
 
   const activeSeeds = (torrents ?? []).filter(
-    (t) => (t.status === "Seeding" || (t.uploadSpeed ?? 0) > 0) && t.status !== "Stopped"
+    (t) =>
+      (t.status === "Seeding" || (t.uploadSpeed ?? 0) > 0) &&
+      t.status !== "Stopped",
   ).length;
 
   const handleAdjustDownloads = (delta: number) => {
@@ -135,7 +139,8 @@ export function QueueConcurrencyCard() {
             <span>Ignore slow / stalled transfers in queue</span>
           </label>
           <div className="quick-settings-subtext">
-            Torrents transferring under 10 KB/s do not consume concurrency slots.
+            Torrents transferring under 10 KB/s do not consume concurrency
+            slots.
           </div>
         </div>
       </div>

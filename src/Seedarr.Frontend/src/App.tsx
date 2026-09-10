@@ -114,7 +114,12 @@ function LegacyTorrentRedirect() {
 
 function LegacyClientRedirect() {
   const { id } = useParams<{ id: string }>();
-  return <Navigate to={id ? `/activity/client/${id}` : "/activity/history"} replace />;
+  return (
+    <Navigate
+      to={id ? `/activity/client/${id}` : "/activity/history"}
+      replace
+    />
+  );
 }
 
 function App() {
@@ -127,12 +132,13 @@ function App() {
   const [showAddTorrentModal, setShowAddTorrentModal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [showGettingStartedModal, setShowGettingStartedModal] = useState<boolean>(() => {
-    if (typeof window !== "undefined" && window.navigator?.webdriver) {
-      return false;
-    }
-    return localStorage.getItem(STORAGE_KEY_HIDE_GUIDE) !== "true";
-  });
+  const [showGettingStartedModal, setShowGettingStartedModal] =
+    useState<boolean>(() => {
+      if (typeof window !== "undefined" && window.navigator?.webdriver) {
+        return false;
+      }
+      return localStorage.getItem(STORAGE_KEY_HIDE_GUIDE) !== "true";
+    });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("seedarr_sidebar_collapsed") === "true";
   });
@@ -276,10 +282,20 @@ function App() {
             type="button"
             className="sidebar-toggle-btn"
             onClick={toggleSidebar}
-            title={isSidebarCollapsed ? "Expand sidebar (Alt+M)" : "Collapse sidebar (Alt+M)"}
-            aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={
+              isSidebarCollapsed
+                ? "Expand sidebar (Alt+M)"
+                : "Collapse sidebar (Alt+M)"
+            }
+            aria-label={
+              isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
           >
-            {isSidebarCollapsed ? <ChevronsRightIcon size={14} /> : <ChevronsLeftIcon size={14} />}
+            {isSidebarCollapsed ? (
+              <ChevronsRightIcon size={14} />
+            ) : (
+              <ChevronsLeftIcon size={14} />
+            )}
           </button>
         </div>
         <nav className="sidebar-nav">
@@ -289,7 +305,8 @@ function App() {
             className="sidebar-nav-item"
             title={t("nav.dashboard", undefined, "Dashboard")}
           >
-            <DashboardIcon /> <span>{t("nav.dashboard", undefined, "Dashboard")}</span>
+            <DashboardIcon />{" "}
+            <span>{t("nav.dashboard", undefined, "Dashboard")}</span>
           </NavLink>
 
           {/* Torrents Top-Level with Live Torrents & Add Torrent */}
@@ -298,7 +315,8 @@ function App() {
             className={`sidebar-nav-item ${isTorrentsRoute ? "active" : ""}`}
             title={t("nav.torrents", undefined, "Torrents")}
           >
-            <TorrentIcon /> <span>{t("nav.torrents", undefined, "Torrents")}</span>
+            <TorrentIcon />{" "}
+            <span>{t("nav.torrents", undefined, "Torrents")}</span>
           </NavLink>
           {isTorrentsRoute && (
             <>
@@ -308,7 +326,8 @@ function App() {
                 className="sidebar-nav-item sidebar-nav-sub"
                 title={t("nav.history", undefined, "History")}
               >
-                <TorrentIcon /> <span>{t("nav.torrents", undefined, "Torrents")}</span>
+                <TorrentIcon />{" "}
+                <span>{t("nav.torrents", undefined, "Torrents")}</span>
               </NavLink>
               <NavLink
                 to="/torrents/add"
@@ -327,7 +346,8 @@ function App() {
             className={`sidebar-nav-item ${isActivityRoute ? "active" : ""}`}
             title={t("nav.activity", undefined, "Activity")}
           >
-            <ActivityIcon /> <span>{t("nav.activity", undefined, "Activity")}</span>
+            <ActivityIcon />{" "}
+            <span>{t("nav.activity", undefined, "Activity")}</span>
           </NavLink>
           {isActivityRoute && (
             <>
@@ -336,7 +356,8 @@ function App() {
                 className="sidebar-nav-item sidebar-nav-sub"
                 title={t("nav.torrents", undefined, "Torrents")}
               >
-                <HistoryIcon /> <span>{t("nav.history", undefined, "History")}</span>
+                <HistoryIcon />{" "}
+                <span>{t("nav.history", undefined, "History")}</span>
               </NavLink>
               {downloadClients
                 ?.filter((c) => c.enable)
@@ -355,7 +376,8 @@ function App() {
                 className="sidebar-nav-item sidebar-nav-sub"
                 title={t("nav.metrics", undefined, "Metrics")}
               >
-                <StatsIcon /> <span>{t("nav.metrics", undefined, "Metrics")}</span>
+                <StatsIcon />{" "}
+                <span>{t("nav.metrics", undefined, "Metrics")}</span>
               </NavLink>
             </>
           )}
@@ -366,7 +388,8 @@ function App() {
             className={`sidebar-nav-item ${isTrackerRoute ? "active" : ""}`}
             title={t("nav.tracker", undefined, "Tracker")}
           >
-            <TrackerIcon /> <span>{t("nav.tracker", undefined, "Tracker")}</span>
+            <TrackerIcon />{" "}
+            <span>{t("nav.tracker", undefined, "Tracker")}</span>
           </NavLink>
           {isTrackerRoute && (
             <>
@@ -407,7 +430,9 @@ function App() {
                 }`}
                 title={t("nav.trackerMetrics", undefined, "Tracker Metrics")}
               >
-                <span>{t("nav.trackerMetrics", undefined, "Tracker Metrics")}</span>
+                <span>
+                  {t("nav.trackerMetrics", undefined, "Tracker Metrics")}
+                </span>
               </NavLink>
             </>
           )}
@@ -416,28 +441,32 @@ function App() {
             className="sidebar-nav-item"
             title={t("nav.peerMap", undefined, "Peer Map")}
           >
-            <PeerMapIcon /> <span>{t("nav.peerMap", undefined, "Peer Map")}</span>
+            <PeerMapIcon />{" "}
+            <span>{t("nav.peerMap", undefined, "Peer Map")}</span>
           </NavLink>
           <NavLink
             to="/schedule"
             className="sidebar-nav-item"
             title={t("nav.schedule", undefined, "Schedule")}
           >
-            <ScheduleIcon /> <span>{t("nav.schedule", undefined, "Schedule")}</span>
+            <ScheduleIcon />{" "}
+            <span>{t("nav.schedule", undefined, "Schedule")}</span>
           </NavLink>
           <NavLink
             to="/statistics"
             className="sidebar-nav-item"
             title={t("nav.statistics", undefined, "Statistics")}
           >
-            <StatsIcon /> <span>{t("nav.statistics", undefined, "Statistics")}</span>
+            <StatsIcon />{" "}
+            <span>{t("nav.statistics", undefined, "Statistics")}</span>
           </NavLink>
           <NavLink
             to="/settings/general"
             className={`sidebar-nav-item ${isSettingsRoute ? "active" : ""}`}
             title={t("nav.settings", undefined, "Settings")}
           >
-            <SettingsIcon /> <span>{t("nav.settings", undefined, "Settings")}</span>
+            <SettingsIcon />{" "}
+            <span>{t("nav.settings", undefined, "Settings")}</span>
           </NavLink>
           {isSettingsRoute &&
             settingsSubItems.map((item) => (
@@ -473,12 +502,19 @@ function App() {
 
       <div className="main-wrapper">
         <header className="topbar">
-          <div className="topbar-left" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <div
+            className="topbar-left"
+            style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+          >
             <button
               type="button"
               className="topbar-btn topbar-sidebar-toggle"
               onClick={toggleSidebar}
-              title={isSidebarCollapsed ? "Expand sidebar (Alt+M)" : "Collapse sidebar (Alt+M)"}
+              title={
+                isSidebarCollapsed
+                  ? "Expand sidebar (Alt+M)"
+                  : "Collapse sidebar (Alt+M)"
+              }
               aria-label="Toggle navigation sidebar"
             >
               <MenuIcon size={16} />
@@ -492,12 +528,20 @@ function App() {
                 alignItems: "center",
                 gap: "0.5rem",
               }}
-              title={t("topbar.searchPlaceholder", undefined, "Search & Quick Jump (Ctrl+K or /)")}
+              title={t(
+                "topbar.searchPlaceholder",
+                undefined,
+                "Search & Quick Jump (Ctrl+K or /)",
+              )}
             >
               <SearchIcon />
               <input
                 type="text"
-                placeholder={t("topbar.searchPlaceholder", undefined, "Quick Jump / Search... (Ctrl+K or /)")}
+                placeholder={t(
+                  "topbar.searchPlaceholder",
+                  undefined,
+                  "Quick Jump / Search... (Ctrl+K or /)",
+                )}
                 className="topbar-search-input"
                 value={searchTerm}
                 readOnly
@@ -566,7 +610,11 @@ function App() {
                   }}
                   onMouseEnter={() => setShowApiKey(true)}
                   onMouseLeave={() => setShowApiKey(false)}
-                  title={t("topbar.copyApiKey", undefined, "Click to copy API Key")}
+                  title={t(
+                    "topbar.copyApiKey",
+                    undefined,
+                    "Click to copy API Key",
+                  )}
                 >
                   {showApiKey
                     ? generalConfig.apiKey
@@ -623,25 +671,45 @@ function App() {
                     className="topbar-dropdown-item"
                     onClick={() => setShowCommandPalette(true)}
                   >
-                    {t("topbar.commandPalette", undefined, "🔍 Command Palette (⌘K)")}
+                    {t(
+                      "topbar.commandPalette",
+                      undefined,
+                      "🔍 Command Palette (⌘K)",
+                    )}
                   </button>
                   <button
                     className="topbar-dropdown-item"
                     onClick={() => setShowShortcutsModal(true)}
                   >
-                    {t("topbar.keyboardShortcuts", undefined, "⌨️ Keyboard Shortcuts (?)")}
+                    {t(
+                      "topbar.keyboardShortcuts",
+                      undefined,
+                      "⌨️ Keyboard Shortcuts (?)",
+                    )}
                   </button>
                   <button
                     className="topbar-dropdown-item"
                     onClick={() => setShowGettingStartedModal(true)}
                   >
-                    {t("topbar.gettingStarted", undefined, "🚀 Getting Started Guide")}
+                    {t(
+                      "topbar.gettingStarted",
+                      undefined,
+                      "🚀 Getting Started Guide",
+                    )}
                   </button>
                   <div className="topbar-dropdown-separator" />
                   <button
                     className="topbar-dropdown-item"
                     onClick={() => {
-                      if (confirm(t("topbar.restartConfirm", undefined, "Restart Seedarr?"))) {
+                      if (
+                        confirm(
+                          t(
+                            "topbar.restartConfirm",
+                            undefined,
+                            "Restart Seedarr?",
+                          ),
+                        )
+                      ) {
                         apiClient
                           .post("/system/restart")
                           .catch((err) =>
@@ -655,7 +723,15 @@ function App() {
                   <button
                     className="topbar-dropdown-item topbar-dropdown-danger"
                     onClick={() => {
-                      if (confirm(t("topbar.shutdownConfirm", undefined, "Shut down Seedarr?"))) {
+                      if (
+                        confirm(
+                          t(
+                            "topbar.shutdownConfirm",
+                            undefined,
+                            "Shut down Seedarr?",
+                          ),
+                        )
+                      ) {
                         apiClient
                           .post("/system/shutdown")
                           .catch((err) =>

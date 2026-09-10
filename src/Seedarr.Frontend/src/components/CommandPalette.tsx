@@ -249,7 +249,12 @@ export function CommandPalette({
         boostAll.mutate(undefined, {
           onSuccess: (res) => {
             const count = Array.isArray(res)
-              ? res.reduce((acc, r) => acc + (r.addedTrackersCount || r.addedTrackers?.length || 0), 0)
+              ? res.reduce(
+                  (acc, r) =>
+                    acc +
+                    (r.addedTrackersCount || r.addedTrackers?.length || 0),
+                  0,
+                )
               : 0;
             showToast(
               `Swarm boost complete: ${count} trackers injected across swarms!`,
@@ -313,10 +318,7 @@ export function CommandPalette({
         onClose();
         scanTrackers.mutate(undefined, {
           onSuccess: (res) =>
-            showToast(
-              `Probed ${res.testedCount ?? 0} trackers!`,
-              "success",
-            ),
+            showToast(`Probed ${res.testedCount ?? 0} trackers!`, "success"),
           onError: (err) => showToast(`Probe failed: ${err.message}`, "error"),
         });
       },
@@ -353,7 +355,8 @@ export function CommandPalette({
       id: "act-getting-started",
       category: "Actions",
       title: "Getting Started Guide & Setup",
-      subtitle: "Open the onboarding walkthrough and connection setup guide (🚀)",
+      subtitle:
+        "Open the onboarding walkthrough and connection setup guide (🚀)",
       icon: "🚀",
       onSelect: () => {
         onClose();

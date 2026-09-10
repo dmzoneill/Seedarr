@@ -41,9 +41,11 @@ export function useTorrentIndexState() {
   const [isFilterCollapsed, setIsFilterCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("seedarr_filter_collapsed") === "true";
   });
-  const [isQuickControlsOpen, setIsQuickControlsOpen] = useState<boolean>(() => {
-    return localStorage.getItem("seedarr_quick_controls_open") === "true";
-  });
+  const [isQuickControlsOpen, setIsQuickControlsOpen] = useState<boolean>(
+    () => {
+      return localStorage.getItem("seedarr_quick_controls_open") === "true";
+    },
+  );
 
   const toggleFilterCollapse = useCallback(() => {
     setIsFilterCollapsed((prev) => {

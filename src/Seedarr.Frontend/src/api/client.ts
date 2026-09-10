@@ -17,7 +17,9 @@ class ApiClient {
           if (typeof data === "string") {
             errorMessage = data;
           } else if (data && typeof data === "object") {
-            const errors = (data as { errors?: Record<string, string[]> | string[] }).errors;
+            const errors = (
+              data as { errors?: Record<string, string[]> | string[] }
+            ).errors;
             let formattedErrors: string | null = null;
             if (Array.isArray(errors)) {
               formattedErrors = errors.join(", ");

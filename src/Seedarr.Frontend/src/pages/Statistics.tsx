@@ -783,9 +783,10 @@ function Statistics() {
                   : (torrents ?? []).reduce((acc, t) => acc + t.totalSize, 0)
               }
               currentRatio={stats?.averageRatio ?? 0}
-              currentUploadSpeed={
-                (torrents ?? []).reduce((acc, t) => acc + (t.uploadSpeed || 0), 0)
-              }
+              currentUploadSpeed={(torrents ?? []).reduce(
+                (acc, t) => acc + (t.uploadSpeed || 0),
+                0,
+              )}
             />
           </div>
 
