@@ -2,6 +2,7 @@ using System;
 using System.Reflection;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Simulation.Traffic;
 
@@ -215,7 +216,7 @@ public class TrafficPatternSimulatorTest
     /// A Random subclass that always returns fixed values, letting tests control
     /// which traffic state branch is taken (burst vs idle vs normal).
     /// </summary>
-    private class ControlledRandom : Random
+    private class ControlledRandom : Random, IRandomNumberGenerator
     {
         private readonly double _doubleValue;
         private readonly int _intValue;
@@ -228,11 +229,15 @@ public class TrafficPatternSimulatorTest
 
         public override double NextDouble() => _doubleValue;
 
+        public override int Next() => _intValue;
+
+        public override int Next(int maxValue) => Math.Clamp(_intValue, 0, Math.Max(0, maxValue - 1));
+
         public override int Next(int minValue, int maxValue)
             => Math.Clamp(_intValue, minValue, maxValue - 1);
     }
 
-    private static bool TryInjectRandom(TrafficPatternSimulator simulator, Random random)
+    private static bool TryInjectRandom(TrafficPatternSimulator simulator, ControlledRandom random)
     {
         var field = typeof(TrafficPatternSimulator)
             .GetField("_random", BindingFlags.NonPublic | BindingFlags.Instance);

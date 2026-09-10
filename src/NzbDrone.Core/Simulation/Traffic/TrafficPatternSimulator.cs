@@ -1,5 +1,6 @@
 using System;
 using NLog;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Simulation.Traffic;
@@ -46,18 +47,23 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
 
     private readonly IConfigService _configService;
     private readonly Logger _logger;
-    private readonly Random _random;
+    private readonly IRandomNumberGenerator _random;
+    private readonly ISystemClock _clock;
     private readonly object _lock = new object();
 
     private TrafficState _currentState;
     private DateTime _stateExpiresAt;
     private double _stateMultiplier;
 
-    public TrafficPatternSimulator(IConfigService configService)
+    public TrafficPatternSimulator(
+        IConfigService configService,
+        IRandomNumberGenerator random = null,
+        ISystemClock clock = null)
     {
         _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
-        _random = new Random();
+        _random = random ?? new RandomNumberGenerator();
+        _clock = clock ?? new SystemClock();
         _currentState = TrafficState.Normal;
         _stateExpiresAt = DateTime.MinValue;
         _stateMultiplier = 1.0;
@@ -70,9 +76,14 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
 
     public double GetSpeedMultiplier(SeedingProfile profile, int peerCount)
     {
+        if (string.Equals(_configService.TrafficPatternProfile, "off", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1.0;
+        }
+
         var effectiveProfile = ResolveProfile(profile);
 
-        var hour = DateTime.UtcNow.Hour;
+        var hour = _clock.UtcNow.Hour;
         var baseMultiplier = effectiveProfile switch
         {
             SeedingProfile.Conservative => 0.5,
@@ -141,7 +152,7 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
     {
         var configured = _configService.TrafficPatternProfile;
 
-        if (string.IsNullOrWhiteSpace(configured))
+        if (string.IsNullOrWhiteSpace(configured) || string.Equals(configured, "off", StringComparison.OrdinalIgnoreCase))
         {
             return fallback;
         }
@@ -159,7 +170,7 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
     {
         lock (_lock)
         {
-            var now = DateTime.UtcNow;
+            var now = _clock.UtcNow;
 
             if (_currentState != TrafficState.Normal && now >= _stateExpiresAt)
             {
@@ -205,7 +216,7 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
 
     private double GetCongestionMultiplier()
     {
-        var seconds = DateTime.UtcNow.TimeOfDay.TotalSeconds;
+        var seconds = _clock.UtcNow.TimeOfDay.TotalSeconds;
         var sineValue = Math.Sin(2.0 * Math.PI * seconds / CongestionCyclePeriodSeconds);
         return 1.0 + (CongestionAmplitude * sineValue);
     }
