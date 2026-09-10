@@ -4,6 +4,7 @@ import {
   StoppedIcon,
   QueuedIcon,
   ErrorIcon,
+  ChevronsLeftIcon,
 } from "../../components/icons/UIIcons";
 import TrackerFavicon from "../../components/TrackerFavicon";
 
@@ -25,6 +26,8 @@ interface TorrentFilterPanelProps {
   stateCounts: Record<string, number>;
   trackerGroups: [string, number][];
   count: number;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 export function TorrentFilterPanel({
@@ -35,10 +38,25 @@ export function TorrentFilterPanel({
   stateCounts,
   trackerGroups,
   count,
+  isCollapsed = false,
+  onToggleCollapse,
 }: TorrentFilterPanelProps) {
   return (
-    <div className="filter-panel">
-      <div className="filter-panel-section">State</div>
+    <div className={`filter-panel ${isCollapsed ? "collapsed" : ""}`}>
+      <div className="filter-panel-header">
+        <div className="filter-panel-section">State</div>
+        {onToggleCollapse && (
+          <button
+            type="button"
+            className="filter-panel-collapse-btn"
+            onClick={onToggleCollapse}
+            title="Collapse filter sidebar"
+            aria-label="Collapse filter sidebar"
+          >
+            <ChevronsLeftIcon size={13} />
+          </button>
+        )}
+      </div>
       <ul className="filter-panel-list">
         {STATE_FILTERS.map((state) => (
           <li key={state}>

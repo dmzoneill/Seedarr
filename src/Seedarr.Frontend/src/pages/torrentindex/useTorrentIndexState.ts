@@ -38,6 +38,17 @@ export function useTorrentIndexState() {
   const [selectedTorrentId, setSelectedTorrentId] = useState<number | null>(
     null,
   );
+  const [isFilterCollapsed, setIsFilterCollapsed] = useState<boolean>(() => {
+    return localStorage.getItem("seedarr_filter_collapsed") === "true";
+  });
+
+  const toggleFilterCollapse = useCallback(() => {
+    setIsFilterCollapsed((prev) => {
+      const next = !prev;
+      localStorage.setItem("seedarr_filter_collapsed", String(next));
+      return next;
+    });
+  }, []);
 
   // Consume ?q= from URL then clean it so the URL stays tidy
   useEffect(() => {
@@ -156,5 +167,7 @@ export function useTorrentIndexState() {
     handleViewMode,
     handleToggleSelect,
     handleSelectAll,
+    isFilterCollapsed,
+    toggleFilterCollapse,
   };
 }
