@@ -580,25 +580,20 @@ function App() {
             <div
               className="topbar-search"
               onClick={() => setShowCommandPalette(true)}
-              style={{
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
+              style={{ cursor: "pointer" }}
               title={t(
                 "topbar.searchPlaceholder",
                 undefined,
-                "Search & Quick Jump (Ctrl+K or /)",
+                "Quick Jump / Search... (Ctrl+k)",
               )}
             >
-              <SearchIcon />
+              <SearchIcon size={14} />
               <input
                 type="text"
                 placeholder={t(
                   "topbar.searchPlaceholder",
                   undefined,
-                  "Quick Jump / Search... (Ctrl+K or /)",
+                  "Quick Jump / Search... (Ctrl+k)",
                 )}
                 className="topbar-search-input"
                 value={searchTerm}
@@ -610,75 +605,67 @@ function App() {
                 style={{
                   backgroundColor: "rgba(255, 255, 255, 0.08)",
                   border: "1px solid rgba(255, 255, 255, 0.16)",
-                  borderRadius: "4px",
+                  borderRadius: "3px",
                   padding: "0.1rem 0.4rem",
                   fontSize: "0.7rem",
                   color: "var(--text-muted)",
                   fontFamily: "monospace",
-                  marginRight: "0.4rem",
                 }}
               >
                 ⌘K
               </kbd>
             </div>
           </div>
-          <div className="topbar-actions">
+          <div
+            className="topbar-actions"
+            style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}
+          >
             <LanguageSelector />
             <button
-              className="topbar-btn topbar-getting-started"
+              className="btn btn-small"
               onClick={() => setShowGettingStartedModal(true)}
-              title={t(
-                "topbar.gettingStartedTooltip",
-                undefined,
-                "Getting Started Setup Guide",
-              )}
-              aria-label={t(
-                "topbar.gettingStartedTooltip",
-                undefined,
-                "Getting Started Setup Guide",
-              )}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                backgroundColor:
+                  "var(--accent-bg-medium, rgba(200, 168, 78, 0.12))",
+                color: "var(--accent, #c8a84e)",
+                border:
+                  "1px solid var(--accent-border-alert, rgba(200, 168, 78, 0.3))",
+                fontWeight: 600,
+              }}
+              title={t("nav.gettingStarted", undefined, "Getting Started")}
             >
-              <span className="topbar-getting-started-icon">🚀</span>
-              <span className="topbar-getting-started-text">
-                {t("topbar.gettingStartedButton", undefined, "Getting Started")}
-              </span>
+              🚀 {t("nav.gettingStarted", undefined, "Getting Started")}
             </button>
             {generalConfig?.apiKey && (
-              <div
-                className="topbar-api-key"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  color: "var(--text-dim)",
-                  fontSize: "0.85rem",
-                }}
+              <button
+                type="button"
+                className="topbar-apikey-btn"
+                onClick={handleCopyApiKey}
+                onMouseEnter={handleMouseEnterApiKey}
+                onMouseLeave={handleMouseLeaveApiKey}
+                title={t(
+                  "topbar.copyApiKey",
+                  undefined,
+                  "Click to copy API Key to clipboard",
+                )}
               >
-                <KeyIcon size={14} />
-                <code
+                <span style={{ fontSize: "0.85rem" }}>⚿</span>
+                <span
                   style={{
-                    background: "var(--bg-lighter)",
-                    padding: "0.2rem 0.5rem",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    userSelect: "none",
+                    letterSpacing: showApiKey ? "0.5px" : "1px",
+                    opacity: 0.85,
                     fontFamily: "monospace",
-                    letterSpacing: showApiKey ? "0.5px" : "1.5px",
+                    fontSize: "0.8rem",
                   }}
-                  onClick={handleCopyApiKey}
-                  onMouseEnter={handleMouseEnterApiKey}
-                  onMouseLeave={handleMouseLeaveApiKey}
-                  title={t(
-                    "topbar.copyApiKey",
-                    undefined,
-                    "Click to copy API Key",
-                  )}
                 >
                   {showApiKey
                     ? (unmaskedApiKey || (generalConfig.apiKey.includes("*") ? "••••••••••••••••••••••••••••••••" : generalConfig.apiKey))
                     : "••••••••••••••••••••••••••••••••"}
-                </code>
-              </div>
+                </span>
+              </button>
             )}
             <button
               className="topbar-btn"
