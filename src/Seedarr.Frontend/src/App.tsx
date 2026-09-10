@@ -60,6 +60,8 @@ import {
 import { useTheme } from "./context/ThemeContext";
 import { apiClient } from "./api/client";
 import { useGeneralConfig, useDownloadClients } from "./api/hooks";
+import { useTranslation } from "./i18n";
+import LanguageSelector from "./components/LanguageSelector";
 
 const systemSubItems = [
   { path: "/system/status", label: "Status" },
@@ -91,6 +93,7 @@ const settingsSubItems = [
 ];
 
 function App() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
@@ -220,7 +223,7 @@ function App() {
         </a>
         <nav className="sidebar-nav">
           <NavLink to="/" end className="sidebar-nav-item">
-            <DashboardIcon /> <span>Dashboard</span>
+            <DashboardIcon /> <span>{t("nav.dashboard", undefined, "Dashboard")}</span>
           </NavLink>
 
           {/* Torrents Top-Level with Historical History & Add Torrent */}
@@ -228,7 +231,7 @@ function App() {
             to="/torrents"
             className={`sidebar-nav-item ${isTorrentsRoute ? "active" : ""}`}
           >
-            <TorrentIcon /> <span>Torrents</span>
+            <TorrentIcon /> <span>{t("nav.torrents", undefined, "Torrents")}</span>
           </NavLink>
           {isTorrentsRoute && (
             <>
@@ -236,14 +239,14 @@ function App() {
                 to="/torrents/history"
                 className="sidebar-nav-item sidebar-nav-sub"
               >
-                <HistoryIcon /> <span>History</span>
+                <HistoryIcon /> <span>{t("nav.history", undefined, "History")}</span>
               </NavLink>
               <NavLink
                 to="/torrents/add"
                 className="sidebar-nav-item sidebar-nav-sub"
               >
                 <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>+</span>{" "}
-                <span>Add Torrent</span>
+                <span>{t("nav.addTorrent", undefined, "Add Torrent")}</span>
               </NavLink>
             </>
           )}
@@ -253,7 +256,7 @@ function App() {
             to="/activity/torrents"
             className={`sidebar-nav-item ${isActivityRoute ? "active" : ""}`}
           >
-            <ActivityIcon /> <span>Activity</span>
+            <ActivityIcon /> <span>{t("nav.activity", undefined, "Activity")}</span>
           </NavLink>
           {isActivityRoute && (
             <>
@@ -261,7 +264,7 @@ function App() {
                 to="/activity/torrents"
                 className="sidebar-nav-item sidebar-nav-sub"
               >
-                <DashboardIcon /> <span>Torrents</span>
+                <DashboardIcon /> <span>{t("nav.torrents", undefined, "Torrents")}</span>
               </NavLink>
               {downloadClients
                 ?.filter((c) => c.enable)
@@ -278,7 +281,7 @@ function App() {
                 to="/activity/metrics"
                 className="sidebar-nav-item sidebar-nav-sub"
               >
-                <StatsIcon /> <span>Metrics</span>
+                <StatsIcon /> <span>{t("nav.metrics", undefined, "Metrics")}</span>
               </NavLink>
             </>
           )}
@@ -288,7 +291,7 @@ function App() {
             to="/tracker"
             className={`sidebar-nav-item ${isTrackerRoute ? "active" : ""}`}
           >
-            <TrackerIcon /> <span>Tracker</span>
+            <TrackerIcon /> <span>{t("nav.tracker", undefined, "Tracker")}</span>
           </NavLink>
           {isTrackerRoute && (
             <>
@@ -301,7 +304,7 @@ function App() {
                     : ""
                 }`}
               >
-                <span>Inbuilt</span>
+                <span>{t("nav.trackerInbuilt", undefined, "Inbuilt")}</span>
               </NavLink>
               <NavLink
                 to="/tracker/trackerboost"
@@ -315,7 +318,7 @@ function App() {
                     : ""
                 }`}
               >
-                <span>Tracker Boost</span>
+                <span>{t("nav.trackerBoost", undefined, "Tracker Boost")}</span>
               </NavLink>
               <NavLink
                 to="/tracker/metrics"
@@ -326,24 +329,24 @@ function App() {
                     : ""
                 }`}
               >
-                <span>Tracker Metrics</span>
+                <span>{t("nav.trackerMetrics", undefined, "Tracker Metrics")}</span>
               </NavLink>
             </>
           )}
           <NavLink to="/peermap" className="sidebar-nav-item">
-            <PeerMapIcon /> <span>Peer Map</span>
+            <PeerMapIcon /> <span>{t("nav.peerMap", undefined, "Peer Map")}</span>
           </NavLink>
           <NavLink to="/schedule" className="sidebar-nav-item">
-            <ScheduleIcon /> <span>Schedule</span>
+            <ScheduleIcon /> <span>{t("nav.schedule", undefined, "Schedule")}</span>
           </NavLink>
           <NavLink to="/statistics" className="sidebar-nav-item">
-            <StatsIcon /> <span>Statistics</span>
+            <StatsIcon /> <span>{t("nav.statistics", undefined, "Statistics")}</span>
           </NavLink>
           <NavLink
             to="/settings/general"
             className={`sidebar-nav-item ${isSettingsRoute ? "active" : ""}`}
           >
-            <SettingsIcon /> <span>Settings</span>
+            <SettingsIcon /> <span>{t("nav.settings", undefined, "Settings")}</span>
           </NavLink>
           {isSettingsRoute &&
             settingsSubItems.map((item) => (
@@ -359,7 +362,7 @@ function App() {
             to="/system/status"
             className={`sidebar-nav-item ${isSystemRoute ? "active" : ""}`}
           >
-            <SystemIcon /> <span>System</span>
+            <SystemIcon /> <span>{t("nav.system", undefined, "System")}</span>
           </NavLink>
           {isSystemRoute &&
             systemSubItems.map((item) => (
@@ -385,12 +388,12 @@ function App() {
               alignItems: "center",
               gap: "0.5rem",
             }}
-            title="Search & Quick Jump (Ctrl+K or /)"
+            title={t("topbar.searchPlaceholder", undefined, "Search & Quick Jump (Ctrl+K or /)")}
           >
             <SearchIcon />
             <input
               type="text"
-              placeholder="Quick Jump / Search... (Ctrl+K or /)"
+              placeholder={t("topbar.searchPlaceholder", undefined, "Quick Jump / Search... (Ctrl+K or /)")}
               className="topbar-search-input"
               value={searchTerm}
               readOnly
@@ -439,7 +442,7 @@ function App() {
                   }}
                   onMouseEnter={() => setShowApiKey(true)}
                   onMouseLeave={() => setShowApiKey(false)}
-                  title="Click to copy API Key"
+                  title={t("topbar.copyApiKey", undefined, "Click to copy API Key")}
                 >
                   {showApiKey
                     ? generalConfig.apiKey
@@ -447,13 +450,14 @@ function App() {
                 </code>
               </div>
             )}
+            <LanguageSelector />
             <button
               className="topbar-btn"
               onClick={toggleTheme}
               title={
                 theme === "dark"
-                  ? "Switch to light theme"
-                  : "Switch to dark theme"
+                  ? t("topbar.switchLight", undefined, "Switch to light theme")
+                  : t("topbar.switchDark", undefined, "Switch to dark theme")
               }
             >
               {theme === "dark" ? <SunIcon /> : <MoonIcon />}
@@ -463,7 +467,7 @@ function App() {
               href="https://github.com/sponsors/dmzoneill"
               target="_blank"
               rel="noopener noreferrer"
-              title="Support Seedarr"
+              title={t("topbar.supportSeedarr", undefined, "Support Seedarr")}
             >
               <HeartIcon />
             </a>
@@ -471,7 +475,7 @@ function App() {
               <button
                 className="topbar-btn"
                 onClick={() => setShowActionsMenu(!showActionsMenu)}
-                title="Actions"
+                title={t("topbar.actions", undefined, "Actions")}
               >
                 <UserIcon />
               </button>
@@ -484,37 +488,37 @@ function App() {
                     className="topbar-dropdown-item"
                     onClick={() => navigate("/system/status")}
                   >
-                    System Status
+                    {t("topbar.systemStatus", undefined, "System Status")}
                   </button>
                   <button
                     className="topbar-dropdown-item"
                     onClick={() => navigate("/settings/general")}
                   >
-                    Settings
+                    {t("topbar.settings", undefined, "Settings")}
                   </button>
                   <button
                     className="topbar-dropdown-item"
                     onClick={() => setShowCommandPalette(true)}
                   >
-                    🔍 Command Palette (⌘K)
+                    {t("topbar.commandPalette", undefined, "🔍 Command Palette (⌘K)")}
                   </button>
                   <button
                     className="topbar-dropdown-item"
                     onClick={() => setShowShortcutsModal(true)}
                   >
-                    ⌨️ Keyboard Shortcuts (?)
+                    {t("topbar.keyboardShortcuts", undefined, "⌨️ Keyboard Shortcuts (?)")}
                   </button>
                   <button
                     className="topbar-dropdown-item"
                     onClick={() => setShowGettingStartedModal(true)}
                   >
-                    🚀 Getting Started Guide
+                    {t("topbar.gettingStarted", undefined, "🚀 Getting Started Guide")}
                   </button>
                   <div className="topbar-dropdown-separator" />
                   <button
                     className="topbar-dropdown-item"
                     onClick={() => {
-                      if (confirm("Restart Seedarr?")) {
+                      if (confirm(t("topbar.restartConfirm", undefined, "Restart Seedarr?"))) {
                         apiClient
                           .post("/system/restart")
                           .catch((err) =>
@@ -523,12 +527,12 @@ function App() {
                       }
                     }}
                   >
-                    Restart
+                    {t("topbar.restart", undefined, "Restart")}
                   </button>
                   <button
                     className="topbar-dropdown-item topbar-dropdown-danger"
                     onClick={() => {
-                      if (confirm("Shut down Seedarr?")) {
+                      if (confirm(t("topbar.shutdownConfirm", undefined, "Shut down Seedarr?"))) {
                         apiClient
                           .post("/system/shutdown")
                           .catch((err) =>
@@ -537,7 +541,7 @@ function App() {
                       }
                     }}
                   >
-                    Shutdown
+                    {t("topbar.shutdown", undefined, "Shutdown")}
                   </button>
                 </div>
               )}
