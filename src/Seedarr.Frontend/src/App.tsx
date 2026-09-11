@@ -121,7 +121,25 @@ function App() {
     });
   const [openSettingsGroups, setOpenSettingsGroups] = useState<
     Record<string, boolean>
-  >({});
+  >(() => {
+    try {
+      const saved = localStorage.getItem("seedarr_settings_accordion_state");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "seedarr_settings_accordion_state",
+        JSON.stringify(openSettingsGroups),
+      );
+    } catch {
+      // ignore
+    }
+  }, [openSettingsGroups]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("seedarr_sidebar_collapsed") === "true";
   });
@@ -893,9 +911,17 @@ function App() {
                       ) {
                         apiClient
                           .post("/system/restart")
-                          .catch((err) =>
-                            console.error("System action failed:", err),
-                          );
+                          .catch((err) => {
+                            console.error("System action failed:", err);
+                            showToast(
+                              t(
+                                "topbar.actionFailed",
+                                undefined,
+                                "System action failed",
+                              ),
+                              "error",
+                            );
+                          });
                       }
                     }}
                   >
@@ -916,9 +942,17 @@ function App() {
                       ) {
                         apiClient
                           .post("/system/shutdown")
-                          .catch((err) =>
-                            console.error("System action failed:", err),
-                          );
+                          .catch((err) => {
+                            console.error("System action failed:", err);
+                            showToast(
+                              t(
+                                "topbar.actionFailed",
+                                undefined,
+                                "System action failed",
+                              ),
+                              "error",
+                            );
+                          });
                       }
                     }}
                   >

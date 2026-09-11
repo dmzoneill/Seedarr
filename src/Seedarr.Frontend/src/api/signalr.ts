@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   HubConnectionBuilder,
   HubConnection,
@@ -10,35 +10,17 @@ import type { QueryClient } from "@tanstack/react-query";
 export type ConnectionStatus = "connected" | "disconnected" | "reconnecting";
 
 let connection: HubConnection | null = null;
+let startPromise: Promise<void> | null = null;
+const statusListeners = new Set<(status: ConnectionStatus) => void>();
 
-export function getSignalRConnection(): HubConnection {
-  if (!connection) {
-    connection = new HubConnectionBuilder()
-      .withUrl("/signalr/messages")
-      .withAutomaticReconnect()
-      .configureLogging(LogLevel.Warning)
-      .build();
-  }
-  return connection;
-}
-
-export async function startSignalR(): Promise<void> {
-  const conn = getSignalRConnection();
-  if (conn.state === "Disconnected") {
+function notifyStatus(status: ConnectionStatus) {
+  statusListeners.forEach((listener) => {
     try {
-      await conn.start();
+      listener(status);
     } catch (err) {
-      console.error("SignalR connection failed:", err);
+      console.error("Error in SignalR status listener:", err);
     }
-  }
-}
-
-export function onSignalRMessage(
-  action: string,
-  callback: (data: unknown) => void,
-): void {
-  const conn = getSignalRConnection();
-  conn.on(action, callback);
+  });
 }
 
 function mapHubState(state: HubConnectionState): ConnectionStatus {
@@ -52,38 +34,82 @@ function mapHubState(state: HubConnectionState): ConnectionStatus {
   }
 }
 
-export function useSignalR(queryClient: QueryClient) {
-  const [status, setStatus] = useState<ConnectionStatus>("disconnected");
+export function getSignalRConnection(): HubConnection {
+  if (!connection) {
+    connection = new HubConnectionBuilder()
+      .withUrl("/signalr/messages")
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build();
+
+    connection.onreconnecting(() => notifyStatus("reconnecting"));
+    connection.onreconnected(() => notifyStatus("connected"));
+    connection.onclose(() => notifyStatus("disconnected"));
+  }
+  return connection;
+}
+
+export async function startSignalR(): Promise<void> {
+  const conn = getSignalRConnection();
+  if (conn.state === HubConnectionState.Disconnected) {
+    if (!startPromise) {
+      startPromise = conn
+        .start()
+        .then(() => {
+          notifyStatus("connected");
+        })
+        .catch((err) => {
+          console.error("SignalR connection failed:", err);
+          notifyStatus("disconnected");
+        })
+        .finally(() => {
+          startPromise = null;
+        });
+    }
+    return startPromise;
+  }
+}
+
+export function onSignalRMessage(
+  action: string,
+  callback: (data: unknown) => void,
+): () => void {
+  const conn = getSignalRConnection();
+  conn.on(action, callback);
+  return () => {
+    conn.off(action, callback);
+  };
+}
+
+export function useSignalR(queryClient?: QueryClient) {
+  const conn = getSignalRConnection();
+  const [status, setStatus] = useState<ConnectionStatus>(() =>
+    mapHubState(conn.state),
+  );
   const queryClientRef = useRef(queryClient);
   queryClientRef.current = queryClient;
 
-  const registerEventHandlers = useCallback((conn: HubConnection) => {
-    conn.onreconnecting(() => setStatus("reconnecting"));
-    conn.onreconnected(() => setStatus("connected"));
-    conn.onclose(() => setStatus("disconnected"));
-  }, []);
-
   useEffect(() => {
-    const conn = getSignalRConnection();
-    registerEventHandlers(conn);
+    let isMounted = true;
+
+    const handleStatusChange = (newStatus: ConnectionStatus) => {
+      if (isMounted) {
+        setStatus(newStatus);
+      }
+    };
+
+    statusListeners.add(handleStatusChange);
+    setStatus(mapHubState(conn.state));
 
     if (conn.state === HubConnectionState.Disconnected) {
-      conn
-        .start()
-        .then(() => setStatus("connected"))
-        .catch((err) => {
-          console.error("SignalR connection failed:", err);
-          setStatus("disconnected");
-        });
-    } else {
-      setStatus(mapHubState(conn.state));
+      startSignalR();
     }
 
     return () => {
-      // Don't stop the shared connection on unmount -- other consumers may
-      // still be using it.  State listeners are cleaned up by React.
+      isMounted = false;
+      statusListeners.delete(handleStatusChange);
     };
-  }, [registerEventHandlers]);
+  }, [conn]);
 
-  return { connection: getSignalRConnection(), status };
+  return { connection: conn, status };
 }
