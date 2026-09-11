@@ -36,7 +36,7 @@ public class ConnectionStringFactory : IConnectionStringFactory
     private string BuildSqliteConnectionString(string dataFolder)
     {
         var dbPath = Path.Combine(dataFolder, "seedarr.db");
-        return $"Data Source={dbPath};Cache=Shared";
+        return $"Data Source={dbPath};Cache=Shared;Busy Timeout=30;Default Timeout=30;Foreign Keys=True;";
     }
 
     private string BuildPostgresConnectionString()

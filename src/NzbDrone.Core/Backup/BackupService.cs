@@ -66,7 +66,8 @@ public class BackupService : IBackupService
                     File.Delete(dbStagingPath);
                 }
 
-                using var conn = new SqliteConnection(_connectionStringFactory.MainDbConnectionString);
+                var connStr = DbFactory.CleanSqliteConnectionString(_connectionStringFactory.MainDbConnectionString);
+                using var conn = new SqliteConnection(connStr);
                 conn.Open();
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"VACUUM INTO '{dbStagingPath.Replace("'", "''")}';";
