@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.5.3](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.3) - 2026-09-11
+
+### 🐛 Bug Fixes
+- fix(ui,update): align getting started modal blur and border with leecharr, embed changelog fallback
+
+### 🔧 Maintenance & Improvements
+- style(api): fix indentation in UpdateController for editorconfig compliance
+
 ## [v1.5.2](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.2) - 2026-09-11
 
 ### 🐛 Bug Fixes
