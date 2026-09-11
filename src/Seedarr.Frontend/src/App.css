@@ -1972,16 +1972,19 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: var(--overlay);
+  background-color: var(--overlay, rgba(10, 11, 18, 0.85));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 1rem;
 }
 
 .modal {
   background-color: var(--bg-secondary);
-  border: 1px solid rgb(255 255 255 / 10%);
+  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.12));
   border-radius: 8px;
   padding: 1.5rem;
   width: 100%;
@@ -1989,8 +1992,8 @@ body {
   max-height: 90vh;
   overflow-y: auto;
   box-shadow:
-    0 16px 48px rgb(0 0 0 / 65%),
-    0 2px 8px rgb(0 0 0 / 30%);
+    0 16px 48px rgba(0, 0, 0, 0.65),
+    0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .modal-title {
