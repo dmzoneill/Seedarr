@@ -91,6 +91,36 @@ public class ConnectionStringFactoryTest
     }
 
     [Test]
+    public void MainDbConnectionString_should_include_busy_timeout_for_sqlite()
+    {
+        _configFileProvider.PostgresHost.Returns(string.Empty);
+
+        var subject = BuildSubject();
+
+        Assert.That(subject.MainDbConnectionString, Does.Contain("Busy Timeout=30"));
+    }
+
+    [Test]
+    public void MainDbConnectionString_should_include_default_timeout_for_sqlite()
+    {
+        _configFileProvider.PostgresHost.Returns(string.Empty);
+
+        var subject = BuildSubject();
+
+        Assert.That(subject.MainDbConnectionString, Does.Contain("Default Timeout=30"));
+    }
+
+    [Test]
+    public void MainDbConnectionString_should_include_foreign_keys_for_sqlite()
+    {
+        _configFileProvider.PostgresHost.Returns(string.Empty);
+
+        var subject = BuildSubject();
+
+        Assert.That(subject.MainDbConnectionString, Does.Contain("Foreign Keys=True"));
+    }
+
+    [Test]
     public void MainDbConnectionString_should_contain_host_when_postgres()
     {
         _configFileProvider.PostgresHost.Returns("pg.example.com");

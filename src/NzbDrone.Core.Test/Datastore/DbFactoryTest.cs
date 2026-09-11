@@ -57,6 +57,21 @@ public class DbFactoryTest
     }
 
     [Test]
+    public void Create_enables_wal_mode_and_busy_timeout_for_sqlite()
+    {
+        var factory = new DbFactory();
+
+        var db = factory.Create(DatabaseType.SQLite, $"Data Source={_tempDbPath}");
+
+        using var conn = db.OpenConnection();
+        var journalMode = conn.ExecuteScalar<string>("PRAGMA journal_mode;");
+        Assert.That(journalMode, Is.EqualTo("wal").IgnoreCase);
+
+        var busyTimeout = conn.ExecuteScalar<int>("PRAGMA busy_timeout;");
+        Assert.That(busyTimeout, Is.GreaterThanOrEqualTo(30000));
+    }
+
+    [Test]
     public void Create_runs_migrations_and_creates_tags_table()
     {
         var factory = new DbFactory();

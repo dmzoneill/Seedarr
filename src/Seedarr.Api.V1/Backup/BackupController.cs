@@ -54,26 +54,45 @@ public class BackupController : Controller
     [HttpDelete("{id:int}")]
     public ActionResult DeleteBackup(int id, [FromQuery] string fileName)
     {
-        if (string.IsNullOrWhiteSpace(fileName))
-        {
-            var backups = _backupService.GetBackups();
+        var backups = _backupService.GetBackups();
+        string targetFileName;
 
+        if (!string.IsNullOrWhiteSpace(fileName))
+        {
+            var safeName = Path.GetFileName(fileName);
+            if (string.IsNullOrWhiteSpace(safeName) ||
+                safeName != fileName ||
+                fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+                !safeName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new { message = "Invalid backup file name" });
+            }
+
+            var matching = backups.FirstOrDefault(b => string.Equals(b.Name, safeName, StringComparison.OrdinalIgnoreCase));
+            if (matching == null)
+            {
+                return NotFound();
+            }
+
+            targetFileName = matching.Name;
+        }
+        else
+        {
             if (id < 1 || id > backups.Count)
             {
                 return NotFound();
             }
 
-            fileName = backups[id - 1].Name;
+            targetFileName = backups[id - 1].Name;
         }
 
-        var safeFileName = Path.GetFileName(fileName);
-
-        if (string.IsNullOrWhiteSpace(safeFileName) || !safeFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        var safeTarget = Path.GetFileName(targetFileName);
+        if (string.IsNullOrWhiteSpace(safeTarget) || !safeTarget.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest(new { message = "Invalid backup file name" });
         }
 
-        _backupService.DeleteBackup(safeFileName);
+        _backupService.DeleteBackup(safeTarget);
         return Ok();
     }
 
@@ -108,7 +127,10 @@ public class BackupController : Controller
 
         var safeFileName = Path.GetFileName(request.FileName);
 
-        if (string.IsNullOrWhiteSpace(safeFileName) || !safeFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(safeFileName) ||
+            safeFileName != request.FileName ||
+            request.FileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            !safeFileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
         {
             return BadRequest(new { message = "Invalid backup file name" });
         }

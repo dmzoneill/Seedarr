@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -56,6 +58,11 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
             return BadRequest("Category name is required.");
         }
 
+        if (!IsValidSavePath(resource.SavePath, out var pathError))
+        {
+            return BadRequest(pathError);
+        }
+
         var trimmedName = resource.Name.Trim();
         var existing = _categoryService.GetByName(trimmedName);
         if (existing != null)
@@ -79,6 +86,11 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
         if (resource == null || string.IsNullOrWhiteSpace(resource.Name))
         {
             return BadRequest("Category name is required.");
+        }
+
+        if (!IsValidSavePath(resource.SavePath, out var pathError))
+        {
+            return BadRequest(pathError);
         }
 
         var targetId = id ?? resource.Id;
@@ -113,6 +125,46 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
     {
         _categoryService.Delete(id);
         return NoContent();
+    }
+
+    private static bool IsValidSavePath(string savePath, out string errorMessage)
+    {
+        errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(savePath))
+        {
+            return true;
+        }
+
+        if (savePath.Contains('\0'))
+        {
+            errorMessage = "Save path cannot contain null bytes.";
+            return false;
+        }
+
+        if (savePath.Contains(".."))
+        {
+            errorMessage = "Save path cannot contain directory traversal sequences ('..').";
+            return false;
+        }
+
+        if (savePath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        {
+            errorMessage = "Save path contains invalid path characters.";
+            return false;
+        }
+
+        try
+        {
+            _ = Path.GetFullPath(savePath);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Invalid save path format: {ex.Message}";
+            return false;
+        }
+
+        return true;
     }
 
     protected override CategoryResource GetResourceById(Category model)

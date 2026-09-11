@@ -59,15 +59,61 @@ public class DbFactory : IDbFactory
 
         _logger.Info("Creating {0} database: {1}", dbType, RedactConnectionString(dbType, connectionString));
 
-        RunMigrations(dbType, connectionString);
+        var sqliteConnectionString = dbType == DatabaseType.SQLite ? CleanSqliteConnectionString(connectionString) : connectionString;
+
+        RunMigrations(dbType, sqliteConnectionString);
+
+        if (dbType == DatabaseType.SQLite)
+        {
+            EnableSqlitePragmas(sqliteConnectionString);
+        }
 
         Func<IDbConnection> factory = dbType switch
         {
             DatabaseType.PostgreSQL => () => new NpgsqlConnection(connectionString),
-            _ => () => new SqliteConnection(connectionString)
+            _ => () =>
+            {
+                var conn = new SqliteConnection(sqliteConnectionString);
+                conn.StateChange += (sender, args) =>
+                {
+                    if (args.CurrentState == ConnectionState.Open && sender is SqliteConnection sqliteConn)
+                    {
+                        using var cmd = sqliteConn.CreateCommand();
+                        cmd.CommandText = "PRAGMA busy_timeout=30000;";
+                        cmd.ExecuteNonQuery();
+                    }
+                };
+                return conn;
+            }
         };
 
         return new Database(factory, dbType);
+    }
+
+    public static string CleanSqliteConnectionString(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        return System.Text.RegularExpressions.Regex.Replace(connectionString, @"(?i)Busy\s+Timeout\s*=\s*[^;]+;?", "");
+    }
+
+    private void EnableSqlitePragmas(string connectionString)
+    {
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA journal_mode=WAL; PRAGMA busy_timeout=30000;";
+            cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to apply SQLite pragmas");
+        }
     }
 
     private static string RedactConnectionString(DatabaseType dbType, string connectionString)
@@ -78,7 +124,7 @@ public class DbFactory : IDbFactory
             return $"Host={builder.Host};Database={builder.Database}";
         }
 
-        var sqliteBuilder = new SqliteConnectionStringBuilder(connectionString);
+        var sqliteBuilder = new SqliteConnectionStringBuilder(CleanSqliteConnectionString(connectionString));
         return $"Data Source={sqliteBuilder.DataSource}";
     }
 
