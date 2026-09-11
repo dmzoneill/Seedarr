@@ -589,7 +589,7 @@ function App() {
                             >
                               <span
                                 style={{
-                                 fontSize: "0.85rem",
+                                  fontSize: "0.85rem",
                                   flexShrink: 0,
                                 }}
                               >
