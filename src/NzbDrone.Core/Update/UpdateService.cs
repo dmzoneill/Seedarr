@@ -87,7 +87,7 @@ public class UpdateService : IUpdateService
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, GitHubReleasesUrl + "?per_page=20");
+            using var request = new HttpRequestMessage(HttpMethod.Get, GitHubReleasesUrl + "?per_page=100");
             using var response = _client.Send(request);
 
             if (!response.IsSuccessStatusCode)
