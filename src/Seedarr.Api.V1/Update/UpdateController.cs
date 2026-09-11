@@ -40,7 +40,7 @@ public class UpdateController : Controller
             foreach (var release in releases.OrderByDescending(r => Version.TryParse(r.Version, out var v) ? v : new Version(0, 0, 0)))
             {
                 var isInstalled = string.Equals(release.Version, currentVersion, StringComparison.OrdinalIgnoreCase) ||
-                                  (Version.TryParse(release.Version, out var rv) && rv == BuildInfo.Version);
+                    (Version.TryParse(release.Version, out var rv) && rv == BuildInfo.Version);
 
                 if (isInstalled)
                 {
