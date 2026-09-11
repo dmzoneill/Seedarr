@@ -9,6 +9,7 @@ public class UpdateResource
     public DateTime ReleaseDate { get; set; }
     public bool Installed { get; set; }
     public bool Latest { get; set; }
+    public string Url { get; set; }
     public UpdateChanges Changes { get; set; }
 }
 

@@ -46,6 +46,7 @@ public class UpdateController : Controller
                 ReleaseDate = release.PublishedAt,
                 Installed = isInstalled,
                 Latest = isLatest,
+                Url = release.Url,
                 Changes = changes,
             });
         }

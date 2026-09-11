@@ -73,8 +73,9 @@ Think of it as Sonarr for seeding: a polished web UI, REST API, real-time update
 
 ---
 
-## Documentation
+## Documentation & Changelog
 
+- [Changelog & Version History](CHANGELOG.md)
 - [Architecture Guide](docs/architecture.md)
 - [Domain Model](docs/domain-model.md)
 - [BitTorrent Protocols](docs/protocols.md)
