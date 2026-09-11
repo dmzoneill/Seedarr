@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.5.2](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.2) - 2026-09-11
+
+### 🐛 Bug Fixes
+- fix(core,api): enhance sqlite connection pragmas, backup deletion safety, and category path validation
+- fix(ui): persist settings accordion state, prevent signalr listener leaks, and add system action error toasts
+
+### 🔧 Maintenance & Improvements
+- chore: trigger CI pipeline
+- chore: trigger CI pipeline
+- style(frontend): fix indentation in App.tsx for editorconfig compliance
+- docs: add CHANGELOG.md, overhaul DOCKER_HUB.md, and expand update ingestion
+
 ## [v1.3.38](https://github.com/dmzoneill/Seedarr/releases/tag/v1.3.38) - 2026-09-10
 
 ### 🐛 Bug Fixes
