@@ -467,6 +467,24 @@ export function GettingStartedModal({
   return (
     <div
       className="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="getting-started-modal-title"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(10, 11, 18, 0.85)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 9999,
+        padding: "1rem",
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) handleClose();
       }}
@@ -479,9 +497,10 @@ export function GettingStartedModal({
           width: "92vw",
           maxHeight: "90vh",
           overflowY: "auto",
+          backgroundColor: "var(--bg-secondary, #2a2620)",
           borderRadius: "8px",
-          boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
+          boxShadow: "0 16px 40px rgba(0, 0, 0, 0.7)",
+          border: "1px solid var(--border-light, rgba(255, 255, 255, 0.15))",
           padding: "1.5rem",
           display: "flex",
           flexDirection: "column",
