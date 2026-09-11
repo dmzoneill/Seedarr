@@ -88,6 +88,7 @@ const en = {
     restartConfirm: "Restart Seedarr?",
     shutdown: "Shutdown",
     shutdownConfirm: "Shut down Seedarr?",
+    actionFailed: "Action failed",
     language: "Language",
     selectLanguage: "Select Language",
   },
