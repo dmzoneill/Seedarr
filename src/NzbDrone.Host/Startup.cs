@@ -84,13 +84,13 @@ public class Startup
 
                 // 1. API Key present in header, query parameter, or Bearer token
                 var hasApiKeyHeader = (req.Headers.TryGetValue("X-Api-Key", out var headerKey) && !string.IsNullOrWhiteSpace(headerKey)) ||
-                                      (req.Headers.TryGetValue("ApiKey", out var headerKey2) && !string.IsNullOrWhiteSpace(headerKey2));
+                    (req.Headers.TryGetValue("ApiKey", out var headerKey2) && !string.IsNullOrWhiteSpace(headerKey2));
                 var hasApiKeyQuery = (req.Query.TryGetValue("apikey", out var qKey) && !string.IsNullOrWhiteSpace(qKey)) ||
-                                     (req.Query.TryGetValue("access_token", out var qToken) && !string.IsNullOrWhiteSpace(qToken)) ||
-                                     (req.Query.TryGetValue("api_key", out var qApiKey) && !string.IsNullOrWhiteSpace(qApiKey));
+                    (req.Query.TryGetValue("access_token", out var qToken) && !string.IsNullOrWhiteSpace(qToken)) ||
+                    (req.Query.TryGetValue("api_key", out var qApiKey) && !string.IsNullOrWhiteSpace(qApiKey));
                 var hasBearerToken = req.Headers.TryGetValue("Authorization", out var authHeader) &&
-                                     authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) &&
-                                     !string.IsNullOrWhiteSpace(authHeader.ToString()["Bearer ".Length..].Trim());
+                    authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(authHeader.ToString()["Bearer ".Length..].Trim());
 
                 if (hasApiKeyHeader || hasApiKeyQuery || hasBearerToken)
                 {
