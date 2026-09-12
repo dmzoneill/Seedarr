@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.5.4](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.4) - 2026-09-12
+
+### 🐛 Bug Fixes
+- fix(host): allow reverse proxy origins for CORS to ensure SignalR real-time websocket connectivity
+
+### 🔧 Maintenance & Improvements
+- style(host): fix indentation in Startup.cs to conform to editorconfig
+
 ## [v1.5.3](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.3) - 2026-09-11
 
 ### 🐛 Bug Fixes
