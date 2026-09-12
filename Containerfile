@@ -74,6 +74,8 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 ENV SEEDARR__APP_DATA=/config
+ENV DOTNET_gcServer=0
+ENV DOTNET_GCHeapHardLimitPercent=75
 ENV PATH="$PATH:/root/.dotnet/tools"
 
 EXPOSE 9898
