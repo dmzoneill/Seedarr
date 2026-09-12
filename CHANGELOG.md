@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.5.5](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.5) - 2026-09-12
+
+### 🔧 Maintenance & Improvements
+- perf(runtime): bake workstation concurrent GC and heap limits into MSBuild props and Containerfile
+
 ## [v1.5.4](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.4) - 2026-09-12
 
 ### 🐛 Bug Fixes
