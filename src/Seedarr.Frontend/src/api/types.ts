@@ -1112,9 +1112,6 @@ export interface AutomationExecutionResult {
   shouldRecheck: boolean;
   shouldReannounce: boolean;
   shouldBoostTracker: boolean;
-  shouldRecheck: boolean;
-  shouldReannounce: boolean;
-  shouldBoostTracker: boolean;
   newUploadLimitKbps?: number | null;
   newDownloadLimitKbps?: number | null;
 }
