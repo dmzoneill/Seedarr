@@ -100,39 +100,43 @@ function SystemLogFiles() {
   };
 
   return (
-    <div className="content-area">
-      {/* Page Header */}
+    <div className="content-area" style={{ padding: "1.5rem" }}>
+      {/* Header Banner */}
       <div
-        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "1.25rem",
+          marginBottom: "1.5rem",
+          flexWrap: "wrap",
+          gap: "1rem",
         }}
       >
-        <div className="page-header-group">
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
-          >
-            <h1 className="page-heading" style={{ margin: 0 }}>
-              System: Log Files
-            </h1>
-            <span className="badge badge-primary">Disk Files</span>
-          </div>
-          <div
+        <div>
+          <h1
             style={{
-              fontSize: "0.8rem",
-              color: "var(--text-muted)",
-              marginTop: "0.2rem",
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
             }}
           >
-            Rotating plain text log files stored on disk for offline debugging
-            and diagnostic exports
-          </div>
+            <span>📁</span> System: Log Files
+          </h1>
+          <p
+            style={{
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
+            }}
+          >
+            Rotating plain text log files stored on disk for offline debugging and diagnostic exports
+          </p>
         </div>
 
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
           <button
             className="btn btn-outline btn-small"
             onClick={handleRefresh}

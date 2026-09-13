@@ -36,24 +36,56 @@ function History() {
   }
 
   return (
-    <div className="content-area">
-      <div className="page-heading-row">
-        <h1 className="page-heading">History</h1>
-      </div>
+    <div className="content-area" style={{ padding: "1.5rem" }}>
+      {/* Header Banner */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "1.5rem",
+          flexWrap: "wrap",
+          gap: "1rem",
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <span>📜</span> History
+          </h1>
+          <p
+            style={{
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
+            }}
+          >
+            Historical peer connection records, swarm traffic events, and active network connections
+          </p>
+        </div>
 
-      <div style={{ display: "flex", gap: 0, marginBottom: 16 }}>
-        <button
-          className={`btn ${activeTab === "log" ? "btn-primary" : "btn-default"}`}
-          onClick={() => setActiveTab("log")}
-        >
-          Connection Log
-        </button>
-        <button
-          className={`btn ${activeTab === "active" ? "btn-primary" : "btn-default"}`}
-          onClick={() => setActiveTab("active")}
-        >
-          Active Peers
-        </button>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          <button
+            className={`btn ${activeTab === "log" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setActiveTab("log")}
+          >
+            Connection Log
+          </button>
+          <button
+            className={`btn ${activeTab === "active" ? "btn-primary" : "btn-secondary"}`}
+            onClick={() => setActiveTab("active")}
+          >
+            Active Peers
+          </button>
+        </div>
       </div>
 
       {activeTab === "log" && (

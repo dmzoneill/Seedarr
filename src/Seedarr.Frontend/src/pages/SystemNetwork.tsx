@@ -115,42 +115,46 @@ function SystemNetwork() {
   }
 
   return (
-    <div className="content-area">
-      {/* Page Header */}
+    <div className="content-area" style={{ padding: "1.5rem" }}>
+      {/* Header Banner */}
       <div
-        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "1.25rem",
+          marginBottom: "1.5rem",
+          flexWrap: "wrap",
+          gap: "1rem",
         }}
       >
-        <div className="page-header-group">
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
-          >
-            <h1 className="page-heading" style={{ margin: 0 }}>
-              System: Network Diagnostics
-            </h1>
-            <span className="badge badge-primary">Networking</span>
-          </div>
-          <div
+        <div>
+          <h1
             style={{
-              fontSize: "0.8rem",
-              color: "var(--text-muted)",
-              marginTop: "0.2rem",
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
             }}
           >
-            Peer-to-peer connection endpoints, listening ports, proxy routes,
-            DHT node counts, and encryption metrics
-          </div>
+            <span>🌐</span> System: Network Diagnostics
+          </h1>
+          <p
+            style={{
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
+            }}
+          >
+            Peer-to-peer connection endpoints, listening ports, proxy routes, DHT node counts, and encryption metrics
+          </p>
         </div>
 
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
           <span
             className="badge badge-seeding"
-            style={{ padding: "0.3rem 0.65rem", fontSize: "0.82rem" }}
+            style={{ padding: "0.35rem 0.75rem", fontSize: "0.85rem" }}
           >
             Port {diag.listeningPort} (TCP/UDP)
           </span>
