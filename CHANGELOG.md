@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.6.4](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.4) - 2026-09-13
+
+### ✨ Features
+- feat(i18n): internationalize entire automation pipeline page and register automation translation catalog
+
+### 🔧 Maintenance & Improvements
+- style: remove trailing whitespace in AutomationPage
+- chore: remove scratch scripts
+
 ## [v1.6.3](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.3) - 2026-09-13
 
 ### ✨ Features
