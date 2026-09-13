@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n";
 import React, { useState, useMemo, useEffect } from "react";
 import {
   useAutomationScripts,
@@ -850,7 +851,49 @@ function yamlToVisualSteps(code: string): VisualStep[] {
       ];
 }
 
+
+function tGroup(t: any, label: string) {
+  if (label.includes("Tags & Categories")) return t("automation.groups.tagsAndCategories", { defaultValue: label });
+  if (label.includes("Torrent State")) return t("automation.groups.torrentState", { defaultValue: label });
+  if (label.includes("Limits & Priority")) return t("automation.groups.limitsAndPriority", { defaultValue: label });
+  if (label.includes("Storage & Files")) return t("automation.groups.storageAndFiles", { defaultValue: label });
+  if (label.includes("Trackers & Peers")) return t("automation.groups.trackersAndPeers", { defaultValue: label });
+  if (label.includes("Alerts & Servarr")) return t("automation.groups.notificationsAndAlerts", { defaultValue: label });
+  if (label.includes("Scripting & Flow Control")) return t("automation.groups.controlFlow", { defaultValue: label });
+  if (label.includes("Media Post-Processing")) return t("automation.groups.mediaPostProcessing", { defaultValue: label });
+  if (label.includes("HTTP Request")) return t("automation.groups.httpRequest", { defaultValue: label });
+  if (label.includes("Commands")) return t("automation.groups.commands", { defaultValue: label });
+  return t(label, { defaultValue: label });
+}
+
+function tTrigger(t: any, key: string, defaultLabel: string) {
+  const map: any = {
+    TorrentAdded: "torrentAdded",
+    TorrentCompleted: "torrentFinished",
+    RatioReached: "ratioReached",
+    SeedingTimeReached: "timeLimitReached",
+    TrackerUnreachable: "trackerError",
+    SpeedThresholdDropped: "speedDrop",
+    DiskSpaceLow: "diskSpaceLow",
+    Scheduled: "hourlySchedule",
+    Manual: "manual"
+  };
+  if (map[key]) return t("automation.triggers." + map[key], { defaultValue: defaultLabel });
+  return t("automation.triggers." + key, { defaultValue: defaultLabel });
+}
+
+function tAction(t: any, type: string, field: "label" | "placeholder" | "extraHelp", defaultText?: string) {
+  if (!defaultText) return defaultText;
+  return t("automation.actions." + type + "." + field, { defaultValue: defaultText });
+}
+
+function tCommand(t: any, name: string, defaultDesc: string) {
+  return t("automation.commands." + name, { defaultValue: defaultDesc });
+}
+
 export function AutomationPage() {
+  const { t } = useTranslation();
+
   const { data: scripts, isLoading: loadingScripts } = useAutomationScripts();
   const { data: templates, isLoading: loadingTemplates } = useAutomationMarketplace();
   const { data: torrents } = useTorrents();
@@ -1176,19 +1219,19 @@ if (torrent) {
             className={`btn ${activeTab === "scripts" ? "btn-primary" : "btn-secondary"}`}
             onClick={() => setActiveTab("scripts")}
           >
-            📋 My Pipelines ({scriptList.length})
+            {t("automation.tabs.visual")} ({scriptList.length})
           </button>
           <button
             className={`btn ${activeTab === "history" ? "btn-primary" : "btn-secondary"}`}
             onClick={() => setActiveTab("history")}
           >
-            📊 Run History
+            {t("automation.tabs.logs")}
           </button>
           <button
             className={`btn ${activeTab === "marketplace" ? "btn-primary" : "btn-secondary"}`}
             onClick={() => setActiveTab("marketplace")}
           >
-            🛍️ Marketplace ({templateList.length})
+            {t("automation.tabs.marketplace")} ({templateList.length})
           </button>
         </div>
       </div>
@@ -1231,7 +1274,7 @@ if (torrent) {
 
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <button className="btn btn-primary" onClick={() => openNewScript("Yaml")}>
-                ✨ + Visual Pipeline Builder
+                ✨ + {t("automation.tabs.visual")}
               </button>
               <button className="btn btn-secondary" onClick={() => openNewScript("JavaScript")}>
                 💻 + JavaScript Script
@@ -1299,7 +1342,7 @@ if (torrent) {
 
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "1rem" }}>
                       <span className="badge" style={{ backgroundColor: "rgba(59, 130, 246, 0.15)", color: "#60a5fa" }}>
-                        {TRIGGER_LABELS[script.trigger.toString()] || script.trigger.toString()}
+                        {tTrigger(t, script.trigger.toString(), TRIGGER_LABELS[script.trigger.toString()]) || script.trigger.toString()}
                       </span>
                       {script.targetCategories && script.targetCategories.length > 0 && (
                         <span className="badge" style={{ backgroundColor: "rgba(168, 85, 247, 0.15)", color: "#c084fc" }}>
@@ -1432,7 +1475,7 @@ if (torrent) {
                         </td>
                         <td style={{ padding: "0.75rem 0.5rem", fontWeight: 600 }}>{s.name}</td>
                         <td style={{ padding: "0.75rem 0.5rem" }}>
-                          <span className="badge">{TRIGGER_LABELS[s.trigger.toString()] || s.trigger.toString()}</span>
+                          <span className="badge">{tTrigger(t, s.trigger.toString(), TRIGGER_LABELS[s.trigger.toString()]) || s.trigger.toString()}</span>
                         </td>
                         <td style={{ padding: "0.75rem 0.5rem", color: "var(--text-muted)" }}>
                           {s.lastExecutedAt ? new Date(s.lastExecutedAt).toLocaleString() : "Unknown"}
@@ -1579,7 +1622,7 @@ if (torrent) {
                       }
                     }}
                   >
-                    ✨ Visual Pipeline Builder
+                    ✨ {t("automation.tabs.visual")}
                   </button>
                   <button
                     type="button"
@@ -2254,11 +2297,9 @@ if (torrent) {
                                   }}
                                 >
                                   {ACTION_GROUPS.map((group) => (
-                                    <optgroup key={group.group} label={group.group}>
+                                    <optgroup key={group.group} label={tGroup(t, group.group)}>
                                       {group.items.map((item) => (
-                                        <option key={item.type} value={item.type}>
-                                          {item.label}
-                                        </option>
+                                        <option key={item.type} value={item.type}>{tAction(t, item.type, "label", item.label)}</option>
                                       ))}
                                     </optgroup>
                                   ))}
