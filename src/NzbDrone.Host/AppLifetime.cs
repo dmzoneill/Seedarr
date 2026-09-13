@@ -151,7 +151,7 @@ public class AppLifetime : IHostedService, IDisposable
         {
             try
             {
-                var torrents = _torrentService.All();
+                var torrents = _torrentService.GetAll();
                 if (torrents != null && torrents.Count > 0)
                 {
                     var activeTorrents = torrents.Where(t => t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.Seeding).ToList();
@@ -175,8 +175,8 @@ public class AppLifetime : IHostedService, IDisposable
 
                     if (_configService != null)
                     {
-                        var maxDl = _configService.MaximumDownloadRate > 0 ? _configService.MaximumDownloadRate * 1024L : 0;
-                        var maxUl = _configService.MaximumUploadRate > 0 ? _configService.MaximumUploadRate * 1024L : 0;
+                        var maxDl = _configService.MaxDownloadSpeedKbps > 0 ? _configService.MaxDownloadSpeedKbps * 1024L : 0;
+                        var maxUl = _configService.MaxUploadSpeedKbps > 0 ? _configService.MaxUploadSpeedKbps * 1024L : 0;
 
                         if ((maxDl > 0 && totalDownloadSpeed >= maxDl) || (maxUl > 0 && totalUploadSpeed >= maxUl))
                         {
