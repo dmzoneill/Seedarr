@@ -78,6 +78,7 @@ public interface IConfigService
     int CustomScriptTimeoutSeconds { get; }
 
     // Speed
+    int HistoryRetentionDays { get; }
     int MaxUploadSpeedKbps { get; }
     int MaxDownloadSpeedKbps { get; }
     bool AlternativeSpeedEnabled { get; }
@@ -390,6 +391,7 @@ public class ConfigService : IConfigService
     public int CustomScriptTimeoutSeconds => GetValueInt("CustomScriptTimeoutSeconds", 60);
 
     // Speed
+    public int HistoryRetentionDays => GetValueInt("HistoryRetentionDays", 30);
     public const int DefaultMaxUploadSpeedKbps = 625;
     public const int DefaultMaxDownloadSpeedKbps = 1250;
 

@@ -66,11 +66,52 @@ function PeerMap() {
     return () => window.removeEventListener("resize", updateDimensions);
   }, [updateDimensions]);
 
+  const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
+  const mainGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const linkGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+
+  // Initialize SVG container & zoom behavior once
   useEffect(() => {
-    if (!graphData || !svgRef.current) return;
+    if (!svgRef.current) return;
 
     const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
+    if (!mainGroupRef.current) {
+      svg.selectAll("*").remove();
+
+      const defs = svg.append("defs");
+      defs
+        .append("marker")
+        .attr("id", "arrowhead")
+        .attr("viewBox", "0 -5 10 10")
+        .attr("refX", 22)
+        .attr("refY", 0)
+        .attr("markerWidth", 6)
+        .attr("markerHeight", 6)
+        .attr("orient", "auto")
+        .append("path")
+        .attr("d", "M0,-5L10,0L0,5")
+        .attr("fill", "rgba(255, 255, 255, 0.4)");
+
+      const g = svg.append("g").attr("class", "main-group");
+      mainGroupRef.current = g;
+      linkGroupRef.current = g.append("g").attr("class", "links");
+      nodeGroupRef.current = g.append("g").attr("class", "nodes");
+
+      const zoom = d3
+        .zoom<SVGSVGElement, unknown>()
+        .scaleExtent([0.1, 5])
+        .on("zoom", (event) => {
+          g.attr("transform", event.transform);
+        });
+
+      zoomRef.current = zoom;
+      svg.call(zoom);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!graphData || !svgRef.current || !mainGroupRef.current || !linkGroupRef.current || !nodeGroupRef.current) return;
 
     const { width, height } = dimensions;
 
@@ -109,15 +150,13 @@ function PeerMap() {
       }
     }
 
-    const nodes: SimNode[] = rawNodes.map((n) => ({ ...n }));
-    const links: SimLink[] = rawLinks.map((l) => ({
-      source: l.source,
-      target: l.target,
-      type: l.type,
-    }));
+    const prevNodes = new Map<string, SimNode>();
+    if (simulationRef.current) {
+      simulationRef.current.nodes().forEach((n) => prevNodes.set(n.id, n));
+    }
 
-    const numTorrents = nodes.filter((n) => n.type === "torrent").length;
-    const numPeers = nodes.filter((n) => n.type === "peer").length;
+    const numTorrents = rawNodes.filter((n) => n.type === "torrent").length;
+    const numPeers = rawNodes.filter((n) => n.type === "peer").length;
 
     // Dynamic radius based on torrent count to avoid cluster overlap
     const baseTorrentRadius = Math.max(
@@ -127,50 +166,36 @@ function PeerMap() {
     );
     const peerDistance = Math.max(90, Math.min(130, 800 / (numPeers || 1)));
 
-    // Pre-distribute torrent nodes in a circle around center to prevent tangling
     let tIdx = 0;
-    nodes.forEach((n) => {
-      if (n.type === "center") {
-        n.fx = width / 2;
-        n.fy = height / 2;
-      } else if (n.type === "torrent") {
+    const nodes: SimNode[] = rawNodes.map((n) => {
+      const prev = prevNodes.get(n.id);
+      const node: SimNode = prev ? { ...n, x: prev.x, y: prev.y, vx: prev.vx, vy: prev.vy } : { ...n };
+
+      if (node.type === "center") {
+        node.fx = width / 2;
+        node.fy = height / 2;
+      } else if (node.type === "torrent" && prev == null) {
         const angle = (tIdx / (numTorrents || 1)) * 2 * Math.PI - Math.PI / 2;
-        n.x = width / 2 + Math.cos(angle) * baseTorrentRadius;
-        n.y = height / 2 + Math.sin(angle) * baseTorrentRadius;
+        node.x = width / 2 + Math.cos(angle) * baseTorrentRadius;
+        node.y = height / 2 + Math.sin(angle) * baseTorrentRadius;
         tIdx++;
       }
+      return node;
     });
 
-    const g = svg.append("g");
+    const links: SimLink[] = rawLinks.map((l) => ({
+      source: l.source,
+      target: l.target,
+      type: l.type,
+    }));
 
-    const zoom = d3
-      .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.1, 5])
-      .on("zoom", (event) => {
-        g.attr("transform", event.transform);
-      });
+    if (!simulationRef.current) {
+      simulationRef.current = d3.forceSimulation<SimNode>();
+    }
 
-    zoomRef.current = zoom;
-    svg.call(zoom);
-
-    const defs = svg.append("defs");
-
-    // Arrowhead marker
-    defs
-      .append("marker")
-      .attr("id", "arrowhead")
-      .attr("viewBox", "0 -5 10 10")
-      .attr("refX", 22)
-      .attr("refY", 0)
-      .attr("markerWidth", 6)
-      .attr("markerHeight", 6)
-      .attr("orient", "auto")
-      .append("path")
-      .attr("d", "M0,-5L10,0L0,5")
-      .attr("fill", "rgba(255, 255, 255, 0.4)");
-
-    const simulation = d3
-      .forceSimulation<SimNode>(nodes)
+    const simulation = simulationRef.current;
+    simulation
+      .nodes(nodes)
       .force(
         "link",
         d3
@@ -201,18 +226,33 @@ function PeerMap() {
           .iterations(2),
       );
 
-    const linkGroup = g.append("g").attr("class", "links");
+    const linkGroup = linkGroupRef.current;
+    const nodeGroup = nodeGroupRef.current;
+
+    // Persistent Link Data Join
     const link = linkGroup
       .selectAll<SVGLineElement, SimLink>("line")
-      .data(links)
-      .enter()
-      .append("line")
-      .attr("stroke", (d) => LINK_COLORS[d.type] || "rgba(255, 255, 255, 0.2)")
-      .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1.2))
-      .attr("stroke-dasharray", (d) =>
-        d.type === "encrypted" ? "4,4" : "none",
-      )
-      .attr("opacity", 0.7);
+      .data(links, (d) => {
+        const s = typeof d.source === "object" ? (d.source as SimNode).id : d.source;
+        const t = typeof d.target === "object" ? (d.target as SimNode).id : d.target;
+        return `${s}->${t}`;
+      })
+      .join(
+        (enter) =>
+          enter
+            .append("line")
+            .attr("stroke", (d) => LINK_COLORS[d.type] || "rgba(255, 255, 255, 0.2)")
+            .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1.2))
+            .attr("stroke-dasharray", (d) =>
+              d.type === "encrypted" ? "4,4" : "none",
+            )
+            .attr("opacity", 0.7),
+        (update) =>
+          update
+            .attr("stroke", (d) => LINK_COLORS[d.type] || "rgba(255, 255, 255, 0.2)")
+            .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1.2)),
+        (exit) => exit.remove(),
+      );
 
     const drag = d3
       .drag<SVGGElement, SimNode>()
@@ -233,134 +273,158 @@ function PeerMap() {
         }
       });
 
-    const nodeGroup = g.append("g").attr("class", "nodes");
+    // Persistent Node Data Join
     const node = nodeGroup
-      .selectAll<SVGGElement, SimNode>("g")
-      .data(nodes)
-      .enter()
-      .append("g")
-      .call(drag)
-      .style("cursor", "pointer")
-      .on("click", (event, d) => {
-        event.stopPropagation();
-        setSelectedNode(d);
-      })
-      .on("mouseenter", (_event, d) => {
-        // Highlight connected neighborhood
-        const neighborIds = new Set<string>();
-        neighborIds.add(d.id);
-        links.forEach((l) => {
-          const sId = (l.source as SimNode).id;
-          const tId = (l.target as SimNode).id;
-          if (sId === d.id) neighborIds.add(tId);
-          if (tId === d.id) neighborIds.add(sId);
-        });
+      .selectAll<SVGGElement, SimNode>("g.node")
+      .data(nodes, (d) => d.id)
+      .join(
+        (enter) => {
+          const g = enter
+            .append("g")
+            .attr("class", "node")
+            .call(drag)
+            .style("cursor", "pointer")
+            .on("click", (event, d) => {
+              event.stopPropagation();
+              setSelectedNode(d);
+            })
+            .on("mouseenter", (_event, d) => {
+              const neighborIds = new Set<string>();
+              neighborIds.add(d.id);
+              links.forEach((l) => {
+                const sId = typeof l.source === "object" ? (l.source as SimNode).id : l.source;
+                const tId = typeof l.target === "object" ? (l.target as SimNode).id : l.target;
+                if (sId === d.id) neighborIds.add(tId as string);
+                if (tId === d.id) neighborIds.add(sId as string);
+              });
 
-        nodeGroup
-          .selectAll<SVGGElement, SimNode>("g")
-          .transition()
-          .duration(150)
-          .attr("opacity", (n) => (neighborIds.has(n.id) ? 1 : 0.2));
+              nodeGroup
+                .selectAll<SVGGElement, SimNode>("g.node")
+                .transition()
+                .duration(150)
+                .attr("opacity", (n) => (neighborIds.has(n.id) ? 1 : 0.2));
 
-        linkGroup
-          .selectAll<SVGLineElement, SimLink>("line")
-          .transition()
-          .duration(150)
-          .attr("opacity", (l) => {
-            const sId = (l.source as SimNode).id;
-            const tId = (l.target as SimNode).id;
-            return sId === d.id || tId === d.id ? 1 : 0.05;
-          })
-          .attr("stroke-width", (l) => {
-            const sId = (l.source as SimNode).id;
-            const tId = (l.target as SimNode).id;
-            return sId === d.id || tId === d.id ? 2.5 : 1;
+              linkGroup
+                .selectAll<SVGLineElement, SimLink>("line")
+                .transition()
+                .duration(150)
+                .attr("opacity", (l) => {
+                  const sId = typeof l.source === "object" ? (l.source as SimNode).id : l.source;
+                  const tId = typeof l.target === "object" ? (l.target as SimNode).id : l.target;
+                  return sId === d.id || tId === d.id ? 1 : 0.05;
+                })
+                .attr("stroke-width", (l) => {
+                  const sId = typeof l.source === "object" ? (l.source as SimNode).id : l.source;
+                  const tId = typeof l.target === "object" ? (l.target as SimNode).id : l.target;
+                  return sId === d.id || tId === d.id ? 2.5 : 1;
+                });
+            })
+            .on("mouseleave", () => {
+              nodeGroup
+                .selectAll<SVGGElement, SimNode>("g.node")
+                .transition()
+                .duration(150)
+                .attr("opacity", 1);
+              linkGroup
+                .selectAll<SVGLineElement, SimLink>("line")
+                .transition()
+                .duration(150)
+                .attr("opacity", 0.7)
+                .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1.2));
+            });
+
+          g.append("circle")
+            .attr("class", "node-circle")
+            .attr("r", (d) => {
+              if (d.type === "center") return 26;
+              if (d.type === "torrent") return 15;
+              return 9;
+            })
+            .attr("fill", (d) => NODE_COLORS[d.type] || "#666")
+            .attr("stroke", "#111")
+            .attr("stroke-width", 2)
+            .attr("opacity", 0.95);
+
+          g.append("text")
+            .attr("class", "node-label")
+            .text((d) => {
+              if (d.label.length > 18) {
+                return d.label.substring(0, 16) + "...";
+              }
+              return d.label;
+            })
+            .attr("text-anchor", "middle")
+            .attr("dy", (d) => {
+              if (d.type === "center") return 44;
+              if (d.type === "torrent") return 28;
+              return 22;
+            })
+            .attr("fill", "var(--text-primary)")
+            .attr("stroke", "#0e0e0e")
+            .attr("stroke-width", "3.5px")
+            .attr("paint-order", "stroke fill")
+            .attr("font-size", (d) => {
+              if (d.type === "center") return "12px";
+              if (d.type === "torrent") return "10px";
+              return "8px";
+            })
+            .attr("font-weight", (d) => (d.type === "center" ? 700 : 600))
+            .attr("font-family", "inherit");
+
+          g.filter((d) => d.type === "center")
+            .append("text")
+            .attr("class", "node-center-icon")
+            .text("⬢")
+            .attr("text-anchor", "middle")
+            .attr("dy", 6)
+            .attr("fill", "#111")
+            .attr("font-size", "22px");
+
+          g.filter((d) => d.type === "torrent")
+            .append("text")
+            .attr("class", "node-torrent-icon")
+            .text("■")
+            .attr("text-anchor", "middle")
+            .attr("dy", 5)
+            .attr("fill", "#111")
+            .attr("font-size", "12px");
+
+          g.filter((d) => d.isEncrypted === true)
+            .append("circle")
+            .attr("class", "node-encrypted-dot")
+            .attr("cx", (d) => (d.type === "peer" ? 8 : 15))
+            .attr("cy", (d) => (d.type === "peer" ? -8 : -15))
+            .attr("r", 5)
+            .attr("fill", "#27ae60");
+
+          g.append("title").text((d) => {
+            if (d.type === "center") return "Seedarr Instance (Click for details)";
+            if (d.type === "torrent")
+              return `Torrent: ${d.label}\n${d.infoHash || ""}\n(Click to view details)`;
+            return `Peer: ${d.label}${d.isEncrypted ? " (encrypted)" : ""}\n(Click for details)`;
           });
-      })
-      .on("mouseleave", () => {
-        nodeGroup
-          .selectAll<SVGGElement, SimNode>("g")
-          .transition()
-          .duration(150)
-          .attr("opacity", 1);
-        linkGroup
-          .selectAll<SVGLineElement, SimLink>("line")
-          .transition()
-          .duration(150)
-          .attr("opacity", 0.7)
-          .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1.2));
-      });
 
-    node
-      .append("circle")
-      .attr("r", (d) => {
-        if (d.type === "center") return 26;
-        if (d.type === "torrent") return 15;
-        return 9;
-      })
-      .attr("fill", (d) => NODE_COLORS[d.type] || "#666")
-      .attr("stroke", "#111")
-      .attr("stroke-width", 2)
-      .attr("opacity", 0.95);
-
-    node
-      .append("text")
-      .text((d) => {
-        if (d.label.length > 18) {
-          return d.label.substring(0, 16) + "...";
-        }
-        return d.label;
-      })
-      .attr("text-anchor", "middle")
-      .attr("dy", (d) => {
-        if (d.type === "center") return 44;
-        if (d.type === "torrent") return 28;
-        return 22;
-      })
-      .attr("fill", "var(--text-primary)")
-      .attr("stroke", "#0e0e0e")
-      .attr("stroke-width", "3.5px")
-      .attr("paint-order", "stroke fill")
-      .attr("font-size", (d) => {
-        if (d.type === "center") return "12px";
-        if (d.type === "torrent") return "10px";
-        return "8px";
-      })
-      .attr("font-weight", (d) => (d.type === "center" ? 700 : 600))
-      .attr("font-family", "inherit");
-
-    node
-      .filter((d) => d.type === "center")
-      .append("text")
-      .text("⬢")
-      .attr("text-anchor", "middle")
-      .attr("dy", 6)
-      .attr("fill", "#111")
-      .attr("font-size", "22px");
-
-    node
-      .filter((d) => d.type === "torrent")
-      .append("text")
-      .text("■")
-      .attr("text-anchor", "middle")
-      .attr("dy", 5)
-      .attr("fill", "#111")
-      .attr("font-size", "12px");
-
-    node
-      .filter((d) => d.isEncrypted === true)
-      .append("circle")
-      .attr("cx", (d) => (d.type === "peer" ? 8 : 15))
-      .attr("cy", (d) => (d.type === "peer" ? -8 : -15))
-      .attr("r", 5)
-      .attr("fill", "#27ae60");
-
-    node.append("title").text((d) => {
-      if (d.type === "center") return "Seedarr Instance (Click for details)";
-      if (d.type === "torrent")
-        return `Torrent: ${d.label}\n${d.infoHash || ""}\n(Click to view details)`;
-      return `Peer: ${d.label}${d.isEncrypted ? " (encrypted)" : ""}\n(Click for details)`;
-    });
+          return g;
+        },
+        (update) => {
+          update
+            .select(".node-label")
+            .text((d) => {
+              if (d.label.length > 18) {
+                return d.label.substring(0, 16) + "...";
+              }
+              return d.label;
+            });
+          update.select("title").text((d) => {
+            if (d.type === "center") return "Seedarr Instance (Click for details)";
+            if (d.type === "torrent")
+              return `Torrent: ${d.label}\n${d.infoHash || ""}\n(Click to view details)`;
+            return `Peer: ${d.label}${d.isEncrypted ? " (encrypted)" : ""}\n(Click for details)`;
+          });
+          return update;
+        },
+        (exit) => exit.remove(),
+      );
 
     simulation.on("tick", () => {
       link
@@ -387,6 +451,8 @@ function PeerMap() {
 
       node.attr("transform", (d) => `translate(${d.x ?? 0},${d.y ?? 0})`);
     });
+
+    simulation.alpha(0.3).restart();
 
     return () => {
       simulation.stop();

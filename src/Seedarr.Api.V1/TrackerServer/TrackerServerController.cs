@@ -59,8 +59,8 @@ public class TrackerServerController : Controller
             totalTorrents = _peerDatabase.GetTotalTorrentCount(),
             internalTorrents = internalCount,
             totalPeers = _peerDatabase.GetTotalPeerCount(),
-            totalAnnounces = _totalAnnounces,
-            totalScrapes = _totalScrapes,
+            totalAnnounces = _peerDatabase.TotalAnnounces + _totalAnnounces,
+            totalScrapes = _peerDatabase.TotalScrapes + _totalScrapes,
             uptime = (long)(DateTime.UtcNow - StartTime).TotalSeconds
         });
     }

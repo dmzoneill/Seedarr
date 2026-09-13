@@ -12,6 +12,7 @@ public class RingBufferTarget : TargetWithLayout
     private readonly LogEntryRecord[] _buffer;
     private int _position;
     private int _count;
+    private int _currentId;
 
     public int Capacity { get; }
 
@@ -23,17 +24,18 @@ public class RingBufferTarget : TargetWithLayout
 
     protected override void Write(LogEventInfo logEvent)
     {
-        var entry = new LogEntryRecord
-        {
-            Time = logEvent.TimeStamp.ToUniversalTime(),
-            Level = logEvent.Level.Name,
-            Logger = logEvent.LoggerName,
-            Message = logEvent.FormattedMessage,
-            Exception = logEvent.Exception?.ToString()
-        };
-
         lock (_lock)
         {
+            var entry = new LogEntryRecord
+            {
+                Id = ++_currentId,
+                Time = logEvent.TimeStamp.ToUniversalTime(),
+                Level = logEvent.Level.Name,
+                Logger = logEvent.LoggerName,
+                Message = logEvent.FormattedMessage,
+                Exception = logEvent.Exception?.ToString()
+            };
+
             _buffer[_position] = entry;
             _position = (_position + 1) % Capacity;
 

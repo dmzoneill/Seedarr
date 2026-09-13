@@ -124,16 +124,16 @@ public class SeedingConfigController : ConfigController<SeedingConfigResource>
         : base(configService)
     {
         SharedValidator.RuleFor(c => c.MaxUploadSpeedKbps)
-            .GreaterThanOrEqualTo(1);
+            .GreaterThanOrEqualTo(0);
 
         SharedValidator.RuleFor(c => c.MaxDownloadSpeedKbps)
-            .GreaterThanOrEqualTo(1);
+            .GreaterThanOrEqualTo(0);
 
         SharedValidator.RuleFor(c => c.AltUploadSpeedKbps)
-            .GreaterThanOrEqualTo(1);
+            .GreaterThanOrEqualTo(0);
 
         SharedValidator.RuleFor(c => c.AltDownloadSpeedKbps)
-            .GreaterThanOrEqualTo(1);
+            .GreaterThanOrEqualTo(0);
 
         SharedValidator.RuleFor(c => c.GlobalSeedRatioLimit)
             .GreaterThanOrEqualTo(0);

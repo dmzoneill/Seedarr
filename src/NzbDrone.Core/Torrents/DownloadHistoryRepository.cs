@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -32,7 +33,7 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
             new { TorrentId = torrentId });
     }
 
-    public List<DownloadHistory> GetHistory(string query = null, string status = null, int limit = 500)
+    public List<DownloadHistory> GetHistory(string query = null, string status = null, int limit = 500, int offset = 0)
     {
         using var connection = _database.OpenConnection();
         var sql = new StringBuilder($"SELECT * FROM \"{_table}\" WHERE 1=1");
@@ -58,7 +59,21 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
             parameters.Add("Limit", limit);
         }
 
+        if (offset > 0)
+        {
+            sql.Append(" OFFSET @Offset");
+            parameters.Add("Offset", offset);
+        }
+
         return connection.Query<DownloadHistory>(sql.ToString(), parameters).ToList();
+    }
+
+    public int DeleteOlderThan(DateTime cutoffDate)
+    {
+        using var connection = _database.OpenConnection();
+        return connection.Execute(
+            $"DELETE FROM \"{_table}\" WHERE \"DateAdded\" < @Cutoff",
+            new { Cutoff = cutoffDate });
     }
 
     public void DeleteAll()

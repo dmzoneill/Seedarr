@@ -790,9 +790,14 @@ public class TrackerBoostService : ITrackerBoostService
             if (completedTask == receiveTask)
             {
                 var result = await receiveTask;
-                if (result.Buffer.Length >= 8)
+                if (result.Buffer.Length >= 16)
                 {
-                    return true;
+                    var responseAction = ReadInt32BigEndian(result.Buffer, 0);
+                    var responseTransactionId = ReadInt32BigEndian(result.Buffer, 4);
+                    if (responseAction == 0 && responseTransactionId == transactionId)
+                    {
+                        return true;
+                    }
                 }
             }
 

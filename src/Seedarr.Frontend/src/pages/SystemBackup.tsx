@@ -4,6 +4,7 @@ import {
   useCreateBackup,
   useDeleteBackup,
   useRestoreBackup,
+  useGeneralConfig,
 } from "../api/hooks";
 import { useToast } from "../context/ToastContext";
 import { formatBytes, formatDate } from "../utils/formatters";
@@ -84,6 +85,7 @@ function TrashIcon() {
 
 function SystemBackup() {
   const { data: backups, isLoading, isError } = useBackups();
+  const { data: generalConfig } = useGeneralConfig();
   const createBackup = useCreateBackup();
   const deleteBackup = useDeleteBackup();
   const restoreBackup = useRestoreBackup();
@@ -91,6 +93,13 @@ function SystemBackup() {
 
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
+
+  const getDownloadUrl = (backupId: number) => {
+    const urlBase = (generalConfig?.urlBase || "").replace(/\/$/, "");
+    const apiKey = generalConfig?.apiKey || "";
+    const base = `${urlBase}/api/v1/backup/${backupId}/download`;
+    return apiKey ? `${base}?apikey=${encodeURIComponent(apiKey)}` : base;
+  };
 
   const handleCreateBackup = () => {
     createBackup.mutate(undefined, {
@@ -248,7 +257,7 @@ function SystemBackup() {
                   <tr key={backup.id} className="torrent-table-row">
                     <td>
                       <a
-                        href={`/api/v1/backup/${backup.id}/download`}
+                        href={getDownloadUrl(backup.id)}
                         className="torrent-link"
                         download
                         style={{

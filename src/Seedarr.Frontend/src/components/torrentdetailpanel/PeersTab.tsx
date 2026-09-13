@@ -38,7 +38,11 @@ export function PeersTab({ torrentId }: { torrentId: number }) {
                     gap: "0.4rem",
                   }}
                 >
-                  <CountryFlag ip={p.ip} />
+                  <CountryFlag
+                    ip={p.ip}
+                    countryCode={p.countryCode}
+                    countryName={p.countryName}
+                  />
                   <span>
                     {p.ip}:{p.port}
                   </span>

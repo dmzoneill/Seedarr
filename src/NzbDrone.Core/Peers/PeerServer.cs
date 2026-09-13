@@ -34,6 +34,9 @@ public class PeerServer : BackgroundService
     private readonly IRandomNumberGenerator _random;
     private readonly Transport.IUtpManager _utpManager;
     private readonly IVpnKillSwitchService _vpnKillSwitchService;
+    private readonly Extensions.IFastExtensionHandler _fastExtensionHandler;
+    private readonly Extensions.IExtensionManager _extensionManager;
+    private readonly IChokeManager _chokeManager;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
@@ -52,7 +55,10 @@ public class PeerServer : BackgroundService
         IRandomNumberGenerator random = null,
         Transport.IUtpManager utpManager = null,
         IClientBehaviorSimulator clientBehaviorSimulator = null,
-        IVpnKillSwitchService vpnKillSwitchService = null)
+        IVpnKillSwitchService vpnKillSwitchService = null,
+        Extensions.IFastExtensionHandler fastExtensionHandler = null,
+        Extensions.IExtensionManager extensionManager = null,
+        IChokeManager chokeManager = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -62,6 +68,9 @@ public class PeerServer : BackgroundService
         _trackerEntryService = trackerEntryService;
         _eventLogService = eventLogService;
         _trackerMetricService = trackerMetricService;
+        _fastExtensionHandler = fastExtensionHandler;
+        _extensionManager = extensionManager;
+        _chokeManager = chokeManager;
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -489,9 +498,43 @@ public class PeerServer : BackgroundService
                 return;
             }
 
-            connection.SendBitfield(torrent.PieceCount);
-            connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
-            connection.AmChoking = false;
+            if (connection.SupportsFastExtension && _fastExtensionHandler != null && !string.IsNullOrEmpty(torrent.InfoHash))
+            {
+                _fastExtensionHandler.RegisterFastPeer(connection, Convert.FromHexString(torrent.InfoHash), torrent.PieceCount, 10);
+            }
+
+            if (connection.SupportsExtensionProtocol && _extensionManager != null)
+            {
+                var extHandshake = _extensionManager.BuildExtensionHandshake(torrent.IsPrivate);
+                var payload = new byte[extHandshake.Length + 1];
+                payload[0] = 0;
+                Array.Copy(extHandshake, 0, payload, 1, extHandshake.Length);
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
+            }
+
+            if (_fastExtensionHandler != null && connection.SupportsFastExtension)
+            {
+                _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, true);
+            }
+            else
+            {
+                connection.SendBitfield(torrent.PieceCount);
+            }
+
+            _chokeManager?.PeerConnected(connection);
+            if (_chokeManager != null)
+            {
+                if (_chokeManager.CanUnchoke(connection))
+                {
+                    connection.AmChoking = false;
+                    connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                }
+            }
+            else
+            {
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                connection.AmChoking = false;
+            }
 
             _connectionManager.Add(connection);
             _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, true);
@@ -553,7 +596,7 @@ public class PeerServer : BackgroundService
                     continue;
                 }
 
-                HandleMessage(connection, message);
+                HandleMessage(connection, message, torrent);
             }
         }
         catch (Exception ex)
@@ -562,6 +605,8 @@ public class PeerServer : BackgroundService
         }
         finally
         {
+            _fastExtensionHandler?.UnregisterPeer(connection);
+            _chokeManager?.PeerDisconnected(connection);
             _connectionManager.Remove(connection);
             connection.Dispose();
         }
@@ -613,10 +658,45 @@ public class PeerServer : BackgroundService
                 connection.IsEncrypted,
                 connection.EncryptionMethod);
 
+            if (connection.SupportsFastExtension && _fastExtensionHandler != null && !string.IsNullOrEmpty(torrent.InfoHash))
+            {
+                _fastExtensionHandler.RegisterFastPeer(connection, Convert.FromHexString(torrent.InfoHash), torrent.PieceCount, 10);
+            }
+
+            if (connection.SupportsExtensionProtocol && _extensionManager != null)
+            {
+                var extHandshake = _extensionManager.BuildExtensionHandshake(torrent.IsPrivate);
+                var payload = new byte[extHandshake.Length + 1];
+                payload[0] = 0;
+                Array.Copy(extHandshake, 0, payload, 1, extHandshake.Length);
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
+            }
+
+            if (_fastExtensionHandler != null && connection.SupportsFastExtension)
+            {
+                _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, true);
+            }
+            else
+            {
+                connection.SendBitfield(torrent.PieceCount);
+            }
+
+            _chokeManager?.PeerConnected(connection);
+            if (_chokeManager != null)
+            {
+                if (_chokeManager.CanUnchoke(connection))
+                {
+                    connection.AmChoking = false;
+                    connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                }
+            }
+            else
+            {
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                connection.AmChoking = false;
+            }
+
             _connectionManager.Add(connection);
-            connection.SendBitfield(torrent.PieceCount);
-            connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
-            connection.AmChoking = false;
 
             while (connection.IsConnected && !stoppingToken.IsCancellationRequested)
             {
@@ -643,7 +723,7 @@ public class PeerServer : BackgroundService
                     continue;
                 }
 
-                HandleMessage(connection, message);
+                HandleMessage(connection, message, torrent);
             }
         }
         catch (Exception ex)
@@ -652,6 +732,8 @@ public class PeerServer : BackgroundService
         }
         finally
         {
+            _fastExtensionHandler?.UnregisterPeer(connection);
+            _chokeManager?.PeerDisconnected(connection);
             _connectionManager.Remove(connection);
         }
     }
@@ -667,13 +749,25 @@ public class PeerServer : BackgroundService
         });
     }
 
-    private void HandleMessage(PeerConnection connection, PeerMessage message)
+    private void HandleMessage(PeerConnection connection, PeerMessage message, Torrent torrent)
     {
         switch (message.Type)
         {
+            case PeerMessageType.Choke:
+                connection.PeerChoking = true;
+                break;
+
+            case PeerMessageType.Unchoke:
+                connection.PeerChoking = false;
+                break;
+
             case PeerMessageType.Interested:
                 connection.PeerInterested = true;
-                if (connection.AmChoking)
+                if (_chokeManager != null)
+                {
+                    _chokeManager.PeerInterestedChanged(connection);
+                }
+                else if (connection.AmChoking)
                 {
                     connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
                     connection.AmChoking = false;
@@ -683,9 +777,58 @@ public class PeerServer : BackgroundService
 
             case PeerMessageType.NotInterested:
                 connection.PeerInterested = false;
+                _chokeManager?.PeerInterestedChanged(connection);
+                break;
+
+            case PeerMessageType.Have:
+                if (message.Payload != null && message.Payload.Length >= 4)
+                {
+                    var pieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
+                    if (torrent != null && torrent.PieceCount > 0)
+                    {
+                        if (connection.PeerPieces == null)
+                        {
+                            connection.PeerPieces = new bool[torrent.PieceCount];
+                        }
+
+                        if (pieceIndex >= 0 && pieceIndex < connection.PeerPieces.Length)
+                        {
+                            connection.PeerPieces[pieceIndex] = true;
+                            var haveCount = connection.PeerPieces.Count(b => b);
+                            connection.Progress = (double)haveCount / torrent.PieceCount;
+                        }
+                    }
+                }
+
+                break;
+
+            case PeerMessageType.Bitfield:
+                if (message.Payload != null && torrent != null && torrent.PieceCount > 0)
+                {
+                    if (connection.PeerPieces == null)
+                    {
+                        connection.PeerPieces = new bool[torrent.PieceCount];
+                    }
+
+                    for (var i = 0; i < torrent.PieceCount; i++)
+                    {
+                        var byteIndex = i / 8;
+                        var bitIndex = 7 - (i % 8);
+                        if (byteIndex < message.Payload.Length)
+                        {
+                            connection.PeerPieces[i] = ((message.Payload[byteIndex] >> bitIndex) & 1) != 0;
+                        }
+                    }
+
+                    var haveCount = connection.PeerPieces.Count(b => b);
+                    connection.Progress = (double)haveCount / torrent.PieceCount;
+                }
+
                 break;
 
             case PeerMessageType.Request:
+                _chokeManager?.UpdatePeerActivity(connection);
+
                 if (_random.NextDouble() < connection.IdleChance)
                 {
                     connection.SendKeepAlive();
@@ -695,18 +838,79 @@ public class PeerServer : BackgroundService
                 if (connection.PendingRequestCount >= connection.MaxPipelinedRequests)
                 {
                     _logger.Trace(
-                        "Request pipeline full ({0}) from {1}, ignoring",
+                        "Request pipeline full ({0}) from {1}, rejecting",
                         connection.MaxPipelinedRequests,
                         connection.RemoteIp);
+
+                    if (connection.SupportsFastExtension && _fastExtensionHandler != null && message.Payload?.Length >= 12)
+                    {
+                        var rejectMsg = _fastExtensionHandler.BuildRejectForRequest(message.Payload);
+                        if (rejectMsg != null)
+                        {
+                            connection.SendMessage(rejectMsg);
+                        }
+                    }
+
                     break;
                 }
 
                 if (message.Payload != null && message.Payload.Length >= 12)
                 {
-                    HandlePieceRequest(connection, message.Payload);
-                    connection.PendingRequestCount++;
+                    var pieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
+                    var isAllowedFast = connection.SupportsFastExtension && _fastExtensionHandler != null && _fastExtensionHandler.GetAllowedFastSet(connection).Contains(pieceIndex);
+
+                    if (!connection.AmChoking || isAllowedFast)
+                    {
+                        HandlePieceRequest(connection, message.Payload);
+                        connection.PendingRequestCount++;
+                    }
+                    else
+                    {
+                        if (connection.SupportsFastExtension && _fastExtensionHandler != null)
+                        {
+                            var rejectMsg = _fastExtensionHandler.BuildRejectForRequest(message.Payload);
+                            if (rejectMsg != null)
+                            {
+                                connection.SendMessage(rejectMsg);
+                            }
+                        }
+                    }
                 }
 
+                break;
+
+            case PeerMessageType.Cancel:
+                if (connection.PendingRequestCount > 0)
+                {
+                    connection.PendingRequestCount--;
+                }
+
+                break;
+
+            case PeerMessageType.SuggestPiece:
+            case PeerMessageType.HaveAll:
+            case PeerMessageType.HaveNone:
+            case PeerMessageType.RejectRequest:
+            case PeerMessageType.AllowedFast:
+                if (connection.SupportsFastExtension && _fastExtensionHandler != null)
+                {
+                    _fastExtensionHandler.HandleMessage(connection, message, torrent?.PieceCount ?? 0);
+                    if (message.Type == PeerMessageType.HaveAll && torrent != null && torrent.PieceCount > 0)
+                    {
+                        connection.PeerPieces = new bool[torrent.PieceCount];
+                        Array.Fill(connection.PeerPieces, true);
+                        connection.Progress = 1.0;
+                    }
+                    else if (message.Type == PeerMessageType.HaveNone && torrent != null && torrent.PieceCount > 0)
+                    {
+                        connection.PeerPieces = new bool[torrent.PieceCount];
+                        connection.Progress = 0.0;
+                    }
+                }
+
+                break;
+
+            case PeerMessageType.Extended:
                 break;
 
             default:
@@ -747,6 +951,7 @@ public class PeerServer : BackgroundService
             piecePayload[7] = (byte)begin;
 
             connection.SendMessage(new PeerMessage { Type = PeerMessageType.Piece, Payload = piecePayload, PayloadLength = payloadSize });
+            connection.BytesUploaded += length;
         }
         finally
         {

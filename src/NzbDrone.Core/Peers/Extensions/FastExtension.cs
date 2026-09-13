@@ -36,6 +36,8 @@ public interface IFastExtensionHandler
     void HandleMessage(PeerConnection connection, PeerMessage message, int pieceCount);
     HashSet<int> GetAllowedFastSet(PeerConnection connection);
     bool IsFastPeer(PeerConnection connection);
+    void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll = true);
+    PeerMessage BuildRejectForRequest(byte[] payload);
     void RegisterFastPeer(PeerConnection connection, byte[] infoHash, int pieceCount, int setSize);
     void UnregisterPeer(PeerConnection connection);
 }

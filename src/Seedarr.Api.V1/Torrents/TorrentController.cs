@@ -39,6 +39,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly ITrackerAnnounceService _trackerAnnounceService;
     private readonly IMediaEnrichmentService _mediaEnrichmentService;
     private readonly ICategoryService _categoryService;
+    private readonly NzbDrone.Core.Network.GeoIp.IGeoIpService _geoIpService;
 
     public TorrentController(
         ITorrentService torrentService,
@@ -54,7 +55,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         ITrackerBoostService trackerBoostService = null,
         ITrackerAnnounceService trackerAnnounceService = null,
         IMediaEnrichmentService mediaEnrichmentService = null,
-        ICategoryService categoryService = null)
+        ICategoryService categoryService = null,
+        NzbDrone.Core.Network.GeoIp.IGeoIpService geoIpService = null)
         : base(signalRBroadcaster)
     {
         _torrentService = torrentService;
@@ -69,6 +71,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _trackerAnnounceService = trackerAnnounceService;
         _mediaEnrichmentService = mediaEnrichmentService;
         _categoryService = categoryService;
+        _geoIpService = geoIpService;
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -441,7 +444,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         var connections = _connectionManager.GetConnections(torrent.InfoHash);
         var id = 1;
-        return connections.Select(c => TorrentResourceMapper.ToPeerResource(c, id++)).ToList();
+        return connections.Select(c =>
+        {
+            var geo = _geoIpService?.Lookup(c.RemoteIp);
+            return TorrentResourceMapper.ToPeerResource(c, id++, geo);
+        }).ToList();
     }
 
     [HttpPost]
@@ -473,6 +480,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         if (string.IsNullOrWhiteSpace(resource.InfoHash) || !global::System.Text.RegularExpressions.Regex.IsMatch(resource.InfoHash, "^[a-fA-F0-9]{40}$"))
         {
             return BadRequest(new { message = "'InfoHash' must be a 40-character hexadecimal string." });
+        }
+
+        if (_torrentService.ExistsByInfoHash(resource.InfoHash))
+        {
+            return Conflict(new { message = $"Torrent with info hash '{resource.InfoHash}' already exists." });
         }
 
         var torrent = TorrentResourceMapper.ToModel(resource);

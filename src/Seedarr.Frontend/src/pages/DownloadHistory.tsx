@@ -41,6 +41,8 @@ export default function DownloadHistory() {
   const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
   const [selectedDetailItem, setSelectedDetailItem] =
     useState<DownloadHistoryEntry | null>(null);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"json" | "csv">("json");
   const { showToast } = useToast();
 
   const { data: arrConnections } = useArrConnections();
@@ -247,6 +249,15 @@ export default function DownloadHistory() {
             title="Fetch and update rich media metadata and posters from connected Sonarr/Radarr/Lidarr instances"
           >
             ⚡ Sync Arr Metadata
+          </button>
+
+          <button
+            className="btn btn-outline"
+            onClick={() => setShowExportModal(true)}
+            disabled={totalCount === 0}
+            title="Export download history as JSON or CSV"
+          >
+            📥 Export History
           </button>
 
           <button
@@ -1840,6 +1851,153 @@ export default function DownloadHistory() {
           initialQuery={searchModalQuery}
           onClose={() => setSearchModalQuery(null)}
         />
+      )}
+
+      {/* History Export Modal */}
+      {showExportModal && (
+        <div className="modal-overlay" onClick={() => setShowExportModal(false)}>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 500,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid var(--border-light)",
+            }}
+          >
+            <h3
+              className="modal-title"
+              style={{ fontSize: "1.15rem", marginBottom: "0.75rem" }}
+            >
+              📥 Export Download History
+            </h3>
+            <p
+              style={{
+                fontSize: "0.875rem",
+                color: "var(--text-secondary)",
+                marginBottom: "1.25rem",
+                lineHeight: 1.5,
+              }}
+            >
+              Export {history?.length ?? 0} historical download records in JSON or CSV format.
+            </p>
+
+            <div style={{ marginBottom: "1.25rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  marginBottom: "0.5rem",
+                  color: "var(--text-primary)",
+                }}
+              >
+                Export Format
+              </label>
+              <div style={{ display: "flex", gap: "1rem" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                  <input
+                    type="radio"
+                    name="exportFormat"
+                    value="json"
+                    checked={exportFormat === "json"}
+                    onChange={() => setExportFormat("json")}
+                  />
+                  <span>JSON (.json)</span>
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                  <input
+                    type="radio"
+                    name="exportFormat"
+                    value="csv"
+                    checked={exportFormat === "csv"}
+                    onChange={() => setExportFormat("csv")}
+                  />
+                  <span>CSV (.csv)</span>
+                </label>
+              </div>
+            </div>
+
+            <div
+              className="modal-actions"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.5rem",
+              }}
+            >
+              <button
+                className="btn btn-outline btn-small"
+                onClick={() => setShowExportModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary btn-small"
+                onClick={() => {
+                  if (!history || history.length === 0) return;
+                  const dateStr = new Date().toISOString().slice(0, 10);
+                  if (exportFormat === "json") {
+                    const blob = new Blob([JSON.stringify(history, null, 2)], {
+                      type: "application/json",
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `seedarr-history-${dateStr}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } else {
+                    const headers = [
+                      "ID",
+                      "Title",
+                      "InfoHash",
+                      "Source",
+                      "Status",
+                      "TotalSize",
+                      "Uploaded",
+                      "Ratio",
+                      "SeedingTimeSeconds",
+                      "DateAdded",
+                      "DateCompleted",
+                    ];
+                    const rows = history.map((h) => [
+                      h.id,
+                      `"${(h.title || "").replace(/"/g, '""')}"`,
+                      `"${(h.infoHash || "").replace(/"/g, '""')}"`,
+                      `"${(h.source || "").replace(/"/g, '""')}"`,
+                      `"${(h.status || "").replace(/"/g, '""')}"`,
+                      h.totalSize,
+                      h.uploaded,
+                      h.ratio,
+                      h.seedingTime,
+                      `"${h.dateAdded || ""}"`,
+                      `"${h.dateCompleted || ""}"`,
+                    ]);
+                    const csvContent = [
+                      headers.join(","),
+                      ...rows.map((r) => r.join(",")),
+                    ].join("\r\n");
+                    const blob = new Blob([csvContent], {
+                      type: "text/csv;charset=utf-8;",
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `seedarr-history-${dateStr}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }
+                  setShowExportModal(false);
+                  showToast("Download history exported successfully", "success");
+                }}
+              >
+                Download {exportFormat.toUpperCase()}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

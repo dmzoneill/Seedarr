@@ -6,7 +6,7 @@ using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Torrents;
 
-public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAddedEvent>, IHandle<TorrentDeletedEvent>
+public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAddedEvent>, IHandle<TorrentDeletedEvent>, IHandle<TorrentDownloadCompletedEvent>, IHandle<TorrentStatusChangedEvent>
 {
     private readonly IDownloadHistoryRepository _historyRepository;
     private readonly ITorrentRepository _torrentRepository;
@@ -24,9 +24,9 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public List<DownloadHistory> GetAll(string query = null, string status = null, int limit = 500)
+    public List<DownloadHistory> GetAll(string query = null, string status = null, int limit = 500, int offset = 0)
     {
-        return _historyRepository.GetHistory(query, status, limit);
+        return _historyRepository.GetHistory(query, status, limit, offset);
     }
 
     public DownloadHistory Get(int id)
@@ -307,6 +307,18 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
         return backfilled;
     }
 
+    public int PruneHistory(int retentionDays)
+    {
+        if (retentionDays <= 0)
+        {
+            return 0;
+        }
+
+        var cutoff = DateTime.UtcNow.AddDays(-retentionDays);
+        _logger.Info("Pruning download history older than {0} days (cutoff: {1})", retentionDays, cutoff);
+        return _historyRepository.DeleteOlderThan(cutoff);
+    }
+
     public void Handle(TorrentAddedEvent message)
     {
         if (message?.Torrent == null)
@@ -333,6 +345,60 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
             entry.Status = "Removed";
             entry.RemovalReason = "Deleted from active library";
             _historyRepository.Update(entry);
+        }
+    }
+
+    public void Handle(TorrentDownloadCompletedEvent message)
+    {
+        if (message?.Torrent == null)
+        {
+            return;
+        }
+
+        var torrent = message.Torrent;
+        var entry = _historyRepository.FindByTorrentId(torrent.Id)
+            ?? (!string.IsNullOrEmpty(torrent.InfoHash) ? _historyRepository.FindByInfoHash(torrent.InfoHash) : null);
+
+        if (entry != null)
+        {
+            entry.DateCompleted ??= DateTime.UtcNow;
+            entry.Status = "Completed";
+            entry.Downloaded = torrent.Downloaded > 0 ? torrent.Downloaded : (torrent.TotalSize > 0 ? torrent.TotalSize : entry.Downloaded);
+            entry.Uploaded = torrent.Uploaded;
+            entry.Ratio = torrent.Ratio;
+            entry.SeedingTime = torrent.SeedingTime;
+            _historyRepository.Update(entry);
+        }
+    }
+
+    public void Handle(TorrentStatusChangedEvent message)
+    {
+        if (message?.Torrent == null)
+        {
+            return;
+        }
+
+        var torrent = message.Torrent;
+        var entry = _historyRepository.FindByTorrentId(torrent.Id)
+            ?? (!string.IsNullOrEmpty(torrent.InfoHash) ? _historyRepository.FindByInfoHash(torrent.InfoHash) : null);
+
+        if (entry != null)
+        {
+            if (message.NewStatus == TorrentStatus.Error)
+            {
+                entry.Status = "Error";
+                _historyRepository.Update(entry);
+            }
+            else if (message.NewStatus == TorrentStatus.Seeding)
+            {
+                entry.DateCompleted ??= DateTime.UtcNow;
+                if (entry.Status == "Active")
+                {
+                    entry.Status = "Completed";
+                }
+
+                _historyRepository.Update(entry);
+            }
         }
     }
 }

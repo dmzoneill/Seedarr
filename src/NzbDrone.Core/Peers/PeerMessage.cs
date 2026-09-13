@@ -12,6 +12,11 @@ public enum PeerMessageType : byte
     Piece = 7,
     Cancel = 8,
     Port = 9,
+    SuggestPiece = 13,
+    HaveAll = 14,
+    HaveNone = 15,
+    RejectRequest = 16,
+    AllowedFast = 17,
     Extended = 20
 }
 

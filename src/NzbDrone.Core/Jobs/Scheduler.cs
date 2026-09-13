@@ -38,15 +38,20 @@ public class Scheduler : BackgroundService
                     if (dueAt <= DateTime.UtcNow)
                     {
                         _logger.Debug("Executing scheduled task: {0}", next.TypeName);
+                        var startTime = DateTime.UtcNow;
+                        _taskManager.RecordTaskStarted(next.TypeName);
 
                         try
                         {
                             var taskInstance = _scheduledTasks.FirstOrDefault(t =>
-                                string.Equals(t.GetType().FullName, next.TypeName, StringComparison.OrdinalIgnoreCase));
+                                string.Equals(t.GetType().FullName, next.TypeName, StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(t.GetType().Name, next.TypeName, StringComparison.OrdinalIgnoreCase));
 
                             if (taskInstance != null)
                             {
-                                await Task.Run(() => taskInstance.Execute(), stoppingToken);
+                                using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                                cts.CancelAfter(TimeSpan.FromMinutes(10));
+                                await Task.Run(() => taskInstance.Execute(), cts.Token);
                                 _logger.Debug("Scheduled task completed: {0}", next.TypeName);
                             }
                             else
@@ -60,7 +65,7 @@ public class Scheduler : BackgroundService
                         }
                         finally
                         {
-                            _taskManager.UpdateLastExecution(next.TypeName);
+                            _taskManager.RecordTaskFinished(next.TypeName, startTime);
                         }
                     }
                 }

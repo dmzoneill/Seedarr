@@ -163,7 +163,7 @@ public static class TorrentResourceMapper
         };
     }
 
-    public static PeerResource ToPeerResource(PeerConnection connection, int id)
+    public static PeerResource ToPeerResource(PeerConnection connection, int id, NzbDrone.Core.Network.GeoIp.GeoLocationInfo geo = null)
     {
         var flags = string.Empty;
         if (connection.IsEncrypted)
@@ -181,18 +181,35 @@ public static class TorrentResourceMapper
             flags += "U";
         }
 
+        if (connection.SupportsFastExtension)
+        {
+            flags += "H";
+        }
+
+        if (connection.IsOptimisticUnchoked)
+        {
+            flags += "O";
+        }
+
+        if (connection.IsSnubbed)
+        {
+            flags += "S";
+        }
+
         return new PeerResource
         {
             Id = id,
             Ip = connection.RemoteIp,
             Port = connection.RemotePort,
             Client = connection.PeerId ?? string.Empty,
-            UploadSpeed = 0,
-            DownloadSpeed = 0,
-            Uploaded = 0,
-            Downloaded = 0,
-            Progress = 0,
-            Flags = flags
+            UploadSpeed = connection.UploadRate,
+            DownloadSpeed = connection.DownloadRate,
+            Uploaded = connection.BytesUploaded,
+            Downloaded = connection.BytesDownloaded,
+            Progress = connection.Progress,
+            Flags = flags,
+            CountryCode = geo?.CountryCode ?? string.Empty,
+            CountryName = geo?.CountryName ?? string.Empty
         };
     }
 }

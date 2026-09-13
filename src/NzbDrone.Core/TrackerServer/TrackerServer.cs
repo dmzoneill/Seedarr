@@ -431,6 +431,8 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             _peerDatabase.AddPeer(infoHash, peerIp, port, peerId);
         }
 
+        _peerDatabase.IncrementAnnounces();
+
         var peers = _peerDatabase.GetPeers(infoHash);
         var interval = _configService.TrackerAnnounceInterval;
         var maxPeers = _configService.TrackerMaxPeersPerAnnounce;
@@ -475,6 +477,8 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         {
             return Encoding.ASCII.GetBytes("d14:failure reason18:Missing info_hashe");
         }
+
+        _peerDatabase.IncrementScrapes();
 
         var stats = _peerDatabase.GetStats(infoHash) ?? new ScrapeStats();
         var scrapeInterval = _configService.ScrapeIntervalSeconds;
