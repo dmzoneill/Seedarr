@@ -36,6 +36,7 @@ import StatusBar from "./components/StatusBar";
 import ToastContainer from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SignalRProvider from "./components/SignalRProvider";
+import { useSignalR } from "./api/signalr";
 import AddTorrentModal from "./components/AddTorrentModal";
 import CommandPalette from "./components/CommandPalette";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
@@ -110,6 +111,7 @@ function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { connected, isReconnecting, reconnect } = useSignalR();
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showAddTorrentModal, setShowAddTorrentModal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -659,6 +661,69 @@ function App() {
       </aside>
 
       <div className="main-wrapper">
+        {isReconnecting && (
+          <div
+            role="alert"
+            className="signalr-reconnection-banner"
+            style={{
+              backgroundColor: "rgba(245, 158, 11, 0.15)",
+              borderBottom: "1px solid rgba(245, 158, 11, 0.4)",
+              color: "#fbbf24",
+              padding: "0.5rem 1.25rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.85rem",
+              fontWeight: 500,
+              zIndex: 1001,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.6rem",
+              }}
+            >
+              <span
+                className="reconnect-pulse-dot"
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  backgroundColor: "#f59e0b",
+                  display: "inline-block",
+                  boxShadow: "0 0 8px #f59e0b",
+                  animation: "skeleton-pulse 1.5s infinite ease-in-out",
+                }}
+              />
+              <span>
+                {t(
+                  "signalr.reconnecting",
+                  undefined,
+                  "Real-time connection lost. Attempting to reconnect...",
+                )}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => reconnect()}
+              className="btn btn-small"
+              style={{
+                backgroundColor: "#f59e0b",
+                color: "#000",
+                fontWeight: 600,
+                border: "none",
+                padding: "0.2rem 0.65rem",
+                cursor: "pointer",
+                borderRadius: "4px",
+                fontSize: "0.75rem",
+              }}
+            >
+              {t("signalr.retryNow", undefined, "Retry Now")}
+            </button>
+          </div>
+        )}
         <header className="topbar">
           <div
             className="topbar-left"
@@ -1049,7 +1114,10 @@ function App() {
             </Routes>
           </ErrorBoundary>
         </main>
-        <StatusBar />
+        <StatusBar
+          connected={connected}
+          isReconnecting={isReconnecting}
+        />
       </div>
       <SignalRProvider />
       {showAddTorrentModal && (

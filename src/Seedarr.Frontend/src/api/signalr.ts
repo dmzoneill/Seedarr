@@ -4,10 +4,57 @@ import {
   HubConnection,
   HubConnectionState,
   LogLevel,
+  type IRetryPolicy,
+  type RetryContext,
 } from "@microsoft/signalr";
 import type { QueryClient } from "@tanstack/react-query";
 
 export type ConnectionStatus = "connected" | "disconnected" | "reconnecting";
+
+/**
+ * Exponential backoff retry policy with randomized jitter and HTTP 401/403 guards.
+ * Ensures the connection never permanently gives up on temporary backend reboots/reloads.
+ */
+export class ExponentialBackoffRetryPolicy implements IRetryPolicy {
+  private readonly initialDelayMs: number;
+  private readonly maxDelayMs: number;
+  private readonly backoffFactor: number;
+
+  constructor(
+    initialDelayMs: number = 1000,
+    maxDelayMs: number = 30000,
+    backoffFactor: number = 1.5,
+  ) {
+    this.initialDelayMs = initialDelayMs;
+    this.maxDelayMs = maxDelayMs;
+    this.backoffFactor = backoffFactor;
+  }
+
+  nextRetryDelayInMilliseconds(retryContext: RetryContext): number | null {
+    const errorMsg = retryContext.retryReason?.message || "";
+
+    // 401/403 HTTP error guards: do not retry if unauthorized or forbidden
+    if (
+      errorMsg.includes("401") ||
+      errorMsg.includes("403") ||
+      errorMsg.includes("Unauthorized") ||
+      errorMsg.includes("Forbidden")
+    ) {
+      return null;
+    }
+
+    // Exponential backoff calculation
+    const baseDelay = Math.min(
+      this.maxDelayMs,
+      this.initialDelayMs *
+        Math.pow(this.backoffFactor, retryContext.previousRetryCount),
+    );
+
+    // Random jitter (+/- 20%)
+    const jitter = Math.random() * 0.4 + 0.8;
+    return Math.min(this.maxDelayMs, Math.round(baseDelay * jitter));
+  }
+}
 
 let connection: HubConnection | null = null;
 let startPromise: Promise<void> | null = null;
@@ -38,13 +85,21 @@ export function getSignalRConnection(): HubConnection {
   if (!connection) {
     connection = new HubConnectionBuilder()
       .withUrl("/signalr/messages")
-      .withAutomaticReconnect()
+      .withAutomaticReconnect(new ExponentialBackoffRetryPolicy())
       .configureLogging(LogLevel.Warning)
       .build();
 
     connection.onreconnecting(() => notifyStatus("reconnecting"));
     connection.onreconnected(() => notifyStatus("connected"));
-    connection.onclose(() => notifyStatus("disconnected"));
+    connection.onclose(() => {
+      notifyStatus("disconnected");
+      // If closed, trigger reconnection after a short delay
+      setTimeout(() => {
+        if (connection?.state === HubConnectionState.Disconnected) {
+          startSignalR();
+        }
+      }, 2000);
+    });
   }
   return connection;
 }
@@ -68,6 +123,25 @@ export async function startSignalR(): Promise<void> {
     }
     return startPromise;
   }
+}
+
+export async function reconnectSignalR(): Promise<void> {
+  const conn = getSignalRConnection();
+  if (conn.state === HubConnectionState.Connected) {
+    return;
+  }
+  if (
+    conn.state === HubConnectionState.Connecting ||
+    conn.state === HubConnectionState.Reconnecting
+  ) {
+    try {
+      await conn.stop();
+    } catch {
+      // ignore
+    }
+  }
+  notifyStatus("reconnecting");
+  return startSignalR();
 }
 
 export function onSignalRMessage(
@@ -111,5 +185,11 @@ export function useSignalR(queryClient?: QueryClient) {
     };
   }, [conn]);
 
-  return { connection: conn, status };
+  return {
+    connection: conn,
+    status,
+    connected: status === "connected",
+    isReconnecting: status === "reconnecting",
+    reconnect: reconnectSignalR,
+  };
 }

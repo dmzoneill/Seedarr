@@ -19,6 +19,8 @@ interface TorrentGridProps {
   filter?: string;
   stateFilter?: string;
   trackerFilter?: string;
+  categoryFilter?: string;
+  tagFilter?: string;
   selectedTorrentId?: number | null;
   onSelectTorrent?: (id: number | null) => void;
 }
@@ -27,6 +29,8 @@ function TorrentGrid({
   filter,
   stateFilter,
   trackerFilter,
+  categoryFilter,
+  tagFilter,
   selectedTorrentId,
   onSelectTorrent,
 }: TorrentGridProps) {
@@ -115,6 +119,14 @@ function TorrentGrid({
         (u) => extractTrackerDomain(u) === trackerFilter,
       );
       if (!hasTracker) return false;
+    }
+    if (categoryFilter && categoryFilter !== "All") {
+      const cat = t.category?.trim() || "Uncategorized";
+      if (cat !== categoryFilter) return false;
+    }
+    if (tagFilter && tagFilter !== "All") {
+      const tag = t.label?.trim() || "Untagged";
+      if (tag !== tagFilter) return false;
     }
     return true;
   });
