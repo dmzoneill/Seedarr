@@ -500,7 +500,7 @@ export function GettingStartedModal({
           backgroundColor: "var(--bg-secondary, #2a2620)",
           borderRadius: "8px",
           boxShadow: "0 16px 40px rgba(0, 0, 0, 0.7)",
-          border: "1px solid var(--border-light, rgba(255, 255, 255, 0.15))",
+          border: "1px solid var(--border-light)",
           padding: "1.5rem",
           display: "flex",
           flexDirection: "column",
@@ -522,7 +522,7 @@ export function GettingStartedModal({
               background: "var(--bg-primary, #18181f)",
               padding: "2px",
               borderRadius: "20px",
-              border: "1px solid var(--border-light, rgba(255, 255, 255, 0.1))",
+              border: "1px solid var(--border-light)",
               fontSize: "0.75rem",
             }}
           >
@@ -603,8 +603,7 @@ export function GettingStartedModal({
             justifyContent: "space-between",
             marginBottom: "1.25rem",
             paddingBottom: "0.75rem",
-            borderBottom:
-              "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
+            borderBottom: "1px solid var(--border-light)",
             gap: "0.25rem",
             overflowX: "auto",
           }}
@@ -630,55 +629,52 @@ export function GettingStartedModal({
                       : "var(--text-muted)",
                   border: "none",
                   borderRadius: "12px",
-                  padding: "2px 8px",
-                  fontSize: "0.72rem",
-                  fontWeight: isActive ? 600 : 400,
+                  padding: "0.35rem 0.75rem",
+                  fontSize: "0.8rem",
+                  fontWeight: 600,
                   cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.35rem",
                   whiteSpace: "nowrap",
+                  transition: "all 0.15s ease",
                 }}
               >
-                {s.shortName}
+                <span>{s.icon}</span>
+                <span>{s.title}</span>
               </button>
             );
           })}
         </div>
 
-        {/* Modal Title matching actual modals */}
-        <div
-          className="modal-title"
-          style={{
-            fontSize: "1.2rem",
-            marginBottom: "1.25rem",
-            color: "var(--text-primary)",
-            fontWeight: 600,
-          }}
-        >
-          {steps[currentStep]?.title}
-        </div>
-
         {/* ========================================================================= */}
-        {/* STEP 0: Welcome */}
+        {/* Step 0: Welcome / Overview */}
         {/* ========================================================================= */}
         {currentStep === 0 && (
-          <div style={{ textAlign: "center", padding: "1rem 0.5rem" }}>
-            <div style={{ marginBottom: "0.75rem" }}>
-              <SeedarrLogo size={72} />
-            </div>
-            <div style={{ marginBottom: "1.25rem" }}>
-              <SeedarrText width={140} />
-            </div>
+          <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+            <h3
+              style={{
+                fontSize: "1.25rem",
+                fontWeight: 700,
+                color: "var(--accent, #c8a84e)",
+                marginBottom: "0.75rem",
+              }}
+            >
+              🚀 {t("gettingStarted.welcomeTitle", undefined, "Welcome to Seedarr!")}
+            </h3>
+
             <p
               style={{
-                color: "var(--text-muted)",
                 fontSize: "0.9rem",
-                lineHeight: 1.5,
-                margin: "0 0 1.5rem",
+                lineHeight: 1.6,
+                color: "var(--text-secondary)",
+                marginBottom: "1.25rem",
               }}
             >
               {t(
-                "gettingStarted.welcomeDescription",
+                "gettingStarted.welcomeBody",
                 undefined,
-                "Seedarr connects to your Download Agent (qBittorrent, Transmission, Deluge), Prowlarr Indexer, and *Arr Media Managers (Sonarr, Radarr, Lidarr) for automated cross-seeding and swarm optimization.",
+                "Seedarr is an integrated, ultra-lightweight BitTorrent client designed for high-performance private and public seeding, automation, cross-platform *arr management, and granular bandwidth orchestration.",
               )}
             </p>
 
@@ -691,8 +687,7 @@ export function GettingStartedModal({
                 backgroundColor: "var(--bg-secondary)",
                 padding: "1rem",
                 borderRadius: "6px",
-                border:
-                  "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
+                border: "1px solid var(--border-light)",
                 marginBottom: "1.5rem",
                 fontSize: "0.85rem",
               }}
@@ -736,8 +731,7 @@ export function GettingStartedModal({
                 padding: "0.3rem 0.75rem",
                 backgroundColor: "var(--bg-secondary, rgba(0, 0, 0, 0.2))",
                 borderRadius: "6px",
-                border:
-                  "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
+                border: "1px solid var(--border-light)",
               }}
             >
               <span
@@ -1812,8 +1806,7 @@ export function GettingStartedModal({
             alignItems: "center",
             marginTop: "1.25rem",
             paddingTop: "0.75rem",
-            borderTop:
-              "1px solid var(--border-light, rgba(255, 255, 255, 0.08))",
+            borderTop: "1px solid var(--border-light)",
             fontSize: "0.8rem",
             color: "var(--text-muted)",
           }}

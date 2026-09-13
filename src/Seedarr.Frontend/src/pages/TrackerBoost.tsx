@@ -1623,7 +1623,7 @@ function TrackerBoost() {
                         flexDirection: "column",
                         height: "auto",
                         borderRadius: "8px",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        border: "1px solid var(--border-light)",
                         backgroundColor: "var(--bg-secondary)",
                         boxShadow: "0 4px 14px rgba(0, 0, 0, 0.35)",
                         transition:
@@ -2197,7 +2197,7 @@ function TrackerBoost() {
                     padding: "1rem",
                     backgroundColor: "var(--bg-secondary)",
                     borderRadius: "8px",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    border: "1px solid var(--border-light)",
                     display: "flex",
                     flexDirection: "column",
                     gap: "0.75rem",

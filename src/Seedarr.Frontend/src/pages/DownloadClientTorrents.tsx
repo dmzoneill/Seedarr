@@ -527,7 +527,7 @@ export default function DownloadClientTorrents() {
                     minHeight: "min-content",
                     flexShrink: 0,
                     borderRadius: "8px",
-                    border: "1px solid rgba(255, 255, 255, 0.08)",
+                    border: "1px solid var(--border-light)",
                     backgroundColor: "var(--bg-secondary)",
                     boxShadow:
                       "0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2)",
@@ -909,7 +909,7 @@ export default function DownloadClientTorrents() {
                       <tr
                         key={item.infoHash || item.downloadId}
                         style={{
-                          borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+                          borderBottom: "1px solid var(--border-light)",
                           transition: "background-color 0.15s ease",
                         }}
                       >
@@ -930,7 +930,7 @@ export default function DownloadClientTorrents() {
                                   height: "46px",
                                   objectFit: "cover",
                                   borderRadius: "4px",
-                                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                                  border: "1px solid var(--border-light)",
                                   flexShrink: 0,
                                 }}
                               />
@@ -1007,7 +1007,7 @@ export default function DownloadClientTorrents() {
                               borderRadius: "3px",
                               overflow: "hidden",
                               width: "100%",
-                              border: "1px solid rgba(255, 255, 255, 0.05)",
+                              border: "1px solid var(--border-light)",
                             }}
                           >
                             <div

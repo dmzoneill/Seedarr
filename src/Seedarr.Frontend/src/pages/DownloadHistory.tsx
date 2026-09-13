@@ -443,7 +443,7 @@ export default function DownloadHistory() {
                   minHeight: "min-content",
                   flexShrink: 0,
                   borderRadius: "8px",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  border: "1px solid var(--border-light)",
                   backgroundColor: "var(--bg-secondary)",
                   boxShadow:
                     "0 4px 14px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.2)",
@@ -549,7 +549,7 @@ export default function DownloadHistory() {
                           color: "#fff",
                           fontSize: "0.68rem",
                           padding: "0.2rem 0.5rem",
-                          border: "1px solid rgba(255,255,255,0.18)",
+                          border: "1px solid var(--border)",
                           cursor: arrLink ? "pointer" : "default",
                           display: "inline-flex",
                           alignItems: "center",
@@ -610,7 +610,7 @@ export default function DownloadHistory() {
                       justifyContent: "space-between",
                       alignItems: "center",
                       fontSize: "0.7rem",
-                      borderTop: "1px solid rgba(255,255,255,0.1)",
+                      borderTop: "1px solid var(--border-light)",
                     }}
                   >
                     <span style={{ color: "#eee" }}>
@@ -1265,7 +1265,7 @@ export default function DownloadHistory() {
                       objectFit: "cover",
                       borderRadius: "6px",
                       boxShadow: "0 6px 16px rgba(0,0,0,0.6)",
-                      border: "1px solid rgba(255,255,255,0.15)",
+                      border: "1px solid var(--border-light)",
                       marginBottom: "-1.5rem",
                     }}
                   />

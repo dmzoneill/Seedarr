@@ -47,7 +47,7 @@ function AddTorrentModal({
           padding: "1.5rem",
           boxShadow:
             "0 12px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3)",
-          border: "1px solid rgba(255, 255, 255, 0.1)",
+          border: "1px solid var(--border-light)",
         }}
       >
         <div

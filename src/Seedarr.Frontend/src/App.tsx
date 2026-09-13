@@ -745,7 +745,7 @@ function App() {
                 justifyContent: "center",
                 width: "28px",
                 height: "28px",
-                border: "1px solid var(--border-light, #3a352e)",
+                border: "1px solid var(--border-light)",
                 borderRadius: "4px",
                 background: "transparent",
                 color: "var(--text-secondary)",
@@ -788,7 +788,7 @@ function App() {
               <kbd
                 style={{
                   backgroundColor: "rgba(255, 255, 255, 0.08)",
-                  border: "1px solid rgba(255, 255, 255, 0.16)",
+                  border: "1px solid var(--border)",
                   borderRadius: "3px",
                   padding: "0.1rem 0.4rem",
                   fontSize: "0.7rem",
@@ -910,7 +910,7 @@ function App() {
                     color: "var(--accent, #c8a84e)",
                     fontSize: "11px",
                     fontWeight: 700,
-                    border: "1px solid var(--border, #3a352e)",
+                    border: "1px solid var(--border)",
                     overflow: "hidden",
                   }}
                 >

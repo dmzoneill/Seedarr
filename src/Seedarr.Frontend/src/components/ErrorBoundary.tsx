@@ -175,7 +175,7 @@ class ErrorBoundary extends Component<Props, State> {
             {/* Collapsible Error Details and Stack Trace */}
             <details
               style={{
-                border: "1px solid var(--border-light, rgba(255, 255, 255, 0.1))",
+                border: "1px solid var(--border-light)",
                 borderRadius: "6px",
                 padding: "0.75rem",
                 backgroundColor: "var(--bg-primary, #0f111c)",

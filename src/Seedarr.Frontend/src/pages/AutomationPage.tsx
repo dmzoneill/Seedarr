@@ -2762,7 +2762,7 @@ if (torrent) {
                 fontSize: "0.8rem",
                 lineHeight: "1.5",
                 whiteSpace: "pre-wrap",
-                border: "1px solid #30363d",
+                border: "1px solid var(--border-light)",
               }}
             >
               {viewingLog.log}

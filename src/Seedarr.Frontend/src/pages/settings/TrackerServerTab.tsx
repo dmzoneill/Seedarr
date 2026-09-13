@@ -79,7 +79,7 @@ export function TrackerServerTab() {
                 style={{
                   padding: "1rem",
                   borderRadius: "8px",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  border: "1px solid var(--border-light)",
                   boxShadow: "0 4px 14px rgba(0, 0, 0, 0.2)",
                   background: "var(--bg-secondary)",
                   textAlign: "center",
@@ -111,7 +111,7 @@ export function TrackerServerTab() {
                 style={{
                   padding: "1rem",
                   borderRadius: "8px",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  border: "1px solid var(--border-light)",
                   boxShadow: "0 4px 14px rgba(0, 0, 0, 0.2)",
                   background: "var(--bg-secondary)",
                   textAlign: "center",
@@ -143,7 +143,7 @@ export function TrackerServerTab() {
                 style={{
                   padding: "1rem",
                   borderRadius: "8px",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  border: "1px solid var(--border-light)",
                   boxShadow: "0 4px 14px rgba(0, 0, 0, 0.2)",
                   background: "var(--bg-secondary)",
                   textAlign: "center",
@@ -175,7 +175,7 @@ export function TrackerServerTab() {
                 style={{
                   padding: "1rem",
                   borderRadius: "8px",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  border: "1px solid var(--border-light)",
                   boxShadow: "0 4px 14px rgba(0, 0, 0, 0.2)",
                   background: "var(--bg-secondary)",
                   textAlign: "center",

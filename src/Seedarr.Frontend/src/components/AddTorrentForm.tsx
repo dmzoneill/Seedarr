@@ -550,7 +550,7 @@ export function AddTorrentForm({
                   ? isMagnetValid
                     ? "1px solid rgba(34, 197, 94, 0.6)"
                     : "1px solid rgba(239, 68, 68, 0.6)"
-                  : "1px solid var(--border-light, rgba(255, 255, 255, 0.15))",
+                  : "1px solid var(--border-light)",
                 backgroundColor: "var(--bg-primary)",
                 boxShadow:
                   magnetLink.trim() && isMagnetValid
@@ -938,7 +938,7 @@ export function AddTorrentForm({
                               key={itemKey}
                               style={{
                                 borderBottom:
-                                  "1px solid rgba(255, 255, 255, 0.05)",
+                                  "1px solid var(--border-light)",
                                 fontSize: "0.85rem",
                               }}
                             >

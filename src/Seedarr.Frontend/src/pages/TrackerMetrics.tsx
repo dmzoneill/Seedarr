@@ -829,7 +829,7 @@ export function TrackerMetrics() {
           style={{
             overflowX: "auto",
             borderRadius: "6px",
-            border: "1px solid rgba(255,255,255,0.08)",
+            border: "1px solid var(--border-light)",
           }}
         >
           <table
@@ -844,7 +844,7 @@ export function TrackerMetrics() {
               <tr
                 style={{
                   backgroundColor: "#161b22",
-                  borderBottom: "1px solid rgba(255,255,255,0.1)",
+                  borderBottom: "1px solid var(--border-light)",
                 }}
               >
                 <th
@@ -1040,7 +1040,7 @@ export function TrackerMetrics() {
                       className="torrent-table-row"
                       style={{
                         cursor: "pointer",
-                        borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        borderBottom: "1px solid var(--border-light)",
                       }}
                       onClick={() => setSelectedMetric(m)}
                     >
@@ -1610,7 +1610,7 @@ function TrackerMetricDetailModal({
               overflowY: "auto",
               backgroundColor: "#0d1117",
               borderRadius: "6px",
-              border: "1px solid rgba(255,255,255,0.08)",
+              border: "1px solid var(--border-light)",
             }}
           >
             <table
@@ -1669,7 +1669,7 @@ function TrackerMetricDetailModal({
                       key={h.id}
                       className="torrent-table-row"
                       style={{
-                        borderBottom: "1px solid rgba(255,255,255,0.04)",
+                        borderBottom: "1px solid var(--border-light)",
                       }}
                     >
                       <td style={{ color: "#8b949e" }}>

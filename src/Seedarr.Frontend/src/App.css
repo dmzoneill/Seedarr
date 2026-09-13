@@ -7,8 +7,8 @@
   --bg-secondary: #2a2620;
   --bg-hover: #3a352e;
   --bg-hover-elevated: #4a4438;
-  --border: #3a352e;
-  --border-light: #302c24;
+  --border: #2a3854;
+  --border-light: #222f46;
   --text-primary: #f8f6f0;
   --text-secondary: #d4ccbe;
   --text-muted: #9c9484;
@@ -54,8 +54,8 @@
   --bg-secondary: #2a2620;
   --bg-hover: #3a352e;
   --bg-hover-elevated: #4a4438;
-  --border: #3a352e;
-  --border-light: #302c24;
+  --border: #2a3854;
+  --border-light: #222f46;
   --text-primary: #f8f6f0;
   --text-secondary: #d4ccbe;
   --text-muted: #9c9484;
@@ -69,8 +69,8 @@
   --bg-secondary: #fdfaf4;
   --bg-hover: #e8e0d0;
   --bg-hover-elevated: #ddd4c2;
-  --border: #d4cbb8;
-  --border-light: rgb(90 72 40 / 8%);
+  --border: #cbd5e1;
+  --border-light: #e2e8f0;
   --text-primary: #2a2418;
   --text-secondary: #4a4030;
   --text-muted: #7a7060;
@@ -119,8 +119,8 @@
   --bg-card-hover: #1f2552;
   --bg-hover: #1f2552;
   --bg-hover-elevated: #1f2552;
-  --border: #1f2552;
-  --border-light: #181d3d;
+  --border: #283060;
+  --border-light: #202750;
   --bg-lighter: #1f2552;
 }
 
@@ -133,8 +133,8 @@
   --bg-card-hover: #141724;
   --bg-hover: #141724;
   --bg-hover-elevated: #141724;
-  --border: #1a1d2e;
-  --border-light: #121420;
+  --border: #24283b;
+  --border-light: #1a1e30;
   --bg-lighter: #141724;
 }
 
@@ -147,8 +147,8 @@
   --bg-card-hover: #1e2a3f;
   --bg-hover: #1e2a3f;
   --bg-hover-elevated: #23324c;
-  --border: #1f2c42;
-  --border-light: #162031;
+  --border: #2a3854;
+  --border-light: #222f46;
   --bg-lighter: #1e2a3f;
 }
 
@@ -478,7 +478,7 @@ body {
   justify-content: space-between;
   gap: 0.4rem;
   margin-top: 0.25rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid var(--border-light);
   cursor: pointer;
   user-select: none;
   border-left: none;
@@ -1152,7 +1152,7 @@ body {
 
 .btn-outline {
   background-color: var(--bg-hover-elevated, rgba(255, 255, 255, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--border);
   color: var(--text-primary);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   cursor: pointer;
@@ -1178,7 +1178,7 @@ body {
   opacity: 0.55;
   cursor: not-allowed;
   background-color: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--border-light);
 }
 
 .btn-action {
@@ -1187,7 +1187,7 @@ body {
     rgba(255, 255, 255, 0.09) 0%,
     rgba(255, 255, 255, 0.04) 100%
   );
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  border: 1px solid var(--border);
   color: var(--text-primary);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
   font-weight: 600;
@@ -2043,7 +2043,7 @@ body {
 
 .modal {
   background-color: var(--bg-secondary);
-  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.12));
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   padding: 1.5rem;
   width: 100%;
@@ -2057,7 +2057,7 @@ body {
 
 .panel {
   background-color: var(--bg-secondary);
-  border: 1px solid var(--border-light, rgba(255, 255, 255, 0.12));
+  border: 1px solid var(--border-light);
   border-radius: 8px;
   box-shadow:
     0 16px 48px rgba(0, 0, 0, 0.65),
@@ -3990,7 +3990,7 @@ html[dir="rtl"] .topbar-getting-started {
   padding: 1px 4px;
   border-radius: 3px;
   background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--border);
   margin-left: 2px;
   font-family: monospace;
 }

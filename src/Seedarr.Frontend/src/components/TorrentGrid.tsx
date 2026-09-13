@@ -181,7 +181,7 @@ function TorrentGrid({
               borderRadius: "8px",
               border: isSelected
                 ? "1px solid var(--accent)"
-                : "1px solid rgba(255, 255, 255, 0.08)",
+                : "1px solid var(--border-light)",
               backgroundColor: isSelected
                 ? "var(--bg-hover-elevated)"
                 : "var(--bg-secondary)",
@@ -284,7 +284,7 @@ function TorrentGrid({
                       color: "#fff",
                       fontSize: "0.68rem",
                       padding: "0.2rem 0.5rem",
-                      border: "1px solid rgba(255,255,255,0.18)",
+                      border: "1px solid var(--border)",
                       cursor: arrLink ? "pointer" : "default",
                       display: "inline-flex",
                       alignItems: "center",
@@ -363,7 +363,7 @@ function TorrentGrid({
                   justifyContent: "space-between",
                   alignItems: "center",
                   fontSize: "0.7rem",
-                  borderTop: "1px solid rgba(255,255,255,0.1)",
+                  borderTop: "1px solid var(--border-light)",
                 }}
               >
                 <span style={{ color: "#eee" }}>
@@ -442,7 +442,7 @@ function TorrentGrid({
                   backgroundColor: "rgba(0, 0, 0, 0.2)",
                   padding: "0.45rem",
                   borderRadius: "4px",
-                  border: "1px solid rgba(255,255,255,0.04)",
+                  border: "1px solid var(--border-light)",
                 }}
               >
                 <div>

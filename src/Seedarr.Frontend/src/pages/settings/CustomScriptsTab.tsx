@@ -113,7 +113,7 @@ export function CustomScriptsTab() {
               backgroundColor: "var(--bg-primary, #10111a)",
               padding: "1rem",
               borderRadius: "6px",
-              border: "1px solid var(--border-light, #1c203b)",
+              border: "1px solid var(--border-light)",
             }}
           >
             <div

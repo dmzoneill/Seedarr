@@ -274,7 +274,7 @@ export function CategorySettingsTab({
               textAlign: "center",
               backgroundColor: "var(--bg-primary, #10111a)",
               borderRadius: "6px",
-              border: "1px dashed var(--border-light, #1c203b)",
+              border: "1px dashed var(--border-light)",
             }}
           >
             <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🏷️</div>
@@ -315,7 +315,7 @@ export function CategorySettingsTab({
               <thead>
                 <tr
                   style={{
-                    borderBottom: "1px solid var(--border-light, #1c203b)",
+                    borderBottom: "1px solid var(--border-light)",
                     textAlign: "left",
                     color: "var(--text-muted, #7e8092)",
                     fontSize: "0.8rem",
@@ -339,7 +339,7 @@ export function CategorySettingsTab({
                     <tr
                       key={cat.id}
                       style={{
-                        borderBottom: "1px solid var(--border-light, #1c203b)",
+                        borderBottom: "1px solid var(--border-light)",
                       }}
                     >
                       <td style={{ padding: "0.65rem 0.8rem", fontWeight: 600 }}>
@@ -478,7 +478,7 @@ export function CategorySettingsTab({
               maxWidth: 540,
               borderRadius: "8px",
               boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
+              border: "1px solid var(--border-light)",
             }}
           >
             <div
@@ -534,7 +534,7 @@ export function CategorySettingsTab({
                     flex: 1,
                     padding: "0.5rem 0.75rem",
                     borderRadius: "6px",
-                    border: "1px solid var(--border-light, rgba(255, 255, 255, 0.15))",
+                    border: "1px solid var(--border-light)",
                     backgroundColor: "var(--bg-primary, #0f111c)",
                     color: "var(--text-primary, #fff)",
                     fontSize: "0.85rem",
@@ -751,7 +751,7 @@ export function CategorySettingsTab({
               borderRadius: "8px",
               padding: "1.5rem",
               boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
-              border: "1px solid rgba(255, 255, 255, 0.12)",
+              border: "1px solid var(--border-light)",
             }}
           >
             <div
@@ -813,7 +813,7 @@ export function CategorySettingsTab({
                   width: "100%",
                   padding: "0.5rem 0.75rem",
                   borderRadius: "6px",
-                  border: "1px solid var(--border-light, rgba(255, 255, 255, 0.15))",
+                  border: "1px solid var(--border-light)",
                   backgroundColor: "var(--bg-primary, #0f111c)",
                   color: "var(--text-primary, #fff)",
                   fontFamily: "monospace",
