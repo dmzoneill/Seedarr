@@ -506,19 +506,19 @@ function visualStepsToYaml(pipelineName: string, trigger: string, steps: VisualS
       if (step.http.json) {
         yaml += `      json: true\n`;
       }
-      if (step.http.body.trim()) {
+      if (step.http.body?.trim()) {
         try {
-          const parsed = JSON.parse(step.http.body);
+          const parsed = JSON.parse(step.http.body!);
           yaml += `      body:\n`;
           for (const [k, v] of Object.entries(parsed)) {
             yaml += `        ${k}: '${String(v).replace(/'/g, "''")}'\n`;
           }
         } catch {
-          yaml += `      body: '${step.http.body.replace(/'/g, "''")}'\n`;
+          yaml += `      body: '${step.http.body!.replace(/'/g, "''")}'\n`;
         }
       }
-      if (step.http.register.trim()) {
-        yaml += `    register: '${step.http.register.trim()}'\n`;
+      if (step.http.register?.trim()) {
+        yaml += `    register: '${step.http.register?.trim()}'\n`;
       }
     }
 
@@ -2399,7 +2399,7 @@ if (torrent) {
                                     <textarea
                                       className="form-control"
                                       style={{ minHeight: "80px", fontFamily: "monospace", fontSize: "0.85rem" }}
-                                      placeholder={`{"event": "complete", "torrent": "${torrent.name}", "size": ${torrent.size}}`}
+                                      placeholder={`{"event": "complete", "torrent": "\${torrent.name}", "size": \${torrent.size}}`}
                                       value={act.extra?.body || ""}
                                       onChange={(e) => {
                                         const copy = [...visualSteps];
