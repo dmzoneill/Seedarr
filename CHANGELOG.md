@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.6.3](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.3) - 2026-09-13
+
+### ✨ Features
+- feat(ui): complete parity for automation actions, rich r-values, and dry-run simulator
+- feat(automation): add media, swarm, rich webhook, and flow control step actions
+- feat(automation): add media, swarm, rich webhook, and flow control step actions
+
+### 🔧 Maintenance & Improvements
+- chore: remove scratch scripts
+
 ## [v1.6.2](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.2) - 2026-09-13
 
 ### 🔧 Maintenance & Improvements
