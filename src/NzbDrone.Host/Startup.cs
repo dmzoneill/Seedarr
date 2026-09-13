@@ -33,6 +33,8 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddProblemDetails();
+
         var apiAssembly = Assembly.Load("Seedarr.Api.V1");
         var httpAssembly = Assembly.Load("Seedarr.Http");
 
@@ -102,7 +104,7 @@ public class Startup
                     basicHeader.ToString().StartsWith("Basic ", StringComparison.OrdinalIgnoreCase) &&
                     !string.IsNullOrWhiteSpace(basicHeader.ToString()["Basic ".Length..].Trim()))
                 {
-                    return ApiKeyAuthenticationOptions.DefaultScheme;
+                    return BasicAuthenticationOptions.DefaultScheme;
                 }
 
                 // 3. Forward-Auth reverse proxy headers
@@ -110,7 +112,7 @@ public class Startup
                     (req.Headers.TryGetValue("X-authentik-username", out var aUser) && !string.IsNullOrWhiteSpace(aUser)) ||
                     (req.Headers.TryGetValue("X-Forwarded-User", out var fUser) && !string.IsNullOrWhiteSpace(fUser)))
                 {
-                    return ApiKeyAuthenticationOptions.DefaultScheme;
+                    return ForwardAuthOptions.DefaultScheme;
                 }
 
                 // 4. Cookie for interactive browser session or login flow
@@ -136,7 +138,11 @@ public class Startup
             options.AccessDeniedPath = "/login?accessDenied=true";
         })
         .AddScheme<ApiKeyAuthenticationOptions, ApiKeyAuthenticationHandler>(
-            ApiKeyAuthenticationOptions.DefaultScheme, _ => { });
+            ApiKeyAuthenticationOptions.DefaultScheme, _ => { })
+        .AddScheme<BasicAuthenticationOptions, BasicAuthenticationHandler>(
+            BasicAuthenticationOptions.DefaultScheme, _ => { })
+        .AddScheme<ForwardAuthOptions, ForwardAuthHandler>(
+            ForwardAuthOptions.DefaultScheme, _ => { });
 
         services.AddOptions<OpenIdConnectOptions>();
         services.AddSingleton<IDynamicAuthSchemeManager, DynamicAuthSchemeManager>();
@@ -220,6 +226,8 @@ public class Startup
 
     public void Configure(WebApplication app)
     {
+        app.UseExceptionHandler();
+
         app.UseForwardedHeaders(new ForwardedHeadersOptions
         {
             ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,

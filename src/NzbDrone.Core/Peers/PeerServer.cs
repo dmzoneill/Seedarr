@@ -37,6 +37,7 @@ public class PeerServer : BackgroundService
     private readonly Extensions.IFastExtensionHandler _fastExtensionHandler;
     private readonly Extensions.IExtensionManager _extensionManager;
     private readonly IChokeManager _chokeManager;
+    private readonly Network.IProxySettingsProvider _proxySettingsProvider;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
@@ -58,7 +59,8 @@ public class PeerServer : BackgroundService
         IVpnKillSwitchService vpnKillSwitchService = null,
         Extensions.IFastExtensionHandler fastExtensionHandler = null,
         Extensions.IExtensionManager extensionManager = null,
-        IChokeManager chokeManager = null)
+        IChokeManager chokeManager = null,
+        Network.IProxySettingsProvider proxySettingsProvider = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -71,6 +73,7 @@ public class PeerServer : BackgroundService
         _fastExtensionHandler = fastExtensionHandler;
         _extensionManager = extensionManager;
         _chokeManager = chokeManager;
+        _proxySettingsProvider = proxySettingsProvider;
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -453,12 +456,12 @@ public class PeerServer : BackgroundService
                 if (connection == null && _utpManager.TcpFallbackEnabled)
                 {
                     _logger.Debug("Falling back to TCP for peer {0}:{1}", candidate.Ip, candidate.Port);
-                    connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos);
+                    connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider);
                 }
             }
             else
             {
-                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos);
+                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider);
             }
 
             if (connection == null)

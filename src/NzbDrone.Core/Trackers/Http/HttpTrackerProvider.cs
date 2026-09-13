@@ -9,6 +9,7 @@ using BencodeNET.Parsing;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Http;
+using NzbDrone.Core.Network;
 using Polly;
 
 namespace NzbDrone.Core.Trackers.Http;
@@ -18,18 +19,23 @@ public class HttpTrackerProvider : ITrackerProvider
     public ResiliencePipeline ResiliencePipeline { get; set; } = ResiliencePolicies.GetTrackerPolicy();
 
     private readonly IConfigService _configService;
+    private readonly IProxySettingsProvider _proxySettingsProvider;
     private readonly HttpClient _client;
     private readonly Logger _logger;
 
     public string Name => "HTTP";
 
-    public HttpTrackerProvider(IConfigService configService)
+    public HttpTrackerProvider(IConfigService configService, IProxySettingsProvider proxySettingsProvider = null)
     {
         _configService = configService;
-        _client = new HttpClient(new SocketsHttpHandler
-        {
-            PooledConnectionLifetime = TimeSpan.FromMinutes(10)
-        })
+        _proxySettingsProvider = proxySettingsProvider;
+        HttpMessageHandler handler = proxySettingsProvider != null && proxySettingsProvider.IsEnabled
+            ? proxySettingsProvider.CreateHandler()
+            : new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+            };
+        _client = new HttpClient(handler)
         {
             Timeout = TimeSpan.FromSeconds(configService.HttpTrackerTimeoutSeconds)
         };

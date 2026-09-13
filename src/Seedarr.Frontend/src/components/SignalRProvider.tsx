@@ -48,6 +48,10 @@ export default function SignalRProvider() {
       } else if (name.includes("seeding")) {
         queryClient.invalidateQueries({ queryKey: ["seeding", "stats"] });
         queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      } else if (name.includes("category")) {
+        queryClient.invalidateQueries({ queryKey: ["categories"] });
+      } else if (name.includes("tag")) {
+        queryClient.invalidateQueries({ queryKey: ["tags"] });
       } else if (name.includes("health")) {
         queryClient.invalidateQueries({ queryKey: ["health"] });
       } else if (name.includes("command") || name.includes("system")) {

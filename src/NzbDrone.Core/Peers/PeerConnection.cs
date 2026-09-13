@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -78,7 +79,7 @@ public class PeerConnection : IDisposable
         LastActivity = DateTime.UtcNow;
     }
 
-    public PeerConnection(string host, int port, IPAddress localBindAddress = null, int dscp = 0, int tos = 0)
+    public PeerConnection(string host, int port, IPAddress localBindAddress = null, int dscp = 0, int tos = 0, Network.IProxySettingsProvider proxySettings = null)
     {
         if (localBindAddress != null)
         {
@@ -92,29 +93,28 @@ public class PeerConnection : IDisposable
 
         try
         {
-            if (dscp > 0)
+            ApplySocketOptions(_client, dscp, tos);
+
+            if (proxySettings != null && proxySettings.IsEnabled)
             {
-                try
+                _client.Connect(proxySettings.Host, proxySettings.Port);
+                _networkStream = _client.GetStream();
+
+                if (proxySettings.Type == Network.ProxyType.Socks5)
                 {
-                    _client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.TypeOfService, dscp << 2);
+                    PerformSocks5Handshake(_networkStream, host, port, proxySettings.Username, proxySettings.Password);
                 }
-                catch
+                else if (proxySettings.Type == Network.ProxyType.Http)
                 {
+                    PerformHttpConnectHandshake(_networkStream, host, port, proxySettings.Username, proxySettings.Password);
                 }
             }
-            else if (tos > 0)
+            else
             {
-                try
-                {
-                    _client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.TypeOfService, tos);
-                }
-                catch
-                {
-                }
+                _client.Connect(host, port);
+                _networkStream = _client.GetStream();
             }
 
-            _client.Connect(host, port);
-            _networkStream = _client.GetStream();
             _activeStream = _networkStream;
             _logger = LogManager.GetCurrentClassLogger();
             RemoteIp = host;
@@ -438,6 +438,218 @@ public class PeerConnection : IDisposable
         Array.Copy(hashBytes, 0, buffer, 28, 20);
         Encoding.ASCII.GetBytes(peerId.PadRight(20)[..20], 0, 20, buffer, 48);
         return buffer;
+    }
+
+    private static void ApplySocketOptions(TcpClient client, int dscp, int tos)
+    {
+        if (dscp > 0)
+        {
+            try
+            {
+                client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.TypeOfService, dscp << 2);
+            }
+            catch
+            {
+            }
+        }
+        else if (tos > 0)
+        {
+            try
+            {
+                client.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.TypeOfService, tos);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    private static void PerformSocks5Handshake(Stream stream, string targetHost, int targetPort, string username, string password)
+    {
+        var hasAuth = !string.IsNullOrEmpty(username);
+        var greeting = hasAuth
+            ? new byte[] { 0x05, 0x02, 0x00, 0x02 }
+            : new byte[] { 0x05, 0x01, 0x00 };
+
+        stream.Write(greeting, 0, greeting.Length);
+        stream.Flush();
+
+        var response = new byte[2];
+        ReadExactBytes(stream, response, 0, 2);
+
+        if (response[0] != 0x05)
+        {
+            throw new InvalidOperationException($"Invalid SOCKS version response from proxy: {response[0]}");
+        }
+
+        var selectedMethod = response[1];
+        if (selectedMethod == 0xFF)
+        {
+            throw new InvalidOperationException("SOCKS5 proxy rejected all authentication methods.");
+        }
+
+        if (selectedMethod == 0x02)
+        {
+            var userBytes = Encoding.UTF8.GetBytes(username ?? string.Empty);
+            var passBytes = Encoding.UTF8.GetBytes(password ?? string.Empty);
+
+            var authPayload = new byte[1 + 1 + userBytes.Length + 1 + passBytes.Length];
+            authPayload[0] = 0x01;
+            authPayload[1] = (byte)userBytes.Length;
+            Buffer.BlockCopy(userBytes, 0, authPayload, 2, userBytes.Length);
+            authPayload[2 + userBytes.Length] = (byte)passBytes.Length;
+            Buffer.BlockCopy(passBytes, 0, authPayload, 3 + userBytes.Length, passBytes.Length);
+
+            stream.Write(authPayload, 0, authPayload.Length);
+            stream.Flush();
+
+            var authResponse = new byte[2];
+            ReadExactBytes(stream, authResponse, 0, 2);
+
+            if (authResponse[1] != 0x00)
+            {
+                throw new InvalidOperationException("SOCKS5 proxy authentication failed.");
+            }
+        }
+
+        using var ms = new MemoryStream();
+        ms.WriteByte(0x05);
+        ms.WriteByte(0x01); // CONNECT
+        ms.WriteByte(0x00); // RSV
+
+        if (IPAddress.TryParse(targetHost, out var ipAddress))
+        {
+            if (ipAddress.AddressFamily == AddressFamily.InterNetwork)
+            {
+                ms.WriteByte(0x01);
+                var ipBytes = ipAddress.GetAddressBytes();
+                ms.Write(ipBytes, 0, ipBytes.Length);
+            }
+            else if (ipAddress.AddressFamily == AddressFamily.InterNetworkV6)
+            {
+                ms.WriteByte(0x04);
+                var ipBytes = ipAddress.GetAddressBytes();
+                ms.Write(ipBytes, 0, ipBytes.Length);
+            }
+            else
+            {
+                throw new NotSupportedException($"Address family {ipAddress.AddressFamily} is not supported by SOCKS5.");
+            }
+        }
+        else
+        {
+            var domainBytes = Encoding.ASCII.GetBytes(targetHost);
+            ms.WriteByte(0x03);
+            ms.WriteByte((byte)domainBytes.Length);
+            ms.Write(domainBytes, 0, domainBytes.Length);
+        }
+
+        ms.WriteByte((byte)((targetPort >> 8) & 0xFF));
+        ms.WriteByte((byte)(targetPort & 0xFF));
+
+        var connectPayload = ms.ToArray();
+        stream.Write(connectPayload, 0, connectPayload.Length);
+        stream.Flush();
+
+        var connectHeader = new byte[4];
+        ReadExactBytes(stream, connectHeader, 0, 4);
+
+        if (connectHeader[1] != 0x00)
+        {
+            throw new SocketException((int)SocketError.ConnectionRefused);
+        }
+
+        var atyp = connectHeader[3];
+        var addrLen = atyp switch
+        {
+            0x01 => 4,
+            0x04 => 16,
+            0x03 => stream.ReadByte(),
+            _ => throw new InvalidOperationException($"Unknown SOCKS5 ATYP: {atyp}")
+        };
+
+        if (addrLen <= 0)
+        {
+            throw new InvalidOperationException("SOCKS5 proxy returned invalid address length.");
+        }
+
+        var boundAddress = new byte[addrLen + 2];
+        ReadExactBytes(stream, boundAddress, 0, boundAddress.Length);
+    }
+
+    private static void PerformHttpConnectHandshake(Stream stream, string targetHost, int targetPort, string username, string password)
+    {
+        var formattedHost = targetHost.Contains(':') && !targetHost.StartsWith('[') ? $"[{targetHost}]" : targetHost;
+        var sb = new StringBuilder();
+        sb.Append($"CONNECT {formattedHost}:{targetPort} HTTP/1.1\r\n");
+        sb.Append($"Host: {formattedHost}:{targetPort}\r\n");
+
+        if (!string.IsNullOrEmpty(username))
+        {
+            var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{username}:{password ?? string.Empty}"));
+            sb.Append($"Proxy-Authorization: Basic {auth}\r\n");
+        }
+
+        sb.Append("\r\n");
+
+        var requestBytes = Encoding.ASCII.GetBytes(sb.ToString());
+        stream.Write(requestBytes, 0, requestBytes.Length);
+        stream.Flush();
+
+        using var headerMs = new MemoryStream();
+        var buffer = new byte[1];
+        var headersComplete = false;
+
+        while (headerMs.Length < 8192)
+        {
+            var read = stream.Read(buffer, 0, 1);
+            if (read == 0)
+            {
+                throw new IOException("HTTP CONNECT proxy closed connection during handshake");
+            }
+
+            headerMs.WriteByte(buffer[0]);
+            var len = headerMs.Length;
+            if (len >= 4)
+            {
+                var bytes = headerMs.GetBuffer();
+                if (bytes[len - 4] == '\r' &&
+                    bytes[len - 3] == '\n' &&
+                    bytes[len - 2] == '\r' &&
+                    bytes[len - 1] == '\n')
+                {
+                    headersComplete = true;
+                    break;
+                }
+            }
+        }
+
+        if (!headersComplete)
+        {
+            throw new InvalidOperationException("HTTP CONNECT proxy response headers exceeded 8192 bytes without terminating delimiter.");
+        }
+
+        var responseText = Encoding.ASCII.GetString(headerMs.ToArray());
+        if (!responseText.StartsWith("HTTP/1.1 200", StringComparison.OrdinalIgnoreCase) &&
+            !responseText.StartsWith("HTTP/1.0 200", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"HTTP CONNECT proxy returned non-200 status: {responseText.Split(new[] { "\r\n" }, StringSplitOptions.None)[0]}");
+        }
+    }
+
+    private static void ReadExactBytes(Stream stream, byte[] buffer, int offset, int count)
+    {
+        var totalRead = 0;
+        while (totalRead < count)
+        {
+            var read = stream.Read(buffer, offset + totalRead, count - totalRead);
+            if (read == 0)
+            {
+                throw new EndOfStreamException("Proxy closed the connection unexpectedly.");
+            }
+
+            totalRead += read;
+        }
     }
 
     private bool ReadExact(byte[] buffer, int count)

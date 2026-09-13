@@ -1168,4 +1168,33 @@ export interface FileSystemResource {
   files?: FileSystemEntryResource[];
 }
 
+export interface CurrentUser {
+  id?: number;
+  identifier?: string;
+  username: string;
+  email?: string | null;
+  displayName?: string | null;
+  roles: string[];
+  avatarUrl?: string | null;
+  isAuthenticated: boolean;
+  returnUrl?: string;
+}
+
+export interface AuthProvider {
+  id: number;
+  providerId: string;
+  name: string;
+  providerType: IdentityProviderType;
+  iconUrl?: string | null;
+  buttonText?: string | null;
+  loginUrl: string;
+}
+
+export interface LoginRequest {
+  username?: string;
+  password?: string;
+  rememberMe?: boolean;
+  returnUrl?: string;
+}
+
 
