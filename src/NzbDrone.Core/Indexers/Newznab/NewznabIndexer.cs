@@ -1,12 +1,12 @@
 using System;
-using System.Net.Http;
 using NLog;
+using NzbDrone.Core.Indexers.Torznab;
 
 namespace NzbDrone.Core.Indexers.Newznab;
 
 public class NewznabIndexer : IIndexer
 {
-    private static readonly HttpClient Client = new();
+    private static readonly System.Net.Http.HttpClient Client = new();
     private readonly Logger _logger;
 
     public string Name => "Newznab";
@@ -34,7 +34,7 @@ public class NewznabIndexer : IIndexer
             var apiPath = string.IsNullOrEmpty(definition.ApiPath) ? "/api" : definition.ApiPath;
             var url = $"{definition.Url.TrimEnd('/')}{apiPath}?t=caps";
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, url);
             if (!string.IsNullOrWhiteSpace(definition.ApiKey))
             {
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
@@ -85,8 +85,180 @@ public class NewznabIndexer : IIndexer
         return null;
     }
 
-    public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null)
+    public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null, int offset = 0, int limit = 50)
     {
-        return new System.Collections.Generic.List<ReleaseInfo>();
+        var results = new System.Collections.Generic.List<ReleaseInfo>();
+        if (definition == null || string.IsNullOrWhiteSpace(definition.Url) || string.IsNullOrWhiteSpace(query))
+        {
+            return results;
+        }
+
+        try
+        {
+            var apiPath = string.IsNullOrEmpty(definition.ApiPath) ? "/api" : definition.ApiPath;
+            var mappedCat = TorznabIndexer.MapFriendlyCategory(category);
+            var url = $"{definition.Url.TrimEnd('/')}{apiPath}?t=search&q={Uri.EscapeDataString(query)}";
+            if (!string.IsNullOrWhiteSpace(mappedCat))
+            {
+                url += $"&cat={Uri.EscapeDataString(mappedCat)}";
+            }
+            else if (!string.IsNullOrWhiteSpace(definition.Categories))
+            {
+                var defCat = TorznabIndexer.MapFriendlyCategory(definition.Categories);
+                if (!string.IsNullOrWhiteSpace(defCat))
+                {
+                    url += $"&cat={Uri.EscapeDataString(defCat)}";
+                }
+            }
+
+            if (offset > 0)
+            {
+                url += $"&offset={offset}";
+            }
+
+            if (limit > 0)
+            {
+                url += $"&limit={limit}";
+            }
+
+            if (!string.IsNullOrWhiteSpace(definition.ApiKey))
+            {
+                url += $"&apikey={Uri.EscapeDataString(definition.ApiKey)}";
+            }
+
+            using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, url);
+            if (!string.IsNullOrWhiteSpace(definition.ApiKey))
+            {
+                request.Headers.Add("X-Api-Key", definition.ApiKey);
+            }
+
+            using var response = Client.Send(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                _logger.Warn("Newznab search returned status code {0}", response.StatusCode);
+                if ((int)response.StatusCode == 429 || (int)response.StatusCode == 503)
+                {
+                    throw new System.Net.Http.HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
+                }
+
+                return results;
+            }
+
+            using var reader = new System.IO.StreamReader(response.Content.ReadAsStream());
+            var xml = reader.ReadToEnd();
+            return ParseResponse(xml, definition);
+        }
+        catch (System.Net.Http.HttpRequestException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to search Newznab at {0} for query '{1}'", definition.Url, query);
+        }
+
+        return results;
+    }
+
+    public System.Collections.Generic.List<ReleaseInfo> ParseResponse(string xml, IndexerDefinition definition = null)
+    {
+        var results = new System.Collections.Generic.List<ReleaseInfo>();
+        if (string.IsNullOrWhiteSpace(xml))
+        {
+            return results;
+        }
+
+        var doc = new System.Xml.XmlDocument();
+        doc.LoadXml(xml);
+
+        int? responseOffset = null;
+        int? responseTotal = null;
+
+        var responseNode = doc.SelectSingleNode("//*[local-name()='response']");
+        if (responseNode != null)
+        {
+            if (responseNode.Attributes?["offset"] != null && int.TryParse(responseNode.Attributes["offset"].Value, out var offsetVal))
+            {
+                responseOffset = offsetVal;
+            }
+
+            if (responseNode.Attributes?["total"] != null && int.TryParse(responseNode.Attributes["total"].Value, out var totalVal))
+            {
+                responseTotal = totalVal;
+            }
+        }
+
+        var items = doc.SelectNodes("//item");
+        if (items != null)
+        {
+            foreach (System.Xml.XmlNode item in items)
+            {
+                var titleNode = item.SelectSingleNode("title");
+                var linkNode = item.SelectSingleNode("link");
+                var enclosureNode = item.SelectSingleNode("enclosure");
+                var sizeNode = item.SelectSingleNode("size");
+                var pubDateNode = item.SelectSingleNode("pubDate");
+                var guidNode = item.SelectSingleNode("guid");
+
+                var downloadUrl = enclosureNode?.Attributes?["url"]?.Value ?? linkNode?.InnerText;
+
+                var release = new ReleaseInfo
+                {
+                    Guid = guidNode?.InnerText ?? string.Empty,
+                    IndexerId = definition?.Id ?? 0,
+                    Indexer = definition?.Name,
+                    Title = titleNode?.InnerText ?? string.Empty,
+                    DownloadUrl = downloadUrl,
+                    ResponseOffset = responseOffset,
+                    ResponseTotal = responseTotal,
+                    DownloadVolumeFactor = 1.0,
+                    UploadVolumeFactor = 1.0,
+                    Protocol = "usenet"
+                };
+
+                if (enclosureNode?.Attributes?["length"] != null && long.TryParse(enclosureNode.Attributes["length"].Value, out var encSize))
+                {
+                    release.Size = encSize;
+                }
+                else if (sizeNode != null && long.TryParse(sizeNode.InnerText, out var sVal))
+                {
+                    release.Size = sVal;
+                }
+
+                if (pubDateNode != null && DateTime.TryParse(pubDateNode.InnerText, out var pDate))
+                {
+                    release.PublishDate = pDate;
+                }
+
+                var attrNodes = item.SelectNodes("*[local-name()='attr']");
+                if (attrNodes != null)
+                {
+                    foreach (System.Xml.XmlNode attr in attrNodes)
+                    {
+                        var name = attr.Attributes?["name"]?.Value?.ToLowerInvariant();
+                        var val = attr.Attributes?["value"]?.Value;
+                        if (name == "category" && !string.IsNullOrEmpty(val))
+                        {
+                            release.Categories.Add(val);
+                        }
+                        else if (name == "size" && release.Size == 0 && long.TryParse(val, out var aSize))
+                        {
+                            release.Size = aSize;
+                        }
+                        else if (name == "guid" && string.IsNullOrEmpty(release.Guid))
+                        {
+                            release.Guid = val;
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(release.Title))
+                {
+                    results.Add(release);
+                }
+            }
+        }
+
+        return results;
     }
 }

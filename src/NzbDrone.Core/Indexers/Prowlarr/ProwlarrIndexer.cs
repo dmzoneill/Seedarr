@@ -134,7 +134,7 @@ public class ProwlarrIndexer : IIndexer
         }
     }
 
-    public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null)
+    public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null, int offset = 0, int limit = 50)
     {
         var results = new System.Collections.Generic.List<ReleaseInfo>();
         if (definition == null || string.IsNullOrWhiteSpace(definition.Url) || string.IsNullOrWhiteSpace(query))
@@ -148,6 +148,16 @@ public class ProwlarrIndexer : IIndexer
             if (!string.IsNullOrWhiteSpace(category))
             {
                 url += $"&categories={Uri.EscapeDataString(category)}";
+            }
+
+            if (offset > 0)
+            {
+                url += $"&offset={offset}";
+            }
+
+            if (limit > 0)
+            {
+                url += $"&limit={limit}";
             }
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);

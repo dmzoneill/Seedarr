@@ -66,6 +66,7 @@ import type {
   AutomationMarketplaceTemplate,
   AutomationTestRequest,
   InstallMarketplaceTemplateRequest,
+  FileSystemResource,
 } from "./types";
 
 const DEFAULT_REFETCH_MS = 5000;
@@ -374,6 +375,13 @@ export function useDiskSpace() {
   return useQuery<DiskSpaceInfo[]>({
     queryKey: ["diskspace"],
     queryFn: () => apiClient.get("/diskspace"),
+  });
+}
+
+export function useFileSystem(path?: string, includeFiles = false) {
+  return useQuery<FileSystemResource>({
+    queryKey: ["filesystem", path, includeFiles],
+    queryFn: () => apiClient.getFileSystem(path, includeFiles),
   });
 }
 

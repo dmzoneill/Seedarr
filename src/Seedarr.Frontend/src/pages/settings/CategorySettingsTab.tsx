@@ -5,6 +5,7 @@ import {
   useUpdateCategory,
   useDeleteCategory,
   useDiskSpace,
+  useFileSystem,
 } from "../../api/hooks";
 import type { Category, DiskSpaceInfo } from "../../api/types";
 import { formatBytes } from "../../utils/formatters";
@@ -103,6 +104,13 @@ export function CategorySettingsTab({
   const [modalError, setModalError] = useState<string | null>(null);
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
   const [browsingPath, setBrowsingPath] = useState("");
+
+  const {
+    data: fsData,
+    isLoading: isFsLoading,
+    isError: isFsError,
+    error: fsError,
+  } = useFileSystem(showFolderBrowser ? browsingPath : undefined);
 
   const defaultCategoryForm: Partial<Category> = {
     name: "",
@@ -803,26 +811,153 @@ export function CategorySettingsTab({
               >
                 Selected Directory Path
               </label>
-              <input
-                type="text"
-                className="input"
-                value={browsingPath}
-                onChange={(e) => setBrowsingPath(e.target.value)}
-                placeholder="/downloads/movies"
-                style={{
-                  width: "100%",
-                  padding: "0.5rem 0.75rem",
-                  borderRadius: "6px",
-                  border: "1px solid var(--border-light)",
-                  backgroundColor: "var(--bg-primary, #0f111c)",
-                  color: "var(--text-primary, #fff)",
-                  fontFamily: "monospace",
-                  fontSize: "0.85rem",
-                  boxSizing: "border-box",
-                }}
-              />
+              <div style={{ display: "flex", gap: "0.4rem" }}>
+                <button
+                  type="button"
+                  className="btn btn-outline btn-small"
+                  onClick={() => fsData?.parent && setBrowsingPath(fsData.parent)}
+                  disabled={!fsData?.parent}
+                  title={fsData?.parent ? `Go up to ${fsData.parent}` : "Root directory"}
+                  style={{
+                    padding: "0.4rem 0.6rem",
+                    fontSize: "0.8rem",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  ⬆ Up
+                </button>
+                <input
+                  type="text"
+                  className="input"
+                  value={browsingPath}
+                  onChange={(e) => setBrowsingPath(e.target.value)}
+                  placeholder="/downloads/movies"
+                  style={{
+                    flex: 1,
+                    padding: "0.5rem 0.75rem",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border-light)",
+                    backgroundColor: "var(--bg-primary, #0f111c)",
+                    color: "var(--text-primary, #fff)",
+                    fontFamily: "monospace",
+                    fontSize: "0.85rem",
+                    boxSizing: "border-box",
+                  }}
+                />
+              </div>
               <div style={{ marginTop: "0.4rem" }}>
                 <DiskSpaceBadge disk={getMatchingDisk(browsingPath, diskSpace)} />
+              </div>
+            </div>
+
+            {/* Dynamic Filesystem Directory Listing */}
+            <div style={{ marginBottom: "1rem" }}>
+              <div
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--text-secondary)",
+                  fontWeight: 600,
+                  marginBottom: "0.4rem",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span>Subdirectories in Current Path:</span>
+                {isFsLoading && (
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    Loading...
+                  </span>
+                )}
+              </div>
+              <div
+                style={{
+                  border: "1px solid var(--border-light)",
+                  borderRadius: "6px",
+                  backgroundColor: "var(--bg-primary, #0f111c)",
+                  maxHeight: "180px",
+                  overflowY: "auto",
+                  padding: "0.4rem",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "0.2rem",
+                }}
+              >
+                {isFsLoading ? (
+                  <div
+                    style={{
+                      padding: "1rem",
+                      textAlign: "center",
+                      color: "var(--text-muted)",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    Fetching directory listing...
+                  </div>
+                ) : isFsError ? (
+                  <div
+                    style={{
+                      padding: "0.75rem",
+                      color: "var(--danger, #ef4444)",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    ⚠️ {fsError?.message || "Failed to load directory contents."}
+                  </div>
+                ) : !fsData?.directories || fsData.directories.length === 0 ? (
+                  <div
+                    style={{
+                      padding: "0.75rem",
+                      textAlign: "center",
+                      color: "var(--text-muted)",
+                      fontSize: "0.8rem",
+                    }}
+                  >
+                    No subdirectories found in this folder.
+                  </div>
+                ) : (
+                  fsData.directories.map((dir, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setBrowsingPath(dir.path)}
+                      className="btn btn-outline"
+                      style={{
+                        textAlign: "left",
+                        padding: "0.35rem 0.6rem",
+                        fontSize: "0.8rem",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        border: "none",
+                        backgroundColor: "transparent",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor =
+                          "rgba(255, 255, 255, 0.05)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                      }}
+                    >
+                      <span style={{ fontSize: "0.9rem" }}>
+                        {dir.type === "drive" ? "💾" : "📁"}
+                      </span>
+                      <span
+                        style={{
+                          flex: 1,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {dir.name}
+                      </span>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
 

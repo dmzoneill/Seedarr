@@ -23,6 +23,7 @@ public class IndexerController : Controller
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly ITorrentFileParser _torrentFileParser;
     private readonly IDownloadHistoryService _downloadHistoryService;
+    private readonly IIndexerStatusService _indexerStatusService;
 
     public IndexerController(
         IIndexerFactory indexerFactory,
@@ -30,7 +31,8 @@ public class IndexerController : Controller
         ITorrentFileService torrentFileService,
         ITrackerEntryService trackerEntryService,
         ITorrentFileParser torrentFileParser,
-        IDownloadHistoryService downloadHistoryService)
+        IDownloadHistoryService downloadHistoryService,
+        IIndexerStatusService indexerStatusService = null)
     {
         _indexerFactory = indexerFactory;
         _torrentService = torrentService;
@@ -38,6 +40,7 @@ public class IndexerController : Controller
         _trackerEntryService = trackerEntryService;
         _torrentFileParser = torrentFileParser;
         _downloadHistoryService = downloadHistoryService;
+        _indexerStatusService = indexerStatusService ?? new IndexerStatusService();
     }
 
     [HttpGet]
@@ -138,6 +141,17 @@ public class IndexerController : Controller
         }
 
         var result = indexer.TestConnectionDetailed(definition);
+        if (definition.Id > 0)
+        {
+            if (result.Success)
+            {
+                _indexerStatusService.RecordSuccess(definition.Id);
+            }
+            else
+            {
+                _indexerStatusService.RecordFailure(definition.Id, errorMessage: result.Message);
+            }
+        }
         return Ok(result);
     }
 
@@ -161,11 +175,19 @@ public class IndexerController : Controller
         }
 
         var result = indexer.TestConnectionDetailed(definition);
+        if (result.Success)
+        {
+            _indexerStatusService.RecordSuccess(id);
+        }
+        else
+        {
+            _indexerStatusService.RecordFailure(id, errorMessage: result.Message);
+        }
         return Ok(result);
     }
 
     [HttpGet("search")]
-    public ActionResult<List<ReleaseInfo>> Search([FromQuery] string query, [FromQuery] string category = null, [FromQuery] int? indexerId = null)
+    public ActionResult<List<ReleaseInfo>> Search([FromQuery] string query, [FromQuery] string category = null, [FromQuery] int? indexerId = null, [FromQuery] int offset = 0, [FromQuery] int limit = 50)
     {
         if (string.IsNullOrWhiteSpace(query))
         {
@@ -178,21 +200,28 @@ public class IndexerController : Controller
             definitions = definitions.Where(d => d.Id == indexerId.Value).ToList();
         }
 
+        definitions = definitions.Where(d => !_indexerStatusService.IsDisabled(d.Id)).ToList();
+
         var allResults = new List<ReleaseInfo>();
         foreach (var def in definitions)
         {
             try
             {
                 var indexer = CreateIndexer(def);
-                var results = indexer.Search(def, query, category);
+                var results = indexer.Search(def, query, category, offset, limit);
+                _indexerStatusService.RecordSuccess(def.Id);
                 if (results != null && results.Count > 0)
                 {
                     allResults.AddRange(results);
                 }
             }
-            catch
+            catch (HttpRequestException ex)
             {
-                // Continue to next indexer
+                _indexerStatusService.RecordFailure(def.Id, (int?)ex.StatusCode, ex.Message, ex);
+            }
+            catch (Exception ex)
+            {
+                _indexerStatusService.RecordFailure(def.Id, null, ex.Message, ex);
             }
         }
 
@@ -212,12 +241,18 @@ public class IndexerController : Controller
             return BadRequest("Invalid request");
         }
 
-        if (!string.IsNullOrWhiteSpace(request.MagnetUrl))
+        var magnetUri = !string.IsNullOrWhiteSpace(request.MagnetUrl)
+            ? request.MagnetUrl
+            : (!string.IsNullOrWhiteSpace(request.DownloadUrl) && request.DownloadUrl.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase)
+                ? request.DownloadUrl
+                : null);
+
+        if (!string.IsNullOrWhiteSpace(magnetUri))
         {
             ParsedMagnetLink parsed;
             try
             {
-                parsed = MagnetLinkParser.Parse(request.MagnetUrl);
+                parsed = MagnetLinkParser.Parse(magnetUri);
             }
             catch (ArgumentException ex)
             {
@@ -255,7 +290,7 @@ public class IndexerController : Controller
             _downloadHistoryService.RecordTorrentAdded(
                 added,
                 source: !string.IsNullOrWhiteSpace(request.IndexerName) ? $"Prowlarr ({request.IndexerName})" : "Prowlarr",
-                magnetUrl: request.MagnetUrl,
+                magnetUrl: magnetUri,
                 indexerName: request.IndexerName);
 
             return Ok(TorrentResourceMapper.ToResource(added));

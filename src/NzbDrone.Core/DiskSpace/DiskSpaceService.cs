@@ -43,16 +43,25 @@ public class DiskSpaceService : IDiskSpaceService
         var result = new List<DiskSpaceInfo>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        AddDriveInfo(result, seen, _appFolderInfo.AppDataFolder, "AppData");
-        AddDriveInfo(result, seen, _appFolderInfo.StartUpFolder, "Startup");
-
+        DriveInfo[] drives;
         try
         {
-            var drives = DriveInfo.GetDrives()
-                .Where(d => d.IsReady && d.DriveType == DriveType.Fixed)
-                .ToList();
+            drives = DriveInfo.GetDrives()
+                .Where(d => d.IsReady && (d.DriveType == DriveType.Fixed || d.DriveType == DriveType.Network))
+                .ToArray();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to enumerate drives");
+            drives = Array.Empty<DriveInfo>();
+        }
 
-            foreach (var drive in drives)
+        AddDriveInfo(result, seen, _appFolderInfo.AppDataFolder, "AppData", drives);
+        AddDriveInfo(result, seen, _appFolderInfo.StartUpFolder, "Startup", drives);
+
+        foreach (var drive in drives)
+        {
+            try
             {
                 if (seen.Add(drive.RootDirectory.FullName))
                 {
@@ -65,10 +74,10 @@ public class DiskSpaceService : IDiskSpaceService
                     });
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn(ex, "Failed to enumerate fixed drives");
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to get space for drive {0}", drive.Name);
+            }
         }
 
         return result;
@@ -78,38 +87,124 @@ public class DiskSpaceService : IDiskSpaceService
         List<DiskSpaceInfo> result,
         HashSet<string> seen,
         string path,
-        string label)
+        string label,
+        DriveInfo[] drives = null)
     {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
         try
         {
-            var root = Path.GetPathRoot(path);
+            drives ??= DriveInfo.GetDrives()
+                .Where(d => d.IsReady && (d.DriveType == DriveType.Fixed || d.DriveType == DriveType.Network))
+                .ToArray();
 
-            if (string.IsNullOrEmpty(root))
+            var drive = GetBestMatchingDrive(path, drives);
+            if (drive == null || !drive.IsReady)
             {
                 return;
             }
 
-            if (!seen.Add(root))
+            var rootKey = drive.RootDirectory.FullName;
+            if (!seen.Add(rootKey))
             {
                 return;
             }
 
-            var drive = new DriveInfo(root);
-
-            if (drive.IsReady)
+            result.Add(new DiskSpaceInfo
             {
-                result.Add(new DiskSpaceInfo
-                {
-                    Path = path,
-                    Label = label,
-                    FreeSpace = drive.AvailableFreeSpace,
-                    TotalSpace = drive.TotalSize,
-                });
-            }
+                Path = path,
+                Label = label,
+                FreeSpace = drive.AvailableFreeSpace,
+                TotalSpace = drive.TotalSize,
+            });
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Failed to get drive info for path {0} ({1})", path, label);
         }
+    }
+
+    private static DriveInfo GetBestMatchingDrive(string path, DriveInfo[] drives)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(path);
+        }
+        catch
+        {
+            fullPath = path;
+        }
+
+        var normalizedFullPath = fullPath;
+        if (!normalizedFullPath.EndsWith(Path.DirectorySeparatorChar.ToString()) && normalizedFullPath != "/")
+        {
+            normalizedFullPath += Path.DirectorySeparatorChar;
+        }
+
+        DriveInfo bestMatch = null;
+        var longestMatchLength = -1;
+
+        if (drives != null)
+        {
+            foreach (var drive in drives)
+            {
+                try
+                {
+                    if (!drive.IsReady)
+                    {
+                        continue;
+                    }
+
+                    var mountPath = drive.RootDirectory.FullName;
+                    var normalizedMountPath = mountPath;
+                    if (!normalizedMountPath.EndsWith(Path.DirectorySeparatorChar.ToString()) && normalizedMountPath != "/")
+                    {
+                        normalizedMountPath += Path.DirectorySeparatorChar;
+                    }
+
+                    if (normalizedFullPath.StartsWith(normalizedMountPath, StringComparison.OrdinalIgnoreCase) ||
+                        fullPath.Equals(drive.Name.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (normalizedMountPath.Length > longestMatchLength)
+                        {
+                            longestMatchLength = normalizedMountPath.Length;
+                            bestMatch = drive;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore inaccessible virtual filesystem mounts
+                }
+            }
+        }
+
+        if (bestMatch != null)
+        {
+            return bestMatch;
+        }
+
+        try
+        {
+            var root = Path.GetPathRoot(fullPath);
+            if (!string.IsNullOrEmpty(root))
+            {
+                return new DriveInfo(root);
+            }
+        }
+        catch
+        {
+        }
+
+        return null;
     }
 }

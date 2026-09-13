@@ -1151,3 +1151,19 @@ export interface InstallMarketplaceTemplateRequest {
   customInputs?: Record<string, string>;
 }
 
+export interface FileSystemEntryResource {
+  name: string;
+  path: string;
+  type: "folder" | "file" | "drive" | string;
+  size?: number | null;
+  lastModified?: string | null;
+}
+
+export interface FileSystemResource {
+  parent?: string | null;
+  current?: string;
+  directories: FileSystemEntryResource[];
+  files?: FileSystemEntryResource[];
+}
+
+
