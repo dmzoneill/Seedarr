@@ -77,4 +77,3 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
         return null;
     }
 }
-
