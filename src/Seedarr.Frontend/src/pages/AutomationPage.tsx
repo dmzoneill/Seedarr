@@ -96,82 +96,82 @@ export interface ActionGroup {
   items: ActionDef[];
 }
 
-export const COMMON_COMMANDS = [
-  { name: "Backup", desc: "Create full database & config backup" },
-  { name: "SyncArr", desc: "Sync connected Sonarr / Radarr instances" },
-  { name: "WatchFolderScan", desc: "Scan watch folder for torrents" },
-  { name: "TrackerBoostScan", desc: "Scan & optimize candidate trackers" },
-  { name: "BlocklistUpdate", desc: "Update peer IP blocklist" },
-  { name: "GeoIpUpdate", desc: "Update MaxMind GeoIP database" },
-  { name: "RssSync", desc: "Poll RSS indexers for releases" },
+export const getCommonCommands = (t: any) => [
+  { name: "Backup", desc: t("automation.commands.createFullDatabaseConfigBackup") },
+  { name: "SyncArr", desc: t("automation.commands.syncConnectedSonarrRadarrInsta") },
+  { name: "WatchFolderScan", desc: t("automation.commands.scanWatchFolderForTorrents") },
+  { name: "TrackerBoostScan", desc: t("automation.commands.scanOptimizeCandidateTrackers") },
+  { name: "BlocklistUpdate", desc: t("automation.commands.updatePeerIpBlocklist") },
+  { name: "GeoIpUpdate", desc: t("automation.commands.updateMaxmindGeoipDatabase") },
+  { name: "RssSync", desc: t("automation.commands.pollRssIndexersForReleases") },
 ];
 
-export const ACTION_GROUPS: ActionGroup[] = [
+export const getActionGroups = (t: any): ActionGroup[] => [
   {
-    group: "🏷️ Tags & Categories",
+    group: t("automation.actions.tagsCategories"),
     items: [
-      { type: "addTag" as VisualActionType, label: "➕ Add Tag", placeholder: "e.g. 4K-HDR, Verified, Freeleech" },
-      { type: "removeTag" as VisualActionType, label: "➖ Remove Tag", placeholder: "e.g. Incomplete, Queued" },
-      { type: "setCategory" as VisualActionType, label: "📁 Set Category", placeholder: "e.g. Movies, TV, Anime" },
+      { type: "addTag" as VisualActionType, label: t("automation.actions.addTag"), placeholder: t("automation.actions.eg4khdrVerifiedFreeleech") },
+      { type: "removeTag" as VisualActionType, label: t("automation.actions.removeTag"), placeholder: t("automation.actions.egIncompleteQueued") },
+      { type: "setCategory" as VisualActionType, label: t("automation.actions.setCategory"), placeholder: t("automation.actions.egMoviesTvAnime") },
     ],
   },
   {
-    group: "⚡ Torrent State & Flow",
+    group: t("automation.actions.torrentStateFlow"),
     items: [
-      { type: "pause" as VisualActionType, label: "⏸️ Pause Torrent" },
-      { type: "resume" as VisualActionType, label: "▶️ Resume Torrent" },
-      { type: "remove" as VisualActionType, label: "🗑️ Remove Torrent", extraHelp: "Deletes torrent from client (optional data deletion)" },
-      { type: "recheck" as VisualActionType, label: "🔍 Force Hash Recheck", extraHelp: "Verifies piece hashes on disk" },
-      { type: "reannounce" as VisualActionType, label: "📢 Force Reannounce", extraHelp: "Forces immediate tracker update" },
+      { type: "pause" as VisualActionType, label: t("automation.actions.pauseTorrent") },
+      { type: "resume" as VisualActionType, label: t("automation.actions.resumeTorrent") },
+      { type: "remove" as VisualActionType, label: t("automation.actions.removeTorrent"), extraHelp: t("automation.actions.deletesTorrentFromClientOption") },
+      { type: "recheck" as VisualActionType, label: t("automation.ui.forceHashRecheck"), extraHelp: t("automation.actions.verifiesPieceHashesOnDisk") },
+      { type: "reannounce" as VisualActionType, label: t("automation.actions.forceReannounce"), extraHelp: t("automation.actions.forcesImmediateTrackerUpdate") },
     ],
   },
   {
-    group: "🎛️ Limits & Priority",
+    group: t("automation.actions.limitsPriority"),
     items: [
-      { type: "setUploadLimit" as VisualActionType, label: "⬆️ Set Upload Limit (KB/s)", placeholder: "e.g. 1024 (0 for unlimited)" },
-      { type: "setDownloadLimit" as VisualActionType, label: "⬇️ Set Download Limit (KB/s)", placeholder: "e.g. 5120 (0 for unlimited)" },
-      { type: "setRatioLimit" as VisualActionType, label: "🎯 Set Stop Ratio Limit", placeholder: "e.g. 2.0" },
-      { type: "setSeedingTimeLimit" as VisualActionType, label: "⏱️ Set Seeding Time Limit (minutes)", placeholder: "e.g. 2880 (48 hours)" },
-      { type: "setPriority" as VisualActionType, label: "⚡ Set Torrent Priority", placeholder: "High, Normal, Low, DoNotDownload" },
-      { type: "setSequentialDownload" as VisualActionType, label: "⏩ Sequential Download Toggle", placeholder: "true or false" },
-      { type: "setSuperSeeding" as VisualActionType, label: "🌱 Initial / Super Seeding", placeholder: "true or false" },
+      { type: "setUploadLimit" as VisualActionType, label: t("automation.actions.setUploadLimitKbs"), placeholder: t("automation.actions.eg10240ForUnlimited") },
+      { type: "setDownloadLimit" as VisualActionType, label: t("automation.actions.setDownloadLimitKbs"), placeholder: t("automation.actions.eg51200ForUnlimited") },
+      { type: "setRatioLimit" as VisualActionType, label: t("automation.actions.setStopRatioLimit"), placeholder: t("automation.actions.eg20") },
+      { type: "setSeedingTimeLimit" as VisualActionType, label: t("automation.actions.setSeedingTimeLimitMinutes"), placeholder: t("automation.actions.eg288048Hours") },
+      { type: "setPriority" as VisualActionType, label: t("automation.actions.setTorrentPriority"), placeholder: t("automation.actions.highNormalLowDonotdownload") },
+      { type: "setSequentialDownload" as VisualActionType, label: t("automation.actions.sequentialDownloadToggle"), placeholder: t("automation.actions.trueOrFalse") },
+      { type: "setSuperSeeding" as VisualActionType, label: t("automation.actions.initialSuperSeeding"), placeholder: t("automation.actions.trueOrFalse") },
     ],
   },
   {
-    group: "📦 Storage & Files",
+    group: t("automation.actions.storageFiles"),
     items: [
-      { type: "moveFiles" as VisualActionType, label: "📂 Move Torrent Files / Change Save Path", placeholder: "e.g. /media/completed/${category}" },
-      { type: "extractArchive" as VisualActionType, label: "📦 Extract Archive (.rar/.zip/.7z)", placeholder: "/extracted/path (blank = current)" },
-      { type: "cleanFiles" as VisualActionType, label: "🧹 Clean Unwanted Files", placeholder: "*.nfo, *.txt, *.sample" },
+      { type: "moveFiles" as VisualActionType, label: t("automation.actions.moveTorrentFilesChangeSave"), placeholder: t("automation.actions.egMediacompletedcategory") },
+      { type: "extractArchive" as VisualActionType, label: t("automation.actions.extractArchiveRarzip7z"), placeholder: t("automation.actions.extractedpathBlankCurrent") },
+      { type: "cleanFiles" as VisualActionType, label: t("automation.actions.cleanUnwantedFiles"), placeholder: t("automation.actions.nfoTxtSample") },
     ],
   },
   {
-    group: "📡 Trackers & Peers",
+    group: t("automation.actions.trackersPeers"),
     items: [
-      { type: "addTracker" as VisualActionType, label: "➕ Add Announce URL", placeholder: "https://tracker.example.com/announce" },
-      { type: "removeTracker" as VisualActionType, label: "➖ Remove Announce URL", placeholder: "https://tracker.example.com/announce" },
-      { type: "boostTracker" as VisualActionType, label: "🚀 Boost Tracker Scrape", placeholder: "Tracker URL to prioritize" },
-      { type: "banPeer" as VisualActionType, label: "🚫 Ban Peer IP / Subnet", placeholder: "192.168.1.100 or 10.0.0.0/24" },
+      { type: "addTracker" as VisualActionType, label: t("automation.actions.addAnnounceUrl"), placeholder: t("automation.actions.httpstrackerexamplecomannounce") },
+      { type: "removeTracker" as VisualActionType, label: t("automation.actions.removeAnnounceUrl"), placeholder: t("automation.actions.httpstrackerexamplecomannounce") },
+      { type: "boostTracker" as VisualActionType, label: t("automation.actions.boostTrackerScrape"), placeholder: t("automation.actions.trackerUrlToPrioritize") },
+      { type: "banPeer" as VisualActionType, label: t("automation.actions.banPeerIpSubnet"), placeholder: t("automation.actions.1921681100Or1000024") },
     ],
   },
   {
-    group: "🔔 Alerts & Servarr",
+    group: t("automation.actions.alertsServarr"),
     items: [
-      { type: "sendNotification" as VisualActionType, label: "🔔 Send System / Push Notification", placeholder: "Torrent ${torrent.name} completed!" },
-      { type: "notifyArr" as VisualActionType, label: "🤖 Notify Servarr App (Sonarr/Radarr)", placeholder: "sonarr or radarr" },
-      { type: "syncArr" as VisualActionType, label: "🔄 Trigger Servarr Rescan", placeholder: "Instance name or all" },
+      { type: "sendNotification" as VisualActionType, label: t("automation.actions.sendSystemPushNotification"), placeholder: t("automation.actions.torrentTorrentnameCompleted") },
+      { type: "notifyArr" as VisualActionType, label: t("automation.actions.notifyServarrAppSonarrradarr"), placeholder: t("automation.actions.sonarrOrRadarr") },
+      { type: "syncArr" as VisualActionType, label: t("automation.actions.triggerServarrRescan"), placeholder: t("automation.actions.instanceNameOrAll") },
     ],
   },
   {
-    group: "💻 Scripting & Flow Control",
+    group: t("automation.actions.scriptingFlowControl"),
     items: [
-      { type: "runScript" as VisualActionType, label: "💻 Run Custom Host Script", placeholder: "/scripts/on_download.sh" },
-      { type: "delay" as VisualActionType, label: "⏱️ Delay / Sleep (seconds)", placeholder: "e.g. 5" },
-      { type: "log" as VisualActionType, label: "📝 Pipeline Log Message", placeholder: "Log message to output stream" },
-      { type: "setVariable" as VisualActionType, label: "💾 Set Pipeline Variable", placeholder: "key=value" },
-      { type: "stopPipeline" as VisualActionType, label: "🛑 Stop Pipeline Early", placeholder: "Reason for halting" },
-      { type: "command" as VisualActionType, label: "⚙️ Run Internal Command", placeholder: "Backup, SyncArr, RssSync, etc." },
-      { type: "http" as VisualActionType, label: "🌐 Send Custom HTTP Request", placeholder: "https://api.example.com/webhook" },
+      { type: "runScript" as VisualActionType, label: t("automation.actions.runCustomHostScript"), placeholder: t("automation.actions.scriptsondownloadsh") },
+      { type: "delay" as VisualActionType, label: t("automation.actions.delaySleepSeconds"), placeholder: t("automation.actions.eg5") },
+      { type: "log" as VisualActionType, label: t("automation.actions.pipelineLogMessage"), placeholder: t("automation.actions.logMessageToOutputStream") },
+      { type: "setVariable" as VisualActionType, label: t("automation.actions.setPipelineVariable"), placeholder: t("automation.actions.keyvalue") },
+      { type: "stopPipeline" as VisualActionType, label: t("automation.actions.stopPipelineEarly"), placeholder: t("automation.actions.reasonForHalting") },
+      { type: "command" as VisualActionType, label: t("automation.actions.runInternalCommand"), placeholder: t("automation.actions.backupSyncarrRsssyncEtc") },
+      { type: "http" as VisualActionType, label: t("automation.actions.sendCustomHttpRequest"), placeholder: t("automation.actions.httpsapiexamplecomwebhook") },
     ],
   },
 ];
@@ -189,52 +189,52 @@ export interface PropertyDef {
   presets?: { label: string; value: string }[];
 }
 
-export const CONDITION_PROPERTIES: PropertyDef[] = [
+export const getConditionProperties = (t: any): PropertyDef[] => [
   // Booleans & Flags
   {
     value: "${torrent.isPrivate}",
-    label: "🔒 Is Private Tracker",
-    group: "Booleans & Flags",
+    label: t("automation.conditions.isPrivateTracker"),
+    group: t("automation.conditions.booleansFlags"),
     type: "boolean",
     options: [
-      { value: "true", label: "🔒 True (Private Tracker)" },
-      { value: "false", label: "🌐 False (Public Tracker)" },
+      { value: "true", label: t("automation.conditions.truePrivateTracker") },
+      { value: "false", label: t("automation.conditions.falsePublicTracker") },
     ],
     defaultOp: "==",
     defaultValue: "true",
   },
   {
     value: "${torrent.isComplete}",
-    label: "✅ Is Download Completed",
-    group: "Booleans & Flags",
+    label: t("automation.conditions.isDownloadCompleted"),
+    group: t("automation.conditions.booleansFlags"),
     type: "boolean",
     options: [
-      { value: "true", label: "✅ True (Completed / 100%)" },
-      { value: "false", label: "⏳ False (Incomplete / Downloading)" },
+      { value: "true", label: t("automation.conditions.trueCompleted100") },
+      { value: "false", label: t("automation.conditions.falseIncompleteDownloading") },
     ],
     defaultOp: "==",
     defaultValue: "true",
   },
   {
     value: "${system.vpnActive}",
-    label: "🛡️ VPN Active / Protected",
-    group: "Booleans & Flags",
+    label: t("automation.conditions.vpnActiveProtected"),
+    group: t("automation.conditions.booleansFlags"),
     type: "boolean",
     options: [
-      { value: "true", label: "🛡️ True (VPN Protected)" },
-      { value: "false", label: "⚠️ False (VPN Down / Inactive)" },
+      { value: "true", label: t("automation.conditions.trueVpnProtected") },
+      { value: "false", label: t("automation.conditions.falseVpnDownInactive") },
     ],
     defaultOp: "==",
     defaultValue: "true",
   },
   {
     value: "${system.isPortForwarded}",
-    label: "🌐 Port Forwarded / Open",
-    group: "Booleans & Flags",
+    label: t("automation.conditions.portForwardedOpen"),
+    group: t("automation.conditions.booleansFlags"),
     type: "boolean",
     options: [
-      { value: "true", label: "🌐 True (Port Open / Forwarded)" },
-      { value: "false", label: "🔒 False (Port Closed)" },
+      { value: "true", label: t("automation.conditions.truePortOpenForwarded") },
+      { value: "false", label: t("automation.conditions.falsePortClosed") },
     ],
     defaultOp: "==",
     defaultValue: "true",
@@ -243,245 +243,245 @@ export const CONDITION_PROPERTIES: PropertyDef[] = [
   // Status & Categories
   {
     value: "${torrent.status}",
-    label: "🔄 Torrent State / Status",
-    group: "Status & Categories",
+    label: t("automation.conditions.torrentStateStatus"),
+    group: t("automation.conditions.statusCategories"),
     type: "enum",
     options: [
-      { value: "'Downloading'", label: "⬇️ Downloading" },
-      { value: "'Seeding'", label: "🌱 Seeding" },
-      { value: "'Paused'", label: "⏸️ Paused" },
-      { value: "'Stopped'", label: "⏹️ Stopped" },
-      { value: "'Queued'", label: "⏳ Queued" },
-      { value: "'Checking'", label: "🔍 Checking" },
-      { value: "'Error'", label: "⚠️ Error" },
+      { value: "'Downloading'", label: t("automation.conditions.downloading") },
+      { value: "'Seeding'", label: t("automation.conditions.seeding") },
+      { value: "'Paused'", label: t("automation.conditions.paused") },
+      { value: "'Stopped'", label: t("automation.conditions.stopped") },
+      { value: "'Queued'", label: t("automation.conditions.queued") },
+      { value: "'Checking'", label: t("automation.conditions.checking") },
+      { value: "'Error'", label: t("automation.conditions.error") },
     ],
     defaultOp: "==",
     defaultValue: "'Downloading'",
   },
   {
     value: "${torrent.category}",
-    label: "📁 Category Name",
-    group: "Status & Categories",
+    label: t("automation.conditions.categoryName"),
+    group: t("automation.conditions.statusCategories"),
     type: "category",
     defaultOp: "==",
     defaultValue: "",
-    placeholder: "e.g. 'Movies' or 'TV'",
+    placeholder: t("automation.conditions.egMoviesOrTv"),
   },
 
   // Numbers & Metrics
   {
     value: "${torrent.size}",
-    label: "💾 Torrent Size (bytes)",
-    group: "Numbers & Metrics",
+    label: t("automation.conditions.torrentSizeBytes"),
+    group: t("automation.conditions.numbersMetrics"),
     type: "number",
     defaultOp: ">=",
     defaultValue: "1073741824",
-    placeholder: "e.g. 1073741824 (1 GB)",
+    placeholder: t("automation.conditions.eg10737418241Gb"),
     unit: "bytes",
     presets: [
-      { label: "500 MB", value: "524288000" },
-      { label: "1 GB", value: "1073741824" },
-      { label: "5 GB", value: "5368709120" },
-      { label: "10 GB", value: "10737418240" },
-      { label: "50 GB", value: "53687091200" },
-      { label: "100 GB", value: "107374182400" },
+      { label: t("automation.conditions.500Mb"), value: "524288000" },
+      { label: t("automation.conditions.1Gb"), value: "1073741824" },
+      { label: t("automation.conditions.5Gb"), value: "5368709120" },
+      { label: t("automation.conditions.10Gb"), value: "10737418240" },
+      { label: t("automation.conditions.50Gb"), value: "53687091200" },
+      { label: t("automation.conditions.100Gb"), value: "107374182400" },
     ],
   },
   {
     value: "${torrent.ratio}",
-    label: "🎯 Share Ratio",
-    group: "Numbers & Metrics",
+    label: t("automation.conditions.shareRatio"),
+    group: t("automation.conditions.numbersMetrics"),
     type: "number",
     defaultOp: ">=",
     defaultValue: "1.0",
-    placeholder: "e.g. 1.0 or 2.5",
+    placeholder: t("automation.conditions.eg10Or25"),
     unit: "ratio",
     presets: [
-      { label: "0.5x", value: "0.5" },
-      { label: "1.0x", value: "1.0" },
-      { label: "1.5x", value: "1.5" },
-      { label: "2.0x", value: "2.0" },
-      { label: "3.0x", value: "3.0" },
-      { label: "5.0x", value: "5.0" },
+      { label: t("automation.conditions.05x"), value: "0.5" },
+      { label: t("automation.conditions.10x"), value: "1.0" },
+      { label: t("automation.conditions.15x"), value: "1.5" },
+      { label: t("automation.conditions.20x"), value: "2.0" },
+      { label: t("automation.conditions.30x"), value: "3.0" },
+      { label: t("automation.conditions.50x"), value: "5.0" },
     ],
   },
   {
     value: "${torrent.progress}",
-    label: "📈 Progress (%)",
-    group: "Numbers & Metrics",
+    label: t("automation.conditions.progress"),
+    group: t("automation.conditions.numbersMetrics"),
     type: "number",
     defaultOp: ">=",
     defaultValue: "100",
-    placeholder: "e.g. 100 or 50",
+    placeholder: t("automation.conditions.eg100Or50"),
     unit: "percent",
     presets: [
-      { label: "25%", value: "25" },
-      { label: "50%", value: "50" },
-      { label: "75%", value: "75" },
-      { label: "100%", value: "100" },
+      { label: t("automation.conditions.25"), value: "25" },
+      { label: t("automation.conditions.50"), value: "50" },
+      { label: t("automation.conditions.75"), value: "75" },
+      { label: t("automation.conditions.100"), value: "100" },
     ],
   },
   {
     value: "${torrent.downloadSpeed}",
-    label: "⬇️ Download Speed (B/s)",
-    group: "Numbers & Metrics",
+    label: t("automation.conditions.downloadSpeedBs"),
+    group: t("automation.conditions.numbersMetrics"),
     type: "number",
     defaultOp: ">",
     defaultValue: "1048576",
-    placeholder: "e.g. 1048576 (1 MB/s)",
+    placeholder: t("automation.conditions.eg10485761Mbs"),
     unit: "speed",
     presets: [
-      { label: "512 KB/s", value: "524288" },
-      { label: "1 MB/s", value: "1048576" },
-      { label: "5 MB/s", value: "5242880" },
-      { label: "10 MB/s", value: "10485760" },
-      { label: "50 MB/s", value: "52428800" },
+      { label: t("automation.conditions.512Kbs"), value: "524288" },
+      { label: t("automation.conditions.1Mbs"), value: "1048576" },
+      { label: t("automation.conditions.5Mbs"), value: "5242880" },
+      { label: t("automation.conditions.10Mbs"), value: "10485760" },
+      { label: t("automation.conditions.50Mbs"), value: "52428800" },
     ],
   },
   {
     value: "${torrent.uploadSpeed}",
-    label: "⬆️ Upload Speed (B/s)",
-    group: "Numbers & Metrics",
+    label: t("automation.conditions.uploadSpeedBs"),
+    group: t("automation.conditions.numbersMetrics"),
     type: "number",
     defaultOp: ">",
     defaultValue: "524288",
-    placeholder: "e.g. 524288 (512 KB/s)",
+    placeholder: t("automation.conditions.eg524288512Kbs"),
     unit: "speed",
     presets: [
-      { label: "256 KB/s", value: "262144" },
-      { label: "512 KB/s", value: "524288" },
-      { label: "1 MB/s", value: "1048576" },
-      { label: "5 MB/s", value: "5242880" },
-      { label: "10 MB/s", value: "10485760" },
+      { label: t("automation.conditions.256Kbs"), value: "262144" },
+      { label: t("automation.conditions.512Kbs"), value: "524288" },
+      { label: t("automation.conditions.1Mbs"), value: "1048576" },
+      { label: t("automation.conditions.5Mbs"), value: "5242880" },
+      { label: t("automation.conditions.10Mbs"), value: "10485760" },
     ],
   },
   {
     value: "${torrent.seeders}",
-    label: "🌱 Seeders Count",
-    group: "Numbers & Metrics",
+    label: t("automation.conditions.seedersCount"),
+    group: t("automation.conditions.numbersMetrics"),
     type: "number",
     defaultOp: "<",
     defaultValue: "3",
-    placeholder: "e.g. 3",
+    placeholder: t("automation.conditions.eg3"),
     unit: "count",
     presets: [
-      { label: "0", value: "0" },
-      { label: "1", value: "1" },
-      { label: "3", value: "3" },
-      { label: "5", value: "5" },
-      { label: "10", value: "10" },
+      { label: t("automation.conditions.0"), value: "0" },
+      { label: t("automation.conditions.1"), value: "1" },
+      { label: t("automation.conditions.3"), value: "3" },
+      { label: t("automation.conditions.5"), value: "5" },
+      { label: t("automation.conditions.10"), value: "10" },
     ],
   },
   {
     value: "${torrent.leechers}",
-    label: "👥 Leechers Count",
-    group: "Numbers & Metrics",
+    label: t("automation.conditions.leechersCount"),
+    group: t("automation.conditions.numbersMetrics"),
     type: "number",
     defaultOp: ">",
     defaultValue: "5",
-    placeholder: "e.g. 5",
+    placeholder: t("automation.actions.eg5"),
     unit: "count",
     presets: [
-      { label: "0", value: "0" },
-      { label: "1", value: "1" },
-      { label: "5", value: "5" },
-      { label: "10", value: "10" },
-      { label: "20", value: "20" },
+      { label: t("automation.conditions.0"), value: "0" },
+      { label: t("automation.conditions.1"), value: "1" },
+      { label: t("automation.conditions.5"), value: "5" },
+      { label: t("automation.conditions.10"), value: "10" },
+      { label: t("automation.conditions.20"), value: "20" },
     ],
   },
 
   // Text & Details
   {
     value: "${torrent.name}",
-    label: "📝 Torrent Name / Title",
-    group: "Text & Details",
+    label: t("automation.conditions.torrentNameTitle"),
+    group: t("automation.conditions.textDetails"),
     type: "string",
     defaultOp: "==",
     defaultValue: "''",
-    placeholder: "e.g. '2160p' or 'REPACK'",
+    placeholder: t("automation.conditions.eg2160pOrRepack"),
   },
   {
     value: "${torrent.tracker}",
-    label: "📡 Tracker URL / Domain",
-    group: "Text & Details",
+    label: t("automation.conditions.trackerUrlDomain"),
+    group: t("automation.conditions.textDetails"),
     type: "string",
     defaultOp: "==",
     defaultValue: "''",
-    placeholder: "e.g. 'tracker.example.com'",
+    placeholder: t("automation.conditions.egTrackerexamplecom"),
   },
   {
     value: "${torrent.savePath}",
-    label: "📂 Save Path Directory",
-    group: "Text & Details",
+    label: t("automation.conditions.savePathDirectory"),
+    group: t("automation.conditions.textDetails"),
     type: "string",
     defaultOp: "==",
     defaultValue: "''",
-    placeholder: "e.g. '/downloads/complete'",
+    placeholder: t("automation.conditions.egDownloadscomplete"),
   },
 
   // Custom
   {
     value: "custom",
-    label: "✏️ Custom Variable / Expression...",
-    group: "Custom / Dynamic",
+    label: t("automation.conditions.customVariableExpression"),
+    group: t("automation.conditions.customDynamic"),
     type: "custom",
     defaultOp: "==",
     defaultValue: "",
-    placeholder: "e.g. ${inputs.minRatio} or ${system.freeDiskBytes}",
+    placeholder: t("automation.conditions.egInputsminratioOrSystemfreedi"),
   },
 ];
 
-const TRIGGER_LABELS: Record<string, string> = {
+const getTriggerLabels = (t: any): Record<string, string> => ({
   // Torrent Lifecycle & Goals
-  TorrentAdded: "📥 On Torrent Added",
-  TorrentCompleted: "✅ On Download Completed",
-  RatioReached: "🎯 On Ratio / Seed Goal Reached",
-  TorrentStarted: "▶️ On Torrent Resumed / Started",
-  TorrentPaused: "⏸️ On Torrent Paused / Stopped",
-  TorrentStalled: "⏳ On Torrent Stalled",
-  SeedingTimeReached: "⌛ On Seeding Time Target Met",
-  HashCheckCompleted: "🔍 On Hash Check Completed",
-  ProgressMilestone: "📈 On Progress Milestone",
-  TorrentStatusChanged: "🔄 On Torrent State Changed",
-  TorrentDeleted: "🗑️ On Torrent Deleted",
-  TorrentError: "⚠️ On Torrent Error",
+  TorrentAdded: t("automation.triggers.onTorrentAdded"),
+  TorrentCompleted: t("automation.triggers.onDownloadCompleted"),
+  RatioReached: t("automation.triggers.onRatioSeedGoalReached"),
+  TorrentStarted: t("automation.triggers.onTorrentResumedStarted"),
+  TorrentPaused: t("automation.triggers.onTorrentPausedStopped"),
+  TorrentStalled: t("automation.triggers.onTorrentStalled"),
+  SeedingTimeReached: t("automation.triggers.onSeedingTimeTargetMet"),
+  HashCheckCompleted: t("automation.triggers.onHashCheckCompleted"),
+  ProgressMilestone: t("automation.triggers.onProgressMilestone"),
+  TorrentStatusChanged: t("automation.triggers.onTorrentStateChanged"),
+  TorrentDeleted: t("automation.triggers.onTorrentDeleted"),
+  TorrentError: t("automation.triggers.onTorrentError"),
 
   // Bandwidth & Speed
-  SpeedThresholdExceeded: "🚀 On High Speed Threshold Exceeded",
-  SpeedThresholdDropped: "📉 On Speed Drop Alert",
-  BandwidthQuotaApproaching: "📊 On Bandwidth Quota Threshold",
+  SpeedThresholdExceeded: t("automation.triggers.onHighSpeedThresholdExceeded"),
+  SpeedThresholdDropped: t("automation.triggers.onSpeedDropAlert"),
+  BandwidthQuotaApproaching: t("automation.triggers.onBandwidthQuotaThreshold"),
 
   // Network & Security
-  VpnDisconnected: "🛡️ On VPN KillSwitch",
-  VpnRestored: "🌐 On VPN Restored",
-  PortForwardingFailed: "🚫 On Port Forwarding / UPnP Failure",
-  PeerBanned: "🛡️ On Malicious / Bad Peer Banned",
-  TrackerUnreachable: "📡 On All Trackers Failed",
-  TrackerBoostApplied: "⚡ On Tracker Boost Applied",
+  VpnDisconnected: t("automation.triggers.onVpnKillswitch"),
+  VpnRestored: t("automation.triggers.onVpnRestored"),
+  PortForwardingFailed: t("automation.triggers.onPortForwardingUpnpFailure"),
+  PeerBanned: t("automation.triggers.onMaliciousBadPeerBanned"),
+  TrackerUnreachable: t("automation.triggers.onAllTrackersFailed"),
+  TrackerBoostApplied: t("automation.triggers.onTrackerBoostApplied"),
 
   // Storage & Disk
-  DiskSpaceLow: "⚠️ On Low Disk Space Warning",
-  DiskSpaceCritical: "🚨 On Critical Disk Space Emergency",
-  FileMoveFailed: "❌ On File Move / Path Error",
+  DiskSpaceLow: t("automation.triggers.onLowDiskSpaceWarning"),
+  DiskSpaceCritical: t("automation.triggers.onCriticalDiskSpaceEmergency"),
+  FileMoveFailed: t("automation.triggers.onFileMovePathError"),
 
   // Media & Processing
-  MediaEnriched: "🎬 On Media Enriched",
-  MediaInspectionFailed: "🎞️ On Media Corruption / Inspection Failed",
-  ArchiveExtracted: "📦 On Archive Extracted",
-  ExtractionFailed: "❌ On Extraction Failed",
-  ArrImportCompleted: "📬 On Servarr Import Completed",
+  MediaEnriched: t("automation.triggers.onMediaEnriched"),
+  MediaInspectionFailed: t("automation.triggers.onMediaCorruptionInspectionFai"),
+  ArchiveExtracted: t("automation.triggers.onArchiveExtracted"),
+  ExtractionFailed: t("automation.triggers.onExtractionFailed"),
+  ArrImportCompleted: t("automation.triggers.onServarrImportCompleted"),
 
   // System & Lifecycle
-  HealthRestored: "💚 On Health Restored",
-  CategoryChanged: "📂 On Category Changed",
-  ApplicationStarted: "🚀 On App Started",
-  ApplicationUpdated: "🔄 On App Updated",
-  BackupCompleted: "💾 On Backup Succeeded",
-  BackupFailed: "❗ On Backup Failed",
-  TaskFailed: "❌ On Scheduled Task Failed",
-  Scheduled: "⏱️ Scheduled Interval",
-  Manual: "🖐️ Manual Only",
-};
+  HealthRestored: t("automation.triggers.onHealthRestored"),
+  CategoryChanged: t("automation.triggers.onCategoryChanged"),
+  ApplicationStarted: t("automation.triggers.onAppStarted"),
+  ApplicationUpdated: t("automation.triggers.onAppUpdated"),
+  BackupCompleted: t("automation.triggers.onBackupSucceeded"),
+  BackupFailed: t("automation.triggers.onBackupFailed"),
+  TaskFailed: t("automation.triggers.onScheduledTaskFailed"),
+  Scheduled: t("automation.triggers.scheduledInterval"),
+  Manual: t("automation.triggers.manualOnly"),
+});
 
 // Convert Visual Steps to YAML DSL string
 function visualStepsToYaml(pipelineName: string, trigger: string, steps: VisualStep[]): string {
@@ -1207,11 +1207,9 @@ if (torrent) {
       >
         <div>
           <h1 style={{ fontSize: "1.75rem", fontWeight: 700, margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span>⚡</span> Automation Pipelines & Marketplace
-          </h1>
+            <span>⚡</span> {t("automation.ui.automationPipelinesMarketplace")}</h1>
           <p style={{ color: "var(--text-muted, #888)", margin: "0.25rem 0 0 0", fontSize: "0.9rem" }}>
-            Visual drag-and-drop workflow builder, low-code scripting engine, and community pipeline registry.
-          </p>
+            {t("automation.ui.visualDraganddropWorkflowBuild")}</p>
         </div>
 
         <div style={{ display: "flex", gap: "0.75rem" }}>
@@ -1253,7 +1251,7 @@ if (torrent) {
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
               <input
                 type="text"
-                placeholder="Search pipelines..."
+                placeholder={t("automation.ui.searchPipelines")}
                 className="input"
                 style={{ width: "240px" }}
                 value={searchQuery}
@@ -1265,8 +1263,8 @@ if (torrent) {
                 value={selectedTriggerFilter}
                 onChange={(e) => setSelectedTriggerFilter(e.target.value)}
               >
-                <option value="All">All Triggers</option>
-                {Object.entries(TRIGGER_LABELS).map(([k, label]) => (
+                <option value="All">{t("automation.ui.allTriggers")}</option>
+                {Object.entries(getTriggerLabels(t)).map(([k, label]) => (
                   <option key={k} value={k}>{label}</option>
                 ))}
               </select>
@@ -1277,29 +1275,24 @@ if (torrent) {
                 ✨ + {t("automation.tabs.visual")}
               </button>
               <button className="btn btn-secondary" onClick={() => openNewScript("JavaScript")}>
-                💻 + JavaScript Script
-              </button>
+                {t("automation.ui.javascriptScript")}</button>
             </div>
           </div>
 
           {loadingScripts ? (
             <div className="panel" style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
-              Loading automation pipelines...
-            </div>
+              {t("automation.ui.loadingAutomationPipelines")}</div>
           ) : filteredScripts.length === 0 ? (
             <div className="panel" style={{ padding: "3rem", textAlign: "center" }}>
-              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>⚙️</div>
-              <h3 style={{ margin: "0 0 0.5rem 0" }}>No Automation Pipelines Found</h3>
+              <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>{t("automation.ui.text1")}</div>
+              <h3 style={{ margin: "0 0 0.5rem 0" }}>{t("automation.ui.noAutomationPipelinesFound")}</h3>
               <p style={{ color: "var(--text-muted)", maxWidth: "480px", margin: "0 auto 1.5rem auto" }}>
-                Create automated actions for when torrents are added, completed, hit ratio goals, or browse the Community Marketplace.
-              </p>
+                {t("automation.ui.createAutomatedActionsForWhen")}</p>
               <div style={{ display: "flex", gap: "0.5rem", justifyContent: "center" }}>
                 <button className="btn btn-primary" onClick={() => openNewScript("Yaml")}>
-                  ✨ Build Visual Pipeline
-                </button>
+                  {t("automation.ui.buildVisualPipeline")}</button>
                 <button className="btn btn-secondary" onClick={() => setActiveTab("marketplace")}>
-                  🛍️ Browse Marketplace
-                </button>
+                  {t("automation.ui.browseMarketplace")}</button>
               </div>
             </div>
           ) : (
@@ -1342,11 +1335,11 @@ if (torrent) {
 
                     <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "1rem" }}>
                       <span className="badge" style={{ backgroundColor: "rgba(59, 130, 246, 0.15)", color: "#60a5fa" }}>
-                        {tTrigger(t, script.trigger.toString(), TRIGGER_LABELS[script.trigger.toString()]) || script.trigger.toString()}
+                        {tTrigger(t, script.trigger.toString(), getTriggerLabels(t)[script.trigger.toString()]) || script.trigger.toString()}
                       </span>
                       {script.targetCategories && script.targetCategories.length > 0 && (
                         <span className="badge" style={{ backgroundColor: "rgba(168, 85, 247, 0.15)", color: "#c084fc" }}>
-                          📁 {script.targetCategories.join(", ")}
+                          {t("automation.ui.text2")}{script.targetCategories.join(", ")}
                         </span>
                       )}
                     </div>
@@ -1367,7 +1360,7 @@ if (torrent) {
                       }}
                     >
                       <span>
-                        Last Run:{" "}
+                        {t("automation.ui.lastRun")}{" "}
                         {script.lastExecutedAt
                           ? new Date(script.lastExecutedAt).toLocaleTimeString()
                           : "Never"}
@@ -1398,29 +1391,26 @@ if (torrent) {
                             });
                             setLogModalOpen(true);
                           }}
-                          title="View Execution Log"
+                          title={t("automation.ui.viewExecutionLog")}
                         >
-                          📜 Logs
-                        </button>
+                          {t("automation.ui.logs")}</button>
                       )}
                       <button
                         className="btn btn-sm btn-secondary"
                         onClick={() => handleRunNow(script.id)}
                         disabled={isRunningId === script.id}
-                        title="Trigger run immediately"
+                        title={t("automation.ui.triggerRunImmediately")}
                       >
                         {isRunningId === script.id ? "⏳ Running..." : "▶️ Run"}
                       </button>
                       <button className="btn btn-sm btn-secondary" onClick={() => openEditScript(script)}>
-                        ✏️ Edit
-                      </button>
+                        {t("automation.ui.edit")}</button>
                       <button
                         className="btn btn-sm btn-danger"
                         onClick={() => handleDeleteScript(script.id)}
-                        title="Delete Script"
+                        title={t("automation.ui.deleteScript")}
                       >
-                        🗑️
-                      </button>
+                        {t("automation.ui.text3")}</button>
                     </div>
                   </div>
                 </div>
@@ -1434,27 +1424,25 @@ if (torrent) {
       {activeTab === "history" && (
         <div>
           <div className="panel" style={{ padding: "1.5rem" }}>
-            <h2 style={{ fontSize: "1.2rem", margin: "0 0 1rem 0" }}>📊 Pipeline Execution History</h2>
+            <h2 style={{ fontSize: "1.2rem", margin: "0 0 1rem 0" }}>{t("automation.ui.pipelineExecutionHistory")}</h2>
             <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: "1.5rem" }}>
-              Detailed execution traces and step-by-step performance metrics for recent pipeline runs.
-            </p>
+              {t("automation.ui.detailedExecutionTracesAndStep")}</p>
 
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left" }}>
-                  <th style={{ padding: "0.75rem 0.5rem" }}>Status</th>
-                  <th style={{ padding: "0.75rem 0.5rem" }}>Pipeline Name</th>
-                  <th style={{ padding: "0.75rem 0.5rem" }}>Trigger</th>
-                  <th style={{ padding: "0.75rem 0.5rem" }}>Executed At</th>
-                  <th style={{ padding: "0.75rem 0.5rem" }}>Actions</th>
+                  <th style={{ padding: "0.75rem 0.5rem" }}>{t("automation.ui.status")}</th>
+                  <th style={{ padding: "0.75rem 0.5rem" }}>{t("automation.ui.pipelineName")}</th>
+                  <th style={{ padding: "0.75rem 0.5rem" }}>{t("automation.ui.trigger")}</th>
+                  <th style={{ padding: "0.75rem 0.5rem" }}>{t("automation.ui.executedAt")}</th>
+                  <th style={{ padding: "0.75rem 0.5rem" }}>{t("automation.ui.actions")}</th>
                 </tr>
               </thead>
               <tbody>
                 {scriptList.filter((s) => s.lastExecutedAt).length === 0 ? (
                   <tr>
                     <td colSpan={5} style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>
-                      No pipeline execution runs recorded yet. Trigger a run or wait for an event.
-                    </td>
+                      {t("automation.ui.noPipelineExecutionRunsRecorde")}</td>
                   </tr>
                 ) : (
                   scriptList
@@ -1475,7 +1463,7 @@ if (torrent) {
                         </td>
                         <td style={{ padding: "0.75rem 0.5rem", fontWeight: 600 }}>{s.name}</td>
                         <td style={{ padding: "0.75rem 0.5rem" }}>
-                          <span className="badge">{tTrigger(t, s.trigger.toString(), TRIGGER_LABELS[s.trigger.toString()]) || s.trigger.toString()}</span>
+                          <span className="badge">{tTrigger(t, s.trigger.toString(), getTriggerLabels(t)[s.trigger.toString()]) || s.trigger.toString()}</span>
                         </td>
                         <td style={{ padding: "0.75rem 0.5rem", color: "var(--text-muted)" }}>
                           {s.lastExecutedAt ? new Date(s.lastExecutedAt).toLocaleString() : "Unknown"}
@@ -1494,8 +1482,7 @@ if (torrent) {
                               setLogModalOpen(true);
                             }}
                           >
-                            🔍 Trace Inspector
-                          </button>
+                            {t("automation.ui.traceInspector")}</button>
                         </td>
                       </tr>
                     ))
@@ -1525,7 +1512,7 @@ if (torrent) {
 
             <input
               type="text"
-              placeholder="Search community templates..."
+              placeholder={t("automation.ui.searchCommunityTemplates")}
               className="input"
               style={{ width: "240px" }}
               value={searchQuery}
@@ -1535,8 +1522,7 @@ if (torrent) {
 
           {loadingTemplates ? (
             <div className="panel" style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
-              Loading marketplace catalog...
-            </div>
+              {t("automation.ui.loadingMarketplaceCatalog")}</div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "1rem" }}>
               {filteredTemplates.map((template) => (
@@ -1559,7 +1545,7 @@ if (torrent) {
                     </div>
 
                     <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                      by <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{template.author}</span> •{" "}
+                      {t("automation.ui.by")}<span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{template.author}</span> •{" "}
                       <span className="badge" style={{ fontSize: "0.7rem" }}>{template.category}</span>
                     </div>
 
@@ -1578,8 +1564,7 @@ if (torrent) {
                       setInstallModalOpen(true);
                     }}
                   >
-                    ⬇️ Install Pipeline
-                  </button>
+                    {t("automation.ui.installPipeline")}</button>
                 </div>
               ))}
             </div>
@@ -1640,8 +1625,7 @@ if (torrent) {
                       }
                     }}
                   >
-                    💻 Code / YAML View
-                  </button>
+                    {t("automation.ui.codeYamlView")}</button>
                 </div>
               </div>
               <button
@@ -1658,31 +1642,31 @@ if (torrent) {
               {/* Form Row 1: Name, Trigger, Language */}
               <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>Pipeline Name</label>
+                  <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>{t("automation.ui.pipelineName")}</label>
                   <input
                     type="text"
                     className="form-control"
                     value={editingScript.name || ""}
                     onChange={(e) => setEditingScript({ ...editingScript, name: e.target.value })}
-                    placeholder="e.g. 4K Movie Auto-Zap & Backup"
+                    placeholder={t("automation.ui.eg4kMovieAutozapBackup")}
                   />
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>Trigger Event</label>
+                  <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>{t("automation.ui.triggerEvent")}</label>
                   <select
                     className="form-control"
                     value={editingScript.trigger?.toString()}
                     onChange={(e) => setEditingScript({ ...editingScript, trigger: e.target.value as AutomationTrigger })}
                   >
-                    {Object.entries(TRIGGER_LABELS).map(([k, label]) => (
+                    {Object.entries(getTriggerLabels(t)).map(([k, label]) => (
                       <option key={k} value={k}>{label}</option>
                     ))}
                   </select>
                 </div>
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                  <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>Engine / Format</label>
+                  <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>{t("automation.ui.engineFormat")}</label>
                   <select
                     className="form-control"
                     value={editingScript.language?.toString()}
@@ -1694,21 +1678,21 @@ if (torrent) {
                       }
                     }}
                   >
-                    <option value="Yaml">YAML (Visual Pipeline DSL)</option>
-                    <option value="JavaScript">JavaScript (Sandboxed Jint)</option>
+                    <option value="Yaml">{t("automation.ui.yamlVisualPipelineDsl")}</option>
+                    <option value="JavaScript">{t("automation.ui.javascriptSandboxedJint")}</option>
                   </select>
                 </div>
               </div>
 
               {/* Form Row 2: Description */}
               <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "1.25rem" }}>
-                <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>Description</label>
+                <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>{t("automation.ui.description")}</label>
                 <input
                   type="text"
                   className="form-control"
                   value={editingScript.description || ""}
                   onChange={(e) => setEditingScript({ ...editingScript, description: e.target.value })}
-                  placeholder="Summary of what this automation pipeline performs..."
+                  placeholder={t("automation.ui.summaryOfWhatThisAutomation")}
                 />
               </div>
 
@@ -1717,7 +1701,7 @@ if (torrent) {
                 <div style={{ marginBottom: "1rem" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
                     <label style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent)" }}>
-                      ✨ Pipeline Steps ({visualSteps.length})
+                      {t("automation.ui.pipelineSteps")}{visualSteps.length})
                     </label>
                     <button
                       type="button"
@@ -1738,8 +1722,7 @@ if (torrent) {
                         updateVisualSteps([...visualSteps, newStep]);
                       }}
                     >
-                      ➕ Add Step
-                    </button>
+                      {t("automation.ui.addStep")}</button>
                   </div>
 
                   {visualSteps.map((step, stepIdx) => (
@@ -1784,7 +1767,7 @@ if (torrent) {
                               copy[stepIdx].name = e.target.value;
                               updateVisualSteps(copy);
                             }}
-                            placeholder="Step Name"
+                            placeholder={t("automation.ui.stepName")}
                           />
                         </div>
 
@@ -1802,8 +1785,7 @@ if (torrent) {
                               updateVisualSteps(copy);
                             }}
                           >
-                            ⬆️
-                          </button>
+                            {t("automation.ui.text4")}</button>
                           <button
                             type="button"
                             className="btn btn-sm btn-secondary"
@@ -1817,8 +1799,7 @@ if (torrent) {
                               updateVisualSteps(copy);
                             }}
                           >
-                            ⬇️
-                          </button>
+                            {t("automation.ui.text5")}</button>
                           <button
                             type="button"
                             className="btn btn-sm btn-danger"
@@ -1828,8 +1809,7 @@ if (torrent) {
                               updateVisualSteps(copy);
                             }}
                           >
-                            🗑️
-                          </button>
+                            {t("automation.ui.text3")}</button>
                         </div>
                       </div>
 
@@ -1853,11 +1833,10 @@ if (torrent) {
                               updateVisualSteps(copy);
                             }}
                           />
-                          Only run this step if condition matches (IF condition)
-                        </label>
+                          {t("automation.ui.onlyRunThisStepIf")}</label>
 
                         {step.conditionEnabled && (() => {
-                          const propDef = CONDITION_PROPERTIES.find((p) => p.value === step.conditionLeft) || {
+                          const propDef = getConditionProperties(t).find((p) => p.value === step.conditionLeft) || {
                             value: "custom",
                             label: "Custom",
                             group: "Custom / Dynamic",
@@ -1866,7 +1845,7 @@ if (torrent) {
                             defaultValue: "",
                           };
 
-                          const isCustomLeft = !CONDITION_PROPERTIES.some((p) => p.value === step.conditionLeft && p.value !== "custom");
+                          const isCustomLeft = !getConditionProperties(t).some((p) => p.value === step.conditionLeft && p.value !== "custom");
 
                           // Operator definitions per type
                           const opOptions = (() => {
@@ -1981,7 +1960,7 @@ if (torrent) {
                                         copy[stepIdx].conditionRight = "";
                                       } else {
                                         copy[stepIdx].conditionLeft = newVal;
-                                        const found = CONDITION_PROPERTIES.find((p) => p.value === newVal);
+                                        const found = getConditionProperties(t).find((p) => p.value === newVal);
                                         if (found) {
                                           copy[stepIdx].conditionOp = found.defaultOp;
                                           copy[stepIdx].conditionRight = found.defaultValue;
@@ -1990,9 +1969,9 @@ if (torrent) {
                                       updateVisualSteps(copy);
                                     }}
                                   >
-                                    {Array.from(new Set(CONDITION_PROPERTIES.map((p) => p.group))).map((groupName) => (
+                                    {Array.from(new Set(getConditionProperties(t).map((p) => p.group))).map((groupName) => (
                                       <optgroup key={groupName} label={groupName}>
-                                        {CONDITION_PROPERTIES.filter((p) => p.group === groupName).map((p) => (
+                                        {getConditionProperties(t).filter((p) => p.group === groupName).map((p) => (
                                           <option key={p.value} value={p.value}>
                                             {p.label}
                                           </option>
@@ -2011,7 +1990,7 @@ if (torrent) {
                                         copy[stepIdx].conditionLeft = e.target.value;
                                         updateVisualSteps(copy);
                                       }}
-                                      placeholder="e.g. ${inputs.myProperty}"
+                                      placeholder={t("automation.ui.egInputsmyproperty")}
                                     />
                                   )}
                                 </div>
@@ -2059,7 +2038,7 @@ if (torrent) {
                                             {opt.label}
                                           </option>
                                         ))}
-                                        <option value="__custom__">✏️ Custom Expression / Variable...</option>
+                                        <option value="__custom__">{t("automation.ui.customExpressionVariable")}</option>
                                       </select>
                                     </div>
                                   ) : propDef.type === "number" ? (
@@ -2097,7 +2076,7 @@ if (torrent) {
                                       </div>
                                       {propDef.presets && propDef.presets.length > 0 && (
                                         <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", alignItems: "center" }}>
-                                          <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginRight: "0.15rem" }}>Quick set:</span>
+                                          <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginRight: "0.15rem" }}>{t("automation.ui.quickSet")}</span>
                                           {propDef.presets.map((preset) => (
                                             <button
                                               key={preset.value}
@@ -2140,7 +2119,7 @@ if (torrent) {
                                         <button
                                           type="button"
                                           className="btn btn-sm btn-secondary"
-                                          title="Switch back to presets dropdown"
+                                          title={t("automation.ui.switchBackToPresetsDropdown")}
                                           style={{ padding: "0.35rem 0.6rem", fontSize: "0.75rem", whiteSpace: "nowrap", flexShrink: 0 }}
                                           onClick={() => {
                                             const copy = [...visualSteps];
@@ -2148,8 +2127,7 @@ if (torrent) {
                                             updateVisualSteps(copy);
                                           }}
                                         >
-                                          🔄 Presets
-                                        </button>
+                                          {t("automation.ui.presets")}</button>
                                       )}
                                     </div>
                                   )}
@@ -2173,7 +2151,7 @@ if (torrent) {
                       {/* Actions List */}
                       <div>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.65rem", flexWrap: "wrap", gap: "0.5rem" }}>
-                          <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)" }}>⚡ Step Actions</span>
+                          <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-secondary)" }}>{t("automation.ui.stepActions")}</span>
                           <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
                             <button
                               type="button"
@@ -2185,8 +2163,7 @@ if (torrent) {
                                 updateVisualSteps(copy);
                               }}
                             >
-                              🏷️ + Tag
-                            </button>
+                              {t("automation.ui.tag")}</button>
                             <button
                               type="button"
                               className="btn btn-sm btn-secondary"
@@ -2197,8 +2174,7 @@ if (torrent) {
                                 updateVisualSteps(copy);
                               }}
                             >
-                              📁 + Category
-                            </button>
+                              {t("automation.ui.category")}</button>
                             <button
                               type="button"
                               className="btn btn-sm btn-secondary"
@@ -2209,8 +2185,7 @@ if (torrent) {
                                 updateVisualSteps(copy);
                               }}
                             >
-                              ⚡ + Limit
-                            </button>
+                              {t("automation.ui.limit")}</button>
                             <button
                               type="button"
                               className="btn btn-sm btn-secondary"
@@ -2221,8 +2196,7 @@ if (torrent) {
                                 updateVisualSteps(copy);
                               }}
                             >
-                              🔔 + Alert
-                            </button>
+                              {t("automation.ui.alert")}</button>
                             <button
                               type="button"
                               className="btn btn-sm btn-secondary"
@@ -2233,8 +2207,7 @@ if (torrent) {
                                 updateVisualSteps(copy);
                               }}
                             >
-                              📬 + Servarr
-                            </button>
+                              {t("automation.ui.servarr")}</button>
                             <button
                               type="button"
                               className="btn btn-sm btn-secondary"
@@ -2245,18 +2218,16 @@ if (torrent) {
                                 updateVisualSteps(copy);
                               }}
                             >
-                              ⚙️ + Command
-                            </button>
+                              {t("automation.ui.command")}</button>
                           </div>
                         </div>
 
                         {step.actions.length === 0 ? (
                           <div style={{ fontSize: "0.825rem", color: "var(--text-muted)", fontStyle: "italic", padding: "0.6rem 0" }}>
-                            No actions added. Click any button above or select from the actions library below.
-                          </div>
+                            {t("automation.ui.noActionsAddedClickAny")}</div>
                         ) : (
                           step.actions.map((act, actIdx) => {
-                            const actDef = ACTION_GROUPS.flatMap((g) => g.items).find((i) => i.type === act.type);
+                            const actDef = getActionGroups(t).flatMap((g) => g.items).find((i) => i.type === act.type);
                             const placeholder = actDef?.placeholder || "Action value";
 
                             return (
@@ -2285,7 +2256,7 @@ if (torrent) {
                                     if (newType === "setCategory" && categories?.[0]) {
                                       copy[stepIdx].actions[actIdx].value = categories[0].name;
                                     } else if (newType === "command") {
-                                      copy[stepIdx].actions[actIdx].value = COMMON_COMMANDS[0].name;
+                                      copy[stepIdx].actions[actIdx].value = getCommonCommands(t)[0].name;
                                     } else if (newType === "setPriority") {
                                       copy[stepIdx].actions[actIdx].value = "High";
                                     } else if (newType === "setSequentialDownload" || newType === "setSuperSeeding") {
@@ -2296,7 +2267,7 @@ if (torrent) {
                                     updateVisualSteps(copy);
                                   }}
                                 >
-                                  {ACTION_GROUPS.map((group) => (
+                                  {getActionGroups(t).map((group) => (
                                     <optgroup key={group.group} label={tGroup(t, group.group)}>
                                       {group.items.map((item) => (
                                         <option key={item.type} value={item.type}>{tAction(t, item.type, "label", item.label)}</option>
@@ -2317,7 +2288,7 @@ if (torrent) {
                                       updateVisualSteps(copy);
                                     }}
                                   >
-                                    {COMMON_COMMANDS.map((cmd) => (
+                                    {getCommonCommands(t).map((cmd) => (
                                       <option key={cmd.name} value={cmd.name}>
                                         {cmd.name} — {cmd.desc}
                                       </option>
@@ -2336,7 +2307,7 @@ if (torrent) {
                                   >
                                     {(categories || []).map((cat) => (
                                       <option key={cat.id} value={cat.name}>
-                                        📁 {cat.name}
+                                        {t("automation.ui.text2")}{cat.name}
                                       </option>
                                     ))}
                                   </select>
@@ -2351,10 +2322,10 @@ if (torrent) {
                                       updateVisualSteps(copy);
                                     }}
                                   >
-                                    <option value="High">⚡ High Priority</option>
-                                    <option value="Normal">🔹 Normal Priority</option>
-                                    <option value="Low">🔻 Low Priority</option>
-                                    <option value="DoNotDownload">🚫 Do Not Download (Skip)</option>
+                                    <option value="High">{t("automation.ui.highPriority")}</option>
+                                    <option value="Normal">{t("automation.ui.normalPriority")}</option>
+                                    <option value="Low">{t("automation.ui.lowPriority")}</option>
+                                    <option value="DoNotDownload">{t("automation.ui.doNotDownloadSkip")}</option>
                                   </select>
                                 ) : act.type === "setSequentialDownload" || act.type === "setSuperSeeding" ? (
                                   <select
@@ -2367,8 +2338,8 @@ if (torrent) {
                                       updateVisualSteps(copy);
                                     }}
                                   >
-                                    <option value="true">✅ Enabled (True)</option>
-                                    <option value="false">❌ Disabled (False)</option>
+                                    <option value="true">{t("automation.ui.enabledTrue")}</option>
+                                    <option value="false">{t("automation.ui.disabledFalse")}</option>
                                   </select>
                                 ) : act.type === "notifyArr" ? (
                                   <select
@@ -2381,12 +2352,12 @@ if (torrent) {
                                       updateVisualSteps(copy);
                                     }}
                                   >
-                                    <option value="">🌐 All Connected Servarr Instances</option>
-                                    <option value="Sonarr">📺 Sonarr (TV Shows)</option>
-                                    <option value="Radarr">🎬 Radarr (Movies)</option>
-                                    <option value="Lidarr">🎵 Lidarr (Music)</option>
-                                    <option value="Readarr">📚 Readarr (Books)</option>
-                                    <option value="Whisparr">🔞 Whisparr (Adult)</option>
+                                    <option value="">{t("automation.ui.allConnectedServarrInstances")}</option>
+                                    <option value="Sonarr">{t("automation.ui.sonarrTvShows")}</option>
+                                    <option value="Radarr">{t("automation.ui.radarrMovies")}</option>
+                                    <option value="Lidarr">{t("automation.ui.lidarrMusic")}</option>
+                                    <option value="Readarr">{t("automation.ui.readarrBooks")}</option>
+                                    <option value="Whisparr">{t("automation.ui.whisparrAdult")}</option>
                                   </select>
                                 ) : act.type === "remove" ? (
                                   <label style={{ flex: 1, display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer", color: "var(--color-danger, #ff6b6b)" }}>
@@ -2399,12 +2370,10 @@ if (torrent) {
                                         updateVisualSteps(copy);
                                       }}
                                     />
-                                    🗑️ Also permanently delete downloaded files from disk
-                                  </label>
+                                    {t("automation.ui.alsoPermanentlyDeleteDownloade")}</label>
                                 ) : act.type === "pause" || act.type === "resume" || act.type === "recheck" || act.type === "reannounce" || act.type === "boostTracker" ? (
                                   <span style={{ flex: 1, fontSize: "0.85rem", color: "var(--text-muted)", paddingLeft: "0.25rem" }}>
-                                    ✨ Auto-applies to active swarm & torrent
-                                  </span>
+                                    {t("automation.ui.autoappliesToActiveSwarmTorren")}</span>
                                 ) : act.type === "http" ? (
                                   <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                                     <div style={{ display: "flex", gap: "0.5rem" }}>
@@ -2419,18 +2388,18 @@ if (torrent) {
                                           updateVisualSteps(copy);
                                         }}
                                       >
-                                        <option value="GET" style={{ color: "#3b82f6" }}>GET</option>
-                                        <option value="POST" style={{ color: "#10b981" }}>POST</option>
-                                        <option value="PUT" style={{ color: "#f59e0b" }}>PUT</option>
-                                        <option value="DELETE" style={{ color: "#ef4444" }}>DELETE</option>
-                                        <option value="PATCH" style={{ color: "#8b5cf6" }}>PATCH</option>
+                                        <option value="GET" style={{ color: "#3b82f6" }}>{t("automation.ui.get")}</option>
+                                        <option value="POST" style={{ color: "#10b981" }}>{t("automation.ui.post")}</option>
+                                        <option value="PUT" style={{ color: "#f59e0b" }}>{t("automation.ui.put")}</option>
+                                        <option value="DELETE" style={{ color: "#ef4444" }}>{t("automation.ui.delete")}</option>
+                                        <option value="PATCH" style={{ color: "#8b5cf6" }}>{t("automation.ui.patch")}</option>
                                       </select>
                                       <input
                                         type="text"
                                         className="form-control"
                                         style={{ flex: 1 }}
                                         value={act.extra?.url || act.value || ""}
-                                        placeholder="https://external.service.com/api/v1/webhook"
+                                        placeholder={t("automation.ui.httpsexternalservicecomapiv1we")}
                                         onChange={(e) => {
                                           const copy = [...visualSteps];
                                           copy[stepIdx].actions[actIdx].value = e.target.value;
@@ -2456,7 +2425,7 @@ if (torrent) {
                                       <button
                                         type="button"
                                         className="btn btn-sm btn-outline"
-                                        title="✨ Insert Torrent JSON Payload"
+                                        title={t("automation.ui.insertTorrentJsonPayload")}
                                         onClick={(e) => {
                                           e.preventDefault();
                                           const copy = [...visualSteps];
@@ -2465,8 +2434,7 @@ if (torrent) {
                                           updateVisualSteps(copy);
                                         }}
                                       >
-                                        ✨ Template
-                                      </button>
+                                        {t("automation.ui.template")}</button>
                                       <select
                                         className="form-control"
                                         style={{ width: "130px", fontSize: "0.8rem", padding: "0.2rem 0.5rem" }}
@@ -2483,10 +2451,10 @@ if (torrent) {
                                           updateVisualSteps(copy);
                                         }}
                                       >
-                                        <option value="">Auth Preset...</option>
-                                        <option value="bearer">Bearer Token</option>
-                                        <option value="apikey">API Key</option>
-                                        <option value="basic">Basic Auth</option>
+                                        <option value="">{t("automation.ui.authPreset")}</option>
+                                        <option value="bearer">{t("automation.ui.bearerToken")}</option>
+                                        <option value="apikey">{t("automation.ui.apiKey")}</option>
+                                        <option value="basic">{t("automation.ui.basicAuth")}</option>
                                       </select>
                                       <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
                                         <input
@@ -2498,8 +2466,7 @@ if (torrent) {
                                             copy[stepIdx].actions[actIdx].extra!.allowInsecure = e.target.checked;
                                             updateVisualSteps(copy);
                                           }}
-                                        /> Allow Insecure
-                                      </label>
+                                        /> {t("automation.ui.allowInsecure")}</label>
                                       <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", cursor: "pointer" }}>
                                         <input
                                           type="checkbox"
@@ -2510,13 +2477,12 @@ if (torrent) {
                                             copy[stepIdx].actions[actIdx].extra!.continueOnError = e.target.checked;
                                             updateVisualSteps(copy);
                                           }}
-                                        /> Continue on Error
-                                      </label>
+                                        /> {t("automation.ui.continueOnError")}</label>
                                       <input
                                         type="text"
                                         className="form-control"
                                         style={{ width: "120px", fontSize: "0.8rem", padding: "0.2rem 0.5rem" }}
-                                        placeholder="Register Variable"
+                                        placeholder={t("automation.ui.registerVariable")}
                                         value={act.extra?.register || ""}
                                         onChange={(e) => {
                                           const copy = [...visualSteps];
@@ -2529,7 +2495,7 @@ if (torrent) {
                                         type="number"
                                         className="form-control"
                                         style={{ width: "80px", fontSize: "0.8rem", padding: "0.2rem 0.5rem" }}
-                                        placeholder="Timeout (s)"
+                                        placeholder={t("automation.ui.timeoutS")}
                                         value={act.extra?.timeoutSeconds || ""}
                                         onChange={(e) => {
                                           const copy = [...visualSteps];
@@ -2559,7 +2525,7 @@ if (torrent) {
                                   type="button"
                                   className="btn btn-sm btn-secondary"
                                   style={{ width: "32px", height: "32px", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, borderRadius: "6px" }}
-                                  title="Delete Action"
+                                  title={t("automation.ui.deleteAction")}
                                   onClick={() => {
                                     const copy = [...visualSteps];
                                     copy[stepIdx].actions = copy[stepIdx].actions.filter((_, idx) => idx !== actIdx);
@@ -2586,7 +2552,7 @@ if (torrent) {
                       {editingScript.language === "Yaml" || editingScript.language === 1 ? "YAML Pipeline DSL" : "JavaScript Code"}
                     </label>
                     <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                      Helpers: <code>system.runCommand()</code>, <code>api.get()</code>, <code>torrent.addTag()</code>
+                      {t("automation.ui.helpers")}<code>{t("automation.ui.systemruncommand")}</code>, <code>{t("automation.ui.apiget")}</code>, <code>{t("automation.ui.torrentaddtag")}</code>
                     </span>
                   </div>
                   <textarea
@@ -2646,10 +2612,9 @@ if (torrent) {
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem", gap: "1rem", flexWrap: "wrap" }}>
                   <div>
-                    <h4 style={{ margin: "0 0 0.25rem 0", fontSize: "0.95rem", fontWeight: 600 }}>⚡ Live Dry Run Inspector</h4>
+                    <h4 style={{ margin: "0 0 0.25rem 0", fontSize: "0.95rem", fontWeight: 600 }}>{t("automation.ui.liveDryRunInspector")}</h4>
                     <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                      Test pipeline execution logic safely against active torrents without writing mutations.
-                    </span>
+                      {t("automation.ui.testPipelineExecutionLogicSafe")}</span>
                   </div>
 
                   <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
@@ -2659,9 +2624,9 @@ if (torrent) {
                       value={testTorrentId}
                       onChange={(e) => setTestTorrentId(e.target.value ? Number(e.target.value) : undefined)}
                     >
-                      <option value="">Sample Torrent (Big Buck Bunny 1080p)</option>
+                      <option value="">{t("automation.ui.sampleTorrentBigBuckBunny")}</option>
                       {(torrents || []).map((t) => (
-                        <option key={t.id} value={t.id}>{t.name} ({(t.totalSize / (1024 * 1024 * 1024)).toFixed(2)} GB)</option>
+                        <option key={t.id} value={t.id}>{t.name} ({(t.totalSize / (1024 * 1024 * 1024)).toFixed(2)} {t("automation.ui.gb")}</option>
                       ))}
                     </select>
 
@@ -2692,17 +2657,17 @@ if (torrent) {
                       <span style={{ color: testResult.success ? "#22c55e" : "#ef4444" }}>
                         {testResult.success ? "✅ Pipeline Dry Run Succeeded" : "❌ Pipeline Dry Run Failed"}
                       </span>
-                      <span>Duration: {testResult.executionTimeMs}ms</span>
+                      <span>{t("automation.ui.duration")}{testResult.executionTimeMs}{t("automation.ui.ms")}</span>
                     </div>
 
                     {testResult.tagsToAdd.length > 0 && (
-                      <div style={{ marginBottom: "0.25rem" }}><strong>Tags Added:</strong> {testResult.tagsToAdd.join(", ")}</div>
+                      <div style={{ marginBottom: "0.25rem" }}><strong>{t("automation.ui.tagsAdded")}</strong> {testResult.tagsToAdd.join(", ")}</div>
                     )}
                     {testResult.newCategory && (
-                      <div style={{ marginBottom: "0.25rem" }}><strong>New Category:</strong> {testResult.newCategory}</div>
+                      <div style={{ marginBottom: "0.25rem" }}><strong>{t("automation.ui.newCategory")}</strong> {testResult.newCategory}</div>
                     )}
                     {testResult.shouldRecheck && (
-                      <div style={{ marginBottom: "0.25rem" }}><strong>Torrent Action:</strong> 🔍 Force Hash Recheck</div>
+                      <div style={{ marginBottom: "0.25rem" }}><strong>{t("automation.ui.torrentAction")}</strong> {t("automation.ui.forceHashRecheck")}</div>
                     )}
 
                     {testResult.outputLog && (
@@ -2730,11 +2695,9 @@ if (torrent) {
             {/* Modal Footer */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.25rem", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
               <button type="button" className="btn btn-secondary" style={{ padding: "0.5rem 1.25rem" }} onClick={() => setEditorOpen(false)}>
-                Cancel
-              </button>
+                {t("automation.ui.cancel")}</button>
               <button type="button" className="btn btn-primary" style={{ padding: "0.5rem 1.25rem", fontWeight: 600 }} onClick={handleSaveScript}>
-                💾 Save Pipeline
-              </button>
+                {t("automation.ui.savePipeline")}</button>
             </div>
           </div>
         </div>
@@ -2757,9 +2720,9 @@ if (torrent) {
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700 }}>🔍 Pipeline Trace: {viewingLog.name}</h3>
+                <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 700 }}>{t("automation.ui.pipelineTrace")}{viewingLog.name}</h3>
                 <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-                  Trigger: {viewingLog.trigger} • Executed: {viewingLog.time || "Recently"}
+                  {t("automation.ui.trigger1")}{viewingLog.trigger} {t("automation.ui.executed")}{viewingLog.time || "Recently"}
                 </span>
               </div>
               <button
@@ -2783,7 +2746,7 @@ if (torrent) {
                   fontWeight: 600,
                 }}
               >
-                Status: {viewingLog.status}
+                {t("automation.ui.status1")}{viewingLog.status}
               </span>
             </div>
 
@@ -2806,7 +2769,7 @@ if (torrent) {
             </pre>
 
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1.25rem" }}>
-              <button className="btn btn-secondary" style={{ padding: "0.45rem 1.25rem" }} onClick={() => setLogModalOpen(false)}>Close</button>
+              <button className="btn btn-secondary" style={{ padding: "0.45rem 1.25rem" }} onClick={() => setLogModalOpen(false)}>{t("automation.ui.close")}</button>
             </div>
           </div>
         </div>
@@ -2816,13 +2779,13 @@ if (torrent) {
       {installModalOpen && selectedTemplate && (
         <div className="modal-overlay">
           <div className="modal panel" style={{ width: "100%", maxWidth: "600px", padding: "1.75rem", backgroundColor: "var(--bg-secondary)" }}>
-            <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.25rem", fontWeight: 700 }}>Install Community Pipeline</h3>
+            <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.25rem", fontWeight: 700 }}>{t("automation.ui.installCommunityPipeline")}</h3>
             <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "1.25rem", lineHeight: "1.4" }}>
               {selectedTemplate.description}
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "1rem" }}>
-              <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>Pipeline Custom Name</label>
+              <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>{t("automation.ui.pipelineCustomName")}</label>
               <input
                 type="text"
                 className="form-control"
@@ -2833,7 +2796,7 @@ if (torrent) {
 
             {selectedTemplate.inputFields && selectedTemplate.inputFields.length > 0 && (
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: "1rem", marginTop: "1rem" }}>
-                <h4 style={{ fontSize: "0.95rem", margin: "0 0 0.75rem 0", fontWeight: 600 }}>Pipeline Configuration Parameters</h4>
+                <h4 style={{ fontSize: "0.95rem", margin: "0 0 0.75rem 0", fontWeight: 600 }}>{t("automation.ui.pipelineConfigurationParameter")}</h4>
                 {selectedTemplate.inputFields.map((field) => (
                   <div key={field.key} style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "0.85rem" }}>
                     <label style={{ fontSize: "0.825rem", fontWeight: 600, color: "var(--text-secondary)" }}>{field.label}</label>
@@ -2856,8 +2819,8 @@ if (torrent) {
             )}
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.5rem", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
-              <button className="btn btn-secondary" style={{ padding: "0.45rem 1.25rem" }} onClick={() => setInstallModalOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" style={{ padding: "0.45rem 1.25rem", fontWeight: 600 }} onClick={handleInstallTemplate}>Install Pipeline</button>
+              <button className="btn btn-secondary" style={{ padding: "0.45rem 1.25rem" }} onClick={() => setInstallModalOpen(false)}>{t("automation.ui.cancel")}</button>
+              <button className="btn btn-primary" style={{ padding: "0.45rem 1.25rem", fontWeight: 600 }} onClick={handleInstallTemplate}>{t("automation.ui.installPipeline1")}</button>
             </div>
           </div>
         </div>
