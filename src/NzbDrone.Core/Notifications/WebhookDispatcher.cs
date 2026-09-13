@@ -155,7 +155,7 @@ public class WebhookDispatcher : IWebhookDispatcher
                         ? sleepDurationProvider(retryAttempt)
                         : TimeSpan.FromSeconds(Math.Pow(2, retryAttempt));
                 },
-                onRetry: (DelegateResult<HttpResponseMessage> outcome, TimeSpan timespan, int retryAttempt, Context context) =>
+                onRetryAsync: (DelegateResult<HttpResponseMessage> outcome, TimeSpan timespan, int retryAttempt, Context context) =>
                 {
                     outcome.Result?.Dispose();
 
@@ -167,6 +167,8 @@ public class WebhookDispatcher : IWebhookDispatcher
                     {
                         LogManager.GetCurrentClassLogger().Warn("Webhook dispatch failed. Retrying in {0}s (Attempt {1}/{2})...", timespan.TotalSeconds, retryAttempt, retryCount);
                     }
+
+                    return Task.CompletedTask;
                 });
     }
 
