@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.6.5](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.5) - 2026-09-13
+
+### ✨ Features
+- feat(api): add atomic bulk torrent action endpoint
+- feat(ui): enhance real-time reconnection, table multi-selection, category filters, and folder browsing in seedarr
+- feat(i18n): comprehensively internationalize 100% of automation page strings and catalog
+
+### 🔧 Maintenance & Improvements
+- style(ui): align AddTorrentPage and TorrentDetails headers with Automation style
+- style(ui): unify all page headers and layout with Automation header design
+
 ## [v1.6.4](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.4) - 2026-09-13
 
 ### ✨ Features
