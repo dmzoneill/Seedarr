@@ -586,22 +586,23 @@ function TrackerBoost() {
         height: "100%",
         minHeight: 0,
         overflow: "hidden",
+        padding: "1.5rem",
+        boxSizing: "border-box",
       }}
     >
-      {/* Top Header Row */}
+      {/* Header Banner */}
       <div
-        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
           gap: "1rem",
-          marginBottom: "1rem",
+          marginBottom: "1.5rem",
           flexShrink: 0,
         }}
       >
-        <div className="page-header-group">
+        <div>
           <div
             style={{
               display: "flex",
@@ -611,29 +612,29 @@ function TrackerBoost() {
             }}
           >
             <h1
-              className="page-heading"
               style={{
+                fontSize: "1.75rem",
+                fontWeight: 700,
                 margin: 0,
-                padding: 0,
-                background: "transparent",
-                border: "none",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
               }}
             >
-              Tracker Boost
+              <span>🚀</span> Tracker Boost
             </h1>
             <span className="badge badge-primary">⚡ Smart Booster</span>
             <span className="badge badge-secondary">BEP 15 & 48 Scraper</span>
           </div>
-          <div
+          <p
             style={{
-              fontSize: "0.85rem",
-              color: "var(--text-muted)",
-              marginTop: "0.3rem",
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
             }}
           >
-            Scrapes live tracker swarms by info_hash to discover and inject
-            verified seeders/peers into Seedarr and download clients
-          </div>
+            Scrapes live tracker swarms by info_hash to discover and inject verified seeders/peers into Seedarr and download clients
+          </p>
         </div>
       </div>
 

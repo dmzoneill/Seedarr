@@ -163,24 +163,34 @@ export function TrackerMetrics() {
         display: "flex",
         flexDirection: "column",
         gap: "1.25rem",
+        padding: "1.5rem",
         paddingBottom: "3rem",
       }}
     >
-      {/* Top Header */}
+      {/* Header Banner */}
       <div
-        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
           gap: "1rem",
+          marginBottom: "1.5rem",
         }}
       >
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-            <h1 className="page-heading" style={{ margin: 0 }}>
-              Tracker Metrics
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <h1
+              style={{
+                fontSize: "1.75rem",
+                fontWeight: 700,
+                margin: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <span>📡</span> Tracker Metrics
             </h1>
             <span
               style={{
@@ -212,17 +222,16 @@ export function TrackerMetrics() {
           </div>
           <p
             style={{
+              color: "var(--text-muted, #888)",
               margin: "0.25rem 0 0 0",
-              fontSize: "0.85rem",
-              color: "var(--text-secondary)",
+              fontSize: "0.9rem",
             }}
           >
-            Telemetry, traffic statistics, scrape responses, and latency metrics
-            for all interacted trackers.
+            Telemetry, traffic statistics, scrape responses, and latency metrics for all interacted trackers
           </p>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           <button
             className={`btn btn-sm ${isLive ? "btn-outline" : "btn-primary"}`}
             onClick={() => setIsLive(!isLive)}

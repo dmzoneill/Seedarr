@@ -216,22 +216,40 @@ function Dashboard() {
   }, [torrents]);
 
   return (
-    <div className="content-area">
+    <div className="content-area" style={{ padding: "1.5rem" }}>
+      {/* Header Banner */}
       <div
-        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "1rem",
+          marginBottom: "1.5rem",
           flexWrap: "wrap",
-          gap: "0.75rem",
+          gap: "1rem",
         }}
       >
-        <div className="page-header-group">
-          <h1 className="page-heading" style={{ margin: 0 }}>
-            Dashboard
+        <div>
+          <h1
+            style={{
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <span>📊</span> Dashboard
           </h1>
+          <p
+            style={{
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
+            }}
+          >
+            Global seeding overview, system health, client bridges, and telemetry
+          </p>
         </div>
       </div>
 

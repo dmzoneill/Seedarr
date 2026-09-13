@@ -44,41 +44,47 @@ function ApiDocsPage() {
         flexDirection: "column",
         height: "calc(100vh - 110px)",
         minHeight: "650px",
+        padding: "1.5rem",
+        boxSizing: "border-box",
       }}
     >
-      {/* Page Header */}
+      {/* Header Banner */}
       <div
-        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "1.25rem",
+          marginBottom: "1.5rem",
+          flexWrap: "wrap",
+          gap: "1rem",
           flexShrink: 0,
         }}
       >
-        <div className="page-header-group">
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
-          >
-            <h1 className="page-heading" style={{ margin: 0 }}>
-              System: API Reference
-            </h1>
-            <span className="badge badge-primary">OpenAPI v3</span>
-          </div>
-          <div
+        <div>
+          <h1
             style={{
-              fontSize: "0.8rem",
-              color: "var(--text-muted)",
-              marginTop: "0.2rem",
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
             }}
           >
-            Interactive REST API explorer, parameter definitions, and endpoint
-            schemas
-          </div>
+            <span>📖</span> System: API Reference
+          </h1>
+          <p
+            style={{
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
+            }}
+          >
+            Interactive REST API explorer, parameter definitions, and endpoint schemas
+          </p>
         </div>
 
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
           <button
             className="btn btn-outline"
             onClick={handleCopyKey}

@@ -56,69 +56,76 @@ function Statistics() {
     .slice(0, 10);
 
   return (
-    <div className="content-area">
-      {/* Header */}
+    <div className="content-area" style={{ padding: "1.5rem" }}>
+      {/* Header Banner */}
       <div
-        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
           flexWrap: "wrap",
           gap: "1rem",
-          marginBottom: "1.25rem",
+          marginBottom: "1.5rem",
         }}
       >
-        <div className="page-header-group">
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
-          >
-            <h1 className="page-heading" style={{ margin: 0 }}>
-              Statistics & Achievements
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <h1
+              style={{
+                fontSize: "1.75rem",
+                fontWeight: 700,
+                margin: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <span>📊</span> Statistics & Achievements
             </h1>
             <span className="badge badge-primary">
               Level {achievements.overallLevel}: {achievements.rankTitle}
             </span>
           </div>
-          <div
+          <p
             style={{
-              fontSize: "0.8rem",
-              color: "var(--text-muted)",
-              marginTop: "0.2rem",
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
             }}
           >
-            Live transfer speeds, seeding milestones, swarm preservation, and
-            tracker metrics
-          </div>
+            Live transfer speeds, seeding milestones, swarm preservation, and tracker metrics
+          </p>
         </div>
 
         {/* Tab switcher */}
-        <div className="view-toggle" style={{ margin: 0 }}>
-          <button
-            className={`view-toggle-btn ${activeTab === "overview" ? "active" : ""}`}
-            onClick={() => setActiveTab("overview")}
-          >
-            📊 Swarm Overview
-          </button>
-          <button
-            className={`view-toggle-btn ${activeTab === "achievements" ? "active" : ""}`}
-            onClick={() => setActiveTab("achievements")}
-          >
-            🏆 Achievements ({achievements.unlockedCount}/
-            {achievements.totalCount})
-          </button>
-          <button
-            className={`view-toggle-btn ${activeTab === "buffers" ? "active" : ""}`}
-            onClick={() => setActiveTab("buffers")}
-          >
-            🛡️ Tracker Buffers & BP
-          </button>
-          <button
-            className={`view-toggle-btn ${activeTab === "simulator" ? "active" : ""}`}
-            onClick={() => setActiveTab("simulator")}
-          >
-            🎯 Seeding Simulator
-          </button>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+          <div className="view-toggle" style={{ margin: 0 }}>
+            <button
+              className={`view-toggle-btn ${activeTab === "overview" ? "active" : ""}`}
+              onClick={() => setActiveTab("overview")}
+            >
+              📊 Swarm Overview
+            </button>
+            <button
+              className={`view-toggle-btn ${activeTab === "achievements" ? "active" : ""}`}
+              onClick={() => setActiveTab("achievements")}
+            >
+              🏆 Achievements ({achievements.unlockedCount}/
+              {achievements.totalCount})
+            </button>
+            <button
+              className={`view-toggle-btn ${activeTab === "buffers" ? "active" : ""}`}
+              onClick={() => setActiveTab("buffers")}
+            >
+              🛡️ Tracker Buffers & BP
+            </button>
+            <button
+              className={`view-toggle-btn ${activeTab === "simulator" ? "active" : ""}`}
+              onClick={() => setActiveTab("simulator")}
+            >
+              🎯 Seeding Simulator
+            </button>
+          </div>
         </div>
       </div>
 

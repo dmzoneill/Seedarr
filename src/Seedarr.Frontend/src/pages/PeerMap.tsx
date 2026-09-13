@@ -434,40 +434,49 @@ function PeerMap() {
         height: "100%",
         minHeight: 0,
         overflow: "hidden",
+        padding: "1.5rem",
+        boxSizing: "border-box",
       }}
     >
-      {/* Header Row */}
+      {/* Header Banner */}
       <div
-        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "0.75rem",
+          marginBottom: "1.5rem",
+          flexWrap: "wrap",
+          gap: "1rem",
           flexShrink: 0,
         }}
       >
-        <div className="page-header-group">
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
-          >
-            <h1 className="page-heading" style={{ margin: 0 }}>
-              Peer Map
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <h1
+              style={{
+                fontSize: "1.75rem",
+                fontWeight: 700,
+                margin: 0,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <span>🗺️</span> Peer Map
             </h1>
             <span className="badge badge-primary">
               {peerCount} Connected Peers
             </span>
           </div>
-          <div
+          <p
             style={{
-              fontSize: "0.8rem",
-              color: "var(--text-muted)",
-              marginTop: "0.2rem",
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
             }}
           >
-            Live swarm topology visualization connecting Seedarr, active
-            torrents, and remote peers
-          </div>
+            Live swarm topology visualization connecting Seedarr, active torrents, and remote peers
+          </p>
         </div>
       </div>
 

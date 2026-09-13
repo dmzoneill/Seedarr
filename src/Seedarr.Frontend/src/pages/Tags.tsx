@@ -56,42 +56,50 @@ function Tags() {
   const tagList = tags ?? [];
 
   return (
-    <div className="content-area">
+    <div className="content-area" style={{ padding: "1.5rem" }}>
+      {/* Header Banner */}
       <div
-        className="page-header"
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "1.25rem",
+          marginBottom: "1.5rem",
+          flexWrap: "wrap",
+          gap: "1rem",
         }}
       >
-        <div className="page-header-group">
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
-          >
-            <h1 className="page-heading" style={{ margin: 0 }}>
-              Tags ({tagList.length})
-            </h1>
-            <span className="badge badge-primary">Metadata</span>
-          </div>
-          <div
+        <div>
+          <h1
             style={{
-              fontSize: "0.8rem",
-              color: "var(--text-muted)",
-              marginTop: "0.2rem",
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <span>🏷️</span> Tags ({tagList.length})
+          </h1>
+          <p
+            style={{
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
             }}
           >
             Organize and filter torrent swarms by custom labels and categories
-          </div>
+          </p>
         </div>
 
-        <button
-          className="btn btn-primary btn-small"
-          onClick={() => setShowAdd(true)}
-        >
-          + Add Tag
-        </button>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          <button
+            className="btn btn-primary"
+            onClick={() => setShowAdd(true)}
+          >
+            + Add Tag
+          </button>
+        </div>
       </div>
 
       {showAdd && (
