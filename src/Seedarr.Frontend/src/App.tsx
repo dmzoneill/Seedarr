@@ -54,6 +54,7 @@ import {
   SettingsIcon,
   SystemIcon,
   DownloadAgentIcon,
+  AutomationIcon,
 } from "./components/icons/NavIcons";
 import {
   ActivityIcon,
@@ -521,7 +522,7 @@ function App() {
             className="sidebar-nav-item"
             title={t("nav.automation", undefined, "Automation")}
           >
-            <span style={{ fontSize: "1.1rem", display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.25rem" }}>⚡</span>{" "}
+            <AutomationIcon />{" "}
             <span>{t("nav.automation", undefined, "Automation")}</span>
           </NavLink>
           <NavLink
