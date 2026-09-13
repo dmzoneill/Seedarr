@@ -12,24 +12,31 @@ namespace NzbDrone.Core.Automation;
 
 public class ScriptHttpContext
 {
-    private static readonly Lazy<HttpClient> LazyClient = new(() =>
+    private static HttpClient CreateClient(bool allowInsecure, int timeoutSeconds)
     {
         var handler = new HttpClientHandler
         {
             AllowAutoRedirect = true,
             AutomaticDecompression = DecompressionMethods.All,
             CookieContainer = new CookieContainer(),
-            ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true,
+            CheckCertificateRevocationList = true,
         };
+
+        if (allowInsecure)
+        {
+            handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
+        }
 
         var client = new HttpClient(handler)
         {
-            Timeout = TimeSpan.FromSeconds(15),
+            Timeout = TimeSpan.FromSeconds(timeoutSeconds > 0 ? timeoutSeconds : 15),
         };
 
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         return client;
-    });
+    }
+
+    private static readonly Lazy<HttpClient> DefaultClient = new(() => CreateClient(true, 15));
 
     private readonly CookieContainer _cookieContainer = new();
 
@@ -128,8 +135,23 @@ public class ScriptHttpContext
             }
         }
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-        var client = LazyClient.Value;
+        var timeoutSeconds = 15;
+        var allowInsecure = true;
+        if (options != null)
+        {
+            if (options.TryGetValue("timeoutSeconds", out var toVal) && int.TryParse(toVal?.ToString(), out var toParsed))
+            {
+                timeoutSeconds = toParsed;
+            }
+
+            if (options.TryGetValue("allowInsecure", out var aiVal) && bool.TryParse(aiVal?.ToString(), out var aiParsed))
+            {
+                allowInsecure = aiParsed;
+            }
+        }
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds > 0 ? timeoutSeconds : 15));
+        var client = timeoutSeconds != 15 || !allowInsecure ? CreateClient(allowInsecure, timeoutSeconds) : DefaultClient.Value;
         using var response = await client.SendAsync(request, cts.Token).ConfigureAwait(false);
 
         var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);

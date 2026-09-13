@@ -473,10 +473,125 @@ public class YamlScriptRunner : IScriptRunner
                             logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendPushover: {user}");
                         }
 
-                        if (action.ContainsKey("reannounceAll"))
+                        if (action.TryGetValue("reannounceAll", out _))
                         {
                             systemContext.reannounceAll();
                             logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] reannounceAll");
+                        }
+
+                        if (action.TryGetValue("http", out var actHttpVal) && actHttpVal != null)
+                        {
+                            var hUrl = "";
+                            var hMethod = "POST";
+                            var hOptions = new Dictionary<string, object>();
+                            object? hBody = null;
+                            var hReg = "";
+                            var hCont = false;
+
+                            if (actHttpVal is string sHttp)
+                            {
+                                hUrl = SubstituteVariables(sHttp, variableContext);
+                                hOptions["json"] = true;
+                            }
+                            else if (actHttpVal is Dictionary<object, object> hDict)
+                            {
+                                hUrl = hDict.TryGetValue("url", out var u) ? SubstituteVariables(u?.ToString() ?? "", variableContext) : "";
+                                hMethod = hDict.TryGetValue("method", out var m) ? SubstituteVariables(m?.ToString() ?? "POST", variableContext).ToUpperInvariant() : "POST";
+                                hReg = hDict.TryGetValue("register", out var r) ? r?.ToString() ?? "" : "";
+
+                                if (hDict.TryGetValue("continueOnError", out var cVal) && (cVal is true || cVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true))
+                                {
+                                    hCont = true;
+                                }
+
+                                if (hDict.TryGetValue("timeoutSeconds", out var tsVal) && int.TryParse(tsVal?.ToString(), out var ts))
+                                {
+                                    hOptions["timeoutSeconds"] = ts;
+                                }
+
+                                if (hDict.TryGetValue("allowInsecure", out var aiVal) && (aiVal is true || aiVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true))
+                                {
+                                    hOptions["allowInsecure"] = true;
+                                }
+
+                                if (hDict.TryGetValue("json", out var jVal) && (jVal is true || jVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true))
+                                {
+                                    hOptions["json"] = true;
+                                }
+
+                                if (hDict.TryGetValue("headers", out var hdrVal) && hdrVal is Dictionary<object, object> hdrDict)
+                                {
+                                    var hdrs = new Dictionary<string, object>();
+                                    foreach (var kvp in hdrDict)
+                                    {
+                                        hdrs[kvp.Key.ToString()!] = SubstituteVariables(kvp.Value?.ToString() ?? "", variableContext);
+                                    }
+
+                                    hOptions["headers"] = hdrs;
+                                }
+
+                                if (hDict.TryGetValue("body", out var bVal) && bVal != null)
+                                {
+                                    if (bVal is string bStr)
+                                    {
+                                        hBody = SubstituteVariables(bStr, variableContext);
+                                    }
+                                    else if (bVal is Dictionary<object, object> bDict)
+                                    {
+                                        var bMap = new Dictionary<string, object>();
+                                        foreach (var kvp in bDict)
+                                        {
+                                            bMap[kvp.Key.ToString()!] = SubstituteVariables(kvp.Value?.ToString() ?? "", variableContext);
+                                        }
+
+                                        hBody = bMap;
+                                    }
+                                }
+                            }
+
+                            try
+                            {
+                                object hResp;
+                                switch (hMethod)
+                                {
+                                    case "GET":
+                                        hResp = httpClient.get(hUrl, hOptions);
+                                        break;
+                                    case "PUT":
+                                        hResp = httpClient.put(hUrl, hBody, hOptions);
+                                        break;
+                                    case "DELETE":
+                                        hResp = httpClient.delete(hUrl, hOptions);
+                                        break;
+                                    case "PATCH":
+                                        hResp = httpClient.post(hUrl, hBody, hOptions); // Using post for patch as simple fallback if no patch method
+                                        break;
+                                    default:
+                                        hResp = httpClient.post(hUrl, hBody, hOptions);
+                                        break;
+                                }
+
+                                if (!string.IsNullOrWhiteSpace(hReg) && hResp is Dictionary<string, object?> rDict)
+                                {
+                                    foreach (var kvp in rDict)
+                                    {
+                                        variableContext[$"{hReg.Trim()}.{kvp.Key}"] = kvp.Value;
+                                    }
+
+                                    variableContext[hReg.Trim()] = rDict;
+                                    variableContext[$"variables.{hReg.Trim()}"] = rDict;
+                                }
+
+                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] http {hMethod} {hUrl}");
+                            }
+                            catch (Exception ex)
+                            {
+                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] http {hMethod} {hUrl} failed: {ex.Message}");
+                                if (!hCont)
+                                {
+                                    throw;
+                                }
+                            }
                         }
 
                         if (torrentCtx != null)

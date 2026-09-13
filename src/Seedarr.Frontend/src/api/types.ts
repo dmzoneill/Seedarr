@@ -1109,6 +1109,12 @@ export interface AutomationExecutionResult {
   shouldResume: boolean;
   shouldRemove: boolean;
   deleteDataOnRemove: boolean;
+  shouldRecheck: boolean;
+  shouldReannounce: boolean;
+  shouldBoostTracker: boolean;
+  shouldRecheck: boolean;
+  shouldReannounce: boolean;
+  shouldBoostTracker: boolean;
   newUploadLimitKbps?: number | null;
   newDownloadLimitKbps?: number | null;
 }
