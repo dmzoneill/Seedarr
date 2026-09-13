@@ -584,12 +584,12 @@ function visualStepsToYaml(pipelineName: string, trigger: string, steps: VisualS
             yaml += `      - http:\n`;
             if (act.extra.method) yaml += `          method: '${act.extra.method}'\n`;
             if (act.extra.url || act.value) yaml += `          url: '${(act.extra.url || act.value).replace(/'/g, "''")}'\n`;
-            
+
             let headers = act.extra.headers || {};
             if (act.extra.auth === "Bearer Token") headers["Authorization"] = "Bearer ${inputs.apiToken}";
             else if (act.extra.auth === "API Key (X-Api-Key)") headers["X-Api-Key"] = "${inputs.apiKey}";
             else if (act.extra.auth === "Basic Auth") headers["Authorization"] = "Basic ${inputs.basicAuth}";
-            
+
             if (Object.keys(headers).length > 0) {
               yaml += `          headers:\n`;
               for (const [k, v] of Object.entries(headers)) {
