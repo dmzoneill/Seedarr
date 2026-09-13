@@ -129,7 +129,7 @@ export function PromptModal({
           borderRadius: "8px",
           padding: "1.5rem",
           boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
+          border: "1px solid var(--border-light)",
         }}
       >
         <h3
@@ -178,7 +178,7 @@ export function PromptModal({
                 borderRadius: "6px",
                 border: error
                   ? "1px solid var(--danger, #ef4444)"
-                  : "1px solid var(--border-light, rgba(255, 255, 255, 0.15))",
+                  : "1px solid var(--border-light)",
                 backgroundColor: "var(--bg-primary, #0f111c)",
                 color: "var(--text-primary, #fff)",
                 fontSize: "0.9rem",

@@ -62,7 +62,7 @@ export function PendingChangesModal({
           maxWidth: 420,
           borderRadius: "8px",
           boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
-          border: "1px solid rgba(255, 255, 255, 0.12)",
+          border: "1px solid var(--border-light)",
         }}
       >
         <h2 style={{ margin: "0 0 0.75rem", fontSize: "1.2rem" }}>
@@ -167,7 +167,7 @@ export function SaveBar({
             "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
           border: dirty
             ? "1px solid rgba(200, 168, 78, 0.5)"
-            : "1px solid rgba(255, 255, 255, 0.08)",
+            : "1px solid var(--border-light)",
           backgroundColor: "var(--bg-secondary)",
           transition: "all 0.2s ease",
         }}
@@ -241,7 +241,7 @@ export function SectionCard({
         borderRadius: "8px",
         boxShadow:
           "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
-        border: "1px solid rgba(255, 255, 255, 0.08)",
+        border: "1px solid var(--border-light)",
       }}
     >
       <div

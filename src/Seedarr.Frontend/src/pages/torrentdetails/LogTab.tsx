@@ -135,7 +135,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           flexWrap: "wrap",
           gap: "0.6rem",
           paddingBottom: "0.5rem",
-          borderBottom: "1px solid var(--border-light, rgba(255,255,255,0.08))",
+          borderBottom: "1px solid var(--border-light)",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
@@ -227,7 +227,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
               borderRadius: "4px",
               backgroundColor: "var(--bg-primary)",
               color: "inherit",
-              border: "1px solid var(--border-light, rgba(255,255,255,0.1))",
+              border: "1px solid var(--border)",
             }}
           />
         </div>
@@ -298,7 +298,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           overflowY: "auto",
           backgroundColor: "#0d1117",
           borderRadius: "6px",
-          border: "1px solid rgba(255,255,255,0.08)",
+          border: "1px solid var(--border-light)",
         }}
       >
         <table
@@ -313,7 +313,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
             <tr
               style={{
                 backgroundColor: "#161b22",
-                borderBottom: "1px solid rgba(255,255,255,0.1)",
+                borderBottom: "1px solid var(--border-light)",
               }}
             >
               <th
@@ -395,7 +395,7 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
                   key={entry.id}
                   className="torrent-table-row"
                   style={{
-                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    borderBottom: "1px solid var(--border-light)",
                     backgroundColor:
                       entry.level.toUpperCase() === "ERROR"
                         ? "rgba(239, 68, 68, 0.08)"

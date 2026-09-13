@@ -109,7 +109,7 @@ export function KeyboardShortcutsModal({
           flexDirection: "column",
           borderRadius: "12px",
           overflow: "hidden",
-          border: "1px solid rgba(255, 255, 255, 0.16)",
+          border: "1px solid var(--border-light)",
           boxShadow: "0 16px 48px rgba(0, 0, 0, 0.6)",
           padding: 0,
         }}
@@ -210,7 +210,7 @@ export function KeyboardShortcutsModal({
                           <kbd
                             style={{
                               backgroundColor: "rgba(255, 255, 255, 0.08)",
-                              border: "1px solid rgba(255, 255, 255, 0.2)",
+                              border: "1px solid var(--border)",
                               borderRadius: "4px",
                               padding: "0.15rem 0.45rem",
                               fontSize: "0.75rem",

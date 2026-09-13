@@ -961,7 +961,7 @@ function Dashboard() {
                       height: "46px",
                       objectFit: "cover",
                       borderRadius: "4px",
-                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      border: "1px solid var(--border-light)",
                       flexShrink: 0,
                     }}
                   />

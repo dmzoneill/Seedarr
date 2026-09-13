@@ -167,7 +167,7 @@ export default function TrackerMultiSelectModal({
           borderRadius: "10px",
           padding: 0,
           overflow: "hidden",
-          border: "1px solid rgba(255, 255, 255, 0.16)",
+          border: "1px solid var(--border-light)",
           boxShadow: "0 20px 45px rgba(0, 0, 0, 0.6)",
         }}
         onClick={(e) => e.stopPropagation()}
