@@ -1107,9 +1107,10 @@ public class DelugeJsonRpcController : ControllerBase
     {
         var hashes = ExtractHashesFromParams(paramsElem);
         var allTorrents = _torrentService.GetAll();
+
         foreach (var t in allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())))
         {
-            t.LastActive = DateTime.UtcNow;
+            t.NextUpdate = 0;
             _torrentService.Update(t);
         }
 
@@ -1118,19 +1119,25 @@ public class DelugeJsonRpcController : ControllerBase
 
     private IActionResult HandleCoreMoveStorage(JsonElement paramsElem, object id)
     {
-        if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() >= 2)
-        {
-            var hashes = ExtractHashesFromParams(paramsElem);
-            var dest = paramsElem[1].ValueKind == JsonValueKind.String ? paramsElem[1].GetString() : null;
+        var hashes = ExtractHashesFromParams(paramsElem);
+        string newPath = null;
 
-            if (!string.IsNullOrWhiteSpace(dest))
+        if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() > 1)
+        {
+            var second = paramsElem[1];
+            if (second.ValueKind == JsonValueKind.String)
             {
-                var allTorrents = _torrentService.GetAll();
-                foreach (var t in allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())))
-                {
-                    t.SourcePath = dest;
-                    _torrentService.Update(t);
-                }
+                newPath = second.GetString();
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(newPath))
+        {
+            var allTorrents = _torrentService.GetAll();
+            foreach (var t in allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())))
+            {
+                t.SourcePath = newPath;
+                _torrentService.Update(t);
             }
         }
 
@@ -1139,17 +1146,20 @@ public class DelugeJsonRpcController : ControllerBase
 
     private IActionResult HandleCoreSetTorrentOptions(JsonElement paramsElem, object id)
     {
-        if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() >= 2)
+        var hashes = ExtractHashesFromParams(paramsElem);
+        JsonElement opts = default;
+
+        if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() > 1)
         {
-            var hashes = ExtractHashesFromParams(paramsElem);
-            var opts = paramsElem[1];
-            if (opts.ValueKind == JsonValueKind.Object)
+            opts = paramsElem[1];
+        }
+
+        if (opts.ValueKind == JsonValueKind.Object)
+        {
+            var allTorrents = _torrentService.GetAll();
+            foreach (var t in allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())))
             {
-                var allTorrents = _torrentService.GetAll();
-                foreach (var t in allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())))
-                {
-                    ApplyDelugeOptions(t, opts);
-                }
+                ApplyDelugeOptions(t, opts);
             }
         }
 
@@ -1158,11 +1168,53 @@ public class DelugeJsonRpcController : ControllerBase
 
     private IActionResult HandleCoreSetTorrentFilePriorities(JsonElement paramsElem, object id)
     {
+        if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() >= 2)
+        {
+            var hash = paramsElem[0].GetString();
+            var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, hash, StringComparison.OrdinalIgnoreCase));
+            if (torrent != null)
+            {
+                var priorities = paramsElem[1];
+                if (priorities.ValueKind == JsonValueKind.Array)
+                {
+                    var prioList = priorities.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
+                }
+            }
+        }
+
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 
     private IActionResult HandleCoreRenameFiles(JsonElement paramsElem, object id)
     {
+        if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() >= 2)
+        {
+            var hash = paramsElem[0].GetString();
+            var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, hash, StringComparison.OrdinalIgnoreCase));
+            if (torrent != null)
+            {
+                var renames = paramsElem[1];
+                if (renames.ValueKind == JsonValueKind.Array)
+                {
+                    var files = _torrentFileService.GetByTorrentId(torrent.Id);
+                    foreach (var item in renames.EnumerateArray())
+                    {
+                        if (item.ValueKind == JsonValueKind.Array && item.GetArrayLength() >= 2)
+                        {
+                            var index = item[0].GetInt32();
+                            var newPath = item[1].GetString();
+                            if (index >= 0 && index < files.Count && !string.IsNullOrWhiteSpace(newPath))
+                            {
+                                var file = files[index];
+                                file.Path = newPath;
+                                _torrentFileService.Update(file);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 

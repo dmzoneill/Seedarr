@@ -478,6 +478,51 @@ public class TransmissionRpcController : ControllerBase
                     }
                 }
 
+                if (request.Arguments.TryGetValue("seedRatioLimit", out var srlVal) && srlVal.ValueKind == JsonValueKind.Number)
+                {
+                    _ = srlVal.GetDouble();
+                }
+
+                if (request.Arguments.TryGetValue("seedRatioMode", out var srmVal) && srmVal.ValueKind == JsonValueKind.Number)
+                {
+                    _ = srmVal.GetInt32();
+                }
+
+                if (request.Arguments.TryGetValue("seedIdleLimit", out var silVal) && silVal.ValueKind == JsonValueKind.Number)
+                {
+                    _ = silVal.GetInt32();
+                }
+
+                if (request.Arguments.TryGetValue("seedIdleMode", out var simVal) && simVal.ValueKind == JsonValueKind.Number)
+                {
+                    _ = simVal.GetInt32();
+                }
+
+                if (request.Arguments.TryGetValue("files-wanted", out var fwVal) && fwVal.ValueKind == JsonValueKind.Array)
+                {
+                    var fileIndices = fwVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
+                }
+
+                if (request.Arguments.TryGetValue("files-unwanted", out var fuVal) && fuVal.ValueKind == JsonValueKind.Array)
+                {
+                    var fileIndices = fuVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
+                }
+
+                if (request.Arguments.TryGetValue("priority-high", out var phVal) && phVal.ValueKind == JsonValueKind.Array)
+                {
+                    var fileIndices = phVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
+                }
+
+                if (request.Arguments.TryGetValue("priority-low", out var plVal) && plVal.ValueKind == JsonValueKind.Array)
+                {
+                    var fileIndices = plVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
+                }
+
+                if (request.Arguments.TryGetValue("priority-normal", out var pnVal) && pnVal.ValueKind == JsonValueKind.Array)
+                {
+                    var fileIndices = pnVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
+                }
+
                 _torrentService.Update(t);
             }
         }

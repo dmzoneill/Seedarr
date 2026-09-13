@@ -8,6 +8,7 @@ public interface ITorrentFileService
     List<TorrentFile> GetByTorrentId(int torrentId);
     TorrentFile Add(TorrentFile torrentFile);
     void DeleteByTorrentId(int torrentId);
+    void Update(TorrentFile torrentFile);
 }
 
 public class TorrentFileService : ITorrentFileService
@@ -34,5 +35,10 @@ public class TorrentFileService : ITorrentFileService
     public void DeleteByTorrentId(int torrentId)
     {
         _repository.DeleteByTorrentId(torrentId);
+    }
+
+    public void Update(TorrentFile torrentFile)
+    {
+        _repository.Update(torrentFile);
     }
 }

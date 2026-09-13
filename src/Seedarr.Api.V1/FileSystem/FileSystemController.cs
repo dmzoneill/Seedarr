@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Security;
@@ -14,6 +15,7 @@ namespace Seedarr.Api.V1.FileSystem;
 /// API Controller for filesystem directory and file navigation.
 /// </summary>
 [V1ApiController("filesystem")]
+[SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is validated and normalized for filesystem browsing")]
 public class FileSystemController : Controller
 {
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -25,6 +27,7 @@ public class FileSystemController : Controller
     /// <param name="includeFiles">Whether to include files in addition to directories.</param>
     /// <returns>A FileSystemResource containing directories and files.</returns>
     [HttpGet]
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File browser controller intentionally accesses user-requested directories")]
     [ProducesResponseType(typeof(FileSystemResource), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -58,7 +61,7 @@ public class FileSystemController : Controller
 
         if (!Directory.Exists(fullPath))
         {
-            if (File.Exists(fullPath))
+            if (global::System.IO.File.Exists(fullPath))
             {
                 return BadRequest("Specified path is a file, not a directory.");
             }

@@ -578,10 +578,16 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         }
 
         var needsUpdate = false;
-        var tagOrCategory = !string.IsNullOrWhiteSpace(request.Category) ? request.Category : request.Tags;
-        if (!string.IsNullOrWhiteSpace(tagOrCategory))
+
+        if (!string.IsNullOrWhiteSpace(request.Category))
         {
-            added.Label = tagOrCategory;
+            added.Category = request.Category;
+            needsUpdate = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Tags))
+        {
+            added.Label = request.Tags;
             needsUpdate = true;
         }
 
@@ -594,6 +600,26 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         if (request.IsSequential)
         {
             added.SequentialDownload = true;
+            needsUpdate = true;
+        }
+
+        if (request.IsFirstLastPiecePrio)
+        {
+            needsUpdate = true;
+        }
+
+        if (request.RatioLimit.HasValue)
+        {
+            needsUpdate = true;
+        }
+
+        if (request.SeedingTimeLimit.HasValue)
+        {
+            needsUpdate = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ContentLayout))
+        {
             needsUpdate = true;
         }
 
@@ -930,7 +956,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         foreach (var torrent in ResolveTorrents(hashes))
         {
-            torrent.Label = category ?? string.Empty;
+            torrent.Category = category ?? string.Empty;
             _torrentService.Update(torrent);
         }
 
@@ -1588,6 +1614,69 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     [HttpPost("torrents/setFirstLastPiecePrio")]
     public ActionResult SetFirstLastPiecePrio([FromForm] string hashes)
     {
+        return Content("Ok.", "text/plain");
+    }
+
+    [HttpPost("torrents/setShareLimits")]
+    public ActionResult SetShareLimits(
+        [FromForm] string hashes,
+        [FromForm] double? ratioLimit = null,
+        [FromForm] int? seedingTimeLimit = null,
+        [FromForm] int? inactiveSeedingTimeLimit = null)
+    {
+        if (string.IsNullOrWhiteSpace(hashes))
+        {
+            return BadRequest();
+        }
+
+        var torrents = ResolveTorrents(hashes);
+        foreach (var torrent in torrents)
+        {
+            _torrentService.Update(torrent);
+        }
+
+        return Content("Ok.", "text/plain");
+    }
+
+    [HttpPost("torrents/filePrio")]
+    [HttpGet("torrents/filePrio")]
+    public ActionResult SetFilePriority(
+        [FromQuery] string hash = null,
+        [FromForm] string hashForm = null,
+        [FromQuery] string id = null,
+        [FromForm] string idForm = null,
+        [FromQuery] string ids = null,
+        [FromForm] string idsForm = null,
+        [FromQuery] int? priority = null,
+        [FromForm] int? priorityForm = null)
+    {
+        var h = !string.IsNullOrWhiteSpace(hash) ? hash : hashForm;
+        if (string.IsNullOrWhiteSpace(h))
+        {
+            return BadRequest();
+        }
+
+        return Content("Ok.", "text/plain");
+    }
+
+    [HttpPost("torrents/setPiecePriority")]
+    [HttpGet("torrents/setPiecePriority")]
+    public ActionResult SetPiecePriority(
+        [FromQuery] string hash = null,
+        [FromForm] string hashForm = null,
+        [FromQuery] string piece = null,
+        [FromForm] string pieceForm = null,
+        [FromQuery] string pieces = null,
+        [FromForm] string piecesForm = null,
+        [FromQuery] int? priority = null,
+        [FromForm] int? priorityForm = null)
+    {
+        var h = !string.IsNullOrWhiteSpace(hash) ? hash : hashForm;
+        if (string.IsNullOrWhiteSpace(h))
+        {
+            return BadRequest();
+        }
+
         return Content("Ok.", "text/plain");
     }
 
