@@ -6,8 +6,8 @@ namespace NzbDrone.Core.Peers.Extensions;
 
 public interface IExtensionManager
 {
-    Dictionary<string, int> GetSupportedExtensions();
-    byte[] BuildExtensionHandshake();
+    Dictionary<string, int> GetSupportedExtensions(bool isPrivate = false);
+    byte[] BuildExtensionHandshake(bool isPrivate = false);
     bool FastExtensionEnabled { get; }
 }
 
@@ -22,12 +22,13 @@ public class ExtensionManager : IExtensionManager
 
     public bool FastExtensionEnabled => _configService.ExtensionFastExtension;
 
-    public Dictionary<string, int> GetSupportedExtensions()
+    public Dictionary<string, int> GetSupportedExtensions(bool isPrivate = false)
     {
         var extensions = new Dictionary<string, int>();
         var nextId = 1;
 
-        if (_configService.ExtensionUtPex)
+        // BEP 27: Never offer PEX for private torrent swarms
+        if (_configService.ExtensionUtPex && !isPrivate)
         {
             extensions["ut_pex"] = nextId++;
         }
@@ -45,9 +46,9 @@ public class ExtensionManager : IExtensionManager
         return extensions;
     }
 
-    public byte[] BuildExtensionHandshake()
+    public byte[] BuildExtensionHandshake(bool isPrivate = false)
     {
-        var extensions = GetSupportedExtensions();
+        var extensions = GetSupportedExtensions(isPrivate);
         var mDict = new BDictionary();
         foreach (var kvp in extensions)
         {

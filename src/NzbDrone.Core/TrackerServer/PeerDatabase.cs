@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace NzbDrone.Core.TrackerServer;
 
@@ -13,6 +14,10 @@ public interface IPeerDatabase
     List<string> GetAllInfoHashes();
     int GetTotalPeerCount();
     int GetTotalTorrentCount();
+    long TotalAnnounces { get; }
+    long TotalScrapes { get; }
+    void IncrementAnnounces();
+    void IncrementScrapes();
 }
 
 public class TrackerPeerEntry
@@ -36,6 +41,21 @@ public class PeerDatabase : IPeerDatabase
 
     private readonly Dictionary<string, List<TrackerPeerEntry>> _peers = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
+    private long _totalAnnounces;
+    private long _totalScrapes;
+
+    public long TotalAnnounces => Interlocked.Read(ref _totalAnnounces);
+    public long TotalScrapes => Interlocked.Read(ref _totalScrapes);
+
+    public void IncrementAnnounces()
+    {
+        Interlocked.Increment(ref _totalAnnounces);
+    }
+
+    public void IncrementScrapes()
+    {
+        Interlocked.Increment(ref _totalScrapes);
+    }
 
     public void AddPeer(string infoHash, string ip, int port, string peerId)
     {

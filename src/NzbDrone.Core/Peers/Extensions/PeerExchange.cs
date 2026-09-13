@@ -14,8 +14,8 @@ namespace NzbDrone.Core.Peers.Extensions;
 public interface IPeerExchange
 {
     int IntervalSeconds { get; }
-    byte[] BuildPexMessage(List<PeerInfo> added, List<PeerInfo> dropped);
-    PexData ParsePexMessage(byte[] data);
+    byte[] BuildPexMessage(List<PeerInfo> added, List<PeerInfo> dropped, bool isPrivate = false);
+    PexData ParsePexMessage(byte[] data, bool isPrivate = false);
 }
 
 public class PeerInfo
@@ -43,9 +43,9 @@ public class PeerExchange : IPeerExchange
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public byte[] BuildPexMessage(List<PeerInfo> added, List<PeerInfo> dropped)
+    public byte[] BuildPexMessage(List<PeerInfo> added, List<PeerInfo> dropped, bool isPrivate = false)
     {
-        if (!_configService.EnablePex)
+        if (!_configService.EnablePex || isPrivate)
         {
             return Array.Empty<byte>();
         }
@@ -66,9 +66,9 @@ public class PeerExchange : IPeerExchange
         return dict.EncodeAsBytes();
     }
 
-    public PexData ParsePexMessage(byte[] data)
+    public PexData ParsePexMessage(byte[] data, bool isPrivate = false)
     {
-        if (!_configService.EnablePex)
+        if (!_configService.EnablePex || isPrivate)
         {
             return new PexData();
         }

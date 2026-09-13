@@ -34,11 +34,11 @@ public class LogController : ControllerBase
             count = 5000;
         }
 
-        var minimumLevel = ParseLogLevel(_configService.FileLogLevel) ?? LogLevel.Info;
+        var minimumLevel = LogLevel.Trace;
 
         if (!string.IsNullOrWhiteSpace(level))
         {
-            minimumLevel = ParseLogLevel(level) ?? minimumLevel;
+            minimumLevel = ParseLogLevel(level) ?? LogLevel.Trace;
         }
 
         var target = RingBufferTarget.Instance;
@@ -52,7 +52,7 @@ public class LogController : ControllerBase
 
         var resources = entries.Select((e, i) => new LogResource
         {
-            Id = i + 1,
+            Id = e.Id != 0 ? e.Id : i + 1,
             Time = e.Time.ToString("O"),
             Level = e.Level,
             Logger = e.Logger,

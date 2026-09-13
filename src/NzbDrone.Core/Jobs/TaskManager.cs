@@ -13,6 +13,8 @@ public interface ITaskManager
     IEnumerable<ScheduledTask> GetAll();
     ScheduledTask GetNextScheduled();
     void UpdateLastExecution(string typeName);
+    void RecordTaskStarted(string typeName);
+    void RecordTaskFinished(string typeName, DateTime startTime);
 }
 
 public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
@@ -49,6 +51,31 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
 
         if (task != null)
         {
+            task.LastExecution = DateTime.UtcNow;
+            _repository.Update(task);
+        }
+    }
+
+    public void RecordTaskStarted(string typeName)
+    {
+        var task = _repository.All()
+            .FirstOrDefault(t => string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase));
+
+        if (task != null)
+        {
+            task.LastStartTime = DateTime.UtcNow;
+            _repository.Update(task);
+        }
+    }
+
+    public void RecordTaskFinished(string typeName, DateTime startTime)
+    {
+        var task = _repository.All()
+            .FirstOrDefault(t => string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase));
+
+        if (task != null)
+        {
+            task.LastStartTime = startTime;
             task.LastExecution = DateTime.UtcNow;
             _repository.Update(task);
         }

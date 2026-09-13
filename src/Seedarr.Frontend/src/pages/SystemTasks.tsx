@@ -1,8 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
+import { useToast } from "../context/ToastContext";
 
 interface ScheduledTask {
+  id?: number;
   typeName: string;
+  name?: string;
   interval: number;
   lastExecution: string | null;
   lastStartTime: string | null;
@@ -125,6 +128,9 @@ function statusClass(status: string): string {
 }
 
 function SystemTasks() {
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+
   const {
     data: tasks,
     isLoading: tasksLoading,
@@ -145,6 +151,23 @@ function SystemTasks() {
     queryFn: () => apiClient.get("/system/command"),
     retry: false,
     refetchInterval: 5000,
+  });
+
+  const executeMutation = useMutation({
+    mutationFn: (task: ScheduledTask) => {
+      const endpoint = task.id
+        ? `/system/task/${task.id}/execute`
+        : `/system/task/${encodeURIComponent(task.typeName)}/execute`;
+      return apiClient.post(endpoint, {});
+    },
+    onSuccess: (_, task) => {
+      showToast(`Started execution of ${formatTaskName(task.typeName)}`, "success");
+      queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
+    },
+    onError: (err: Error) => {
+      showToast(`Failed to execute task: ${err.message}`, "error");
+    },
   });
 
   return (
@@ -255,6 +278,7 @@ function SystemTasks() {
                   <th className="torrent-table-th">Last Execution</th>
                   <th className="torrent-table-th">Last Duration</th>
                   <th className="torrent-table-th">Next Execution</th>
+                  <th className="torrent-table-th" style={{ textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -286,6 +310,23 @@ function SystemTasks() {
                       }}
                     >
                       {formatRelativeTime(task.nextExecution)}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        className="btn btn-outline"
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "0.25rem 0.6rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                        }}
+                        onClick={() => executeMutation.mutate(task)}
+                        disabled={executeMutation.isPending}
+                        title="Execute task now"
+                      >
+                        ⚡ Run Now
+                      </button>
                     </td>
                   </tr>
                 ))}

@@ -27,9 +27,10 @@ public class DownloadHistoryController : Controller
     public ActionResult<List<DownloadHistoryResource>> GetAll(
         [FromQuery] string query = null,
         [FromQuery] string status = null,
-        [FromQuery] int limit = 500)
+        [FromQuery] int limit = 500,
+        [FromQuery] int offset = 0)
     {
-        var records = _historyService.GetAll(query, status, limit);
+        var records = _historyService.GetAll(query, status, limit, offset);
         return Ok(records.Select(ToResource).ToList());
     }
 

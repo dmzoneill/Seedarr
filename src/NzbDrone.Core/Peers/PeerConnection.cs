@@ -41,6 +41,19 @@ public class PeerConnection : IDisposable
     public int MaxPipelinedRequests { get; set; } = 200;
     public int PendingRequestCount { get; set; }
     public double IdleChance { get; set; }
+    public byte[] ReservedBytes { get; private set; } = new byte[8];
+    public bool SupportsExtensionProtocol { get; private set; }
+    public bool SupportsFastExtension { get; private set; }
+    public bool SupportsDht { get; private set; }
+    public bool IsSnubbed { get; set; }
+    public bool IsOptimisticUnchoked { get; set; }
+    public long BytesUploaded { get; set; }
+    public long BytesDownloaded { get; set; }
+    public long UploadRate { get; set; }
+    public long DownloadRate { get; set; }
+    public double Progress { get; set; }
+    public bool[] PeerPieces { get; set; }
+    public DateTime LastRequestReceived { get; set; } = DateTime.UtcNow;
 
     public PeerConnection(TcpClient client)
     {
@@ -231,6 +244,12 @@ public class PeerConnection : IDisposable
             }
 
             // reserved bytes at 20-27
+            ReservedBytes = new byte[8];
+            Array.Copy(buffer, 20, ReservedBytes, 0, 8);
+            SupportsExtensionProtocol = (buffer[25] & 0x10) != 0;
+            SupportsFastExtension = (buffer[27] & 0x04) != 0;
+            SupportsDht = (buffer[27] & 0x01) != 0;
+
             InfoHash = Convert.ToHexString(buffer, 28, 20).ToLowerInvariant();
             PeerId = Encoding.ASCII.GetString(buffer, 48, 20);
             LastActivity = DateTime.UtcNow;
@@ -410,7 +429,11 @@ public class PeerConnection : IDisposable
         buffer[0] = 19;
         Encoding.ASCII.GetBytes(ProtocolString, 0, 19, buffer, 1);
 
-        // reserved bytes 20-27 are zero
+        // Advertise BEP 10 (Extension Protocol), BEP 6 (Fast Extension), BEP 5 (DHT)
+        buffer[25] |= 0x10; // BEP 10
+        buffer[27] |= 0x04; // BEP 6
+        buffer[27] |= 0x01; // BEP 5
+
         var hashBytes = Convert.FromHexString(infoHash);
         Array.Copy(hashBytes, 0, buffer, 28, 20);
         Encoding.ASCII.GetBytes(peerId.PadRight(20)[..20], 0, 20, buffer, 48);

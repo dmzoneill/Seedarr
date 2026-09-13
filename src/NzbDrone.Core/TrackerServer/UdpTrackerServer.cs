@@ -223,6 +223,8 @@ public class UdpTrackerServer : BackgroundService
             _peerDatabase.AddPeer(infoHash, peerIp, peerPort, peerId);
         }
 
+        _peerDatabase.IncrementAnnounces();
+
         var peers = _peerDatabase.GetPeers(infoHash);
         var compactPeers = BuildCompactPeers(peers, peerIp, peerPort, numWant);
         var stats = _peerDatabase.GetStats(infoHash);
@@ -269,6 +271,8 @@ public class UdpTrackerServer : BackgroundService
         {
             return BuildErrorResponse(transactionId, "Invalid scrape request");
         }
+
+        _peerDatabase.IncrementScrapes();
 
         var hashCount = payloadLength / InfoHashLength;
 

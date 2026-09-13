@@ -22,6 +22,7 @@ public class SystemController : ControllerBase
     private static readonly DateTime StartTime = DateTime.UtcNow;
 
     private readonly ITaskManager _taskManager;
+    private readonly IEnumerable<IScheduledTask> _scheduledTasks;
     private readonly IManageCommandQueue _commandQueueManager;
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IHostApplicationLifetime _lifetime;
@@ -29,12 +30,14 @@ public class SystemController : ControllerBase
 
     public SystemController(
         ITaskManager taskManager,
+        IEnumerable<IScheduledTask> scheduledTasks,
         IManageCommandQueue commandQueueManager,
         IAppFolderInfo appFolderInfo,
         IHostApplicationLifetime lifetime,
         IConfigService configService = null)
     {
         _taskManager = taskManager;
+        _scheduledTasks = scheduledTasks ?? Enumerable.Empty<IScheduledTask>();
         _commandQueueManager = commandQueueManager;
         _appFolderInfo = appFolderInfo;
         _lifetime = lifetime;
@@ -94,6 +97,14 @@ public class SystemController : ControllerBase
         var tasks = _taskManager.GetAll();
         return Ok(tasks.Select(t =>
         {
+            var taskInstance = _scheduledTasks.FirstOrDefault(st =>
+                string.Equals(st.GetType().FullName, t.TypeName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(st.GetType().Name, t.TypeName, StringComparison.OrdinalIgnoreCase));
+
+            var simpleName = taskInstance != null
+                ? taskInstance.GetType().Name
+                : (t.TypeName.Contains('.') ? t.TypeName.Substring(t.TypeName.LastIndexOf('.') + 1) : t.TypeName);
+
             TimeSpan? lastDuration = null;
 
             if (t.LastStartTime.HasValue)
@@ -110,7 +121,9 @@ public class SystemController : ControllerBase
 
             return new ScheduledTaskResource
             {
+                Id = t.Id,
                 TypeName = t.TypeName,
+                Name = simpleName,
                 Interval = t.Interval,
                 LastExecution = t.LastExecution,
                 LastStartTime = t.LastStartTime,
@@ -118,6 +131,68 @@ public class SystemController : ControllerBase
                 NextExecution = nextExecution
             };
         }).ToList());
+    }
+
+    /// <summary>
+    /// Executes a scheduled task immediately by ID.
+    /// </summary>
+    [HttpPost("task/{id:int}/execute")]
+    public ActionResult ExecuteTask(int id)
+    {
+        var task = _taskManager.GetAll().FirstOrDefault(t => t.Id == id);
+        if (task == null)
+        {
+            return NotFound(new { message = $"Task with ID {id} not found" });
+        }
+
+        return RunScheduledTask(task);
+    }
+
+    /// <summary>
+    /// Executes a scheduled task immediately by type or name.
+    /// </summary>
+    [HttpPost("task/{name}/execute")]
+    public ActionResult ExecuteTaskByName(string name)
+    {
+        var task = _taskManager.GetAll().FirstOrDefault(t =>
+            string.Equals(t.TypeName, name, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.TypeName.Split('.').LastOrDefault(), name, StringComparison.OrdinalIgnoreCase));
+
+        if (task == null)
+        {
+            return NotFound(new { message = $"Task '{name}' not found" });
+        }
+
+        return RunScheduledTask(task);
+    }
+
+    private ActionResult RunScheduledTask(ScheduledTask task)
+    {
+        var taskInstance = _scheduledTasks.FirstOrDefault(st =>
+            string.Equals(st.GetType().FullName, task.TypeName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(st.GetType().Name, task.TypeName, StringComparison.OrdinalIgnoreCase));
+
+        if (taskInstance == null)
+        {
+            return NotFound(new { message = $"Task implementation for {task.TypeName} not found" });
+        }
+
+        global::System.Threading.Tasks.Task.Run(() =>
+        {
+            var startTime = DateTime.UtcNow;
+            _taskManager.RecordTaskStarted(task.TypeName);
+
+            try
+            {
+                taskInstance.Execute();
+            }
+            finally
+            {
+                _taskManager.RecordTaskFinished(task.TypeName, startTime);
+            }
+        });
+
+        return Ok(new { message = $"Task {task.TypeName} execution started" });
     }
 
     /// <summary>

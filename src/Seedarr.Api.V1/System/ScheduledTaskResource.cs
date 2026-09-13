@@ -4,7 +4,9 @@ namespace Seedarr.Api.V1.System;
 
 public class ScheduledTaskResource
 {
+    public int Id { get; set; }
     public string TypeName { get; set; }
+    public string Name { get; set; }
     public int Interval { get; set; }
     public DateTime? LastExecution { get; set; }
     public DateTime? LastStartTime { get; set; }
