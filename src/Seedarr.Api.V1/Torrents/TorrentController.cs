@@ -1,11 +1,15 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.ArrIntegration;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Peers;
@@ -34,6 +38,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly ITrackerBoostService _trackerBoostService;
     private readonly ITrackerAnnounceService _trackerAnnounceService;
     private readonly IMediaEnrichmentService _mediaEnrichmentService;
+    private readonly ICategoryService _categoryService;
 
     public TorrentController(
         ITorrentService torrentService,
@@ -48,7 +53,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         IDownloadHistoryRepository downloadHistoryRepository = null,
         ITrackerBoostService trackerBoostService = null,
         ITrackerAnnounceService trackerAnnounceService = null,
-        IMediaEnrichmentService mediaEnrichmentService = null)
+        IMediaEnrichmentService mediaEnrichmentService = null,
+        ICategoryService categoryService = null)
         : base(signalRBroadcaster)
     {
         _torrentService = torrentService;
@@ -62,6 +68,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _trackerBoostService = trackerBoostService;
         _trackerAnnounceService = trackerAnnounceService;
         _mediaEnrichmentService = mediaEnrichmentService;
+        _categoryService = categoryService;
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -633,6 +640,227 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     {
         _torrentService.Delete(id, deleteFiles);
         return Ok();
+    }
+
+    [HttpPost("bulk")]
+    public async Task<ActionResult<BulkActionResult>> BulkAction([FromBody] BulkTorrentActionResource resource)
+    {
+        if (resource == null || string.IsNullOrWhiteSpace(resource.Action))
+        {
+            return BadRequest(new { message = "Action is required." });
+        }
+
+        var result = new BulkActionResult();
+        if (resource.TorrentIds == null || resource.TorrentIds.Count == 0)
+        {
+            return Ok(result);
+        }
+
+        var errors = new ConcurrentBag<string>();
+        var successCount = 0;
+        var failedCount = 0;
+
+        await Parallel.ForEachAsync(resource.TorrentIds, async (id, cancellationToken) =>
+        {
+            await Task.Yield();
+            try
+            {
+                ExecuteActionForTorrent(id, resource);
+                Interlocked.Increment(ref successCount);
+            }
+            catch (Exception ex)
+            {
+                Interlocked.Increment(ref failedCount);
+                errors.Add($"Torrent {id}: {ex.Message}");
+                _logger.Error(ex, "Failed to execute bulk action '{0}' for torrent {1}", resource.Action, id);
+            }
+        });
+
+        result.SuccessCount = successCount;
+        result.FailedCount = failedCount;
+        result.Errors = errors.ToList();
+
+        return Ok(result);
+    }
+
+    private void ExecuteActionForTorrent(int id, BulkTorrentActionResource resource)
+    {
+        var action = resource.Action.Trim().ToLowerInvariant();
+        switch (action)
+        {
+            case "start":
+            case "resume":
+            {
+                var torrent = _torrentService.Get(id);
+                if (torrent == null)
+                {
+                    throw new KeyNotFoundException($"Torrent {id} not found");
+                }
+
+                torrent.Resume();
+                _torrentService.Update(torrent);
+                _eventLogService?.Info(id, "Bulk", "Started torrent");
+                break;
+            }
+
+            case "stop":
+            case "pause":
+            {
+                var torrent = _torrentService.Get(id);
+                if (torrent == null)
+                {
+                    throw new KeyNotFoundException($"Torrent {id} not found");
+                }
+
+                torrent.Stop();
+                _torrentService.Update(torrent);
+                _eventLogService?.Info(id, "Bulk", "Stopped torrent");
+                break;
+            }
+
+            case "delete":
+            case "remove":
+            {
+                var torrent = _torrentService.Get(id);
+                if (torrent == null)
+                {
+                    throw new KeyNotFoundException($"Torrent {id} not found");
+                }
+
+                _torrentService.Delete(id, resource.DeleteFiles);
+                _eventLogService?.Info(id, "Bulk", $"Deleted torrent (deleteFiles={resource.DeleteFiles})");
+                break;
+            }
+
+            case "recheck":
+            case "forcerecheck":
+            {
+                var torrent = _torrentService.Recheck(id);
+                if (torrent == null)
+                {
+                    throw new KeyNotFoundException($"Torrent {id} not found");
+                }
+
+                _eventLogService?.Info(id, "Recheck", $"Recheck complete: progress {torrent.Progress:P0}");
+                break;
+            }
+
+            case "announce":
+            case "forceannounce":
+            {
+                var torrent = _torrentService.Get(id);
+                if (torrent == null)
+                {
+                    throw new KeyNotFoundException($"Torrent {id} not found");
+                }
+
+                TriggerAnnounceInternal(torrent);
+                _eventLogService?.Info(id, "Announce", "Triggered tracker announce");
+                break;
+            }
+
+            case "setcategory":
+            {
+                var torrent = _torrentService.Get(id);
+                if (torrent == null)
+                {
+                    throw new KeyNotFoundException($"Torrent {id} not found");
+                }
+
+                string categoryName = null;
+                if (resource.CategoryId.HasValue && resource.CategoryId.Value > 0 && _categoryService != null)
+                {
+                    var cat = _categoryService.Get(resource.CategoryId.Value);
+                    categoryName = cat?.Name;
+                }
+
+                torrent.Category = categoryName;
+                _torrentService.Update(torrent);
+                _eventLogService?.Info(id, "Category", $"Category set to '{categoryName ?? "None"}'");
+                break;
+            }
+
+            case "addtags":
+            {
+                var torrent = _torrentService.Get(id);
+                if (torrent == null)
+                {
+                    throw new KeyNotFoundException($"Torrent {id} not found");
+                }
+
+                if (resource.TagIds != null && resource.TagIds.Count > 0)
+                {
+                    torrent.TagIds ??= new List<int>();
+                    torrent.TagIds = torrent.TagIds.Union(resource.TagIds).Distinct().ToList();
+                    _torrentService.Update(torrent);
+                    _eventLogService?.Info(id, "Tags", $"Added tags: {string.Join(", ", resource.TagIds)}");
+                }
+
+                break;
+            }
+
+            case "removetags":
+            {
+                var torrent = _torrentService.Get(id);
+                if (torrent == null)
+                {
+                    throw new KeyNotFoundException($"Torrent {id} not found");
+                }
+
+                if (resource.TagIds != null && resource.TagIds.Count > 0 && torrent.TagIds != null)
+                {
+                    torrent.TagIds = torrent.TagIds.Except(resource.TagIds).ToList();
+                    _torrentService.Update(torrent);
+                    _eventLogService?.Info(id, "Tags", $"Removed tags: {string.Join(", ", resource.TagIds)}");
+                }
+
+                break;
+            }
+
+            case "setpriority":
+            {
+                var torrent = _torrentService.Get(id);
+                if (torrent == null)
+                {
+                    throw new KeyNotFoundException($"Torrent {id} not found");
+                }
+
+                if (resource.Priority.HasValue)
+                {
+                    torrent.Priority = resource.Priority.Value;
+                    _torrentService.Update(torrent);
+                    _eventLogService?.Info(id, "Priority", $"Priority set to {resource.Priority.Value}");
+                }
+
+                break;
+            }
+
+            case "setspeedlimits":
+            {
+                var torrent = _torrentService.Get(id);
+                if (torrent == null)
+                {
+                    throw new KeyNotFoundException($"Torrent {id} not found");
+                }
+
+                if (resource.UploadLimit.HasValue)
+                {
+                    torrent.UploadLimit = resource.UploadLimit.Value;
+                }
+
+                if (resource.DownloadLimit.HasValue)
+                {
+                    torrent.DownloadLimit = resource.DownloadLimit.Value;
+                }
+
+                _torrentService.Update(torrent);
+                _eventLogService?.Info(id, "Limits", $"Limits updated: Upload={torrent.UploadLimit} KB/s, Download={torrent.DownloadLimit} KB/s");
+                break;
+            }
+
+            default:
+                throw new ArgumentException($"Unknown action: {resource.Action}");
+        }
     }
 
     private void LogUpdateTransitions(Torrent existing, TorrentResource resource)
