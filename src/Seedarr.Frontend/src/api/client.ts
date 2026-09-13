@@ -4,6 +4,9 @@ import type {
   SslTestRequest,
   SslCertificateValidationResult,
   FileSystemResource,
+  AuthProvider,
+  CurrentUser,
+  LoginRequest,
 } from "./types";
 
 const BASE_URL = "/api/v1";
@@ -184,6 +187,22 @@ class ApiClient {
     if (includeFiles) params.append("includeFiles", "true");
     const query = params.toString();
     return this.get<FileSystemResource>(`/filesystem${query ? `?${query}` : ""}`);
+  }
+
+  getAuthProviders(): Promise<AuthProvider[]> {
+    return this.get<AuthProvider[]>("/auth/providers");
+  }
+
+  getCurrentUser(): Promise<CurrentUser> {
+    return this.get<CurrentUser>("/auth/me");
+  }
+
+  login(request: LoginRequest): Promise<CurrentUser> {
+    return this.post<CurrentUser>("/auth/login", request);
+  }
+
+  logout(): Promise<{ message: string }> {
+    return this.post<{ message: string }>("/auth/logout");
   }
 
   async postForm<T>(endpoint: string, formData: FormData): Promise<T> {

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore.Migration;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
 using Seedarr.Http;
@@ -82,7 +83,7 @@ public class SystemController : ControllerBase
             IsDocker = isDocker,
             IsDebug = isDebug,
             DatabaseVersion = "SQLite",
-            DatabaseMigration = "015",
+            DatabaseMigration = NzbDroneMigrationBase.LatestMigration.ToString(),
             UptimeSeconds = (DateTime.UtcNow - StartTime).TotalSeconds,
         });
     }

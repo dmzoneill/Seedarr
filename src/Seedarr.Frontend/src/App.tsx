@@ -32,6 +32,7 @@ import SystemNetwork from "./pages/SystemNetwork";
 import ApiDocsPage from "./pages/ApiDocsPage";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
 import { AutomationPage } from "./pages/AutomationPage";
+import LoginPage from "./pages/LoginPage";
 import StatusBar from "./components/StatusBar";
 import ToastContainer from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -112,6 +113,31 @@ function App() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { connected, isReconnecting, reconnect } = useSignalR();
+  const [currentUser, setCurrentUser] = useState<import("./api/types").CurrentUser | null>(null);
+
+  const loadUser = async () => {
+    try {
+      const user = await apiClient.getCurrentUser();
+      setCurrentUser(user);
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    loadUser();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await apiClient.logout();
+      setCurrentUser(null);
+      navigate("/login");
+    } catch {
+      navigate("/login");
+    }
+  };
+
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showAddTorrentModal, setShowAddTorrentModal] = useState(false);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
@@ -321,6 +347,19 @@ function App() {
       if (pendingGTimer) clearTimeout(pendingGTimer);
     };
   }, [navigate]);
+
+  if (location.pathname === "/login") {
+    return (
+      <ErrorBoundary>
+        <LoginPage
+          onLoginSuccess={() => {
+            loadUser();
+            navigate("/");
+          }}
+        />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <div className={`app ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
@@ -970,6 +1009,13 @@ function App() {
                       "🚀 Getting Started Guide",
                     )}
                   </button>
+                  <button
+                    className="topbar-dropdown-item"
+                    role="menuitem"
+                    onClick={handleLogout}
+                  >
+                    {t("topbar.logout", undefined, "Log Out")}
+                  </button>
                   <div className="topbar-dropdown-separator" />
                   <button
                     className="topbar-dropdown-item"
@@ -1043,6 +1089,17 @@ function App() {
         <main className="app-main">
           <ErrorBoundary>
             <Routes>
+              <Route
+                path="/login"
+                element={
+                  <LoginPage
+                    onLoginSuccess={() => {
+                      loadUser();
+                      navigate("/");
+                    }}
+                  />
+                }
+              />
               <Route path="/" element={<Dashboard />} />
               <Route path="/torrents" element={<TorrentIndex />} />
               <Route path="/torrents/add" element={<AddTorrentPage />} />

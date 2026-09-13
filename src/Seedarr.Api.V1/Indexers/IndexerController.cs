@@ -7,6 +7,7 @@ using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Newznab;
 using NzbDrone.Core.Indexers.Prowlarr;
 using NzbDrone.Core.Indexers.Torznab;
+using NzbDrone.Core.Network;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Torrents;
 using Seedarr.Http;
@@ -16,7 +17,8 @@ namespace Seedarr.Api.V1.Indexers;
 [V1ApiController("indexers")]
 public class IndexerController : Controller
 {
-    private static readonly HttpClient HttpClient = new();
+    private readonly HttpClient _httpClient;
+    private readonly IProxySettingsProvider _proxySettingsProvider;
     private readonly IIndexerFactory _indexerFactory;
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileService _torrentFileService;
@@ -32,7 +34,8 @@ public class IndexerController : Controller
         ITrackerEntryService trackerEntryService,
         ITorrentFileParser torrentFileParser,
         IDownloadHistoryService downloadHistoryService,
-        IIndexerStatusService indexerStatusService = null)
+        IIndexerStatusService indexerStatusService = null,
+        IProxySettingsProvider proxySettingsProvider = null)
     {
         _indexerFactory = indexerFactory;
         _torrentService = torrentService;
@@ -41,6 +44,10 @@ public class IndexerController : Controller
         _torrentFileParser = torrentFileParser;
         _downloadHistoryService = downloadHistoryService;
         _indexerStatusService = indexerStatusService ?? new IndexerStatusService();
+        _proxySettingsProvider = proxySettingsProvider;
+        _httpClient = proxySettingsProvider != null && proxySettingsProvider.IsEnabled
+            ? new HttpClient(proxySettingsProvider.CreateHandler())
+            : new HttpClient();
     }
 
     [HttpGet]
@@ -313,7 +320,7 @@ public class IndexerController : Controller
                     }
                 }
 
-                using var httpResponse = HttpClient.Send(httpRequest);
+                using var httpResponse = _httpClient.Send(httpRequest);
                 if (!httpResponse.IsSuccessStatusCode)
                 {
                     return BadRequest($"Failed to download torrent file from indexer (HTTP {(int)httpResponse.StatusCode})");
