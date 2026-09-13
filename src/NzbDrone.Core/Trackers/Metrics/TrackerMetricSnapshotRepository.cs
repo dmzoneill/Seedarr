@@ -11,6 +11,7 @@ public interface ITrackerMetricSnapshotRepository : IBasicRepository<TrackerMetr
     List<TrackerMetricSnapshot> GetHistory(int trackerMetricId, DateTime since);
     List<TrackerMetricSnapshot> GetRecentSnapshots(DateTime since);
     void PruneOlderThan(DateTime cutoff);
+    void DeleteByMetricId(int trackerMetricId);
 }
 
 public class TrackerMetricSnapshotRepository : BasicRepository<TrackerMetricSnapshot>, ITrackerMetricSnapshotRepository
@@ -47,5 +48,13 @@ public class TrackerMetricSnapshotRepository : BasicRepository<TrackerMetricSnap
         connection.Execute(
             $"DELETE FROM \"{_table}\" WHERE \"Timestamp\" < @Cutoff",
             new { Cutoff = cutoff });
+    }
+
+    public void DeleteByMetricId(int trackerMetricId)
+    {
+        using var connection = _database.OpenConnection();
+        connection.Execute(
+            $"DELETE FROM \"{_table}\" WHERE \"TrackerMetricId\" = @MetricId",
+            new { MetricId = trackerMetricId });
     }
 }

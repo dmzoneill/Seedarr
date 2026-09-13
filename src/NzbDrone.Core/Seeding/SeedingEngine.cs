@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
@@ -46,6 +47,8 @@ public class SeedingEngine : BackgroundService
     private readonly Dictionary<int, long> _prevDownloaded = new();
     private readonly Dictionary<int, long> _sessionStartUploaded = new();
     private readonly Dictionary<int, long> _sessionStartDownloaded = new();
+    private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _uploadSpeedHistory = new();
+    private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _downloadSpeedHistory = new();
 
     private string _localPeerId;
 
@@ -65,7 +68,8 @@ public class SeedingEngine : BackgroundService
         IRandomNumberGenerator random = null,
         ITrafficPatternSimulator trafficPatternSimulator = null,
         IClientBehaviorSimulator clientBehaviorSimulator = null,
-        ISwarmAnalyzer swarmAnalyzer = null)
+        ISwarmAnalyzer swarmAnalyzer = null,
+        ICategoryService categoryService = null)
     {
         _torrentService = torrentService;
         _distributionManager = distributionManager;
@@ -82,7 +86,7 @@ public class SeedingEngine : BackgroundService
         _swarmAnalyzer = swarmAnalyzer ?? new SwarmAnalyzer(configService);
         _trafficPatternSimulator = trafficPatternSimulator ?? new TrafficPatternSimulator(configService, _random, _clock);
         _clientBehaviorSimulator = clientBehaviorSimulator;
-        _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator);
+        _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator, categoryService);
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -211,6 +215,8 @@ public class SeedingEngine : BackgroundService
                     t.UploadSpeed = 0;
                     t.DownloadSpeed = 0;
                     t.Active = false;
+                    _uploadSpeedHistory.Remove(t.Id);
+                    _downloadSpeedHistory.Remove(t.Id);
                     idleToUpdate.Add(t);
                 }
             }
@@ -273,6 +279,8 @@ public class SeedingEngine : BackgroundService
                 t.UploadSpeed = 0;
                 t.DownloadSpeed = 0;
                 t.Active = false;
+                _uploadSpeedHistory.Remove(t.Id);
+                _downloadSpeedHistory.Remove(t.Id);
                 dirtyTorrents.Add(t);
             }
         }
@@ -290,6 +298,8 @@ public class SeedingEngine : BackgroundService
             _prevDownloaded.Remove(id);
             _sessionStartUploaded.Remove(id);
             _sessionStartDownloaded.Remove(id);
+            _uploadSpeedHistory.Remove(id);
+            _downloadSpeedHistory.Remove(id);
         }
 
         var totalActive = downloadingTorrents.Count + seedingTorrents.Count;
@@ -307,9 +317,30 @@ public class SeedingEngine : BackgroundService
         _connectionManager.RotateConnections();
     }
 
+    private long CalculateMovingAverageSpeed(int torrentId, long instantSpeed, Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> history, DateTime now)
+    {
+        if (!history.TryGetValue(torrentId, out var queue))
+        {
+            queue = new Queue<(DateTime Timestamp, long Speed)>();
+            history[torrentId] = queue;
+        }
+
+        queue.Enqueue((now, instantSpeed));
+
+        var cutoff = now.AddSeconds(-5);
+        while (queue.Count > 1 && queue.Peek().Timestamp < cutoff)
+        {
+            queue.Dequeue();
+        }
+
+        var avg = (long)queue.Average(s => s.Speed);
+        return Math.Max(0, avg);
+    }
+
     private void UpdateComputedFields(List<Torrent> activeTorrents, int thresholdPercent)
     {
         var tickSeconds = TickInterval.TotalSeconds;
+        var now = _clock.UtcNow;
 
         foreach (var torrent in activeTorrents)
         {
@@ -321,12 +352,14 @@ public class SeedingEngine : BackgroundService
 
             if (_prevUploaded.TryGetValue(torrent.Id, out var prevUp))
             {
-                torrent.UploadSpeed = Math.Max(0, (long)((torrent.Uploaded - prevUp) / tickSeconds));
+                var instantUp = Math.Max(0, (long)((torrent.Uploaded - prevUp) / tickSeconds));
+                torrent.UploadSpeed = CalculateMovingAverageSpeed(torrent.Id, instantUp, _uploadSpeedHistory, now);
             }
 
             if (_prevDownloaded.TryGetValue(torrent.Id, out var prevDown))
             {
-                torrent.DownloadSpeed = Math.Max(0, (long)((torrent.Downloaded - prevDown) / tickSeconds));
+                var instantDown = Math.Max(0, (long)((torrent.Downloaded - prevDown) / tickSeconds));
+                torrent.DownloadSpeed = CalculateMovingAverageSpeed(torrent.Id, instantDown, _downloadSpeedHistory, now);
             }
 
             _prevUploaded[torrent.Id] = torrent.Uploaded;

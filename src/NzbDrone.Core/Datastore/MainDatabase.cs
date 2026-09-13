@@ -49,6 +49,27 @@ public class MainDatabase : IMainDatabase
 
         try
         {
+            if (File.Exists(dbPath))
+            {
+                var backupPath = Path.Combine(appDataFolder, $"{DbFileName}.bak-{DateTime.UtcNow:yyyyMMddHHmmss}");
+                File.Copy(dbPath, backupPath, overwrite: true);
+                _logger.Info("Created backup of existing database at {0}", backupPath);
+            }
+
+            var walPath = dbPath + "-wal";
+            if (File.Exists(walPath))
+            {
+                File.Delete(walPath);
+                _logger.Info("Deleted WAL file {0} prior to restore", walPath);
+            }
+
+            var shmPath = dbPath + "-shm";
+            if (File.Exists(shmPath))
+            {
+                File.Delete(shmPath);
+                _logger.Info("Deleted SHM file {0} prior to restore", shmPath);
+            }
+
             File.Move(dbRestorePath, dbPath, overwrite: true);
             _logger.Info("Database restore applied successfully from {0}", dbRestorePath);
         }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Seeding.Distribution;
@@ -25,6 +26,7 @@ public class SpeedPolicy : ISpeedPolicy
     private readonly IRandomNumberGenerator _random;
     private readonly ISwarmAnalyzer _swarmAnalyzer;
     private readonly IEventAggregator _eventAggregator;
+    private readonly ICategoryService _categoryService;
     private readonly Logger _logger;
 
     public SpeedPolicy(
@@ -36,7 +38,8 @@ public class SpeedPolicy : ISpeedPolicy
         IStopPolicy stopPolicy,
         IRandomNumberGenerator random = null,
         ISwarmAnalyzer swarmAnalyzer = null,
-        IEventAggregator eventAggregator = null)
+        IEventAggregator eventAggregator = null,
+        ICategoryService categoryService = null)
     {
         _distributionManager = distributionManager;
         _speedScheduler = speedScheduler;
@@ -47,6 +50,7 @@ public class SpeedPolicy : ISpeedPolicy
         _random = random ?? new RandomNumberGenerator();
         _swarmAnalyzer = swarmAnalyzer ?? new SwarmAnalyzer(configService);
         _eventAggregator = eventAggregator;
+        _categoryService = categoryService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -96,9 +100,19 @@ public class SpeedPolicy : ISpeedPolicy
 
             var bytesPerSecond = speeds[i];
 
-            if (torrent.DownloadLimit > 0)
+            var effectiveDlLimit = torrent.DownloadLimit;
+            if (effectiveDlLimit <= 0 && _categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
             {
-                var perTorrentLimitBps = (long)torrent.DownloadLimit * 1024;
+                var cat = _categoryService.GetByName(torrent.Category);
+                if (cat != null && cat.DefaultDownloadLimit > 0)
+                {
+                    effectiveDlLimit = cat.DefaultDownloadLimit;
+                }
+            }
+
+            if (effectiveDlLimit > 0)
+            {
+                var perTorrentLimitBps = (long)effectiveDlLimit * 1024;
                 bytesPerSecond = Math.Min(bytesPerSecond, perTorrentLimitBps);
             }
 
@@ -182,9 +196,19 @@ public class SpeedPolicy : ISpeedPolicy
             {
                 var bytesPerSecond = speeds[activeIndex++];
 
-                if (torrent.UploadLimit > 0)
+                var effectiveUlLimit = torrent.UploadLimit;
+                if (effectiveUlLimit <= 0 && _categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
                 {
-                    var perTorrentLimitBps = (long)torrent.UploadLimit * 1024;
+                    var cat = _categoryService.GetByName(torrent.Category);
+                    if (cat != null && cat.DefaultUploadLimit > 0)
+                    {
+                        effectiveUlLimit = cat.DefaultUploadLimit;
+                    }
+                }
+
+                if (effectiveUlLimit > 0)
+                {
+                    var perTorrentLimitBps = (long)effectiveUlLimit * 1024;
                     bytesPerSecond = Math.Min(bytesPerSecond, perTorrentLimitBps);
                 }
 

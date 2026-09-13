@@ -54,7 +54,8 @@ public static class TorrentResourceMapper
             Eta = model.Eta,
             SortOrder = model.SortOrder,
             ForceCompleted = model.ForceCompleted,
-            SeedingTime = model.SeedingTime
+            SeedingTime = model.SeedingTime,
+            TagIds = model.TagIds != null ? new List<int>(model.TagIds) : new List<int>()
         };
 
         if (trackers != null)
@@ -115,7 +116,8 @@ public static class TorrentResourceMapper
             Eta = resource.Eta,
             SortOrder = resource.SortOrder,
             ForceCompleted = resource.ForceCompleted,
-            SeedingTime = resource.SeedingTime
+            SeedingTime = resource.SeedingTime,
+            TagIds = resource.TagIds != null ? new List<int>(resource.TagIds) : new List<int>()
         };
     }
 

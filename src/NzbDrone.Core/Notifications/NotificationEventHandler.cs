@@ -61,22 +61,6 @@ public class NotificationEventHandler :
         }
 
         Dispatch(n => n.OnGrab, "OnGrab", message.Torrent);
-
-        var scriptTorrentAdded = _configService?.GetValue("ScriptTorrentAddedFilename", string.Empty);
-        if (!string.IsNullOrWhiteSpace(scriptTorrentAdded))
-        {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _customScriptService.ExecuteScriptAsync(scriptTorrentAdded, message.Torrent, "OnGrab").ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error executing ScriptTorrentAdded script");
-                }
-            });
-        }
     }
 
     public void Handle(TorrentDownloadCompletedEvent message)
@@ -87,38 +71,6 @@ public class NotificationEventHandler :
         }
 
         Dispatch(n => n.OnDownloadComplete, "OnDownloadComplete", message.Torrent);
-
-        var onDownloadCompleteScript = _configService?.GetValue("OnDownloadCompleteScript", string.Empty);
-        if (!string.IsNullOrWhiteSpace(onDownloadCompleteScript))
-        {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _customScriptService.ExecuteScriptAsync(onDownloadCompleteScript, message.Torrent, "OnDownloadComplete").ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error executing OnDownloadComplete script");
-                }
-            });
-        }
-
-        var scriptTorrentDone = _configService?.GetValue("ScriptTorrentDoneFilename", string.Empty);
-        if (!string.IsNullOrWhiteSpace(scriptTorrentDone))
-        {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _customScriptService.ExecuteScriptAsync(scriptTorrentDone, message.Torrent, "OnDownloadComplete").ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error executing ScriptTorrentDone script");
-                }
-            });
-        }
     }
 
     public void Handle(TorrentDeletedEvent message)
@@ -192,38 +144,6 @@ public class NotificationEventHandler :
         }
 
         Dispatch(n => n.OnSeedGoalReached, "OnSeedGoalReached", message.Torrent);
-
-        var onSeedGoalReachedScript = _configService?.GetValue("OnSeedGoalReachedScript", string.Empty);
-        if (!string.IsNullOrWhiteSpace(onSeedGoalReachedScript))
-        {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _customScriptService.ExecuteScriptAsync(onSeedGoalReachedScript, message.Torrent, "OnSeedGoalReached").ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error executing OnSeedGoalReached script");
-                }
-            });
-        }
-
-        var scriptTorrentDoneSeeding = _configService?.GetValue("ScriptTorrentDoneSeedingFilename", string.Empty);
-        if (!string.IsNullOrWhiteSpace(scriptTorrentDoneSeeding))
-        {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _customScriptService.ExecuteScriptAsync(scriptTorrentDoneSeeding, message.Torrent, "OnSeedGoalReached").ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error executing ScriptTorrentDoneSeeding script");
-                }
-            });
-        }
     }
 
     public void Handle(HealthIssueEvent message)
@@ -419,15 +339,15 @@ public class NotificationEventHandler :
                 id = torrent.Id,
                 name = torrent.Name,
                 infoHash = torrent.InfoHash,
-                category = torrent.Label,
+                category = torrent.Category ?? torrent.Label,
                 state = torrent.Status.ToString(),
                 status = torrent.Status.ToString(),
                 progress = double.IsFinite(torrent.Progress) ? torrent.Progress : 0.0,
                 totalSize = torrent.TotalSize,
                 downloaded = torrent.Downloaded,
                 uploaded = torrent.Uploaded,
-                downloadPath = torrent.SourcePath,
-                savePath = torrent.SourcePath,
+                downloadPath = torrent.SavePath ?? torrent.SourcePath,
+                savePath = torrent.SavePath ?? torrent.SourcePath,
                 downloadSpeed = torrent.DownloadSpeed,
                 uploadSpeed = torrent.UploadSpeed,
                 eta = torrent.Eta,

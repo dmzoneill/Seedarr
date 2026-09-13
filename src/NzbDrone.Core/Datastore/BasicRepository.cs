@@ -1,6 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Dapper;
+using Microsoft.Data.Sqlite;
+using Polly;
+using Polly.Retry;
 
 namespace NzbDrone.Core.Datastore;
 
@@ -19,6 +23,17 @@ public interface IBasicRepository<TModel>
 public class BasicRepository<TModel> : IBasicRepository<TModel>
     where TModel : ModelBase, new()
 {
+    protected static readonly RetryPolicy RetryPolicy = Policy
+        .Handle<SqliteException>(ex => ex.SqliteErrorCode is 5 or 6)
+        .WaitAndRetry(new[]
+        {
+            TimeSpan.FromMilliseconds(50),
+            TimeSpan.FromMilliseconds(100),
+            TimeSpan.FromMilliseconds(250),
+            TimeSpan.FromMilliseconds(500),
+            TimeSpan.FromMilliseconds(1000)
+        });
+
     private readonly IDatabase _database;
     protected readonly string _table;
 
@@ -30,47 +45,59 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
 
     public IEnumerable<TModel> All()
     {
-        using var connection = _database.OpenConnection();
-        return connection.Query<TModel>($"SELECT * FROM \"{_table}\"");
+        return RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            return connection.Query<TModel>($"SELECT * FROM \"{_table}\"");
+        });
     }
 
     public TModel Get(int id)
     {
-        using var connection = _database.OpenConnection();
-        return connection.QueryFirstOrDefault<TModel>(
-            $"SELECT * FROM \"{_table}\" WHERE \"Id\" = @Id",
-            new { Id = id });
+        return RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            return connection.QueryFirstOrDefault<TModel>(
+                $"SELECT * FROM \"{_table}\" WHERE \"Id\" = @Id",
+                new { Id = id });
+        });
     }
 
     public TModel Insert(TModel model)
     {
-        using var connection = _database.OpenConnection();
-
-        if (_database.DatabaseType == DatabaseType.SQLite)
+        return RetryPolicy.Execute(() =>
         {
-            var id = connection.ExecuteScalar<int>(
-                TableMapping.GetInsertSql(_table, model) + "; SELECT last_insert_rowid()",
-                model);
-            model.Id = id;
-        }
-        else
-        {
-            var id = connection.ExecuteScalar<int>(
-                TableMapping.GetInsertSql(_table, model) + " RETURNING \"Id\"",
-                model);
-            model.Id = id;
-        }
+            using var connection = _database.OpenConnection();
 
-        return model;
+            if (_database.DatabaseType == DatabaseType.SQLite)
+            {
+                var id = connection.ExecuteScalar<int>(
+                    TableMapping.GetInsertSql(_table, model) + "; SELECT last_insert_rowid()",
+                    model);
+                model.Id = id;
+            }
+            else
+            {
+                var id = connection.ExecuteScalar<int>(
+                    TableMapping.GetInsertSql(_table, model) + " RETURNING \"Id\"",
+                    model);
+                model.Id = id;
+            }
+
+            return model;
+        });
     }
 
     public TModel Update(TModel model)
     {
-        using var connection = _database.OpenConnection();
-        connection.Execute(
-            TableMapping.GetUpdateSql<TModel>(_table, model),
-            model);
-        return model;
+        return RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            connection.Execute(
+                TableMapping.GetUpdateSql<TModel>(_table, model),
+                model);
+            return model;
+        });
     }
 
     public void UpdateMany(IEnumerable<TModel> models)
@@ -81,21 +108,43 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
             return;
         }
 
-        using var connection = _database.OpenConnection();
-        using var transaction = connection.BeginTransaction();
-        connection.Execute(
-            TableMapping.GetUpdateSql<TModel>(_table),
-            list,
-            transaction);
-        transaction.Commit();
+        RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                connection.Execute(
+                    TableMapping.GetUpdateSql<TModel>(_table),
+                    list,
+                    transaction);
+                transaction.Commit();
+            }
+            catch
+            {
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch
+                {
+                    // best-effort rollback
+                }
+
+                throw;
+            }
+        });
     }
 
-    public void Delete(int id)
+    public virtual void Delete(int id)
     {
-        using var connection = _database.OpenConnection();
-        connection.Execute(
-            $"DELETE FROM \"{_table}\" WHERE \"Id\" = @Id",
-            new { Id = id });
+        RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            connection.Execute(
+                $"DELETE FROM \"{_table}\" WHERE \"Id\" = @Id",
+                new { Id = id });
+        });
     }
 
     public void Delete(TModel model)
