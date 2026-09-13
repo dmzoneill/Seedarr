@@ -28,6 +28,57 @@ public class CustomScriptPayload
     public int TimeoutSeconds { get; set; } = 60;
 }
 
+public class LinkPayload
+{
+    public string Source { get; set; } = string.Empty;
+    public string Destination { get; set; } = string.Empty;
+    public bool IsHardlink { get; set; }
+}
+
+public class PermissionsPayload
+{
+    public string Path { get; set; } = string.Empty;
+    public string Mode { get; set; } = string.Empty;
+    public bool Recurse { get; set; }
+}
+
+public class DiscordWebhookPayload
+{
+    public string Url { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Color { get; set; } = string.Empty;
+    public Dictionary<string, string> Fields { get; set; } = new();
+}
+
+public class TelegramPayload
+{
+    public string Token { get; set; } = string.Empty;
+    public string ChatId { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string ParseMode { get; set; } = "Markdown";
+}
+
+public class NtfyPayload
+{
+    public string Server { get; set; } = "https://ntfy.sh";
+    public string Topic { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string Priority { get; set; } = string.Empty;
+    public string Tags { get; set; } = string.Empty;
+    public string Click { get; set; } = string.Empty;
+}
+
+public class PushoverPayload
+{
+    public string Token { get; set; } = string.Empty;
+    public string User { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string Priority { get; set; } = string.Empty;
+    public string Sound { get; set; } = string.Empty;
+}
+
 public class AutomationExecutionResult
 {
     public bool Success { get; set; }
@@ -97,4 +148,28 @@ public class AutomationExecutionResult
     public bool ShouldStopPipeline { get; set; }
 
     public string? StopReason { get; set; }
+
+    public string? ShareLimitAction { get; set; }
+
+    public Dictionary<string, int> FilePriorities { get; set; } = new();
+
+    public Dictionary<string, string> TrackersToReplace { get; set; } = new();
+
+    public bool ShouldReannounceAll { get; set; }
+
+    public string? ExportTorrentDestination { get; set; }
+
+    public List<LinkPayload> LinksToCreate { get; set; } = new();
+
+    public List<PermissionsPayload> PermissionsToSet { get; set; } = new();
+
+    public List<DiscordWebhookPayload> DiscordWebhooksToSend { get; set; } = new();
+
+    public List<TelegramPayload> TelegramMessagesToSend { get; set; } = new();
+
+    public List<NtfyPayload> NtfyMessagesToSend { get; set; } = new();
+
+    public List<PushoverPayload> PushoverMessagesToSend { get; set; } = new();
+
+    public List<string> PipelinesToInvoke { get; set; } = new();
 }
