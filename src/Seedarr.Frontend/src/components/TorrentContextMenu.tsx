@@ -4,6 +4,7 @@ import { useArrConnections, useDownloadHistory } from "../api/hooks";
 import { getMediaDeepLink } from "../utils/arrLinks";
 import { useTranslation } from "../i18n";
 import { COLUMN_I18N_KEYS } from "./TorrentTable";
+import PromptModal from "./PromptModal";
 import type { Torrent } from "../api/types";
 
 export interface TorrentContextMenuProps {
@@ -52,12 +53,25 @@ function TorrentContextMenu({
 }: TorrentContextMenuProps) {
   const { t } = useTranslation();
   const [openSubmenu, setOpenSubmenu] = useState<string | null>(null);
+  const [promptConfig, setPromptConfig] = useState<{
+    title: string;
+    description?: string;
+    initialValue: string | number;
+    inputType: "text" | "number";
+    min?: number;
+    max?: number;
+    step?: number;
+    suffix?: string;
+    validate?: (val: string) => string | null;
+    onConfirm: (val: string) => void;
+  } | null>(null);
   const navigate = useNavigate();
 
   const { data: history } = useDownloadHistory();
   const { data: arrConnections } = useArrConnections();
 
   useEffect(() => {
+    if (promptConfig) return;
     const handleClick = () => onClose();
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -68,7 +82,7 @@ function TorrentContextMenu({
       document.removeEventListener("click", handleClick);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [onClose]);
+  }, [onClose, promptConfig]);
 
   function handleCopy(text: string) {
     navigator.clipboard
@@ -93,11 +107,12 @@ function TorrentContextMenu({
     : null;
 
   return (
-    <div
-      className="context-menu"
-      style={{ left: x, top: y }}
-      onClick={(e) => e.stopPropagation()}
-    >
+    <>
+      <div
+        className="context-menu"
+        style={{ left: x, top: y, display: promptConfig ? "none" : undefined }}
+        onClick={(e) => e.stopPropagation()}
+      >
       {ct ? (
         <>
           {/* Arr Direct Jump Link */}
@@ -291,16 +306,20 @@ function TorrentContextMenu({
                 <button
                   className="context-menu-item"
                   onClick={() => {
-                    const limit = window.prompt(
-                      "Upload limit in KB/s (0 = unlimited):",
-                      String(ct.uploadLimit || 0),
-                    );
-                    if (limit !== null) {
-                      const val = parseInt(limit, 10);
-                      if (!isNaN(val) && val >= 0)
-                        onUpdate({ ...ct, uploadLimit: val });
-                    }
-                    onClose();
+                    setPromptConfig({
+                      title: t("torrents.setUploadLimit", undefined, "Set Upload Speed Limit"),
+                      description: "Enter upload limit in KB/s (0 for unlimited):",
+                      initialValue: ct.uploadLimit || 0,
+                      inputType: "number",
+                      min: 0,
+                      suffix: "KB/s",
+                      onConfirm: (limit) => {
+                        const val = parseInt(limit, 10);
+                        if (!isNaN(val) && val >= 0)
+                          onUpdate({ ...ct, uploadLimit: val });
+                        onClose();
+                      },
+                    });
                   }}
                 >
                   Set Upload Limit...
@@ -308,16 +327,20 @@ function TorrentContextMenu({
                 <button
                   className="context-menu-item"
                   onClick={() => {
-                    const limit = window.prompt(
-                      "Download limit in KB/s (0 = unlimited):",
-                      String(ct.downloadLimit || 0),
-                    );
-                    if (limit !== null) {
-                      const val = parseInt(limit, 10);
-                      if (!isNaN(val) && val >= 0)
-                        onUpdate({ ...ct, downloadLimit: val });
-                    }
-                    onClose();
+                    setPromptConfig({
+                      title: t("torrents.setDownloadLimit", undefined, "Set Download Speed Limit"),
+                      description: "Enter download limit in KB/s (0 for unlimited):",
+                      initialValue: ct.downloadLimit || 0,
+                      inputType: "number",
+                      min: 0,
+                      suffix: "KB/s",
+                      onConfirm: (limit) => {
+                        const val = parseInt(limit, 10);
+                        if (!isNaN(val) && val >= 0)
+                          onUpdate({ ...ct, downloadLimit: val });
+                        onClose();
+                      },
+                    });
                   }}
                 >
                   Set Download Limit...
@@ -390,9 +413,17 @@ function TorrentContextMenu({
           <button
             className="context-menu-item"
             onClick={() => {
-              const n = window.prompt("Rename torrent:", ct.name);
-              if (n !== null && n.trim()) onUpdate({ ...ct, name: n.trim() });
-              onClose();
+              setPromptConfig({
+                title: t("torrents.rename", undefined, "Rename Torrent"),
+                description: "Enter a new name for this torrent:",
+                initialValue: ct.name,
+                inputType: "text",
+                validate: (val) => (!val.trim() ? "Name cannot be empty" : null),
+                onConfirm: (n) => {
+                  if (n.trim()) onUpdate({ ...ct, name: n.trim() });
+                  onClose();
+                },
+              });
             }}
           >
             {t("torrents.rename", undefined, "Rename...")}
@@ -400,9 +431,16 @@ function TorrentContextMenu({
           <button
             className="context-menu-item"
             onClick={() => {
-              const l = window.prompt("Set label:", ct.label ?? "");
-              if (l !== null) onUpdate({ ...ct, label: l || null });
-              onClose();
+              setPromptConfig({
+                title: t("torrents.setLabel", undefined, "Set Torrent Label / Tag"),
+                description: "Enter label for organization (leave empty to remove):",
+                initialValue: ct.label ?? "",
+                inputType: "text",
+                onConfirm: (l) => {
+                  onUpdate({ ...ct, label: l.trim() || null });
+                  onClose();
+                },
+              });
             }}
           >
             {t("torrents.setLabel", undefined, "Set Label...")}{ct.label ? ` (${ct.label})` : ""}
@@ -491,6 +529,26 @@ function TorrentContextMenu({
         )}
       </div>
     </div>
+    {promptConfig && (
+      <PromptModal
+        isOpen={true}
+        title={promptConfig.title}
+        description={promptConfig.description}
+        initialValue={promptConfig.initialValue}
+        inputType={promptConfig.inputType}
+        min={promptConfig.min}
+        max={promptConfig.max}
+        step={promptConfig.step}
+        suffix={promptConfig.suffix}
+        validate={promptConfig.validate}
+        onConfirm={promptConfig.onConfirm}
+        onClose={() => {
+          setPromptConfig(null);
+          onClose();
+        }}
+      />
+    )}
+  </>
   );
 }
 

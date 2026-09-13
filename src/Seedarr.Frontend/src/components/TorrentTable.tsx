@@ -201,22 +201,30 @@ interface TorrentTableProps {
   filter?: string;
   stateFilter?: string;
   trackerFilter?: string;
+  categoryFilter?: string;
+  tagFilter?: string;
   selectedTorrentId?: number | null;
   onSelectTorrent?: (id: number | null) => void;
   selectedIds?: Set<number>;
   onToggleSelect?: (id: number) => void;
   onSelectAll?: (ids: number[]) => void;
+  onSelectRange?: (ids: number[]) => void;
+  onSelectMultiple?: (ids: Set<number>) => void;
 }
 
 function TorrentTable({
   filter,
   stateFilter,
   trackerFilter,
+  categoryFilter,
+  tagFilter,
   selectedTorrentId,
   onSelectTorrent,
   selectedIds,
   onToggleSelect,
   onSelectAll,
+  onSelectRange,
+  onSelectMultiple,
 }: TorrentTableProps) {
   const { t } = useTranslation();
   const { data: torrents, isLoading, isError } = useTorrents();
@@ -229,6 +237,7 @@ function TorrentTable({
   const moveTorrentQueue = useMoveTorrentQueue();
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
+  const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] =
@@ -303,6 +312,14 @@ function TorrentTable({
         (u) => extractTrackerDomain(u) === trackerFilter,
       );
       if (!hasTracker) return false;
+    }
+    if (categoryFilter && categoryFilter !== "All") {
+      const cat = t.category?.trim() || "Uncategorized";
+      if (cat !== categoryFilter) return false;
+    }
+    if (tagFilter && tagFilter !== "All") {
+      const tag = t.label?.trim() || "Untagged";
+      if (tag !== tagFilter) return false;
     }
     return true;
   });
@@ -595,9 +612,30 @@ function TorrentTable({
             <tr
               key={t.id}
               className={`torrent-table-row${selectedTorrentId === t.id ? " torrent-table-row-selected" : ""}${selectedIds?.has(t.id) ? " torrent-table-row-selected" : ""}`}
-              onClick={() =>
-                onSelectTorrent?.(selectedTorrentId === t.id ? null : t.id)
-              }
+              onClick={(e) => {
+                if (e.shiftKey && lastClickedIndex !== null) {
+                  const start = Math.min(lastClickedIndex, index);
+                  const end = Math.max(lastClickedIndex, index);
+                  const rangeIds = sorted
+                    .slice(start, end + 1)
+                    .map((item) => item.id);
+                  if (onSelectRange) {
+                    onSelectRange(rangeIds);
+                  } else if (onSelectMultiple) {
+                    onSelectMultiple(
+                      new Set([...(selectedIds || []), ...rangeIds]),
+                    );
+                  }
+                  onSelectTorrent?.(t.id);
+                } else if (e.ctrlKey || e.metaKey) {
+                  onToggleSelect?.(t.id);
+                  onSelectTorrent?.(t.id);
+                  setLastClickedIndex(index);
+                } else {
+                  onSelectTorrent?.(selectedTorrentId === t.id ? null : t.id);
+                  setLastClickedIndex(index);
+                }
+              }}
               onContextMenu={(e) => handleContextMenu(e, t)}
             >
               <td>
@@ -605,8 +643,27 @@ function TorrentTable({
                   type="checkbox"
                   className="torrent-checkbox"
                   checked={selectedIds?.has(t.id) ?? false}
-                  onChange={() => onToggleSelect?.(t.id)}
-                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => {}}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (e.shiftKey && lastClickedIndex !== null) {
+                      const start = Math.min(lastClickedIndex, index);
+                      const end = Math.max(lastClickedIndex, index);
+                      const rangeIds = sorted
+                        .slice(start, end + 1)
+                        .map((item) => item.id);
+                      if (onSelectRange) {
+                        onSelectRange(rangeIds);
+                      } else if (onSelectMultiple) {
+                        onSelectMultiple(
+                          new Set([...(selectedIds || []), ...rangeIds]),
+                        );
+                      }
+                    } else {
+                      onToggleSelect?.(t.id);
+                      setLastClickedIndex(index);
+                    }
+                  }}
                 />
               </td>
               {columns.map((col) => (

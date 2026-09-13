@@ -16,6 +16,7 @@ function TorrentIndex() {
   const recheckTorrent = useRecheckTorrent();
   const {
     torrents,
+    filteredTorrents,
     startSeeding,
     stopSeeding,
     deleteTorrent,
@@ -33,16 +34,23 @@ function TorrentIndex() {
     setSelectedState,
     selectedTracker,
     setSelectedTracker,
+    selectedCategory,
+    setSelectedCategory,
+    selectedTag,
+    setSelectedTag,
     selectedTorrentId,
     setSelectedTorrentId,
     adjustSpeed,
     stateCounts,
     trackerGroups,
+    categoryGroups,
+    tagGroups,
     totalUploadSpeed,
     totalDownloadSpeed,
     handleViewMode,
     handleToggleSelect,
     handleSelectAll,
+    handleSelectRange,
     isFilterCollapsed,
     toggleFilterCollapse,
     isQuickControlsOpen,
@@ -122,38 +130,100 @@ function TorrentIndex() {
         }
       }
 
-      // Hotkeys for selected torrent
-      if (selectedTorrentId != null) {
-        const targetTorrent = torrents?.find((t) => t.id === selectedTorrentId);
+      // Ctrl+A / Cmd+A to select all filtered torrents
+      if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+        e.preventDefault();
+        handleSelectAll(filteredTorrents.map((t) => t.id));
+        return;
+      }
 
-        // Space or p / P: pause / resume
-        if (e.key === " " || e.key === "p" || e.key === "P") {
-          e.preventDefault();
-          if (targetTorrent?.status === "Seeding") {
+      // ArrowUp / ArrowDown navigation across filtered torrents
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        if (filteredTorrents.length === 0) return;
+        e.preventDefault();
+        const currentIndex = filteredTorrents.findIndex(
+          (t) => t.id === selectedTorrentId,
+        );
+        let nextIndex = 0;
+        if (e.key === "ArrowUp") {
+          nextIndex =
+            currentIndex > 0 ? currentIndex - 1 : filteredTorrents.length - 1;
+        } else {
+          nextIndex =
+            currentIndex >= 0 && currentIndex < filteredTorrents.length - 1
+              ? currentIndex + 1
+              : 0;
+        }
+        const nextTorrent = filteredTorrents[nextIndex];
+        if (nextTorrent) {
+          setSelectedTorrentId(nextTorrent.id);
+          if (e.shiftKey) {
+            handleSelectRange([nextTorrent.id]);
+          }
+        }
+        return;
+      }
+
+      // Space or p / P: pause / resume (supporting single & multi-selection)
+      if (e.key === " " || e.key === "p" || e.key === "P") {
+        e.preventDefault();
+        if (selectedIds.size > 0) {
+          const selectedTorrents = (torrents ?? []).filter((t) =>
+            selectedIds.has(t.id),
+          );
+          const anyActive = selectedTorrents.some(
+            (t) => t.status === "Seeding" || t.active,
+          );
+          if (anyActive) {
+            handleBulkStop();
+          } else {
+            handleBulkStart();
+          }
+          return;
+        }
+
+        if (selectedTorrentId != null) {
+          const targetTorrent = torrents?.find(
+            (t) => t.id === selectedTorrentId,
+          );
+          if (targetTorrent?.status === "Seeding" || targetTorrent?.active) {
             stopSeeding.mutate(selectedTorrentId);
           } else {
             startSeeding.mutate(selectedTorrentId);
           }
           return;
         }
+      }
 
-        // a / A: force announce to all trackers
-        if (e.key === "a" || e.key === "A") {
+      // a / A: force announce to all trackers (single selected)
+      if (e.key === "a" || e.key === "A") {
+        if (selectedTorrentId != null) {
           e.preventDefault();
           announceTorrent.mutate(selectedTorrentId);
           return;
         }
+      }
 
-        // r / R: force recheck torrent files
-        if (e.key === "r" || e.key === "R") {
+      // r / R: force recheck torrent files (single selected)
+      if (e.key === "r" || e.key === "R") {
+        if (selectedTorrentId != null) {
           e.preventDefault();
           recheckTorrent.mutate(selectedTorrentId);
           return;
         }
+      }
 
-        // Delete: delete torrent
-        if (e.key === "Delete") {
-          e.preventDefault();
+      // Delete: delete torrent (supporting single & multi-selection)
+      if (e.key === "Delete") {
+        e.preventDefault();
+        if (selectedIds.size > 0) {
+          handleBulkDelete();
+          return;
+        }
+        if (selectedTorrentId != null) {
+          const targetTorrent = torrents?.find(
+            (t) => t.id === selectedTorrentId,
+          );
           if (
             confirm(
               `Delete torrent "${targetTorrent?.name || selectedTorrentId}"?`,
@@ -162,15 +232,6 @@ function TorrentIndex() {
             deleteTorrent.mutate({ id: selectedTorrentId });
             setSelectedTorrentId(null);
           }
-          return;
-        }
-      }
-
-      // Bulk actions when multiple items are selected via table checkboxes
-      if (selectedIds.size > 0 && selectedTorrentId == null) {
-        if (e.key === "Delete") {
-          e.preventDefault();
-          handleBulkDelete();
           return;
         }
       }
@@ -186,12 +247,17 @@ function TorrentIndex() {
     setSelectedTorrentId,
     selectedIds,
     torrents,
+    filteredTorrents,
     startSeeding,
     stopSeeding,
     announceTorrent,
     recheckTorrent,
     deleteTorrent,
+    handleBulkStart,
+    handleBulkStop,
     handleBulkDelete,
+    handleSelectAll,
+    handleSelectRange,
   ]);
 
   const count = torrents?.length ?? 0;
@@ -233,8 +299,14 @@ function TorrentIndex() {
           onSelectState={setSelectedState}
           selectedTracker={selectedTracker}
           onSelectTracker={setSelectedTracker}
+          selectedCategory={selectedCategory}
+          onSelectCategory={setSelectedCategory}
+          selectedTag={selectedTag}
+          onSelectTag={setSelectedTag}
           stateCounts={stateCounts}
           trackerGroups={trackerGroups}
+          categoryGroups={categoryGroups}
+          tagGroups={tagGroups}
           count={count}
           isCollapsed={isFilterCollapsed}
           onToggleCollapse={toggleFilterCollapse}
@@ -247,17 +319,22 @@ function TorrentIndex() {
                   filter={filter}
                   stateFilter={selectedState}
                   trackerFilter={selectedTracker}
+                  categoryFilter={selectedCategory}
+                  tagFilter={selectedTag}
                   selectedTorrentId={selectedTorrentId}
                   onSelectTorrent={setSelectedTorrentId}
                   selectedIds={selectedIds}
                   onToggleSelect={handleToggleSelect}
                   onSelectAll={handleSelectAll}
+                  onSelectRange={handleSelectRange}
                 />
               ) : (
                 <TorrentGrid
                   filter={filter}
                   stateFilter={selectedState}
                   trackerFilter={selectedTracker}
+                  categoryFilter={selectedCategory}
+                  tagFilter={selectedTag}
                   selectedTorrentId={selectedTorrentId}
                   onSelectTorrent={setSelectedTorrentId}
                 />

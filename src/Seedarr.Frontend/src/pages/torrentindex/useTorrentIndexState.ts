@@ -35,6 +35,8 @@ export function useTorrentIndexState() {
   const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
   const [selectedState, setSelectedState] = useState<string>("All");
   const [selectedTracker, setSelectedTracker] = useState<string>("All");
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [selectedTag, setSelectedTag] = useState<string>("All");
   const [selectedTorrentId, setSelectedTorrentId] = useState<number | null>(
     null,
   );
@@ -126,6 +128,65 @@ export function useTorrentIndexState() {
     return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
   }, [torrents]);
 
+  const categoryGroups = useMemo(() => {
+    const groups: Record<string, number> = {};
+    for (const t of torrents ?? []) {
+      const cat = t.category?.trim() || "Uncategorized";
+      groups[cat] = (groups[cat] || 0) + 1;
+    }
+    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [torrents]);
+
+  const tagGroups = useMemo(() => {
+    const groups: Record<string, number> = {};
+    for (const t of torrents ?? []) {
+      const tag = t.label?.trim() || "Untagged";
+      groups[tag] = (groups[tag] || 0) + 1;
+    }
+    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [torrents]);
+
+  const filteredTorrents = useMemo(() => {
+    return (torrents ?? []).filter((t) => {
+      if (filter && !t.name.toLowerCase().includes(filter.toLowerCase()))
+        return false;
+      if (
+        selectedState &&
+        selectedState !== "All" &&
+        t.status !== selectedState
+      )
+        return false;
+      if (selectedTracker && selectedTracker !== "All") {
+        const urls =
+          t.trackers && t.trackers.length > 0
+            ? t.trackers
+            : t.trackerUrl
+              ? [t.trackerUrl]
+              : [];
+        const hasTracker = urls.some(
+          (u) => extractTrackerDomain(u) === selectedTracker,
+        );
+        if (!hasTracker) return false;
+      }
+      if (selectedCategory && selectedCategory !== "All") {
+        const cat = t.category?.trim() || "Uncategorized";
+        if (cat !== selectedCategory) return false;
+      }
+      if (selectedTag && selectedTag !== "All") {
+        const tag = t.label?.trim() || "Untagged";
+        if (tag !== selectedTag) return false;
+      }
+      return true;
+    });
+  }, [
+    torrents,
+    filter,
+    selectedState,
+    selectedTracker,
+    selectedCategory,
+    selectedTag,
+  ]);
+
   const { totalUploadSpeed, totalDownloadSpeed } = useMemo(() => {
     let ul = 0;
     let dl = 0;
@@ -156,8 +217,17 @@ export function useTorrentIndexState() {
     );
   }
 
+  function handleSelectRange(rangeIds: number[]) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      rangeIds.forEach((id) => next.add(id));
+      return next;
+    });
+  }
+
   return {
     torrents,
+    filteredTorrents,
     startSeeding,
     stopSeeding,
     deleteTorrent,
@@ -175,16 +245,23 @@ export function useTorrentIndexState() {
     setSelectedState,
     selectedTracker,
     setSelectedTracker,
+    selectedCategory,
+    setSelectedCategory,
+    selectedTag,
+    setSelectedTag,
     selectedTorrentId,
     setSelectedTorrentId,
     adjustSpeed,
     stateCounts,
     trackerGroups,
+    categoryGroups,
+    tagGroups,
     totalUploadSpeed,
     totalDownloadSpeed,
     handleViewMode,
     handleToggleSelect,
     handleSelectAll,
+    handleSelectRange,
     isFilterCollapsed,
     toggleFilterCollapse,
     isQuickControlsOpen,

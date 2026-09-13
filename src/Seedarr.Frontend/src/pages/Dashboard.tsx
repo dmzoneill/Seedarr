@@ -8,6 +8,8 @@ import {
   useIndexers,
   useDownloadClients,
   useDownloadHistory,
+  useDiskSpace,
+  useCategories,
 } from "../api/hooks";
 import {
   formatBytes,
@@ -127,6 +129,8 @@ function Dashboard() {
   const { data: indexers } = useIndexers();
   const { data: downloadClients } = useDownloadClients();
   const { data: history } = useDownloadHistory();
+  const { data: diskSpace, isLoading: diskLoading } = useDiskSpace();
+  const { data: categories } = useCategories();
 
   const achievements = useMemo(
     () => calculateAchievements(torrents, stats),
@@ -139,6 +143,47 @@ function Dashboard() {
   }, [torrents]);
 
   const totalSize = (torrents ?? []).reduce((sum, t) => sum + t.totalSize, 0);
+
+  // Storage utilization & category breakdown
+  const storageUtilization = useMemo(() => {
+    const totalCapacity = (diskSpace ?? []).reduce(
+      (sum, d) => sum + d.totalSpace,
+      0,
+    );
+    const totalFree = (diskSpace ?? []).reduce(
+      (sum, d) => sum + d.freeSpace,
+      0,
+    );
+    const totalUsed = totalCapacity > 0 ? totalCapacity - totalFree : 0;
+    const usedPercentage =
+      totalCapacity > 0 ? (totalUsed / totalCapacity) * 100 : 0;
+
+    const catMap: Record<
+      string,
+      { category: string; count: number; totalBytes: number }
+    > = {};
+
+    for (const t of torrents ?? []) {
+      const cat = t.category?.trim() || "Uncategorized";
+      if (!catMap[cat]) {
+        catMap[cat] = { category: cat, count: 0, totalBytes: 0 };
+      }
+      catMap[cat].count += 1;
+      catMap[cat].totalBytes += t.totalSize;
+    }
+
+    const categoryBreakdown = Object.values(catMap).sort(
+      (a, b) => b.totalBytes - a.totalBytes,
+    );
+
+    return {
+      totalCapacity,
+      totalFree,
+      totalUsed,
+      usedPercentage,
+      categoryBreakdown,
+    };
+  }, [diskSpace, torrents]);
   const recent = [...(torrents ?? [])]
     .sort(
       (a, b) =>
@@ -297,6 +342,206 @@ function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Storage Utilization Card */}
+      <div
+        className="card"
+        style={{
+          marginBottom: "1.25rem",
+          padding: "1.1rem 1.25rem",
+          borderRadius: "8px",
+          boxShadow:
+            "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "0.85rem",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "1.2rem" }}>💾</span>
+            <h3 style={{ margin: 0, border: "none", padding: 0 }}>
+              Storage Utilization & Disk Space
+            </h3>
+          </div>
+          <Link
+            to="/system/status"
+            style={{
+              fontSize: "0.82rem",
+              color: "var(--accent)",
+              textDecoration: "none",
+              fontWeight: 500,
+            }}
+          >
+            System Status & Drives →
+          </Link>
+        </div>
+
+        {diskLoading ? (
+          <div className="status-row">
+            <SkeletonLine width="60%" height="1.2rem" />
+          </div>
+        ) : (
+          <>
+            {/* Total Storage Progress Bar */}
+            <div style={{ marginBottom: "1rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  fontSize: "0.85rem",
+                  marginBottom: "0.4rem",
+                  flexWrap: "wrap",
+                  gap: "0.5rem",
+                }}
+              >
+                <span>
+                  <strong>{formatBytes(storageUtilization.totalUsed)}</strong>{" "}
+                  used of{" "}
+                  <strong>
+                    {formatBytes(storageUtilization.totalCapacity)}
+                  </strong>
+                </span>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color:
+                      storageUtilization.usedPercentage >= 90
+                        ? "var(--danger)"
+                        : storageUtilization.usedPercentage >= 75
+                          ? "var(--warning, #f59e0b)"
+                          : "var(--success)",
+                  }}
+                >
+                  {formatBytes(storageUtilization.totalFree)} free (
+                  {storageUtilization.usedPercentage.toFixed(1)}% used)
+                </span>
+              </div>
+
+              <div
+                className="disk-progress"
+                style={{
+                  borderRadius: "6px",
+                  height: "14px",
+                  backgroundColor: "rgba(255, 255, 255, 0.08)",
+                }}
+              >
+                <div
+                  className={`disk-progress-bar ${
+                    storageUtilization.usedPercentage >= 90
+                      ? "disk-progress-bar-danger"
+                      : storageUtilization.usedPercentage >= 75
+                        ? "disk-progress-bar-warning"
+                        : ""
+                  }`}
+                  style={{
+                    width: `${Math.min(100, storageUtilization.usedPercentage)}%`,
+                    borderRadius: "6px",
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Storage Breakdown by Category */}
+            <div>
+              <div
+                style={{
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  color: "var(--text-secondary)",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                Payload Breakdown by Category:
+              </div>
+              {storageUtilization.categoryBreakdown.length === 0 ? (
+                <div
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "var(--text-muted)",
+                    padding: "0.5rem 0",
+                  }}
+                >
+                  No torrents allocated to categories yet.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(180px, 1fr))",
+                    gap: "0.6rem",
+                  }}
+                >
+                  {storageUtilization.categoryBreakdown.map((item) => {
+                    const pctOfTotal =
+                      totalSize > 0
+                        ? (item.totalBytes / totalSize) * 100
+                        : 0;
+                    return (
+                      <div
+                        key={item.category}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "0.5rem 0.75rem",
+                          backgroundColor: "var(--bg-primary)",
+                          borderRadius: "6px",
+                          border: "1px solid var(--border-light)",
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <Link
+                            to={`/torrents?category=${encodeURIComponent(item.category)}`}
+                            style={{
+                              fontWeight: 600,
+                              color: "inherit",
+                              textDecoration: "none",
+                              display: "block",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={`View ${item.category} torrents`}
+                          >
+                            📁 {item.category}
+                          </Link>
+                          <div
+                            style={{
+                              fontSize: "0.7rem",
+                              color: "var(--text-muted)",
+                            }}
+                          >
+                            {item.count}{" "}
+                            {item.count === 1 ? "torrent" : "torrents"} (
+                            {pctOfTotal.toFixed(1)}%)
+                          </div>
+                        </div>
+                        <span
+                          className="badge badge-primary"
+                          style={{
+                            fontSize: "0.72rem",
+                            padding: "0.15rem 0.4rem",
+                            flexShrink: 0,
+                          }}
+                        >
+                          {formatBytes(item.totalBytes)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Arr & Client Ecosystem Integration Bar */}
       {((arrConnections && arrConnections.length > 0) ||
