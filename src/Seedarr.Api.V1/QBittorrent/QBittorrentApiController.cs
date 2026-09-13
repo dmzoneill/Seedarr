@@ -141,7 +141,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
             if (!string.IsNullOrWhiteSpace(masterApiKey) &&
                 ((!string.IsNullOrWhiteSpace(password) && RpcAuthenticationHelper.FixedTimeEquals(password, masterApiKey)) ||
-                 (!string.IsNullOrWhiteSpace(username) && RpcAuthenticationHelper.FixedTimeEquals(username, masterApiKey))))
+                (!string.IsNullOrWhiteSpace(username) && RpcAuthenticationHelper.FixedTimeEquals(username, masterApiKey))))
             {
                 authenticated = true;
             }
