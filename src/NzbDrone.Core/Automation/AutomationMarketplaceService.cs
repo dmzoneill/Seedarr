@@ -76,26 +76,26 @@ public class AutomationMarketplaceService : IAutomationMarketplaceService
             },
             Code = @"// Private Tracker Auto-Zap Script
 if (!torrent.tracker.includes(inputs.tracker_domain)) {
-  console.log('Skipping: tracker does not match ' + inputs.tracker_domain);
-  return;
+    console.log('Skipping: tracker does not match ' + inputs.tracker_domain);
+    return;
 }
 
 console.log('Processing torrent: ' + torrent.name + ' (' + torrent.infoHash + ')');
 
 var response = http.post('https://' + inputs.tracker_domain + '/api/torrent/' + torrent.infoHash + '/zap', {
-  torrent_id: torrent.infoHash
+    torrent_id: torrent.infoHash
 }, {
-  headers: {
-    'Authorization': 'Bearer ' + inputs.session_cookie,
-    'Cookie': 'session=' + inputs.session_cookie
-  }
+    headers: {
+        'Authorization': 'Bearer ' + inputs.session_cookie,
+        'Cookie': 'session=' + inputs.session_cookie
+    }
 });
 
 if (response.ok) {
-  console.log('Successfully zapped torrent on tracker!');
-  torrent.addTag(inputs.zap_tag || 'zapped');
+    console.log('Successfully zapped torrent on tracker!');
+    torrent.addTag(inputs.zap_tag || 'zapped');
 } else {
-  console.warn('Zap request returned status: ' + response.status + ' - ' + response.body);
+    console.warn('Zap request returned status: ' + response.status + ' - ' + response.body);
 }
 ",
         },
@@ -120,9 +120,9 @@ var targetRatio = parseFloat(inputs.target_ratio || 3.0);
 console.log('Torrent ' + torrent.name + ' current ratio: ' + torrent.ratio + ' (Target: ' + targetRatio + ')');
 
 if (torrent.ratio >= targetRatio) {
-  console.log('Target ratio reached! Adding tag and pausing torrent.');
-  torrent.addTag(inputs.tag_name || 'ratio-met');
-  torrent.pause();
+    console.log('Target ratio reached! Adding tag and pausing torrent.');
+    torrent.addTag(inputs.tag_name || 'ratio-met');
+    torrent.pause();
 }
 ",
         },
@@ -142,31 +142,31 @@ if (torrent.ratio >= targetRatio) {
             },
             Code = @"// Discord Webhook Notification
 if (!inputs.webhook_url) {
-  console.error('Discord webhook URL is not configured!');
-  return;
+    console.error('Discord webhook URL is not configured!');
+    return;
 }
 
 var sizeMB = (torrent.size / (1024 * 1024)).toFixed(2);
 
 var payload = {
-  embeds: [{
-    title: 'Download Completed',
-    description: '**' + torrent.name + '**',
-    color: 3066993, // Green
-    fields: [
-      { name: 'Size', value: sizeMB + ' MB', inline: true },
-      { name: 'Category', value: torrent.category || 'Default', inline: true },
-      { name: 'Ratio', value: torrent.ratio.toFixed(2), inline: true }
-    ],
-    timestamp: new Date().toISOString()
-  }]
+    embeds: [{
+        title: 'Download Completed',
+        description: '**' + torrent.name + '**',
+        color: 3066993, // Green
+        fields: [
+            { name: 'Size', value: sizeMB + ' MB', inline: true },
+            { name: 'Category', value: torrent.category || 'Default', inline: true },
+            { name: 'Ratio', value: torrent.ratio.toFixed(2), inline: true }
+        ],
+        timestamp: new Date().toISOString()
+    }]
 };
 
 var res = http.post(inputs.webhook_url, payload, { json: true });
 if (res.ok) {
-  console.log('Discord notification dispatched successfully.');
+    console.log('Discord notification dispatched successfully.');
 } else {
-  console.error('Failed to dispatch Discord webhook: ' + res.status);
+    console.error('Failed to dispatch Discord webhook: ' + res.status);
 }
 ",
         },
@@ -184,15 +184,15 @@ if (res.ok) {
             Code = @"name: 'Auto Categorize Media'
 trigger: 'TorrentAdded'
 steps:
-  - name: 'Check for TV Show'
-    condition: '${torrent.name}'
-    actions:
-      - addTag: 'Automated'
+    - name: 'Check for TV Show'
+      condition: '${torrent.name}'
+      actions:
+          - addTag: 'Automated'
 
-  - name: 'Tag Fast Seeding'
-    condition: '${torrent.size} > 1000000000'
-    actions:
-      - addTag: 'LargeTorrent'
+    - name: 'Tag Fast Seeding'
+      condition: '${torrent.size} > 1000000000'
+      actions:
+          - addTag: 'LargeTorrent'
 ",
         },
         new AutomationMarketplaceTemplate
@@ -211,12 +211,12 @@ steps:
             },
             Code = @"// Stalled Torrent Pruner
 if (torrent && torrent.uploadSpeed === 0 && torrent.downloadSpeed === 0) {
-  console.log('Torrent ' + torrent.name + ' has 0 B/s traffic.');
-  if (inputs.action === 'pause') {
-    torrent.pause();
-  } else {
-    torrent.addTag('stalled');
-  }
+    console.log('Torrent ' + torrent.name + ' has 0 B/s traffic.');
+    if (inputs.action === 'pause') {
+        torrent.pause();
+    } else {
+        torrent.addTag('stalled');
+    }
 }
 ",
         },

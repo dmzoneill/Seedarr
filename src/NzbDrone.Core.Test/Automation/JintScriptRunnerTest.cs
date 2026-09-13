@@ -50,9 +50,9 @@ public class JintScriptRunnerTest
             Code = @"
 console.log('Torrent:', torrent.name, 'Ratio:', torrent.ratio);
 if (torrent.ratio > 2.0) {
-  torrent.addTag('high-ratio');
-  torrent.setCategory('Seeded');
-  torrent.pause();
+    torrent.addTag('high-ratio');
+    torrent.setCategory('Seeded');
+    torrent.pause();
 }
 ",
             Language = AutomationLanguage.JavaScript,
