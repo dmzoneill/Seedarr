@@ -1764,21 +1764,23 @@ body {
   max-width: 400px;
 }
 
+.input,
 .form-control,
 .form-input {
-  padding: 0.45rem 0.8rem;
+  padding: 0.5rem 0.8rem;
   border: 1px solid var(--border-light);
   border-radius: 6px;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-size: 0.85rem;
   width: 100%;
-  max-width: 400px;
+  box-sizing: border-box;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
 }
 
+.input:focus,
 .form-control:focus,
 .form-input:focus {
   outline: none;
@@ -1786,6 +1788,7 @@ body {
   box-shadow: 0 0 0 2px var(--accent-bg-toast);
 }
 
+.input:disabled,
 .form-control:disabled,
 .form-input:disabled {
   opacity: 0.4;
