@@ -160,10 +160,10 @@ public class AppLifetime : IHostedService, IDisposable
 
                     foreach (var torrent in torrents)
                     {
-                        totalDownloadSpeed += torrent.DownloadRate;
-                        totalUploadSpeed += torrent.UploadRate;
+                        totalDownloadSpeed += torrent.DownloadSpeed;
+                        totalUploadSpeed += torrent.UploadSpeed;
 
-                        if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadRate == 0 && torrent.Progress < 1.0)
+                        if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed == 0 && torrent.Progress < 1.0)
                         {
                             var minutesSinceAdd = (DateTime.UtcNow - torrent.DateAdded).TotalMinutes;
                             if (minutesSinceAdd >= 5)
