@@ -54,6 +54,7 @@ public class DbFactory : IDbFactory
             SqlMapper.AddTypeHandler(new SqliteDoubleTypeHandler());
             SqlMapper.AddTypeHandler(new TimeOnlyTypeHandler());
             SqlMapper.AddTypeHandler(new EmbeddedDocumentConverter<List<int>>());
+            SqlMapper.AddTypeHandler(new EmbeddedDocumentConverter<List<string>>());
             _typeHandlersRegistered = true;
         }
 

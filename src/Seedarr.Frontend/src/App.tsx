@@ -31,6 +31,7 @@ import Tags from "./pages/Tags";
 import SystemNetwork from "./pages/SystemNetwork";
 import ApiDocsPage from "./pages/ApiDocsPage";
 import DownloadClientTorrents from "./pages/DownloadClientTorrents";
+import { AutomationPage } from "./pages/AutomationPage";
 import StatusBar from "./components/StatusBar";
 import ToastContainer from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -514,6 +515,14 @@ function App() {
           >
             <StatsIcon />{" "}
             <span>{t("nav.statistics", undefined, "Statistics")}</span>
+          </NavLink>
+          <NavLink
+            to="/automation"
+            className="sidebar-nav-item"
+            title={t("nav.automation", undefined, "Automation")}
+          >
+            <span style={{ fontSize: "1.1rem", display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.25rem" }}>⚡</span>{" "}
+            <span>{t("nav.automation", undefined, "Automation")}</span>
           </NavLink>
           <NavLink
             to="/settings/general"
@@ -1021,6 +1030,7 @@ function App() {
               <Route path="/peermap" element={<PeerMap />} />
               <Route path="/schedule" element={<SpeedSchedule />} />
               <Route path="/statistics" element={<Statistics />} />
+              <Route path="/automation" element={<AutomationPage />} />
               <Route path="/settings/tags" element={<Tags />} />
               <Route path="/settings/:section?" element={<Settings />} />
               <Route path="/system/status" element={<SystemStatus />} />
