@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.6.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.0) - 2026-09-13
+
+### ✨ Features
+- feat(automation): implement full suite of step actions across backend runners and visual builder
+- feat(automation): add type-aware condition builder with boolean, enum, and lazy custom matchers
+- feat(automation): expand subscription triggers and alert events across lifecycle
+
 ## [v1.5.8](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.8) - 2026-09-13
 
 ### 🐛 Bug Fixes
