@@ -3,6 +3,7 @@ import type {
   IdentityProviderDefinition,
   SslTestRequest,
   SslCertificateValidationResult,
+  FileSystemResource,
 } from "./types";
 
 const BASE_URL = "/api/v1";
@@ -175,6 +176,14 @@ class ApiClient {
       "/config/general/test-ssl",
       request,
     );
+  }
+
+  getFileSystem(path?: string, includeFiles?: boolean): Promise<FileSystemResource> {
+    const params = new URLSearchParams();
+    if (path) params.append("path", path);
+    if (includeFiles) params.append("includeFiles", "true");
+    const query = params.toString();
+    return this.get<FileSystemResource>(`/filesystem${query ? `?${query}` : ""}`);
   }
 
   async postForm<T>(endpoint: string, formData: FormData): Promise<T> {

@@ -204,5 +204,71 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             Assert.That(_subject.ParseResponse(""), Is.Empty);
             Assert.That(_subject.ParseResponse("<rss><channel></channel></rss>"), Is.Empty);
         }
+
+        [Test]
+        public void ParseResponse_should_parse_response_offset_and_total()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <torznab:response offset=""20"" total=""150"" />
+        <item>
+            <title>Paginated.Release</title>
+            <link>http://indexer.local/torrent/1</link>
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].ResponseOffset, Is.EqualTo(20));
+            Assert.That(results[0].ResponseTotal, Is.EqualTo(150));
+        }
+
+        [Test]
+        public void ParseResponse_should_parse_freeleech_and_volume_factors()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <item>
+            <title>Freeleech.Release</title>
+            <link>http://indexer.local/torrent/1</link>
+            <torznab:attr name=""downloadvolumefactor"" value=""0"" />
+            <torznab:attr name=""uploadvolumefactor"" value=""2.0"" />
+        </item>
+        <item>
+            <title>Half.Leech.Release</title>
+            <link>http://indexer.local/torrent/2</link>
+            <torznab:attr name=""downloadvolumefactor"" value=""0.5"" />
+            <torznab:attr name=""uploadvolumefactor"" value=""1.0"" />
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(2));
+            Assert.That(results[0].DownloadVolumeFactor, Is.EqualTo(0.0));
+            Assert.That(results[0].UploadVolumeFactor, Is.EqualTo(2.0));
+            Assert.That(results[0].IsFreeleech, Is.True);
+
+            Assert.That(results[1].DownloadVolumeFactor, Is.EqualTo(0.5));
+            Assert.That(results[1].UploadVolumeFactor, Is.EqualTo(1.0));
+            Assert.That(results[1].IsFreeleech, Is.False);
+        }
+
+        [TestCase("movies", "2000,2010,2020,2030,2040,2045,2050,2060,2070,2080,2090")]
+        [TestCase("tv", "5000,5010,5020,5030,5040,5045,5050,5060,5070,5080")]
+        [TestCase("music", "3000,3010,3020,3030,3040,3050,3060")]
+        [TestCase("2000", "2000,2010,2020,2030,2040,2045,2050,2060,2070,2080,2090")]
+        [TestCase("2040", "2040")]
+        [TestCase("anime", "5070")]
+        public void MapFriendlyCategory_should_map_and_expand_categories(string input, string expected)
+        {
+            var result = TorznabIndexer.MapFriendlyCategory(input);
+            Assert.That(result, Is.EqualTo(expected));
+        }
     }
 }
