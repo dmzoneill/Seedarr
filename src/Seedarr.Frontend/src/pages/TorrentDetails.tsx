@@ -79,6 +79,7 @@ function TorrentDetails() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          marginBottom: "1.5rem",
           flexWrap: "wrap",
           gap: "1rem",
         }}
@@ -97,9 +98,27 @@ function TorrentDetails() {
           >
             ← Back to Torrents
           </Link>
-          <h1 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 600 }}>
-            {torrent.name}
+          <h1
+            style={{
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <span>📦</span> {torrent.name}
           </h1>
+          <p
+            style={{
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
+            }}
+          >
+            {torrent.status} &bull; {torrent.infoHash || "Torrent Details & Analytics"}
+          </p>
         </div>
 
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
