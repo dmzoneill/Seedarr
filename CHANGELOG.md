@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.5.7](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.7) - 2026-09-13
+
+### ✨ Features
+- feat(ui): add visual pipeline editor, point-and-click step builder, and run history viewer
+- feat(automation): add DSL scripting engine, marketplace, expanded event triggers, and system/api contexts
+
+### 🐛 Bug Fixes
+- fix(ui): eliminate modal background transparency and enforce solid theme background with backdrop blur
+- fix(automation): use string concatenation for YAML templates to satisfy both yaml parser and editorconfig
+- fix(lint): format yaml string literals to strict 4-space multiple indentation
+- fix(lint): format multiline string literals with 4-space indentation for editorconfig
+
 ## [v1.5.6](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.6) - 2026-09-12
 
 ### 🐛 Bug Fixes
