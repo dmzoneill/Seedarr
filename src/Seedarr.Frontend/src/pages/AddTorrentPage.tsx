@@ -21,14 +21,33 @@ export function AddTorrentPage() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: "1rem",
-          flexShrink: 0,
+          marginBottom: "1.5rem",
+          flexWrap: "wrap",
+          gap: "1rem",
         }}
       >
-        <div className="page-header-group">
-          <h1 className="page-heading" style={{ margin: 0 }}>
-            Add Torrent
+        <div>
+          <h1
+            style={{
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              margin: 0,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <span>➕</span> Add Torrent
           </h1>
+          <p
+            style={{
+              color: "var(--text-muted, #888)",
+              margin: "0.25rem 0 0 0",
+              fontSize: "0.9rem",
+            }}
+          >
+            Add a new torrent via file upload or magnet link
+          </p>
         </div>
       </div>
 
