@@ -1120,6 +1120,9 @@ if (torrent) {
             shouldResume: false,
             shouldRemove: false,
             deleteDataOnRemove: false,
+            shouldRecheck: false,
+            shouldReannounce: false,
+            shouldBoostTracker: false,
           });
         },
       }
