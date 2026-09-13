@@ -140,7 +140,7 @@ public class WebhookDispatcher : IWebhookDispatcher
             .OrResult(r => (int)r.StatusCode >= 500 || r.StatusCode == HttpStatusCode.TooManyRequests)
             .WaitAndRetryAsync(
                 retryCount,
-                sleepDurationProvider: (int retryAttempt, DelegateResult<HttpResponseMessage> outcome, Context context) =>
+                sleepDurationProvider: (retryAttempt, outcome, context) =>
                 {
                     if (outcome.Result != null)
                     {
@@ -155,7 +155,7 @@ public class WebhookDispatcher : IWebhookDispatcher
                         ? sleepDurationProvider(retryAttempt)
                         : TimeSpan.FromSeconds(Math.Pow(2, retryAttempt));
                 },
-                onRetryAsync: (DelegateResult<HttpResponseMessage> outcome, TimeSpan timespan, int retryAttempt, Context context) =>
+                onRetryAsync: (outcome, timespan, retryAttempt, context) =>
                 {
                     outcome.Result?.Dispose();
 
