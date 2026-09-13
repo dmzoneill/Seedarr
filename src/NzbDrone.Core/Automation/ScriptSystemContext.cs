@@ -155,5 +155,116 @@ public class ScriptSystemContext
 
         _logger.Info("Automation script requested pipeline termination: {0}", reason);
     }
+
+    public void createHardlink(string source, string destination)
+    {
+        _result?.LinksToCreate.Add(new LinkPayload { Source = source, Destination = destination, IsHardlink = true });
+    }
+
+    public void createSymlink(string source, string destination)
+    {
+        _result?.LinksToCreate.Add(new LinkPayload { Source = source, Destination = destination, IsHardlink = false });
+    }
+
+    public void setFilePermissions(string path, string mode, bool recurse = false)
+    {
+        _result?.PermissionsToSet.Add(new PermissionsPayload { Path = path, Mode = mode, Recurse = recurse });
+    }
+
+    public string? calculateChecksum(string path, string algorithm = "SHA256")
+    {
+        if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = System.IO.File.OpenRead(path);
+            byte[] bytes;
+            if (algorithm.Equals("MD5", StringComparison.OrdinalIgnoreCase))
+            {
+                using var md5 = System.Security.Cryptography.MD5.Create();
+                bytes = md5.ComputeHash(stream);
+            }
+            else
+            {
+                using var sha = System.Security.Cryptography.SHA256.Create();
+                bytes = sha.ComputeHash(stream);
+            }
+
+            return System.BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to calculate checksum for {0}", path);
+            return null;
+        }
+    }
+
+    public void reannounceAll()
+    {
+        if (_result != null)
+        {
+            _result.ShouldReannounceAll = true;
+        }
+    }
+
+    public void sendDiscordWebhook(string url, string title, string description, string color = "", Dictionary<string, string>? fields = null)
+    {
+        _result?.DiscordWebhooksToSend.Add(new DiscordWebhookPayload
+        {
+            Url = url,
+            Title = title,
+            Description = description,
+            Color = color,
+            Fields = fields ?? new Dictionary<string, string>()
+        });
+    }
+
+    public void sendTelegramMessage(string token, string chatId, string message, string parseMode = "Markdown")
+    {
+        _result?.TelegramMessagesToSend.Add(new TelegramPayload
+        {
+            Token = token,
+            ChatId = chatId,
+            Message = message,
+            ParseMode = parseMode
+        });
+    }
+
+    public void sendNtfy(string topic, string message, string title = "", string priority = "", string tags = "", string click = "", string server = "https://ntfy.sh")
+    {
+        _result?.NtfyMessagesToSend.Add(new NtfyPayload
+        {
+            Server = server,
+            Topic = topic,
+            Title = title,
+            Message = message,
+            Priority = priority,
+            Tags = tags,
+            Click = click
+        });
+    }
+
+    public void sendPushover(string token, string user, string message, string priority = "", string sound = "")
+    {
+        _result?.PushoverMessagesToSend.Add(new PushoverPayload
+        {
+            Token = token,
+            User = user,
+            Message = message,
+            Priority = priority,
+            Sound = sound
+        });
+    }
+
+    public void invokePipeline(string pipeline)
+    {
+        if (!string.IsNullOrWhiteSpace(pipeline))
+        {
+            _result?.PipelinesToInvoke.Add(pipeline);
+        }
+    }
 }
 #pragma warning restore SA1300

@@ -245,4 +245,30 @@ public class ScriptTorrentContext
     {
         _result.ShouldReannounce = true;
     }
+
+    public void setShareLimitAction(string action)
+    {
+        _result.ShareLimitAction = action;
+    }
+
+    public void setFilePriority(string pattern, int priority)
+    {
+        if (!string.IsNullOrWhiteSpace(pattern))
+        {
+            _result.FilePriorities[pattern] = priority;
+        }
+    }
+
+    public void replaceTracker(string oldTracker, string newTracker)
+    {
+        if (!string.IsNullOrWhiteSpace(oldTracker) && !string.IsNullOrWhiteSpace(newTracker))
+        {
+            _result.TrackersToReplace[oldTracker] = newTracker;
+        }
+    }
+
+    public void exportTorrent(string destination)
+    {
+        _result.ExportTorrentDestination = destination;
+    }
 }
