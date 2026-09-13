@@ -115,6 +115,7 @@ public interface IConfigService
     bool SchedulerFriday { get; }
     bool SchedulerSaturday { get; }
     bool SchedulerSunday { get; }
+    string TimeZone { get; }
 
     // Peer Protocol
     int HandshakeTimeoutSeconds { get; }
@@ -429,6 +430,7 @@ public class ConfigService : IConfigService
     public bool SchedulerFriday => GetValueBoolean("SchedulerFriday", true);
     public bool SchedulerSaturday => GetValueBoolean("SchedulerSaturday", true);
     public bool SchedulerSunday => GetValueBoolean("SchedulerSunday", true);
+    public string TimeZone => GetValue("TimeZone", string.Empty);
 
     // Peer Protocol
     public int HandshakeTimeoutSeconds => GetValueInt("HandshakeTimeoutSeconds", 30);

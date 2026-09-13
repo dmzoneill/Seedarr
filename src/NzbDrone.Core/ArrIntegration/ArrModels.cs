@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.ArrIntegration;
@@ -18,6 +19,7 @@ public class ArrConnectionDefinition : ProviderDefinition
     public bool EnableAutomaticAdd { get; set; } = true;
     public bool WebhookEnabled { get; set; } = true;
     public string WebhookHost { get; set; }
+    public List<int> Tags { get; set; } = new();
 
     public ArrConnectionDefinition Clone() => (ArrConnectionDefinition)MemberwiseClone();
 }

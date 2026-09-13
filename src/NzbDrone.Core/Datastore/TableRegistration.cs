@@ -1,5 +1,6 @@
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Authentication;
+using NzbDrone.Core.Automation;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.DownloadClients;
@@ -45,5 +46,7 @@ public static class TableRegistration
         TableMapping.Register<IdentityProviderDefinition>("IdentityProviders");
         TableMapping.Register<RssRule>("RssRules");
         TableMapping.Register<Category>("Categories");
+        TableMapping.Register<AutomationScript>("AutomationScripts");
+        TableMapping.Register<TorrentEventLog>("TorrentEventLogs");
     }
 }

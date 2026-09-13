@@ -390,14 +390,20 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
             >
               {String(hour).padStart(2, "0")}:00
             </div>
-            {DAY_FLAGS.map((day) => {
-              const active = schedules.filter(
-                (s) =>
-                  s.isEnabled &&
-                  s.days & day.value &&
-                  timeToHour(s.startTime) <= hour &&
-                  timeToHour(s.endTime) > hour,
-              );
+            {DAY_FLAGS.map((day, dayIdx) => {
+              const prevDay = DAY_FLAGS[(dayIdx + 6) % 7];
+              const active = schedules.filter((s) => {
+                if (!s.isEnabled) return false;
+                const start = timeToHour(s.startTime);
+                const end = timeToHour(s.endTime);
+                if (start <= end) {
+                  return Boolean(s.days & day.value) && hour >= start && hour < end;
+                } else {
+                  const isTodayEvening = Boolean(s.days & day.value) && hour >= start;
+                  const isPrevDayMorning = Boolean(s.days & prevDay.value) && hour < end;
+                  return isTodayEvening || isPrevDayMorning;
+                }
+              });
               const top = active[0];
               return (
                 <div

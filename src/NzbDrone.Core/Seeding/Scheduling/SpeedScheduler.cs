@@ -63,15 +63,16 @@ public class SpeedScheduler : ISpeedScheduler
 
     public SpeedLimits GetLimitsAt(DateTime utcTime)
     {
+        var localTime = ToConfiguredTime(utcTime);
         var schedules = _repository.GetEnabled().ToList();
 
         if (schedules.Count == 0)
         {
             // No SpeedSchedule entities exist; fall back to global scheduler config
-            return GetLimitsFromGlobalConfig(utcTime);
+            return GetLimitsFromGlobalConfig(localTime);
         }
 
-        var activeSchedules = GetActiveSchedules(schedules, utcTime);
+        var activeSchedules = GetActiveSchedules(schedules, localTime);
 
         if (activeSchedules.Count == 0)
         {
@@ -81,25 +82,60 @@ public class SpeedScheduler : ISpeedScheduler
         return ResolveLimits(activeSchedules);
     }
 
-    private SpeedLimits GetLimitsFromGlobalConfig(DateTime utcTime)
+    private DateTime ToConfiguredTime(DateTime utcTime)
+    {
+        if (TryGetConfiguredTimeZone(out var tz))
+        {
+            return TimeZoneInfo.ConvertTimeFromUtc(utcTime, tz);
+        }
+
+        return TimeZoneInfo.ConvertTimeFromUtc(utcTime, TimeZoneInfo.Local);
+    }
+
+    private bool TryGetConfiguredTimeZone(out TimeZoneInfo timeZone)
+    {
+        timeZone = null;
+        var tzId = _configService?.TimeZone;
+        if (string.IsNullOrWhiteSpace(tzId))
+        {
+            return false;
+        }
+
+        try
+        {
+            return TimeZoneInfo.TryFindSystemTimeZoneById(tzId, out timeZone);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private SpeedLimits GetLimitsFromGlobalConfig(DateTime localTime)
     {
         if (!_configService.SchedulerEnabled)
         {
             return NoConstraint();
         }
 
-        var dayOfWeek = utcTime.DayOfWeek;
-
-        if (!IsDayEnabledInGlobalConfig(dayOfWeek))
-        {
-            return NoConstraint();
-        }
-
         var startTime = new TimeOnly(_configService.SchedulerStartHour, _configService.SchedulerStartMinute);
         var endTime = new TimeOnly(_configService.SchedulerEndHour, _configService.SchedulerEndMinute);
-        var currentTime = TimeOnly.FromDateTime(utcTime);
+        var currentTime = TimeOnly.FromDateTime(localTime);
+        var today = localTime.DayOfWeek;
+        var prevDay = (DayOfWeek)(((int)localTime.DayOfWeek + 6) % 7);
 
-        if (IsTimeInRange(currentTime, startTime, endTime))
+        bool isActive;
+        if (startTime <= endTime)
+        {
+            isActive = IsDayEnabledInGlobalConfig(today) && currentTime >= startTime && currentTime < endTime;
+        }
+        else
+        {
+            isActive = (currentTime >= startTime && IsDayEnabledInGlobalConfig(today)) ||
+                       (currentTime < endTime && IsDayEnabledInGlobalConfig(prevDay));
+        }
+
+        if (isActive)
         {
             // Global scheduler is active: use alternative speed limits from config.
             // 0 means unlimited for alt speeds as well.
@@ -167,24 +203,35 @@ public class SpeedScheduler : ISpeedScheduler
         _repository.Delete(id);
     }
 
-    private static List<SpeedSchedule> GetActiveSchedules(List<SpeedSchedule> schedules, DateTime utcTime)
+    private static List<SpeedSchedule> GetActiveSchedules(List<SpeedSchedule> schedules, DateTime localTime)
     {
-        var dayOfWeek = utcTime.DayOfWeek;
-        var scheduleDayFlag = MapDayOfWeek(dayOfWeek);
-        var currentTime = TimeOnly.FromDateTime(utcTime);
+        var todayFlag = MapDayOfWeek(localTime.DayOfWeek);
+        var prevDay = (DayOfWeek)(((int)localTime.DayOfWeek + 6) % 7);
+        var prevDayFlag = MapDayOfWeek(prevDay);
+        var currentTime = TimeOnly.FromDateTime(localTime);
 
         var active = new List<SpeedSchedule>();
 
         foreach (var schedule in schedules)
         {
-            if (!schedule.Days.HasFlag(scheduleDayFlag))
+            if (schedule.StartTime <= schedule.EndTime)
             {
-                continue;
+                if (schedule.Days.HasFlag(todayFlag) && currentTime >= schedule.StartTime && currentTime < schedule.EndTime)
+                {
+                    active.Add(schedule);
+                }
             }
-
-            if (IsTimeInRange(currentTime, schedule.StartTime, schedule.EndTime))
+            else
             {
-                active.Add(schedule);
+                // Overnight schedule (e.g. 22:00 - 06:00)
+                if (currentTime >= schedule.StartTime && schedule.Days.HasFlag(todayFlag))
+                {
+                    active.Add(schedule);
+                }
+                else if (currentTime < schedule.EndTime && schedule.Days.HasFlag(prevDayFlag))
+                {
+                    active.Add(schedule);
+                }
             }
         }
 
@@ -219,15 +266,16 @@ public class SpeedScheduler : ISpeedScheduler
 
     private static SpeedLimits ResolveLimits(List<SpeedSchedule> activeSchedules)
     {
-        // Most restrictive wins: take the lowest non-zero speed from all active schedules.
-        // A value of 0 means unlimited for that schedule, so it does not constrain.
+        // Most restrictive wins: take the lowest speed from all active schedules.
+        // MaxUploadSpeed = 0 acts as an explicit scheduled pause.
+        // SpeedLimits.Unlimited (-1) indicates unconstrained.
         var uploadSpeeds = activeSchedules
-            .Where(s => s.MaxUploadSpeed > 0)
+            .Where(s => s.MaxUploadSpeed >= 0)
             .Select(s => s.MaxUploadSpeed)
             .ToList();
 
         var downloadSpeeds = activeSchedules
-            .Where(s => s.MaxDownloadSpeed > 0)
+            .Where(s => s.MaxDownloadSpeed >= 0)
             .Select(s => s.MaxDownloadSpeed)
             .ToList();
 

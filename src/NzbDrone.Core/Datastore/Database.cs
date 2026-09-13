@@ -21,6 +21,14 @@ public class Database : IDatabase
     {
         var connection = _connectionFactory();
         connection.Open();
+
+        if (DatabaseType == DatabaseType.SQLite)
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "PRAGMA busy_timeout = 30000; PRAGMA cache_size = -64000; PRAGMA synchronous = NORMAL; PRAGMA foreign_keys = ON;";
+            cmd.ExecuteNonQuery();
+        }
+
         return connection;
     }
 }

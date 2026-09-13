@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.DownloadClients;
@@ -11,6 +12,7 @@ public class DownloadClientDefinition : ProviderDefinition
     public string Username { get; set; }
     public string Password { get; set; }
     public string Category { get; set; }
+    public List<int> Tags { get; set; } = new();
 
     public DownloadClientDefinition Clone() => (DownloadClientDefinition)MemberwiseClone();
 }

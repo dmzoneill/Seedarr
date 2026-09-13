@@ -262,7 +262,7 @@ public static class NotificationPayloadBuilder
         {
             var title = Truncate($"[{eventType}] {torrentName}", 256);
             var torrentDetails = torrent != null
-                ? $"Category: {torrent.Label ?? "None"} | Status: {torrent.Status} | Progress: {torrent.Progress * 100:F1}% | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
+                ? $"Category: {torrent.Category ?? torrent.Label ?? "None"} | Status: {torrent.Status} | Progress: {torrent.Progress * 100:F1}% | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
                 : ExtractMessage(genericPayload, $"Event: {eventType}");
             var overview = ExtractOverview(meta);
             var rawDesc = !string.IsNullOrWhiteSpace(overview)
@@ -289,7 +289,7 @@ public static class NotificationPayloadBuilder
         if (string.Equals(implementation, "Slack", StringComparison.OrdinalIgnoreCase))
         {
             var text = torrent != null
-                ? $"*Seedarr [{eventType}]* - *{torrent.Name}*\nCategory: {torrent.Label ?? "None"} | Status: {torrent.Status} | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
+                ? $"*Seedarr [{eventType}]* - *{torrent.Name}*\nCategory: {torrent.Category ?? torrent.Label ?? "None"} | Status: {torrent.Status} | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
                 : $"*Seedarr [{eventType}]*\n{ExtractMessage(genericPayload, eventType)}";
 
             return new
@@ -302,7 +302,7 @@ public static class NotificationPayloadBuilder
         if (string.Equals(implementation, "Telegram", StringComparison.OrdinalIgnoreCase))
         {
             var text = torrent != null
-                ? $"*Seedarr [{EpisodicParser.EscapeMarkdownStatic(eventType)}]*\n*{EpisodicParser.EscapeMarkdownStatic(torrent.Name)}*\nCategory: {EpisodicParser.EscapeMarkdownStatic(torrent.Label ?? "None")}\nProgress: {torrent.Progress * 100:F1}%\nStatus: {torrent.Status}"
+                ? $"*Seedarr [{EpisodicParser.EscapeMarkdownStatic(eventType)}]*\n*{EpisodicParser.EscapeMarkdownStatic(torrent.Name)}*\nCategory: {EpisodicParser.EscapeMarkdownStatic(torrent.Category ?? torrent.Label ?? "None")}\nProgress: {torrent.Progress * 100:F1}%\nStatus: {torrent.Status}"
                 : $"*Seedarr [{EpisodicParser.EscapeMarkdownStatic(eventType)}]*\n{EpisodicParser.EscapeMarkdownStatic(ExtractMessage(genericPayload, eventType))}";
 
             var payloadDict = new Dictionary<string, object>
@@ -324,7 +324,7 @@ public static class NotificationPayloadBuilder
             return new
             {
                 title = $"Seedarr: {eventType}",
-                message = torrent != null ? $"{torrent.Name} ({torrent.Label ?? "Default"}) - {torrent.Status}" : ExtractMessage(genericPayload, eventType),
+                message = torrent != null ? $"{torrent.Name} ({torrent.Category ?? torrent.Label ?? "Default"}) - {torrent.Status}" : ExtractMessage(genericPayload, eventType),
                 priority = 5,
             };
         }
@@ -334,7 +334,7 @@ public static class NotificationPayloadBuilder
             var payloadDict = new Dictionary<string, object>
             {
                 ["title"] = $"Seedarr: {eventType}",
-                ["message"] = torrent != null ? $"{torrent.Name} ({torrent.Label ?? "Default"}) - {torrent.Status}" : ExtractMessage(genericPayload, eventType),
+                ["message"] = torrent != null ? $"{torrent.Name} ({torrent.Category ?? torrent.Label ?? "Default"}) - {torrent.Status}" : ExtractMessage(genericPayload, eventType),
             };
 
             if (!string.IsNullOrEmpty(token))
@@ -354,7 +354,7 @@ public static class NotificationPayloadBuilder
         {
             var title = $"Seedarr: {eventType}";
             var body = torrent != null
-                ? $"Torrent: {torrent.Name}\nCategory: {torrent.Label ?? "None"}\nStatus: {torrent.Status}\nProgress: {torrent.Progress * 100:F1}%\nSize: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
+                ? $"Torrent: {torrent.Name}\nCategory: {torrent.Category ?? torrent.Label ?? "None"}\nStatus: {torrent.Status}\nProgress: {torrent.Progress * 100:F1}%\nSize: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
                 : ExtractMessage(genericPayload, $"Event: {eventType}");
 
             var isWarning = eventType.Contains("HealthIssue", StringComparison.OrdinalIgnoreCase) ||

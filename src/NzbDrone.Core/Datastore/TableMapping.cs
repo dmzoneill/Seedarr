@@ -5,6 +5,11 @@ using System.Reflection;
 
 namespace NzbDrone.Core.Datastore;
 
+[AttributeUsage(AttributeTargets.Property)]
+public class IgnoreAttribute : Attribute
+{
+}
+
 public static class TableMapping
 {
     private static readonly ConcurrentDictionary<Type, string> TableNames = new();
@@ -49,7 +54,13 @@ public static class TableMapping
     {
         return PropertyCache.GetOrAdd(type, static t =>
             t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(p => p.Name != "Id" && p.CanRead && p.CanWrite)
+                .Where(p => p.Name != "Id"
+                    && p.CanRead
+                    && p.CanWrite
+                    && p.GetGetMethod(false) != null
+                    && p.GetSetMethod(false) != null
+                    && !p.IsDefined(typeof(IgnoreAttribute), true)
+                    && !p.GetCustomAttributes(true).Any(a => a.GetType().Name is "IgnoreAttribute" or "NotMappedAttribute" or "IgnoreMappingAttribute"))
                 .ToArray());
     }
 }

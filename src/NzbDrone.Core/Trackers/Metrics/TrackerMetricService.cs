@@ -385,6 +385,7 @@ public class TrackerMetricService : ITrackerMetricService
 
     public void DeleteMetric(int id)
     {
+        _snapshotRepository.DeleteByMetricId(id);
         _metricRepository.Delete(id);
     }
 

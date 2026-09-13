@@ -49,6 +49,8 @@ public class DbFactory : IDbFactory
 
     public IDatabase Create(DatabaseType dbType, string connectionString)
     {
+        TableRegistration.RegisterTables();
+
         if (!_typeHandlersRegistered)
         {
             SqlMapper.AddTypeHandler(new SqliteDoubleTypeHandler());
