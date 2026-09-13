@@ -374,9 +374,9 @@ public class TransmissionRpcController : ControllerBase
         else if (isRecentlyActive)
         {
             torrents = torrents.Where(t => t.Status == TorrentStatus.Downloading ||
-                                           t.Status == TorrentStatus.Seeding ||
-                                           t.DownloadSpeed > 0 ||
-                                           t.UploadSpeed > 0);
+                t.Status == TorrentStatus.Seeding ||
+                t.DownloadSpeed > 0 ||
+                t.UploadSpeed > 0);
         }
 
         HashSet<string> requestedFields = null;
