@@ -152,6 +152,7 @@ public class IndexerController : Controller
                 _indexerStatusService.RecordFailure(definition.Id, errorMessage: result.Message);
             }
         }
+
         return Ok(result);
     }
 
@@ -183,6 +184,7 @@ public class IndexerController : Controller
         {
             _indexerStatusService.RecordFailure(id, errorMessage: result.Message);
         }
+
         return Ok(result);
     }
 
