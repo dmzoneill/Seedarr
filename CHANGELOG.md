@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.5.8](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.8) - 2026-09-13
+
+### 🐛 Bug Fixes
+- fix(ui): use standard SVG AutomationIcon to align sidebar navigation text
+- fix(ui): expand code editor textarea with full width, monospace typography, minHeight, and tab indentation
+- fix(ui): polish automation modal layout, form controls, padding, and field sizing
+
 ## [v1.5.7](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.7) - 2026-09-13
 
 ### ✨ Features
