@@ -42,3 +42,8 @@ config.xml
 # Secrets
 *.env
 
+# Scratch scripts
+patch*.py
+scratch/
+
+
