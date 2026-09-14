@@ -30,14 +30,40 @@ services:
         aliases:
           - seedarr.local
     depends_on:
+      leecharr:
+        condition: service_healthy
       sonarr:
         condition: service_healthy
       radarr:
         condition: service_healthy
       prowlarr:
         condition: service_healthy
-      transmission:
-        condition: service_healthy
+
+  leecharr:
+    image: docker.io/dmzoneill/leecharr:latest
+    container_name: leecharr
+    hostname: leecharr.local
+    ports:
+      - "7889:7889"
+    volumes:
+      - ./config/leecharr:/config:z
+      - ./data/downloads:/downloads:z
+      - ./data/movies:/movies:z
+      - ./data/series:/series:z
+      - ./tests/fixtures:/app/fixtures:ro,z
+    restart: unless-stopped
+    environment:
+      - TZ=UTC
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7889/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      arr-network:
+        aliases:
+          - leecharr.local
 
   sonarr:
     image: docker.io/linuxserver/sonarr:latest
@@ -116,38 +142,13 @@ services:
         aliases:
           - prowlarr.local
 
-  transmission:
-    image: docker.io/linuxserver/transmission:latest
-    container_name: transmission
-    hostname: transmission.local
-    ports:
-      - "9091:9091"
-      - "51413:51413"
-      - "51413:51413/udp"
-    volumes:
-      - ./config/transmission:/config:z
-      - ./data/downloads:/downloads:z
-    restart: unless-stopped
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=UTC
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9091/transmission/web/"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-    networks:
-      arr-network:
-        aliases:
-          - transmission.local
-
   configure:
     image: docker.io/curlimages/curl:latest
     container_name: arr-configure
     depends_on:
       seedarr:
+        condition: service_healthy
+      leecharr:
         condition: service_healthy
       sonarr:
         condition: service_healthy
@@ -155,12 +156,11 @@ services:
         condition: service_healthy
       prowlarr:
         condition: service_healthy
-      transmission:
-        condition: service_healthy
     environment:
       - SEEDARR_AUTH=${SEEDARR_AUTH:-}
     volumes:
       - ./config/seedarr:/seedarr-config:ro
+      - ./config/leecharr:/leecharr-config:ro
       - ./config/sonarr:/sonarr-config:ro
       - ./config/radarr:/radarr-config:ro
       - ./config/prowlarr:/prowlarr-config:ro
@@ -172,7 +172,7 @@ services:
     command:
       - |
         set -e
-        echo "=== Configuring *arr stack with fixed test API keys ==="
+        echo "=== Configuring Seedarr stack (Leecharr as Download Client) ==="
 
         get_api_key() {
           local config_path=$$1
@@ -185,11 +185,13 @@ services:
         }
 
         SEEDARR_KEY=$$(get_api_key /seedarr-config/config.xml "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d")
+        LEECHARR_KEY=$$(get_api_key /leecharr-config/config.xml "2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e")
         SONARR_KEY=$$(get_api_key /sonarr-config/config.xml "4b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e")
         RADARR_KEY=$$(get_api_key /radarr-config/config.xml "5c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f")
         PROWLARR_KEY=$$(get_api_key /prowlarr-config/config.xml "3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f")
 
         echo "  Seedarr:  $${SEEDARR_KEY:0:8}..."
+        echo "  Leecharr: $${LEECHARR_KEY:0:8}..."
         echo "  Sonarr:   $${SONARR_KEY:0:8}..."
         echo "  Radarr:   $${RADARR_KEY:0:8}..."
         echo "  Prowlarr: $${PROWLARR_KEY:0:8}..."
@@ -199,8 +201,9 @@ services:
           sonarr_ok=$$(curl -sf "http://sonarr.local:8989/api/v3/system/status" -H "X-Api-Key: $$SONARR_KEY" > /dev/null 2>&1 && echo 1 || echo 0)
           radarr_ok=$$(curl -sf "http://radarr.local:7878/api/v3/system/status" -H "X-Api-Key: $$RADARR_KEY" > /dev/null 2>&1 && echo 1 || echo 0)
           prowlarr_ok=$$(curl -sf "http://prowlarr.local:9696/api/v1/system/status" -H "X-Api-Key: $$PROWLARR_KEY" > /dev/null 2>&1 && echo 1 || echo 0)
+          leecharr_ok=$$(curl -sf "http://leecharr.local:7889/ping" > /dev/null 2>&1 && echo 1 || echo 0)
           seedarr_ok=$$(curl -sf "http://seedarr.local:9898/api/v1/system/status" -H "X-Api-Key: $$SEEDARR_KEY" > /dev/null 2>&1 && echo 1 || echo 0)
-          if [ "$$sonarr_ok$$radarr_ok$$prowlarr_ok$$seedarr_ok" = "1111" ]; then
+          if [ "$$sonarr_ok$$radarr_ok$$prowlarr_ok$$leecharr_ok$$seedarr_ok" = "11111" ]; then
             echo "  All APIs ready after $${i}s"
             break
           fi
@@ -333,27 +336,27 @@ services:
         add_prowlarr_app "Sonarr" "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY" "5000,5010,5020,5030,5040,5045"
         add_prowlarr_app "Radarr" "Radarr" "http://radarr.local:7878" "$$RADARR_KEY" "2000,2010,2020,2030,2040,2045"
 
-        # --- Add Transmission as download client in Sonarr & Radarr ---
-        add_download_client() {
+        # --- Add Leecharr as Download Client in Sonarr & Radarr (via Transmission RPC protocol) ---
+        add_leecharr_download_client() {
           local name=$$1 url=$$2 api_key=$$3 api_ver=$$4
-          existing=$$(curl -sf "$$url/api/$$api_ver/downloadclient" -H "X-Api-Key: $$api_key" 2>/dev/null | grep -c 'Transmission' || true)
+          existing=$$(curl -sf "$$url/api/$$api_ver/downloadclient" -H "X-Api-Key: $$api_key" 2>/dev/null | grep -c 'Leecharr' || true)
           if [ "$$existing" != "0" ]; then
-            echo "  $$name: Transmission already configured"
+            echo "  $$name: Leecharr download client already configured"
             return
           fi
-          echo "  Adding Transmission to $$name..."
+          echo "  Adding Leecharr download client to $$name..."
           code=$$(curl -s -o /tmp/dc_resp -w "%{http_code}" -X POST "$$url/api/$$api_ver/downloadclient" \
             -H "X-Api-Key: $$api_key" \
             -H "Content-Type: application/json" \
             -d '{
-              "name": "Transmission",
+              "name": "Leecharr",
               "implementation": "Transmission",
               "configContract": "TransmissionSettings",
               "enable": true,
               "priority": 1,
               "fields": [
-                {"name": "host", "value": "transmission.local"},
-                {"name": "port", "value": 9091},
+                {"name": "host", "value": "leecharr.local"},
+                {"name": "port", "value": 7889},
                 {"name": "useSsl", "value": false},
                 {"name": "urlBase", "value": "/transmission/rpc"}
               ]
@@ -366,11 +369,11 @@ services:
         }
 
         echo ""
-        echo "--- Adding Transmission download client ---"
-        add_download_client "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY" "v3"
-        add_download_client "Radarr" "http://radarr.local:7878" "$$RADARR_KEY" "v3"
+        echo "--- Adding Leecharr download client to *arr apps ---"
+        add_leecharr_download_client "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY" "v3"
+        add_leecharr_download_client "Radarr" "http://radarr.local:7878" "$$RADARR_KEY" "v3"
 
-        # --- Connect Seedarr to Sonarr, Radarr & Prowlarr ---
+        # --- Connect Seedarr to Sonarr, Radarr, Prowlarr & Leecharr ---
         add_seedarr_connection() {
           local name=$$1 arr_type=$$2 url=$$3 api_key=$$4
           existing=$$(curl -sf "http://seedarr.local:9898/api/v1/arrconnections" -H "X-Api-Key: $$SEEDARR_KEY" 2>/dev/null | grep -c "\"name\":\"$$name\"" || true)
@@ -402,26 +405,26 @@ services:
         }
 
         echo ""
-        echo "--- Connecting Seedarr to *arr apps ---"
+        echo "--- Connecting Seedarr to *arr apps & Leecharr ---"
         add_seedarr_connection "Sonarr" "Sonarr" "http://sonarr.local:8989" "$$SONARR_KEY"
         add_seedarr_connection "Radarr" "Radarr" "http://radarr.local:7878" "$$RADARR_KEY"
         add_seedarr_connection "Prowlarr" "Prowlarr" "http://prowlarr.local:9696" "$$PROWLARR_KEY"
 
-        # --- Add Transmission as download client in Seedarr ---
+        # --- Add Leecharr as download client in Seedarr ---
         echo ""
-        echo "--- Adding Transmission download client to Seedarr ---"
-        dc_exists=$$(curl -sf "http://seedarr.local:9898/api/v1/downloadclients" -H "X-Api-Key: $$SEEDARR_KEY" 2>/dev/null | grep -c '"Transmission"' || true)
+        echo "--- Adding Leecharr download client to Seedarr ---"
+        dc_exists=$$(curl -sf "http://seedarr.local:9898/api/v1/downloadclients" -H "X-Api-Key: $$SEEDARR_KEY" 2>/dev/null | grep -c '"Leecharr"' || true)
         if [ "$$dc_exists" = "0" ]; then
           code=$$(curl -s -o /tmp/sdc_resp -w "%{http_code}" -X POST "http://seedarr.local:9898/api/v1/downloadclients" \
             -H "X-Api-Key: $$SEEDARR_KEY" \
             -H "Content-Type: application/json" \
             -d '{
-              "name": "Transmission",
+              "name": "Leecharr",
               "implementation": "Transmission",
               "configContract": "TransmissionSettings",
               "clientType": "Transmission",
-              "host": "transmission.local",
-              "port": 9091,
+              "host": "leecharr.local",
+              "port": 7889,
               "useSsl": false,
               "username": "",
               "password": "",
@@ -429,12 +432,12 @@ services:
               "enable": true
             }')
           if [ "$$code" = "200" ] || [ "$$code" = "201" ]; then
-            echo "  Transmission download client: OK"
+            echo "  Leecharr download client in Seedarr: OK"
           else
-            echo "  Transmission download client: HTTP $$code $$(cat /tmp/sdc_resp | head -c 200)"
+            echo "  Leecharr download client in Seedarr: HTTP $$code $$(cat /tmp/sdc_resp | head -c 200)"
           fi
         else
-          echo "  Transmission download client: already exists, skipping"
+          echo "  Leecharr download client: already exists, skipping"
         fi
 
         # --- Add Prowlarr as indexer in Seedarr ---
@@ -467,7 +470,7 @@ services:
           echo "  Prowlarr indexer: already exists, skipping"
         fi
 
-        # --- Add webhook notifications in Sonarr & Radarr ---
+        # --- Add webhook notifications in Sonarr & Radarr for Seedarr ---
         add_webhook() {
           local name=$$1 url=$$2 api_key=$$3 api_ver=$$4
           existing=$$(curl -sf "$$url/api/$$api_ver/notification" -H "X-Api-Key: $$api_key" 2>/dev/null | grep -c '"Seedarr"' || true)
@@ -512,10 +515,10 @@ services:
         echo ""
         echo "=== Configuration complete ==="
         echo "  Seedarr:       http://localhost:9898 (API Key: $$SEEDARR_KEY)"
+        echo "  Leecharr:      http://localhost:7889 (API Key: $$LEECHARR_KEY)"
         echo "  Sonarr:        http://localhost:8989 (API Key: $$SONARR_KEY)"
         echo "  Radarr:        http://localhost:7878 (API Key: $$RADARR_KEY)"
         echo "  Prowlarr:      http://localhost:9696 (API Key: $$PROWLARR_KEY)"
-        echo "  Transmission:  http://localhost:9091"
         echo "  Shared Media:  /downloads, /movies, /series"
 
 networks:
