@@ -377,7 +377,7 @@ function TorrentGrid({
                     borderRadius: "3px",
                   }}
                 >
-                  {t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status)}
+                  {t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status === "QueuedForChecking" ? "Queued for Recheck" : torrent.status)}
                 </span>
               </div>
             </div>

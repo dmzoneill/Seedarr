@@ -1371,6 +1371,8 @@ public class DelugeJsonRpcController : ControllerBase
         return status switch
         {
             TorrentStatus.Queued => "Queued",
+            TorrentStatus.Checking => "Checking",
+            TorrentStatus.QueuedForChecking => "Checking",
             TorrentStatus.Downloading => "Downloading",
             TorrentStatus.Seeding => "Seeding",
             TorrentStatus.Paused => "Paused",

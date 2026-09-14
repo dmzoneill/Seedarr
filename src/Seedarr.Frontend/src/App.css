@@ -1092,6 +1092,16 @@ body {
   color: var(--danger);
 }
 
+.badge-checking {
+  background-color: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
+.badge-queuedforchecking {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
 /* ============================================
   Buttons
   ============================================ */
