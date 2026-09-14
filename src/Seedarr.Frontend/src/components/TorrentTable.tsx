@@ -467,7 +467,7 @@ function TorrentTable({
       case "status":
         return (
           <span className={`badge badge-${torrent.status.toLowerCase()}`}>
-            {t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status)}
+            {t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status === "QueuedForChecking" ? "Queued for Recheck" : torrent.status)}
           </span>
         );
       case "totalSize":

@@ -963,6 +963,8 @@ public class TransmissionRpcController : ControllerBase
         {
             TorrentStatus.Stopped => 0,
             TorrentStatus.Paused => 0,
+            TorrentStatus.QueuedForChecking => 1,
+            TorrentStatus.Checking => 2,
             TorrentStatus.Queued => progress >= 1.0 ? 5 : 3,
             TorrentStatus.Downloading => 4,
             TorrentStatus.Seeding => 6,

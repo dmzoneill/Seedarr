@@ -7,5 +7,7 @@ public enum TorrentStatus
     Paused = 2,
     Error = 3,
     Queued = 4,
-    Downloading = 5
+    Downloading = 5,
+    Checking = 6,
+    QueuedForChecking = 7
 }

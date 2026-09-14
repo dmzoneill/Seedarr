@@ -1765,6 +1765,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         return status switch
         {
             TorrentStatus.Queued => progress >= 1.0 ? "queuedUP" : "queuedDL",
+            TorrentStatus.Checking => progress >= 1.0 ? "checkingUP" : "checkingDL",
+            TorrentStatus.QueuedForChecking => progress >= 1.0 ? "checkingUP" : "checkingDL",
             TorrentStatus.Downloading => "downloading",
             TorrentStatus.Seeding => "uploading",
             TorrentStatus.Paused => progress >= 1.0 ? "pausedUP" : "pausedDL",
