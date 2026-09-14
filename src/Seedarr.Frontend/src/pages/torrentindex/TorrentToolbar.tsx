@@ -87,69 +87,72 @@ export function TorrentToolbar({
           </button>
         )}
         <h1 className="page-heading">{t("torrents.title", undefined, "Torrents")} ({count})</h1>
-        <button className="btn btn-success" onClick={onAddTorrent}>
-          <PlusIcon size={13} /> {t("torrents.addTorrent", undefined, "Add Torrent")}
-        </button>
-        {onSearchIndexers && (
-          <button
-            type="button"
-            className="btn btn-outline"
-            onClick={onSearchIndexers}
-            style={{ fontSize: "0.82rem" }}
-          >
-            🔍 {t("modals.indexerSearch", undefined, "Search Indexers")}
-          </button>
-        )}
-        {onToggleQuickControls && (
-          <button
-            type="button"
-            className={`btn btn-small quick-controls-toggle-btn${isQuickControlsOpen ? " active" : ""}`}
-            onClick={onToggleQuickControls}
-            title={
-              isQuickControlsOpen
-                ? "Hide Quick Controls (Q)"
-                : "Show Quick Controls (Q)"
-            }
-            aria-label="Toggle Quick Controls drawer"
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-          >
-            <SlidersIcon size={13} />
-            <span>{t("torrents.quickControls", undefined, "Quick Controls")}</span>
-            <kbd className="quick-controls-kbd">Q</kbd>
-          </button>
-        )}
-        {selectedCount > 0 && (
+        {selectedCount > 0 ? (
           <div className="bulk-actions">
             <span className="bulk-actions-count">{t("torrents.selectedCount", { count: selectedCount }, `${selectedCount} selected`)}</span>
             <button
-              className="btn btn-small btn-success"
+              className="btn btn-success"
               onClick={onBulkStart}
               disabled={bulkPending}
             >
-              <PlayIcon size={12} /> {t("torrents.start", undefined, "Start")}
+              <PlayIcon size={13} /> {t("torrents.start", undefined, "Start")}
             </button>
             <button
-              className="btn btn-small"
+              className="btn btn-outline"
               onClick={onBulkStop}
               disabled={bulkPending}
             >
-              <StopIcon size={12} /> {t("torrents.stop", undefined, "Stop")}
+              <StopIcon size={13} /> {t("torrents.stop", undefined, "Stop")}
             </button>
             <button
-              className="btn btn-small btn-danger"
+              className="btn btn-danger"
               onClick={onBulkDelete}
               disabled={bulkPending}
             >
               {t("common.delete", undefined, "Delete")}
             </button>
             <button
-              className="btn btn-small"
+              className="btn btn-outline"
               onClick={onBulkClear}
               disabled={bulkPending}
             >
               {t("common.clear", undefined, "Clear")}
             </button>
           </div>
+        ) : (
+          <>
+            <button className="btn btn-success" onClick={onAddTorrent}>
+              <PlusIcon size={13} /> {t("torrents.addTorrent", undefined, "Add Torrent")}
+            </button>
+            {onSearchIndexers && (
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={onSearchIndexers}
+                style={{ fontSize: "0.82rem" }}
+              >
+                🔍 {t("modals.indexerSearch", undefined, "Search Indexers")}
+              </button>
+            )}
+            {onToggleQuickControls && (
+              <button
+                type="button"
+                className={`btn btn-small quick-controls-toggle-btn${isQuickControlsOpen ? " active" : ""}`}
+                onClick={onToggleQuickControls}
+                title={
+                  isQuickControlsOpen
+                    ? "Hide Quick Controls (Q)"
+                    : "Show Quick Controls (Q)"
+                }
+                aria-label="Toggle Quick Controls drawer"
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+              >
+                <SlidersIcon size={13} />
+                <span>{t("torrents.quickControls", undefined, "Quick Controls")}</span>
+                <kbd className="quick-controls-kbd">Q</kbd>
+              </button>
+            )}
+          </>
         )}
       </div>
       <div className="page-header-actions">
