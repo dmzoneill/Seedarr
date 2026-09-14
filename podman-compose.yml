@@ -40,7 +40,7 @@ services:
         condition: service_healthy
 
   leecharr:
-    image: docker.io/dmzoneill/leecharr:latest
+    image: ${LEECHARR_IMAGE:-leecharr:latest}
     container_name: leecharr
     hostname: leecharr.local
     ports:
