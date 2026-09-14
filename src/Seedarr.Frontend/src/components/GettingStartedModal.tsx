@@ -653,6 +653,7 @@ export function GettingStartedModal({
         {currentStep === 0 && (
           <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
             <h3
+              className="modal-title"
               style={{
                 fontSize: "1.25rem",
                 fontWeight: 700,
@@ -792,6 +793,17 @@ export function GettingStartedModal({
         {/* ========================================================================= */}
         {currentStep === 1 && (
           <div>
+            <h3
+              className="modal-title"
+              style={{
+                fontSize: "1.25rem",
+                fontWeight: 700,
+                color: "var(--accent, #c8a84e)",
+                marginBottom: "0.75rem",
+              }}
+            >
+              📥 {t("gettingStarted.step1Title", undefined, "Add Download Client")}
+            </h3>
             <TextInput
               label={t("gettingStarted.name", undefined, "Name")}
               value={clientForm.name || ""}
@@ -970,6 +982,17 @@ export function GettingStartedModal({
         {/* ========================================================================= */}
         {currentStep === 2 && (
           <div>
+            <h3
+              className="modal-title"
+              style={{
+                fontSize: "1.25rem",
+                fontWeight: 700,
+                color: "var(--accent, #c8a84e)",
+                marginBottom: "0.75rem",
+              }}
+            >
+              🔍 {t("gettingStarted.step2Title", undefined, "Add Indexer")}
+            </h3>
             <TextInput
               label={t("gettingStarted.name", undefined, "Name")}
               value={indexerForm.name || ""}

@@ -224,11 +224,11 @@ public class SpeedScheduler : ISpeedScheduler
             else
             {
                 // Overnight schedule (e.g. 22:00 - 06:00)
-                if (currentTime >= schedule.StartTime && schedule.Days.HasFlag(todayFlag))
+                if (schedule.Days.HasFlag(todayFlag) && (currentTime >= schedule.StartTime || currentTime < schedule.EndTime))
                 {
                     active.Add(schedule);
                 }
-                else if (currentTime < schedule.EndTime && schedule.Days.HasFlag(prevDayFlag))
+                else if (schedule.Days.HasFlag(prevDayFlag) && currentTime < schedule.EndTime)
                 {
                     active.Add(schedule);
                 }
@@ -267,15 +267,14 @@ public class SpeedScheduler : ISpeedScheduler
     private static SpeedLimits ResolveLimits(List<SpeedSchedule> activeSchedules)
     {
         // Most restrictive wins: take the lowest speed from all active schedules.
-        // MaxUploadSpeed = 0 acts as an explicit scheduled pause.
-        // SpeedLimits.Unlimited (-1) indicates unconstrained.
+        // In SpeedSchedule entities, 0 indicates Unlimited (-1L).
         var uploadSpeeds = activeSchedules
-            .Where(s => s.MaxUploadSpeed >= 0)
+            .Where(s => s.MaxUploadSpeed > 0)
             .Select(s => s.MaxUploadSpeed)
             .ToList();
 
         var downloadSpeeds = activeSchedules
-            .Where(s => s.MaxDownloadSpeed >= 0)
+            .Where(s => s.MaxDownloadSpeed > 0)
             .Select(s => s.MaxDownloadSpeed)
             .ToList();
 
