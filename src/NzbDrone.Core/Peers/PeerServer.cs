@@ -752,6 +752,17 @@ public class PeerServer : BackgroundService
         });
     }
 
+    private void HandleMessage(PeerConnection connection, PeerMessage message)
+    {
+        Torrent torrent = null;
+        if (!string.IsNullOrEmpty(connection?.InfoHash) && _torrentService != null)
+        {
+            torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, connection.InfoHash, StringComparison.OrdinalIgnoreCase));
+        }
+
+        HandleMessage(connection, message, torrent);
+    }
+
     private void HandleMessage(PeerConnection connection, PeerMessage message, Torrent torrent)
     {
         switch (message.Type)
