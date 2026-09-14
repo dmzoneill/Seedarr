@@ -29,15 +29,25 @@ wwwroot/
 .DS_Store
 Thumbs.db
 
-# Seedarr data
+# Seedarr runtime data & compose volumes
 *.db
 *.db-shm
 *.db-wal
-config.xml
+/config/
+/data/downloads/*
+!/data/downloads/.gitkeep
+/data/movies/*
+!/data/movies/.gitkeep
+/data/series/*
+!/data/series/.gitkeep
 /logs/
 /MediaCover/
 /MediaCache/
 /Backups/
+
+# Track test configs and fixtures
+!tests/config/**
+!tests/fixtures/**
 
 # Secrets
 *.env
@@ -47,6 +57,3 @@ patch*.py
 patch*.js
 update*.js
 scratch/
-
-
-

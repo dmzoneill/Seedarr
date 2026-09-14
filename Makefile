@@ -1,5 +1,5 @@
 .PHONY: setup test-setup test integration build clean restore frontend \
-       stack-up stack-down stack-configure stack-healthy stack-rebuild \
+       stack-init stack-build stack-up stack-down stack-configure stack-healthy stack-rebuild stack-clean \
        test-unit test-integration test-integration-rerun test-integration-only test-all \
        coverage-report
 
@@ -10,8 +10,13 @@ AUTOMATION_TEST := src/NzbDrone.Automation.Test/Seedarr.Automation.Test.csproj
 CONSOLE := src/NzbDrone.Console/Seedarr.Console.csproj
 FRONTEND := src/Seedarr.Frontend
 COMPOSE := podman-compose
-SERVICES := seedarr sonarr radarr lidarr prowlarr transmission
-DEPS := sonarr radarr lidarr prowlarr transmission
+SERVICES := seedarr sonarr radarr prowlarr transmission
+DEPS := sonarr radarr prowlarr transmission
+
+SEEDARR_API_KEY := 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d
+SONARR_API_KEY := 4b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e
+RADARR_API_KEY := 5c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f
+PROWLARR_API_KEY := 3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f
 
 # --- Build targets (called by upstream CI: make setup) ---
 
@@ -48,8 +53,7 @@ test:
 		--collect:"XPlat Code Coverage"
 
 # integration brings up the full stack and runs all test suites.
-# Webhook auth uses standard X-Api-Key (same as all other endpoints).
-integration: stack-clean stack-build stack-up stack-healthy stack-configure
+integration: stack-clean stack-init stack-build stack-up stack-healthy stack-configure
 	@echo ""
 	@echo "Running .NET integration tests..."
 	dotnet test $(INTEGRATION_TEST) --no-build \
@@ -59,8 +63,11 @@ integration: stack-clean stack-build stack-up stack-healthy stack-configure
 		--collect:"XPlat Code Coverage"
 	@echo ""
 	@echo "Running automation tests..."
-	$(eval SEEDARR_API_KEY := $(shell podman exec seedarr sh -c "grep -o '<ApiKey>[^<]*</ApiKey>' /config/config.xml 2>/dev/null" | sed 's/<[^>]*>//g'))
-	SEEDARR_URL=http://localhost:9898 SEEDARR_API_KEY=$(SEEDARR_API_KEY) dotnet test $(AUTOMATION_TEST) --no-build \
+	SEEDARR_URL=http://localhost:9898 SEEDARR_API_KEY=$(SEEDARR_API_KEY) \
+	SONARR_URL=http://localhost:8989 SONARR_API_KEY=$(SONARR_API_KEY) \
+	RADARR_URL=http://localhost:7878 RADARR_API_KEY=$(RADARR_API_KEY) \
+	PROWLARR_URL=http://localhost:9696 PROWLARR_API_KEY=$(PROWLARR_API_KEY) \
+	dotnet test $(AUTOMATION_TEST) --no-build \
 		--settings .runsettings \
 		-maxcpucount:4 \
 		--logger "trx;LogFileName=automation-results.trx"
@@ -77,19 +84,27 @@ test-unit: test
 
 # --- Integration test stack ---
 
+stack-init:
+	@mkdir -p config/seedarr config/sonarr config/radarr config/prowlarr config/transmission data/downloads data/movies data/series
+	@if [ ! -f config/seedarr/config.xml ]; then cp tests/config/seedarr/config.xml config/seedarr/config.xml; fi
+	@if [ ! -f config/sonarr/config.xml ]; then cp tests/config/sonarr/config.xml config/sonarr/config.xml; fi
+	@if [ ! -f config/radarr/config.xml ]; then cp tests/config/radarr/config.xml config/radarr/config.xml; fi
+	@if [ ! -f config/prowlarr/config.xml ]; then cp tests/config/prowlarr/config.xml config/prowlarr/config.xml; fi
+	@if [ ! -f config/transmission/settings.json ]; then cp tests/config/transmission/settings.json config/transmission/settings.json; fi
+	@chmod -R 777 config data 2>/dev/null || true
+
 stack-build:
 	$(COMPOSE) build
 
 stack-rebuild:
 	$(COMPOSE) build --no-cache seedarr
 
-stack-up:
+stack-up: stack-init
 	$(COMPOSE) up -d $(DEPS)
 	@echo "Waiting for dependency services..."
 	@for i in $$(seq 1 120); do \
 		if curl -sf http://localhost:8989/ping > /dev/null 2>&1 && \
 		   curl -sf http://localhost:7878/ping > /dev/null 2>&1 && \
-		   curl -sf http://localhost:8686/ping > /dev/null 2>&1 && \
 		   curl -sf http://localhost:9696/ping > /dev/null 2>&1 && \
 		   curl -sf http://localhost:9091/transmission/web/ > /dev/null 2>&1; then \
 			echo "Dependencies healthy after $${i}s"; \
@@ -105,6 +120,7 @@ stack-down:
 stack-clean:
 	@$(COMPOSE) down 2>/dev/null || true
 	@podman rm -f $(SERVICES) arr-configure 2>/dev/null || true
+	@rm -rf config data
 	@$(COMPOSE) down -v 2>/dev/null || true
 
 stack-healthy:
@@ -119,8 +135,6 @@ stack-healthy:
 	echo "Timeout waiting for Seedarr"; exit 1
 
 stack-configure:
-	@podman exec radarr mkdir -p /config/movies 2>/dev/null || true
-	@podman exec radarr chown abc:users /config/movies 2>/dev/null || true
 	@$(COMPOSE) rm -f configure 2>/dev/null || true
 	@$(COMPOSE) up --no-deps configure 2>&1 | tail -60
 
@@ -149,11 +163,19 @@ test-integration-rerun: stack-healthy stack-configure
 		--logger "trx;LogFileName=integration-test-results.trx"
 	@echo ""
 	@echo "Running automation tests..."
-	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
+	SEEDARR_URL=http://localhost:9898 SEEDARR_API_KEY=$(SEEDARR_API_KEY) \
+	SONARR_URL=http://localhost:8989 SONARR_API_KEY=$(SONARR_API_KEY) \
+	RADARR_URL=http://localhost:7878 RADARR_API_KEY=$(RADARR_API_KEY) \
+	PROWLARR_URL=http://localhost:9696 PROWLARR_API_KEY=$(PROWLARR_API_KEY) \
+	dotnet test $(AUTOMATION_TEST) --no-build \
 		--logger "trx;LogFileName=automation-test-results.trx"
 
 test-integration-only:
-	SEEDARR_URL=http://localhost:9898 dotnet test $(AUTOMATION_TEST) --no-build \
+	SEEDARR_URL=http://localhost:9898 SEEDARR_API_KEY=$(SEEDARR_API_KEY) \
+	SONARR_URL=http://localhost:8989 SONARR_API_KEY=$(SONARR_API_KEY) \
+	RADARR_URL=http://localhost:7878 RADARR_API_KEY=$(RADARR_API_KEY) \
+	PROWLARR_URL=http://localhost:9696 PROWLARR_API_KEY=$(PROWLARR_API_KEY) \
+	dotnet test $(AUTOMATION_TEST) --no-build \
 		--logger "trx;LogFileName=automation-test-results.trx"
 
 # --- Combined ---
