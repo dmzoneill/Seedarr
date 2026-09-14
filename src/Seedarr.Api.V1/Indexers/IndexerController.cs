@@ -15,6 +15,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.Indexers;
 
 [V1ApiController("indexers")]
+[Route("api/v1/indexer")]
 public class IndexerController : Controller
 {
     private readonly HttpClient _httpClient;
