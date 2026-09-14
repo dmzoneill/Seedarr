@@ -868,7 +868,7 @@ public class PeerServer : BackgroundService
                     var pieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
                     var isAllowedFast = connection.SupportsFastExtension && _fastExtensionHandler != null && _fastExtensionHandler.GetAllowedFastSet(connection).Contains(pieceIndex);
 
-                    if (!connection.AmChoking || isAllowedFast)
+                    if (!connection.AmChoking || isAllowedFast || _chokeManager == null)
                     {
                         HandlePieceRequest(connection, message.Payload);
                         connection.PendingRequestCount++;

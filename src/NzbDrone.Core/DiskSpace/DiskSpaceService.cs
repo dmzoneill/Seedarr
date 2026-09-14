@@ -60,8 +60,8 @@ public class DiskSpaceService : IDiskSpaceService
             drives = Array.Empty<DriveInfo>();
         }
 
-        AddDriveInfo(result, seen, _appFolderInfo.AppDataFolder, "AppData", drives);
-        AddDriveInfo(result, seen, _appFolderInfo.StartUpFolder, "Startup", drives);
+        AddDriveInfoWithDrives(result, seen, _appFolderInfo.AppDataFolder, "AppData", drives);
+        AddDriveInfoWithDrives(result, seen, _appFolderInfo.StartUpFolder, "Startup", drives);
 
         foreach (var drive in drives)
         {
@@ -107,10 +107,10 @@ public class DiskSpaceService : IDiskSpaceService
         string path,
         string label)
     {
-        AddDriveInfo(result, seen, path, label, null);
+        AddDriveInfoWithDrives(result, seen, path, label, null);
     }
 
-    private void AddDriveInfo(
+    private void AddDriveInfoWithDrives(
         List<DiskSpaceInfo> result,
         HashSet<string> seen,
         string path,
