@@ -10,10 +10,11 @@ AUTOMATION_TEST := src/NzbDrone.Automation.Test/Seedarr.Automation.Test.csproj
 CONSOLE := src/NzbDrone.Console/Seedarr.Console.csproj
 FRONTEND := src/Seedarr.Frontend
 COMPOSE := podman-compose
-SERVICES := seedarr sonarr radarr prowlarr transmission
-DEPS := sonarr radarr prowlarr transmission
+SERVICES := seedarr leecharr sonarr radarr prowlarr
+DEPS := leecharr sonarr radarr prowlarr
 
 SEEDARR_API_KEY := 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d
+LEECHARR_API_KEY := 2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e
 SONARR_API_KEY := 4b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e
 RADARR_API_KEY := 5c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f
 PROWLARR_API_KEY := 3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f
@@ -64,6 +65,7 @@ integration: stack-clean stack-init stack-build stack-up stack-healthy stack-con
 	@echo ""
 	@echo "Running automation tests..."
 	SEEDARR_URL=http://localhost:9898 SEEDARR_API_KEY=$(SEEDARR_API_KEY) \
+	LEECHARR_URL=http://localhost:7889 LEECHARR_API_KEY=$(LEECHARR_API_KEY) \
 	SONARR_URL=http://localhost:8989 SONARR_API_KEY=$(SONARR_API_KEY) \
 	RADARR_URL=http://localhost:7878 RADARR_API_KEY=$(RADARR_API_KEY) \
 	PROWLARR_URL=http://localhost:9696 PROWLARR_API_KEY=$(PROWLARR_API_KEY) \
@@ -85,12 +87,12 @@ test-unit: test
 # --- Integration test stack ---
 
 stack-init:
-	@mkdir -p config/seedarr config/sonarr config/radarr config/prowlarr config/transmission data/downloads data/movies data/series
+	@mkdir -p config/seedarr config/leecharr config/sonarr config/radarr config/prowlarr data/downloads data/movies data/series
 	@if [ ! -f config/seedarr/config.xml ]; then cp tests/config/seedarr/config.xml config/seedarr/config.xml; fi
+	@if [ ! -f config/leecharr/config.xml ]; then cp tests/config/leecharr/config.xml config/leecharr/config.xml; fi
 	@if [ ! -f config/sonarr/config.xml ]; then cp tests/config/sonarr/config.xml config/sonarr/config.xml; fi
 	@if [ ! -f config/radarr/config.xml ]; then cp tests/config/radarr/config.xml config/radarr/config.xml; fi
 	@if [ ! -f config/prowlarr/config.xml ]; then cp tests/config/prowlarr/config.xml config/prowlarr/config.xml; fi
-	@if [ ! -f config/transmission/settings.json ]; then cp tests/config/transmission/settings.json config/transmission/settings.json; fi
 	@chmod -R 777 config data 2>/dev/null || true
 
 stack-build:
@@ -106,7 +108,7 @@ stack-up: stack-init
 		if curl -sf http://localhost:8989/ping > /dev/null 2>&1 && \
 		   curl -sf http://localhost:7878/ping > /dev/null 2>&1 && \
 		   curl -sf http://localhost:9696/ping > /dev/null 2>&1 && \
-		   curl -sf http://localhost:9091/transmission/web/ > /dev/null 2>&1; then \
+		   curl -sf http://localhost:7889/ping > /dev/null 2>&1; then \
 			echo "Dependencies healthy after $${i}s"; \
 			break; \
 		fi; \
@@ -120,7 +122,7 @@ stack-down:
 stack-clean:
 	@$(COMPOSE) down 2>/dev/null || true
 	@podman rm -f $(SERVICES) arr-configure 2>/dev/null || true
-	@rm -rf config data
+	@podman unshare rm -rf config 2>/dev/null || rm -rf config 2>/dev/null || true
 	@$(COMPOSE) down -v 2>/dev/null || true
 
 stack-healthy:
@@ -164,6 +166,7 @@ test-integration-rerun: stack-healthy stack-configure
 	@echo ""
 	@echo "Running automation tests..."
 	SEEDARR_URL=http://localhost:9898 SEEDARR_API_KEY=$(SEEDARR_API_KEY) \
+	LEECHARR_URL=http://localhost:7889 LEECHARR_API_KEY=$(LEECHARR_API_KEY) \
 	SONARR_URL=http://localhost:8989 SONARR_API_KEY=$(SONARR_API_KEY) \
 	RADARR_URL=http://localhost:7878 RADARR_API_KEY=$(RADARR_API_KEY) \
 	PROWLARR_URL=http://localhost:9696 PROWLARR_API_KEY=$(PROWLARR_API_KEY) \
@@ -172,6 +175,7 @@ test-integration-rerun: stack-healthy stack-configure
 
 test-integration-only:
 	SEEDARR_URL=http://localhost:9898 SEEDARR_API_KEY=$(SEEDARR_API_KEY) \
+	LEECHARR_URL=http://localhost:7889 LEECHARR_API_KEY=$(LEECHARR_API_KEY) \
 	SONARR_URL=http://localhost:8989 SONARR_API_KEY=$(SONARR_API_KEY) \
 	RADARR_URL=http://localhost:7878 RADARR_API_KEY=$(RADARR_API_KEY) \
 	PROWLARR_URL=http://localhost:9696 PROWLARR_API_KEY=$(PROWLARR_API_KEY) \
