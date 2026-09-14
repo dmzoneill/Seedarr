@@ -10,6 +10,8 @@ const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
   SeedingStatsUpdated: [["seeding", "stats"]],
   HealthCheckCompleted: [["health"]],
   CommandCompleted: [["system", "status"]],
+  AutomationExecuted: [["automation", "scripts"], ["automation"]],
+  AutomationTriggerEvaluated: [["automation", "scripts"], ["automation"]],
 };
 
 export default function SignalRProvider() {
@@ -56,6 +58,9 @@ export default function SignalRProvider() {
         queryClient.invalidateQueries({ queryKey: ["health"] });
       } else if (name.includes("command") || name.includes("system")) {
         queryClient.invalidateQueries({ queryKey: ["system", "status"] });
+      } else if (name.includes("automation")) {
+        queryClient.invalidateQueries({ queryKey: ["automation", "scripts"] });
+        queryClient.invalidateQueries({ queryKey: ["automation"] });
       }
     };
 
@@ -82,6 +87,15 @@ export default function SignalRProvider() {
           );
         } else if (event === "TorrentDeleted") {
           showToastRef.current("Torrent removed", "info");
+        } else if (event === "AutomationExecuted") {
+          const body = data as Record<string, unknown> | undefined;
+          const isSuccess = body?.success !== false && body?.Success !== false;
+          showToastRef.current(
+            isSuccess
+              ? "Automation execution completed"
+              : "Automation execution encountered error",
+            isSuccess ? "success" : "warning",
+          );
         }
       };
       handlers.push([event, handler]);

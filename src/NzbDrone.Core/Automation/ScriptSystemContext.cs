@@ -15,10 +15,17 @@ public class ScriptSystemContext
     private readonly AutomationExecutionResult? _result;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-    public ScriptSystemContext(IManageCommandQueue? commandQueue = null, AutomationExecutionResult? result = null)
+    public long diskFreeSpace { get; set; }
+    public bool vpnActive { get; set; } = true;
+    public bool isPortForwarded { get; set; } = true;
+
+    public ScriptSystemContext(IManageCommandQueue? commandQueue = null, AutomationExecutionResult? result = null, long freeSpace = 0, bool isVpnActive = true, bool isPortForward = true)
     {
         _commandQueue = commandQueue;
         _result = result;
+        diskFreeSpace = freeSpace;
+        vpnActive = isVpnActive;
+        isPortForwarded = isPortForward;
     }
 
     public object? runCommand(string commandName, object? payload = null)

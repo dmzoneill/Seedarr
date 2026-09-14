@@ -305,6 +305,37 @@ public class SeedingEngine : BackgroundService
         var totalActive = downloadingTorrents.Count + seedingTorrents.Count;
         _eventAggregator.PublishEvent(new SeedingTickEvent(totalActive));
 
+        // Evaluate metric thresholds across active torrents
+        long totalDlSpeed = 0;
+        long totalUlSpeed = 0;
+
+        foreach (var torrent in activeTorrents)
+        {
+            totalDlSpeed += torrent.DownloadSpeed;
+            totalUlSpeed += torrent.UploadSpeed;
+
+            if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed == 0 && torrent.Progress < 1.0)
+            {
+                var stalledMinutes = (int)(_clock.UtcNow - torrent.DateAdded).TotalMinutes;
+                if (stalledMinutes >= 5)
+                {
+                    _eventAggregator.PublishEvent(new TorrentStalledEvent(torrent, stalledMinutes));
+                }
+            }
+
+            if (torrent.Status == TorrentStatus.Seeding && torrent.SeedingTime > 0)
+            {
+                _eventAggregator.PublishEvent(new TorrentSeedingTimeReachedEvent(torrent, TimeSpan.FromSeconds(torrent.SeedingTime)));
+            }
+        }
+
+        var configuredMaxDl = _configService.MaxDownloadSpeedKbps > 0 ? _configService.MaxDownloadSpeedKbps * 1024L : 0;
+        var configuredMaxUl = _configService.MaxUploadSpeedKbps > 0 ? _configService.MaxUploadSpeedKbps * 1024L : 0;
+        if ((configuredMaxDl > 0 && totalDlSpeed >= configuredMaxDl) || (configuredMaxUl > 0 && totalUlSpeed >= configuredMaxUl))
+        {
+            _eventAggregator.PublishEvent(new SpeedThresholdExceededEvent(totalDlSpeed, totalUlSpeed, activeTorrents.Count));
+        }
+
         foreach (var torrent in activeTorrents)
         {
             if (!string.IsNullOrEmpty(torrent.InfoHash))
