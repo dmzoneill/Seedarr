@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.DiskSpace;
 
@@ -25,15 +26,18 @@ public interface IDiskSpaceService
 public class DiskSpaceService : IDiskSpaceService
 {
     private readonly IAppFolderInfo _appFolderInfo;
+    private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DiskSpaceService"/> class.
     /// </summary>
     /// <param name="appFolderInfo">Application folder information.</param>
-    public DiskSpaceService(IAppFolderInfo appFolderInfo)
+    /// <param name="eventAggregator">Event aggregator for publishing disk space threshold events.</param>
+    public DiskSpaceService(IAppFolderInfo appFolderInfo, IEventAggregator eventAggregator = null)
     {
         _appFolderInfo = appFolderInfo;
+        _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -65,13 +69,27 @@ public class DiskSpaceService : IDiskSpaceService
             {
                 if (seen.Add(drive.RootDirectory.FullName))
                 {
-                    result.Add(new DiskSpaceInfo
+                    var info = new DiskSpaceInfo
                     {
                         Path = drive.RootDirectory.FullName,
                         Label = drive.VolumeLabel.Length > 0 ? drive.VolumeLabel : drive.RootDirectory.FullName,
                         FreeSpace = drive.AvailableFreeSpace,
                         TotalSpace = drive.TotalSize,
-                    });
+                    };
+                    result.Add(info);
+
+                    if (_eventAggregator != null && info.TotalSpace > 0)
+                    {
+                        var freePercentage = (double)info.FreeSpace / info.TotalSpace;
+                        if (info.FreeSpace < 1024L * 1024 * 1024)
+                        {
+                            _eventAggregator.PublishEvent(new DiskSpaceCriticalEvent(info.Path, info.FreeSpace));
+                        }
+                        else if (info.FreeSpace < 5L * 1024 * 1024 * 1024 || freePercentage < 0.05)
+                        {
+                            _eventAggregator.PublishEvent(new DiskSpaceLowEvent(info.Path, info.FreeSpace, info.TotalSpace, freePercentage));
+                        }
+                    }
                 }
             }
             catch (Exception ex)

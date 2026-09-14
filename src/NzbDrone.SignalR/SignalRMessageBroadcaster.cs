@@ -69,7 +69,20 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
             return "CommandCompleted";
         }
 
-        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandCompleted")
+        if (string.Equals(message.Name, "Automation", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "AutomationExecution", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "AutomationScript", StringComparison.OrdinalIgnoreCase))
+        {
+            return "AutomationExecuted";
+        }
+
+        if (string.Equals(message.Name, "AutomationTriggerEvaluation", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "AutomationTriggerEvaluated", StringComparison.OrdinalIgnoreCase))
+        {
+            return "AutomationTriggerEvaluated";
+        }
+
+        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandCompleted" or "AutomationExecuted" or "AutomationTriggerEvaluated")
         {
             return message.Name;
         }

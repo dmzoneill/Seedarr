@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Trackers.Metrics;
@@ -96,6 +97,7 @@ public class TrackerMetricService : ITrackerMetricService
     private readonly ITrackerMetricSnapshotRepository _snapshotRepository;
     private readonly ITrackerEntryRepository _trackerEntryRepository;
     private readonly ITorrentRepository _torrentRepository;
+    private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
     private readonly object _lock = new();
 
@@ -103,12 +105,14 @@ public class TrackerMetricService : ITrackerMetricService
         ITrackerMetricRepository metricRepository,
         ITrackerMetricSnapshotRepository snapshotRepository,
         ITrackerEntryRepository trackerEntryRepository,
-        ITorrentRepository torrentRepository)
+        ITorrentRepository torrentRepository,
+        IEventAggregator eventAggregator = null)
     {
         _metricRepository = metricRepository;
         _snapshotRepository = snapshotRepository;
         _trackerEntryRepository = trackerEntryRepository;
         _torrentRepository = torrentRepository;
+        _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
 
         Task.Run(SeedFromExistingTrackers);
@@ -251,9 +255,12 @@ public class TrackerMetricService : ITrackerMetricService
                 {
                     metric.Status = "Degraded";
                 }
+
+                _eventAggregator?.PublishEvent(new TrackerUnreachableEvent(null, trackerUrl, error ?? "Announce failed"));
             }
 
             _metricRepository.Update(metric);
+            _eventAggregator?.PublishEvent(new TrackerMetricUpdatedEvent(metric.TrackerUrl, metric.TotalAnnounces, metric.TotalUploaded, metric.TotalDownloaded, metric.Status));
 
             // Record snapshot for time-series history
             try
@@ -330,6 +337,7 @@ public class TrackerMetricService : ITrackerMetricService
             }
 
             _metricRepository.Update(metric);
+            _eventAggregator?.PublishEvent(new TrackerMetricUpdatedEvent(metric.TrackerUrl, metric.TotalAnnounces, metric.TotalUploaded, metric.TotalDownloaded, metric.Status));
 
             try
             {

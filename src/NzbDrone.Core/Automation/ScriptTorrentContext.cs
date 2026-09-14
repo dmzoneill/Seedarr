@@ -57,6 +57,12 @@ public class ScriptTorrentContext
 
     public bool isPrivate => _torrent.IsPrivate;
 
+    public bool isComplete => _torrent.Progress >= 1.0 || _torrent.Progress >= 0.999 || _torrent.ForceCompleted || _torrent.Status == TorrentStatus.Seeding;
+
+    public long seedingTime => _torrent.SeedingTime;
+
+    public long seedingTimeMinutes => (long)(_torrent.SeedingTime / 60);
+
     public List<int> tagIds => _torrent.TagIds != null ? new List<int>(_torrent.TagIds) : new List<int>();
 
     public List<string> tags => new(_tagNames);

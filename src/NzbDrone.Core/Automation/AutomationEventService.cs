@@ -3,6 +3,7 @@ using System;
 using System.Linq;
 using NLog;
 using NzbDrone.Core.Categories;
+using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Messaging.Events;
@@ -15,6 +16,7 @@ public class AutomationEventService :
     IHandle<TorrentAddedEvent>,
     IHandle<TorrentDownloadCompletedEvent>,
     IHandle<TorrentSeedGoalReachedEvent>,
+    IHandle<TorrentRatioReachedEvent>,
     IHandle<HealthIssueEvent>,
     IHandle<TorrentDeletedEvent>,
     IHandle<TorrentStatusChangedEvent>,
@@ -78,6 +80,16 @@ public class AutomationEventService :
     }
 
     public void Handle(TorrentSeedGoalReachedEvent message)
+    {
+        if (message?.Torrent == null)
+        {
+            return;
+        }
+
+        DispatchTrigger(AutomationTrigger.RatioReached, message.Torrent);
+    }
+
+    public void Handle(TorrentRatioReachedEvent message)
     {
         if (message?.Torrent == null)
         {

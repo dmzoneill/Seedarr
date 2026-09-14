@@ -38,6 +38,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService
     private readonly ITorrentEventLogService _eventLogService;
     private readonly IConfigService _configService;
     private readonly ITrackerMetricService _trackerMetricService;
+    private readonly NzbDrone.Core.Messaging.Events.IEventAggregator _eventAggregator;
     private readonly Logger _logger;
 
     public TrackerAnnounceService(
@@ -46,7 +47,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService
         IPeerDiscoveryService peerDiscovery,
         ITorrentEventLogService eventLogService,
         IConfigService configService,
-        ITrackerMetricService trackerMetricService = null)
+        ITrackerMetricService trackerMetricService = null,
+        NzbDrone.Core.Messaging.Events.IEventAggregator eventAggregator = null)
     {
         _trackerEntryService = trackerEntryService;
         _multiTracker = multiTracker;
@@ -54,6 +56,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService
         _eventLogService = eventLogService;
         _configService = configService;
         _trackerMetricService = trackerMetricService;
+        _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -223,7 +226,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService
                 torrent.Id,
                 "Tracker",
                 $"Tracker announce failed: {entry.Url} -> {response.FailureReason ?? "Unreachable"} (failure #{entry.ConsecutiveFailures}, next retry in {(int)backoffSeconds}s)");
+
+            _eventAggregator?.PublishEvent(new TrackerUnreachableEvent(torrent, entry.Url, response.FailureReason ?? "Unreachable"));
         }
+
+        _eventAggregator?.PublishEvent(new TrackerAnnounceEvent(torrent, entry.Url, response.Complete, response.Incomplete, response.Peers?.Count ?? 0, sw.ElapsedMilliseconds, response.Success, response.FailureReason));
 
         return result;
     }
