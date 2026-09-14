@@ -132,7 +132,7 @@ public class SpeedScheduler : ISpeedScheduler
         else
         {
             isActive = (currentTime >= startTime && IsDayEnabledInGlobalConfig(today)) ||
-                       (currentTime < endTime && IsDayEnabledInGlobalConfig(prevDay));
+                (currentTime < endTime && IsDayEnabledInGlobalConfig(prevDay));
         }
 
         if (isActive)
