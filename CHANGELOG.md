@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.6.6](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.6) - 2026-09-14
+
+### ✨ Features
+- feat(automation): link metrics to events and enable end-to-end event propagation
+- Implement History, Tasks, Logging, Backup & Validation (fixes #142, #136, #144, #143, #137, #133, #134)
+
+### 🐛 Bug Fixes
+- fix(core): resolve AddDriveInfo overload reflection ambiguity and handle unconfigured choke manager in PeerServer
+- fix(core): restore cache shared, overload AddDriveInfo and HandleMessage, and trigger immediate scheduler execution
+- fix: resolve peer message overload, speed scheduler zero limits and getting started modal title
+- fix(host): use DownloadSpeed and UploadSpeed in AppLifetime watchdog
+- fix(host): correct watchdog ITorrentService and IConfigService method references
+- fix(core): remove unused using in PeerConnection
+- fix: harmonize SignalR events, dynamic versioning, and cleanup History component (#127, #129, #130)
+- fix(emulation): implement share limits, file/piece prio, and separate categories and tags
+- fix(indexers): implement search, pagination, freeleech parsing, health backoff, and magnet download (#139, #152)
+- fix(webhook): resolve Polly retry overload signature in WebhookDispatcher
+- Fix automation pipeline, duplicate script execution, interpreter resolution, process reaping, and notifications
+
+### 🔧 Maintenance & Improvements
+- style: fix indentation in SpeedScheduler
+- style: fix indentation in AutomationService
+- style: fix StyleCop and unused imports in SignalR components
+- chore: ignore patch*.js and update*.js
+- chore: remove scratch patch python scripts and ignore patch*.py
+- style: format left-padding indentations for editorconfig compliance
+- Update retry handler in WebhookDispatcher
+- style(ui): standardize border theme variables and card outlines across all components
+
 ## [v1.6.5](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.5) - 2026-09-13
 
 ### ✨ Features
