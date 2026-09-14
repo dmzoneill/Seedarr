@@ -599,7 +599,7 @@ public class PeerServer : BackgroundService
                     continue;
                 }
 
-                HandleMessage(connection, message, torrent);
+                HandleMessage(connection, message);
             }
         }
         catch (Exception ex)
@@ -726,7 +726,7 @@ public class PeerServer : BackgroundService
                     continue;
                 }
 
-                HandleMessage(connection, message, torrent);
+                HandleMessage(connection, message);
             }
         }
         catch (Exception ex)
@@ -760,11 +760,6 @@ public class PeerServer : BackgroundService
             torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, connection.InfoHash, StringComparison.OrdinalIgnoreCase));
         }
 
-        HandleMessage(connection, message, torrent);
-    }
-
-    private void HandleMessage(PeerConnection connection, PeerMessage message, Torrent torrent)
-    {
         switch (message.Type)
         {
             case PeerMessageType.Choke:

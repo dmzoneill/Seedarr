@@ -582,6 +582,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         if (!string.IsNullOrWhiteSpace(request.Category))
         {
             added.Category = request.Category;
+            added.Label = request.Category;
             needsUpdate = true;
         }
 

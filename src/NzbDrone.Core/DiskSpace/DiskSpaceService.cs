@@ -105,8 +105,17 @@ public class DiskSpaceService : IDiskSpaceService
         List<DiskSpaceInfo> result,
         HashSet<string> seen,
         string path,
+        string label)
+    {
+        AddDriveInfo(result, seen, path, label, null);
+    }
+
+    private void AddDriveInfo(
+        List<DiskSpaceInfo> result,
+        HashSet<string> seen,
+        string path,
         string label,
-        DriveInfo[] drives = null)
+        DriveInfo[] drives)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
