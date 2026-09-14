@@ -65,6 +65,7 @@ public class Scheduler : BackgroundService
                         }
                         finally
                         {
+                            _taskManager.UpdateLastExecution(next.TypeName);
                             _taskManager.RecordTaskFinished(next.TypeName, startTime);
                         }
                     }
@@ -75,7 +76,7 @@ public class Scheduler : BackgroundService
                 _logger.Error(ex, "Scheduler tick error");
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+            await Task.Delay(50, stoppingToken);
         }
     }
 }
