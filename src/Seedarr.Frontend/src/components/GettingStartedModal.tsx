@@ -39,6 +39,7 @@ type GuideMode = "readonly" | "interactive";
 interface StepMeta {
   id: string;
   stepNum: number;
+  icon: string;
   shortName: string;
   title: string;
 }
@@ -60,6 +61,7 @@ export function GettingStartedModal({
       {
         id: "welcome",
         stepNum: 0,
+        icon: "🚀",
         shortName: t("gettingStarted.stepWelcome", undefined, "Welcome"),
         title: t(
           "gettingStarted.stepWelcomeTitle",
@@ -70,6 +72,7 @@ export function GettingStartedModal({
       {
         id: "client",
         stepNum: 1,
+        icon: "📥",
         shortName: t(
           "gettingStarted.stepClient",
           undefined,
@@ -84,6 +87,7 @@ export function GettingStartedModal({
       {
         id: "prowlarr",
         stepNum: 2,
+        icon: "🔍",
         shortName: t("gettingStarted.stepProwlarr", undefined, "Prowlarr"),
         title: t(
           "gettingStarted.stepProwlarrTitle",
@@ -94,6 +98,7 @@ export function GettingStartedModal({
       {
         id: "sonarr",
         stepNum: 3,
+        icon: "📺",
         shortName: t("gettingStarted.stepSonarr", undefined, "Sonarr"),
         title: t(
           "gettingStarted.stepSonarrTitle",
@@ -104,6 +109,7 @@ export function GettingStartedModal({
       {
         id: "radarr",
         stepNum: 4,
+        icon: "🎬",
         shortName: t("gettingStarted.stepRadarr", undefined, "Radarr"),
         title: t(
           "gettingStarted.stepRadarrTitle",
@@ -114,6 +120,7 @@ export function GettingStartedModal({
       {
         id: "lidarr",
         stepNum: 5,
+        icon: "🎵",
         shortName: t("gettingStarted.stepLidarr", undefined, "Lidarr"),
         title: t(
           "gettingStarted.stepLidarrTitle",
@@ -124,6 +131,7 @@ export function GettingStartedModal({
       {
         id: "finish",
         stepNum: 6,
+        icon: "🎉",
         shortName: t("gettingStarted.stepFinished", undefined, "Finished"),
         title: t(
           "gettingStarted.stepFinishedTitle",
