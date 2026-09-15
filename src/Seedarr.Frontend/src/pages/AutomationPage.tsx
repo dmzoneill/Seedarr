@@ -993,14 +993,14 @@ export function AutomationPage() {
   }, [scriptList, selectedTriggerFilter, searchQuery]);
 
   const filteredTemplates = useMemo(() => {
-    return templateList.filter((t) => {
-      if (selectedCategoryFilter !== "All" && t.category !== selectedCategoryFilter) {
+    return templateList.filter((tmpl) => {
+      if (selectedCategoryFilter !== "All" && tmpl.category !== selectedCategoryFilter) {
         return false;
       }
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchName = t.name.toLowerCase().includes(q);
-        const matchDesc = t.description.toLowerCase().includes(q);
+        const matchName = tmpl.name.toLowerCase().includes(q);
+        const matchDesc = tmpl.description.toLowerCase().includes(q);
         if (!matchName && !matchDesc) return false;
       }
       return true;
@@ -1009,7 +1009,7 @@ export function AutomationPage() {
 
   const marketplaceCategories = useMemo(() => {
     const set = new Set<string>();
-    templateList.forEach((t) => set.add(t.category));
+    templateList.forEach((tmpl) => set.add(tmpl.category));
     return ["All", ...Array.from(set)];
   }, [templateList]);
 
@@ -2660,8 +2660,8 @@ if (torrent) {
                       onChange={(e) => setTestTorrentId(e.target.value ? Number(e.target.value) : undefined)}
                     >
                       <option value="">{t("automation.ui.sampleTorrentBigBuckBunny")}</option>
-                      {(torrents || []).map((t) => (
-                        <option key={t.id} value={t.id}>{t.name} ({(t.totalSize / (1024 * 1024 * 1024)).toFixed(2)} {t("automation.ui.gb")}</option>
+                      {(torrents || []).map((torrentItem) => (
+                        <option key={torrentItem.id} value={torrentItem.id}>{torrentItem.name} ({(torrentItem.totalSize / (1024 * 1024 * 1024)).toFixed(2)} {t("automation.ui.gb")}</option>
                       ))}
                     </select>
 

@@ -94,7 +94,7 @@ export default function SignalRProvider() {
             isSuccess
               ? "Automation execution completed"
               : "Automation execution encountered error",
-            isSuccess ? "success" : "warning",
+            isSuccess ? "success" : "error",
           );
         }
       };
