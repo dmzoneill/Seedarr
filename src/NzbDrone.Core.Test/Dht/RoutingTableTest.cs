@@ -285,12 +285,199 @@ public class RoutingTableTest
         Assert.That(closest, Is.Empty);
     }
 
-    private static DhtNode CreateNode(byte[] nodeId)
+    [Test]
+    public void AddNode_should_reject_duplicate_ip_with_different_node_id_in_same_bucket()
     {
-        return new DhtNode
+        var table = new RoutingTable(_localNodeId, bucketSize: 8);
+
+        var nodeId1 = new byte[20];
+        nodeId1[0] = 0x80;
+        nodeId1[19] = 1;
+        var node1 = new DhtNode
+        {
+            NodeId = nodeId1,
+            EndPoint = new IPEndPoint(IPAddress.Parse("198.51.100.1"), 6881),
+            LastSeen = DateTime.UtcNow
+        };
+        table.AddNode(node1);
+
+        var nodeId2 = new byte[20];
+        nodeId2[0] = 0x80;
+        nodeId2[19] = 2;
+        var node2 = new DhtNode
+        {
+            NodeId = nodeId2,
+            EndPoint = new IPEndPoint(IPAddress.Parse("198.51.100.1"), 6882), // Same IP, different port & NodeId
+            LastSeen = DateTime.UtcNow
+        };
+        table.AddNode(node2);
+
+        Assert.That(table.NodeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void AddNode_should_reject_third_node_from_same_ipv4_24_subnet_in_same_bucket()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 8);
+
+        // First node in 198.51.100.0/24
+        var nodeId1 = new byte[20];
+        nodeId1[0] = 0x80;
+        nodeId1[19] = 1;
+        table.AddNode(new DhtNode
+        {
+            NodeId = nodeId1,
+            EndPoint = new IPEndPoint(IPAddress.Parse("198.51.100.10"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        // Second node in same /24 subnet
+        var nodeId2 = new byte[20];
+        nodeId2[0] = 0x80;
+        nodeId2[19] = 2;
+        table.AddNode(new DhtNode
+        {
+            NodeId = nodeId2,
+            EndPoint = new IPEndPoint(IPAddress.Parse("198.51.100.20"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        Assert.That(table.NodeCount, Is.EqualTo(2));
+
+        // Third node in same /24 subnet should be rejected
+        var nodeId3 = new byte[20];
+        nodeId3[0] = 0x80;
+        nodeId3[19] = 3;
+        table.AddNode(new DhtNode
+        {
+            NodeId = nodeId3,
+            EndPoint = new IPEndPoint(IPAddress.Parse("198.51.100.30"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        Assert.That(table.NodeCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void AddNode_should_accept_nodes_from_different_subnets_up_to_bucket_capacity()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 4);
+
+        for (var i = 1; i <= 4; i++)
+        {
+            var nodeId = new byte[20];
+            nodeId[0] = 0x80;
+            nodeId[19] = (byte)i;
+
+            // Each node in a different /24 subnet: 198.51.1.0/24, 198.51.2.0/24, etc.
+            table.AddNode(new DhtNode
+            {
+                NodeId = nodeId,
+                EndPoint = new IPEndPoint(IPAddress.Parse($"198.51.{i}.1"), 6881),
+                LastSeen = DateTime.UtcNow
+            });
+        }
+
+        Assert.That(table.NodeCount, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void AddNode_should_reject_loopback_and_link_local_when_allow_local_is_false()
+    {
+        var table = new RoutingTable(_localNodeId, allowLocal: false);
+
+        var nodeId1 = new byte[20];
+        nodeId1[0] = 0x80;
+        table.AddNode(new DhtNode
+        {
+            NodeId = nodeId1,
+            EndPoint = new IPEndPoint(IPAddress.Loopback, 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        var nodeId2 = new byte[20];
+        nodeId2[0] = 0x40;
+        table.AddNode(new DhtNode
+        {
+            NodeId = nodeId2,
+            EndPoint = new IPEndPoint(IPAddress.Parse("169.254.1.1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        Assert.That(table.NodeCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void AddNode_should_allow_loopback_when_allow_local_is_true()
+    {
+        var table = new RoutingTable(_localNodeId, allowLocal: true);
+
+        var nodeId = new byte[20];
+        nodeId[0] = 0x80;
+        table.AddNode(new DhtNode
         {
             NodeId = nodeId,
             EndPoint = new IPEndPoint(IPAddress.Loopback, 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        Assert.That(table.NodeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void AddNode_should_enforce_ipv6_48_subnet_diversity()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 8);
+
+        var nodeId1 = new byte[20];
+        nodeId1[0] = 0x80;
+        nodeId1[19] = 1;
+        table.AddNode(new DhtNode
+        {
+            NodeId = nodeId1,
+            EndPoint = new IPEndPoint(IPAddress.Parse("2001:db8:abcd:1::1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        var nodeId2 = new byte[20];
+        nodeId2[0] = 0x80;
+        nodeId2[19] = 2;
+        table.AddNode(new DhtNode
+        {
+            NodeId = nodeId2,
+            EndPoint = new IPEndPoint(IPAddress.Parse("2001:db8:abcd:2::1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        Assert.That(table.NodeCount, Is.EqualTo(2));
+
+        // 3rd node with same /48 prefix (2001:0db8:abcd) should be rejected
+        var nodeId3 = new byte[20];
+        nodeId3[0] = 0x80;
+        nodeId3[19] = 3;
+        table.AddNode(new DhtNode
+        {
+            NodeId = nodeId3,
+            EndPoint = new IPEndPoint(IPAddress.Parse("2001:db8:abcd:3::1"), 6881),
+            LastSeen = DateTime.UtcNow
+        });
+
+        Assert.That(table.NodeCount, Is.EqualTo(2));
+    }
+
+    private static DhtNode CreateNode(byte[] nodeId, IPAddress ip = null)
+    {
+        if (ip == null)
+        {
+            var b0 = nodeId.Length > 0 ? nodeId[0] : (byte)1;
+            var b19 = nodeId.Length > 19 ? nodeId[19] : (byte)1;
+            ip = new IPAddress(new byte[] { 8, b0, b19, 1 });
+        }
+
+        return new DhtNode
+        {
+            NodeId = nodeId,
+            EndPoint = new IPEndPoint(ip, 6881),
             LastSeen = DateTime.UtcNow,
             FailCount = 0
         };
