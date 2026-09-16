@@ -12,13 +12,14 @@ using BencodeNET.Parsing;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Dht;
 
-public class DhtService : BackgroundService, IDhtService
+public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEvent>
 {
     private const int DhtPort = 6882;
     private const int PeerTtlMinutes = 30;
@@ -33,9 +34,14 @@ public class DhtService : BackgroundService, IDhtService
     private readonly byte[] _nodeId;
     private readonly DhtPeerStore _peerStore;
     private readonly object _secretLock = new();
+    private readonly object _stateLock = new();
     private readonly ConcurrentDictionary<string, PendingDhtQuery> _pendingQueries = new();
     private UdpClient _udpClient;
     private int _boundPort;
+    private CancellationTokenSource _workerCts;
+    private Task _workerTask;
+    private bool _wasEnabled;
+    private CancellationToken _stoppingToken;
 
     private byte[] _tokenSecret;
     private byte[] _previousTokenSecret;
@@ -78,6 +84,7 @@ public class DhtService : BackgroundService, IDhtService
 
     public override void Dispose()
     {
+        StopDht();
         _querySemaphore?.Dispose();
         base.Dispose();
     }
@@ -88,30 +95,148 @@ public class DhtService : BackgroundService, IDhtService
 
     public int BoundPort => _boundPort;
 
+    public bool IsRunning => _udpClient != null;
+
     public IPEndPoint LocalEndPoint => _udpClient?.Client?.LocalEndPoint as IPEndPoint;
+
+    public void Handle(ConfigSavedEvent message)
+    {
+        lock (_stateLock)
+        {
+            var isEnabled = _configService.EnableDht;
+
+            if (isEnabled)
+            {
+                if (_workerTask == null || _workerTask.IsCompleted)
+                {
+                    _logger.Info("DHT enabled via configuration change, starting service");
+                    StartDht();
+                }
+            }
+            else if (_wasEnabled || _workerTask != null)
+            {
+                _logger.Info("DHT disabled via configuration change, stopping service");
+                StopDht();
+            }
+        }
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_configService.EnableDht)
+        _stoppingToken = stoppingToken;
+
+        lock (_stateLock)
+        {
+            _wasEnabled = _configService.EnableDht;
+        }
+
+        if (_configService.EnableDht)
+        {
+            StartDht();
+        }
+        else
         {
             _logger.Info("DHT service disabled via configuration");
-            return;
         }
 
-        var portToBind = _customPort ?? DhtPort;
         try
         {
-            _udpClient = new UdpClient(portToBind);
-            _boundPort = ((IPEndPoint)_udpClient.Client.LocalEndPoint).Port;
+            await Task.Delay(Timeout.Infinite, stoppingToken);
         }
-        catch (SocketException ex)
+        catch (OperationCanceledException)
         {
-            _logger.Warn(ex, "DHT service failed to bind port {0}, skipping", portToBind);
-            return;
         }
+        finally
+        {
+            StopDht();
+            if (_workerTask != null)
+            {
+                try
+                {
+                    await _workerTask.ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
+    }
 
-        _logger.Info("DHT service started on port {0}, node ID: {1}", _boundPort, Convert.ToHexString(_nodeId));
+    private void StartDht()
+    {
+        lock (_stateLock)
+        {
+            if (_workerTask != null && !_workerTask.IsCompleted)
+            {
+                return;
+            }
 
+            var portToBind = _customPort ?? DhtPort;
+            try
+            {
+                _udpClient = new UdpClient(portToBind);
+                _boundPort = ((IPEndPoint)_udpClient.Client.LocalEndPoint).Port;
+            }
+            catch (SocketException ex)
+            {
+                _logger.Warn(ex, "DHT service failed to bind port {0}, skipping", portToBind);
+                return;
+            }
+
+            _wasEnabled = true;
+            _logger.Info("DHT service started on port {0}, node ID: {1}", _boundPort, Convert.ToHexString(_nodeId));
+
+            _workerCts = _stoppingToken.CanBeCanceled
+                ? CancellationTokenSource.CreateLinkedTokenSource(_stoppingToken)
+                : new CancellationTokenSource();
+
+            var token = _workerCts.Token;
+            _workerTask = Task.Run(() => RunWorkerAsync(token), token);
+        }
+    }
+
+    private void StopDht()
+    {
+        lock (_stateLock)
+        {
+            _wasEnabled = false;
+
+            if (_workerCts != null)
+            {
+                try
+                {
+                    _workerCts.Cancel();
+                }
+                catch (Exception)
+                {
+                }
+
+                _workerCts.Dispose();
+                _workerCts = null;
+            }
+
+            if (_udpClient != null)
+            {
+                try
+                {
+                    _udpClient.Close();
+                    _udpClient.Dispose();
+                }
+                catch (Exception)
+                {
+                }
+
+                _udpClient = null;
+                _boundPort = 0;
+                _logger.Info("DHT service stopped");
+            }
+
+            _workerTask = null;
+        }
+    }
+
+    private async Task RunWorkerAsync(CancellationToken stoppingToken)
+    {
         // Bootstrap with well-known nodes if enabled
         if (_configService.DhtAutoBootstrap)
         {
@@ -124,6 +249,14 @@ public class DhtService : BackgroundService, IDhtService
             catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
             {
                 _logger.Warn("DHT bootstrap timed out after {0}s", _configService.DhtBootstrapTimeout);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
             }
         }
 
@@ -142,7 +275,13 @@ public class DhtService : BackgroundService, IDhtService
 
                 try
                 {
-                    var result = await _udpClient.ReceiveAsync(receiveCts.Token);
+                    var client = _udpClient;
+                    if (client == null)
+                    {
+                        break;
+                    }
+
+                    var result = await client.ReceiveAsync(receiveCts.Token);
 
                     // Rate limiting
                     if (_configService.DhtRateLimitEnabled)
@@ -195,13 +334,24 @@ public class DhtService : BackgroundService, IDhtService
             {
                 break;
             }
+            catch (ObjectDisposedException)
+            {
+                break;
+            }
+            catch (SocketException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
             catch (Exception ex)
             {
+                if (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 _logger.Debug(ex, "DHT receive error");
             }
         }
-
-        _udpClient?.Dispose();
     }
 
     private async Task AnnounceTorrentsAsync(CancellationToken ct)
@@ -479,7 +629,7 @@ public class DhtService : BackgroundService, IDhtService
         };
 
         var bytes = response.EncodeAsBytes();
-        _udpClient.Send(bytes, bytes.Length, sender);
+        _udpClient?.Send(bytes, bytes.Length, sender);
     }
 
     private void HandleAnnouncePeerQuery(BDictionary args, IPEndPoint sender, BString transactionId)
@@ -567,7 +717,7 @@ public class DhtService : BackgroundService, IDhtService
         };
 
         var bytes = response.EncodeAsBytes();
-        _udpClient.Send(bytes, bytes.Length, target);
+        _udpClient?.Send(bytes, bytes.Length, target);
     }
 
     private void HandleFindNodeQuery(BDictionary args, IPEndPoint sender, BString transactionId)
@@ -590,7 +740,7 @@ public class DhtService : BackgroundService, IDhtService
         };
 
         var bytes = response.EncodeAsBytes();
-        _udpClient.Send(bytes, bytes.Length, sender);
+        _udpClient?.Send(bytes, bytes.Length, sender);
     }
 
     private void SendErrorResponse(IPEndPoint target, BString transactionId, int code, string message)
@@ -607,7 +757,7 @@ public class DhtService : BackgroundService, IDhtService
         };
 
         var bytes = error.EncodeAsBytes();
-        _udpClient.Send(bytes, bytes.Length, target);
+        _udpClient?.Send(bytes, bytes.Length, target);
     }
 
     private async Task SendFindNode(IPEndPoint target, byte[] targetId, CancellationToken ct = default)
@@ -629,7 +779,11 @@ public class DhtService : BackgroundService, IDhtService
             };
 
             var bytes = query.EncodeAsBytes();
-            await _udpClient.SendAsync(bytes, bytes.Length, target);
+            var client = _udpClient;
+            if (client != null)
+            {
+                await client.SendAsync(bytes, bytes.Length, target);
+            }
         }
         finally
         {
