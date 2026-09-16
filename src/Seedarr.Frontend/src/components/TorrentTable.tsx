@@ -22,6 +22,7 @@ import {
 } from "../utils/formatters";
 import { getMediaDeepLink } from "../utils/arrLinks";
 import { getTorrentBadges } from "../utils/milestones";
+import { filterTorrents } from "../utils/filterUtils";
 import { SkeletonTableRow } from "./Skeleton";
 import TorrentContextMenu from "./TorrentContextMenu";
 import AddTorrentModal from "./AddTorrentModal";
@@ -296,32 +297,12 @@ function TorrentTable({
     return <p className="error">Failed to load data.</p>;
   }
 
-  const filtered = (torrents ?? []).filter((t) => {
-    if (filter && !t.name.toLowerCase().includes(filter.toLowerCase()))
-      return false;
-    if (stateFilter && stateFilter !== "All" && t.status !== stateFilter)
-      return false;
-    if (trackerFilter && trackerFilter !== "All") {
-      const urls =
-        t.trackers && t.trackers.length > 0
-          ? t.trackers
-          : t.trackerUrl
-            ? [t.trackerUrl]
-            : [];
-      const hasTracker = urls.some(
-        (u) => extractTrackerDomain(u) === trackerFilter,
-      );
-      if (!hasTracker) return false;
-    }
-    if (categoryFilter && categoryFilter !== "All") {
-      const cat = t.category?.trim() || "Uncategorized";
-      if (cat !== categoryFilter) return false;
-    }
-    if (tagFilter && tagFilter !== "All") {
-      const tag = t.label?.trim() || "Untagged";
-      if (tag !== tagFilter) return false;
-    }
-    return true;
+  const filtered = filterTorrents(torrents, {
+    filter,
+    stateFilter,
+    trackerFilter,
+    categoryFilter,
+    tagFilter,
   });
 
   function getSortValue(t: Torrent, key: SortKey): string | number {

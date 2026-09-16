@@ -11,6 +11,7 @@ import {
   useSaveSeedingConfig,
 } from "../../api/hooks";
 import { extractTrackerDomain } from "../../utils/formatters";
+import { filterTorrents } from "../../utils/filterUtils";
 import { ViewMode } from "./types";
 
 function getInitialViewMode(): ViewMode {
@@ -147,36 +148,12 @@ export function useTorrentIndexState() {
   }, [torrents]);
 
   const filteredTorrents = useMemo(() => {
-    return (torrents ?? []).filter((t) => {
-      if (filter && !t.name.toLowerCase().includes(filter.toLowerCase()))
-        return false;
-      if (
-        selectedState &&
-        selectedState !== "All" &&
-        t.status !== selectedState
-      )
-        return false;
-      if (selectedTracker && selectedTracker !== "All") {
-        const urls =
-          t.trackers && t.trackers.length > 0
-            ? t.trackers
-            : t.trackerUrl
-              ? [t.trackerUrl]
-              : [];
-        const hasTracker = urls.some(
-          (u) => extractTrackerDomain(u) === selectedTracker,
-        );
-        if (!hasTracker) return false;
-      }
-      if (selectedCategory && selectedCategory !== "All") {
-        const cat = t.category?.trim() || "Uncategorized";
-        if (cat !== selectedCategory) return false;
-      }
-      if (selectedTag && selectedTag !== "All") {
-        const tag = t.label?.trim() || "Untagged";
-        if (tag !== selectedTag) return false;
-      }
-      return true;
+    return filterTorrents(torrents, {
+      filter,
+      stateFilter: selectedState,
+      trackerFilter: selectedTracker,
+      categoryFilter: selectedCategory,
+      tagFilter: selectedTag,
     });
   }, [
     torrents,

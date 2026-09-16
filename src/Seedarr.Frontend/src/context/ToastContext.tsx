@@ -7,7 +7,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 
-export type ToastType = "success" | "error" | "info";
+export type ToastType = "success" | "error" | "info" | "warning";
 
 interface Toast {
   id: number;
