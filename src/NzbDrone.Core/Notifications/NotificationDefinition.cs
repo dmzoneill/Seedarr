@@ -25,6 +25,10 @@ public class NotificationDefinition : ProviderDefinition
 
     public bool OnApplicationUpdate { get; set; }
 
+    public bool OnBackupComplete { get; set; }
+
+    public bool OnBackupFailed { get; set; } = true;
+
     public List<int> Tags { get; set; } = new();
     public List<string> Categories { get; set; } = new();
 }

@@ -508,43 +508,6 @@ public class ArrImportCompletedEvent : IEvent
     }
 }
 
-public class BackupCompletedEvent : IEvent
-{
-    public string BackupFileName { get; set; }
-
-    public long SizeBytes { get; set; }
-
-    public long DurationMs { get; set; }
-
-    public BackupCompletedEvent()
-    {
-    }
-
-    public BackupCompletedEvent(string backupFileName, long sizeBytes, long durationMs)
-    {
-        this.BackupFileName = backupFileName;
-        this.SizeBytes = sizeBytes;
-        this.DurationMs = durationMs;
-    }
-}
-
-public class BackupFailedEvent : IEvent
-{
-    public string BackupType { get; set; }
-
-    public string ErrorMessage { get; set; }
-
-    public BackupFailedEvent()
-    {
-    }
-
-    public BackupFailedEvent(string backupType, string errorMessage)
-    {
-        this.BackupType = backupType;
-        this.ErrorMessage = errorMessage;
-    }
-}
-
 public class TaskFailedEvent : IEvent
 {
     public string TaskName { get; set; }

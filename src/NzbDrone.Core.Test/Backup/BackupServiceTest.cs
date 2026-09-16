@@ -6,6 +6,7 @@ using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Backup;
 using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Test.Backup;
 
@@ -14,6 +15,7 @@ public class BackupServiceTest
 {
     private IAppFolderInfo _appFolderInfo;
     private IConnectionStringFactory _connectionStringFactory;
+    private IEventAggregator _eventAggregator;
     private BackupService _subject;
     private string _tempDir;
 
@@ -31,7 +33,9 @@ public class BackupServiceTest
         var dbPath = Path.Combine(_tempDir, "seedarr.db");
         _connectionStringFactory.MainDbConnectionString.Returns($"Data Source={dbPath}");
 
-        _subject = new BackupService(_appFolderInfo, _connectionStringFactory);
+        _eventAggregator = Substitute.For<IEventAggregator>();
+
+        _subject = new BackupService(_appFolderInfo, _connectionStringFactory, _eventAggregator);
     }
 
     [TearDown]
@@ -320,5 +324,68 @@ public class BackupServiceTest
         File.WriteAllText(Path.Combine(backupDir, "safe.zip"), "content");
 
         Assert.DoesNotThrow(() => _subject.DeleteBackup("../../../etc/passwd"));
+    }
+
+    [Test]
+    public void CreateBackup_should_publish_BackupCreatedEvent_on_success()
+    {
+        CreateTestSqliteDatabase();
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<BackupCreatedEvent>(e =>
+            e.Type == BackupType.Manual &&
+            e.FileName == result.Name &&
+            e.Path == result.Path &&
+            e.Size == result.Size));
+    }
+
+    [Test]
+    public void CreateBackup_scheduled_should_publish_BackupCreatedEvent_with_Scheduled_type()
+    {
+        CreateTestSqliteDatabase();
+
+        var result = _subject.CreateBackup(BackupType.Scheduled);
+
+        Assert.That(result, Is.Not.Null);
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<BackupCreatedEvent>(e =>
+            e.Type == BackupType.Scheduled &&
+            e.FileName == result.Name));
+    }
+
+    [Test]
+    public void CreateBackup_should_publish_BackupFailedEvent_when_db_file_not_found()
+    {
+        var result = _subject.CreateBackup(BackupType.Scheduled);
+
+        Assert.That(result, Is.Null);
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<BackupFailedEvent>(e =>
+            e.Type == BackupType.Scheduled &&
+            e.ErrorMessage.Contains("Database file not found")));
+    }
+
+    [Test]
+    public void CreateBackup_should_publish_BackupFailedEvent_and_rethrow_on_exception()
+    {
+        CreateTestSqliteDatabase();
+        _connectionStringFactory.MainDbConnectionString.Returns("Invalid connection string ;; %%");
+
+        Assert.Throws<ArgumentException>(() => _subject.CreateBackup(BackupType.Manual));
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<BackupFailedEvent>(e =>
+            e.Type == BackupType.Manual &&
+            e.Exception != null));
+    }
+
+    [Test]
+    public void CreateBackup_should_succeed_without_event_aggregator()
+    {
+        CreateTestSqliteDatabase();
+        var legacyService = new BackupService(_appFolderInfo, _connectionStringFactory);
+
+        var result = legacyService.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
     }
 }

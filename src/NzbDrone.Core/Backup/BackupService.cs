@@ -8,12 +8,13 @@ using Microsoft.Data.Sqlite;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Backup;
 
 public interface IBackupService
 {
-    BackupInfo CreateBackup();
+    BackupInfo CreateBackup(BackupType type = BackupType.Manual);
     List<BackupInfo> GetBackups();
     void DeleteBackup(string fileName);
     Stream GetBackupStream(string fileName);
@@ -28,94 +29,119 @@ public class BackupService : IBackupService
 
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IConnectionStringFactory _connectionStringFactory;
+    private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
 
     public BackupService(IAppFolderInfo appFolderInfo, IConnectionStringFactory connectionStringFactory)
+        : this(appFolderInfo, connectionStringFactory, null)
+    {
+    }
+
+    public BackupService(
+        IAppFolderInfo appFolderInfo,
+        IConnectionStringFactory connectionStringFactory,
+        IEventAggregator eventAggregator)
     {
         _appFolderInfo = appFolderInfo;
         _connectionStringFactory = connectionStringFactory;
+        _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public BackupInfo CreateBackup()
+    public BackupInfo CreateBackup(BackupType type = BackupType.Manual)
     {
-        var backupFolder = GetBackupFolder();
-        Directory.CreateDirectory(backupFolder);
-
-        var version = BuildInfo.Version.ToString();
-        var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd_HH-mm-ss-fff");
-        var backupFileName = $"seedarr_backup_{version}_{timestamp}.zip";
-        var backupPath = Path.Combine(backupFolder, backupFileName);
-        var configPath = Path.Combine(_appFolderInfo.AppDataFolder, ConfigFileName);
-
-        if (_connectionStringFactory.DatabaseType == DatabaseType.SQLite)
+        try
         {
-            var dbPath = Path.Combine(_appFolderInfo.AppDataFolder, DbFileName);
+            var backupFolder = GetBackupFolder();
+            Directory.CreateDirectory(backupFolder);
 
-            if (!File.Exists(dbPath))
+            var version = BuildInfo.Version.ToString();
+            var timestamp = DateTime.UtcNow.ToString("yyyy-MM-dd_HH-mm-ss-fff");
+            var backupFileName = $"seedarr_backup_{version}_{timestamp}.zip";
+            var backupPath = Path.Combine(backupFolder, backupFileName);
+            var configPath = Path.Combine(_appFolderInfo.AppDataFolder, ConfigFileName);
+
+            if (_connectionStringFactory.DatabaseType == DatabaseType.SQLite)
             {
-                _logger.Warn("Database file not found at {0}, skipping backup", dbPath);
-                return null;
-            }
+                var dbPath = Path.Combine(_appFolderInfo.AppDataFolder, DbFileName);
 
-            var dbStagingPath = dbPath + ".backup-staging";
-
-            try
-            {
-                if (File.Exists(dbStagingPath))
+                if (!File.Exists(dbPath))
                 {
-                    File.Delete(dbStagingPath);
+                    var msg = $"Database file not found at {dbPath}, skipping backup";
+                    _logger.Warn(msg);
+                    _eventAggregator?.PublishEvent(new BackupFailedEvent(type, msg, new FileNotFoundException(msg, dbPath)));
+                    return null;
                 }
 
-                var connStr = DbFactory.CleanSqliteConnectionString(_connectionStringFactory.MainDbConnectionString);
-                using var conn = new SqliteConnection(connStr);
-                conn.Open();
-                using var cmd = conn.CreateCommand();
-                cmd.CommandText = $"VACUUM INTO '{dbStagingPath.Replace("'", "''")}';";
-                cmd.ExecuteNonQuery();
+                var dbStagingPath = dbPath + ".backup-staging";
+
+                try
+                {
+                    if (File.Exists(dbStagingPath))
+                    {
+                        File.Delete(dbStagingPath);
+                    }
+
+                    var connStr = DbFactory.CleanSqliteConnectionString(_connectionStringFactory.MainDbConnectionString);
+                    using var conn = new SqliteConnection(connStr);
+                    conn.Open();
+                    using var cmd = conn.CreateCommand();
+                    cmd.CommandText = $"VACUUM INTO '{dbStagingPath.Replace("'", "''")}';";
+                    cmd.ExecuteNonQuery();
+
+                    using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+                    {
+                        zip.CreateEntryFromFile(dbStagingPath, DbFileName);
+
+                        if (File.Exists(configPath))
+                        {
+                            zip.CreateEntryFromFile(configPath, ConfigFileName);
+                        }
+                    }
+                }
+                finally
+                {
+                    if (File.Exists(dbStagingPath))
+                    {
+                        File.Delete(dbStagingPath);
+                    }
+                }
+            }
+            else
+            {
+                _logger.Info("Creating PostgreSQL backup: config exported (external database dump required)");
 
                 using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
                 {
-                    zip.CreateEntryFromFile(dbStagingPath, DbFileName);
-
                     if (File.Exists(configPath))
                     {
                         zip.CreateEntryFromFile(configPath, ConfigFileName);
                     }
                 }
             }
-            finally
+
+            _logger.Info("Backup created: {0}", backupPath);
+
+            var fileInfo = new FileInfo(backupPath);
+
+            var backupInfo = new BackupInfo
             {
-                if (File.Exists(dbStagingPath))
-                {
-                    File.Delete(dbStagingPath);
-                }
-            }
+                Name = fileInfo.Name,
+                Path = fileInfo.FullName,
+                Size = fileInfo.Length,
+                Time = fileInfo.CreationTimeUtc
+            };
+
+            _eventAggregator?.PublishEvent(new BackupCreatedEvent(backupInfo.Path, backupInfo.Name, type, backupInfo.Size));
+
+            return backupInfo;
         }
-        else
+        catch (Exception ex)
         {
-            _logger.Info("Creating PostgreSQL backup: config exported (external database dump required)");
-
-            using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
-            {
-                if (File.Exists(configPath))
-                {
-                    zip.CreateEntryFromFile(configPath, ConfigFileName);
-                }
-            }
+            _logger.Error(ex, "Failed to create backup");
+            _eventAggregator?.PublishEvent(new BackupFailedEvent(type, ex.Message, ex));
+            throw;
         }
-
-        _logger.Info("Backup created: {0}", backupPath);
-
-        var fileInfo = new FileInfo(backupPath);
-
-        return new BackupInfo
-        {
-            Name = fileInfo.Name,
-            Path = fileInfo.FullName,
-            Size = fileInfo.Length,
-            Time = fileInfo.CreationTimeUtc
-        };
     }
 
     public List<BackupInfo> GetBackups()

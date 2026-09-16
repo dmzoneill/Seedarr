@@ -1,7 +1,11 @@
 namespace NzbDrone.Core.Jobs;
 
-public interface IScheduledTask
+public interface IJob
+{
+    void Execute();
+}
+
+public interface IScheduledTask : IJob
 {
     int DefaultInterval { get; }
-    void Execute();
 }

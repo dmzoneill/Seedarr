@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Backup;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Messaging.Events;
@@ -24,6 +25,8 @@ public class NotificationEventHandler :
     IHandle<ApplicationUpdatedEvent>,
     IHandle<HealthIssueEvent>,
     IHandle<TorrentSeedGoalReachedEvent>,
+    IHandle<BackupCreatedEvent>,
+    IHandle<BackupFailedEvent>,
     IDisposable
 {
     private readonly INotificationRepository _notificationRepository;
@@ -218,6 +221,48 @@ public class NotificationEventHandler :
         };
 
         DispatchGeneric(n => n.OnApplicationUpdate, "OnApplicationUpdate", payload);
+    }
+
+    public void Handle(BackupCreatedEvent message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            EventType = "OnBackupComplete",
+            FileName = message.FileName ?? string.Empty,
+            Path = message.Path ?? string.Empty,
+            BackupType = message.Type.ToString(),
+            Size = message.Size,
+            Message = $"Seedarr backup created: {message.FileName}",
+            Timestamp = DateTime.UtcNow,
+        };
+
+        DispatchGeneric(n => n.OnBackupComplete, "OnBackupComplete", payload);
+    }
+
+    public void Handle(BackupFailedEvent message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+
+        var errorMsg = message.ErrorMessage ?? message.Exception?.Message ?? "Backup failed";
+        var payload = new
+        {
+            EventType = "OnBackupFailed",
+            BackupType = message.Type.ToString(),
+            Message = $"Seedarr backup failed: {errorMsg}",
+            ErrorMessage = errorMsg,
+            errorMessage = errorMsg,
+            Timestamp = DateTime.UtcNow,
+        };
+
+        DispatchGeneric(n => n.OnBackupFailed || n.OnHealthIssue, "OnBackupFailed", payload);
     }
 
     public static string ResolveTargetUrl(string implementation, string settings)
