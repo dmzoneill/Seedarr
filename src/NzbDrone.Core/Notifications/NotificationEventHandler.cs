@@ -258,6 +258,11 @@ public class NotificationEventHandler :
 
         foreach (var notif in activeNotifications)
         {
+            if (notif.Tags != null && notif.Tags.Count > 0)
+            {
+                continue;
+            }
+
             if (string.Equals(notif.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
             {
                 var (scriptPath, scriptArgs) = CustomScriptService.ParseSettings(notif.Settings);
@@ -399,6 +404,16 @@ public class NotificationEventHandler :
             if (notif.Tags != null && notif.Tags.Count > 0)
             {
                 if (torrent.TagIds == null || !notif.Tags.Any(t => torrent.TagIds.Contains(t)))
+                {
+                    continue;
+                }
+            }
+
+            if (notif.Categories != null && notif.Categories.Count > 0)
+            {
+                var torrentCategory = torrent.Category ?? torrent.Label;
+                if (string.IsNullOrWhiteSpace(torrentCategory) ||
+                    !notif.Categories.Any(c => string.Equals(c, torrentCategory, StringComparison.OrdinalIgnoreCase)))
                 {
                     continue;
                 }

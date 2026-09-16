@@ -11,6 +11,8 @@ import {
   useDeleteNotification,
   useTestNotification,
   useTestDirectNotification,
+  useTags,
+  useCategories,
 } from "../../api/hooks";
 import {
   Toggle,
@@ -35,6 +37,38 @@ const defaultNotificationSettings: NotificationSettings = {
   showError: true,
 };
 
+const VALID_NOTIFICATION_POSITIONS = [
+  "top-right",
+  "top-left",
+  "bottom-right",
+  "bottom-left",
+] as const;
+
+function sanitizeNotificationSettings(
+  raw: any,
+  fallback: NotificationSettings,
+): NotificationSettings {
+  if (!raw || typeof raw !== "object") {
+    return fallback;
+  }
+
+  const position = VALID_NOTIFICATION_POSITIONS.includes(raw.position)
+    ? raw.position
+    : fallback.position;
+
+  let autoDismissSeconds = fallback.autoDismissSeconds;
+  if (typeof raw.autoDismissSeconds === "number" && !isNaN(raw.autoDismissSeconds)) {
+    autoDismissSeconds = Math.min(60, Math.max(1, Math.round(raw.autoDismissSeconds)));
+  }
+
+  return {
+    ...fallback,
+    ...raw,
+    position,
+    autoDismissSeconds,
+  };
+}
+
 function useNotificationSettings(): [
   NotificationSettings,
   (settings: NotificationSettings) => void,
@@ -43,7 +77,7 @@ function useNotificationSettings(): [
     try {
       const stored = localStorage.getItem(NOTIFICATION_SETTINGS_KEY);
       return stored
-        ? { ...defaultNotificationSettings, ...JSON.parse(stored) }
+        ? sanitizeNotificationSettings(JSON.parse(stored), defaultNotificationSettings)
         : defaultNotificationSettings;
     } catch {
       return defaultNotificationSettings;
@@ -51,10 +85,11 @@ function useNotificationSettings(): [
   });
 
   const saveSettings = (newSettings: NotificationSettings) => {
-    setSettings(newSettings);
+    const sanitized = sanitizeNotificationSettings(newSettings, defaultNotificationSettings);
+    setSettings(sanitized);
     localStorage.setItem(
       NOTIFICATION_SETTINGS_KEY,
-      JSON.stringify(newSettings),
+      JSON.stringify(sanitized),
     );
   };
 
@@ -78,6 +113,7 @@ interface NotificationFormState {
   onManualInteractionRequired: boolean;
   onApplicationUpdate: boolean;
   tags: number[];
+  categories: string[];
 
   // Platform / template specific settings
   url: string;
@@ -116,6 +152,7 @@ function getDefaultFormForImplementation(impl: string): NotificationFormState {
     onManualInteractionRequired: true,
     onApplicationUpdate: false,
     tags: [],
+    categories: [],
     url: "",
     token: "",
     chatId: "",
@@ -167,6 +204,7 @@ function parseNotificationToForm(
     onManualInteractionRequired: notif.onManualInteractionRequired ?? true,
     onApplicationUpdate: notif.onApplicationUpdate ?? false,
     tags: notif.tags || [],
+    categories: notif.categories || [],
 
     url:
       parsed.serverUrl ||
@@ -312,12 +350,29 @@ function buildNotificationPayload(
     onManualInteractionRequired: form.onManualInteractionRequired,
     onApplicationUpdate: form.onApplicationUpdate,
     tags: form.tags || [],
+    categories: form.categories || [],
   };
 }
 
 function validateNotificationForm(form: NotificationFormState): string | null {
   if (!form.name.trim()) {
     return "Notification name is required";
+  }
+
+  const hasTrigger =
+    form.onGrab ||
+    form.onDownloadComplete ||
+    form.onMediaInspected ||
+    form.onExtractComplete ||
+    form.onSeedGoalReached ||
+    form.onTorrentDeleted ||
+    form.onHealthIssue ||
+    form.onHealthRestored ||
+    form.onManualInteractionRequired ||
+    form.onApplicationUpdate;
+
+  if (!hasTrigger) {
+    return "At least one notification trigger must be enabled";
   }
 
   switch (form.implementation) {
@@ -398,6 +453,8 @@ export function NotificationsTab() {
 
   // Backend outbound notifications
   const { data: notifications, isLoading: isLoadingNotifications } = useNotifications();
+  const { data: allTags } = useTags();
+  const { data: allCategories } = useCategories();
   const createMutation = useCreateNotification();
   const updateMutation = useUpdateNotification();
   const deleteMutation = useDeleteNotification();
@@ -405,6 +462,7 @@ export function NotificationsTab() {
   const testDirectMutation = useTestDirectNotification();
 
   const [editing, setEditing] = useState<NotificationFormState | null>(null);
+  const [deletingNotif, setDeletingNotif] = useState<NotificationResource | null>(null);
   const [testResults, setTestResults] = useState<Record<number, NotificationTestResult | null>>({});
   const [modalTestResult, setModalTestResult] = useState<NotificationTestResult | null>(null);
 
@@ -504,13 +562,16 @@ export function NotificationsTab() {
   };
 
   const handleDelete = (notif: NotificationResource) => {
-    if (!window.confirm(`Are you sure you want to delete the notification "${notif.name}"?`)) {
-      return;
-    }
+    setDeletingNotif(notif);
+  };
 
-    deleteMutation.mutate(notif.id, {
+  const handleConfirmDelete = () => {
+    if (!deletingNotif) return;
+    const target = deletingNotif;
+    deleteMutation.mutate(target.id, {
       onSuccess: () => {
-        showToast(`Notification "${notif.name}" deleted`, "info");
+        showToast(`Notification "${target.name}" deleted`, "info");
+        setDeletingNotif(null);
       },
       onError: (err: any) => {
         showToast(err?.message || "Failed to delete notification", "error");
@@ -710,6 +771,35 @@ export function NotificationsTab() {
                         Health
                       </span>
                     )}
+                    {notif.categories && notif.categories.length > 0 && notif.categories.map((c) => (
+                      <span
+                        key={c}
+                        className="provider-card-badge"
+                        style={{
+                          backgroundColor: "rgba(168, 85, 247, 0.15)",
+                          color: "#c084fc",
+                          border: "1px solid rgba(168, 85, 247, 0.3)",
+                        }}
+                      >
+                        {c}
+                      </span>
+                    ))}
+                    {notif.tags && notif.tags.length > 0 && notif.tags.map((tagId) => {
+                      const tag = allTags?.find((t) => t.id === tagId);
+                      return tag ? (
+                        <span
+                          key={tagId}
+                          className="provider-card-badge"
+                          style={{
+                            backgroundColor: "rgba(234, 179, 8, 0.15)",
+                            color: "#facc15",
+                            border: "1px solid rgba(234, 179, 8, 0.3)",
+                          }}
+                        >
+                          {tag.label}
+                        </span>
+                      ) : null;
+                    })}
                   </div>
                   <div className="provider-card-info">{summary}</div>
                   {testResults[notif.id]?.success === true && (
@@ -1131,6 +1221,152 @@ export function NotificationsTab() {
               />
             </div>
 
+            <SectionTitle>Filters</SectionTitle>
+            <div className="form-group">
+              <label className="form-label">Tags</label>
+              <div className="form-input-wrapper">
+                <select
+                  multiple
+                  className="form-select"
+                  value={(editing.tags || []).map(String)}
+                  onChange={(e) => {
+                    const selectedOptions = Array.from(
+                      e.target.selectedOptions,
+                      (option) => Number(option.value),
+                    );
+                    setEditing({ ...editing, tags: selectedOptions });
+                  }}
+                  style={{ borderRadius: "6px", minHeight: "80px" }}
+                >
+                  {allTags?.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.label}
+                    </option>
+                  ))}
+                  {editing.tags
+                    ?.filter((tagId) => !allTags?.some((t) => t.id === tagId))
+                    .map((tagId) => (
+                      <option key={tagId} value={tagId}>
+                        Tag #{tagId}
+                      </option>
+                    ))}
+                </select>
+                {editing.tags && editing.tags.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "0.35rem",
+                      marginTop: "0.5rem",
+                    }}
+                  >
+                    {editing.tags.map((tagId) => {
+                      const tag = allTags?.find((t) => t.id === tagId);
+                      return (
+                        <span
+                          key={tagId}
+                          className="badge badge-primary"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            padding: "0.2rem 0.5rem",
+                            fontSize: "0.75rem",
+                            cursor: "pointer",
+                          }}
+                          title="Click to remove tag"
+                          onClick={() => {
+                            setEditing({
+                              ...editing,
+                              tags: (editing.tags || []).filter(
+                                (id) => id !== tagId,
+                              ),
+                            });
+                          }}
+                        >
+                          {tag ? tag.label : `Tag #${tagId}`} ✕
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                <span className="form-hint">
+                  Only trigger for torrents matching these tags (leave empty to allow all torrents and system events)
+                </span>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Categories</label>
+              <div className="form-input-wrapper">
+                <select
+                  multiple
+                  className="form-select"
+                  value={editing.categories || []}
+                  onChange={(e) => {
+                    const selectedOptions = Array.from(
+                      e.target.selectedOptions,
+                      (option) => option.value,
+                    );
+                    setEditing({ ...editing, categories: selectedOptions });
+                  }}
+                  style={{ borderRadius: "6px", minHeight: "80px" }}
+                >
+                  {allCategories?.map((cat) => (
+                    <option key={cat.id} value={cat.name}>
+                      {cat.name}
+                    </option>
+                  ))}
+                  {editing.categories
+                    ?.filter((catName) => !allCategories?.some((c) => c.name === catName))
+                    .map((catName) => (
+                      <option key={catName} value={catName}>
+                        {catName}
+                      </option>
+                    ))}
+                </select>
+                {editing.categories && editing.categories.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "0.35rem",
+                      marginTop: "0.5rem",
+                    }}
+                  >
+                    {editing.categories.map((catName) => (
+                      <span
+                        key={catName}
+                        className="badge badge-primary"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          padding: "0.2rem 0.5rem",
+                          fontSize: "0.75rem",
+                          cursor: "pointer",
+                        }}
+                        title="Click to remove category"
+                        onClick={() => {
+                          setEditing({
+                            ...editing,
+                            categories: (editing.categories || []).filter(
+                              (c) => c !== catName,
+                            ),
+                          });
+                        }}
+                      >
+                        {catName} ✕
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <span className="form-hint">
+                  Only trigger for torrents matching these categories (leave empty to allow all categories)
+                </span>
+              </div>
+            </div>
+
             {testDirectMutation.isPending && (
               <div
                 style={{
@@ -1245,6 +1481,64 @@ export function NotificationsTab() {
                     : "Save"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deletingNotif && (
+        <div className="modal-overlay" onClick={() => setDeletingNotif(null)}>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 450,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid var(--border-light)",
+            }}
+          >
+            <h3
+              className="modal-title"
+              style={{ fontSize: "1.15rem", marginBottom: "0.75rem" }}
+            >
+              Delete Notification Channel
+            </h3>
+            <p
+              style={{
+                fontSize: "0.875rem",
+                color: "var(--text-secondary)",
+                marginBottom: "1.25rem",
+                lineHeight: 1.5,
+              }}
+            >
+              Are you sure you want to delete the notification channel "{deletingNotif.name}"?
+              This action cannot be undone.
+            </p>
+            <div
+              className="modal-actions"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.5rem",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setDeletingNotif(null)}
+                disabled={deleteMutation.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleConfirmDelete}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              </button>
             </div>
           </div>
         </div>

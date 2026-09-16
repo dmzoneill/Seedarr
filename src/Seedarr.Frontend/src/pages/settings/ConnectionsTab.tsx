@@ -45,7 +45,6 @@ export function ConnectionsTab() {
     syncEnabled: true,
     enableAutomaticAdd: true,
     webhookEnabled: true,
-    syncIntervalMinutes: 60,
     acceptInvalidCertificates: false,
     implementation: "SonarrConnection",
     configContract: "ArrConnectionDefinition",
