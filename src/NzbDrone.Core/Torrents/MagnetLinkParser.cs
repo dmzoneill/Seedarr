@@ -42,18 +42,21 @@ public static class MagnetLinkParser
             infoHash = infoHash.ToLowerInvariant();
         }
 
-        if (infoHash.Length != 40)
+        if (infoHash.Length != 40 || !infoHash.All(Uri.IsHexDigit))
         {
-            throw new ArgumentException("Invalid magnet link: info hash must be 40 hex characters");
+            throw new ArgumentException("Invalid magnet link: info hash must be 40 valid hexadecimal characters");
         }
 
         var displayName = parameters["dn"];
-        displayName = !string.IsNullOrEmpty(displayName)
-            ? HttpUtility.UrlDecode(displayName)
-            : infoHash;
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            displayName = infoHash;
+        }
 
         var rawTrackers = parameters.GetValues("tr");
-        var trackers = rawTrackers?.Select(HttpUtility.UrlDecode).ToArray() ?? Array.Empty<string>();
+        var trackers = rawTrackers?
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .ToArray() ?? Array.Empty<string>();
 
         return new ParsedMagnetLink(infoHash, displayName, trackers);
     }
