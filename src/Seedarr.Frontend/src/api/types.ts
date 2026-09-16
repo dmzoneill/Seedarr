@@ -784,6 +784,15 @@ export interface NetworkDiagnostics {
   encryptionPercentage: number;
 }
 
+export interface PortTestResult {
+  port: number;
+  externalIp: string;
+  isOpen: boolean;
+  errorMessage?: string | null;
+  responseTime: string;
+  responseTimeMs?: number;
+}
+
 export interface PeerConnectionLogEntry {
   id: number;
   remoteIp: string;
