@@ -3,13 +3,17 @@ import {
   useNetworkConfig,
   useSaveNetworkConfig,
   useNetworkStatus,
+  useNetworkInterfaces,
 } from "../../api/hooks";
-import { SaveBar, SectionCard, NumberInput, TextInput, Toggle } from "./shared";
+import { SaveBar, SectionCard, NumberInput, TextInput, SelectInput, Toggle } from "./shared";
 
 export function NetworkSettingsTab() {
   const { data: config, isLoading } = useNetworkConfig();
   const saveMutation = useSaveNetworkConfig();
   const { data: netStatus } = useNetworkStatus();
+  const { data: interfaces, isLoading: loadingInterfaces } =
+    useNetworkInterfaces();
+  const [customInterfaceMode, setCustomInterfaceMode] = useState(false);
 
   const [form, setForm] = useState({
     listeningPort: 51413,
@@ -45,6 +49,15 @@ export function NetworkSettingsTab() {
       setDirty(false);
     }
   }, [config]);
+
+  useEffect(() => {
+    if (config?.bindInterface && interfaces && interfaces.length > 0) {
+      const isKnown = interfaces.some((i) => i.name === config.bindInterface);
+      if (!isKnown) {
+        setCustomInterfaceMode(true);
+      }
+    }
+  }, [config?.bindInterface, interfaces]);
 
   const update = <K extends keyof typeof form>(
     key: K,
@@ -191,13 +204,144 @@ export function NetworkSettingsTab() {
         description="Bind BitTorrent sockets to a dedicated physical/virtual network interface or VPN adapter"
       >
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <TextInput
-            label="Bind Network Interface"
-            value={form.bindInterface}
-            onChange={(v) => update("bindInterface", v)}
-            placeholder="tun0, wg0, eth0, or IP address"
-            hint="Interface name (e.g. tun0, wg0) or IP address to restrict all torrent traffic"
-          />
+          {customInterfaceMode ? (
+            <TextInput
+              label="Bind Network Interface"
+              value={form.bindInterface}
+              onChange={(v) => update("bindInterface", v)}
+              placeholder="tun0, wg0, eth0, or IP address"
+              hint="Interface name (e.g. tun0, wg0) or IP address to restrict all torrent traffic"
+              rightElement={
+                <button
+                  type="button"
+                  className="btn btn-outline btn-small"
+                  onClick={() => {
+                    setCustomInterfaceMode(false);
+                    if (
+                      !interfaces?.some((i) => i.name === form.bindInterface)
+                    ) {
+                      update("bindInterface", "");
+                    }
+                  }}
+                  title="Choose from detected interfaces"
+                >
+                  Choose from list
+                </button>
+              }
+            />
+          ) : (
+            <div>
+              <SelectInput
+                label="Bind Network Interface"
+                value={
+                  interfaces?.some((i) => i.name === form.bindInterface)
+                    ? form.bindInterface
+                    : form.bindInterface === ""
+                      ? ""
+                      : "__custom__"
+                }
+                onChange={(v) => {
+                  if (v === "__custom__") {
+                    setCustomInterfaceMode(true);
+                  } else {
+                    update("bindInterface", v);
+                  }
+                }}
+                options={[
+                  { value: "", label: "Any / All Interfaces (Default)" },
+                  ...(interfaces || []).map((iface) => {
+                    const addrStr =
+                      iface.addresses && iface.addresses.length > 0
+                        ? ` [${iface.addresses.join(", ")}]`
+                        : "";
+                    const typeStr = iface.isVpn ? "VPN Tunnel" : iface.type;
+                    return {
+                      value: iface.name,
+                      label: `${iface.name}${addrStr} (${typeStr}) - ${iface.status}`,
+                    };
+                  }),
+                  {
+                    value: "__custom__",
+                    label: "Custom Interface or IP Address...",
+                  },
+                ]}
+                hint={
+                  loadingInterfaces
+                    ? "Loading available network interfaces..."
+                    : "Select a physical or VPN network interface to restrict BitTorrent traffic, or choose Custom to enter an IP address"
+                }
+              />
+              {interfaces?.find((i) => i.name === form.bindInterface) && (
+                <div
+                  style={{
+                    marginTop: "-0.5rem",
+                    marginBottom: "0.5rem",
+                    padding: "0.4rem 0.75rem",
+                    backgroundColor: "var(--bg-primary, #10111a)",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border-light)",
+                    fontSize: "0.8rem",
+                    display: "flex",
+                    gap: "1rem",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {(() => {
+                    const selected = interfaces.find(
+                      (i) => i.name === form.bindInterface,
+                    )!;
+                    return (
+                      <>
+                        <span>
+                          Type:{" "}
+                          <strong
+                            style={{
+                              color: selected.isVpn
+                                ? "var(--accent, #c8a84e)"
+                                : "var(--text-secondary)",
+                            }}
+                          >
+                            {selected.isVpn ? "🛡️ VPN Tunnel" : selected.type}
+                          </strong>
+                        </span>
+                        <span>
+                          Status:{" "}
+                          <strong
+                            style={{
+                              color:
+                                selected.status === "Up"
+                                  ? "var(--success, #27ae60)"
+                                  : "var(--danger, #e74c3c)",
+                            }}
+                          >
+                            {selected.status}
+                          </strong>
+                        </span>
+                        {selected.addresses && selected.addresses.length > 0 && (
+                          <span>
+                            IP: <code>{selected.addresses.join(", ")}</code>
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-small"
+                          style={{
+                            marginLeft: "auto",
+                            fontSize: "0.75rem",
+                            padding: "0.15rem 0.5rem",
+                          }}
+                          onClick={() => setCustomInterfaceMode(true)}
+                        >
+                          Edit as text
+                        </button>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+            </div>
+          )}
 
           <Toggle
             label="Enable Automated VPN Kill Switch"
