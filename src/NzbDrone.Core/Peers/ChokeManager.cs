@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -35,7 +36,6 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     private DateTime _lastRegularUnchoke = DateTime.MinValue;
     private DateTime _lastOptimisticUnchoke = DateTime.MinValue;
-    private string _currentOptimisticPeerKey;
 
     public ChokeManager(
         IConnectionManager connectionManager,
@@ -137,14 +137,22 @@ public class ChokeManager : BackgroundService, IChokeManager
                 .Where(c => !string.IsNullOrEmpty(c.InfoHash))
                 .GroupBy(c => c.InfoHash, StringComparer.OrdinalIgnoreCase);
 
-            var candidatePeers = connections
-                .Where(c => c.PeerInterested && !c.IsSnubbed)
-                .OrderByDescending(c => c.UploadRate + c.DownloadRate)
-                .ThenByDescending(c => c.BytesUploaded)
-                .ThenBy(c => c.ConnectedAt)
-                .ToList();
+            var selectedRegular = new HashSet<PeerConnection>();
 
-            var selectedRegular = candidatePeers.Take(regularSlotCount).ToHashSet();
+            foreach (var group in byTorrent)
+            {
+                var candidatePeers = group
+                    .Where(c => c.PeerInterested && !c.IsSnubbed)
+                    .OrderByDescending(c => c.UploadRate + c.DownloadRate)
+                    .ThenByDescending(c => c.BytesUploaded)
+                    .ThenBy(c => c.ConnectedAt)
+                    .Take(regularSlotCount);
+
+                foreach (var peer in candidatePeers)
+                {
+                    selectedRegular.Add(peer);
+                }
+            }
 
             foreach (var conn in connections)
             {
@@ -184,10 +192,9 @@ public class ChokeManager : BackgroundService, IChokeManager
                 return;
             }
 
-            // Find all interested peers that are currently choked
-            var chokedInterested = connections
-                .Where(c => c.PeerInterested && c.AmChoking)
-                .ToList();
+            var byTorrent = connections
+                .Where(c => !string.IsNullOrEmpty(c.InfoHash))
+                .GroupBy(c => c.InfoHash, StringComparer.OrdinalIgnoreCase);
 
             // Clear previous optimistic peer flag
             foreach (var conn in connections)
@@ -201,20 +208,26 @@ public class ChokeManager : BackgroundService, IChokeManager
                 }
             }
 
-            if (chokedInterested.Count == 0)
+            foreach (var group in byTorrent)
             {
-                _currentOptimisticPeerKey = null;
-                return;
+                // Find all interested peers that are currently choked in this torrent swarm
+                var chokedInterested = group
+                    .Where(c => c.PeerInterested && c.AmChoking)
+                    .ToList();
+
+                if (chokedInterested.Count == 0)
+                {
+                    continue;
+                }
+
+                // Pick a random choked interested peer for optimistic unchoke in this swarm
+                var chosenIndex = _random.Next(0, chokedInterested.Count);
+                var chosen = chokedInterested[chosenIndex];
+
+                chosen.IsOptimisticUnchoked = true;
+                _logger.Debug("Optimistically unchoking peer {0}:{1} for torrent {2}", chosen.RemoteIp, chosen.RemotePort, group.Key);
+                Unchoke(chosen);
             }
-
-            // Pick a random choked interested peer for optimistic unchoke
-            var chosenIndex = _random.Next(0, chokedInterested.Count);
-            var chosen = chokedInterested[chosenIndex];
-
-            chosen.IsOptimisticUnchoked = true;
-            _currentOptimisticPeerKey = $"{chosen.RemoteIp}:{chosen.RemotePort}";
-            _logger.Debug("Optimistically unchoking peer {0}:{1}", chosen.RemoteIp, chosen.RemotePort);
-            Unchoke(chosen);
         }
     }
 
@@ -226,13 +239,6 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     public void PeerDisconnected(PeerConnection connection)
     {
-        lock (_lock)
-        {
-            if (connection.IsOptimisticUnchoked)
-            {
-                _currentOptimisticPeerKey = null;
-            }
-        }
     }
 
     public void PeerInterestedChanged(PeerConnection connection)
@@ -246,10 +252,7 @@ public class ChokeManager : BackgroundService, IChokeManager
         }
         else
         {
-            if (!connection.AmChoking)
-            {
-                Choke(connection);
-            }
+            Choke(connection);
         }
     }
 
@@ -271,7 +274,13 @@ public class ChokeManager : BackgroundService, IChokeManager
             return true;
         }
 
-        var unchokedCount = _connectionManager.GetAllConnections().Count(c => !c.AmChoking);
+        if (string.IsNullOrEmpty(connection.InfoHash))
+        {
+            return false;
+        }
+
+        var unchokedCount = _connectionManager.GetAllConnections()
+            .Count(c => !c.AmChoking && string.Equals(c.InfoHash, connection.InfoHash, StringComparison.OrdinalIgnoreCase));
         return unchokedCount < maxUploadSlots;
     }
 
