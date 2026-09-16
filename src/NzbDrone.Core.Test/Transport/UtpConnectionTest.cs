@@ -1056,6 +1056,103 @@ public class UtpConnectionTest
         Assert.Throws<NotSupportedException>(() => stream.SetLength(0));
     }
 
+    [Test]
+    public void Disposing_connection_with_shared_udp_client_should_not_dispose_shared_client()
+    {
+        using var sharedClient = new UdpClient();
+        sharedClient.Client.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        var remoteEndpoint = new IPEndPoint(IPAddress.Loopback, 12345);
+
+        var connection = new UtpConnection(sharedClient, 1, remoteEndpoint);
+        Assert.That(connection.OwnsUdpClient, Is.False);
+
+        connection.Dispose();
+
+        Assert.That(sharedClient.Client.IsBound, Is.True);
+        Assert.DoesNotThrow(() =>
+        {
+            var ping = new byte[] { 1, 2, 3 };
+            sharedClient.Send(ping, ping.Length, remoteEndpoint);
+        });
+    }
+
+    [Test]
+    public void Disposing_connection_with_owned_udp_client_should_dispose_udp_client()
+    {
+        var connection = new UtpConnection();
+        Assert.That(connection.OwnsUdpClient, Is.True);
+
+        var udpClientField = typeof(UtpConnection).GetField(
+            "_udpClient",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var udpClient = (UdpClient)udpClientField.GetValue(connection)!;
+
+        connection.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() =>
+        {
+            _ = udpClient.Client.LocalEndPoint;
+        });
+    }
+
+    [Test]
+    public void Disposing_connection_when_udp_client_is_already_closed_should_not_throw()
+    {
+        var client = new UdpClient();
+        var remoteEndpoint = new IPEndPoint(IPAddress.Loopback, 12345);
+        var connection = new UtpConnection(client, 1, remoteEndpoint);
+
+        client.Dispose();
+
+        Assert.DoesNotThrow(() => connection.Dispose());
+    }
+
+    [Test]
+    public void Disposing_connected_connection_with_shared_client_sends_fin_safely_and_preserves_shared_client()
+    {
+        using var sharedClient = new UdpClient();
+        sharedClient.Client.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        var remoteEndpoint = new IPEndPoint(IPAddress.Loopback, 12346);
+
+        var connection = new UtpConnection(sharedClient, 1, remoteEndpoint);
+        SetConnected(connection, true);
+
+        Assert.DoesNotThrow(() => connection.Dispose());
+        Assert.That(connection.IsConnected, Is.False);
+        Assert.That(sharedClient.Client.IsBound, Is.True);
+    }
+
+    [Test]
+    public void Multiple_connections_sharing_same_client_can_dispose_independently()
+    {
+        using var sharedClient = new UdpClient();
+        sharedClient.Client.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        var remoteEndpoint1 = new IPEndPoint(IPAddress.Loopback, 12347);
+        var remoteEndpoint2 = new IPEndPoint(IPAddress.Loopback, 12348);
+
+        var conn1 = new UtpConnection(sharedClient, 1, remoteEndpoint1);
+        var conn2 = new UtpConnection(sharedClient, 2, remoteEndpoint2);
+
+        SetConnected(conn1, true);
+        SetConnected(conn2, true);
+
+        conn1.Dispose();
+
+        Assert.That(conn1.IsConnected, Is.False);
+        Assert.That(conn2.IsConnected, Is.True);
+
+        var dummyData = new byte[] { 0x01, 0x02, 0x03 };
+        Assert.DoesNotThrow(() =>
+        {
+            sharedClient.Send(dummyData, dummyData.Length, remoteEndpoint2);
+        });
+
+        conn2.Dispose();
+
+        Assert.That(conn2.IsConnected, Is.False);
+        Assert.That(sharedClient.Client.IsBound, Is.True);
+    }
+
     // ---- helpers ----
 
     private static void SetConnected(UtpConnection connection, bool value)

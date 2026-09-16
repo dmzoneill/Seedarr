@@ -52,6 +52,7 @@ public class UtpConnection : IUtpConnection
     private const int MaxPayloadSize = 1360;
 
     private readonly UdpClient _udpClient;
+    private readonly bool _ownsUdpClient;
     private readonly Logger _logger;
     private readonly int _connectionTimeoutSeconds;
     private readonly ConcurrentDictionary<ushort, byte[]> _outOfOrderBuffer = new();
@@ -75,10 +76,12 @@ public class UtpConnection : IUtpConnection
 
     public bool IsConnected { get; private set; }
     public IPEndPoint RemoteEndPoint => _remoteEndpoint;
+    public bool OwnsUdpClient => _ownsUdpClient;
 
     public UtpConnection(int connectionTimeoutSeconds = 30)
     {
         _udpClient = new UdpClient();
+        _ownsUdpClient = true;
         _logger = LogManager.GetCurrentClassLogger();
         _connectionId = (ushort)RandomNumberGenerator.GetInt32(0, ushort.MaxValue + 1);
         _sequenceNumber = 1;
@@ -87,14 +90,35 @@ public class UtpConnection : IUtpConnection
 
     public UtpConnection(UdpClient udpClient, ushort connectionId, IPEndPoint remoteEndpoint, int connectionTimeoutSeconds = 30)
     {
-        _udpClient = udpClient ?? new UdpClient();
+        if (udpClient == null)
+        {
+            _udpClient = new UdpClient();
+            _ownsUdpClient = true;
+        }
+        else
+        {
+            _udpClient = udpClient;
+            _ownsUdpClient = false;
+        }
+
         _logger = LogManager.GetCurrentClassLogger();
         _connectionId = connectionId;
         _remoteEndpoint = remoteEndpoint;
         _sequenceNumber = 1;
         _connectionTimeoutSeconds = connectionTimeoutSeconds;
-        _udpClient.Client.ReceiveTimeout = _connectionTimeoutSeconds * 1000;
-        _udpClient.Client.SendTimeout = _connectionTimeoutSeconds * 1000;
+
+        if (_ownsUdpClient)
+        {
+            try
+            {
+                _udpClient.Client.ReceiveTimeout = _connectionTimeoutSeconds * 1000;
+                _udpClient.Client.SendTimeout = _connectionTimeoutSeconds * 1000;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to set socket timeouts");
+            }
+        }
     }
 
     public void Connect(IPEndPoint endpoint)
@@ -105,8 +129,18 @@ public class UtpConnection : IUtpConnection
         }
 
         _remoteEndpoint = endpoint;
-        _udpClient.Client.ReceiveTimeout = _connectionTimeoutSeconds * 1000;
-        _udpClient.Client.SendTimeout = _connectionTimeoutSeconds * 1000;
+        if (_ownsUdpClient)
+        {
+            try
+            {
+                _udpClient.Client.ReceiveTimeout = _connectionTimeoutSeconds * 1000;
+                _udpClient.Client.SendTimeout = _connectionTimeoutSeconds * 1000;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to set socket timeouts");
+            }
+        }
 
         var synPacket = BuildPacket(UtpPacketType.Syn, Array.Empty<byte>());
         var synSeq = _sequenceNumber;
@@ -126,7 +160,17 @@ public class UtpConnection : IUtpConnection
 
             try
             {
-                _udpClient.Client.ReceiveTimeout = rtoMs;
+                if (_ownsUdpClient)
+                {
+                    try
+                    {
+                        _udpClient.Client.ReceiveTimeout = rtoMs;
+                    }
+                    catch
+                    {
+                    }
+                }
+
                 var receiveEndpoint = new IPEndPoint(IPAddress.Any, 0);
                 var response = _udpClient.Receive(ref receiveEndpoint);
 
@@ -217,6 +261,11 @@ public class UtpConnection : IUtpConnection
             return 0;
         }
 
+        var startTime = DateTime.UtcNow;
+        var timeoutMs = _ownsUdpClient && _udpClient.Client.ReceiveTimeout > 0
+            ? _udpClient.Client.ReceiveTimeout
+            : (_connectionTimeoutSeconds > 0 ? _connectionTimeoutSeconds * 1000 : 3000);
+
         lock (_receiveLock)
         {
             if (_receiveQueue.Count > 0)
@@ -229,11 +278,42 @@ public class UtpConnection : IUtpConnection
 
                 return bytesToCopy;
             }
+
+            if (!_ownsUdpClient)
+            {
+                while (IsConnected && _receiveQueue.Count == 0)
+                {
+                    var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+                    if (elapsed >= timeoutMs)
+                    {
+                        return 0;
+                    }
+
+                    var waitTime = (int)Math.Min(100, timeoutMs - elapsed);
+                    if (waitTime <= 0)
+                    {
+                        return 0;
+                    }
+
+                    Monitor.Wait(_receiveLock, waitTime);
+                }
+
+                if (_receiveQueue.Count > 0)
+                {
+                    var bytesToCopy = Math.Min(_receiveQueue.Count, length);
+                    for (var i = 0; i < bytesToCopy; i++)
+                    {
+                        buffer[offset + i] = _receiveQueue.Dequeue();
+                    }
+
+                    return bytesToCopy;
+                }
+
+                return 0;
+            }
         }
 
         var receiveEndpoint = new IPEndPoint(IPAddress.Any, 0);
-        var startTime = DateTime.UtcNow;
-        var timeoutMs = _udpClient.Client.ReceiveTimeout > 0 ? _udpClient.Client.ReceiveTimeout : 3000;
 
         while (IsConnected)
         {
@@ -306,6 +386,11 @@ public class UtpConnection : IUtpConnection
         if (header.Type == UtpPacketType.Reset)
         {
             IsConnected = false;
+            lock (_receiveLock)
+            {
+                Monitor.PulseAll(_receiveLock);
+            }
+
             return;
         }
 
@@ -315,6 +400,11 @@ public class UtpConnection : IUtpConnection
             var ack = BuildPacket(UtpPacketType.State, Array.Empty<byte>());
             SendUdpPacket(ack, ack.Length, sender);
             IsConnected = false;
+            lock (_receiveLock)
+            {
+                Monitor.PulseAll(_receiveLock);
+            }
+
             return;
         }
 
@@ -357,6 +447,8 @@ public class UtpConnection : IUtpConnection
                                 _receiveQueue.Enqueue(nextPayload[i]);
                             }
                         }
+
+                        Monitor.PulseAll(_receiveLock);
                     }
                     else if (IsAhead(header.SequenceNumber, _expectedSeqNr))
                     {
@@ -459,15 +551,25 @@ public class UtpConnection : IUtpConnection
 
     private void TryReceiveUdpNonBlocking()
     {
+        if (!_ownsUdpClient)
+        {
+            return;
+        }
+
         lock (_socketLock)
         {
-            if (_udpClient.Client.Available <= 0)
-            {
-                return;
-            }
-
             try
             {
+                if (_udpClient.Client == null || (!_udpClient.Client.Connected && !_udpClient.Client.IsBound))
+                {
+                    return;
+                }
+
+                if (_udpClient.Client.Available <= 0)
+                {
+                    return;
+                }
+
                 var endpoint = new IPEndPoint(IPAddress.Any, 0);
                 var data = _udpClient.Receive(ref endpoint);
                 HandleIncomingPacket(data, endpoint);
@@ -541,7 +643,7 @@ public class UtpConnection : IUtpConnection
                 var fin = BuildPacket(UtpPacketType.Fin, Array.Empty<byte>());
                 if (_remoteEndpoint != null)
                 {
-                    _udpClient.Send(fin, fin.Length, _remoteEndpoint);
+                    SendUdpPacket(fin, fin.Length, _remoteEndpoint);
                 }
             }
             catch
@@ -552,8 +654,31 @@ public class UtpConnection : IUtpConnection
             IsConnected = false;
         }
 
-        _udpClient.Dispose();
-        OnClosed?.Invoke(this);
+        lock (_receiveLock)
+        {
+            Monitor.PulseAll(_receiveLock);
+        }
+
+        if (_ownsUdpClient)
+        {
+            try
+            {
+                _udpClient.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error disposing UDP client");
+            }
+        }
+
+        try
+        {
+            OnClosed?.Invoke(this);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Error invoking OnClosed callback");
+        }
     }
 
     private class InFlightPacket
