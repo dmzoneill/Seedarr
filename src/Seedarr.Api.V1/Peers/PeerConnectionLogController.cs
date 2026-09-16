@@ -61,25 +61,20 @@ public class PeerConnectionLogController : Controller
     [HttpGet("active")]
     public ActionResult<List<PeerConnectionLogResource>> GetActive()
     {
-        var now = DateTime.UtcNow;
-        var logs = _logService.GetByTimeRange(now.AddHours(-24), now);
+        var activeConnections = _connectionManager?.GetAllConnections() ?? new List<PeerConnection>();
 
-        var connected = new Dictionary<string, PeerConnectionLog>();
-
-        foreach (var log in logs.OrderBy(l => l.Timestamp))
+        var resources = activeConnections.Select(conn => new PeerConnectionLogResource
         {
-            var key = $"{log.RemoteIp}:{log.RemotePort}:{log.InfoHash}";
-            if (log.EventType == "Connected")
-            {
-                connected[key] = log;
-            }
-            else
-            {
-                connected.Remove(key);
-            }
-        }
+            InfoHash = conn.InfoHash,
+            RemoteIp = conn.RemoteIp,
+            RemotePort = conn.RemotePort,
+            PeerId = conn.PeerId,
+            IsEncrypted = conn.IsEncrypted,
+            EventType = "Connected",
+            Timestamp = conn.ConnectedAt != default ? conn.ConnectedAt : DateTime.UtcNow,
+        }).ToList();
 
-        return Ok(connected.Values.Select(ToResource).ToList());
+        return Ok(resources);
     }
 
     [HttpGet("graph")]

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
@@ -246,5 +247,65 @@ public class PeerConnectionLogControllerTest
 
         var hasResurrectedNode = graph.Nodes.Any(n => n.Id == $"peer:192.168.1.10:5000:{hash}");
         Assert.That(hasResurrectedNode, Is.False, "Peer that explicitly disconnected should not be resurrected by tracker database");
+    }
+
+    [Test]
+    public void GetActive_queries_connection_manager_and_maps_active_connections()
+    {
+        var conn = CreateMockPeerConnection("192.168.1.50", 6881, "aabbccdd11223344", "-TR3000-abcdef123456", true);
+        _connectionManager.GetAllConnections().Returns(new List<PeerConnection> { conn });
+
+        var result = _controller.GetActive();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var resources = (List<PeerConnectionLogResource>)okResult.Value;
+
+        Assert.That(resources.Count, Is.EqualTo(1));
+        Assert.That(resources[0].InfoHash, Is.EqualTo("aabbccdd11223344"));
+        Assert.That(resources[0].RemoteIp, Is.EqualTo("192.168.1.50"));
+        Assert.That(resources[0].RemotePort, Is.EqualTo(6881));
+        Assert.That(resources[0].PeerId, Is.EqualTo("-TR3000-abcdef123456"));
+        Assert.That(resources[0].IsEncrypted, Is.True);
+        Assert.That(resources[0].EventType, Is.EqualTo("Connected"));
+        Assert.That(resources[0].Timestamp, Is.EqualTo(conn.ConnectedAt));
+
+        _connectionManager.Received(1).GetAllConnections();
+    }
+
+    [Test]
+    public void GetActive_does_not_execute_database_table_scan()
+    {
+        var conn = CreateMockPeerConnection("10.0.0.1", 51413, "hash123", "peer123", false);
+        _connectionManager.GetAllConnections().Returns(new List<PeerConnection> { conn });
+
+        var result = _controller.GetActive();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _logService.DidNotReceiveWithAnyArgs().GetByTimeRange(default, default);
+        _logService.DidNotReceiveWithAnyArgs().GetByInfoHash(default, default, default);
+    }
+
+    [Test]
+    public void GetActive_when_connection_manager_is_null_returns_empty_list()
+    {
+        var controllerWithoutManager = new PeerConnectionLogController(_logService, null);
+
+        var result = controllerWithoutManager.GetActive();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var resources = (List<PeerConnectionLogResource>)okResult.Value;
+
+        Assert.That(resources, Is.Empty);
+    }
+
+    private static PeerConnection CreateMockPeerConnection(string ip, int port, string infoHash, string peerId, bool isEncrypted)
+    {
+        var conn = new PeerConnection(new MemoryStream(), ip, port);
+        typeof(PeerConnection).GetProperty("InfoHash")?.SetValue(conn, infoHash);
+        typeof(PeerConnection).GetProperty("PeerId")?.SetValue(conn, peerId);
+        typeof(PeerConnection).GetProperty("IsEncrypted")?.SetValue(conn, isEncrypted);
+        return conn;
     }
 }
