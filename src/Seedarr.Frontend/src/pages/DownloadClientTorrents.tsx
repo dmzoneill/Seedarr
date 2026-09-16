@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router";
 import {
   useDownloadClients,
@@ -61,6 +61,14 @@ export default function DownloadClientTorrents() {
     "all",
   );
   const [importingHash, setImportingHash] = useState<string | null>(null);
+  const [selectedHashes, setSelectedHashes] = useState<Set<string>>(new Set());
+  const [importingSelected, setImportingSelected] = useState(false);
+
+  useEffect(() => {
+    setSearchTerm("");
+    setFilterMode("all");
+    setSelectedHashes(new Set());
+  }, [id]);
 
   const totalCount = items?.length || 0;
   const inLibraryCount = items?.filter((i) => i.isInLibrary).length || 0;
@@ -83,17 +91,102 @@ export default function DownloadClientTorrents() {
     });
   }, [items, filterMode, searchTerm]);
 
+  const visibleMissingItems = useMemo(
+    () => filteredItems.filter((i) => !i.isInLibrary && i.infoHash),
+    [filteredItems],
+  );
+
+  const allMissingSelected = useMemo(
+    () =>
+      visibleMissingItems.length > 0 &&
+      visibleMissingItems.every((i) => selectedHashes.has(i.infoHash)),
+    [visibleMissingItems, selectedHashes],
+  );
+
+  const someMissingSelected = useMemo(
+    () => visibleMissingItems.some((i) => selectedHashes.has(i.infoHash)),
+    [visibleMissingItems, selectedHashes],
+  );
+
+  const handleToggleSelectAll = () => {
+    if (allMissingSelected) {
+      setSelectedHashes((prev) => {
+        const next = new Set(prev);
+        visibleMissingItems.forEach((i) => next.delete(i.infoHash));
+        return next;
+      });
+    } else {
+      setSelectedHashes((prev) => {
+        const next = new Set(prev);
+        visibleMissingItems.forEach((i) => next.add(i.infoHash));
+        return next;
+      });
+    }
+  };
+
+  const handleToggleSelect = (hash: string) => {
+    setSelectedHashes((prev) => {
+      const next = new Set(prev);
+      if (next.has(hash)) {
+        next.delete(hash);
+      } else {
+        next.add(hash);
+      }
+      return next;
+    });
+  };
+
   const handleImportOne = (hash: string, title: string) => {
     setImportingHash(hash);
     importOneMutation.mutate(hash, {
       onSuccess: () => {
         setImportingHash(null);
+        setSelectedHashes((prev) => {
+          const next = new Set(prev);
+          next.delete(hash);
+          return next;
+        });
         showToast(`Imported "${title}" into Seedarr library`, "success");
       },
       onError: (err) => {
         setImportingHash(null);
         showToast(
           `Failed to import "${title}": ${err.message || "Unknown error"}`,
+          "error",
+        );
+      },
+    });
+  };
+
+  const handleImportSelected = () => {
+    if (selectedHashes.size === 0) return;
+    const missingHashes = Array.from(selectedHashes).filter((hash) => {
+      const item = items?.find(
+        (i) => i.infoHash?.toLowerCase() === hash.toLowerCase(),
+      );
+      return !item || !item.isInLibrary;
+    });
+
+    if (missingHashes.length === 0) {
+      setSelectedHashes(new Set());
+      showToast("All selected torrents are already in the library.", "info");
+      return;
+    }
+
+    setImportingSelected(true);
+    importAllMutation.mutate(missingHashes, {
+      onSuccess: (res) => {
+        setImportingSelected(false);
+        setSelectedHashes(new Set());
+        showToast(
+          `Import Complete: ${res.added} added, ${res.skipped} skipped, ${res.failed} failed.`,
+          res.failed > 0 ? "error" : "success",
+        );
+      },
+      onError: (err) => {
+        setImportingSelected(false);
+        showToast(
+          `Bulk import failed: ${err.message || "Unknown error"}`,
           "error",
         );
       },
@@ -116,6 +209,7 @@ export default function DownloadClientTorrents() {
 
     importAllMutation.mutate(missingHashes, {
       onSuccess: (res) => {
+        setSelectedHashes(new Set());
         showToast(
           `Import Complete: ${res.added} added, ${res.skipped} skipped, ${res.failed} failed.`,
           res.failed > 0 ? "error" : "success",
@@ -273,6 +367,21 @@ export default function DownloadClientTorrents() {
 
           <button
             className="btn btn-primary"
+            onClick={handleImportSelected}
+            disabled={selectedHashes.size === 0 || importAllMutation.isPending}
+            title={
+              selectedHashes.size > 0
+                ? `Import ${selectedHashes.size} selected torrent(s) into library`
+                : "Select missing torrents to import"
+            }
+          >
+            {importAllMutation.isPending && importingSelected
+              ? "Importing..."
+              : `Import Selected (${selectedHashes.size})`}
+          </button>
+
+          <button
+            className="btn btn-primary"
             onClick={handleImportAllMissing}
             disabled={missingCount === 0 || importAllMutation.isPending}
             title={
@@ -281,7 +390,7 @@ export default function DownloadClientTorrents() {
                 : "All torrents are already in library"
             }
           >
-            {importAllMutation.isPending
+            {importAllMutation.isPending && !importingSelected
               ? "Importing..."
               : `Import All Missing (${missingCount})`}
           </button>
@@ -861,6 +970,40 @@ export default function DownloadClientTorrents() {
                       fontSize: "0.8rem",
                     }}
                   >
+                    <th
+                      style={{
+                        padding: "0.75rem 0.5rem 0.75rem 1rem",
+                        width: "36px",
+                        textAlign: "center",
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={allMissingSelected}
+                        ref={(el) => {
+                          if (el) {
+                            el.indeterminate =
+                              !allMissingSelected && someMissingSelected;
+                          }
+                        }}
+                        disabled={visibleMissingItems.length === 0}
+                        onChange={handleToggleSelectAll}
+                        aria-label="Select all missing torrents"
+                        title={
+                          visibleMissingItems.length === 0
+                            ? "No missing torrents"
+                            : allMissingSelected
+                              ? "Deselect all missing"
+                              : "Select all missing"
+                        }
+                        style={{
+                          cursor:
+                            visibleMissingItems.length === 0
+                              ? "not-allowed"
+                              : "pointer",
+                        }}
+                      />
+                    </th>
                     <th style={{ padding: "0.75rem 1rem" }}>Media & Torrent</th>
                     <th style={{ padding: "0.75rem 1rem", width: "130px" }}>
                       Status
@@ -913,6 +1056,34 @@ export default function DownloadClientTorrents() {
                           transition: "background-color 0.15s ease",
                         }}
                       >
+                        <td
+                          style={{
+                            padding: "0.75rem 0.5rem 0.75rem 1rem",
+                            textAlign: "center",
+                            width: "36px",
+                          }}
+                        >
+                          {!item.isInLibrary ? (
+                            <input
+                              type="checkbox"
+                              checked={selectedHashes.has(item.infoHash)}
+                              disabled={isImporting}
+                              onChange={() => handleToggleSelect(item.infoHash)}
+                              aria-label={`Select ${displayTitle}`}
+                              style={{
+                                cursor: isImporting ? "not-allowed" : "pointer",
+                              }}
+                            />
+                          ) : (
+                            <input
+                              type="checkbox"
+                              disabled
+                              checked={false}
+                              title="Already in library"
+                              style={{ opacity: 0.3, cursor: "not-allowed" }}
+                            />
+                          )}
+                        </td>
                         <td style={{ padding: "0.75rem 1rem" }}>
                           <div
                             style={{

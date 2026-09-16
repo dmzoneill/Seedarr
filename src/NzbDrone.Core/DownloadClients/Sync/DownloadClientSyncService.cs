@@ -276,11 +276,16 @@ public class DownloadClientSyncService : IDownloadClientSyncService
             using var ms = new System.IO.MemoryStream(torrentBytes);
             var parsed = _torrentFileParser.Parse(ms);
 
+            var total = parsed.TotalSize > 0 ? parsed.TotalSize : (matchingItem?.TotalSize ?? 0);
+            var remaining = matchingItem?.RemainingSize ?? 0;
+            var downloaded = Math.Max(0, total - remaining);
+
             torrent = new Torrent
             {
                 Name = matchingItem?.Title ?? parsed.Name ?? normalizedHash,
                 InfoHash = normalizedHash,
-                TotalSize = parsed.TotalSize > 0 ? parsed.TotalSize : (matchingItem?.TotalSize ?? 0),
+                TotalSize = total,
+                Downloaded = downloaded,
                 PieceCount = parsed.PieceCount,
                 PieceLength = parsed.PieceLength,
                 Comment = parsed.Comment,
@@ -290,21 +295,46 @@ public class DownloadClientSyncService : IDownloadClientSyncService
                 Status = TorrentStatus.Stopped
             };
 
+            if (remaining == 0)
+            {
+                torrent.MarkForceCompleted();
+                torrent.Status = TorrentStatus.Stopped;
+            }
+            else if (total > 0)
+            {
+                torrent.Progress = Math.Round((double)downloaded / total, 6);
+            }
+
             _torrentService.Add(torrent);
             SaveParsedTrackersAndFiles(torrent.Id, parsed);
         }
         else if (matchingItem != null)
         {
             var clientTrackers = provider.GetTrackers(normalizedHash);
+            var total = matchingItem.TotalSize;
+            var remaining = matchingItem.RemainingSize;
+            var downloaded = Math.Max(0, total - remaining);
+
             torrent = new Torrent
             {
                 Name = !string.IsNullOrEmpty(matchingItem.Title) ? matchingItem.Title : normalizedHash,
                 InfoHash = normalizedHash,
                 TotalSize = matchingItem.TotalSize,
+                Downloaded = downloaded,
                 TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
                 DateAdded = DateTime.UtcNow,
                 Status = TorrentStatus.Stopped
             };
+
+            if (remaining == 0)
+            {
+                torrent.MarkForceCompleted();
+                torrent.Status = TorrentStatus.Stopped;
+            }
+            else if (total > 0)
+            {
+                torrent.Progress = Math.Round((double)downloaded / total, 6);
+            }
 
             _torrentService.Add(torrent);
             SaveClientTrackers(torrent.Id, clientTrackers);
