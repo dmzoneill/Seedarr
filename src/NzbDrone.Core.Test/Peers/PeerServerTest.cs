@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Torrents;
@@ -687,12 +688,13 @@ public class PeerServerTest
 
     // RunListenerAsync tests
 
-    private Task InvokeRunListenerAsync(CancellationToken ct)
+    private Task InvokeRunListenerAsync(CancellationToken ct, PeerServer server = null)
     {
+        var target = server ?? _server;
         var method = typeof(PeerServer).GetMethod(
             "RunListenerAsync",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        return (Task)method.Invoke(_server, new object[] { ct });
+        return (Task)method.Invoke(target, new object[] { ct });
     }
 
     private Task InvokeRunPeerContactLoopAsync(CancellationToken ct)
@@ -1051,5 +1053,308 @@ public class PeerServerTest
         acceptTask.Wait(TimeSpan.FromSeconds(5));
 
         _connectionManager.Received().Add(Arg.Any<PeerConnection>());
+    }
+
+    private IPAddress InvokeGetBindAddress(PeerServer server = null)
+    {
+        var target = server ?? _server;
+        var method = typeof(PeerServer).GetMethod(
+            "GetBindAddress",
+            BindingFlags.NonPublic | BindingFlags.Instance) ??
+            typeof(PeerServer).GetMethod(
+            "GetListenAddress",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        return (IPAddress)method.Invoke(target, Array.Empty<object>());
+    }
+
+    private void InvokeConnectToPeer(PeerServer server, Torrent torrent, DiscoveredPeer candidate)
+    {
+        var method = typeof(PeerServer).GetMethod(
+            "ConnectToPeer",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        method.Invoke(server, new object[] { torrent, candidate });
+    }
+
+    [Test]
+    public void GetBindAddress_should_return_null_when_dedicated_interface_is_unplumbed()
+    {
+        _configService.BindInterface.Returns("tun0");
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.GetVpnInterfaceIpAddress(Arg.Any<AddressFamily>()).Returns((IPAddress)null);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            vpnKillSwitchService: vpnService);
+
+        var address = InvokeGetBindAddress(server);
+
+        Assert.That(address, Is.Null);
+        Assert.That(address, Is.Not.EqualTo(IPAddress.Any));
+        Assert.That(address, Is.Not.EqualTo(IPAddress.IPv6Any));
+        server.Dispose();
+    }
+
+    [Test]
+    public void GetBindAddress_should_return_interface_ip_when_dedicated_interface_is_plumbed()
+    {
+        _configService.BindInterface.Returns("tun0");
+        var expectedIp = IPAddress.Parse("10.8.0.2");
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.GetVpnInterfaceIpAddress(AddressFamily.InterNetwork).Returns(expectedIp);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            vpnKillSwitchService: vpnService);
+
+        var address = InvokeGetBindAddress(server);
+
+        Assert.That(address, Is.EqualTo(expectedIp));
+        server.Dispose();
+    }
+
+    [Test]
+    public void GetBindAddress_should_return_any_when_bind_interface_is_any()
+    {
+        _configService.BindInterface.Returns("Any");
+        _configService.EnableIPv6.Returns(false);
+
+        var address = InvokeGetBindAddress(_server);
+
+        Assert.That(address, Is.EqualTo(IPAddress.Any));
+    }
+
+    [Test]
+    public void GetBindAddress_should_return_ipv6_any_when_ipv6_enabled_and_interface_is_any()
+    {
+        _configService.BindInterface.Returns("");
+        _configService.EnableIPv6.Returns(true);
+
+        var address = InvokeGetBindAddress(_server);
+
+        Assert.That(address, Is.EqualTo(IPAddress.IPv6Any));
+    }
+
+    [Test]
+    [CancelAfter(5000)]
+    public async Task RunListenerAsync_should_defer_binding_when_interface_is_unplumbed()
+    {
+        _configService.BindInterface.Returns("tun0");
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.GetVpnInterfaceIpAddress(Arg.Any<AddressFamily>()).Returns((IPAddress)null);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            vpnKillSwitchService: vpnService);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+        await InvokeRunListenerAsync(cts.Token, server);
+
+        Assert.That(server.ListenerSocket, Is.Null);
+        server.Dispose();
+    }
+
+    [Test]
+    [CancelAfter(10000)]
+    public async Task RunListenerAsync_should_bind_to_interface_ip_when_vpn_restored_event_fires()
+    {
+        _configService.BindInterface.Returns("tun0");
+        _configService.ListeningPort.Returns(0);
+
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.GetVpnInterfaceIpAddress(Arg.Any<AddressFamily>()).Returns((IPAddress)null);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            vpnKillSwitchService: vpnService);
+
+        using var cts = new CancellationTokenSource();
+        var listenerTask = InvokeRunListenerAsync(cts.Token, server);
+
+        // Initially deferred, socket should not be bound
+        await Task.Delay(100);
+        Assert.That(server.ListenerSocket, Is.Null);
+
+        // Simulate VPN interface coming online
+        vpnService.GetVpnInterfaceIpAddress(AddressFamily.InterNetwork).Returns(IPAddress.Loopback);
+        vpnService.VpnRestored += Raise.Event<Action<string>>("tun0");
+
+        // Wait for listener to bind
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (server.ListenerSocket == null && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.That(server.ListenerSocket, Is.Not.Null);
+        var boundEndpoint = (IPEndPoint)server.ListenerSocket.LocalEndPoint!;
+        Assert.That(boundEndpoint.Address, Is.EqualTo(IPAddress.Loopback));
+
+        await cts.CancelAsync();
+        try
+        {
+            await listenerTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        server.Dispose();
+    }
+
+    [Test]
+    [CancelAfter(10000)]
+    public async Task Handle_VpnInterfaceRestoredEvent_should_rebind_listener()
+    {
+        _configService.BindInterface.Returns("tun0");
+        _configService.ListeningPort.Returns(0);
+
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.GetVpnInterfaceIpAddress(Arg.Any<AddressFamily>()).Returns((IPAddress)null);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            vpnKillSwitchService: vpnService);
+
+        using var cts = new CancellationTokenSource();
+        var listenerTask = InvokeRunListenerAsync(cts.Token, server);
+
+        await Task.Delay(100);
+        Assert.That(server.ListenerSocket, Is.Null);
+
+        vpnService.GetVpnInterfaceIpAddress(AddressFamily.InterNetwork).Returns(IPAddress.Loopback);
+        server.Handle(new VpnInterfaceRestoredEvent("tun0"));
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (server.ListenerSocket == null && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.That(server.ListenerSocket, Is.Not.Null);
+        var boundEndpoint = (IPEndPoint)server.ListenerSocket.LocalEndPoint!;
+        Assert.That(boundEndpoint.Address, Is.EqualTo(IPAddress.Loopback));
+
+        await cts.CancelAsync();
+        try
+        {
+            await listenerTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        server.Dispose();
+    }
+
+    [Test]
+    [CancelAfter(10000)]
+    public async Task OnVpnDropped_should_stop_listener_when_dedicated_interface_configured()
+    {
+        _configService.BindInterface.Returns("tun0");
+        _configService.ListeningPort.Returns(0);
+
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.GetVpnInterfaceIpAddress(AddressFamily.InterNetwork).Returns(IPAddress.Loopback);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            vpnKillSwitchService: vpnService);
+
+        using var cts = new CancellationTokenSource();
+        var listenerTask = InvokeRunListenerAsync(cts.Token, server);
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (server.ListenerSocket == null && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.That(server.ListenerSocket, Is.Not.Null);
+
+        // Drop VPN
+        vpnService.GetVpnInterfaceIpAddress(Arg.Any<AddressFamily>()).Returns((IPAddress)null);
+        vpnService.VpnDropped += Raise.Event<Action<string>>("tun0");
+
+        deadline = DateTime.UtcNow.AddSeconds(3);
+        while (server.ListenerSocket != null && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.That(server.ListenerSocket, Is.Null);
+
+        await cts.CancelAsync();
+        try
+        {
+            await listenerTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        server.Dispose();
+    }
+
+    [Test]
+    public void ConnectToPeer_should_fail_closed_when_dedicated_interface_is_unplumbed()
+    {
+        _configService.BindInterface.Returns("tun0");
+
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.GetVpnInterfaceIpAddress(Arg.Any<AddressFamily>()).Returns((IPAddress)null);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            vpnKillSwitchService: vpnService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = 5000,
+            Source = "tracker"
+        };
+
+        InvokeConnectToPeer(server, torrent, candidate);
+
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+        _peerDiscovery.Received().MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+
+        server.Dispose();
     }
 }

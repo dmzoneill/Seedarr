@@ -11,6 +11,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Simulation.ClientBehavior;
@@ -18,7 +19,7 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
-public class PeerServer : BackgroundService
+public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
 {
     private const int OutgoingConnectTimeoutMs = 5000;
     private readonly IConfigService _configService;
@@ -42,6 +43,12 @@ public class PeerServer : BackgroundService
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
     private readonly Logger _logger;
+    private readonly object _listenerLock = new();
+    private readonly SemaphoreSlim _rebindSignal = new(0, 1);
+    private TcpListener _listener;
+    private CancellationTokenSource _listenerCts;
+
+    public Socket ListenerSocket => _listener?.Server;
 
     public PeerServer(
         IConfigService configService,
@@ -93,6 +100,7 @@ public class PeerServer : BackgroundService
         if (_vpnKillSwitchService != null)
         {
             _vpnKillSwitchService.VpnDropped += OnVpnDropped;
+            _vpnKillSwitchService.VpnRestored += OnVpnRestored;
         }
     }
 
@@ -107,6 +115,22 @@ public class PeerServer : BackgroundService
         {
             _logger.Error(ex, "Error disconnecting peers after VPN kill switch triggered");
         }
+
+        if (HasDedicatedBindInterface())
+        {
+            StopListener();
+        }
+    }
+
+    private void OnVpnRestored(string iface)
+    {
+        _logger.Info("VPN interface '{0}' restored. Rebinding peer listener socket.", iface);
+        TriggerRebind();
+    }
+
+    public void Handle(VpnInterfaceRestoredEvent message)
+    {
+        OnVpnRestored(message?.InterfaceName);
     }
 
     public override void Dispose()
@@ -114,12 +138,191 @@ public class PeerServer : BackgroundService
         if (_vpnKillSwitchService != null)
         {
             _vpnKillSwitchService.VpnDropped -= OnVpnDropped;
+            _vpnKillSwitchService.VpnRestored -= OnVpnRestored;
         }
 
+        StopListener();
+        _rebindSignal?.Dispose();
         _connectionSemaphore?.Dispose();
         _halfOpenSemaphore?.Dispose();
         base.Dispose();
     }
+
+    private void StopListener()
+    {
+        lock (_listenerLock)
+        {
+            if (_listenerCts != null && !_listenerCts.IsCancellationRequested)
+            {
+                try
+                {
+                    _listenerCts.Cancel();
+                }
+                catch
+                {
+                }
+            }
+
+            if (_listener != null)
+            {
+                try
+                {
+                    _listener.Stop();
+                }
+                catch
+                {
+                }
+
+                _listener = null;
+            }
+        }
+    }
+
+    private void TriggerRebind()
+    {
+        StopListener();
+
+        try
+        {
+            if (_rebindSignal.CurrentCount == 0)
+            {
+                _rebindSignal.Release();
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private async Task WaitUntilRestoredOrCancelledAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await _rebindSignal.WaitAsync(TimeSpan.FromSeconds(2), stoppingToken);
+        }
+        catch (ObjectDisposedException)
+        {
+            stoppingToken.ThrowIfCancellationRequested();
+        }
+    }
+
+    private bool HasDedicatedBindInterface()
+    {
+        var bindIface = _configService.BindInterface?.Trim();
+        return !string.IsNullOrWhiteSpace(bindIface) &&
+               !bindIface.Equals("Any", StringComparison.OrdinalIgnoreCase) &&
+               !bindIface.Equals("all", StringComparison.OrdinalIgnoreCase) &&
+               !bindIface.Equals("*", StringComparison.OrdinalIgnoreCase) &&
+               !bindIface.Equals("0.0.0.0", StringComparison.OrdinalIgnoreCase) &&
+               !bindIface.Equals("::", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private IPAddress ResolveDedicatedBindIp()
+    {
+        if (_vpnKillSwitchService != null)
+        {
+            if (_vpnKillSwitchService.IsFailClosedActive)
+            {
+                return null;
+            }
+
+            if (_configService.EnableIPv6)
+            {
+                var ip6 = _vpnKillSwitchService.GetVpnInterfaceIpAddress(AddressFamily.InterNetworkV6);
+                if (ip6 != null)
+                {
+                    return ip6;
+                }
+            }
+
+            var ip4 = _vpnKillSwitchService.GetVpnInterfaceIpAddress(AddressFamily.InterNetwork);
+            if (ip4 != null)
+            {
+                return ip4;
+            }
+        }
+
+        var bindIface = _configService.BindInterface?.Trim();
+        if (string.IsNullOrWhiteSpace(bindIface))
+        {
+            return null;
+        }
+
+        if (IPAddress.TryParse(bindIface, out var parsed))
+        {
+            if (!parsed.Equals(IPAddress.Any) && !parsed.Equals(IPAddress.IPv6Any))
+            {
+                return parsed;
+            }
+
+            return null;
+        }
+
+        return ResolveInterfaceIpFromName(bindIface);
+    }
+
+    private IPAddress ResolveInterfaceIpFromName(string interfaceName)
+    {
+        try
+        {
+            var family = _configService.EnableIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork;
+            var nics = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
+            var nic = nics.FirstOrDefault(n =>
+                string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
+
+            if (nic == null || nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
+            {
+                return null;
+            }
+
+            var unicast = nic.GetIPProperties()?.UnicastAddresses;
+            if (unicast == null)
+            {
+                return null;
+            }
+
+            if (_configService.EnableIPv6)
+            {
+                var ip6 = unicast.FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetworkV6 &&
+                    !IPAddress.IsLoopback(a.Address) &&
+                    !a.Address.Equals(IPAddress.IPv6Any) &&
+                    !a.Address.Equals(IPAddress.IPv6None) &&
+                    !a.Address.IsIPv6LinkLocal &&
+                    !a.Address.IsIPv6SiteLocal &&
+                    !a.Address.IsIPv6Multicast)?.Address;
+
+                if (ip6 != null)
+                {
+                    return ip6;
+                }
+            }
+
+            var ip4 = unicast.FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetwork &&
+                !IPAddress.IsLoopback(a.Address) &&
+                !a.Address.Equals(IPAddress.Any) &&
+                !a.Address.Equals(IPAddress.None))?.Address;
+
+            return ip4;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to resolve IP for interface '{0}'", interfaceName);
+            return null;
+        }
+    }
+
+    private IPAddress GetBindAddress()
+    {
+        if (HasDedicatedBindInterface())
+        {
+            return ResolveDedicatedBindIp();
+        }
+
+        return _configService.EnableIPv6 ? IPAddress.IPv6Any : IPAddress.Any;
+    }
+
+    private IPAddress GetListenAddress() => GetBindAddress();
 
     private EncryptionMode GetEncryptionMode()
     {
@@ -129,40 +332,6 @@ public class PeerServer : BackgroundService
             "disabled" => EncryptionMode.PreferPlainText,
             _ => EncryptionMode.PreferEncrypted
         };
-    }
-
-    private IPAddress GetListenAddress()
-    {
-        if (_vpnKillSwitchService != null)
-        {
-            var ifaceIp = _vpnKillSwitchService.GetVpnInterfaceIpAddress(
-                _configService.EnableIPv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork);
-
-            if (ifaceIp != null)
-            {
-                return ifaceIp;
-            }
-
-            ifaceIp = _vpnKillSwitchService.GetVpnInterfaceIpAddress(AddressFamily.InterNetwork);
-            if (ifaceIp != null)
-            {
-                return ifaceIp;
-            }
-        }
-
-        var bindIface = _configService.BindInterface?.Trim();
-        if (!string.IsNullOrWhiteSpace(bindIface) &&
-            !bindIface.Equals("Any", StringComparison.OrdinalIgnoreCase) &&
-            !bindIface.Equals("all", StringComparison.OrdinalIgnoreCase) &&
-            !bindIface.Equals("*", StringComparison.OrdinalIgnoreCase))
-        {
-            if (IPAddress.TryParse(bindIface, out var parsed))
-            {
-                return parsed;
-            }
-        }
-
-        return _configService.EnableIPv6 ? IPAddress.IPv6Any : IPAddress.Any;
     }
 
     private void ApplySocketQos(Socket socket)
@@ -198,14 +367,34 @@ public class PeerServer : BackgroundService
 
     private async Task RunListenerAsync(CancellationToken stoppingToken)
     {
-        var listeningPort = _configService.ListeningPort;
-        var bindAddress = GetListenAddress();
-        var listener = new TcpListener(bindAddress, listeningPort);
-
-        try
+        while (!stoppingToken.IsCancellationRequested)
         {
+            var bindAddress = GetBindAddress();
+            if (bindAddress == null)
+            {
+                var configuredIface = _configService.BindInterface?.Trim();
+                _logger.Warn(
+                    "Configured bind interface '{0}' is not available or unplumbed. Deferring peer listener binding.",
+                    configuredIface);
+
+                try
+                {
+                    await WaitUntilRestoredOrCancelledAsync(stoppingToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                continue;
+            }
+
+            var listeningPort = _configService.ListeningPort;
+            TcpListener listener;
+
             try
             {
+                listener = new TcpListener(bindAddress, listeningPort);
                 if (bindAddress.Equals(IPAddress.IPv6Any))
                 {
                     listener.Server.DualMode = true;
@@ -215,7 +404,32 @@ public class PeerServer : BackgroundService
             }
             catch (SocketException ex)
             {
-                _logger.Warn(ex, "Peer server failed to bind {0}:{1}, attempting fallback to IPv4 Any", bindAddress, listeningPort);
+                if (HasDedicatedBindInterface())
+                {
+                    _logger.Warn(
+                        ex,
+                        "Peer server failed to bind configured interface {0}:{1}. Deferring listener binding.",
+                        bindAddress,
+                        listeningPort);
+
+                    try
+                    {
+                        await WaitUntilRestoredOrCancelledAsync(stoppingToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+
+                    continue;
+                }
+
+                _logger.Warn(
+                    ex,
+                    "Peer server failed to bind {0}:{1}, attempting fallback to IPv4 Any",
+                    bindAddress,
+                    listeningPort);
+
                 try
                 {
                     listener = new TcpListener(IPAddress.Any, listeningPort);
@@ -223,75 +437,118 @@ public class PeerServer : BackgroundService
                 }
                 catch (Exception fallbackEx)
                 {
-                    _logger.Warn(fallbackEx, "Peer server failed fallback bind on port {0}, skipping", listeningPort);
+                    _logger.Warn(
+                        fallbackEx,
+                        "Peer server failed fallback bind on port {0}, skipping",
+                        listeningPort);
                     return;
                 }
             }
 
             _logger.Info("Peer server listening on {0}:{1}", bindAddress, listeningPort);
 
-            while (!stoppingToken.IsCancellationRequested)
+            CancellationToken linkedToken;
+            lock (_listenerLock)
             {
-                var client = await listener.AcceptTcpClientAsync(stoppingToken);
+                _listener = listener;
+                _listenerCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                linkedToken = _listenerCts.Token;
+            }
 
-                if (_vpnKillSwitchService?.IsFailClosedActive == true)
+            try
+            {
+                while (!linkedToken.IsCancellationRequested)
                 {
-                    _logger.Debug("VPN fail-closed engaged; rejecting incoming peer connection");
-                    client.Dispose();
-                    continue;
-                }
+                    var client = await listener.AcceptTcpClientAsync(linkedToken);
 
-                _ = Task.Run(
-                    async () =>
+                    if (_vpnKillSwitchService?.IsFailClosedActive == true)
                     {
-                        var maxPerIp = _configService.MaxConnectionsPerIp > 0 ? _configService.MaxConnectionsPerIp : 5;
-                        var clientIp = ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString();
-                        var currentCount = _connectionsPerIp.AddOrUpdate(clientIp, 1, (_, count) => count + 1);
-                        if (currentCount > maxPerIp)
-                        {
-                            _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
-                            client.Dispose();
-                            return;
-                        }
+                        _logger.Debug("VPN fail-closed engaged; rejecting incoming peer connection");
+                        client.Dispose();
+                        continue;
+                    }
 
-                        ApplySocketQos(client.Client);
-
-                        try
+                    _ = Task.Run(
+                        async () =>
                         {
-                            if (!await _connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                            var maxPerIp = _configService.MaxConnectionsPerIp > 0 ? _configService.MaxConnectionsPerIp : 5;
+                            var clientIp = ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString();
+                            var currentCount = _connectionsPerIp.AddOrUpdate(clientIp, 1, (_, count) => count + 1);
+                            if (currentCount > maxPerIp)
                             {
                                 _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
                                 client.Dispose();
                                 return;
                             }
-                        }
-                        catch
-                        {
-                            _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
-                            client.Dispose();
-                            return;
-                        }
 
-                        try
-                        {
-                            HandleConnection(client, stoppingToken);
-                        }
-                        finally
-                        {
-                            _connectionSemaphore.Release();
-                            _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
-                        }
-                    },
-                    stoppingToken);
+                            ApplySocketQos(client.Client);
+
+                            try
+                            {
+                                if (!await _connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                                {
+                                    _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
+                                    client.Dispose();
+                                    return;
+                                }
+                            }
+                            catch
+                            {
+                                _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
+                                client.Dispose();
+                                return;
+                            }
+
+                            try
+                            {
+                                HandleConnection(client, stoppingToken);
+                            }
+                            finally
+                            {
+                                _connectionSemaphore.Release();
+                                _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
+                            }
+                        },
+                        stoppingToken);
+                }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            // Shutdown
-        }
-        finally
-        {
-            listener.Stop();
+            catch (OperationCanceledException)
+            {
+                // Expected when stoppingToken is cancelled or _listenerCts cancelled for rebind
+            }
+            catch (SocketException)
+            {
+                // Expected when listener is stopped/closed
+            }
+            catch (ObjectDisposedException)
+            {
+                // Expected when listener is stopped/disposed
+            }
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+            {
+                _logger.Debug(ex, "Exception in peer server listener loop");
+            }
+            finally
+            {
+                lock (_listenerLock)
+                {
+                    try
+                    {
+                        listener.Stop();
+                    }
+                    catch
+                    {
+                    }
+
+                    if (_listener == listener)
+                    {
+                        _listener = null;
+                    }
+
+                    _listenerCts?.Dispose();
+                    _listenerCts = null;
+                }
+            }
         }
     }
 
@@ -398,6 +655,17 @@ public class PeerServer : BackgroundService
             return;
         }
 
+        if (HasDedicatedBindInterface() && GetBindAddress() == null)
+        {
+            _logger.Debug(
+                "Dedicated bind interface '{0}' is unplumbed or unavailable; suppressing outgoing connection to {1}:{2}",
+                _configService.BindInterface,
+                candidate.Ip,
+                candidate.Port);
+            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+            return;
+        }
+
         if (!_configService.EnableIPv6 &&
             IPAddress.TryParse(candidate.Ip, out var candIp) &&
             candIp.AddressFamily == AddressFamily.InterNetworkV6)
@@ -435,6 +703,21 @@ public class PeerServer : BackgroundService
             _eventLogService?.Debug(torrent.Id, "Peers", $"Attempting connection to peer {candidate.Ip}:{candidate.Port} (source: {candidate.Source})");
 
             var localBind = _vpnKillSwitchService?.GetVpnInterfaceIpAddress();
+            if (localBind == null && HasDedicatedBindInterface())
+            {
+                localBind = ResolveDedicatedBindIp();
+            }
+
+            if (HasDedicatedBindInterface() && localBind == null)
+            {
+                _logger.Warn(
+                    "Dedicated bind interface '{0}' is configured but unplumbed/unavailable. Failing closed on outgoing connection to {1}:{2}",
+                    _configService.BindInterface,
+                    candidate.Ip,
+                    candidate.Port);
+                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                return;
+            }
 
             if (_utpManager != null && _utpManager.IsEnabled)
             {
