@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
@@ -280,6 +282,193 @@ public class MediaEnrichmentServiceTest
         Assert.That(result.Title, Is.EqualTo("Arr Show Title"));
         await mockProvider.Received(1).GetDownloadHistoryAsync(Arg.Any<CancellationToken>());
         await mockProvider.Received(1).GetMediaDetailsAsync(999, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task CacheArtworkAsync_InvalidOrTraversalType_ReturnsNull()
+    {
+        var sourceImage = Path.Combine(_tempDirectory, "source.jpg");
+        var validJpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46 };
+        await File.WriteAllBytesAsync(sourceImage, validJpeg);
+
+        Assert.That(await _service.CacheArtworkAsync(sourceImage, 101, "../poster"), Is.Null);
+        Assert.That(await _service.CacheArtworkAsync(sourceImage, 101, "../../etc/passwd"), Is.Null);
+        Assert.That(await _service.CacheArtworkAsync(sourceImage, 101, "invalid_type"), Is.Null);
+        Assert.That(await _service.CacheArtworkAsync(sourceImage, 101, string.Empty), Is.Null);
+        Assert.That(await _service.CacheArtworkAsync(sourceImage, 101, null), Is.Null);
+    }
+
+    [Test]
+    public async Task CacheArtworkAsync_StreamExceeding15Mb_AbortsAndDeletesTempFile()
+    {
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StreamContent(new RepeatingStream(16 * 1024 * 1024)),
+        });
+        using var httpClient = new HttpClient(handler);
+        var service = new MediaEnrichmentService(
+            _repository,
+            _inspector,
+            _configService,
+            _appFolderInfo,
+            _eventAggregator,
+            _arrRepository,
+            _connectionFactory,
+            httpClient);
+
+        var result = await service.CacheArtworkAsync("https://example.com/poster.jpg", 102, "poster");
+
+        Assert.That(result, Is.Null);
+        var cacheDir = Path.Combine(_tempDirectory, "MediaCover", "102");
+        if (Directory.Exists(cacheDir))
+        {
+            var tmpFiles = Directory.EnumerateFiles(cacheDir, "*.tmp.*").ToList();
+            Assert.That(tmpFiles, Is.Empty);
+            Assert.That(File.Exists(Path.Combine(cacheDir, "poster.jpg")), Is.False);
+        }
+    }
+
+    [Test]
+    public async Task CacheArtworkAsync_CorruptedMagicBytes_QuarantinesOrDeletesTempFile()
+    {
+        var invalidBytes = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 };
+        var handler = new FakeHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(invalidBytes),
+        });
+        using var httpClient = new HttpClient(handler);
+        var service = new MediaEnrichmentService(
+            _repository,
+            _inspector,
+            _configService,
+            _appFolderInfo,
+            _eventAggregator,
+            _arrRepository,
+            _connectionFactory,
+            httpClient);
+
+        var result = await service.CacheArtworkAsync("https://example.com/poster.jpg", 103, "poster");
+
+        Assert.That(result, Is.Null);
+        var cacheDir = Path.Combine(_tempDirectory, "MediaCover", "103");
+        if (Directory.Exists(cacheDir))
+        {
+            var tmpFiles = Directory.EnumerateFiles(cacheDir, "*.tmp.*").ToList();
+            Assert.That(tmpFiles, Is.Empty);
+            Assert.That(File.Exists(Path.Combine(cacheDir, "poster.jpg")), Is.False);
+        }
+    }
+
+    [Test]
+    public async Task CacheArtworkAsync_CleansUpExistingFormat_WhenNewFormatCached()
+    {
+        var cacheDir = Path.Combine(_tempDirectory, "MediaCover", "104");
+        Directory.CreateDirectory(cacheDir);
+        var existingJpg = Path.Combine(cacheDir, "poster.jpg");
+        await File.WriteAllBytesAsync(existingJpg, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46 });
+        Assert.That(File.Exists(existingJpg), Is.True);
+
+        var validWebp = new byte[] { 0x52, 0x49, 0x46, 0x46, 0x20, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x20 };
+        var sourceWebp = Path.Combine(_tempDirectory, "poster.webp");
+        await File.WriteAllBytesAsync(sourceWebp, validWebp);
+
+        var result = await _service.CacheArtworkAsync(sourceWebp, 104, "poster");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(File.Exists(result), Is.True);
+        Assert.That(result, Does.EndWith("poster.webp"));
+        Assert.That(File.Exists(existingJpg), Is.False);
+    }
+
+    [Test]
+    public async Task EnrichTorrentAsync_WhenExistingPosterPathMissingOnDisk_ReCachesArtwork()
+    {
+        var validJpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46 };
+        var sourcePoster = Path.Combine(_tempDirectory, "source_poster.jpg");
+        await File.WriteAllBytesAsync(sourcePoster, validJpeg);
+
+        var missingPath = Path.Combine(_tempDirectory, "non_existent_poster.jpg");
+        var existing = new TorrentMediaMetadata
+        {
+            Id = 1,
+            TorrentId = 105,
+            Title = "Test Torrent",
+            PosterUrl = sourcePoster,
+            PosterLocalPath = missingPath,
+        };
+
+        _repository.GetByTorrentId(105).Returns(existing);
+
+        var torrent = new Torrent { Id = 105, Name = "Test Torrent" };
+        var result = await _service.EnrichTorrentAsync(torrent);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.PosterLocalPath, Is.Not.EqualTo(missingPath));
+        Assert.That(File.Exists(result.PosterLocalPath), Is.True);
+    }
+
+    private class RepeatingStream : Stream
+    {
+        private readonly long _length;
+        private long _position;
+
+        public RepeatingStream(long length)
+        {
+            _length = length;
+        }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => _length;
+
+        public override long Position
+        {
+            get => _position;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var remaining = _length - _position;
+            if (remaining <= 0)
+            {
+                return 0;
+            }
+
+            var toRead = (int)Math.Min(count, remaining);
+            Array.Fill(buffer, (byte)0x55, offset, toRead);
+            _position += toRead;
+            return toRead;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private class FakeHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _handler;
+
+        public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> handler)
+        {
+            _handler = handler;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_handler(request));
+        }
     }
 
     private class TestableMediaEnrichmentService : MediaEnrichmentService

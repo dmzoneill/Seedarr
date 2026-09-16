@@ -48,6 +48,8 @@ public interface IMediaEnrichmentService
 
 public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDeletedEvent>
 {
+    private const long MaxArtworkSizeBytes = 15 * 1024 * 1024;
+
     private readonly ITorrentMediaMetadataRepository _repository;
     private readonly IMediaContainerInspector _inspector;
     private readonly IConfigService _configService;
@@ -60,6 +62,16 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _torrentLocks = new();
     private readonly object _evictionLock = new();
+
+    private static readonly HashSet<string> AllowedArtworkTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "poster",
+        "backdrop",
+        "banner",
+        "fanart",
+        "logo",
+        "thumb",
+    };
 
     private static readonly Regex SceneTagsRegex = new(
         @"\b(1080p|720p|2160p|4k|uhd|hdr|hdr10|hdr10plus|dv|dovi|remux|bluray|blu-ray|bdrip|web-dl|webrip|web|hdtv|x264|x265|h264|h265|hevc|av1|xvid|aac|dts|dts-hd|truehd|atmos|flac|mp3|extended|repack|proper|complete|season|\bS\d{1,2}(E\d{1,2})?\b|\bEP?\d{1,3}\b)\b.*$",
@@ -232,12 +244,12 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             }
 
             // 5. Cache remote or local poster & backdrop
-            if (!string.IsNullOrEmpty(metadata.PosterUrl) && string.IsNullOrEmpty(metadata.PosterLocalPath))
+            if (!string.IsNullOrEmpty(metadata.PosterUrl) && (string.IsNullOrEmpty(metadata.PosterLocalPath) || !File.Exists(metadata.PosterLocalPath)))
             {
                 metadata.PosterLocalPath = await CacheArtworkAsync(metadata.PosterUrl, torrent.Id, "poster", cancellationToken).ConfigureAwait(false);
             }
 
-            if (!string.IsNullOrEmpty(metadata.BackdropUrl) && string.IsNullOrEmpty(metadata.BackdropLocalPath))
+            if (!string.IsNullOrEmpty(metadata.BackdropUrl) && (string.IsNullOrEmpty(metadata.BackdropLocalPath) || !File.Exists(metadata.BackdropLocalPath)))
             {
                 metadata.BackdropLocalPath = await CacheArtworkAsync(metadata.BackdropUrl, torrent.Id, "backdrop", cancellationToken).ConfigureAwait(false);
             }
@@ -375,8 +387,19 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
 
     public async Task<string> CacheArtworkAsync(string url, int torrentId, string type, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(url) || _appFolderInfo == null)
+        if (string.IsNullOrWhiteSpace(url) || _appFolderInfo == null || string.IsNullOrWhiteSpace(type))
         {
+            return null;
+        }
+
+        var sanitizedType = Path.GetFileName(type)?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(sanitizedType) ||
+            !AllowedArtworkTypes.Contains(sanitizedType) ||
+            type.Contains("..") ||
+            type.Contains('/') ||
+            type.Contains('\\'))
+        {
+            _logger.Warn("Invalid or unauthorized artwork type requested: {0}", type);
             return null;
         }
 
@@ -393,10 +416,10 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             {
                 if (File.Exists(url))
                 {
-                    var localBytes = await File.ReadAllBytesAsync(url, cancellationToken).ConfigureAwait(false);
-                    if (localBytes == null || localBytes.Length > 15 * 1024 * 1024 || !IsValidImage(localBytes))
+                    var fileInfo = new FileInfo(url);
+                    if (fileInfo.Length > MaxArtworkSizeBytes)
                     {
-                        _logger.Warn("Local artwork file is invalid, not an image, or exceeds size limit: {0}", url);
+                        _logger.Warn("Local artwork file exceeds size limit: {0}", url);
                         return null;
                     }
 
@@ -406,13 +429,28 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                         ext = ".jpg";
                     }
 
-                    var localFile = Path.Combine(cacheDir, $"{type}{ext}");
+                    var localFile = Path.Combine(cacheDir, $"{sanitizedType}{ext}");
                     var tmpLocalFile = $"{localFile}.tmp.{Guid.NewGuid():N}";
                     try
                     {
-                        await File.WriteAllBytesAsync(tmpLocalFile, localBytes, cancellationToken).ConfigureAwait(false);
+                        using (var srcStream = new FileStream(url, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true))
+                        using (var destStream = new FileStream(tmpLocalFile, FileMode.Create, FileAccess.ReadWrite, FileShare.None, 81920, useAsync: true))
+                        {
+                            var headerBytes = new byte[16];
+                            var readHeader = await srcStream.ReadAsync(headerBytes.AsMemory(), cancellationToken).ConfigureAwait(false);
+                            if (readHeader < 4 || !IsValidImage(headerBytes[..readHeader]))
+                            {
+                                _logger.Warn("Local artwork file is invalid, not an image, or corrupted: {0}", url);
+                                return null;
+                            }
+
+                            srcStream.Position = 0;
+                            await srcStream.CopyToAsync(destStream, cancellationToken).ConfigureAwait(false);
+                        }
+
                         File.Move(tmpLocalFile, localFile, overwrite: true);
-                        _logger.Debug("Copied validated local {0} artwork from {1} to {2}", type, url, localFile);
+                        CleanUpAlternativeFormats(cacheDir, sanitizedType, localFile);
+                        _logger.Debug("Copied validated local {0} artwork from {1} to {2}", sanitizedType, url, localFile);
                         EvictMediaCoverCache();
                         return localFile;
                     }
@@ -451,7 +489,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 extRemote = uriExt;
             }
 
-            var destFile = Path.Combine(cacheDir, $"{type}{extRemote}");
+            var destFile = Path.Combine(cacheDir, $"{sanitizedType}{extRemote}");
 
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             var apiKey = GetServarrApiKey(url);
@@ -460,26 +498,60 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 request.Headers.TryAddWithoutValidation("X-Api-Key", apiKey);
             }
 
-            using var response = await GetImageHttpClient(url).SendAsync(request, cancellationToken).ConfigureAwait(false);
+            using var response = await GetImageHttpClient(url).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Failed downloading artwork from {0}: {1}", url, response.StatusCode);
                 return null;
             }
 
-            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
-            if (bytes == null || bytes.Length == 0 || bytes.Length > 15 * 1024 * 1024 || !IsValidImage(bytes))
+            if (response.Content.Headers.ContentLength.HasValue && response.Content.Headers.ContentLength.Value > MaxArtworkSizeBytes)
             {
-                _logger.Warn("Downloaded artwork from {0} has invalid image magic bytes or is empty. Discarding.", url);
+                _logger.Warn("Artwork download from {0} exceeds size limit: {1} bytes", url, response.Content.Headers.ContentLength.Value);
                 return null;
             }
 
             var tmpFile = $"{destFile}.tmp.{Guid.NewGuid():N}";
             try
             {
-                await File.WriteAllBytesAsync(tmpFile, bytes, cancellationToken).ConfigureAwait(false);
+                using (var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
+                using (var fileStream = new FileStream(tmpFile, FileMode.Create, FileAccess.ReadWrite, FileShare.None, 81920, useAsync: true))
+                {
+                    var buffer = new byte[81920];
+                    long totalBytesRead = 0;
+                    int bytesRead;
+
+                    while ((bytesRead = await stream.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
+                    {
+                        totalBytesRead += bytesRead;
+                        if (totalBytesRead > MaxArtworkSizeBytes)
+                        {
+                            _logger.Warn("Artwork download from {0} exceeded size limit of {1} bytes during transfer", url, MaxArtworkSizeBytes);
+                            return null;
+                        }
+
+                        await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead), cancellationToken).ConfigureAwait(false);
+                    }
+
+                    if (totalBytesRead == 0)
+                    {
+                        _logger.Warn("Downloaded artwork from {0} is empty. Discarding.", url);
+                        return null;
+                    }
+
+                    fileStream.Position = 0;
+                    var headerBytes = new byte[Math.Min(16, (int)totalBytesRead)];
+                    var readHeader = await fileStream.ReadAsync(headerBytes.AsMemory(), cancellationToken).ConfigureAwait(false);
+                    if (readHeader < 4 || !IsValidImage(headerBytes[..readHeader]))
+                    {
+                        _logger.Warn("Downloaded artwork from {0} has invalid image magic bytes or is corrupted. Discarding.", url);
+                        return null;
+                    }
+                }
+
                 File.Move(tmpFile, destFile, overwrite: true);
-                _logger.Debug("Cached {0} artwork to {1}", type, destFile);
+                CleanUpAlternativeFormats(cacheDir, sanitizedType, destFile);
+                _logger.Debug("Cached {0} artwork to {1}", sanitizedType, destFile);
                 EvictMediaCoverCache();
                 return destFile;
             }
@@ -505,6 +577,49 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         {
             _logger.Warn(ex, "Failed to cache artwork from URL/path: {0}", url);
             return null;
+        }
+    }
+
+    private static void CleanUpAlternativeFormats(string cacheDir, string type, string currentFile)
+    {
+        if (!Directory.Exists(cacheDir))
+        {
+            return;
+        }
+
+        try
+        {
+            var normalizedCurrent = Path.GetFullPath(currentFile);
+            foreach (var file in Directory.EnumerateFiles(cacheDir))
+            {
+                var fileName = Path.GetFileName(file);
+                if (!fileName.StartsWith(type + ".", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var fullPath = Path.GetFullPath(file);
+                if (string.Equals(fullPath, normalizedCurrent, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (file.Contains(".tmp.", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Delete(fullPath);
+                }
+                catch
+                {
+                }
+            }
+        }
+        catch
+        {
         }
     }
 
