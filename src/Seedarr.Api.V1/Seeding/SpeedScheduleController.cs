@@ -56,12 +56,18 @@ public class SpeedScheduleController : Controller
     [HttpPost]
     public ActionResult<SpeedScheduleResource> Create([FromBody] SpeedScheduleResource resource)
     {
+        var validation = ValidateResource(resource);
+        if (validation != null)
+        {
+            return validation;
+        }
+
         SpeedSchedule schedule;
         try
         {
             schedule = ToModel(resource);
         }
-        catch (FormatException)
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
         {
             return BadRequest("Invalid time format. Expected HH:mm.");
         }
@@ -73,6 +79,12 @@ public class SpeedScheduleController : Controller
     [HttpPut("{id:int}")]
     public ActionResult<SpeedScheduleResource> Update(int id, [FromBody] SpeedScheduleResource resource)
     {
+        var validation = ValidateResource(resource);
+        if (validation != null)
+        {
+            return validation;
+        }
+
         var existing = _speedScheduler.Get(id);
         if (existing == null)
         {
@@ -84,7 +96,7 @@ public class SpeedScheduleController : Controller
         {
             schedule = ToModel(resource);
         }
-        catch (FormatException)
+        catch (Exception ex) when (ex is FormatException or ArgumentException)
         {
             return BadRequest("Invalid time format. Expected HH:mm.");
         }
@@ -107,6 +119,31 @@ public class SpeedScheduleController : Controller
         return Ok();
     }
 
+    private ActionResult ValidateResource(SpeedScheduleResource resource)
+    {
+        if (resource == null)
+        {
+            return BadRequest("Request body is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(resource.Name))
+        {
+            return BadRequest("Schedule name cannot be empty.");
+        }
+
+        if (resource.Days <= 0 || resource.Days > 127)
+        {
+            return BadRequest("Days must be between 1 and 127.");
+        }
+
+        if (resource.MaxUploadSpeed < -1 || resource.MaxDownloadSpeed < -1)
+        {
+            return BadRequest("Speed limit cannot be less than -1.");
+        }
+
+        return null;
+    }
+
     private static SpeedScheduleResource ToResource(SpeedSchedule model)
     {
         return new SpeedScheduleResource
@@ -125,10 +162,20 @@ public class SpeedScheduleController : Controller
 
     private static SpeedSchedule ToModel(SpeedScheduleResource resource)
     {
+        if (string.IsNullOrWhiteSpace(resource.StartTime))
+        {
+            throw new ArgumentException("StartTime cannot be null or empty.");
+        }
+
+        if (string.IsNullOrWhiteSpace(resource.EndTime))
+        {
+            throw new ArgumentException("EndTime cannot be null or empty.");
+        }
+
         return new SpeedSchedule
         {
             Id = resource.Id,
-            Name = resource.Name,
+            Name = resource.Name?.Trim() ?? string.Empty,
             Days = (ScheduleDays)resource.Days,
             StartTime = TimeOnly.Parse(resource.StartTime),
             EndTime = TimeOnly.Parse(resource.EndTime),

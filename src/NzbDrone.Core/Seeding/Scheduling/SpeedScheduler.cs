@@ -44,6 +44,8 @@ public class SpeedScheduler : ISpeedScheduler
     private readonly IConfigService _configService;
     private readonly ISystemClock _clock;
     private readonly Logger _logger;
+    private readonly object _cacheLock = new();
+    private List<SpeedSchedule> _cachedEnabledSchedules;
 
     public SpeedScheduler(
         ISpeedScheduleRepository repository,
@@ -64,7 +66,7 @@ public class SpeedScheduler : ISpeedScheduler
     public SpeedLimits GetLimitsAt(DateTime utcTime)
     {
         var localTime = ToConfiguredTime(utcTime);
-        var schedules = _repository.GetEnabled().ToList();
+        var schedules = GetEnabledSchedules();
 
         if (schedules.Count == 0)
         {
@@ -188,19 +190,40 @@ public class SpeedScheduler : ISpeedScheduler
     public SpeedSchedule Add(SpeedSchedule schedule)
     {
         _logger.Info("Adding speed schedule: {0}", schedule.Name);
-        return _repository.Insert(schedule);
+        var added = _repository.Insert(schedule);
+        InvalidateCache();
+        return added;
     }
 
     public SpeedSchedule Update(SpeedSchedule schedule)
     {
         _logger.Info("Updating speed schedule: {0}", schedule.Name);
-        return _repository.Update(schedule);
+        var updated = _repository.Update(schedule);
+        InvalidateCache();
+        return updated;
     }
 
     public void Delete(int id)
     {
         _logger.Info("Deleting speed schedule: {0}", id);
         _repository.Delete(id);
+        InvalidateCache();
+    }
+
+    private List<SpeedSchedule> GetEnabledSchedules()
+    {
+        lock (_cacheLock)
+        {
+            return _cachedEnabledSchedules ??= _repository.GetEnabled().ToList();
+        }
+    }
+
+    private void InvalidateCache()
+    {
+        lock (_cacheLock)
+        {
+            _cachedEnabledSchedules = null;
+        }
     }
 
     private static List<SpeedSchedule> GetActiveSchedules(List<SpeedSchedule> schedules, DateTime localTime)
