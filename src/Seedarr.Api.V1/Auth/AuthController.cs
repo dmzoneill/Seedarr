@@ -38,7 +38,7 @@ public class AuthController : ControllerBase
     public ActionResult<List<AuthProviderResource>> GetProviders()
     {
         var providers = new List<AuthProviderResource>();
-        var basePath = Request.PathBase.HasValue ? Request.PathBase.Value : string.Empty;
+        var basePath = GetEffectivePathBase();
 
         var enabledProviders = _identityProviderService.GetEnabled();
         foreach (var p in enabledProviders)
@@ -104,7 +104,7 @@ public class AuthController : ControllerBase
         await HttpContext.SignInAsync("Cookies", principal, authProps);
 
         var requestedUrl = returnUrl ?? request.ReturnUrl;
-        var safeReturnUrl = SanitizeRedirectUrl(requestedUrl);
+        var safeReturnUrl = SanitizeRedirectUrl(requestedUrl, GetEffectivePathBase());
 
         return Ok(new CurrentUserResource
         {
@@ -173,7 +173,7 @@ public class AuthController : ControllerBase
     [AllowAnonymous]
     public ActionResult ChallengeProvider(string providerId, [FromQuery] string returnUrl = "/")
     {
-        var safeReturnUrl = SanitizeRedirectUrl(returnUrl);
+        var safeReturnUrl = SanitizeRedirectUrl(returnUrl, GetEffectivePathBase());
         var schemeName = $"Oidc_{providerId}";
         var props = new AuthenticationProperties
         {
@@ -190,11 +190,19 @@ public class AuthController : ControllerBase
             return false;
         }
 
-        if (!url.StartsWith('/') || url.StartsWith("//", StringComparison.Ordinal) || url.StartsWith("/\\", StringComparison.Ordinal))
+        // Prohibit any backslash characters completely
+        if (url.Contains('\\') || url.Contains("%5c", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
+        // Must start with single slash, not double slash or /@
+        if (!url.StartsWith('/') || url.StartsWith("//", StringComparison.Ordinal) || url.StartsWith("/@", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // Disallow control characters
         for (var i = 0; i < url.Length; i++)
         {
             if (char.IsControl(url[i]))
@@ -203,12 +211,66 @@ public class AuthController : ControllerBase
             }
         }
 
-        return true;
+        return Uri.TryCreate(url, UriKind.Relative, out var uri) && !uri.OriginalString.StartsWith("//", StringComparison.Ordinal);
     }
 
-    public static string SanitizeRedirectUrl(string url)
+    public static string NormalizePathBase(string pathBase)
     {
-        return IsLocalUrl(url) ? url : "/";
+        if (string.IsNullOrWhiteSpace(pathBase))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = pathBase.Trim().TrimEnd('/');
+        if (!trimmed.StartsWith('/'))
+        {
+            trimmed = "/" + trimmed;
+        }
+
+        return trimmed == "/" ? string.Empty : trimmed;
+    }
+
+    public static string SanitizeRedirectUrl(string url, string pathBase = null)
+    {
+        var cleanBase = NormalizePathBase(pathBase);
+
+        if (!IsLocalUrl(url))
+        {
+            return string.IsNullOrEmpty(cleanBase) ? "/" : cleanBase + "/";
+        }
+
+        if (string.IsNullOrEmpty(cleanBase))
+        {
+            return url;
+        }
+
+        if (url.Equals(cleanBase, StringComparison.OrdinalIgnoreCase) ||
+            url.StartsWith(cleanBase + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            return url;
+        }
+
+        if (url == "/")
+        {
+            return cleanBase + "/";
+        }
+
+        return cleanBase + url;
+    }
+
+    private string GetEffectivePathBase()
+    {
+        if (Request?.PathBase.HasValue == true && !string.IsNullOrWhiteSpace(Request.PathBase.Value))
+        {
+            return NormalizePathBase(Request.PathBase.Value);
+        }
+
+        if (_configFileProvider != null && !string.IsNullOrWhiteSpace(_configFileProvider.UrlBase))
+        {
+            return NormalizePathBase(_configFileProvider.UrlBase);
+        }
+
+        return string.Empty;
     }
 
     private static bool FixedTimeEquals(string a, string b)
