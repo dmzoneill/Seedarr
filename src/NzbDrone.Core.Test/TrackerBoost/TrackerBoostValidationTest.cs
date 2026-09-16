@@ -6,7 +6,11 @@ namespace NzbDrone.Core.Test.TrackerBoost;
 [TestFixture]
 public class TrackerBoostValidationTest
 {
-    [TestCase("http://127.0.0.1.stackoverflow.tech/44817e2f66221a38b0029e8e098b9aff/announce", true)]
+    [TestCase("http://127.0.0.1.stackoverflow.tech/announce", true)]
+    [TestCase("http://127.0.0.1.stackoverflow.tech/44817e2f66221a38b0029e8e098b9aff/announce", false)]
+    [TestCase("https://tracker.private.org/announce/44817e2f66221a38b0029e8e098b9aff", false)]
+    [TestCase("https://tracker.private.org/0123456789abcdef0123456789abcdef", false)]
+    [TestCase("https://tracker.private.org/1234567890abcdef1234567890abcdef/announce", false)]
     [TestCase("udp://tracker.opentrackr.org:1337/announce", true)]
     [TestCase("http://tracker.files.fm:6969/announce", true)]
     [TestCase("https://tracker.tamersunion.org:443/announce", true)]

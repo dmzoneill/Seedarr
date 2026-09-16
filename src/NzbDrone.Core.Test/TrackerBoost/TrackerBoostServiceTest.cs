@@ -169,4 +169,55 @@ public class TrackerBoostServiceTest
             await client.ReceiveAsync(cts.Token);
         });
     }
+
+    [Test]
+    public async Task HarvestFromActiveDownloadsAsync_skips_trackers_from_private_torrents_and_items()
+    {
+        var privateTorrent = new Torrent { Id = 1, IsPrivate = true, InfoHash = "privatehash1", Name = "Private" };
+        var publicTorrent = new Torrent { Id = 2, IsPrivate = false, InfoHash = "publichash2", Name = "Public" };
+        _torrentService.GetAll().Returns(new List<Torrent> { privateTorrent, publicTorrent });
+
+        var privateTrackerEntry = new TrackerEntry { Id = 1, TorrentId = 1, Url = "udp://tracker.private.org:1337/announce" };
+        var publicTrackerEntry = new TrackerEntry { Id = 2, TorrentId = 2, Url = "udp://tracker.public.org:1337/announce" };
+        _trackerEntryService.All().Returns(new List<TrackerEntry> { privateTrackerEntry, publicTrackerEntry });
+
+        var clientDef = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", Enable = true, ClientType = "QBitTorrent" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        var privateItem = new DownloadClientItem { InfoHash = "clientprivhash", IsPrivate = true };
+        var publicItem = new DownloadClientItem { InfoHash = "publichash2", IsPrivate = false };
+        downloadClient.GetItems().Returns(new List<DownloadClientItem> { privateItem, publicItem });
+        downloadClient.GetTrackers("clientprivhash").Returns(new List<string> { "udp://client.private.org:1337/announce" });
+        downloadClient.GetTrackers("publichash2").Returns(new List<string> { "udp://client.public.org:1337/announce" });
+
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        _trackerRepository.FindByUrl(Arg.Any<string>()).Returns((TrackerBoostTracker)null);
+        _trackerRepository.Insert(Arg.Any<TrackerBoostTracker>()).Returns(callInfo =>
+        {
+            var t = callInfo.Arg<TrackerBoostTracker>();
+            t.Id = 10;
+            return t;
+        });
+
+        var count = await _service.HarvestFromActiveDownloadsAsync();
+
+        Assert.That(count, Is.EqualTo(2));
+        _trackerRepository.Received(1).Insert(Arg.Is<TrackerBoostTracker>(t => t.Url == "udp://tracker.public.org:1337/announce"));
+        _trackerRepository.Received(1).Insert(Arg.Is<TrackerBoostTracker>(t => t.Url == "udp://client.public.org:1337/announce"));
+        _trackerRepository.DidNotReceive().Insert(Arg.Is<TrackerBoostTracker>(t => t.Url == "udp://tracker.private.org:1337/announce"));
+        _trackerRepository.DidNotReceive().Insert(Arg.Is<TrackerBoostTracker>(t => t.Url == "udp://client.private.org:1337/announce"));
+    }
+
+    [TestCase("https://tracker.private.org/44817e2f66221a38b0029e8e098b9aff/announce", false)]
+    [TestCase("https://tracker.private.org/announce/44817e2f66221a38b0029e8e098b9aff", false)]
+    [TestCase("https://tracker.private.org/0123456789abcdef0123456789abcdef", false)]
+    [TestCase("https://tracker.public.org/announce", true)]
+    [TestCase("udp://tracker.public.org:1337/announce", true)]
+    public void IsValidPublicTrackerUrl_rejects_path_based_passkey_tokens(string url, bool expected)
+    {
+        var result = TrackerBoostService.IsValidPublicTrackerUrl(url);
+        Assert.That(result, Is.EqualTo(expected));
+    }
 }

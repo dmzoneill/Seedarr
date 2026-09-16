@@ -9,6 +9,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using BencodeNET.Objects;
@@ -391,7 +392,14 @@ public class TrackerBoostService : ITrackerBoostService
         var discovered = 0;
         try
         {
-            var seedarrEntries = _trackerEntryService.All();
+            var privateTorrents = _torrentService.GetAll().Where(t => t.IsPrivate).ToList();
+            var privateTorrentIds = privateTorrents.Select(t => t.Id).ToHashSet();
+            var privateHashes = privateTorrents
+                .Where(t => !string.IsNullOrWhiteSpace(t.InfoHash))
+                .Select(t => t.InfoHash)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var seedarrEntries = _trackerEntryService.All().Where(e => !privateTorrentIds.Contains(e.TorrentId));
             foreach (var entry in seedarrEntries)
             {
                 if (IsValidPublicTrackerUrl(entry.Url))
@@ -413,7 +421,7 @@ public class TrackerBoostService : ITrackerBoostService
                     var items = client.GetItems();
                     foreach (var item in items)
                     {
-                        if (string.IsNullOrWhiteSpace(item.InfoHash))
+                        if (string.IsNullOrWhiteSpace(item.InfoHash) || item.IsPrivate || privateHashes.Contains(item.InfoHash))
                         {
                             continue;
                         }
@@ -463,6 +471,11 @@ public class TrackerBoostService : ITrackerBoostService
         var count = 0;
         try
         {
+            var privateHashes = _torrentService.GetAll()
+                .Where(t => t.IsPrivate && !string.IsNullOrWhiteSpace(t.InfoHash))
+                .Select(t => t.InfoHash)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
             var baseUrl = $"{(clientDef.UseSsl ? "https" : "http")}://{clientDef.Host}:{clientDef.Port}";
             using var handler = new HttpClientHandler
             {
@@ -496,7 +509,12 @@ public class TrackerBoostService : ITrackerBoostService
                 if (item.TryGetProperty("hash", out var hashProp))
                 {
                     var hash = hashProp.GetString();
-                    if (string.IsNullOrWhiteSpace(hash))
+                    if (string.IsNullOrWhiteSpace(hash) || privateHashes.Contains(hash))
+                    {
+                        continue;
+                    }
+
+                    if (item.TryGetProperty("is_private", out var privProp) && privProp.ValueKind == JsonValueKind.True)
                     {
                         continue;
                     }
@@ -593,6 +611,19 @@ public class TrackerBoostService : ITrackerBoostService
         {
             var lowerQuery = query.ToLowerInvariant();
             if (lowerQuery.Contains("passkey=") || lowerQuery.Contains("authkey=") || lowerQuery.Contains("torrentpass="))
+            {
+                return false;
+            }
+        }
+
+        // Check for private tracker passkey/token in URL path segments
+        var pathSegments = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var segment in pathSegments)
+        {
+            if (segment.Length >= 16 && segment.Length <= 64 &&
+                Regex.IsMatch(segment, "^[a-zA-Z0-9_-]+$") &&
+                !segment.Equals("announce", StringComparison.OrdinalIgnoreCase) &&
+                !segment.Equals("scrape", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
