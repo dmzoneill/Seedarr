@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 
@@ -25,15 +26,22 @@ public class TransmissionClient : IDownloadClient, IDisposable
     public string Password { get; set; } = "";
     public string Category { get; set; } = "";
 
-    public TransmissionClient()
+    public TransmissionClient(HttpClient client = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
-        var handler = new HttpClientHandler
+        if (client != null)
         {
-            CheckCertificateRevocationList = true,
-        };
+            _client = client;
+        }
+        else
+        {
+            var handler = new HttpClientHandler
+            {
+                CheckCertificateRevocationList = true,
+            };
 
-        _client = new HttpClient(handler);
+            _client = new HttpClient(handler);
+        }
     }
 
     private string RpcUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}/transmission/rpc";
@@ -83,6 +91,31 @@ public class TransmissionClient : IDownloadClient, IDisposable
             response.EnsureSuccessStatusCode();
             using var stream = response.Content.ReadAsStream();
             return JsonDocument.Parse(stream);
+        }
+    }
+
+    private async Task<JsonDocument> SendRequestAsync(string method, object arguments, CancellationToken cancellationToken = default)
+    {
+        var request = CreateRequest(method, arguments);
+        var response = await _client.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Conflict)
+        {
+            if (response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
+            {
+                _sessionId = string.Join("", values);
+            }
+
+            response.Dispose();
+            request = CreateRequest(method, arguments);
+            response = await _client.SendAsync(request, cancellationToken);
+        }
+
+        using (response)
+        {
+            response.EnsureSuccessStatusCode();
+            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
         }
     }
 
@@ -333,6 +366,115 @@ public class TransmissionClient : IDownloadClient, IDisposable
     public void Dispose()
     {
         _client?.Dispose();
+    }
+
+    public async Task<DownloadClientSpeedLimits> GetSpeedLimitsAsync(CancellationToken cancellationToken = default)
+    {
+        var result = new DownloadClientSpeedLimits();
+        try
+        {
+            using var sessionDoc = await SendRequestAsync("session-get", null, cancellationToken);
+            if (sessionDoc.RootElement.TryGetProperty("arguments", out var sessionArgs))
+            {
+                if (sessionArgs.TryGetProperty("speed-limit-down-enabled", out var downEnabled) &&
+                    downEnabled.GetBoolean() &&
+                    sessionArgs.TryGetProperty("speed-limit-down", out var downLimit) &&
+                    downLimit.TryGetInt64(out var downVal))
+                {
+                    result.DownloadLimitBps = downVal > 0 ? downVal * 1024 : null;
+                }
+
+                if (sessionArgs.TryGetProperty("speed-limit-up-enabled", out var upEnabled) &&
+                    upEnabled.GetBoolean() &&
+                    sessionArgs.TryGetProperty("speed-limit-up", out var upLimit) &&
+                    upLimit.TryGetInt64(out var upVal))
+                {
+                    result.UploadLimitBps = upVal > 0 ? upVal * 1024 : null;
+                }
+            }
+
+            using var statsDoc = await SendRequestAsync("session-stats", null, cancellationToken);
+            if (statsDoc.RootElement.TryGetProperty("arguments", out var statsArgs))
+            {
+                if (statsArgs.TryGetProperty("downloadSpeed", out var dlSpeed) && dlSpeed.TryGetInt64(out var dlSpeedVal))
+                {
+                    result.CurrentDownloadRateBps = dlSpeedVal;
+                }
+
+                if (statsArgs.TryGetProperty("uploadSpeed", out var upSpeed) && upSpeed.TryGetInt64(out var upSpeedVal))
+                {
+                    result.CurrentUploadRateBps = upSpeedVal;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to get speed limits from Transmission");
+        }
+
+        return result;
+    }
+
+    public async Task SetSpeedLimitsAsync(long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var args = new Dictionary<string, object>();
+            if (uploadBps.HasValue)
+            {
+                args["speed-limit-up"] = Math.Max(0, uploadBps.Value / 1024);
+                args["speed-limit-up-enabled"] = uploadBps.Value > 0;
+            }
+
+            if (downloadBps.HasValue)
+            {
+                args["speed-limit-down"] = Math.Max(0, downloadBps.Value / 1024);
+                args["speed-limit-down-enabled"] = downloadBps.Value > 0;
+            }
+
+            if (args.Count > 0)
+            {
+                using var doc = await SendRequestAsync("session-set", args, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to set speed limits in Transmission");
+        }
+    }
+
+    public async Task SetTorrentLimitsAsync(string infoHash, long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return;
+        }
+
+        try
+        {
+            var args = new Dictionary<string, object>
+            {
+                ["ids"] = new[] { infoHash }
+            };
+
+            if (uploadBps.HasValue)
+            {
+                args["uploadLimit"] = Math.Max(0, uploadBps.Value / 1024);
+                args["uploadLimited"] = uploadBps.Value > 0;
+            }
+
+            if (downloadBps.HasValue)
+            {
+                args["downloadLimit"] = Math.Max(0, downloadBps.Value / 1024);
+                args["downloadLimited"] = downloadBps.Value > 0;
+            }
+
+            using var doc = await SendRequestAsync("torrent-set", args, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to set torrent limits in Transmission for {0}", infoHash);
+        }
     }
 
     private static string MapStatus(int transmissionStatus)

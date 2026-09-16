@@ -498,4 +498,48 @@ public class DelugeClientTest
         Assert.That(pub, Is.Not.Null);
         Assert.That(pub.IsPrivate, Is.False);
     }
+
+    [Test]
+    public async System.Threading.Tasks.Task GetSpeedLimitsAsync_should_return_parsed_speed_limits()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""max_upload_speed"":500.0,""max_download_speed"":1000.0},""id"":1}"); // core.get_config
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""upload_rate"":102400.0,""download_rate"":204800.0},""id"":2}"); // core.get_session_status
+        InjectMockClient(handler);
+
+        var result = await _client.GetSpeedLimitsAsync();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.UploadLimitBps, Is.EqualTo((long)(500.0 * 1024)));
+        Assert.That(result.DownloadLimitBps, Is.EqualTo((long)(1000.0 * 1024)));
+        Assert.That(result.CurrentUploadRateBps, Is.EqualTo(102400));
+        Assert.That(result.CurrentDownloadRateBps, Is.EqualTo(204800));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SetSpeedLimitsAsync_should_send_request()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // core.set_config
+        InjectMockClient(handler);
+
+        await _client.SetSpeedLimitsAsync(500 * 1024, 1000 * 1024);
+
+        Assert.That(handler.Requests, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SetTorrentLimitsAsync_should_send_request()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // core.set_torrent_options
+        InjectMockClient(handler);
+
+        await _client.SetTorrentLimitsAsync("hash123", 250 * 1024, 500 * 1024);
+
+        Assert.That(handler.Requests, Has.Count.EqualTo(2));
+    }
 }

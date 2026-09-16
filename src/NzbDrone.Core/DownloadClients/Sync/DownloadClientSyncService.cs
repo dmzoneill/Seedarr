@@ -5,6 +5,7 @@ using System.Threading;
 using NLog;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Indexers;
+using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.DownloadClients.Sync;
@@ -25,6 +26,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
     private readonly ITorrentFileParser _torrentFileParser;
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly ITorrentFileService _torrentFileService;
+    private readonly IRemotePathMappingService _remotePathMappingService;
     private readonly SemaphoreSlim _syncLock = new(1, 1);
     private readonly Logger _logger;
 
@@ -34,7 +36,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         ITorrentService torrentService,
         ITorrentFileParser torrentFileParser,
         ITrackerEntryService trackerEntryService = null,
-        ITorrentFileService torrentFileService = null)
+        ITorrentFileService torrentFileService = null,
+        IRemotePathMappingService remotePathMappingService = null)
     {
         _downloadClientFactory = downloadClientFactory;
         _indexerFactory = indexerFactory;
@@ -42,6 +45,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         _torrentFileParser = torrentFileParser;
         _trackerEntryService = trackerEntryService;
         _torrentFileService = torrentFileService;
+        _remotePathMappingService = remotePathMappingService ?? new RemotePathMappingService();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -108,14 +112,15 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
                             if (!string.IsNullOrWhiteSpace(item.OutputPath))
                             {
+                                var remappedPath = _remotePathMappingService.Remap(definition.Host, item.OutputPath);
                                 if (string.IsNullOrEmpty(torrent.SavePath))
                                 {
-                                    torrent.SavePath = item.OutputPath;
+                                    torrent.SavePath = remappedPath;
                                 }
 
                                 if (string.IsNullOrEmpty(torrent.SourcePath))
                                 {
-                                    torrent.SourcePath = item.OutputPath;
+                                    torrent.SourcePath = remappedPath;
                                 }
                             }
 
@@ -150,6 +155,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             var total = parsed.TotalSize > 0 ? parsed.TotalSize : item.TotalSize;
                             var remaining = item.RemainingSize;
                             var downloaded = Math.Max(0, total - remaining);
+                            var remappedPath = _remotePathMappingService.Remap(definition.Host, item.OutputPath);
 
                             torrent = new Torrent
                             {
@@ -165,8 +171,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                                 DateAdded = DateTime.UtcNow,
                                 Status = MapClientStatus(item.Status, remaining, total),
                                 Category = item.Category,
-                                SavePath = item.OutputPath,
-                                SourcePath = item.OutputPath,
+                                SavePath = remappedPath,
+                                SourcePath = remappedPath,
                             };
 
                             if (remaining == 0)
@@ -192,6 +198,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             var total = item.TotalSize;
                             var remaining = item.RemainingSize;
                             var downloaded = Math.Max(0, total - remaining);
+                            var remappedPath = _remotePathMappingService.Remap(definition.Host, item.OutputPath);
 
                             torrent = new Torrent
                             {
@@ -203,8 +210,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                                 DateAdded = DateTime.UtcNow,
                                 Status = MapClientStatus(item.Status, remaining, total),
                                 Category = item.Category,
-                                SavePath = item.OutputPath,
-                                SourcePath = item.OutputPath,
+                                SavePath = remappedPath,
+                                SourcePath = remappedPath,
                             };
 
                             if (remaining == 0)
@@ -375,6 +382,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             torrentBytes = SearchIndexersForTorrent(normalizedHash);
         }
 
+        var remappedPath = _remotePathMappingService.Remap(definition?.Host, matchingItem?.OutputPath);
+
         Torrent torrent;
         if (torrentBytes != null && torrentBytes.Length > 0)
         {
@@ -399,8 +408,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 DateAdded = DateTime.UtcNow,
                 Status = MapClientStatus(matchingItem?.Status, remaining, total),
                 Category = matchingItem?.Category,
-                SavePath = matchingItem?.OutputPath,
-                SourcePath = matchingItem?.OutputPath,
+                SavePath = remappedPath,
+                SourcePath = remappedPath,
             };
 
             if (remaining == 0)
@@ -435,8 +444,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 DateAdded = DateTime.UtcNow,
                 Status = MapClientStatus(matchingItem.Status, remaining, total),
                 Category = matchingItem.Category,
-                SavePath = matchingItem.OutputPath,
-                SourcePath = matchingItem.OutputPath,
+                SavePath = remappedPath,
+                SourcePath = remappedPath,
             };
 
             if (remaining == 0)

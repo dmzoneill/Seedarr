@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.DownloadClients;
@@ -22,4 +24,7 @@ public interface IDownloadClient : IProvider
     bool Reannounce(string infoHash);
     bool TestConnection();
     DownloadClientTestResult TestConnectionDetailed();
+    Task<DownloadClientSpeedLimits> GetSpeedLimitsAsync(CancellationToken cancellationToken = default);
+    Task SetSpeedLimitsAsync(long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default);
+    Task SetTorrentLimitsAsync(string infoHash, long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default);
 }

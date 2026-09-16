@@ -721,4 +721,49 @@ public class TransmissionClientTest
         Assert.That(result[0].IsPrivate, Is.True);
         Assert.That(result[1].IsPrivate, Is.False);
     }
+
+    [Test]
+    public async System.Threading.Tasks.Task GetSpeedLimitsAsync_should_return_parsed_speed_limits()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""arguments"":{""speed-limit-down-enabled"":true,""speed-limit-down"":1000,""speed-limit-up-enabled"":true,""speed-limit-up"":500},""result"":""success""}");
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""arguments"":{""downloadSpeed"":204800,""uploadSpeed"":102400},""result"":""success""}");
+        InjectMockClient(handler);
+
+        var result = await _client.GetSpeedLimitsAsync();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.DownloadLimitBps, Is.EqualTo(1000 * 1024));
+        Assert.That(result.UploadLimitBps, Is.EqualTo(500 * 1024));
+        Assert.That(result.CurrentDownloadRateBps, Is.EqualTo(204800));
+        Assert.That(result.CurrentUploadRateBps, Is.EqualTo(102400));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SetSpeedLimitsAsync_should_send_request()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":""success""}");
+        InjectMockClient(handler);
+
+        await _client.SetSpeedLimitsAsync(500 * 1024, 1000 * 1024);
+
+        Assert.That(handler.Requests, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SetTorrentLimitsAsync_should_send_request()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":""success""}");
+        InjectMockClient(handler);
+
+        await _client.SetTorrentLimitsAsync("hash123", 200 * 1024, 400 * 1024);
+
+        Assert.That(handler.Requests, Has.Count.EqualTo(1));
+    }
 }

@@ -4,6 +4,8 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 
 namespace NzbDrone.Core.DownloadClients.QBitTorrent;
@@ -23,16 +25,23 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
     public string Password { get; set; } = "adminadmin";
     public string Category { get; set; } = "";
 
-    public QBitTorrentClient()
+    public QBitTorrentClient(HttpClient client = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
-        var handler = new HttpClientHandler
+        if (client != null)
         {
-            CookieContainer = _cookies,
-            CheckCertificateRevocationList = true,
-        };
+            _client = client;
+        }
+        else
+        {
+            var handler = new HttpClientHandler
+            {
+                CookieContainer = _cookies,
+                CheckCertificateRevocationList = true,
+            };
 
-        _client = new HttpClient(handler);
+            _client = new HttpClient(handler);
+        }
     }
 
     private string BaseUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}";
@@ -313,6 +322,127 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
     public void Dispose()
     {
         _client?.Dispose();
+    }
+
+    public async Task<DownloadClientSpeedLimits> GetSpeedLimitsAsync(CancellationToken cancellationToken = default)
+    {
+        var result = new DownloadClientSpeedLimits();
+        if (!Authenticate())
+        {
+            return result;
+        }
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/transfer/info");
+            using var response = await _client.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return result;
+            }
+
+            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("up_info_speed", out var upSpeed) && upSpeed.TryGetInt64(out var upSpeedVal))
+            {
+                result.CurrentUploadRateBps = upSpeedVal;
+            }
+
+            if (root.TryGetProperty("dl_info_speed", out var dlSpeed) && dlSpeed.TryGetInt64(out var dlSpeedVal))
+            {
+                result.CurrentDownloadRateBps = dlSpeedVal;
+            }
+
+            if (root.TryGetProperty("up_rate_limit", out var upLimit) && upLimit.TryGetInt64(out var upLimitVal))
+            {
+                result.UploadLimitBps = upLimitVal > 0 ? upLimitVal : null;
+            }
+
+            if (root.TryGetProperty("dl_rate_limit", out var dlLimit) && dlLimit.TryGetInt64(out var dlLimitVal))
+            {
+                result.DownloadLimitBps = dlLimitVal > 0 ? dlLimitVal : null;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to get speed limits from qBittorrent");
+        }
+
+        return result;
+    }
+
+    public async Task SetSpeedLimitsAsync(long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default)
+    {
+        if (!Authenticate())
+        {
+            return;
+        }
+
+        try
+        {
+            if (uploadBps.HasValue)
+            {
+                using var content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("limit", Math.Max(0, uploadBps.Value).ToString())
+                });
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/transfer/setUploadLimit") { Content = content };
+                using var response = await _client.SendAsync(request, cancellationToken);
+            }
+
+            if (downloadBps.HasValue)
+            {
+                using var content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("limit", Math.Max(0, downloadBps.Value).ToString())
+                });
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/transfer/setDownloadLimit") { Content = content };
+                using var response = await _client.SendAsync(request, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to set speed limits in qBittorrent");
+        }
+    }
+
+    public async Task SetTorrentLimitsAsync(string infoHash, long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash) || !Authenticate())
+        {
+            return;
+        }
+
+        try
+        {
+            if (uploadBps.HasValue)
+            {
+                using var content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("hashes", infoHash),
+                    new KeyValuePair<string, string>("limit", (uploadBps.Value > 0 ? uploadBps.Value : 0).ToString())
+                });
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/setUploadLimit") { Content = content };
+                using var response = await _client.SendAsync(request, cancellationToken);
+            }
+
+            if (downloadBps.HasValue)
+            {
+                using var content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("hashes", infoHash),
+                    new KeyValuePair<string, string>("limit", (downloadBps.Value > 0 ? downloadBps.Value : 0).ToString())
+                });
+                using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/setDownloadLimit") { Content = content };
+                using var response = await _client.SendAsync(request, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to set torrent limits in qBittorrent for {0}", infoHash);
+        }
     }
 
     private static string MapState(string qbtState)
