@@ -9,8 +9,14 @@ public class ParetoDistributor : ISpeedDistributor
     public long[] Distribute(long totalBytesPerSecond, int torrentCount)
     {
         var speeds = new long[torrentCount];
-        if (torrentCount == 0)
+        if (torrentCount <= 0 || totalBytesPerSecond <= 0)
         {
+            return speeds;
+        }
+
+        if (torrentCount == 1)
+        {
+            speeds[0] = totalBytesPerSecond;
             return speeds;
         }
 
@@ -24,9 +30,34 @@ public class ParetoDistributor : ISpeedDistributor
             totalWeight += weights[i];
         }
 
-        for (var i = 0; i < torrentCount; i++)
+        if (totalWeight <= 0.0)
         {
-            speeds[i] = (long)(totalBytesPerSecond * (weights[i] / totalWeight));
+            return speeds;
+        }
+
+        if (totalBytesPerSecond >= torrentCount)
+        {
+            var remainingBandwidth = totalBytesPerSecond - torrentCount;
+            var allocated = 0L;
+
+            for (var i = 0; i < torrentCount; i++)
+            {
+                speeds[i] = 1L + (long)(remainingBandwidth * (weights[i] / totalWeight));
+                allocated += speeds[i];
+            }
+
+            var remainder = totalBytesPerSecond - allocated;
+            for (var i = 0; i < remainder && i < torrentCount; i++)
+            {
+                speeds[i]++;
+            }
+        }
+        else
+        {
+            for (var i = 0; i < totalBytesPerSecond; i++)
+            {
+                speeds[i] = 1L;
+            }
         }
 
         return speeds;

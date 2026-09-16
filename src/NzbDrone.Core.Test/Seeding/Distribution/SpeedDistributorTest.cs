@@ -60,16 +60,16 @@ public class SpeedDistributorTest
     }
 
     [Test]
-    public void Equal_should_truncate_remainder_via_integer_division()
+    public void Equal_should_distribute_remainder_without_truncation_loss()
     {
-        // 1000 / 3 = 333 per torrent (integer division), remainder 1 is lost
+        // 1000 / 3 = 333 per torrent, remainder 1 is assigned to first torrent
         var speeds = _equalDistributor.Distribute(1000L, 3);
 
         Assert.That(speeds, Has.Length.EqualTo(3));
-        Assert.That(speeds, Is.All.EqualTo(333L));
-
-        // Sum is 999, not 1000 -- integer division truncation
-        Assert.That(speeds.Sum(), Is.EqualTo(999L));
+        Assert.That(speeds[0], Is.EqualTo(334L));
+        Assert.That(speeds[1], Is.EqualTo(333L));
+        Assert.That(speeds[2], Is.EqualTo(333L));
+        Assert.That(speeds.Sum(), Is.EqualTo(1000L));
     }
 
     [Test]
@@ -81,7 +81,21 @@ public class SpeedDistributorTest
         var speeds = _equalDistributor.Distribute(totalSpeed, count);
 
         Assert.That(speeds, Has.Length.EqualTo(count));
-        Assert.That(speeds, Is.All.EqualTo(10_485L));
+        Assert.That(speeds.Sum(), Is.EqualTo(totalSpeed));
+        Assert.That(speeds[0], Is.EqualTo(10_486L));
+        Assert.That(speeds[999], Is.EqualTo(10_485L));
+    }
+
+    [TestCase(7, 1_000_000L)]
+    [TestCase(50, 5_000_000L)]
+    [TestCase(100, 10_000_000L)]
+    public void Equal_should_conserve_bandwidth_exactly_and_prevent_tail_starvation(int count, long totalSpeed)
+    {
+        var speeds = _equalDistributor.Distribute(totalSpeed, count);
+
+        Assert.That(speeds, Has.Length.EqualTo(count));
+        Assert.That(speeds.Sum(), Is.EqualTo(totalSpeed));
+        Assert.That(speeds, Is.All.GreaterThanOrEqualTo(1L));
     }
 
     [Test]
@@ -103,20 +117,26 @@ public class SpeedDistributorTest
     }
 
     [Test]
-    public void Pareto_should_sum_to_approximately_total_speed()
+    public void Pareto_should_sum_to_exact_total_speed()
     {
         var totalSpeed = 1_000_000L;
         var count = 10;
 
         var speeds = _paretoDistributor.Distribute(totalSpeed, count);
 
-        // Due to integer truncation, sum will be close but not necessarily exact
-        var sum = speeds.Sum();
-        Assert.That(sum, Is.LessThanOrEqualTo(totalSpeed));
-        Assert.That(
-            sum,
-            Is.GreaterThan(totalSpeed * 0.95),
-            "Sum of Pareto-distributed speeds should be within 5% of total");
+        Assert.That(speeds.Sum(), Is.EqualTo(totalSpeed));
+    }
+
+    [TestCase(7, 1_000_000L)]
+    [TestCase(50, 5_000_000L)]
+    [TestCase(100, 10_000_000L)]
+    public void Pareto_should_conserve_bandwidth_exactly_and_prevent_tail_starvation(int count, long totalSpeed)
+    {
+        var speeds = _paretoDistributor.Distribute(totalSpeed, count);
+
+        Assert.That(speeds, Has.Length.EqualTo(count));
+        Assert.That(speeds.Sum(), Is.EqualTo(totalSpeed));
+        Assert.That(speeds, Is.All.GreaterThanOrEqualTo(1L));
     }
 
     [Test]
