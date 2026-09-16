@@ -12,4 +12,6 @@ public interface ITorrentRepository : IBasicRepository<Torrent>
     int GetNextSortOrder();
     void UpdateCategoryName(string oldCategoryName, string newCategoryName);
     void ClearCategory(string categoryName);
+    void UpdateTagsAndLabels(IEnumerable<Torrent> torrents);
+    void UpdateTagsAndLabel(int id, List<int> tagIds, string label);
 }

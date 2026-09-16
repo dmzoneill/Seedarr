@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using Dapper;
 using NzbDrone.Core.Datastore;
 
@@ -46,11 +47,6 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
         return connection.QueryFirstOrDefault<Torrent>(
             $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash COLLATE NOCASE",
             new { InfoHash = normalized });
-    }
-
-    public Torrent FindByInfoHash(string infoHash)
-    {
-        return GetByInfoHash(infoHash);
     }
 
     public Torrent FindByInfoHash(string infoHash)
@@ -126,6 +122,52 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
                 $"UPDATE \"{_table}\" SET \"Category\" = '' WHERE LOWER(\"Category\") = LOWER(@CategoryName)",
                 new { CategoryName = categoryName.Trim() });
         });
+    }
+
+    public void UpdateTagsAndLabels(IEnumerable<Torrent> torrents)
+    {
+        var list = torrents?.ToList();
+        if (list == null || list.Count == 0)
+        {
+            return;
+        }
+
+        RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                foreach (var torrent in list)
+                {
+                    var tagIdsJson = JsonSerializer.Serialize(torrent.TagIds ?? new List<int>());
+                    connection.Execute(
+                        $"UPDATE \"{_table}\" SET \"TagIds\" = @TagIds, \"Label\" = @Label WHERE \"Id\" = @Id",
+                        new { Id = torrent.Id, TagIds = tagIdsJson, Label = torrent.Label ?? string.Empty },
+                        transaction);
+                }
+
+                transaction.Commit();
+            }
+            catch
+            {
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch
+                {
+                    // best-effort rollback
+                }
+
+                throw;
+            }
+        });
+    }
+
+    public void UpdateTagsAndLabel(int id, List<int> tagIds, string label)
+    {
+        UpdateTagsAndLabels(new[] { new Torrent { Id = id, TagIds = tagIds, Label = label } });
     }
 
     public override void Delete(int id)
