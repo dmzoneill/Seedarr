@@ -66,6 +66,11 @@ public class NotificationController : Controller
             return BadRequest();
         }
 
+        if (!HasActiveTrigger(resource))
+        {
+            return BadRequest("At least one notification trigger must be enabled");
+        }
+
         var model = ToModel(resource);
         var created = _notificationRepository.Insert(model);
         return Ok(ToResource(created));
@@ -80,6 +85,11 @@ public class NotificationController : Controller
         if (resource == null)
         {
             return BadRequest();
+        }
+
+        if (!HasActiveTrigger(resource))
+        {
+            return BadRequest("At least one notification trigger must be enabled");
         }
 
         var existing = _notificationRepository.Get(id);
@@ -306,6 +316,7 @@ public class NotificationController : Controller
             OnManualInteractionRequired = n.OnManualInteractionRequired,
             OnApplicationUpdate = n.OnApplicationUpdate,
             Tags = n.Tags ?? new List<int>(),
+            Categories = n.Categories ?? new List<string>(),
         };
     }
 
@@ -330,7 +341,22 @@ public class NotificationController : Controller
             OnManualInteractionRequired = r.OnManualInteractionRequired,
             OnApplicationUpdate = r.OnApplicationUpdate,
             Tags = r.Tags ?? new List<int>(),
+            Categories = r.Categories ?? new List<string>(),
         };
+    }
+
+    private static bool HasActiveTrigger(NotificationResource resource)
+    {
+        return resource.OnGrab ||
+               resource.OnDownloadComplete ||
+               resource.OnMediaInspected ||
+               resource.OnExtractComplete ||
+               resource.OnSeedGoalReached ||
+               resource.OnTorrentDeleted ||
+               resource.OnHealthIssue ||
+               resource.OnHealthRestored ||
+               resource.OnManualInteractionRequired ||
+               resource.OnApplicationUpdate;
     }
 
     private static string ExtractSetting(string settings, params string[] propertyNames)

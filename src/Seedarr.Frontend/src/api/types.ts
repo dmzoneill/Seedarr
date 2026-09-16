@@ -569,6 +569,7 @@ export interface NotificationResource {
   onManualInteractionRequired: boolean;
   onApplicationUpdate: boolean;
   tags?: number[];
+  categories?: string[];
 }
 
 export type NotificationDefinition = NotificationResource;
@@ -597,7 +598,6 @@ export interface ArrConnection {
   webhookHost: string;
   implementation: string;
   configContract: string;
-  syncIntervalMinutes?: number;
   acceptInvalidCertificates?: boolean;
 }
 
