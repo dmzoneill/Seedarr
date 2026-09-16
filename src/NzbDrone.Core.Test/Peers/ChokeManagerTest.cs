@@ -134,4 +134,48 @@ public class ChokeManagerTest
 
         Assert.That(_connections.All(c => !c.AmChoking), Is.True);
     }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_immediately_elect_replacement_optimistic_peer_when_optimistic_peer_is_promoted()
+    {
+        // MaxUploadSlots = 4 => 3 regular slots + 1 optimistic slot
+        _configService.MaxUploadSlots.Returns(4);
+
+        var peer1 = CreatePeer("hashA", 1001, rate: 100);
+        var peer2 = CreatePeer("hashA", 1002, rate: 50);
+        var peer3 = CreatePeer("hashA", 1003, rate: 300);
+        var peer4 = CreatePeer("hashA", 1004, rate: 400);
+        var peer5 = CreatePeer("hashA", 1005, rate: 500);
+
+        // Pre-configure initial state: peer2 is optimistic unchoke, peer3/4/5 are regular unchokes
+        peer2.IsOptimisticUnchoked = true;
+        peer2.AmChoking = false;
+        peer3.AmChoking = false;
+        peer4.AmChoking = false;
+        peer5.AmChoking = false;
+
+        // Peer2 (optimistic) now outperforms peer3 and should be promoted into regular unchoke slots
+        peer2.UploadRate = 600;
+
+        _subject.ProcessRegularUnchoke();
+
+        // Peer2 should have been promoted: now regular unchoked (IsOptimisticUnchoked cleared to false)
+        Assert.That(peer2.AmChoking, Is.False);
+        Assert.That(peer2.IsOptimisticUnchoked, Is.False);
+
+        // Regular slots are peer2 (600), peer5 (500), peer4 (400)
+        Assert.That(peer4.AmChoking, Is.False);
+        Assert.That(peer5.AmChoking, Is.False);
+
+        // Total unchoked slots must not collapse: exactly 4 unchoked peers (3 regular + 1 replacement optimistic)
+        var unchoked = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
+        Assert.That(unchoked.Count, Is.EqualTo(4));
+
+        // Exactly one peer in the swarm must hold the optimistic unchoked slot
+        var optimisticPeers = _connections.Where(c => c.InfoHash == "hashA" && c.IsOptimisticUnchoked).ToList();
+        Assert.That(optimisticPeers.Count, Is.EqualTo(1));
+        var replacementOptimistic = optimisticPeers.Single();
+        Assert.That(replacementOptimistic.AmChoking, Is.False);
+        Assert.That(new[] { 1001, 1003 }, Does.Contain(replacementOptimistic.RemotePort));
+    }
 }
