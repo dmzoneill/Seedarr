@@ -89,6 +89,17 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
+        public void ExistsByInfoHash_matches_uppercase_query_against_lowercase_record()
+        {
+            _repository.ExistsByInfoHash("hash123").Returns(true);
+
+            var result = _subject.ExistsByInfoHash("HASH123");
+
+            Assert.That(result, Is.True);
+            _repository.Received(1).ExistsByInfoHash("hash123");
+        }
+
+        [Test]
         public void Add_should_set_SortOrder_to_0_when_no_existing_torrents()
         {
             var torrent = new Torrent { Name = "New Torrent" };
@@ -142,6 +153,40 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(ex.InfoHash, Is.EqualTo(infoHash));
             _repository.DidNotReceive().Insert(Arg.Any<Torrent>());
             _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentAddedEvent>());
+        }
+
+        [Test]
+        public void Add_throws_DuplicateTorrentException_when_uppercase_info_hash_already_exists()
+        {
+            const string existingLower = "a1b2c3d4e5f60123456789abcdef0123456789ab";
+            const string incomingUpper = "A1B2C3D4E5F60123456789ABCDEF0123456789AB";
+
+            _repository.ExistsByInfoHash(existingLower).Returns(true);
+
+            var torrent = new Torrent { Name = "Uppercase Hash Torrent", InfoHash = incomingUpper };
+
+            var ex = Assert.Throws<DuplicateTorrentException>(() => _subject.Add(torrent));
+
+            Assert.That(ex.InfoHash, Is.EqualTo(existingLower));
+            _repository.DidNotReceive().Insert(Arg.Any<Torrent>());
+            _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentAddedEvent>());
+        }
+
+        [Test]
+        public void Add_persists_normalized_lowercase_InfoHash()
+        {
+            const string incomingMixed = "  A1B2C3D4E5F60123456789ABCDEF0123456789AB  ";
+            const string expectedNormalized = "a1b2c3d4e5f60123456789abcdef0123456789ab";
+
+            _repository.ExistsByInfoHash(expectedNormalized).Returns(false);
+            _repository.GetNextSortOrder().Returns(1);
+            _repository.Insert(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
+
+            var torrent = new Torrent { Name = "Mixed Hash Torrent", InfoHash = incomingMixed };
+            var result = _subject.Add(torrent);
+
+            Assert.That(result.InfoHash, Is.EqualTo(expectedNormalized));
+            _repository.Received(1).Insert(Arg.Is<Torrent>(t => t.InfoHash == expectedNormalized));
         }
 
         [Test]
