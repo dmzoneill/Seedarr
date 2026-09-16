@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
@@ -14,18 +16,25 @@ namespace NzbDrone.Core.Test.Notifications;
 [TestFixture]
 public class NotificationControllerTest
 {
-    private INotificationRepository _notificationRepository;
-    private IWebhookDispatcher _webhookDispatcher;
-    private ICustomScriptService _customScriptService;
+    private INotificationRepository _repository;
+    private IWebhookDispatcher _dispatcher;
+    private ICustomScriptService _scriptService;
+    private INotificationFactory _factory;
     private NotificationController _controller;
 
     [SetUp]
     public void SetUp()
     {
-        _notificationRepository = Substitute.For<INotificationRepository>();
-        _webhookDispatcher = Substitute.For<IWebhookDispatcher>();
-        _customScriptService = Substitute.For<ICustomScriptService>();
-        _controller = new NotificationController(_notificationRepository, _webhookDispatcher, _customScriptService);
+        _repository = Substitute.For<INotificationRepository>();
+        _dispatcher = Substitute.For<IWebhookDispatcher>();
+        _scriptService = Substitute.For<ICustomScriptService>();
+        _factory = Substitute.For<INotificationFactory>();
+
+        _controller = new NotificationController(
+            _repository,
+            _dispatcher,
+            _scriptService,
+            _factory);
     }
 
     [Test]
@@ -75,7 +84,7 @@ public class NotificationControllerTest
             Tags = new List<int> { 1, 2 },
         };
 
-        _notificationRepository.Insert(Arg.Any<NotificationDefinition>())
+        _repository.Insert(Arg.Any<NotificationDefinition>())
             .Returns(callInfo =>
             {
                 var def = callInfo.Arg<NotificationDefinition>();
@@ -94,12 +103,293 @@ public class NotificationControllerTest
         Assert.That(created.Categories, Is.EquivalentTo(new[] { "Movies", "TV" }));
         Assert.That(created.Tags, Is.EquivalentTo(new[] { 1, 2 }));
 
-        _notificationRepository.Received(1).Insert(Arg.Is<NotificationDefinition>(d =>
+        _repository.Received(1).Insert(Arg.Is<NotificationDefinition>(d =>
             d.Name == "Webhook Channel" &&
             d.Categories.Contains("Movies") &&
             d.Categories.Contains("TV") &&
             d.Tags.Contains(1) &&
             d.Tags.Contains(2)));
+    }
+
+    [Test]
+    public void ToResource_masks_password_in_email_settings()
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "My Email",
+            Implementation = "Email",
+            Settings = "{\"server\":\"smtp.mail.com\",\"port\":587,\"username\":\"user@mail.com\",\"password\":\"SuperSecret123\",\"recipient\":\"to@mail.com\"}"
+        };
+
+        var resource = NotificationController.ToResource(definition);
+
+        Assert.That(resource, Is.Not.Null);
+        using var doc = JsonDocument.Parse(resource.Settings);
+        Assert.That(doc.RootElement.GetProperty("password").GetString(), Is.EqualTo(NotificationController.PasswordMask));
+        Assert.That(doc.RootElement.GetProperty("username").GetString(), Is.EqualTo("user@mail.com"));
+        Assert.That(doc.RootElement.GetProperty("server").GetString(), Is.EqualTo("smtp.mail.com"));
+    }
+
+    [Test]
+    public void ToResource_masks_token_in_telegram_settings()
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 2,
+            Name = "My Telegram",
+            Implementation = "Telegram",
+            Settings = "{\"token\":\"123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11\",\"chat_id\":\"987654\"}"
+        };
+
+        var resource = NotificationController.ToResource(definition);
+
+        Assert.That(resource, Is.Not.Null);
+        using var doc = JsonDocument.Parse(resource.Settings);
+        Assert.That(doc.RootElement.GetProperty("token").GetString(), Is.EqualTo(NotificationController.PasswordMask));
+        Assert.That(doc.RootElement.GetProperty("chat_id").GetString(), Is.EqualTo("987654"));
+    }
+
+    [Test]
+    public void ToResource_masks_token_and_user_and_userKey_in_pushover_settings()
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 3,
+            Name = "My Pushover",
+            Implementation = "Pushover",
+            Settings = "{\"token\":\"app_token_secret\",\"user\":\"user_key_secret\",\"userKey\":\"another_key\"}"
+        };
+
+        var resource = NotificationController.ToResource(definition);
+
+        Assert.That(resource, Is.Not.Null);
+        using var doc = JsonDocument.Parse(resource.Settings);
+        Assert.That(doc.RootElement.GetProperty("token").GetString(), Is.EqualTo(NotificationController.PasswordMask));
+        Assert.That(doc.RootElement.GetProperty("user").GetString(), Is.EqualTo(NotificationController.PasswordMask));
+        Assert.That(doc.RootElement.GetProperty("userKey").GetString(), Is.EqualTo(NotificationController.PasswordMask));
+    }
+
+    [Test]
+    public void ToResource_masks_discord_webhook_secret_token_in_url()
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 4,
+            Name = "My Discord",
+            Implementation = "Discord",
+            Settings = "{\"url\":\"https://discord.com/api/webhooks/1234567890/AbCdEfGhIjKlMnOpQrStUvWxYz\",\"username\":\"Seedarr\"}"
+        };
+
+        var resource = NotificationController.ToResource(definition);
+
+        Assert.That(resource, Is.Not.Null);
+        using var doc = JsonDocument.Parse(resource.Settings);
+        var maskedUrl = doc.RootElement.GetProperty("url").GetString();
+        Assert.That(maskedUrl, Is.EqualTo("https://discord.com/api/webhooks/1234567890/********"));
+        Assert.That(doc.RootElement.GetProperty("username").GetString(), Is.EqualTo("Seedarr"));
+    }
+
+    [Test]
+    public void ToResource_masks_slack_webhook_secret_token_in_url()
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 5,
+            Name = "My Slack",
+            Implementation = "Slack",
+            Settings = "{\"url\":\"https://hooks.slack.com/services/T00000000/B00000000/SECRETTOKEN12345\"}"
+        };
+
+        var resource = NotificationController.ToResource(definition);
+
+        Assert.That(resource, Is.Not.Null);
+        using var doc = JsonDocument.Parse(resource.Settings);
+        var maskedUrl = doc.RootElement.GetProperty("url").GetString();
+        Assert.That(maskedUrl, Is.EqualTo("https://hooks.slack.com/services/T00000000/B00000000/********"));
+    }
+
+    [Test]
+    public void ToResource_masks_gotify_query_token_in_url()
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 6,
+            Name = "My Gotify",
+            Implementation = "Gotify",
+            Settings = "{\"url\":\"https://gotify.example.com/message?token=my_secret_token\",\"token\":\"my_secret_token\"}"
+        };
+
+        var resource = NotificationController.ToResource(definition);
+
+        Assert.That(resource, Is.Not.Null);
+        using var doc = JsonDocument.Parse(resource.Settings);
+        Assert.That(doc.RootElement.GetProperty("url").GetString(), Is.EqualTo("https://gotify.example.com/message?token=********"));
+        Assert.That(doc.RootElement.GetProperty("token").GetString(), Is.EqualTo(NotificationController.PasswordMask));
+    }
+
+    [Test]
+    public void ToResource_masks_basic_auth_in_url()
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 7,
+            Name = "My Webhook",
+            Implementation = "Webhook",
+            Settings = "{\"url\":\"https://admin:mysecretpassword@webhook.example.com/api\"}"
+        };
+
+        var resource = NotificationController.ToResource(definition);
+
+        Assert.That(resource, Is.Not.Null);
+        using var doc = JsonDocument.Parse(resource.Settings);
+        Assert.That(doc.RootElement.GetProperty("url").GetString(), Is.EqualTo("https://admin:********@webhook.example.com/api"));
+    }
+
+    [Test]
+    public void ToResource_returns_null_when_definition_is_null()
+    {
+        Assert.That(NotificationController.ToResource(null), Is.Null);
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    public void ToResource_handles_null_or_empty_settings(string emptySettings)
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 8,
+            Name = "Empty",
+            Implementation = "Webhook",
+            Settings = emptySettings
+        };
+
+        var resource = NotificationController.ToResource(definition);
+
+        Assert.That(resource, Is.Not.Null);
+        Assert.That(resource.Settings, Is.EqualTo(emptySettings));
+    }
+
+    [Test]
+    public void GetAll_maps_categories_and_tags()
+    {
+        var list = new List<NotificationDefinition>
+        {
+            new()
+            {
+                Id = 1,
+                Name = "N1",
+                Categories = new List<string> { "Cat1" },
+                Tags = new List<int> { 10 }
+            },
+            new()
+            {
+                Id = 2,
+                Name = "N2",
+                Categories = null,
+                Tags = null
+            }
+        };
+
+        _repository.All().Returns(list);
+
+        var result = _controller.GetAll();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var items = (List<NotificationResource>)okResult.Value;
+
+        Assert.That(items.Count, Is.EqualTo(2));
+        Assert.That(items[0].Categories, Is.EquivalentTo(new[] { "Cat1" }));
+        Assert.That(items[0].Tags, Is.EquivalentTo(new[] { 10 }));
+        Assert.That(items[1].Categories, Is.Not.Null);
+        Assert.That(items[1].Categories, Is.Empty);
+        Assert.That(items[1].Tags, Is.Not.Null);
+        Assert.That(items[1].Tags, Is.Empty);
+    }
+
+    [Test]
+    public void GetAll_returns_masked_resources()
+    {
+        var list = new List<NotificationDefinition>
+        {
+            new() { Id = 1, Name = "Tele", Implementation = "Telegram", Settings = "{\"token\":\"token123\"}" },
+            new() { Id = 2, Name = "Mail", Implementation = "Email", Settings = "{\"password\":\"pass123\"}" }
+        };
+        _repository.All().Returns(list);
+
+        var result = _controller.GetAll();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var resources = (List<NotificationResource>)okResult.Value;
+        Assert.That(resources, Has.Count.EqualTo(2));
+        Assert.That(resources[0].Settings, Does.Contain(NotificationController.PasswordMask));
+        Assert.That(resources[1].Settings, Does.Contain(NotificationController.PasswordMask));
+    }
+
+    [Test]
+    public void GetById_returns_masked_resource()
+    {
+        var definition = new NotificationDefinition
+        {
+            Id = 10,
+            Name = "Tele",
+            Implementation = "Telegram",
+            Settings = "{\"token\":\"secrettoken\"}"
+        };
+        _repository.Get(10).Returns(definition);
+
+        var result = _controller.GetById(10);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var resource = (NotificationResource)okResult.Value;
+        Assert.That(resource.Settings, Does.Contain(NotificationController.PasswordMask));
+    }
+
+    [Test]
+    public void GetById_returns_not_found_when_missing()
+    {
+        _repository.Get(99).Returns((NotificationDefinition)null);
+
+        var result = _controller.GetById(99);
+
+        Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [Test]
+    public void Create_saves_definition_and_returns_masked_resource()
+    {
+        var inputResource = new NotificationResource
+        {
+            Name = "New Email",
+            Implementation = "Email",
+            OnGrab = true,
+            Settings = "{\"username\":\"user@mail.com\",\"password\":\"plaintext_password\"}"
+        };
+
+        _repository.Insert(Arg.Any<NotificationDefinition>()).Returns(callInfo =>
+        {
+            var def = callInfo.Arg<NotificationDefinition>();
+            def.Id = 15;
+            return def;
+        });
+
+        var result = _controller.Create(inputResource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var returned = (NotificationResource)okResult.Value;
+
+        // Saved definition in DB had plaintext password
+        _repository.Received(1).Insert(Arg.Is<NotificationDefinition>(d =>
+            d.Settings.Contains("plaintext_password")));
+
+        // Returned resource to client has masked password
+        Assert.That(returned.Settings, Does.Contain(NotificationController.PasswordMask));
+        Assert.That(returned.Settings, Does.Not.Contain("plaintext_password"));
     }
 
     [Test]
@@ -138,102 +428,258 @@ public class NotificationControllerTest
     }
 
     [Test]
-    public void Update_with_nonexistent_id_returns_not_found()
+    public void Update_preserves_existing_password_when_masked_asterisks_submitted()
     {
-        var resource = new NotificationResource
+        var existing = new NotificationDefinition
         {
-            Id = 999,
-            Name = "Telegram Channel",
-            Implementation = "Telegram",
-            OnDownloadComplete = true,
+            Id = 1,
+            Name = "Mail",
+            Implementation = "Email",
+            OnGrab = true,
+            Settings = "{\"server\":\"smtp.mail.com\",\"username\":\"user\",\"password\":\"StoredSecretPassword\"}"
+        };
+        _repository.Get(1).Returns(existing);
+
+        var updateResource = new NotificationResource
+        {
+            Id = 1,
+            Name = "Mail Renamed",
+            Implementation = "Email",
+            OnGrab = true,
+            Settings = "{\"server\":\"smtp.mail.com\",\"username\":\"user\",\"password\":\"********\"}"
         };
 
-        _notificationRepository.Get(999).Returns((NotificationDefinition)null);
+        var result = _controller.Update(1, updateResource);
 
-        var result = _controller.Update(999, resource);
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Settings.Contains("StoredSecretPassword") && !d.Settings.Contains("********")));
+    }
+
+    [Test]
+    public void Update_preserves_existing_password_when_empty_string_submitted()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Mail",
+            Implementation = "Email",
+            OnGrab = true,
+            Settings = "{\"server\":\"smtp.mail.com\",\"username\":\"user\",\"password\":\"StoredSecretPassword\"}"
+        };
+        _repository.Get(1).Returns(existing);
+
+        var updateResource = new NotificationResource
+        {
+            Id = 1,
+            Name = "Mail Renamed",
+            Implementation = "Email",
+            OnGrab = true,
+            Settings = "{\"server\":\"smtp.mail.com\",\"username\":\"user\",\"password\":\"\"}"
+        };
+
+        var result = _controller.Update(1, updateResource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Settings.Contains("StoredSecretPassword")));
+    }
+
+    [Test]
+    public void Update_updates_password_when_new_unmasked_value_submitted()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Mail",
+            Implementation = "Email",
+            OnGrab = true,
+            Settings = "{\"server\":\"smtp.mail.com\",\"username\":\"user\",\"password\":\"OldPassword\"}"
+        };
+        _repository.Get(1).Returns(existing);
+
+        var updateResource = new NotificationResource
+        {
+            Id = 1,
+            Name = "Mail",
+            Implementation = "Email",
+            OnGrab = true,
+            Settings = "{\"server\":\"smtp.mail.com\",\"username\":\"user\",\"password\":\"BrandNewPassword\"}"
+        };
+
+        var result = _controller.Update(1, updateResource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Settings.Contains("BrandNewPassword") && !d.Settings.Contains("OldPassword")));
+    }
+
+    [Test]
+    public void Update_preserves_existing_telegram_token_when_masked()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 2,
+            Name = "Tele",
+            Implementation = "Telegram",
+            OnGrab = true,
+            Settings = "{\"token\":\"123456:ABC-DEF1234ghIkl\",\"chat_id\":\"123\"}"
+        };
+        _repository.Get(2).Returns(existing);
+
+        var updateResource = new NotificationResource
+        {
+            Id = 2,
+            Name = "Tele",
+            Implementation = "Telegram",
+            OnGrab = true,
+            Settings = "{\"token\":\"********\",\"chat_id\":\"456\"}"
+        };
+
+        var result = _controller.Update(2, updateResource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Settings.Contains("123456:ABC-DEF1234ghIkl") && d.Settings.Contains("456")));
+    }
+
+    [Test]
+    public void Update_preserves_existing_discord_webhook_url_when_masked()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 3,
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://discord.com/api/webhooks/12345/REAL_DISCORD_TOKEN\",\"username\":\"Seedarr\"}"
+        };
+        _repository.Get(3).Returns(existing);
+
+        var updateResource = new NotificationResource
+        {
+            Id = 3,
+            Name = "Discord",
+            Implementation = "Discord",
+            OnGrab = true,
+            Settings = "{\"url\":\"https://discord.com/api/webhooks/12345/********\",\"username\":\"UpdatedSeedarr\"}"
+        };
+
+        var result = _controller.Update(3, updateResource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Settings.Contains("REAL_DISCORD_TOKEN") && d.Settings.Contains("UpdatedSeedarr")));
+    }
+
+    [Test]
+    public void Update_preserves_existing_pushover_credentials_when_masked()
+    {
+        var existing = new NotificationDefinition
+        {
+            Id = 4,
+            Name = "Pushover",
+            Implementation = "Pushover",
+            OnGrab = true,
+            Settings = "{\"token\":\"stored_token\",\"user\":\"stored_user\"}"
+        };
+        _repository.Get(4).Returns(existing);
+
+        var updateResource = new NotificationResource
+        {
+            Id = 4,
+            Name = "Pushover",
+            Implementation = "Pushover",
+            OnGrab = true,
+            Settings = "{\"token\":\"********\",\"user\":\"********\"}"
+        };
+
+        var result = _controller.Update(4, updateResource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _repository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
+            d.Settings.Contains("stored_token") && d.Settings.Contains("stored_user")));
+    }
+
+    [Test]
+    public void Update_returns_not_found_when_missing()
+    {
+        _repository.Get(99).Returns((NotificationDefinition)null);
+
+        var result = _controller.Update(99, new NotificationResource { Id = 99, OnGrab = true });
 
         Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
     }
 
     [Test]
-    public void Update_with_active_trigger_updates_and_returns_ok_with_categories()
+    public async Task TestDirect_with_existing_id_restores_stored_credentials_before_test()
     {
         var existing = new NotificationDefinition
         {
-            Id = 10,
-            Name = "Old Name",
+            Id = 5,
+            Name = "Webhook",
             Implementation = "Webhook",
-            OnGrab = true,
-            Categories = new List<string> { "OldCategory" },
+            Settings = "{\"url\":\"https://webhook.example.com/api?token=REAL_SECRET_TOKEN\"}"
         };
+        _repository.Get(5).Returns(existing);
 
-        var resource = new NotificationResource
+        _dispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>())
+            .Returns(Task.FromResult(true));
+
+        var testResource = new NotificationResource
         {
-            Id = 10,
-            Name = "New Name",
+            Id = 5,
             Implementation = "Webhook",
             OnSeedGoalReached = true,
             Categories = new List<string> { "Anime", "Documentary" },
             Tags = new List<int> { 5 },
+            Settings = "{\"url\":\"https://webhook.example.com/api?token=********\"}"
         };
 
-        _notificationRepository.Get(10).Returns(existing);
-
-        var result = _controller.Update(10, resource);
+        var result = await _controller.TestDirect(testResource);
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
-        var okResult = (OkObjectResult)result.Result;
-        var updated = (NotificationResource)okResult.Value;
-
-        Assert.That(updated.Id, Is.EqualTo(10));
-        Assert.That(updated.Name, Is.EqualTo("New Name"));
-        Assert.That(updated.Categories, Is.EquivalentTo(new[] { "Anime", "Documentary" }));
-        Assert.That(updated.Tags, Is.EquivalentTo(new[] { 5 }));
-
-        _notificationRepository.Received(1).Update(Arg.Is<NotificationDefinition>(d =>
-            d.Id == 10 &&
-            d.Name == "New Name" &&
-            d.Categories.Contains("Anime") &&
-            d.Categories.Contains("Documentary") &&
-            d.Tags.Contains(5)));
+        await _dispatcher.Received(1).DispatchAsync(
+            Arg.Is<string>(url => url.Contains("REAL_SECRET_TOKEN")),
+            Arg.Any<object>(),
+            Arg.Any<string>());
     }
 
     [Test]
-    public void GetAll_maps_categories_and_tags()
+    public void GetSchema_returns_available_schemas_from_factory()
     {
-        var list = new List<NotificationDefinition>
+        var definitions = new List<NotificationDefinition>
         {
-            new NotificationDefinition
-            {
-                Id = 1,
-                Name = "N1",
-                Categories = new List<string> { "Cat1" },
-                Tags = new List<int> { 10 },
-            },
-            new NotificationDefinition
-            {
-                Id = 2,
-                Name = "N2",
-                Categories = null,
-                Tags = null,
-            },
+            new() { Name = "Discord", Implementation = "Discord", ConfigContract = "DiscordSettings" },
+            new() { Name = "Telegram", Implementation = "Telegram", ConfigContract = "TelegramSettings" },
+            new() { Name = "Email", Implementation = "Email", ConfigContract = "EmailSettings" }
         };
+        _factory.GetDefaultDefinitions().Returns(definitions);
 
-        _notificationRepository.All().Returns(list);
-
-        var result = _controller.GetAll();
+        var result = _controller.GetSchema();
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         var okResult = (OkObjectResult)result.Result;
-        var items = (List<NotificationResource>)okResult.Value;
+        var schemas = (List<NotificationResource>)okResult.Value;
 
-        Assert.That(items.Count, Is.EqualTo(2));
-        Assert.That(items[0].Categories, Is.EquivalentTo(new[] { "Cat1" }));
-        Assert.That(items[0].Tags, Is.EquivalentTo(new[] { 10 }));
-        Assert.That(items[1].Categories, Is.Not.Null);
-        Assert.That(items[1].Categories, Is.Empty);
-        Assert.That(items[1].Tags, Is.Not.Null);
-        Assert.That(items[1].Tags, Is.Empty);
+        Assert.That(schemas, Has.Count.EqualTo(3));
+        Assert.That(schemas.Select(s => s.Implementation), Does.Contain("Discord"));
+        Assert.That(schemas.Select(s => s.Implementation), Does.Contain("Telegram"));
+        Assert.That(schemas.Select(s => s.Implementation), Does.Contain("Email"));
+    }
+
+    [Test]
+    public void GetSchema_returns_empty_when_factory_is_null()
+    {
+        var controller = new NotificationController(_repository, _dispatcher, _scriptService, null);
+
+        var result = controller.GetSchema();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var schemas = (List<NotificationResource>)okResult.Value;
+
+        Assert.That(schemas, Is.Empty);
     }
 
     [Test]
@@ -390,7 +836,7 @@ public class NotificationControllerTest
     public async Task Test_Webhook_should_return_detailed_diagnostic_on_http_failure()
     {
         var publicUrl = "https://93.184.216.34/webhook";
-        _webhookDispatcher.DispatchDetailedAsync(Arg.Is(publicUrl), Arg.Any<object>(), Arg.Any<string>())
+        _dispatcher.DispatchDetailedAsync(Arg.Is(publicUrl), Arg.Any<object>(), Arg.Any<string>())
             .Returns(new WebhookDispatchResult
             {
                 Success = false,

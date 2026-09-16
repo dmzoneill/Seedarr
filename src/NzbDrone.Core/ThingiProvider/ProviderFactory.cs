@@ -62,4 +62,22 @@ public abstract class ProviderFactory<TProvider, TProviderDefinition> : IProvide
             .Where(p => enabledImplementations.Contains(p.GetType().Name))
             .ToList();
     }
+
+    public virtual List<TProviderDefinition> GetDefaultDefinitions()
+    {
+        return _serviceFactory.BuildAll<TProvider>()
+            .OrderBy(p => p.Name)
+            .Select(p =>
+            {
+                var impl = p.Name;
+                return new TProviderDefinition
+                {
+                    Name = p.Name,
+                    Implementation = impl,
+                    ConfigContract = $"{impl}Settings",
+                    Enable = true
+                };
+            })
+            .ToList();
+    }
 }
