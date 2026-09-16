@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -9,6 +10,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Validation;
 using Polly;
 using Polly.Retry;
 
@@ -29,11 +31,12 @@ public interface IWebhookDispatcher
 
 public class WebhookDispatcher : IWebhookDispatcher
 {
-    private static readonly SocketsHttpHandler SharedHandler = new()
+    public static readonly SocketsHttpHandler SharedHandler = new()
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(2),
         PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1),
         AutomaticDecompression = DecompressionMethods.All,
+        AllowAutoRedirect = false,
     };
 
     private static readonly HttpClient SharedDefaultClient = new(SharedHandler, disposeHandler: false)
@@ -82,72 +85,7 @@ public class WebhookDispatcher : IWebhookDispatcher
             return false;
         }
 
-        var host = uri.Host;
-        if (string.IsNullOrWhiteSpace(host))
-        {
-            return false;
-        }
-
-        if (allowLoopback)
-        {
-            return true;
-        }
-
-        if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) ||
-            host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(host, "instance-data", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(host, "metadata.google.internal", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        if (IPAddress.TryParse(host, out var ip))
-        {
-            if (IPAddress.IsLoopback(ip))
-            {
-                return false;
-            }
-
-            if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
-            {
-                var bytes = ip.GetAddressBytes();
-                if (bytes[0] == 127 ||
-                    bytes[0] == 0 ||
-                    (bytes[0] == 169 && bytes[1] == 254) ||
-                    (bytes[0] == 255 && bytes[1] == 255 && bytes[2] == 255 && bytes[3] == 255) ||
-                    bytes[0] >= 224)
-                {
-                    return false;
-                }
-            }
-            else if (ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
-            {
-                if (ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6Multicast)
-                {
-                    return false;
-                }
-
-                if (IPAddress.IPv6Any.Equals(ip) || IPAddress.IPv6None.Equals(ip) || IPAddress.IPv6Loopback.Equals(ip))
-                {
-                    return false;
-                }
-
-                if (ip.IsIPv4MappedToIPv6)
-                {
-                    var ipv4 = ip.MapToIPv4();
-                    var bytes = ipv4.GetAddressBytes();
-                    if (bytes[0] == 127 ||
-                        bytes[0] == 0 ||
-                        (bytes[0] == 169 && bytes[1] == 254) ||
-                        bytes[0] >= 224)
-                    {
-                        return false;
-                    }
-                }
-            }
-        }
-
-        return true;
+        return UrlValidator.IsSafeHost(uri.Host, allowLoopback);
     }
 
     internal static AsyncRetryPolicy<HttpResponseMessage> CreateRetryPolicy(
@@ -194,7 +132,19 @@ public class WebhookDispatcher : IWebhookDispatcher
                 });
     }
 
-    internal static TimeSpan? ExtractRetryAfter(HttpResponseMessage response)
+    public static readonly TimeSpan MaxRetryAfterDelay = TimeSpan.FromSeconds(60);
+
+    public static TimeSpan ClampRetryAfter(TimeSpan delay)
+    {
+        if (delay <= TimeSpan.Zero)
+        {
+            return TimeSpan.Zero;
+        }
+
+        return delay > MaxRetryAfterDelay ? MaxRetryAfterDelay : delay;
+    }
+
+    public static TimeSpan? ExtractRetryAfter(HttpResponseMessage response)
     {
         if (response == null)
         {
@@ -207,7 +157,7 @@ public class WebhookDispatcher : IWebhookDispatcher
             {
                 if (response.Headers.RetryAfter.Delta.HasValue)
                 {
-                    return response.Headers.RetryAfter.Delta.Value;
+                    return ClampRetryAfter(response.Headers.RetryAfter.Delta.Value);
                 }
 
                 if (response.Headers.RetryAfter.Date.HasValue)
@@ -215,7 +165,7 @@ public class WebhookDispatcher : IWebhookDispatcher
                     var delta = response.Headers.RetryAfter.Date.Value - DateTimeOffset.UtcNow;
                     if (delta > TimeSpan.Zero)
                     {
-                        return delta;
+                        return ClampRetryAfter(delta);
                     }
                 }
             }
@@ -227,7 +177,7 @@ public class WebhookDispatcher : IWebhookDispatcher
                 {
                     if (double.TryParse(val, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var seconds))
                     {
-                        return TimeSpan.FromSeconds(seconds);
+                        return ClampRetryAfter(TimeSpan.FromSeconds(seconds));
                     }
 
                     if (DateTimeOffset.TryParse(val, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date))
@@ -235,7 +185,7 @@ public class WebhookDispatcher : IWebhookDispatcher
                         var delta = date - DateTimeOffset.UtcNow;
                         if (delta > TimeSpan.Zero)
                         {
-                            return delta;
+                            return ClampRetryAfter(delta);
                         }
                     }
                 }
@@ -243,35 +193,51 @@ public class WebhookDispatcher : IWebhookDispatcher
 
             if (response.Content != null)
             {
-                var rawBody = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                if (!string.IsNullOrWhiteSpace(rawBody) && rawBody.TrimStart().StartsWith("{"))
+                // Inspect buffered content in memory without synchronous blocking on network content streams
+                var stream = response.Content.ReadAsStream();
+                if (stream is MemoryStream ms)
                 {
-                    using var doc = JsonDocument.Parse(rawBody);
-                    var root = doc.RootElement;
-
-                    if (root.TryGetProperty("parameters", out var paramsElem) &&
-                        paramsElem.ValueKind == JsonValueKind.Object &&
-                        paramsElem.TryGetProperty("retry_after", out var tgRetry))
+                    var originalPosition = ms.Position;
+                    string rawBody;
+                    using (var reader = new StreamReader(ms, Encoding.UTF8, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true))
                     {
-                        if (tgRetry.TryGetDouble(out var s))
-                        {
-                            return TimeSpan.FromSeconds(s);
-                        }
+                        rawBody = reader.ReadToEnd();
                     }
 
-                    var retryProps = new[] { "retry_after", "retryAfter", "retry_after_seconds", "retryAfterSeconds" };
-                    foreach (var prop in retryProps)
+                    if (ms.CanSeek)
                     {
-                        if (root.TryGetProperty(prop, out var elem))
-                        {
-                            if (elem.ValueKind == JsonValueKind.Number && elem.TryGetDouble(out var s))
-                            {
-                                return TimeSpan.FromSeconds(s);
-                            }
+                        ms.Position = originalPosition;
+                    }
 
-                            if (elem.ValueKind == JsonValueKind.String && double.TryParse(elem.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var sParsed))
+                    if (!string.IsNullOrWhiteSpace(rawBody) && rawBody.TrimStart().StartsWith("{"))
+                    {
+                        using var doc = JsonDocument.Parse(rawBody);
+                        var root = doc.RootElement;
+
+                        if (root.TryGetProperty("parameters", out var paramsElem) &&
+                            paramsElem.ValueKind == JsonValueKind.Object &&
+                            paramsElem.TryGetProperty("retry_after", out var tgRetry))
+                        {
+                            if (tgRetry.TryGetDouble(out var s))
                             {
-                                return TimeSpan.FromSeconds(sParsed);
+                                return ClampRetryAfter(TimeSpan.FromSeconds(s));
+                            }
+                        }
+
+                        var retryProps = new[] { "retry_after", "retryAfter", "retry_after_seconds", "retryAfterSeconds" };
+                        foreach (var prop in retryProps)
+                        {
+                            if (root.TryGetProperty(prop, out var elem))
+                            {
+                                if (elem.ValueKind == JsonValueKind.Number && elem.TryGetDouble(out var s))
+                                {
+                                    return ClampRetryAfter(TimeSpan.FromSeconds(s));
+                                }
+
+                                if (elem.ValueKind == JsonValueKind.String && double.TryParse(elem.GetString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var sParsed))
+                                {
+                                    return ClampRetryAfter(TimeSpan.FromSeconds(sParsed));
+                                }
                             }
                         }
                     }

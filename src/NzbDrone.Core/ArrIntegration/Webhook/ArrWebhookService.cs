@@ -31,7 +31,8 @@ public class ArrWebhookService : IArrWebhookService
 {
     private static readonly HttpClient SharedClient = new(new SocketsHttpHandler
     {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        AllowAutoRedirect = false,
     });
     private static readonly ResiliencePipeline SharedPolicy = ResiliencePolicies.GetArrApiPolicy();
 
