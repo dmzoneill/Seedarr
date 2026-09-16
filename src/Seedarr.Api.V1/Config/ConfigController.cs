@@ -253,6 +253,10 @@ public class BitTorrentConfigController : ConfigController<BitTorrentConfigResou
 
         SharedValidator.RuleFor(c => c.ScrapeIntervalSeconds)
             .GreaterThanOrEqualTo(60);
+
+        SharedValidator.RuleFor(c => c.EncryptionMode)
+            .Must(m => !string.IsNullOrEmpty(m) && m.ToLowerInvariant() is "disabled" or "enabled" or "required" or "forced")
+            .WithMessage("EncryptionMode must be one of: disabled, enabled, required, forced.");
     }
 
     protected override BitTorrentConfigResource ToResource(IConfigService model)
