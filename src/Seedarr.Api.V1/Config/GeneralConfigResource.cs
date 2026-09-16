@@ -15,6 +15,12 @@ public class GeneralConfigResource : RestResource
 
     public string ColorScheme { get; set; }
 
+    public string UiLanguage { get; set; }
+
+    public string UiTheme { get; set; }
+
+    public string UiAccent { get; set; }
+
     public bool WatchFolderEnabled { get; set; }
 
     public string WatchFolderPath { get; set; }
@@ -73,6 +79,9 @@ public static class GeneralConfigResourceMapper
             AutoStart = config?.AutoStart ?? false,
             ThemeStyle = config?.ThemeStyle,
             ColorScheme = config?.ColorScheme,
+            UiLanguage = config?.UiLanguage ?? "en",
+            UiTheme = config?.UiTheme ?? config?.ThemeStyle,
+            UiAccent = config?.UiAccent ?? config?.ColorScheme,
             WatchFolderEnabled = config?.WatchFolderEnabled ?? false,
             WatchFolderPath = config?.WatchFolderPath,
             WatchFolderScanIntervalSeconds = config?.WatchFolderScanIntervalSeconds ?? 0,

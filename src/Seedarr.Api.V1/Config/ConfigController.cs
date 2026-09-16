@@ -129,6 +129,24 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             resource.SslCertPassword = _configFileProvider.SslCertPassword;
         }
 
+        if (string.IsNullOrWhiteSpace(resource.UiTheme) && !string.IsNullOrWhiteSpace(resource.ThemeStyle))
+        {
+            resource.UiTheme = resource.ThemeStyle;
+        }
+        else if (!string.IsNullOrWhiteSpace(resource.UiTheme) && string.IsNullOrWhiteSpace(resource.ThemeStyle))
+        {
+            resource.ThemeStyle = resource.UiTheme;
+        }
+
+        if (string.IsNullOrWhiteSpace(resource.UiAccent) && !string.IsNullOrWhiteSpace(resource.ColorScheme))
+        {
+            resource.UiAccent = resource.ColorScheme;
+        }
+        else if (!string.IsNullOrWhiteSpace(resource.UiAccent) && string.IsNullOrWhiteSpace(resource.ColorScheme))
+        {
+            resource.ColorScheme = resource.UiAccent;
+        }
+
         var xmlValues = new Dictionary<string, object>
         {
             { "BindAddress", resource.BindAddress },

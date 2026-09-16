@@ -313,4 +313,35 @@ public class ConfigControllerTests : IntegrationTestBase
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
+
+    [Test]
+    public async Task PutGeneralConfig_persists_theme_accent_and_language()
+    {
+        var body = new
+        {
+            id = 1,
+            port = 9898,
+            sslPort = 9899,
+            watchFolderScanIntervalSeconds = 10,
+            themeStyle = "indigo",
+            colorScheme = "emerald",
+            uiTheme = "indigo",
+            uiAccent = "emerald",
+            uiLanguage = "de"
+        };
+        var putResponse = await PutJsonAsync("/api/v1/config/general/1", body);
+        Assert.That(putResponse.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+
+        var getResponse = await GetAsync("/api/v1/config/general");
+        Assert.That(getResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        var json = await getResponse.Content.ReadAsStringAsync();
+        var resource = Deserialize<Dictionary<string, object>>(json);
+
+        Assert.That(resource["themeStyle"].ToString(), Is.EqualTo("indigo"));
+        Assert.That(resource["colorScheme"].ToString(), Is.EqualTo("emerald"));
+        Assert.That(resource["uiTheme"].ToString(), Is.EqualTo("indigo"));
+        Assert.That(resource["uiAccent"].ToString(), Is.EqualTo("emerald"));
+        Assert.That(resource["uiLanguage"].ToString(), Is.EqualTo("de"));
+    }
 }

@@ -121,6 +121,17 @@ public static class Bootstrap
         var mainDb = app.Services.GetRequiredService<IMainDatabase>();
         Logger.Info("Database initialized: {0}", mainDb.DatabaseType);
 
+        try
+        {
+            var loggingReconfig = app.Services.GetService<ILoggingReconfigurationService>()
+                                  ?? (ILoggingReconfigurationService)app.Services.GetService<LoggingReconfigurationService>();
+            loggingReconfig?.ReconfigureLogging();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Failed to reconfigure logging during bootstrap");
+        }
+
         if (urls != null)
         {
             foreach (var url in urls)

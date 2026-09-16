@@ -30,7 +30,7 @@ export function WebUiSettingsTab() {
     if (config) {
       setForm({
         themeStyle: config.themeStyle || currentContextTheme || "dark",
-        colorScheme: config.colorScheme || currentContextAccent || "auto",
+        colorScheme: config.colorScheme === "green" ? "emerald" : config.colorScheme || currentContextAccent || "auto",
         port: config.port ?? 9898,
         bindAddress: config.bindAddress || "0.0.0.0",
         authenticationEnabled: config.authenticationEnabled ?? false,
@@ -62,7 +62,9 @@ export function WebUiSettingsTab() {
       {
         ...config,
         themeStyle: form.themeStyle,
-        colorScheme: form.colorScheme,
+        colorScheme: form.colorScheme === "green" ? "emerald" : form.colorScheme,
+        uiTheme: form.themeStyle,
+        uiAccent: form.colorScheme === "green" ? "emerald" : form.colorScheme,
         port: form.port,
         bindAddress: form.bindAddress,
         authenticationEnabled: form.authenticationEnabled,

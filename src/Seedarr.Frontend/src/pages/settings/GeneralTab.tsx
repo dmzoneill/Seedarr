@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { useGeneralConfig, useSaveGeneralConfig } from "../../api/hooks";
 import { apiClient } from "../../api/client";
 import { useToast } from "../../context/ToastContext";
+import { useTheme, type Theme, type Accent } from "../../context/ThemeContext";
 import type { GeneralConfig, SslCertificateValidationResult } from "../../api/types";
 import {
   SaveBar,
@@ -18,6 +19,7 @@ export function GeneralTab() {
   const save = useSaveGeneralConfig();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { setTheme, setAccent } = useTheme();
   const [form, setForm] = useState<GeneralConfig>({
     id: 1,
     autoStart: false,
@@ -53,6 +55,7 @@ export function GeneralTab() {
     if (config) {
       setForm({
         ...config,
+        colorScheme: config.colorScheme === "green" ? "emerald" : config.colorScheme || "auto",
         enableSsl: config.enableSsl ?? false,
         sslPort: config.sslPort ?? 9899,
         sslCertPath: config.sslCertPath ?? "",
@@ -175,7 +178,17 @@ export function GeneralTab() {
         isError={save.isError}
         isSuccess={save.isSuccess}
         error={save.error}
-        onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
+        onSave={() =>
+          save.mutate(
+            {
+              ...form,
+              colorScheme: form.colorScheme === "green" ? "emerald" : form.colorScheme,
+              uiTheme: form.themeStyle,
+              uiAccent: form.colorScheme === "green" ? "emerald" : form.colorScheme,
+            },
+            { onSuccess: () => setDirty(false) },
+          )
+        }
       />
 
       <SectionCard
@@ -191,23 +204,36 @@ export function GeneralTab() {
         <SelectInput
           label="Theme"
           value={form.themeStyle}
-          onChange={(v) => set("themeStyle", v)}
+          onChange={(v) => {
+            set("themeStyle", v);
+            setTheme(v as Theme);
+          }}
           options={[
-            { value: "system", label: "System Default" },
-            { value: "dark", label: "Dark Charcoal" },
-            { value: "light", label: "Light Theme" },
+            { value: "dark", label: "Dark (Warm Espresso)" },
+            { value: "indigo", label: "Indigo (Deep Midnight)" },
+            { value: "oled", label: "OLED (Pure Black)" },
+            { value: "slate", label: "Slate (Cool Steel)" },
+            { value: "light", label: "Light (Cream Parchment)" },
+            { value: "system", label: "System (OS Preference)" },
           ]}
           hint="Overall application appearance theme"
         />
         <SelectInput
           label="Color Scheme"
-          value={form.colorScheme}
-          onChange={(v) => set("colorScheme", v)}
+          value={form.colorScheme === "green" ? "emerald" : form.colorScheme}
+          onChange={(v) => {
+            const nextAccent = v === "green" ? "emerald" : v;
+            set("colorScheme", nextAccent);
+            setAccent(nextAccent as Accent);
+          }}
           options={[
-            { value: "auto", label: "Warm Gold (Default)" },
-            { value: "blue", label: "Sapphire Blue" },
-            { value: "green", label: "Emerald Green" },
-            { value: "purple", label: "Amethyst Purple" },
+            { value: "auto", label: "Auto / Brand Gold (Default)" },
+            { value: "blue", label: "Electric Blue" },
+            { value: "emerald", label: "Emerald Green" },
+            { value: "purple", label: "Royal Purple" },
+            { value: "rose", label: "Vibrant Rose" },
+            { value: "cyan", label: "Cyan Sky" },
+            { value: "amber", label: "Warm Amber" },
           ]}
           hint="Accent brand highlight palette"
         />

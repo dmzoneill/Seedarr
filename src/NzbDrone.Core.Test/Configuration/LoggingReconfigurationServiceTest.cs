@@ -5,6 +5,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Lifecycle;
 
 namespace NzbDrone.Core.Test.Configuration
 {
@@ -126,6 +127,61 @@ namespace NzbDrone.Core.Test.Configuration
             Assert.That(rules.Count, Is.GreaterThan(0));
             Assert.That(rules[0].Levels, Does.Not.Contain(LogLevel.Debug));
             Assert.That(rules[0].Levels, Does.Contain(LogLevel.Info));
+        }
+
+        [Test]
+        public void Handle_ApplicationStartedEvent_should_reconfigure_logging()
+        {
+            var config = new LoggingConfiguration();
+            var consoleTarget = new ConsoleTarget("console");
+            config.AddTarget(consoleTarget);
+            config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget);
+            LogManager.Configuration = config;
+
+            _configService.DebugMode.Returns(true);
+
+            _subject.Handle(new ApplicationStartedEvent());
+
+            var rules = LogManager.Configuration.LoggingRules;
+            Assert.That(rules.Count, Is.GreaterThan(0));
+            Assert.That(rules[0].Levels, Does.Contain(LogLevel.Debug));
+        }
+
+        [Test]
+        public void ReconfigureLogging_should_reconfigure_logging_directly()
+        {
+            var config = new LoggingConfiguration();
+            var consoleTarget = new ConsoleTarget("console");
+            config.AddTarget(consoleTarget);
+            config.AddRule(LogLevel.Info, LogLevel.Fatal, consoleTarget);
+            LogManager.Configuration = config;
+
+            _configService.LogToFile.Returns(true);
+            _configService.FileLogLevel.Returns("Debug");
+
+            _subject.ReconfigureLogging();
+
+            Assert.That(LogManager.Configuration.FindTargetByName<FileTarget>("file"), Is.Not.Null);
+        }
+
+        [Test]
+        public void RemoveRulesForTarget_should_remove_rule_when_target_is_not_first()
+        {
+            var config = new LoggingConfiguration();
+            var otherTarget = new ConsoleTarget("other");
+            var consoleTarget = new ConsoleTarget("console");
+            config.AddTarget(otherTarget);
+            config.AddTarget(consoleTarget);
+
+            var rule = new LoggingRule("*", LogLevel.Info, LogLevel.Fatal, otherTarget);
+            rule.Targets.Add(consoleTarget);
+            config.LoggingRules.Add(rule);
+            LogManager.Configuration = config;
+
+            _subject.ReconfigureLogging();
+
+            // The multi-target rule containing "console" should have been removed and replaced with a fresh console rule
+            Assert.That(config.LoggingRules, Has.None.Matches<LoggingRule>(r => r.Targets.Contains(otherTarget)));
         }
     }
 }
