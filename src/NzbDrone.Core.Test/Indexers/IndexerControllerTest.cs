@@ -1,3 +1,7 @@
+using System.Linq;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
@@ -181,5 +185,125 @@ public class IndexerControllerTest
         var result = _controller.TestConnection(99);
 
         Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+    }
+
+    [TestCase("http://169.254.169.254/latest/meta-data")]
+    [TestCase("http://127.0.0.1:8080/file.torrent")]
+    [TestCase("http://localhost:9696/download")]
+    [TestCase("http://10.0.0.1:9696/download")]
+    [TestCase("http://192.168.1.1:9696/download")]
+    [TestCase("http://172.16.0.1:9696/download")]
+    public void DownloadRelease_with_unsafe_download_url_returns_bad_request(string url)
+    {
+        var request = new DownloadReleaseRequest
+        {
+            Title = "Unsafe Torrent",
+            DownloadUrl = url
+        };
+
+        var result = _controller.DownloadRelease(request);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Invalid or unsafe download URL."));
+    }
+
+    [Test]
+    public void DownloadRelease_does_not_send_api_key_to_cross_origin_host()
+    {
+        var handler = new FakeHttpMessageHandler();
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Source Indexer",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "secret_api_key"
+        };
+        _indexerFactory.Get(1).Returns(indexerDef);
+
+        var request = new DownloadReleaseRequest
+        {
+            Title = "Cross Origin Torrent",
+            DownloadUrl = "http://8.8.4.4:8080/download/1.torrent",
+            IndexerId = 1
+        };
+
+        controller.DownloadRelease(request);
+
+        Assert.That(handler.SentRequest, Is.Not.Null);
+        Assert.That(handler.SentRequest.Headers.Contains("X-Api-Key"), Is.False);
+    }
+
+    [Test]
+    public void DownloadRelease_sends_api_key_to_same_origin_host()
+    {
+        var handler = new FakeHttpMessageHandler();
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Source Indexer",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "secret_api_key"
+        };
+        _indexerFactory.Get(1).Returns(indexerDef);
+
+        var request = new DownloadReleaseRequest
+        {
+            Title = "Same Origin Torrent",
+            DownloadUrl = "http://8.8.8.8:9696/download/1.torrent",
+            IndexerId = 1
+        };
+
+        controller.DownloadRelease(request);
+
+        Assert.That(handler.SentRequest, Is.Not.Null);
+        Assert.That(handler.SentRequest.Headers.Contains("X-Api-Key"), Is.True);
+        Assert.That(handler.SentRequest.Headers.GetValues("X-Api-Key").First(), Is.EqualTo("secret_api_key"));
+    }
+
+    private class FakeHttpMessageHandler : HttpMessageHandler
+    {
+        public HttpRequestMessage SentRequest { get; private set; }
+        public HttpResponseMessage ResponseToReturn { get; set; } = new(System.Net.HttpStatusCode.BadRequest);
+
+        protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            SentRequest = request;
+            return ResponseToReturn;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            SentRequest = request;
+            return Task.FromResult(ResponseToReturn);
+        }
     }
 }

@@ -108,5 +108,22 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
             Assert.That(results[0].ResponseOffset, Is.EqualTo(0));
             Assert.That(results[0].ResponseTotal, Is.EqualTo(42));
         }
+
+        [Test]
+        public void ParseResponse_should_prohibit_dtd_entity_expansion()
+        {
+            var xmlWithDtd = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<!DOCTYPE foo [ <!ENTITY xxe SYSTEM ""http://169.254.169.254/latest/meta-data""> ]>
+<rss version=""2.0"">
+    <channel>
+        <item>
+            <title>&xxe;</title>
+            <link>http://indexer.local/nzb/1</link>
+        </item>
+    </channel>
+</rss>";
+
+            Assert.Throws<System.Xml.XmlException>(() => _subject.ParseResponse(xmlWithDtd));
+        }
     }
 }

@@ -1,4 +1,7 @@
 using System;
+using System.IO;
+using System.Net.Http;
+using System.Xml;
 using NLog;
 using NzbDrone.Core.Indexers.Torznab;
 
@@ -6,14 +9,16 @@ namespace NzbDrone.Core.Indexers.Newznab;
 
 public class NewznabIndexer : IIndexer
 {
-    private static readonly System.Net.Http.HttpClient Client = new();
+    private static readonly HttpClient DefaultClient = new();
+    private readonly HttpClient _httpClient;
     private readonly Logger _logger;
 
     public string Name => "Newznab";
     public string IndexerType => "Newznab";
 
-    public NewznabIndexer()
+    public NewznabIndexer(HttpClient httpClient = null)
     {
+        _httpClient = httpClient ?? DefaultClient;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -34,13 +39,13 @@ public class NewznabIndexer : IIndexer
             var apiPath = string.IsNullOrEmpty(definition.ApiPath) ? "/api" : definition.ApiPath;
             var url = $"{definition.Url.TrimEnd('/')}{apiPath}?t=caps";
 
-            using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, url);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
             if (!string.IsNullOrWhiteSpace(definition.ApiKey))
             {
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            using var response = Client.Send(request);
+            using var response = _httpClient.Send(request);
 
             if (response.IsSuccessStatusCode)
             {
@@ -126,19 +131,19 @@ public class NewznabIndexer : IIndexer
                 url += $"&apikey={Uri.EscapeDataString(definition.ApiKey)}";
             }
 
-            using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, url);
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
             if (!string.IsNullOrWhiteSpace(definition.ApiKey))
             {
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            using var response = Client.Send(request);
+            using var response = _httpClient.Send(request);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Newznab search returned status code {0}", response.StatusCode);
                 if ((int)response.StatusCode == 429 || (int)response.StatusCode == 503)
                 {
-                    throw new System.Net.Http.HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
+                    throw new HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
                 }
 
                 return results;
@@ -148,7 +153,7 @@ public class NewznabIndexer : IIndexer
             var xml = reader.ReadToEnd();
             return ParseResponse(xml, definition);
         }
-        catch (System.Net.Http.HttpRequestException)
+        catch (HttpRequestException)
         {
             throw;
         }
@@ -168,8 +173,15 @@ public class NewznabIndexer : IIndexer
             return results;
         }
 
-        var doc = new System.Xml.XmlDocument();
-        doc.LoadXml(xml);
+        var doc = new XmlDocument();
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersFromEntities = 1024
+        };
+        using var reader = XmlReader.Create(new StringReader(xml), settings);
+        doc.Load(reader);
 
         int? responseOffset = null;
         int? responseTotal = null;
