@@ -903,6 +903,14 @@ namespace NzbDrone.Core.Test.Configuration
             Assert.That(_subject.GlobalSeedRatioLimit, Is.EqualTo(0.0));
         }
 
+        [Test]
+        public void SeedGoalReachedAction_should_default_to_Stop()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.SeedGoalReachedAction, Is.EqualTo("Stop"));
+        }
+
         // ---- Property defaults (Speed Distribution) ----
 
         [Test]
@@ -1672,6 +1680,18 @@ namespace NzbDrone.Core.Test.Configuration
             _repository.All().Returns(configs.AsQueryable());
 
             Assert.That(_subject.GlobalSeedRatioLimit, Is.EqualTo(2.5));
+        }
+
+        [Test]
+        public void SeedGoalReachedAction_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "SeedGoalReachedAction", Value = "Pause" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.SeedGoalReachedAction, Is.EqualTo("Pause"));
         }
 
         [Test]
