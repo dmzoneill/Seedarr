@@ -236,6 +236,18 @@ export function NetworkSettingsTab() {
             max={500}
             hint="Maximum peer connections allocated per individual torrent swarm"
           />
+          {form.maxPerTorrentConnections > form.maxGlobalConnections && (
+            <div
+              style={{
+                color: "var(--danger, #dc3545)",
+                fontSize: "0.85rem",
+                marginTop: "-0.5rem",
+                marginBottom: "0.5rem",
+              }}
+            >
+              Max Connections Per Torrent cannot exceed Maximum Global Connections.
+            </div>
+          )}
 
           <NumberInput
             label="Max Upload Slots Per Torrent"
