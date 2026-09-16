@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -225,5 +226,165 @@ public class DelugeJsonRpcControllerTest
         Assert.That(torrent.Label, Is.EqualTo("keep"));
         Assert.That(torrent.TagIds, Is.EqualTo(new List<int> { 6 }));
         _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public async Task HandleRpc_CoreGetTorrentStatus_Projects_Hash_And_TotalRemaining_Correctly()
+    {
+        var partialTorrent = new Torrent
+        {
+            Id = 1,
+            Name = "Partial Torrent",
+            InfoHash = "AABBCCDDEEFF00112233445566778899AABBCCDD",
+            TotalSize = 10_000_000L,
+            Progress = 0.4,
+            Status = TorrentStatus.Downloading,
+            DateAdded = DateTime.UtcNow,
+        };
+
+        var completedTorrent = new Torrent
+        {
+            Id = 2,
+            Name = "Completed Torrent",
+            InfoHash = "11223344556677889900AABBCCDDEEFF00112233",
+            TotalSize = 5_000_000L,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding,
+            DateAdded = DateTime.UtcNow,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { partialTorrent, completedTorrent });
+
+        // Test partial torrent projection
+        var jsonPartial = "{\"method\": \"core.get_torrent_status\", \"params\": [\"aabbccddeeff00112233445566778899aabbccdd\", [\"hash\", \"total_remaining\", \"name\"]], \"id\": 101}";
+        using var docPartial = JsonDocument.Parse(jsonPartial);
+        var resultPartial = await _controller.HandleRpc(docPartial.RootElement);
+        Assert.That(resultPartial, Is.InstanceOf<JsonResult>());
+        var jsonPartialResult = (JsonResult)resultPartial;
+
+        var serializedPartial = JsonSerializer.Serialize(jsonPartialResult.Value);
+        using var resDocPartial = JsonDocument.Parse(serializedPartial);
+        var resMapPartial = resDocPartial.RootElement.GetProperty("result");
+        Assert.That(resMapPartial.GetProperty("hash").GetString(), Is.EqualTo("aabbccddeeff00112233445566778899aabbccdd"));
+        Assert.That(resMapPartial.GetProperty("total_remaining").GetInt64(), Is.EqualTo(6_000_000L));
+        Assert.That(resMapPartial.GetProperty("name").GetString(), Is.EqualTo("Partial Torrent"));
+
+        // Test completed torrent projection
+        var jsonCompleted = "{\"method\": \"core.get_torrent_status\", \"params\": [\"11223344556677889900aabbccddeeff00112233\", [\"hash\", \"total_remaining\", \"name\"]], \"id\": 102}";
+        using var docCompleted = JsonDocument.Parse(jsonCompleted);
+        var resultCompleted = await _controller.HandleRpc(docCompleted.RootElement);
+        Assert.That(resultCompleted, Is.InstanceOf<JsonResult>());
+        var jsonCompletedResult = (JsonResult)resultCompleted;
+
+        var serializedCompleted = JsonSerializer.Serialize(jsonCompletedResult.Value);
+        using var resDocCompleted = JsonDocument.Parse(serializedCompleted);
+        var resMapCompleted = resDocCompleted.RootElement.GetProperty("result");
+        Assert.That(resMapCompleted.GetProperty("hash").GetString(), Is.EqualTo("11223344556677889900aabbccddeeff00112233"));
+        Assert.That(resMapCompleted.GetProperty("total_remaining").GetInt64(), Is.EqualTo(0L));
+        Assert.That(resMapCompleted.GetProperty("name").GetString(), Is.EqualTo("Completed Torrent"));
+    }
+
+    [Test]
+    public async Task HandleRpc_WebAddTorrents_With_FilePath_Imports_Without_FormatException()
+    {
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllBytesAsync(tempFile, new byte[] { 0x64, 0x31, 0x3a, 0x65 });
+
+            var createdTorrent = new Torrent
+            {
+                Id = 10,
+                Name = "FileTorrent",
+                InfoHash = "aabbccddeeff00112233445566778899aabbccdd",
+            };
+
+            _torrentImportService.ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>()).Returns(createdTorrent);
+
+            var escapedPath = tempFile.Replace("\\", "\\\\");
+            var json = $"{{\"method\": \"web.add_torrents\", \"params\": [[{{\"path\": \"{escapedPath}\", \"options\": {{\"label\": \"imported\"}}}}]], \"id\": 201}}";
+            using var doc = JsonDocument.Parse(json);
+
+            var result = await _controller.HandleRpc(doc.RootElement);
+            Assert.That(result, Is.InstanceOf<JsonResult>());
+            var jsonResult = (JsonResult)result;
+
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.True);
+            _torrentImportService.Received(1).ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>());
+
+            // Verify non-existent file path does not throw FormatException
+            var invalidPathJson = "{\"method\": \"web.add_torrents\", \"params\": [[{\"path\": \"/nonexistent/test/path.torrent\", \"options\": {}}]], \"id\": 202}";
+            using var docInvalid = JsonDocument.Parse(invalidPathJson);
+            var resultInvalid = await _controller.HandleRpc(docInvalid.RootElement);
+            Assert.That(resultInvalid, Is.InstanceOf<JsonResult>());
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
+    }
+
+    [Test]
+    public async Task HandleRpc_WebConnectionState_Maintains_State_Across_Connected_Connect_And_Disconnect()
+    {
+        DelugeJsonRpcController.IsWebConnected = true;
+
+        // 1. Initially connected
+        var jsonConnected = "{\"method\": \"web.connected\", \"params\": [], \"id\": 301}";
+        using (var doc = JsonDocument.Parse(jsonConnected))
+        {
+            var result = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)result;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.True);
+        }
+
+        // 2. Disconnect
+        var jsonDisconnect = "{\"method\": \"web.disconnect\", \"params\": [], \"id\": 302}";
+        using (var doc = JsonDocument.Parse(jsonDisconnect))
+        {
+            var result = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)result;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.True);
+        }
+
+        // 3. Now disconnected
+        using (var doc = JsonDocument.Parse(jsonConnected))
+        {
+            var result = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)result;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.False);
+        }
+
+        // 4. Connect
+        var jsonConnect = "{\"method\": \"web.connect\", \"params\": [\"host-1\"], \"id\": 303}";
+        using (var doc = JsonDocument.Parse(jsonConnect))
+        {
+            var result = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)result;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.True);
+        }
+
+        // 5. Connected again
+        using (var doc = JsonDocument.Parse(jsonConnected))
+        {
+            var result = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)result;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.True);
+        }
     }
 }

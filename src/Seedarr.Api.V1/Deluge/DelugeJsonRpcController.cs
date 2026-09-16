@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
@@ -30,6 +31,9 @@ public class DelugeJsonRpcController : ControllerBase
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
+    private static readonly HttpClient _sharedHttpClient = new();
+    private static volatile bool _isWebConnected = true;
+
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileService _torrentFileService;
     private readonly ITorrentFileParser _torrentFileParser;
@@ -39,6 +43,12 @@ public class DelugeJsonRpcController : ControllerBase
     private readonly IConfigFileProvider _configFileProvider;
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
+
+    public static bool IsWebConnected
+    {
+        get => _isWebConnected;
+        set => _isWebConnected = value;
+    }
 
     public DelugeJsonRpcController(
         ITorrentService torrentService,
@@ -58,7 +68,7 @@ public class DelugeJsonRpcController : ControllerBase
         _configService = configService;
         _tagService = tagService;
         _configFileProvider = configFileProvider;
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? _sharedHttpClient;
         _sessionStore = sessionStore ?? RpcSessionStore.SharedSessionStore;
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -248,7 +258,8 @@ public class DelugeJsonRpcController : ControllerBase
     {
         return method switch
         {
-            "web.connected" or "web.connect" => HandleWebConnected(id),
+            "web.connected" => HandleWebConnected(id),
+            "web.connect" => HandleWebConnect(id),
             "web.get_version" => HandleGetVersion(id),
             "web.get_plugins" or "web.get_installed_plugins" => HandleGetPlugins(id),
             "web.get_hosts" => HandleWebGetHosts(id),
@@ -368,11 +379,18 @@ public class DelugeJsonRpcController : ControllerBase
 
     private IActionResult HandleWebConnected(object id)
     {
+        return DelugeResult(new { result = _isWebConnected, error = (object)null, id });
+    }
+
+    private IActionResult HandleWebConnect(object id)
+    {
+        _isWebConnected = true;
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 
     private IActionResult HandleWebDisconnect(object id)
     {
+        _isWebConnected = false;
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 
@@ -387,6 +405,7 @@ public class DelugeJsonRpcController : ControllerBase
                 "auth.delete_session",
                 "web.connected",
                 "web.connect",
+                "web.disconnect",
                 "web.get_hosts",
                 "web.get_host_status",
                 "web.update_ui",
@@ -641,12 +660,12 @@ public class DelugeJsonRpcController : ControllerBase
 
     private IActionResult HandleWebGetHosts(object id)
     {
-        return DelugeResult(new { result = new object[] { new object[] { "1", "127.0.0.1", 58846, "Connected" } }, error = (object)null, id });
+        return DelugeResult(new { result = new object[] { new object[] { "1", "127.0.0.1", 58846, _isWebConnected ? "Connected" : "Offline" } }, error = (object)null, id });
     }
 
     private IActionResult HandleWebGetHostStatus(object id)
     {
-        return DelugeResult(new { result = new object[] { "1", "Connected", "2.1.1" }, error = (object)null, id });
+        return DelugeResult(new { result = new object[] { "1", _isWebConnected ? "Connected" : "Offline", "2.1.1" }, error = (object)null, id });
     }
 
     private IActionResult HandleWebUpdateUi(JsonElement paramsElem, object id)
@@ -1006,6 +1025,7 @@ public class DelugeJsonRpcController : ControllerBase
         return DelugeResult(new { result = new { name = "torrent", size = 0L, files_tree = new Dictionary<string, object>() }, error = (object)null, id });
     }
 
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Deluge Web API intentionally imports torrent files from local filesystem paths")]
     private async Task<IActionResult> HandleWebAddTorrentsAsync(JsonElement paramsElem, object id)
     {
         if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() > 0)
@@ -1029,12 +1049,37 @@ public class DelugeJsonRpcController : ControllerBase
                                     var added = _torrentImportService.ImportFromMagnet(path);
                                     ApplyDelugeOptions(added, opts);
                                 }
+                                else if (global::System.IO.File.Exists(path))
+                                {
+                                    var bytes = await global::System.IO.File.ReadAllBytesAsync(path);
+                                    var fileName = Path.GetFileName(path);
+                                    if (string.IsNullOrWhiteSpace(fileName))
+                                    {
+                                        fileName = "file.torrent";
+                                    }
+
+                                    using var ms = new MemoryStream(bytes);
+                                    var added = _torrentImportService.ImportFromFile(ms, fileName);
+                                    ApplyDelugeOptions(added, opts);
+                                }
                                 else
                                 {
-                                    var bytes = Convert.FromBase64String(path);
-                                    using var ms = new MemoryStream(bytes);
-                                    var added = _torrentImportService.ImportFromFile(ms, "file.torrent");
-                                    ApplyDelugeOptions(added, opts);
+                                    byte[] bytes = null;
+                                    try
+                                    {
+                                        bytes = Convert.FromBase64String(path);
+                                    }
+                                    catch (FormatException)
+                                    {
+                                        _logger.Warn("Failed to decode base64 torrent string for path: {0}", path);
+                                    }
+
+                                    if (bytes != null && bytes.Length > 0)
+                                    {
+                                        using var ms = new MemoryStream(bytes);
+                                        var added = _torrentImportService.ImportFromFile(ms, "file.torrent");
+                                        ApplyDelugeOptions(added, opts);
+                                    }
                                 }
                             }
                             catch (Exception ex)
@@ -1354,8 +1399,10 @@ public class DelugeJsonRpcController : ControllerBase
     {
         var status = new Dictionary<string, object>
         {
+            ["hash"] = (t.InfoHash ?? string.Empty).ToLowerInvariant(),
             ["name"] = t.Name ?? string.Empty,
             ["total_size"] = t.TotalSize,
+            ["total_remaining"] = Math.Max(0L, t.TotalSize - (t.Progress >= 1.0 ? t.TotalSize : (long)(t.TotalSize * t.Progress))),
             ["progress"] = t.Progress * 100.0,
             ["state"] = MapToDelugeState(t.Status, t.Progress),
             ["download_payload_rate"] = t.DownloadSpeed,
