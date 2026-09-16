@@ -13,16 +13,16 @@ public class CategoryResource : RestResource
     [StringLength(1024)]
     public string SavePath { get; set; }
 
-    [Range(0, int.MaxValue)]
+    [Range(-1, int.MaxValue)]
     public int DefaultUploadLimit { get; set; }
 
-    [Range(0, int.MaxValue)]
+    [Range(-1, int.MaxValue)]
     public int DefaultDownloadLimit { get; set; }
 
-    [Range(0.0, 1000.0)]
+    [Range(-1.0, 1000.0)]
     public double TargetRatio { get; set; }
 
-    [Range(0, int.MaxValue)]
+    [Range(-1, int.MaxValue)]
     public int TargetSeedTimeMinutes { get; set; }
 
     public bool AutoStop { get; set; }

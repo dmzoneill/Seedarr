@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Seeding.Distribution;
@@ -20,6 +21,7 @@ public class SpeedPolicyTest
     private ITorrentEventLogService _eventLogService;
     private ITorrentStateMachine _stateMachine;
     private IStopPolicy _stopPolicy;
+    private ICategoryService _categoryService;
     private SpeedPolicy _subject;
 
     [SetUp]
@@ -31,6 +33,7 @@ public class SpeedPolicyTest
         _eventLogService = Substitute.For<ITorrentEventLogService>();
         _stateMachine = Substitute.For<ITorrentStateMachine>();
         _stopPolicy = Substitute.For<IStopPolicy>();
+        _categoryService = Substitute.For<ICategoryService>();
 
         _configService.AlternativeSpeedEnabled.Returns(false);
         _configService.MaxUploadSpeedKbps.Returns(100);
@@ -53,7 +56,8 @@ public class SpeedPolicyTest
             _eventLogService,
             _stateMachine,
             _stopPolicy,
-            new RandomNumberGenerator(42));
+            new RandomNumberGenerator(42),
+            categoryService: _categoryService);
     }
 
     [Test]
@@ -90,6 +94,97 @@ public class SpeedPolicyTest
     }
 
     [Test]
+    public void ProcessDownloading_when_torrent_has_no_limit_inherits_category_download_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Category = "LinuxISO",
+            DownloadLimit = 0, // Unconfigured, inherits category
+            Downloaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 0.0
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _categoryService.GetByName("LinuxISO").Returns(new Category
+        {
+            Name = "LinuxISO",
+            DefaultDownloadLimit = 100 // 100 KB/s = 102,400 B/s
+        });
+
+        _stopPolicy.SelectDownloadStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 500_000 });
+
+        _subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Downloaded, Is.EqualTo(100 * 1024));
+    }
+
+    [Test]
+    public void ProcessDownloading_when_torrent_has_minus_one_unlimited_overrides_category_download_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Category = "LinuxISO",
+            DownloadLimit = -1, // Explicitly unlimited override
+            Downloaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 0.0
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _categoryService.GetByName("LinuxISO").Returns(new Category
+        {
+            Name = "LinuxISO",
+            DefaultDownloadLimit = 100 // 100 KB/s
+        });
+
+        _stopPolicy.SelectDownloadStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 500_000 });
+
+        _subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        // Should not be throttled by category limit of 100 KB/s
+        Assert.That(torrent.Downloaded, Is.EqualTo(500_000));
+    }
+
+    [Test]
+    public void ProcessDownloading_when_torrent_has_explicit_positive_limit_overrides_category_download_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Category = "LinuxISO",
+            DownloadLimit = 50, // 50 KB/s override
+            Downloaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 0.0
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _categoryService.GetByName("LinuxISO").Returns(new Category
+        {
+            Name = "LinuxISO",
+            DefaultDownloadLimit = 100 // 100 KB/s
+        });
+
+        _stopPolicy.SelectDownloadStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 500_000 });
+
+        _subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Downloaded, Is.EqualTo(50 * 1024));
+    }
+
+    [Test]
     public void ProcessSeeding_distributes_speeds_and_updates_uploaded()
     {
         var torrent = new Torrent
@@ -110,6 +205,97 @@ public class SpeedPolicyTest
 
         Assert.That(torrent.Uploaded, Is.EqualTo(250));
         Assert.That(torrent.Ratio, Is.EqualTo(0.25));
+    }
+
+    [Test]
+    public void ProcessSeeding_when_torrent_has_no_limit_inherits_category_upload_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Category = "Movies",
+            UploadLimit = 0, // Unconfigured, inherits category
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _categoryService.GetByName("Movies").Returns(new Category
+        {
+            Name = "Movies",
+            DefaultUploadLimit = 50 // 50 KB/s = 51,200 B/s
+        });
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Uploaded, Is.EqualTo(50 * 1024));
+    }
+
+    [Test]
+    public void ProcessSeeding_when_torrent_has_minus_one_unlimited_overrides_category_upload_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Category = "Movies",
+            UploadLimit = -1, // Explicitly unlimited override
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _categoryService.GetByName("Movies").Returns(new Category
+        {
+            Name = "Movies",
+            DefaultUploadLimit = 50 // 50 KB/s
+        });
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        // Should not be throttled by category limit of 50 KB/s
+        Assert.That(torrent.Uploaded, Is.EqualTo(250_000));
+    }
+
+    [Test]
+    public void ProcessSeeding_when_torrent_has_explicit_positive_limit_overrides_category_upload_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Category = "Movies",
+            UploadLimit = 20, // 20 KB/s override
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _categoryService.GetByName("Movies").Returns(new Category
+        {
+            Name = "Movies",
+            DefaultUploadLimit = 50 // 50 KB/s
+        });
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Uploaded, Is.EqualTo(20 * 1024));
     }
 
     [Test]
