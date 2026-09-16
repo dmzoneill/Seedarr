@@ -1,12 +1,14 @@
 export function formatBytes(bytes: number): string {
-  if (bytes <= 0) return "0 B";
+  if (bytes === 0 || !Number.isFinite(bytes) || isNaN(bytes)) return "0 B";
+  const isNegative = bytes < 0;
+  const absBytes = Math.abs(bytes);
   const units = ["B", "KB", "MB", "GB", "TB", "PB"];
   const i = Math.max(
     0,
-    Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024))),
+    Math.min(units.length - 1, Math.floor(Math.log(absBytes) / Math.log(1024))),
   );
-  const val = bytes / Math.pow(1024, i);
-  return `${val.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
+  const val = absBytes / Math.pow(1024, i);
+  return `${isNegative ? "-" : ""}${val.toFixed(i > 0 ? 1 : 0)} ${units[i]}`;
 }
 
 export function formatSpeed(bytesPerSecond: number): string {
@@ -14,6 +16,7 @@ export function formatSpeed(bytesPerSecond: number): string {
 }
 
 export function formatRatio(ratio: number): string {
+  if (!Number.isFinite(ratio) || isNaN(ratio)) return "-";
   return ratio.toFixed(2);
 }
 
