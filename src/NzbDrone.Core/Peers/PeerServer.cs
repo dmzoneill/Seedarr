@@ -123,10 +123,10 @@ public class PeerServer : BackgroundService
 
     private EncryptionMode GetEncryptionMode()
     {
-        return _configService.EncryptionMode switch
+        return _configService.EncryptionMode?.ToLowerInvariant() switch
         {
-            "required" => EncryptionMode.RequireEncrypted,
-            "disabled" => EncryptionMode.PreferPlainText,
+            "required" or "forced" => EncryptionMode.RequireEncrypted,
+            "disabled" or "plain" or "none" => EncryptionMode.PreferPlainText,
             _ => EncryptionMode.PreferEncrypted
         };
     }
