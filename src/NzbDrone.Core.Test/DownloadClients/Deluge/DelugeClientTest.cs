@@ -474,4 +474,28 @@ public class DelugeClientTest
         Assert.That(result[1].Status, Is.EqualTo("downloading"));
         Assert.That(result[2].Status, Is.EqualTo("downloading")); // Queued maps to downloading
     }
+
+    [Test]
+    public void GetItems_should_extract_is_private_flag_correctly()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""result"":{""torrents"":{" +
+            @"""priv1"":{""name"":""Private"",""total_size"":1000,""total_remaining"":0,""state"":""Seeding"",""private"":true}," +
+            @"""pub1"":{""name"":""Public"",""total_size"":2000,""total_remaining"":0,""state"":""Seeding"",""private"":false}" +
+            @"}},""id"":1}");
+        InjectMockClient(handler);
+
+        var result = _client.GetItems();
+
+        Assert.That(result, Has.Count.EqualTo(2));
+        var priv = result.Find(i => i.InfoHash == "priv1");
+        var pub = result.Find(i => i.InfoHash == "pub1");
+        Assert.That(priv, Is.Not.Null);
+        Assert.That(priv.IsPrivate, Is.True);
+        Assert.That(pub, Is.Not.Null);
+        Assert.That(pub.IsPrivate, Is.False);
+    }
 }

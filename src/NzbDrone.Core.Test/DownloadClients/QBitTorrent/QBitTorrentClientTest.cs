@@ -524,4 +524,25 @@ public class QBitTorrentClientTest
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.EqualTo(expectedBytes));
     }
+
+    [Test]
+    public void GetItems_should_extract_is_private_flag_correctly()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"[" +
+            @"{""hash"":""priv1"",""name"":""Private Torrent"",""total_size"":1000,""amount_left"":0,""state"":""uploading"",""save_path"":""/dl"",""is_private"":true}," +
+            @"{""hash"":""pub1"",""name"":""Public Torrent"",""total_size"":2000,""amount_left"":0,""state"":""uploading"",""save_path"":""/dl"",""is_private"":false}" +
+            @"]");
+
+        InjectMockClient(handler);
+
+        var result = _client.GetItems();
+
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result[0].IsPrivate, Is.True);
+        Assert.That(result[1].IsPrivate, Is.False);
+    }
 }

@@ -209,6 +209,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService
                 Status = item.Status,
                 OutputPath = item.OutputPath,
                 Category = item.Category,
+                IsPrivate = item.IsPrivate,
                 IsInLibrary = isInLibrary,
                 LibraryTorrentId = libraryId
             });
@@ -330,6 +331,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService
                 InfoHash = normalizedHash,
                 TotalSize = matchingItem.TotalSize,
                 Downloaded = downloaded,
+                IsPrivate = matchingItem.IsPrivate,
                 TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
                 DateAdded = DateTime.UtcNow,
                 Status = TorrentStatus.Stopped

@@ -309,7 +309,8 @@ public class DownloadClientSyncServiceTest
                 RemainingSize = 0,
                 Status = "seeding",
                 Category = "tv",
-                OutputPath = "/downloads/tv"
+                OutputPath = "/downloads/tv",
+                IsPrivate = true
             },
             new()
             {
@@ -320,7 +321,8 @@ public class DownloadClientSyncServiceTest
                 RemainingSize = 1000,
                 Status = "downloading",
                 Category = "movies",
-                OutputPath = "/downloads/movies"
+                OutputPath = "/downloads/movies",
+                IsPrivate = false
             }
         });
 
@@ -342,12 +344,14 @@ public class DownloadClientSyncServiceTest
         Assert.That(first.IsInLibrary, Is.True);
         Assert.That(first.LibraryTorrentId, Is.EqualTo(42));
         Assert.That(first.Progress, Is.EqualTo(100.0));
+        Assert.That(first.IsPrivate, Is.True);
 
         var second = items[1];
         Assert.That(second.Title, Is.EqualTo("New Movie"));
         Assert.That(second.IsInLibrary, Is.False);
         Assert.That(second.LibraryTorrentId, Is.Null);
         Assert.That(second.Progress, Is.EqualTo(50.0));
+        Assert.That(second.IsPrivate, Is.False);
     }
 
     [Test]
@@ -668,6 +672,7 @@ public class DownloadClientSyncServiceTest
                 InfoHash = hash,
                 TotalSize = 5000,
                 RemainingSize = 0,
+                IsPrivate = true,
                 Status = "seeding"
             }
         });
@@ -689,6 +694,7 @@ public class DownloadClientSyncServiceTest
         Assert.That(torrent, Is.Not.Null);
         Assert.That(torrent.Downloaded, Is.EqualTo(5000));
         Assert.That(torrent.TotalSize, Is.EqualTo(5000));
+        Assert.That(torrent.IsPrivate, Is.True);
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
         Assert.That(torrent.ForceCompleted, Is.True);
         Assert.That(torrent.Progress, Is.EqualTo(1.0));
@@ -697,6 +703,7 @@ public class DownloadClientSyncServiceTest
             t.InfoHash == hash &&
             t.Downloaded == 5000 &&
             t.TotalSize == 5000 &&
+            t.IsPrivate &&
             t.Status == TorrentStatus.Stopped &&
             t.ForceCompleted &&
             t.Progress == 1.0));

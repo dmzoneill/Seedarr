@@ -41,7 +41,19 @@ export default function DownloadClientTorrents() {
   const importAllMutation = useImportDownloadClientTorrents(clientId);
   const boostHashMutation = useBoostHash();
 
-  const handleBoostTorrent = (hash: string, title: string) => {
+  const handleBoostTorrent = (
+    hash: string,
+    title: string,
+    isPrivate?: boolean,
+  ) => {
+    if (isPrivate) {
+      showToast(
+        "Tracker boosting is prohibited on private torrents to protect tracker rules and passkeys (BEP 27).",
+        "info",
+      );
+      return;
+    }
+
     boostHashMutation.mutate(
       { infoHash: hash, name: title },
       {
@@ -863,22 +875,44 @@ export default function DownloadClientTorrents() {
                         {item.status || "unknown"}
                       </span>
 
-                      <div style={{ display: "flex", gap: "0.35rem" }}>
-                        <button
-                          className="btn btn-primary btn-small"
-                          style={{
-                            fontSize: "0.78rem",
-                            padding: "0.2rem 0.55rem",
-                            borderRadius: "4px",
-                          }}
-                          onClick={() =>
-                            handleBoostTorrent(item.infoHash, item.title)
-                          }
-                          disabled={boostHashMutation.isPending}
-                          title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
-                        >
-                          ⚡ Boost
-                        </button>
+                      <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
+                        {!item.isPrivate ? (
+                          <button
+                            className="btn btn-primary btn-small"
+                            style={{
+                              fontSize: "0.78rem",
+                              padding: "0.2rem 0.55rem",
+                              borderRadius: "4px",
+                            }}
+                            onClick={() =>
+                              handleBoostTorrent(
+                                item.infoHash,
+                                item.title,
+                                item.isPrivate,
+                              )
+                            }
+                            disabled={boostHashMutation.isPending}
+                            title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
+                          >
+                            ⚡ Boost
+                          </button>
+                        ) : (
+                          <span
+                            className="badge badge-secondary"
+                            style={{
+                              fontSize: "0.72rem",
+                              padding: "0.2rem 0.45rem",
+                              borderRadius: "4px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.2rem",
+                              cursor: "help",
+                            }}
+                            title="Tracker boosting is prohibited on private torrents to protect tracker rules and passkeys (BEP 27)."
+                          >
+                            🔒 Private Swarm
+                          </span>
+                        )}
 
                         {item.isInLibrary ? (
                           <button
@@ -1296,26 +1330,49 @@ export default function DownloadClientTorrents() {
                               whiteSpace: "nowrap",
                             }}
                           >
-                            <button
-                              className="btn btn-primary"
-                              style={{
-                                fontSize: "0.78rem",
-                                padding: "0.3rem 0.65rem",
-                                borderRadius: "4px",
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "0.35rem",
-                                whiteSpace: "nowrap",
-                              }}
-                              onClick={() =>
-                                handleBoostTorrent(item.infoHash, item.title)
-                              }
-                              disabled={boostHashMutation.isPending}
-                              title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
-                            >
-                              <span>⚡</span>
-                              <span>Boost</span>
-                            </button>
+                            {!item.isPrivate ? (
+                              <button
+                                className="btn btn-primary"
+                                style={{
+                                  fontSize: "0.78rem",
+                                  padding: "0.3rem 0.65rem",
+                                  borderRadius: "4px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.35rem",
+                                  whiteSpace: "nowrap",
+                                }}
+                                onClick={() =>
+                                  handleBoostTorrent(
+                                    item.infoHash,
+                                    item.title,
+                                    item.isPrivate,
+                                  )
+                                }
+                                disabled={boostHashMutation.isPending}
+                                title="Query candidate trackers via BEP 15/48 scrape and inject verified seeders"
+                              >
+                                <span>⚡</span>
+                                <span>Boost</span>
+                              </button>
+                            ) : (
+                              <span
+                                className="badge badge-secondary"
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.3rem 0.55rem",
+                                  borderRadius: "4px",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "0.3rem",
+                                  whiteSpace: "nowrap",
+                                  cursor: "help",
+                                }}
+                                title="Tracker boosting is prohibited on private torrents to protect tracker rules and passkeys (BEP 27)."
+                              >
+                                🔒 Private Swarm
+                              </span>
+                            )}
 
                             {item.isInLibrary ? (
                               <button
