@@ -10,13 +10,15 @@ namespace NzbDrone.Core.Test.Seeding;
 public class TorrentStateMachineTest
 {
     private ITorrentEventLogService _eventLogService;
+    private ITorrentService _torrentService;
     private TorrentStateMachine _subject;
 
     [SetUp]
     public void Setup()
     {
         _eventLogService = Substitute.For<ITorrentEventLogService>();
-        _subject = new TorrentStateMachine(_eventLogService);
+        _torrentService = Substitute.For<ITorrentService>();
+        _subject = new TorrentStateMachine(_eventLogService, null, _torrentService);
     }
 
     [Test]
@@ -123,5 +125,49 @@ public class TorrentStateMachineTest
         Assert.That(list, Has.Count.EqualTo(1));
         Assert.That(list[0].Id, Is.EqualTo(2));
         _eventLogService.Received(1).Info(1, "Seeding", Arg.Any<string>());
+    }
+
+    [Test]
+    public void ApplyRatioLimit_pauses_torrents_when_action_is_Pause()
+    {
+        var torrent1 = new Torrent { Id = 1, Status = TorrentStatus.Seeding, Ratio = 2.5, UploadSpeed = 100, DownloadSpeed = 50, Active = true };
+        var torrent2 = new Torrent { Id = 2, Status = TorrentStatus.Seeding, Ratio = 1.0, UploadSpeed = 100, DownloadSpeed = 50, Active = true };
+        var list = new List<Torrent> { torrent1, torrent2 };
+
+        _subject.ApplyRatioLimit(list, 2.0, "Pause");
+
+        Assert.That(torrent1.Status, Is.EqualTo(TorrentStatus.Paused));
+        Assert.That(torrent1.UploadSpeed, Is.EqualTo(0));
+        Assert.That(torrent1.DownloadSpeed, Is.EqualTo(0));
+        Assert.That(torrent1.Active, Is.False);
+        Assert.That(list, Has.Count.EqualTo(1));
+        Assert.That(list[0].Id, Is.EqualTo(2));
+        _torrentService.DidNotReceiveWithAnyArgs().Delete(default, default);
+    }
+
+    [Test]
+    public void ApplyRatioLimit_removes_torrent_without_data_when_action_is_RemoveTorrent()
+    {
+        var torrent = new Torrent { Id = 1, Status = TorrentStatus.Seeding, Ratio = 2.5, UploadSpeed = 100, DownloadSpeed = 50, Active = true };
+        var list = new List<Torrent> { torrent };
+
+        _subject.ApplyRatioLimit(list, 2.0, "RemoveTorrent");
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(list, Is.Empty);
+        _torrentService.Received(1).Delete(1, false);
+    }
+
+    [Test]
+    public void ApplyRatioLimit_removes_torrent_with_data_when_action_is_RemoveTorrentAndData()
+    {
+        var torrent = new Torrent { Id = 1, Status = TorrentStatus.Seeding, Ratio = 2.5, UploadSpeed = 100, DownloadSpeed = 50, Active = true };
+        var list = new List<Torrent> { torrent };
+
+        _subject.ApplyRatioLimit(list, 2.0, "RemoveTorrentAndData");
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(list, Is.Empty);
+        _torrentService.Received(1).Delete(1, true);
     }
 }

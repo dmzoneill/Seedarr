@@ -34,6 +34,7 @@ export function SeedingTab() {
     downloadCustomIntervalMinutes: 5,
     downloadStoppedMinPercentage: 20,
     downloadStoppedMaxPercentage: 40,
+    seedGoalReachedAction: "Stop",
   });
   const [dirty, setDirty] = useState(false);
 
@@ -51,6 +52,13 @@ export function SeedingTab() {
     setForm((prev) => ({ ...prev, [key]: value }));
     setDirty(true);
   };
+
+  const seedGoalActions = [
+    { value: "Stop", label: "Stop Seeding" },
+    { value: "Pause", label: "Pause Torrent" },
+    { value: "RemoveTorrent", label: "Remove Torrent" },
+    { value: "RemoveTorrentAndData", label: "Remove Torrent & Delete Data" },
+  ];
 
   const distOptions = [
     { value: "Equal", label: "Equal Distribution" },
@@ -187,6 +195,13 @@ export function SeedingTab() {
           min={0}
           step={0.1}
           hint="Stop seeding automatically when ratio reaches this value (0 = unlimited)"
+        />
+        <SelectInput
+          label="When Seeding Goal Reached"
+          value={form.seedGoalReachedAction || "Stop"}
+          options={seedGoalActions}
+          onChange={(v) => set("seedGoalReachedAction", v)}
+          hint="Action to execute when a torrent reaches the configured seed ratio limit"
         />
       </SectionCard>
 
