@@ -43,14 +43,17 @@ public class TrackerServerController : Controller
     {
         var internalCount = 0;
         var infoHashes = _peerDatabase.GetAllInfoHashes();
-        var allTorrents = _torrentService.GetAll();
-        var knownHashes = new HashSet<string>(allTorrents.Where(t => !string.IsNullOrEmpty(t.InfoHash)).Select(t => t.InfoHash), StringComparer.OrdinalIgnoreCase);
-
-        foreach (var hash in infoHashes)
+        if (infoHashes != null && infoHashes.Count > 0)
         {
-            if (knownHashes.Contains(hash))
+            var matchingTorrents = _torrentService.GetByInfoHashes(infoHashes);
+            var knownHashes = new HashSet<string>(matchingTorrents.Where(t => !string.IsNullOrEmpty(t.InfoHash)).Select(t => t.InfoHash), StringComparer.OrdinalIgnoreCase);
+
+            foreach (var hash in infoHashes)
             {
-                internalCount++;
+                if (knownHashes.Contains(hash))
+                {
+                    internalCount++;
+                }
             }
         }
 
@@ -69,9 +72,14 @@ public class TrackerServerController : Controller
     public IActionResult GetTrackedTorrents()
     {
         var infoHashes = _peerDatabase.GetAllInfoHashes();
-        var allTorrents = _torrentService.GetAll();
+        if (infoHashes == null || infoHashes.Count == 0)
+        {
+            return Ok(new List<object>());
+        }
+
+        var matchingTorrents = _torrentService.GetByInfoHashes(infoHashes);
         var torrentsByHash = new Dictionary<string, Torrent>(StringComparer.OrdinalIgnoreCase);
-        foreach (var t in allTorrents)
+        foreach (var t in matchingTorrents)
         {
             if (!string.IsNullOrEmpty(t.InfoHash))
             {
@@ -79,9 +87,7 @@ public class TrackerServerController : Controller
             }
         }
 
-        var historyByHash = _downloadHistoryRepository?.All()
-            .GroupBy(h => h.InfoHash, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.Id).First(), StringComparer.OrdinalIgnoreCase)
+        var historyByHash = _downloadHistoryRepository?.GetLatestByInfoHashes(infoHashes)
             ?? new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase);
 
         var result = infoHashes.Select(hash =>
