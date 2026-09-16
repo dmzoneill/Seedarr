@@ -704,6 +704,7 @@ public class PeerConnection : IDisposable
             }
 
             _isDisposed = true;
+            PendingRequestCount = 0;
 
             if (_activeStream != _networkStream)
             {

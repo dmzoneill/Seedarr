@@ -1018,6 +1018,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
             _fastExtensionHandler?.UnregisterPeer(connection);
             _chokeManager?.PeerDisconnected(connection);
             _connectionManager.Remove(connection);
+            connection.PendingRequestCount = 0;
             connection.Dispose();
         }
     }
@@ -1176,6 +1177,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
             _fastExtensionHandler?.UnregisterPeer(connection);
             _chokeManager?.PeerDisconnected(connection);
             _connectionManager.Remove(connection);
+            connection.PendingRequestCount = 0;
         }
     }
 
@@ -1233,6 +1235,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         {
             case PeerMessageType.Choke:
                 connection.PeerChoking = true;
+                connection.PendingRequestCount = 0;
                 break;
 
             case PeerMessageType.Unchoke:
@@ -1339,8 +1342,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
                     if (!connection.AmChoking || isAllowedFast || _chokeManager == null)
                     {
-                        HandlePieceRequest(connection, message.Payload);
                         connection.PendingRequestCount++;
+                        HandlePieceRequest(connection, message.Payload);
                     }
                     else
                     {
@@ -1368,7 +1371,6 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
             case PeerMessageType.SuggestPiece:
             case PeerMessageType.HaveAll:
             case PeerMessageType.HaveNone:
-            case PeerMessageType.RejectRequest:
             case PeerMessageType.AllowedFast:
                 if (connection.SupportsFastExtension && _fastExtensionHandler != null)
                 {
@@ -1388,6 +1390,19 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
                 break;
 
+            case PeerMessageType.RejectRequest:
+                if (connection.PendingRequestCount > 0)
+                {
+                    connection.PendingRequestCount--;
+                }
+
+                if (connection.SupportsFastExtension && _fastExtensionHandler != null)
+                {
+                    _fastExtensionHandler.HandleMessage(connection, message, torrent?.PieceCount ?? 0);
+                }
+
+                break;
+
             case PeerMessageType.Extended:
                 break;
 
@@ -1399,41 +1414,51 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
     private static void HandlePieceRequest(PeerConnection connection, byte[] payload)
     {
-        var index = (int)(((uint)payload[0] << 24) | ((uint)payload[1] << 16) | ((uint)payload[2] << 8) | payload[3]);
-        var begin = (int)(((uint)payload[4] << 24) | ((uint)payload[5] << 16) | ((uint)payload[6] << 8) | payload[7]);
-        var length = (int)(((uint)payload[8] << 24) | ((uint)payload[9] << 16) | ((uint)payload[10] << 8) | payload[11]);
-
-        const int MaxBlockSize = 32768;
-        if (length <= 0 || length > MaxBlockSize)
-        {
-            return;
-        }
-
-        if (index < 0 || begin < 0)
-        {
-            return;
-        }
-
-        var payloadSize = 8 + length;
-        var piecePayload = ArrayPool<byte>.Shared.Rent(payloadSize);
         try
         {
-            Array.Clear(piecePayload, 0, payloadSize);
-            piecePayload[0] = (byte)(index >> 24);
-            piecePayload[1] = (byte)(index >> 16);
-            piecePayload[2] = (byte)(index >> 8);
-            piecePayload[3] = (byte)index;
-            piecePayload[4] = (byte)(begin >> 24);
-            piecePayload[5] = (byte)(begin >> 16);
-            piecePayload[6] = (byte)(begin >> 8);
-            piecePayload[7] = (byte)begin;
+            var index = (int)(((uint)payload[0] << 24) | ((uint)payload[1] << 16) | ((uint)payload[2] << 8) | payload[3]);
+            var begin = (int)(((uint)payload[4] << 24) | ((uint)payload[5] << 16) | ((uint)payload[6] << 8) | payload[7]);
+            var length = (int)(((uint)payload[8] << 24) | ((uint)payload[9] << 16) | ((uint)payload[10] << 8) | payload[11]);
 
-            connection.SendMessage(new PeerMessage { Type = PeerMessageType.Piece, Payload = piecePayload, PayloadLength = payloadSize });
-            connection.BytesUploaded += length;
+            const int MaxBlockSize = 32768;
+            if (length <= 0 || length > MaxBlockSize)
+            {
+                return;
+            }
+
+            if (index < 0 || begin < 0)
+            {
+                return;
+            }
+
+            var payloadSize = 8 + length;
+            var piecePayload = ArrayPool<byte>.Shared.Rent(payloadSize);
+            try
+            {
+                Array.Clear(piecePayload, 0, payloadSize);
+                piecePayload[0] = (byte)(index >> 24);
+                piecePayload[1] = (byte)(index >> 16);
+                piecePayload[2] = (byte)(index >> 8);
+                piecePayload[3] = (byte)index;
+                piecePayload[4] = (byte)(begin >> 24);
+                piecePayload[5] = (byte)(begin >> 16);
+                piecePayload[6] = (byte)(begin >> 8);
+                piecePayload[7] = (byte)begin;
+
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Piece, Payload = piecePayload, PayloadLength = payloadSize });
+                connection.BytesUploaded += length;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(piecePayload);
+            }
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(piecePayload);
+            if (connection.PendingRequestCount > 0)
+            {
+                connection.PendingRequestCount--;
+            }
         }
     }
 }
