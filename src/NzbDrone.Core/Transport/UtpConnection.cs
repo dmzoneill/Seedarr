@@ -58,7 +58,9 @@ public class UtpConnection : IUtpConnection
     private readonly ConcurrentDictionary<ushort, byte[]> _outOfOrderBuffer = new();
     private readonly Queue<byte> _receiveQueue = new();
     private readonly object _receiveLock = new();
-    private readonly object _socketLock = new();
+    private readonly object _socketReceiveLock = new();
+    private readonly object _sendLock = new();
+    private readonly ManualResetEventSlim _ackReceivedEvent = new(false);
     private readonly ConcurrentDictionary<ushort, InFlightPacket> _inFlightPackets = new();
 
     private ushort _connectionId;
@@ -210,34 +212,42 @@ public class UtpConnection : IUtpConnection
             return 0;
         }
 
-        var totalSent = 0;
-        while (totalSent < length && IsConnected)
+        lock (_sendLock)
         {
-            var chunkSize = Math.Min(MaxPayloadSize, length - totalSent);
-            var payload = new byte[chunkSize];
-            Array.Copy(data, offset + totalSent, payload, 0, chunkSize);
-
-            var currentSeq = _sequenceNumber;
-            var packet = BuildPacket(UtpPacketType.Data, payload);
-            _sequenceNumber++;
-
-            var inFlight = new InFlightPacket
+            if (!IsConnected)
             {
-                SequenceNumber = currentSeq,
-                PacketData = packet,
-                PayloadLength = chunkSize,
-                SentTimestamp = Environment.TickCount64,
-                Retries = 0
-            };
+                return 0;
+            }
 
-            _inFlightPackets[currentSeq] = inFlight;
-            SendUdpPacket(packet, packet.Length, _remoteEndpoint);
-            totalSent += chunkSize;
+            var totalSent = 0;
+            while (totalSent < length && IsConnected)
+            {
+                var chunkSize = Math.Min(MaxPayloadSize, length - totalSent);
+                var payload = new byte[chunkSize];
+                Array.Copy(data, offset + totalSent, payload, 0, chunkSize);
 
-            TryReceiveUdpNonBlocking();
+                var currentSeq = _sequenceNumber;
+                var packet = BuildPacket(UtpPacketType.Data, payload);
+                _sequenceNumber++;
+
+                var inFlight = new InFlightPacket
+                {
+                    SequenceNumber = currentSeq,
+                    PacketData = packet,
+                    PayloadLength = chunkSize,
+                    SentTimestamp = Environment.TickCount64,
+                    Retries = 0
+                };
+
+                _inFlightPackets[currentSeq] = inFlight;
+                SendUdpPacket(packet, packet.Length, _remoteEndpoint);
+                totalSent += chunkSize;
+
+                TryReceiveUdpNonBlocking();
+            }
+
+            return totalSent;
         }
-
-        return totalSent;
     }
 
     public void Flush()
@@ -247,10 +257,26 @@ public class UtpConnection : IUtpConnection
         {
             TryReceiveUdpNonBlocking();
             RetransmitUnackedPackets();
-            if (!_inFlightPackets.IsEmpty)
+            if (_inFlightPackets.IsEmpty)
             {
-                Thread.Sleep(5);
+                break;
             }
+
+            var elapsedMs = (DateTime.UtcNow - sendStart).TotalMilliseconds;
+            var remainingTimeoutMs = (_connectionTimeoutSeconds * 1000) - elapsedMs;
+            if (remainingTimeoutMs <= 0)
+            {
+                break;
+            }
+
+            var waitMs = (int)Math.Min(50, remainingTimeoutMs);
+            _ackReceivedEvent.Reset();
+            if (_inFlightPackets.IsEmpty)
+            {
+                break;
+            }
+
+            _ackReceivedEvent.Wait(waitMs);
         }
     }
 
@@ -320,8 +346,13 @@ public class UtpConnection : IUtpConnection
             byte[] data;
             try
             {
-                lock (_socketLock)
+                lock (_socketReceiveLock)
                 {
+                    if (!IsConnected)
+                    {
+                        return 0;
+                    }
+
                     data = _udpClient.Receive(ref receiveEndpoint);
                 }
             }
@@ -556,28 +587,32 @@ public class UtpConnection : IUtpConnection
             return;
         }
 
-        lock (_socketLock)
+        if (!Monitor.TryEnter(_socketReceiveLock))
         {
-            try
+            return;
+        }
+
+        try
+        {
+            if (_udpClient.Client == null || (!_udpClient.Client.Connected && !_udpClient.Client.IsBound))
             {
-                if (_udpClient.Client == null || (!_udpClient.Client.Connected && !_udpClient.Client.IsBound))
-                {
-                    return;
-                }
+                return;
+            }
 
-                if (_udpClient.Client.Available <= 0)
-                {
-                    return;
-                }
-
+            while (_udpClient.Client.Available > 0)
+            {
                 var endpoint = new IPEndPoint(IPAddress.Any, 0);
                 var data = _udpClient.Receive(ref endpoint);
                 HandleIncomingPacket(data, endpoint);
             }
-            catch
-            {
-                // Non-blocking drain
-            }
+        }
+        catch
+        {
+            // Non-blocking drain
+        }
+        finally
+        {
+            Monitor.Exit(_socketReceiveLock);
         }
     }
 
@@ -588,12 +623,21 @@ public class UtpConnection : IUtpConnection
             return;
         }
 
+        var anyRemoved = false;
         foreach (var key in _inFlightPackets.Keys)
         {
             if (IsAcked(key, ackNr))
             {
-                _inFlightPackets.TryRemove(key, out _);
+                if (_inFlightPackets.TryRemove(key, out _))
+                {
+                    anyRemoved = true;
+                }
             }
+        }
+
+        if (anyRemoved)
+        {
+            _ackReceivedEvent.Set();
         }
     }
 
@@ -658,6 +702,8 @@ public class UtpConnection : IUtpConnection
         {
             Monitor.PulseAll(_receiveLock);
         }
+
+        _ackReceivedEvent.Set();
 
         if (_ownsUdpClient)
         {

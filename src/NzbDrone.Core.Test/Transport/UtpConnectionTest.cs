@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.Transport;
@@ -1151,6 +1152,92 @@ public class UtpConnectionTest
 
         Assert.That(conn2.IsConnected, Is.False);
         Assert.That(sharedClient.Client.IsBound, Is.True);
+    }
+
+    [Test]
+    public void Send_should_not_block_when_receive_is_pending()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        BindInternalUdpClient(connection, out _);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, new IPEndPoint(IPAddress.Loopback, 12345));
+
+        using var receiveStarted = new ManualResetEventSlim(false);
+
+        var receiveTask = Task.Run(() =>
+        {
+            receiveStarted.Set();
+            var buf = new byte[100];
+            return connection.Receive(buf, 0, buf.Length);
+        });
+
+        Assert.That(receiveStarted.Wait(TimeSpan.FromSeconds(2)), Is.True);
+        Thread.Sleep(100);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var sent = connection.Send(new byte[] { 1, 2, 3 }, 0, 3);
+        sw.Stop();
+
+        Assert.That(sent, Is.EqualTo(3));
+        Assert.That(sw.ElapsedMilliseconds, Is.LessThan(1000), "Send should not be blocked by pending socket receive");
+
+        connection.Dispose();
+        receiveTask.Wait(TimeSpan.FromSeconds(3));
+    }
+
+    [Test]
+    public void Concurrent_send_and_receive_should_not_deadlock()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        BindInternalUdpClient(connection, out var port);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, new IPEndPoint(IPAddress.Loopback, port));
+
+        var sendTask = Task.Run(() =>
+        {
+            for (var i = 0; i < 50; i++)
+            {
+                connection.Send(new byte[] { 1, 2, 3, 4 }, 0, 4);
+            }
+        });
+
+        var receiveTask = Task.Run(() =>
+        {
+            var buf = new byte[100];
+            for (var i = 0; i < 10; i++)
+            {
+                connection.Receive(buf, 0, buf.Length);
+            }
+        });
+
+        var completed = Task.WaitAll(new[] { sendTask, receiveTask }, TimeSpan.FromSeconds(5));
+        connection.Dispose();
+
+        Assert.That(completed, Is.True, "Concurrent send and receive should complete without deadlock");
+    }
+
+    [Test]
+    public void Flush_should_wake_up_immediately_when_ack_is_received()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        BindInternalUdpClient(connection, out _);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, new IPEndPoint(IPAddress.Loopback, 12345));
+
+        connection.Send(new byte[] { 1, 2, 3 }, 0, 3);
+
+        var flushTask = Task.Run(() => connection.Flush());
+
+        var ackPacket = new byte[20];
+        ackPacket[0] = ((byte)UtpPacketType.State << 4) | 1;
+        ackPacket[18] = 0x00;
+        ackPacket[19] = 0x01;
+
+        Thread.Sleep(50);
+        connection.HandleIncomingPacket(ackPacket, new IPEndPoint(IPAddress.Loopback, 12345));
+
+        var flushed = flushTask.Wait(TimeSpan.FromSeconds(1));
+        Assert.That(flushed, Is.True, "Flush should complete promptly once ACK is processed");
     }
 
     // ---- helpers ----
