@@ -8,6 +8,7 @@ using NLog;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
@@ -557,6 +558,10 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             {
                 return Conflict(new { message = ex.Message });
             }
+            catch (DuplicateTorrentException ex)
+            {
+                return Conflict(new { message = ex.Message });
+            }
         }
 
         var validationResult = SharedValidator.Validate(resource);
@@ -617,8 +622,16 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         var torrent = TorrentResourceMapper.ToModel(resource);
         torrent.DateAdded = DateTime.UtcNow;
-        var added = _torrentService.Add(torrent);
-        return Created($"/api/v1/torrent/{added.Id}", TorrentResourceMapper.ToResource(added));
+
+        try
+        {
+            var added = _torrentService.Add(torrent);
+            return Created($"/api/v1/torrent/{added.Id}", TorrentResourceMapper.ToResource(added));
+        }
+        catch (DuplicateTorrentException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
     }
 
     [HttpPost("upload")]
