@@ -1,8 +1,10 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Security;
 using Seedarr.Http;
 
@@ -249,6 +251,67 @@ public class BitTorrentConfigController : ConfigController<BitTorrentConfigResou
 
         SharedValidator.RuleFor(c => c.ScrapeIntervalSeconds)
             .GreaterThanOrEqualTo(60);
+
+        SharedValidator.RuleFor(c => c.CustomScriptTimeoutSeconds)
+            .InclusiveBetween(5, 3600);
+
+        SharedValidator.RuleFor(c => c.OnDownloadCompleteScript)
+            .Must(IsValidScriptPath)
+            .WithMessage("OnDownloadCompleteScript must be a valid absolute path.");
+
+        SharedValidator.RuleFor(c => c.OnSeedGoalReachedScript)
+            .Must(IsValidScriptPath)
+            .WithMessage("OnSeedGoalReachedScript must be a valid absolute path.");
+
+        SharedValidator.RuleFor(c => c.ScriptTorrentDoneFilename)
+            .Must(IsValidScriptPath)
+            .WithMessage("ScriptTorrentDoneFilename must be a valid absolute path.");
+
+        SharedValidator.RuleFor(c => c.ScriptTorrentAddedFilename)
+            .Must(IsValidScriptPath)
+            .WithMessage("ScriptTorrentAddedFilename must be a valid absolute path.");
+
+        SharedValidator.RuleFor(c => c.ScriptTorrentDoneSeedingFilename)
+            .Must(IsValidScriptPath)
+            .WithMessage("ScriptTorrentDoneSeedingFilename must be a valid absolute path.");
+    }
+
+    private static bool IsValidScriptPath(string scriptPath)
+    {
+        if (string.IsNullOrWhiteSpace(scriptPath))
+        {
+            return true;
+        }
+
+        var (path, _) = CustomScriptService.ParseSettings(scriptPath);
+        if (string.IsNullOrWhiteSpace(path) || path.IndexOf('\0') >= 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (Path.IsPathRooted(path))
+            {
+                return true;
+            }
+
+            if (path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && (path[2] == '\\' || path[2] == '/'))
+            {
+                return true;
+            }
+
+            if (path.StartsWith(@"\\") || path.StartsWith("//"))
+            {
+                return true;
+            }
+
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     protected override BitTorrentConfigResource ToResource(IConfigService model)

@@ -108,4 +108,80 @@ public class ConfigControllerTests : IntegrationTestBase
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
+
+    [TestCase(4)]
+    [TestCase(3601)]
+    [TestCase(-1)]
+    [TestCase(2000000000)]
+    public async Task PutBitTorrentConfig_with_invalid_timeout_returns_400(int timeout)
+    {
+        var body = new
+        {
+            id = 1,
+            announceIntervalSeconds = 100,
+            minAnnounceIntervalSeconds = 50,
+            scrapeIntervalSeconds = 100,
+            customScriptTimeoutSeconds = timeout
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/bittorrent/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task PutBitTorrentConfig_with_valid_timeout_returns_202()
+    {
+        var body = new
+        {
+            id = 1,
+            announceIntervalSeconds = 100,
+            minAnnounceIntervalSeconds = 50,
+            scrapeIntervalSeconds = 100,
+            customScriptTimeoutSeconds = 120
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/bittorrent/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+    }
+
+    [TestCase("relative/path/to/script.sh")]
+    [TestCase("script.sh")]
+    [TestCase("{\"path\": \"relative/script.sh\"}")]
+    public async Task PutBitTorrentConfig_with_invalid_script_path_returns_400(string scriptPath)
+    {
+        var body = new
+        {
+            id = 1,
+            announceIntervalSeconds = 100,
+            minAnnounceIntervalSeconds = 50,
+            scrapeIntervalSeconds = 100,
+            customScriptTimeoutSeconds = 60,
+            onDownloadCompleteScript = scriptPath
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/bittorrent/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [TestCase("/usr/local/bin/on-complete.sh")]
+    [TestCase("{\"path\": \"/usr/local/bin/on-complete.sh\", \"arguments\": \"--foo\"}")]
+    public async Task PutBitTorrentConfig_with_valid_script_path_returns_202(string scriptPath)
+    {
+        var body = new
+        {
+            id = 1,
+            announceIntervalSeconds = 100,
+            minAnnounceIntervalSeconds = 50,
+            scrapeIntervalSeconds = 100,
+            customScriptTimeoutSeconds = 60,
+            onDownloadCompleteScript = scriptPath
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/bittorrent/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+    }
 }
