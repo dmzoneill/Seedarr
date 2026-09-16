@@ -587,6 +587,7 @@ export interface ArrConnection {
   url: string;
   apiKey: string;
   enable?: boolean;
+  syncIntervalMinutes?: number;
   syncEnabled: boolean;
   enableAutomaticAdd: boolean;
   webhookEnabled: boolean;
