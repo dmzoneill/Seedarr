@@ -2292,6 +2292,7 @@ public class DhtServiceTest
         SetUdpClient(service);
 
         // Add a node to routing table so AnnounceTorrent can query it
+        service.RoutingTable.AllowLocal = true;
         service.RoutingTable.AddNode(new DhtNode
         {
             NodeId = CreateNodeId(0x33),
