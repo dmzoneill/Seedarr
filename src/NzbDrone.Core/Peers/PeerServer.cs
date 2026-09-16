@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -41,7 +42,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private readonly Network.IProxySettingsProvider _proxySettingsProvider;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
-    private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
+    private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Torrent> _torrentCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Logger _logger;
     private readonly object _listenerLock = new();
@@ -171,6 +172,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         }
 
         StopListener();
+        _connectionsPerIp.Clear();
         _rebindSignal?.Dispose();
         _connectionSemaphore?.Dispose();
         _halfOpenSemaphore?.Dispose();
@@ -500,42 +502,65 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                     _ = Task.Run(
                         async () =>
                         {
-                            var maxPerIp = _configService.MaxConnectionsPerIp > 0 ? _configService.MaxConnectionsPerIp : 5;
-                            var clientIp = ((IPEndPoint)client.Client.RemoteEndPoint).Address.ToString();
-                            var currentCount = _connectionsPerIp.AddOrUpdate(clientIp, 1, (_, count) => count + 1);
-                            if (currentCount > maxPerIp)
-                            {
-                                _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
-                                client.Dispose();
-                                return;
-                            }
-
-                            ApplySocketQos(client.Client);
+                            string clientIp = null;
+                            var ipReserved = false;
+                            var acquiredConnectionSemaphore = false;
 
                             try
                             {
-                                if (!await _connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                                if (client.Client?.RemoteEndPoint is not IPEndPoint remoteEp)
                                 {
-                                    _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
                                     client.Dispose();
                                     return;
                                 }
-                            }
-                            catch
-                            {
-                                _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
-                                client.Dispose();
-                                return;
-                            }
 
-                            try
-                            {
+                                clientIp = remoteEp.Address.ToString();
+                                var maxPerIp = _configService.MaxConnectionsPerIp > 0 ? _configService.MaxConnectionsPerIp : 5;
+                                var currentCount = _connectionsPerIp.AddOrUpdate(clientIp, 1, (_, count) => count + 1);
+                                ipReserved = true;
+
+                                if (currentCount > maxPerIp)
+                                {
+                                    client.Dispose();
+                                    return;
+                                }
+
+                                ApplySocketQos(client.Client);
+
+                                try
+                                {
+                                    if (!await _connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                                    {
+                                        client.Dispose();
+                                        return;
+                                    }
+
+                                    acquiredConnectionSemaphore = true;
+                                }
+                                catch
+                                {
+                                    client.Dispose();
+                                    return;
+                                }
+
                                 HandleConnection(client, stoppingToken);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Debug(ex, "Failed to handle incoming peer connection from {0}", clientIp ?? "unknown");
+                                client.Dispose();
                             }
                             finally
                             {
-                                _connectionSemaphore.Release();
-                                _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
+                                if (acquiredConnectionSemaphore)
+                                {
+                                    _connectionSemaphore.Release();
+                                }
+
+                                if (ipReserved && clientIp != null)
+                                {
+                                    DecrementConnectionCount(clientIp);
+                                }
                             }
                         },
                         stoppingToken);
@@ -707,27 +732,28 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         var currentCount = _connectionsPerIp.AddOrUpdate(candidate.Ip, 1, (_, count) => count + 1);
         if (currentCount > maxPerIp)
         {
-            _connectionsPerIp.AddOrUpdate(candidate.Ip, 0, (_, count) => Math.Max(0, count - 1));
+            DecrementConnectionCount(candidate.Ip);
             return;
         }
 
-        try
-        {
-            if (!await _halfOpenSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
-            {
-                _connectionsPerIp.AddOrUpdate(candidate.Ip, 0, (_, count) => Math.Max(0, count - 1));
-                return;
-            }
-        }
-        catch
-        {
-            _connectionsPerIp.AddOrUpdate(candidate.Ip, 0, (_, count) => Math.Max(0, count - 1));
-            return;
-        }
-
+        var acquiredHalfOpen = false;
         PeerConnection connection = null;
         try
         {
+            try
+            {
+                if (!await _halfOpenSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                {
+                    return;
+                }
+
+                acquiredHalfOpen = true;
+            }
+            catch
+            {
+                return;
+            }
+
             _logger.Debug("Connecting to peer {0}:{1} for {2}", candidate.Ip, candidate.Port, torrent.Name);
             _eventLogService?.Debug(torrent.Id, "Peers", $"Attempting connection to peer {candidate.Ip}:{candidate.Port} (source: {candidate.Source})");
 
@@ -878,8 +904,12 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         }
         finally
         {
-            _halfOpenSemaphore.Release();
-            _connectionsPerIp.AddOrUpdate(candidate.Ip, 0, (_, count) => Math.Max(0, count - 1));
+            if (acquiredHalfOpen)
+            {
+                _halfOpenSemaphore.Release();
+            }
+
+            DecrementConnectionCount(candidate.Ip);
         }
     }
 
@@ -1070,6 +1100,20 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
             var expected = MseKeyDerivation.DeriveKey(infoHashBytes, Encoding.ASCII.GetBytes("req2"));
             return expected.AsSpan().SequenceEqual(skeyHash);
         });
+    }
+
+    private void DecrementConnectionCount(string clientIp)
+    {
+        if (string.IsNullOrEmpty(clientIp))
+        {
+            return;
+        }
+
+        _connectionsPerIp.AddOrUpdate(clientIp, 0, (_, count) => Math.Max(0, count - 1));
+        if (_connectionsPerIp.TryGetValue(clientIp, out var remaining) && remaining <= 0)
+        {
+            _connectionsPerIp.TryRemove(new KeyValuePair<string, int>(clientIp, 0));
+        }
     }
 
     private Torrent GetCachedTorrent(string infoHash)
