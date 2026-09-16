@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
@@ -237,5 +239,67 @@ public class MediaEnrichmentServiceTest
         Assert.That(MediaEnrichmentService.IsValidImage(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }), Is.True); // JPEG
         Assert.That(MediaEnrichmentService.IsValidImage(new byte[] { 0x89, 0x50, 0x4E, 0x47 }), Is.True); // PNG
         Assert.That(MediaEnrichmentService.IsValidImage(new byte[] { 0x00, 0x00, 0x00, 0x00 }), Is.False); // Invalid
+    }
+
+    [Test]
+    public async Task EnrichTorrentAsync_QueriesArrConnectionAsyncMethods()
+    {
+        var mockProvider = Substitute.For<IArrConnection>();
+        mockProvider.GetDownloadHistoryAsync(Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new List<ArrDownloadRecord>
+            {
+                new ArrDownloadRecord { InfoHash = "hash123", MediaId = 999 }
+            }));
+        mockProvider.GetMediaDetailsAsync(999, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(new MediaMetadata
+            {
+                Title = "Arr Show Title",
+                Year = 2024,
+                MediaType = "series"
+            }));
+
+        var service = new TestableMediaEnrichmentService(
+            _repository,
+            _inspector,
+            _configService,
+            _appFolderInfo,
+            _eventAggregator,
+            _arrRepository,
+            _connectionFactory,
+            mockProvider);
+
+        _arrRepository.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new ArrConnectionDefinition { Id = 1, Name = "Sonarr", ArrType = "Sonarr", Enable = true }
+        });
+
+        var torrent = new Torrent { Id = 99, Name = "Test.Show", InfoHash = "hash123" };
+        var result = await service.EnrichTorrentAsync(torrent);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Title, Is.EqualTo("Arr Show Title"));
+        await mockProvider.Received(1).GetDownloadHistoryAsync(Arg.Any<CancellationToken>());
+        await mockProvider.Received(1).GetMediaDetailsAsync(999, Arg.Any<CancellationToken>());
+    }
+
+    private class TestableMediaEnrichmentService : MediaEnrichmentService
+    {
+        private readonly IArrConnection _mockProvider;
+
+        public TestableMediaEnrichmentService(
+            ITorrentMediaMetadataRepository repository,
+            IMediaContainerInspector inspector,
+            IConfigService configService,
+            IAppFolderInfo appFolderInfo,
+            IEventAggregator eventAggregator,
+            IArrConnectionRepository arrRepository,
+            IArrConnectionFactory connectionFactory,
+            IArrConnection mockProvider)
+            : base(repository, inspector, configService, appFolderInfo, eventAggregator, arrRepository, connectionFactory)
+        {
+            _mockProvider = mockProvider;
+        }
+
+        protected override IArrConnection CreateProvider(ArrConnectionDefinition definition) => _mockProvider;
     }
 }

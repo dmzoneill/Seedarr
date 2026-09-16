@@ -29,7 +29,7 @@ public class MediaEnrichedEvent : IEvent
 
 public interface IMediaEnrichmentService
 {
-    Task<TorrentMediaMetadata> EnrichTorrentAsync(Torrent torrent, string filePath = null);
+    Task<TorrentMediaMetadata> EnrichTorrentAsync(Torrent torrent, string filePath = null, CancellationToken cancellationToken = default);
 
     TorrentMediaMetadata GetMetadata(int torrentId);
 
@@ -41,7 +41,7 @@ public interface IMediaEnrichmentService
 
     void DeleteMediaCache(int torrentId);
 
-    Task<string> CacheArtworkAsync(string url, int torrentId, string type);
+    Task<string> CacheArtworkAsync(string url, int torrentId, string type, CancellationToken cancellationToken = default);
 }
 
 public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDeletedEvent>
@@ -86,7 +86,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public async Task<TorrentMediaMetadata> EnrichTorrentAsync(Torrent torrent, string filePath = null)
+    public async Task<TorrentMediaMetadata> EnrichTorrentAsync(Torrent torrent, string filePath = null, CancellationToken cancellationToken = default)
     {
         if (torrent == null)
         {
@@ -97,7 +97,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         if (torrent.Id > 0)
         {
             semaphore = _torrentLocks.GetOrAdd(torrent.Id, static _ => new SemaphoreSlim(1, 1));
-            await semaphore.WaitAsync().ConfigureAwait(false);
+            await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         try
@@ -129,7 +129,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             var parsedYear = ExtractYear(torrent.Name);
 
             // 3. Query connected Servarr APIs (Sonarr / Radarr / Lidarr) if configured
-            var arrMetadata = await QueryServarrAsync(torrent, cleanTitle);
+            var arrMetadata = await QueryServarrAsync(torrent, cleanTitle, cancellationToken).ConfigureAwait(false);
             if (arrMetadata != null)
             {
                 if (!string.IsNullOrEmpty(arrMetadata.Title))
@@ -231,12 +231,12 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             // 5. Cache remote or local poster & backdrop
             if (!string.IsNullOrEmpty(metadata.PosterUrl) && string.IsNullOrEmpty(metadata.PosterLocalPath))
             {
-                metadata.PosterLocalPath = await CacheArtworkAsync(metadata.PosterUrl, torrent.Id, "poster");
+                metadata.PosterLocalPath = await CacheArtworkAsync(metadata.PosterUrl, torrent.Id, "poster", cancellationToken).ConfigureAwait(false);
             }
 
             if (!string.IsNullOrEmpty(metadata.BackdropUrl) && string.IsNullOrEmpty(metadata.BackdropLocalPath))
             {
-                metadata.BackdropLocalPath = await CacheArtworkAsync(metadata.BackdropUrl, torrent.Id, "backdrop");
+                metadata.BackdropLocalPath = await CacheArtworkAsync(metadata.BackdropUrl, torrent.Id, "backdrop", cancellationToken).ConfigureAwait(false);
             }
 
             // 6. Persist to database
@@ -370,7 +370,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         }
     }
 
-    public async Task<string> CacheArtworkAsync(string url, int torrentId, string type)
+    public async Task<string> CacheArtworkAsync(string url, int torrentId, string type, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(url) || _appFolderInfo == null)
         {
@@ -390,7 +390,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             {
                 if (File.Exists(url))
                 {
-                    var localBytes = await File.ReadAllBytesAsync(url);
+                    var localBytes = await File.ReadAllBytesAsync(url, cancellationToken).ConfigureAwait(false);
                     if (localBytes == null || localBytes.Length > 15 * 1024 * 1024 || !IsValidImage(localBytes))
                     {
                         _logger.Warn("Local artwork file is invalid, not an image, or exceeds size limit: {0}", url);
@@ -404,7 +404,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                     }
 
                     var localFile = Path.Combine(cacheDir, $"{type}{ext}");
-                    await File.WriteAllBytesAsync(localFile, localBytes);
+                    await File.WriteAllBytesAsync(localFile, localBytes, cancellationToken).ConfigureAwait(false);
                     _logger.Debug("Copied validated local {0} artwork from {1} to {2}", type, url, localFile);
                     return localFile;
                 }
@@ -438,23 +438,27 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 request.Headers.TryAddWithoutValidation("X-Api-Key", apiKey);
             }
 
-            using var response = await GetImageHttpClient(url).SendAsync(request);
+            using var response = await GetImageHttpClient(url).SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Failed downloading artwork from {0}: {1}", url, response.StatusCode);
                 return null;
             }
 
-            var bytes = await response.Content.ReadAsByteArrayAsync();
+            var bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
             if (bytes == null || bytes.Length == 0 || bytes.Length > 15 * 1024 * 1024 || !IsValidImage(bytes))
             {
                 _logger.Warn("Downloaded artwork from {0} has invalid image magic bytes or is empty. Discarding.", url);
                 return null;
             }
 
-            await File.WriteAllBytesAsync(destFile, bytes);
+            await File.WriteAllBytesAsync(destFile, bytes, cancellationToken).ConfigureAwait(false);
             _logger.Debug("Cached {0} artwork to {1}", type, destFile);
             return destFile;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -545,7 +549,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         return _httpClient;
     }
 
-    private async Task<MediaMetadata> QueryServarrAsync(Torrent torrent, string cleanTitle)
+    private async Task<MediaMetadata> QueryServarrAsync(Torrent torrent, string cleanTitle, CancellationToken cancellationToken = default)
     {
         var definitions = (_arrRepository?.All() ?? _connectionFactory?.All())?.Where(d => d.Enable).ToList();
         if (definitions == null || definitions.Count == 0)
@@ -555,6 +559,8 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
 
         foreach (var def in definitions)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var provider = CreateProvider(def);
             if (provider == null)
             {
@@ -566,13 +572,13 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 // 1. Try info_hash matching from download history
                 if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
                 {
-                    var records = provider.GetDownloadHistory();
+                    var records = await provider.GetDownloadHistoryAsync(cancellationToken).ConfigureAwait(false);
                     if (records != null)
                     {
                         var match = records.FirstOrDefault(r => string.Equals(r.InfoHash, torrent.InfoHash, StringComparison.OrdinalIgnoreCase));
                         if (match != null && match.MediaId.HasValue)
                         {
-                            var details = provider.GetMediaDetails(match.MediaId.Value);
+                            var details = await provider.GetMediaDetailsAsync(match.MediaId.Value, cancellationToken).ConfigureAwait(false);
                             if (details != null)
                             {
                                 return details;
@@ -584,12 +590,16 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 // 2. Try title lookup
                 if (!string.IsNullOrWhiteSpace(cleanTitle))
                 {
-                    var lookup = provider.LookupMedia(cleanTitle);
+                    var lookup = await provider.LookupMediaAsync(cleanTitle, cancellationToken).ConfigureAwait(false);
                     if (lookup != null)
                     {
                         return lookup;
                     }
                 }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception ex)
             {
