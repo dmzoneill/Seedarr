@@ -3,6 +3,7 @@ using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
@@ -22,6 +23,7 @@ public class TorrentControllerTest
     private ITorrentEventLogService _eventLogService;
     private IConfigService _configService;
     private IBroadcastSignalRMessage _signalRBroadcaster;
+    private ICategoryService _categoryService;
     private TorrentResourceValidator _validator;
     private TorrentController _controller;
 
@@ -36,6 +38,7 @@ public class TorrentControllerTest
         _eventLogService = Substitute.For<ITorrentEventLogService>();
         _configService = Substitute.For<IConfigService>();
         _signalRBroadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        _categoryService = Substitute.For<ICategoryService>();
         _validator = new TorrentResourceValidator();
 
         _controller = new TorrentController(
@@ -47,7 +50,8 @@ public class TorrentControllerTest
             _eventLogService,
             _configService,
             _signalRBroadcaster,
-            _validator);
+            _validator,
+            categoryService: _categoryService);
     }
 
     [Test]
@@ -212,5 +216,98 @@ public class TorrentControllerTest
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
         _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 50 && t.Url == "http://new-tracker.com/announce"));
+    }
+
+    [TestCase("ftp://tracker.example.com/announce")]
+    [TestCase("invalid-scheme")]
+    [TestCase("javascript:alert(1)")]
+    [TestCase("file:///etc/passwd")]
+    public void AddTracker_returns_BadRequest_when_url_scheme_is_invalid(string url)
+    {
+        var resource = new AddTorrentTrackerResource
+        {
+            Url = url,
+            Tier = 1,
+        };
+
+        var result = _controller.AddTracker(1, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Invalid tracker URL. Must be an HTTP, HTTPS, or UDP URL."));
+        _trackerEntryService.DidNotReceive().Add(Arg.Any<TrackerEntry>());
+    }
+
+    [TestCase("http://tracker.example.com/announce")]
+    [TestCase("https://tracker.example.com/announce")]
+    [TestCase("udp://tracker.example.com:6969/announce")]
+    public void AddTracker_accepts_valid_url_schemes(string url)
+    {
+        const int torrentId = 15;
+        var torrent = new Torrent
+        {
+            Id = torrentId,
+            IsPrivate = false,
+            Name = "Public Torrent",
+        };
+
+        _torrentService.Get(torrentId).Returns(torrent);
+        _trackerEntryService.GetByTorrentId(torrentId).Returns(new List<TrackerEntry>());
+        _trackerEntryService.Add(Arg.Any<TrackerEntry>()).Returns(callInfo => callInfo.Arg<TrackerEntry>());
+
+        var resource = new AddTorrentTrackerResource
+        {
+            Url = url,
+            Tier = 1,
+        };
+
+        var result = _controller.AddTracker(torrentId, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<CreatedAtActionResult>());
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == torrentId && t.Url == url));
+    }
+
+    [Test]
+    public void BulkAction_populates_SucceededIds_and_FailedIds()
+    {
+        var torrent1 = new Torrent { Id = 1, Name = "Torrent 1" };
+        _torrentService.Get(1).Returns(torrent1);
+        _torrentService.Get(2).Returns((Torrent)null);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "start",
+            TorrentIds = new List<int> { 1, 2 },
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var bulkResult = (BulkActionResult)okResult.Value;
+
+        Assert.That(bulkResult.SuccessCount, Is.EqualTo(1));
+        Assert.That(bulkResult.FailedCount, Is.EqualTo(1));
+        Assert.That(bulkResult.SucceededIds, Does.Contain(1));
+        Assert.That(bulkResult.FailedIds, Does.ContainKey(2));
+    }
+
+    [Test]
+    public void BulkAction_setCategory_returns_BadRequest_when_categoryId_is_invalid()
+    {
+        _categoryService.Get(999).Returns((Category)null);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "setCategory",
+            CategoryId = 999,
+            TorrentIds = new List<int> { 1, 2 },
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Is.EqualTo("Category with ID 999 not found."));
     }
 }

@@ -1247,4 +1247,23 @@ export interface LoginRequest {
   returnUrl?: string;
 }
 
+export interface BulkTorrentActionResource {
+  torrentIds: number[];
+  action: string;
+  deleteFiles?: boolean;
+  categoryId?: number;
+  tagIds?: number[];
+  priority?: number;
+  uploadLimit?: number;
+  downloadLimit?: number;
+}
+
+export interface BulkActionResult {
+  successCount: number;
+  failedCount: number;
+  errors: string[];
+  succeededIds: number[];
+  failedIds: Record<number, string>;
+}
+
 

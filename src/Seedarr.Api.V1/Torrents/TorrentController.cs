@@ -1,10 +1,7 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
@@ -346,6 +343,14 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         if (resource == null || string.IsNullOrWhiteSpace(resource.Url))
         {
             return BadRequest(new { message = "Tracker URL is required." });
+        }
+
+        if (!Uri.TryCreate(resource.Url.Trim(), UriKind.Absolute, out var uri) ||
+            (!uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) &&
+             !uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) &&
+             !uri.Scheme.Equals("udp", StringComparison.OrdinalIgnoreCase)))
+        {
+            return BadRequest("Invalid tracker URL. Must be an HTTP, HTTPS, or UDP URL.");
         }
 
         var torrent = _torrentService.Get(torrentId);
@@ -814,7 +819,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpPost("bulk")]
-    public async Task<ActionResult<BulkActionResult>> BulkAction([FromBody] BulkTorrentActionResource resource)
+    public ActionResult<BulkActionResult> BulkAction([FromBody] BulkTorrentActionResource resource)
     {
         if (resource == null || string.IsNullOrWhiteSpace(resource.Action))
         {
@@ -827,34 +832,40 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return Ok(result);
         }
 
-        var errors = new ConcurrentBag<string>();
-        var successCount = 0;
-        var failedCount = 0;
-
-        await Parallel.ForEachAsync(resource.TorrentIds, async (id, cancellationToken) =>
+        var action = resource.Action.Trim().ToLowerInvariant();
+        string resolvedCategoryName = null;
+        if (action == "setcategory" && resource.CategoryId.HasValue && resource.CategoryId.Value > 0)
         {
-            await Task.Yield();
+            var cat = _categoryService?.Get(resource.CategoryId.Value);
+            if (cat == null)
+            {
+                return BadRequest($"Category with ID {resource.CategoryId.Value} not found.");
+            }
+
+            resolvedCategoryName = cat.Name;
+        }
+
+        foreach (var id in resource.TorrentIds)
+        {
             try
             {
-                ExecuteActionForTorrent(id, resource);
-                Interlocked.Increment(ref successCount);
+                ExecuteActionForTorrent(id, resource, resolvedCategoryName);
+                result.SucceededIds.Add(id);
+                result.SuccessCount++;
             }
             catch (Exception ex)
             {
-                Interlocked.Increment(ref failedCount);
-                errors.Add($"Torrent {id}: {ex.Message}");
+                result.FailedIds[id] = ex.Message;
+                result.FailedCount++;
+                result.Errors.Add($"Torrent {id}: {ex.Message}");
                 _logger.Error(ex, "Failed to execute bulk action '{0}' for torrent {1}", resource.Action, id);
             }
-        });
-
-        result.SuccessCount = successCount;
-        result.FailedCount = failedCount;
-        result.Errors = errors.ToList();
+        }
 
         return Ok(result);
     }
 
-    private void ExecuteActionForTorrent(int id, BulkTorrentActionResource resource)
+    private void ExecuteActionForTorrent(int id, BulkTorrentActionResource resource, string resolvedCategoryName = null)
     {
         var action = resource.Action.Trim().ToLowerInvariant();
         switch (action)
@@ -938,8 +949,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                     throw new KeyNotFoundException($"Torrent {id} not found");
                 }
 
-                string categoryName = null;
-                if (resource.CategoryId.HasValue && resource.CategoryId.Value > 0 && _categoryService != null)
+                var categoryName = resolvedCategoryName;
+                if (categoryName == null && resource.CategoryId.HasValue && resource.CategoryId.Value > 0 && _categoryService != null)
                 {
                     var cat = _categoryService.Get(resource.CategoryId.Value);
                     categoryName = cat?.Name;

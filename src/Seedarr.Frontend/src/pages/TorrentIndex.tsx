@@ -8,7 +8,7 @@ import { QuickSettingsDrawer } from "../components/quicksettings";
 import { TorrentToolbar } from "./torrentindex/TorrentToolbar";
 import { TorrentFilterPanel } from "./torrentindex/TorrentFilterPanel";
 import { useTorrentIndexState } from "./torrentindex/useTorrentIndexState";
-import { useAnnounceTorrent, useRecheckTorrent } from "../api/hooks";
+import { useAnnounceTorrent, useRecheckTorrent, useBulkTorrentAction } from "../api/hooks";
 import { useToast } from "../context/ToastContext";
 
 function TorrentIndex() {
@@ -16,6 +16,7 @@ function TorrentIndex() {
   const { showToast } = useToast();
   const announceTorrent = useAnnounceTorrent();
   const recheckTorrent = useRecheckTorrent();
+  const bulkAction = useBulkTorrentAction();
   const {
     torrents,
     filteredTorrents,
@@ -67,18 +68,11 @@ function TorrentIndex() {
     setBulkPending(true);
     const ids = [...selectedIds];
     try {
-      const results = await Promise.allSettled(
-        ids.map((id) => startSeeding.mutateAsync(id)),
-      );
-      const succeeded: number[] = [];
-      const failed: number[] = [];
-      results.forEach((res, i) => {
-        if (res.status === "fulfilled") {
-          succeeded.push(ids[i]);
-        } else {
-          failed.push(ids[i]);
-        }
+      const res = await bulkAction.mutateAsync({
+        torrentIds: ids,
+        action: "start",
       });
+      const succeeded = res.succeededIds ?? [];
 
       setSelectedIds((prev) => {
         const next = new Set(prev);
@@ -86,39 +80,35 @@ function TorrentIndex() {
         return next;
       });
 
-      if (failed.length === 0) {
+      if (res.failedCount === 0) {
         showToast(
-          `Successfully started ${succeeded.length} torrent(s).`,
+          `Successfully started ${res.successCount} torrent(s).`,
           "success",
         );
       } else {
         showToast(
-          `${succeeded.length} started, ${failed.length} failed`,
+          `${res.successCount} started, ${res.failedCount} failed`,
           "warning",
         );
       }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to start torrents";
+      showToast(msg, "error");
     } finally {
       setBulkPending(false);
     }
-  }, [selectedIds, startSeeding, setSelectedIds, showToast]);
+  }, [selectedIds, bulkAction, setSelectedIds, showToast]);
 
   const handleBulkStop = useCallback(async () => {
     if (selectedIds.size === 0) return;
     setBulkPending(true);
     const ids = [...selectedIds];
     try {
-      const results = await Promise.allSettled(
-        ids.map((id) => stopSeeding.mutateAsync(id)),
-      );
-      const succeeded: number[] = [];
-      const failed: number[] = [];
-      results.forEach((res, i) => {
-        if (res.status === "fulfilled") {
-          succeeded.push(ids[i]);
-        } else {
-          failed.push(ids[i]);
-        }
+      const res = await bulkAction.mutateAsync({
+        torrentIds: ids,
+        action: "stop",
       });
+      const succeeded = res.succeededIds ?? [];
 
       setSelectedIds((prev) => {
         const next = new Set(prev);
@@ -126,21 +116,24 @@ function TorrentIndex() {
         return next;
       });
 
-      if (failed.length === 0) {
+      if (res.failedCount === 0) {
         showToast(
-          `Successfully stopped ${succeeded.length} torrent(s).`,
+          `Successfully stopped ${res.successCount} torrent(s).`,
           "success",
         );
       } else {
         showToast(
-          `${succeeded.length} stopped, ${failed.length} failed`,
+          `${res.successCount} stopped, ${res.failedCount} failed`,
           "warning",
         );
       }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to stop torrents";
+      showToast(msg, "error");
     } finally {
       setBulkPending(false);
     }
-  }, [selectedIds, stopSeeding, setSelectedIds, showToast]);
+  }, [selectedIds, bulkAction, setSelectedIds, showToast]);
 
   const handleBulkDelete = useCallback(
     async (deleteFilesOpt?: boolean | unknown) => {
@@ -155,18 +148,12 @@ function TorrentIndex() {
       setBulkPending(true);
       const ids = [...selectedIds];
       try {
-        const results = await Promise.allSettled(
-          ids.map((id) => deleteTorrent.mutateAsync({ id, deleteFiles })),
-        );
-        const succeeded: number[] = [];
-        const failed: number[] = [];
-        results.forEach((res, i) => {
-          if (res.status === "fulfilled") {
-            succeeded.push(ids[i]);
-          } else {
-            failed.push(ids[i]);
-          }
+        const res = await bulkAction.mutateAsync({
+          torrentIds: ids,
+          action: "delete",
+          deleteFiles,
         });
+        const succeeded = res.succeededIds ?? [];
 
         setSelectedIds((prev) => {
           const next = new Set(prev);
@@ -174,22 +161,25 @@ function TorrentIndex() {
           return next;
         });
 
-        if (failed.length === 0) {
+        if (res.failedCount === 0) {
           showToast(
-            `Successfully deleted ${succeeded.length} torrent(s).`,
+            `Successfully deleted ${res.successCount} torrent(s).`,
             "success",
           );
         } else {
           showToast(
-            `${succeeded.length} deleted, ${failed.length} failed`,
+            `${res.successCount} deleted, ${res.failedCount} failed`,
             "warning",
           );
         }
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Failed to delete torrents";
+        showToast(msg, "error");
       } finally {
         setBulkPending(false);
       }
     },
-    [selectedIds, deleteTorrent, setSelectedIds, showToast],
+    [selectedIds, bulkAction, setSelectedIds, showToast],
   );
 
   // Keyboard Shortcuts Listener for Torrent Operations, Navigation & Modals

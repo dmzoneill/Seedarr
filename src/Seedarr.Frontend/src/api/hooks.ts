@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "./client";
 import type {
   Torrent,
+  BulkTorrentActionResource,
+  BulkActionResult,
   Category,
   TorrentFileInfo,
   SeedingStats,
@@ -369,6 +371,18 @@ export function useStopAllSeeding() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => apiClient.post("/seeding/stop-all"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["seeding"] });
+    },
+  });
+}
+
+export function useBulkTorrentAction() {
+  const queryClient = useQueryClient();
+  return useMutation<BulkActionResult, Error, BulkTorrentActionResource>({
+    mutationFn: (data: BulkTorrentActionResource) =>
+      apiClient.post<BulkActionResult>("/torrent/bulk", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["torrents"] });
       queryClient.invalidateQueries({ queryKey: ["seeding"] });
