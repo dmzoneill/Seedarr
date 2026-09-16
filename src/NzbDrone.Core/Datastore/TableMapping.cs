@@ -31,7 +31,7 @@ public static class TableMapping
         return type.Name + "s";
     }
 
-    public static string GetInsertSql<TModel>(string table, TModel model)
+    public static string GetInsertSql<TModel>(string table, TModel model = null)
         where TModel : ModelBase
     {
         var properties = GetWritableProperties(typeof(TModel));
