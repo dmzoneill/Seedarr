@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Net.Security;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -12,33 +13,50 @@ namespace NzbDrone.Core.Automation;
 
 public class ScriptHttpContext
 {
-    private static HttpClient CreateClient(bool allowInsecure, int timeoutSeconds)
+    private static readonly Lazy<HttpClient> InsecureClient = new(() => CreatePooledClient(allowInsecure: true));
+    private static readonly Lazy<HttpClient> SecureClient = new(() => CreatePooledClient(allowInsecure: false));
+
+    public static HttpClient DefaultInsecureClient => InsecureClient.Value;
+    public static HttpClient DefaultSecureClient => SecureClient.Value;
+
+    private readonly HttpClient? _customClient;
+
+    public ScriptHttpContext(HttpClient? client = null)
     {
-        var handler = new HttpClientHandler
+        _customClient = client;
+    }
+
+    private static HttpClient CreatePooledClient(bool allowInsecure)
+    {
+        var handler = new SocketsHttpHandler
         {
             AllowAutoRedirect = true,
             AutomaticDecompression = DecompressionMethods.All,
-            CookieContainer = new CookieContainer(),
-            CheckCertificateRevocationList = true,
+            PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1),
         };
 
         if (allowInsecure)
         {
-            handler.ServerCertificateCustomValidationCallback = (sender, cert, chain, sslPolicyErrors) => true;
+            handler.SslOptions = new SslClientAuthenticationOptions
+            {
+                RemoteCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true
+            };
         }
 
         var client = new HttpClient(handler)
         {
-            Timeout = TimeSpan.FromSeconds(timeoutSeconds > 0 ? timeoutSeconds : 15),
+            Timeout = Timeout.InfiniteTimeSpan,
         };
 
         client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
         return client;
     }
 
-    private static readonly Lazy<HttpClient> DefaultClient = new(() => CreateClient(true, 15));
-
-    private readonly CookieContainer _cookieContainer = new();
+    public HttpClient ResolveClient(bool allowInsecure)
+    {
+        return _customClient ?? (allowInsecure ? InsecureClient.Value : SecureClient.Value);
+    }
 
     public object get(string url, IDictionary<string, object>? options = null)
     {
@@ -151,7 +169,7 @@ public class ScriptHttpContext
         }
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds > 0 ? timeoutSeconds : 15));
-        var client = timeoutSeconds != 15 || !allowInsecure ? CreateClient(allowInsecure, timeoutSeconds) : DefaultClient.Value;
+        var client = ResolveClient(allowInsecure);
         using var response = await client.SendAsync(request, cts.Token).ConfigureAwait(false);
 
         var responseBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
