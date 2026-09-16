@@ -101,7 +101,7 @@ public class SpeedPolicy : ISpeedPolicy
             var bytesPerSecond = speeds[i];
 
             var effectiveDlLimit = torrent.DownloadLimit;
-            if (effectiveDlLimit <= 0 && _categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
+            if (effectiveDlLimit == 0 && _categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
             {
                 var cat = _categoryService.GetByName(torrent.Category);
                 if (cat != null && cat.DefaultDownloadLimit > 0)
@@ -197,7 +197,7 @@ public class SpeedPolicy : ISpeedPolicy
                 var bytesPerSecond = speeds[activeIndex++];
 
                 var effectiveUlLimit = torrent.UploadLimit;
-                if (effectiveUlLimit <= 0 && _categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
+                if (effectiveUlLimit == 0 && _categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
                 {
                     var cat = _categoryService.GetByName(torrent.Category);
                     if (cat != null && cat.DefaultUploadLimit > 0)

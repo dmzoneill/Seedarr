@@ -24,17 +24,20 @@ function getMatchingDisk(
   const target = (path || "").trim().replace(/\\/g, "/");
   if (!target) return null;
 
+  const normalizedTarget = target.endsWith("/") ? target : `${target}/`;
   let bestMatch: DiskSpaceInfo | null = null;
   let bestMatchLength = -1;
 
   for (const d of disks) {
+    if (!d.path) continue;
     const dPath = d.path.replace(/\\/g, "/");
-    const isMatch =
-      target === dPath ||
-      target.startsWith(dPath.endsWith("/") ? dPath : dPath + "/");
-    if (isMatch && dPath.length > bestMatchLength) {
+    const normalizedDiskPath = dPath.endsWith("/") ? dPath : `${dPath}/`;
+    if (
+      normalizedTarget.startsWith(normalizedDiskPath) &&
+      normalizedDiskPath.length > bestMatchLength
+    ) {
       bestMatch = d;
-      bestMatchLength = dPath.length;
+      bestMatchLength = normalizedDiskPath.length;
     }
   }
   return bestMatch;
