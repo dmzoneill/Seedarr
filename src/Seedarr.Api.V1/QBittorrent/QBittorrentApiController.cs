@@ -1015,13 +1015,37 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     [HttpGet("torrents/tags")]
     public ActionResult<List<string>> GetTags()
     {
-        var tags = _torrentService.GetAll()
-            .Select(t => t.Label)
-            .Where(l => !string.IsNullOrWhiteSpace(l))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var tagSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        return Ok(tags);
+        if (_tagService != null)
+        {
+            foreach (var tag in _tagService.GetAll())
+            {
+                if (!string.IsNullOrWhiteSpace(tag?.Label))
+                {
+                    tagSet.Add(tag.Label.Trim());
+                }
+            }
+        }
+
+        var torrents = _torrentService.GetAll();
+        foreach (var torrent in torrents)
+        {
+            if (!string.IsNullOrWhiteSpace(torrent.Label))
+            {
+                var tokens = torrent.Label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var token in tokens)
+                {
+                    var trimmed = token.Trim();
+                    if (!string.IsNullOrWhiteSpace(trimmed))
+                    {
+                        tagSet.Add(trimmed);
+                    }
+                }
+            }
+        }
+
+        return Ok(tagSet.ToList());
     }
 
     [HttpPost("torrents/createTags")]
@@ -1126,20 +1150,32 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     {
         if (!string.IsNullOrEmpty(tags))
         {
-            var tagsToDelete = tags.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            var tagsToDelete = tags.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(t => t.Trim())
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (_tagService != null)
+            {
+                var allTags = _tagService.GetAll();
+                foreach (var tag in allTags)
+                {
+                    if (!string.IsNullOrWhiteSpace(tag?.Label) && tagsToDelete.Contains(tag.Label.Trim()))
+                    {
+                        _tagService.Delete(tag.Id);
+                    }
+                }
+            }
 
             var all = _torrentService.GetAll();
             foreach (var torrent in all)
             {
                 if (!string.IsNullOrEmpty(torrent.Label) || (torrent.TagIds != null && torrent.TagIds.Count > 0))
                 {
-                    var remaining = (torrent.Label ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    var remaining = (torrent.Label ?? string.Empty).Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
                         .Select(t => t.Trim())
                         .Where(t => !tagsToDelete.Contains(t))
                         .ToList();
-                    torrent.Label = string.Join(", ", remaining);
+                    torrent.Label = remaining.Count > 0 ? string.Join(", ", remaining) : string.Empty;
                     if (_tagService != null)
                     {
                         torrent.TagIds = _tagService.SyncTagsFromLabels(remaining);

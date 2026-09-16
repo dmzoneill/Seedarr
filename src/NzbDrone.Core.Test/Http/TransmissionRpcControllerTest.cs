@@ -217,4 +217,48 @@ public class TransmissionRpcControllerTest
         Assert.That(torrent.TagIds, Is.EqualTo(new List<int> { 10, 20 }));
         _torrentService.Received(1).Update(torrent);
     }
+
+    [Test]
+    public async Task HandleRpc_TorrentSet_WithEmptyLabels_Clears_Label_And_TagIds()
+    {
+        var tagService = Substitute.For<ITagService>();
+        var controller = new TransmissionRpcController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _configFileProvider,
+            tagService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-Transmission-Session-Id"] = "test-session-id";
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var torrent = new Torrent
+        {
+            Id = 7,
+            InfoHash = "fedcba",
+            Label = "existingLabel",
+            TagIds = new List<int> { 42 },
+        };
+        _torrentService.Get(7).Returns(torrent);
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-set",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[7]").RootElement,
+                ["labels"] = JsonDocument.Parse("[]").RootElement,
+            },
+        };
+
+        var result = await controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(torrent.Label, Is.EqualTo(string.Empty));
+        Assert.That(torrent.TagIds, Is.Empty);
+        _torrentService.Received(1).Update(torrent);
+    }
 }

@@ -463,14 +463,37 @@ public class DelugeJsonRpcController : ControllerBase
 
     private IActionResult HandleLabelGetLabels(object id)
     {
-        var torrents = _torrentService.GetAll();
-        var labels = torrents
-            .Select(t => t.Label)
-            .Where(l => !string.IsNullOrWhiteSpace(l))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var labelSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        return DelugeResult(new { result = labels, error = (object)null, id });
+        if (_tagService != null)
+        {
+            foreach (var tag in _tagService.GetAll())
+            {
+                if (!string.IsNullOrWhiteSpace(tag?.Label))
+                {
+                    labelSet.Add(tag.Label.Trim());
+                }
+            }
+        }
+
+        var torrents = _torrentService.GetAll();
+        foreach (var torrent in torrents)
+        {
+            if (!string.IsNullOrWhiteSpace(torrent.Label))
+            {
+                var tokens = torrent.Label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var token in tokens)
+                {
+                    var trimmed = token.Trim();
+                    if (!string.IsNullOrWhiteSpace(trimmed))
+                    {
+                        labelSet.Add(trimmed);
+                    }
+                }
+            }
+        }
+
+        return DelugeResult(new { result = labelSet.ToArray(), error = (object)null, id });
     }
 
     private IActionResult HandleLabelGetTorrents(JsonElement paramsElem, object id)
@@ -510,12 +533,42 @@ public class DelugeJsonRpcController : ControllerBase
     private IActionResult HandleLabelRemove(JsonElement paramsElem, object id)
     {
         var labelToRemove = GetFirstStringParam(paramsElem);
-        if (!string.IsNullOrEmpty(labelToRemove) && _tagService != null)
+        if (!string.IsNullOrEmpty(labelToRemove))
         {
-            var tag = _tagService.GetAll().FirstOrDefault(t => string.Equals(t.Label, labelToRemove, StringComparison.OrdinalIgnoreCase));
-            if (tag != null)
+            if (_tagService != null)
             {
-                _tagService.Delete(tag.Id);
+                var tag = _tagService.GetAll().FirstOrDefault(t => string.Equals(t.Label, labelToRemove, StringComparison.OrdinalIgnoreCase));
+                if (tag != null)
+                {
+                    _tagService.Delete(tag.Id);
+                }
+            }
+
+            var allTorrents = _torrentService.GetAll();
+            foreach (var torrent in allTorrents)
+            {
+                if (!string.IsNullOrEmpty(torrent.Label) || (torrent.TagIds != null && torrent.TagIds.Count > 0))
+                {
+                    var currentLabels = (torrent.Label ?? string.Empty)
+                        .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(l => l.Trim())
+                        .ToList();
+
+                    if (currentLabels.Any(l => string.Equals(l, labelToRemove, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var remaining = currentLabels
+                            .Where(l => !string.Equals(l, labelToRemove, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+
+                        torrent.Label = remaining.Count > 0 ? string.Join(", ", remaining) : string.Empty;
+                        if (_tagService != null)
+                        {
+                            torrent.TagIds = _tagService.SyncTagsFromLabels(remaining);
+                        }
+
+                        _torrentService.Update(torrent);
+                    }
+                }
             }
         }
 

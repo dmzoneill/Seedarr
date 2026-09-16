@@ -237,4 +237,56 @@ public class QBittorrentApiControllerTest
         Assert.That(torrent.TagIds, Is.EqualTo(new List<int> { 1, 2 }));
         _torrentService.Received(1).Update(torrent);
     }
+
+    [Test]
+    public void GetTags_Returns_Tokens_From_Torrents_And_TagService()
+    {
+        var torrent1 = new Torrent { Id = 1, Label = "tag1, tag2" };
+        var torrent2 = new Torrent { Id = 2, Label = "tag2; tag3" };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent1, torrent2 });
+
+        _tagService.GetAll().Returns(new List<Tag>
+        {
+            new Tag { Id = 1, Label = "tag4" },
+            new Tag { Id = 2, Label = "tag1" }
+        });
+
+        var result = _controller.GetTags();
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result.Result;
+        var tags = ok.Value as List<string>;
+
+        Assert.That(tags, Is.Not.Null);
+        Assert.That(tags, Does.Contain("tag1"));
+        Assert.That(tags, Does.Contain("tag2"));
+        Assert.That(tags, Does.Contain("tag3"));
+        Assert.That(tags, Does.Contain("tag4"));
+        Assert.That(tags.Count, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void DeleteTags_Deletes_From_TagService_And_Torrents()
+    {
+        var tag1 = new Tag { Id = 10, Label = "tag1" };
+        var tag2 = new Tag { Id = 20, Label = "tag2" };
+        _tagService.GetAll().Returns(new List<Tag> { tag1, tag2 });
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Label = "tag1, tag2",
+            TagIds = new List<int> { 10, 20 }
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _tagService.SyncTagsFromLabels(Arg.Any<IEnumerable<string>>()).Returns(new List<int> { 20 });
+
+        var result = _controller.DeleteTags("tag1");
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        _tagService.Received(1).Delete(10);
+        _tagService.DidNotReceive().Delete(20);
+        Assert.That(torrent.Label, Is.EqualTo("tag2"));
+        Assert.That(torrent.TagIds, Is.EqualTo(new List<int> { 20 }));
+        _torrentService.Received(1).Update(torrent);
+    }
 }
