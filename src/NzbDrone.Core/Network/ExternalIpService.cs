@@ -21,7 +21,6 @@ public interface IExternalIpService
 public class ExternalIpService : BackgroundService, IExternalIpService
 {
     private const string PrimaryEndpointTemplate = "https://www.seedarr.net/ip/?uuid={0}";
-    private const string PrimaryHttpEndpointTemplate = "http://www.seedarr.net/ip/?uuid={0}";
 
     private static readonly TimeSpan FallbackInterval = TimeSpan.FromHours(6);
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(1);
@@ -136,13 +135,18 @@ public class ExternalIpService : BackgroundService, IExternalIpService
 
     private async Task<string> FetchExternalIpAsync(CancellationToken cancellationToken)
     {
-        if (!await _fetchLock.WaitAsync(0, cancellationToken))
+        if (!await _fetchLock.WaitAsync(TimeSpan.FromSeconds(5), cancellationToken))
         {
             return _cachedIp;
         }
 
         try
         {
+            if (!string.IsNullOrEmpty(_cachedIp) && DateTime.UtcNow - _lastFetch < CacheDuration)
+            {
+                return _cachedIp;
+            }
+
             var uuid = _configService?.InstanceUuid;
             if (string.IsNullOrWhiteSpace(uuid))
             {
@@ -151,8 +155,7 @@ public class ExternalIpService : BackgroundService, IExternalIpService
 
             var sources = new List<string>
             {
-                string.Format(PrimaryEndpointTemplate, Uri.EscapeDataString(uuid)),
-                string.Format(PrimaryHttpEndpointTemplate, Uri.EscapeDataString(uuid))
+                string.Format(PrimaryEndpointTemplate, Uri.EscapeDataString(uuid))
             };
             sources.AddRange(FallbackSources);
 
@@ -184,6 +187,152 @@ public class ExternalIpService : BackgroundService, IExternalIpService
         }
     }
 
+    public static bool IsPublicRoutableIpAddress(IPAddress address)
+    {
+        if (address == null)
+        {
+            return false;
+        }
+
+        if (IPAddress.IsLoopback(address))
+        {
+            return false;
+        }
+
+        if (address.IsIPv4MappedToIPv6)
+        {
+            return IsPublicRoutableIpAddress(address.MapToIPv4());
+        }
+
+        var bytes = address.GetAddressBytes();
+
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)
+        {
+            // 0.0.0.0/8 - Unspecified / current network
+            if (bytes[0] == 0)
+            {
+                return false;
+            }
+
+            // 10.0.0.0/8 - RFC 1918 Private
+            if (bytes[0] == 10)
+            {
+                return false;
+            }
+
+            // 100.64.0.0/10 - RFC 6598 Shared Address Space (CGNAT)
+            if (bytes[0] == 100 && (bytes[1] & 0xC0) == 64)
+            {
+                return false;
+            }
+
+            // 127.0.0.0/8 - Loopback
+            if (bytes[0] == 127)
+            {
+                return false;
+            }
+
+            // 169.254.0.0/16 - RFC 3927 Link-Local
+            if (bytes[0] == 169 && bytes[1] == 254)
+            {
+                return false;
+            }
+
+            // 172.16.0.0/12 - RFC 1918 Private
+            if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+            {
+                return false;
+            }
+
+            // 192.0.2.0/24 - RFC 5737 TEST-NET-1
+            if (bytes[0] == 192 && bytes[1] == 0 && bytes[2] == 2)
+            {
+                return false;
+            }
+
+            // 192.168.0.0/16 - RFC 1918 Private
+            if (bytes[0] == 192 && bytes[1] == 168)
+            {
+                return false;
+            }
+
+            // 198.51.100.0/24 - RFC 5737 TEST-NET-2
+            if (bytes[0] == 198 && bytes[1] == 51 && bytes[2] == 100)
+            {
+                return false;
+            }
+
+            // 203.0.113.0/24 - RFC 5737 TEST-NET-3
+            if (bytes[0] == 203 && bytes[1] == 0 && bytes[2] == 113)
+            {
+                return false;
+            }
+
+            // 224.0.0.0/4 - Multicast & 240.0.0.0/4 - Reserved / Broadcast
+            if (bytes[0] >= 224)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        if (address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+        {
+            // :: - Unspecified
+            if (address.Equals(IPAddress.IPv6None) || address.Equals(IPAddress.IPv6Any))
+            {
+                return false;
+            }
+
+            // Link-Local (fe80::/10)
+            if (address.IsIPv6LinkLocal || (bytes[0] == 0xFE && (bytes[1] & 0xC0) == 0x80))
+            {
+                return false;
+            }
+
+            // Multicast (ff00::/8)
+            if (address.IsIPv6Multicast || bytes[0] == 0xFF)
+            {
+                return false;
+            }
+
+            // Site-Local (fec0::/10)
+            if (address.IsIPv6SiteLocal || (bytes[0] == 0xFE && (bytes[1] & 0xC0) == 0xC0))
+            {
+                return false;
+            }
+
+            // Unique Local Address (fc00::/7) - RFC 4193
+            if ((bytes[0] & 0xFE) == 0xFC)
+            {
+                return false;
+            }
+
+            // Documentation (2001:db8::/32) - RFC 3849
+            if (bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0x0D && bytes[3] == 0xB8)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryValidateCandidate(string candidate, out string ip)
+    {
+        ip = string.Empty;
+        if (!string.IsNullOrEmpty(candidate) && IPAddress.TryParse(candidate, out var parsed) && IsPublicRoutableIpAddress(parsed))
+        {
+            ip = parsed.ToString();
+            return true;
+        }
+
+        return false;
+    }
+
     public static bool TryExtractIpFromResponse(string responseText, out string ip)
     {
         ip = string.Empty;
@@ -194,31 +343,27 @@ public class ExternalIpService : BackgroundService, IExternalIpService
 
         var trimmed = responseText.Trim();
 
-        // 1. Try parsing JSON format (e.g. from seedarr.net/my/?uuid=...)
+        // 1. Try parsing JSON format (e.g. from seedarr.net/ip/?uuid=...)
         try
         {
             using var doc = JsonDocument.Parse(trimmed);
             var root = doc.RootElement;
 
-            // Check for { "data": { "ip": "127.0.0.1" } } or { "data": { "ip_address": "127.0.0.1" } }
+            // Check for { "data": { "ip": "..." } } or { "data": { "ip_address": "..." } }
             if (root.TryGetProperty("data", out var dataElem) && dataElem.ValueKind == JsonValueKind.Object)
             {
                 if (dataElem.TryGetProperty("ip", out var ipElem) && ipElem.ValueKind == JsonValueKind.String)
                 {
-                    var candidate = ipElem.GetString()?.Trim();
-                    if (!string.IsNullOrEmpty(candidate) && IPAddress.TryParse(candidate, out _))
+                    if (TryValidateCandidate(ipElem.GetString()?.Trim(), out ip))
                     {
-                        ip = candidate;
                         return true;
                     }
                 }
 
                 if (dataElem.TryGetProperty("ip_address", out var ipAddressElem) && ipAddressElem.ValueKind == JsonValueKind.String)
                 {
-                    var candidate = ipAddressElem.GetString()?.Trim();
-                    if (!string.IsNullOrEmpty(candidate) && IPAddress.TryParse(candidate, out _))
+                    if (TryValidateCandidate(ipAddressElem.GetString()?.Trim(), out ip))
                     {
-                        ip = candidate;
                         return true;
                     }
                 }
@@ -227,10 +372,8 @@ public class ExternalIpService : BackgroundService, IExternalIpService
             // Check for root { "ip": "..." }
             if (root.TryGetProperty("ip", out var simpleIpElem) && simpleIpElem.ValueKind == JsonValueKind.String)
             {
-                var candidate = simpleIpElem.GetString()?.Trim();
-                if (!string.IsNullOrEmpty(candidate) && IPAddress.TryParse(candidate, out _))
+                if (TryValidateCandidate(simpleIpElem.GetString()?.Trim(), out ip))
                 {
-                    ip = candidate;
                     return true;
                 }
             }
@@ -238,10 +381,8 @@ public class ExternalIpService : BackgroundService, IExternalIpService
             // Check for root { "ip_address": "..." }
             if (root.TryGetProperty("ip_address", out var rootIpElem) && rootIpElem.ValueKind == JsonValueKind.String)
             {
-                var candidate = rootIpElem.GetString()?.Trim();
-                if (!string.IsNullOrEmpty(candidate) && IPAddress.TryParse(candidate, out _))
+                if (TryValidateCandidate(rootIpElem.GetString()?.Trim(), out ip))
                 {
-                    ip = candidate;
                     return true;
                 }
             }
@@ -252,9 +393,8 @@ public class ExternalIpService : BackgroundService, IExternalIpService
         }
 
         // 2. Try parsing plain text IP
-        if (IPAddress.TryParse(trimmed, out _))
+        if (TryValidateCandidate(trimmed, out ip))
         {
-            ip = trimmed;
             return true;
         }
 
