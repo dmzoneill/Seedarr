@@ -69,7 +69,7 @@ public class DownloadClientControllerTests : IntegrationTestBase
         {
             name = "Invalid Client",
             clientType = "UnknownType",
-            host = "localhost",
+            host = "8.8.8.8",
             port = 8080,
             enable = true
         };
@@ -83,6 +83,22 @@ public class DownloadClientControllerTests : IntegrationTestBase
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.False);
         Assert.That(result.Message, Does.Contain("Unknown client type"));
+    }
+
+    [Test]
+    public async Task TestDirect_with_unsafe_host_returns_bad_request()
+    {
+        var unsafeDef = new
+        {
+            name = "Metadata Probe",
+            clientType = "QBitTorrent",
+            host = "169.254.169.254",
+            port = 80,
+            enable = true
+        };
+
+        var response = await PostJsonAsync("/api/v1/downloadclients/test", unsafeDef);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
     [Test]
