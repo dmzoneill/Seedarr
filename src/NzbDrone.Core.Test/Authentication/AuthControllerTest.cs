@@ -96,4 +96,94 @@ public class AuthControllerTest
         Assert.That(list[0].ProviderId, Is.EqualTo("oidc1"));
         Assert.That(list[0].ButtonText, Is.EqualTo("Login with OIDC"));
     }
+
+    [TestCase("/")]
+    [TestCase("/settings")]
+    [TestCase("/torrents/1")]
+    [TestCase("/api/v1/queue")]
+    [TestCase("/media/detail?id=42")]
+    [TestCase("/app#section")]
+    public void IsLocalUrl_ValidLocalPaths_ReturnsTrue(string url)
+    {
+        Assert.That(AuthController.IsLocalUrl(url), Is.True);
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase("/\\/evil.com")]
+    [TestCase("/\\evil.com")]
+    [TestCase("/\\/")]
+    [TestCase("/\\")]
+    [TestCase("/foo\\bar")]
+    [TestCase("/%5cevil.com")]
+    [TestCase("//evil.com")]
+    [TestCase("//")]
+    [TestCase("///")]
+    [TestCase("///evil.com")]
+    [TestCase("/@evil.com")]
+    [TestCase("/@www.google.com")]
+    [TestCase("http://evil.com")]
+    [TestCase("https://evil.com")]
+    [TestCase("ftp://evil.com")]
+    [TestCase("javascript:alert(1)")]
+    [TestCase("data:text/html,test")]
+    [TestCase("evil.com/login")]
+    [TestCase("settings")]
+    [TestCase("/evil.com\0")]
+    [TestCase("/evil.com\r\n")]
+    [TestCase("/evil.com\t")]
+    public void IsLocalUrl_MaliciousOrInvalidPaths_ReturnsFalse(string url)
+    {
+        Assert.That(AuthController.IsLocalUrl(url), Is.False);
+    }
+
+    [TestCase("/settings", null, "/settings")]
+    [TestCase("/torrents/1", "", "/torrents/1")]
+    [TestCase("/", null, "/")]
+    [TestCase("http://evil.com", null, "/")]
+    [TestCase("//evil.com", null, "/")]
+    [TestCase("/\\/evil.com", null, "/")]
+    [TestCase("/\\evil.com", null, "/")]
+    [TestCase("/@evil.com", null, "/")]
+    [TestCase(null, null, "/")]
+    [TestCase("", null, "/")]
+    public void SanitizeRedirectUrl_WithoutPathBase_ReturnsExpected(string url, string pathBase, string expected)
+    {
+        Assert.That(AuthController.SanitizeRedirectUrl(url, pathBase), Is.EqualTo(expected));
+    }
+
+    [TestCase("/settings", "/seedarr", "/seedarr/settings")]
+    [TestCase("/torrents/1", "/seedarr", "/seedarr/torrents/1")]
+    [TestCase("/", "/seedarr", "/seedarr/")]
+    [TestCase("/seedarr/settings", "/seedarr", "/seedarr/settings")]
+    [TestCase("/seedarr", "/seedarr", "/seedarr")]
+    [TestCase("/seedarr/", "/seedarr", "/seedarr/")]
+    [TestCase("/settings", "seedarr", "/seedarr/settings")]
+    [TestCase("/settings", "/seedarr/", "/seedarr/settings")]
+    [TestCase("http://evil.com", "/seedarr", "/seedarr/")]
+    [TestCase("//evil.com", "/seedarr", "/seedarr/")]
+    [TestCase("/\\/evil.com", "/seedarr", "/seedarr/")]
+    [TestCase("/\\evil.com", "/seedarr", "/seedarr/")]
+    [TestCase("/@evil.com", "/seedarr", "/seedarr/")]
+    [TestCase(null, "/seedarr", "/seedarr/")]
+    [TestCase("", "/seedarr", "/seedarr/")]
+    public void SanitizeRedirectUrl_WithPathBase_ReturnsSubpathPrefixed(string url, string pathBase, string expected)
+    {
+        Assert.That(AuthController.SanitizeRedirectUrl(url, pathBase), Is.EqualTo(expected));
+    }
+
+    [TestCase(null, "")]
+    [TestCase("", "")]
+    [TestCase("   ", "")]
+    [TestCase("/", "")]
+    [TestCase("/seedarr", "/seedarr")]
+    [TestCase("/seedarr/", "/seedarr")]
+    [TestCase("seedarr", "/seedarr")]
+    [TestCase("seedarr/", "/seedarr")]
+    [TestCase("/app/seedarr", "/app/seedarr")]
+    public void NormalizePathBase_NormalizesCorrectly(string input, string expected)
+    {
+        Assert.That(AuthController.NormalizePathBase(input), Is.EqualTo(expected));
+    }
 }
