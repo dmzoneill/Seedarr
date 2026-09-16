@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http;
@@ -12,6 +15,7 @@ namespace Seedarr.Api.V1.Torrents;
 [V1ApiController("downloadhistory")]
 public class DownloadHistoryController : Controller
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
     private readonly IDownloadHistoryService _historyService;
     private readonly IArrMetadataEnricherService _metadataEnricherService;
 
@@ -32,6 +36,25 @@ public class DownloadHistoryController : Controller
     {
         var records = _historyService.GetAll(query, status, limit, offset);
         return Ok(records.Select(ToResource).ToList());
+    }
+
+    [HttpGet("export")]
+    public ActionResult Export(
+        [FromQuery] string query = null,
+        [FromQuery] string status = null,
+        [FromQuery] string format = "json")
+    {
+        var records = _historyService.GetAll(query, status, limit: -1, offset: 0);
+        var resources = records.Select(ToResource).ToList();
+
+        if (string.Equals(format, "csv", StringComparison.OrdinalIgnoreCase))
+        {
+            var csv = GenerateCsv(resources);
+            var bytes = Encoding.UTF8.GetBytes(csv);
+            return File(bytes, "text/csv; charset=utf-8", $"seedarr-history-{DateTime.UtcNow:yyyy-MM-dd}.csv");
+        }
+
+        return Ok(resources);
     }
 
     [HttpGet("{id:int}")]
@@ -93,7 +116,17 @@ public class DownloadHistoryController : Controller
     {
         if (_metadataEnricherService != null)
         {
-            _metadataEnricherService.EnrichAll();
+            Task.Run(() =>
+            {
+                try
+                {
+                    _metadataEnricherService.EnrichAll();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Background history enrichment failed");
+                }
+            });
         }
 
         return Ok(new { message = "Enrichment started" });
@@ -170,5 +203,46 @@ public class DownloadHistoryController : Controller
             DataJson = model.DataJson,
             Metadata = metadata
         };
+    }
+
+    public static string EscapeCsvField(object value)
+    {
+        if (value == null)
+        {
+            return "\"\"";
+        }
+
+        var str = value.ToString() ?? string.Empty;
+        var formulaChars = new[] { '=', '+', '-', '@', '\t', '\r' };
+        if (formulaChars.Any(c => str.StartsWith(c)))
+        {
+            str = "'" + str;
+        }
+
+        return $"\"{str.Replace("\"", "\"\"")}\"";
+    }
+
+    public static string GenerateCsv(IEnumerable<DownloadHistoryResource> records)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("ID,Title,InfoHash,Source,Status,TotalSize,Uploaded,Ratio,SeedingTimeSeconds,DateAdded,DateCompleted");
+        foreach (var h in records)
+        {
+            sb.AppendLine(string.Join(
+                ",",
+                h.Id,
+                EscapeCsvField(h.Title),
+                EscapeCsvField(h.InfoHash),
+                EscapeCsvField(h.Source),
+                EscapeCsvField(h.Status),
+                h.TotalSize,
+                h.Uploaded,
+                h.Ratio,
+                h.SeedingTime,
+                EscapeCsvField(h.DateAdded.ToString("o")),
+                EscapeCsvField(h.DateCompleted?.ToString("o") ?? "")));
+        }
+
+        return sb.ToString();
     }
 }
