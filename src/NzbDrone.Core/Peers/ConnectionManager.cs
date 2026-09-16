@@ -153,6 +153,11 @@ public class ConnectionManager : IConnectionManager
     {
         lock (_lock)
         {
+            if (_connections.Count >= _configService.MaxGlobalConnections)
+            {
+                return false;
+            }
+
             var maxPerTorrent = _configService.MaxPerTorrentConnections;
             var torrentCount = _connections.Count(c =>
                 string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));

@@ -280,6 +280,20 @@ public class ConnectionManagerTest
     }
 
     [Test]
+    public void CanAddConnectionForTorrent_should_return_false_when_at_global_limit()
+    {
+        _configService.MaxGlobalConnections.Returns(1);
+        _configService.MaxPerTorrentConnections.Returns(50);
+        var conn = CreateTestConnection();
+        SetInfoHash(conn, "abc123");
+        _manager.Add(conn);
+
+        var result = _manager.CanAddConnectionForTorrent("xyz789");
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
     public void GetUploadSlotCount_should_return_config_value()
     {
         _configService.MaxUploadSlots.Returns(8);

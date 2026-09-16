@@ -190,6 +190,10 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
         SharedValidator.RuleFor(c => c.MaxPerTorrentConnections)
             .GreaterThanOrEqualTo(1);
 
+        SharedValidator.RuleFor(c => c.MaxPerTorrentConnections)
+            .LessThanOrEqualTo(c => c.MaxGlobalConnections)
+            .WithMessage("Max Connections Per Torrent cannot exceed Maximum Global Connections.");
+
         SharedValidator.RuleFor(c => c.MaxUploadSlots)
             .GreaterThanOrEqualTo(1);
 
