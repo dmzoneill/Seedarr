@@ -248,13 +248,22 @@ public class DownloadClientSyncService : IDownloadClientSyncService
         try
         {
             var items = provider.GetItems();
-            matchingItem = items.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
+            matchingItem = items?.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception ex)
         {
             _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
         }
 
+        return ImportTorrentInternal(definition, provider, normalizedHash, matchingItem);
+    }
+
+    protected virtual Torrent ImportTorrentInternal(
+        DownloadClientDefinition definition,
+        IDownloadClient provider,
+        string normalizedHash,
+        DownloadClientItem matchingItem)
+    {
         byte[] torrentBytes = null;
         try
         {
@@ -451,19 +460,63 @@ public class DownloadClientSyncService : IDownloadClientSyncService
             return result;
         }
 
-        foreach (var hash in infoHashes)
+        var definition = _downloadClientFactory.Get(clientId);
+        if (definition == null)
         {
+            throw new ArgumentException($"Download client with id {clientId} not found.");
+        }
+
+        var provider = CreateClient(definition);
+        if (provider == null)
+        {
+            throw new ArgumentException($"Could not create provider for client type {definition.ClientType}.");
+        }
+
+        var existingHashes = _torrentService.GetAll()
+            .Where(t => !string.IsNullOrEmpty(t.InfoHash))
+            .Select(t => t.InfoHash.ToLowerInvariant())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var clientItems = new Dictionary<string, DownloadClientItem>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var items = provider.GetItems();
+            if (items != null)
+            {
+                foreach (var item in items)
+                {
+                    if (!string.IsNullOrEmpty(item.InfoHash))
+                    {
+                        clientItems.TryAdd(item.InfoHash.ToLowerInvariant(), item);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
+        }
+
+        foreach (var rawHash in infoHashes)
+        {
+            if (string.IsNullOrWhiteSpace(rawHash))
+            {
+                result.Failed++;
+                continue;
+            }
+
+            var hash = rawHash.Trim().ToLowerInvariant();
+            if (existingHashes.Contains(hash))
+            {
+                result.Skipped++;
+                continue;
+            }
+
             try
             {
-                var existing = _torrentService.GetAll()
-                    .FirstOrDefault(t => string.Equals(t.InfoHash, hash, StringComparison.OrdinalIgnoreCase));
-                if (existing != null)
-                {
-                    result.Skipped++;
-                    continue;
-                }
-
-                ImportTorrent(clientId, hash);
+                clientItems.TryGetValue(hash, out var matchingItem);
+                ImportTorrentInternal(definition, provider, hash, matchingItem);
+                existingHashes.Add(hash);
                 result.Added++;
             }
             catch (Exception ex)
