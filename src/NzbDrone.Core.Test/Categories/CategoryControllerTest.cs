@@ -241,4 +241,131 @@ public class CategoryControllerTest
         var badRequest = (BadRequestObjectResult)result;
         Assert.That(badRequest.Value, Does.Contain("Cannot delete category 'Default'"));
     }
+
+    [Test]
+    public void Add_with_relative_save_path_returns_bad_request()
+    {
+        var resource = new CategoryResource
+        {
+            Name = "RelativeCat",
+            SavePath = "downloads/movies"
+        };
+
+        _categoryService.GetByName("RelativeCat").Returns((Category)null);
+
+        var result = _controller.Add(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Does.Contain("Save path must be an absolute path"));
+        _categoryService.DidNotReceive().Add(Arg.Any<Category>());
+    }
+
+    [Test]
+    public void Update_with_relative_save_path_returns_bad_request()
+    {
+        var resource = new CategoryResource
+        {
+            Id = 1,
+            Name = "RelativeCat",
+            SavePath = "downloads/movies"
+        };
+
+        var existing = new Category { Id = 1, Name = "RelativeCat", SavePath = "/downloads" };
+        _categoryService.Get(1).Returns(existing);
+
+        var result = _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Does.Contain("Save path must be an absolute path"));
+        _categoryService.DidNotReceive().Update(Arg.Any<Category>());
+    }
+
+    [Test]
+    public void Add_normalizes_trailing_slashes_in_save_path()
+    {
+        var resource = new CategoryResource
+        {
+            Name = "NormalizedCat",
+            SavePath = "/downloads/movies///"
+        };
+
+        _categoryService.GetByName("NormalizedCat").Returns((Category)null);
+        _categoryService.Add(Arg.Any<Category>()).Returns(callInfo =>
+        {
+            var cat = callInfo.Arg<Category>();
+            cat.Id = 1;
+            return cat;
+        });
+
+        var result = _controller.Add(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _categoryService.Received(1).Add(Arg.Is<Category>(c => c.SavePath == "/downloads/movies"));
+    }
+
+    [Test]
+    public void Update_normalizes_trailing_slashes_in_save_path()
+    {
+        var resource = new CategoryResource
+        {
+            Id = 1,
+            Name = "Movies",
+            SavePath = "/new/downloads/movies/"
+        };
+
+        var existing = new Category { Id = 1, Name = "Movies", SavePath = "/downloads/movies" };
+        _categoryService.Get(1).Returns(existing);
+        _categoryService.GetByName("Movies").Returns(existing);
+        _categoryService.Update(Arg.Any<Category>()).Returns(callInfo => callInfo.Arg<Category>());
+
+        var result = _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _categoryService.Received(1).Update(Arg.Is<Category>(c => c.SavePath == "/new/downloads/movies"));
+    }
+
+    [Test]
+    public void Add_when_service_throws_invalid_operation_exception_returns_bad_request()
+    {
+        var resource = new CategoryResource
+        {
+            Name = "PermissionDeniedCat",
+            SavePath = "/root/forbidden"
+        };
+
+        _categoryService.GetByName("PermissionDeniedCat").Returns((Category)null);
+        _categoryService.When(x => x.Add(Arg.Any<Category>())).Do(_ =>
+            throw new InvalidOperationException("Cannot access or write to save path '/root/forbidden': Permission denied"));
+
+        var result = _controller.Add(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Does.Contain("Cannot access or write to save path '/root/forbidden'"));
+    }
+
+    [Test]
+    public void Update_when_service_throws_invalid_operation_exception_returns_bad_request()
+    {
+        var resource = new CategoryResource
+        {
+            Id = 1,
+            Name = "Movies",
+            SavePath = "/root/forbidden"
+        };
+
+        var existing = new Category { Id = 1, Name = "Movies", SavePath = "/downloads/movies" };
+        _categoryService.Get(1).Returns(existing);
+        _categoryService.GetByName("Movies").Returns(existing);
+        _categoryService.When(x => x.Update(Arg.Any<Category>())).Do(_ =>
+            throw new InvalidOperationException("Cannot access or write to save path '/root/forbidden': Permission denied"));
+
+        var result = _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value, Does.Contain("Cannot access or write to save path '/root/forbidden'"));
+    }
 }
