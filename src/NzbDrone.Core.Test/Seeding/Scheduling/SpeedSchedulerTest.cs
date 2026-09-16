@@ -220,10 +220,68 @@ public class SpeedSchedulerTest
         };
         _repository.GetEnabled().Returns(new List<SpeedSchedule> { schedule });
 
-        var mondayEarly = new DateTime(2026, 8, 10, 3, 0, 0, DateTimeKind.Utc);
-        var limits = _scheduler.GetLimitsAt(mondayEarly);
+        var tuesdayEarly = new DateTime(2026, 8, 11, 3, 0, 0, DateTimeKind.Utc);
+        var limits = _scheduler.GetLimitsAt(tuesdayEarly);
 
         Assert.That(limits.IsScheduleActive, Is.True);
+    }
+
+    [Test]
+    public void GetLimitsAt_should_not_activate_overnight_schedule_prematurely_on_morning_of_start_day()
+    {
+        var schedule = new SpeedSchedule
+        {
+            Name = "FridayOvernight",
+            Days = ScheduleDays.Friday,
+            StartTime = new TimeOnly(22, 0),
+            EndTime = new TimeOnly(6, 0),
+            MaxUploadSpeed = 2_000_000,
+            MaxDownloadSpeed = 1_000_000,
+            IsEnabled = true,
+            Priority = 1
+        };
+        _repository.GetEnabled().Returns(new List<SpeedSchedule> { schedule });
+
+        var fridayEarly = new DateTime(2026, 8, 14, 3, 0, 0, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(fridayEarly).IsScheduleActive, Is.False);
+
+        var fridayLate = new DateTime(2026, 8, 14, 23, 0, 0, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(fridayLate).IsScheduleActive, Is.True);
+
+        var saturdayEarly = new DateTime(2026, 8, 15, 3, 0, 0, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(saturdayEarly).IsScheduleActive, Is.True);
+
+        var saturdayPastEnd = new DateTime(2026, 8, 15, 7, 0, 0, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(saturdayPastEnd).IsScheduleActive, Is.False);
+    }
+
+    [Test]
+    public void GetLimitsAt_should_be_active_for_continuous_24h_schedule()
+    {
+        var schedule = new SpeedSchedule
+        {
+            Name = "Friday24h",
+            Days = ScheduleDays.Friday,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(0, 0),
+            MaxUploadSpeed = 500_000,
+            MaxDownloadSpeed = 500_000,
+            IsEnabled = true,
+            Priority = 1
+        };
+        _repository.GetEnabled().Returns(new List<SpeedSchedule> { schedule });
+
+        var fridayEarly = new DateTime(2026, 8, 14, 3, 0, 0, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(fridayEarly).IsScheduleActive, Is.True);
+
+        var fridayNoon = new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(fridayNoon).IsScheduleActive, Is.True);
+
+        var fridayLate = new DateTime(2026, 8, 14, 23, 59, 30, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(fridayLate).IsScheduleActive, Is.True);
+
+        var saturdayNoon = new DateTime(2026, 8, 15, 12, 0, 0, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(saturdayNoon).IsScheduleActive, Is.False);
     }
 
     [Test]
