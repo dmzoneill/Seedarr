@@ -900,6 +900,39 @@ public class UpdateServiceTest
     }
 
     [Test]
+    public void CheckForUpdate_should_retain_semver_2_prereleases_with_dot_identifiers_and_build_metadata()
+    {
+        var json = """
+            [
+                {
+                    "tag_name": "v2.0.0-rc.2+build.42",
+                    "draft": false,
+                    "published_at": "2024-07-01T00:00:00Z",
+                    "body": "RC2 release",
+                    "html_url": "https://github.com/test/releases/tag/v2.0.0-rc.2"
+                },
+                {
+                    "tag_name": "v1.6.0-beta.2",
+                    "draft": false,
+                    "published_at": "2024-06-15T00:00:00Z",
+                    "body": "Beta release",
+                    "html_url": "https://github.com/test/releases/tag/v1.6.0-beta.2"
+                }
+            ]
+            """;
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, json);
+        var subject = CreateWithHandler(handler);
+
+        var result = subject.CheckForUpdate();
+
+        Assert.That(result.Releases, Has.Count.EqualTo(2));
+        Assert.That(result.Releases[0].Version, Is.EqualTo("2.0.0-rc.2+build.42"));
+        Assert.That(result.Releases[1].Version, Is.EqualTo("1.6.0-beta.2"));
+        Assert.That(result.LatestVersion, Is.EqualTo("2.0.0-rc.2+build.42"));
+    }
+
+    [Test]
     public void BuildResult_should_set_update_available_true_for_prerelease_to_full_release()
     {
         var result = InvokeBuildResult("1.5.0-rc1", "1.5.0", new List<ReleaseInfo>());

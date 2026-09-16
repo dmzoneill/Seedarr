@@ -181,4 +181,48 @@ public class UpdateControllerTest
         Assert.That(lowerRelease, Is.Not.Null);
         Assert.That(lowerRelease.Installed, Is.False);
     }
+
+    [Test]
+    public async Task GetUpdates_should_sort_prereleases_accurately()
+    {
+        var updateInfo = new UpdateInfo
+        {
+            CurrentVersion = BuildInfo.Version.ToString(),
+            LatestVersion = "1.5.0",
+            UpdateAvailable = true,
+            Releases = new List<ReleaseInfo>
+            {
+                new() { Version = "1.4.0-beta.1", PublishedAt = DateTime.UtcNow, Body = "notes" },
+                new() { Version = "1.5.0-rc1", PublishedAt = DateTime.UtcNow, Body = "notes" },
+                new() { Version = "1.5.0", PublishedAt = DateTime.UtcNow, Body = "notes" },
+                new() { Version = "1.4.0", PublishedAt = DateTime.UtcNow, Body = "notes" },
+                new() { Version = "1.5.0-rc2", PublishedAt = DateTime.UtcNow, Body = "notes" },
+                new() { Version = "1.4.0-beta.2", PublishedAt = DateTime.UtcNow, Body = "notes" },
+            },
+        };
+
+        _updateService.CheckForUpdateAsync(false, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(updateInfo));
+
+        var actionResult = await _controller.GetUpdates();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var results = okResult.Value as List<UpdateResource>;
+        Assert.That(results, Is.Not.Null);
+        Assert.That(results, Has.Count.EqualTo(6));
+
+        var versions = results.ConvertAll(r => r.Version);
+        Assert.That(versions, Is.EqualTo(new List<string>
+        {
+            "1.5.0",
+            "1.5.0-rc2",
+            "1.5.0-rc1",
+            "1.4.0",
+            "1.4.0-beta.2",
+            "1.4.0-beta.1",
+        }));
+        Assert.That(results[0].Latest, Is.True);
+        Assert.That(results[1].Latest, Is.False);
+    }
 }

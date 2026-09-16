@@ -38,7 +38,7 @@ public class UpdateController : Controller
         if (releases != null && releases.Count > 0)
         {
             var isFirst = true;
-            foreach (var release in releases.OrderByDescending(r => SemVersion.TryParse(r.Version, out var v) ? v : new SemVersion(new Version(0, 0, 0))))
+            foreach (var release in releases.OrderByDescending(r => ParseSemVersionOrFallback(r.Version)))
             {
                 var isInstalled = string.Equals(release.Version, currentVersion, StringComparison.OrdinalIgnoreCase) ||
                     (Version.TryParse(release.Version?.TrimStart('v', 'V'), out var rv) && (AreVersionsEqual(rv, BuildInfo.Version) || (Version.TryParse(currentVersion?.TrimStart('v', 'V'), out var cv) && AreVersionsEqual(rv, cv)))) ||
@@ -112,6 +112,44 @@ public class UpdateController : Controller
                a.Minor == b.Minor &&
                Math.Max(0, a.Build) == Math.Max(0, b.Build) &&
                Math.Max(0, a.Revision) == Math.Max(0, b.Revision);
+    }
+
+    private static SemVersion ParseSemVersionOrFallback(string versionStr)
+    {
+        if (SemVersion.TryParse(versionStr, out var v))
+        {
+            return v;
+        }
+
+        if (!string.IsNullOrWhiteSpace(versionStr))
+        {
+            var clean = versionStr.Trim().TrimStart('v', 'V');
+            var plusIdx = clean.IndexOf('+');
+            if (plusIdx >= 0)
+            {
+                clean = clean[..plusIdx];
+            }
+
+            var dashIdx = clean.IndexOf('-');
+            var pre = string.Empty;
+            if (dashIdx >= 0)
+            {
+                pre = clean[(dashIdx + 1)..];
+                clean = clean[..dashIdx];
+            }
+
+            if (!clean.Contains('.'))
+            {
+                clean += ".0";
+            }
+
+            if (Version.TryParse(clean, out var core))
+            {
+                return new SemVersion(core, pre, originalString: versionStr);
+            }
+        }
+
+        return new SemVersion(new Version(0, 0, 0));
     }
 
     private static UpdateChanges ParseReleaseNotes(string body)
