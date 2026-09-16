@@ -21,7 +21,7 @@ public class BitTorrentConfigResource : RestResource
     public string ScriptTorrentDoneFilename { get; set; }
     public string ScriptTorrentAddedFilename { get; set; }
     public string ScriptTorrentDoneSeedingFilename { get; set; }
-    public int CustomScriptTimeoutSeconds { get; set; }
+    public int CustomScriptTimeoutSeconds { get; set; } = 60;
 }
 
 public static class BitTorrentConfigResourceMapper
