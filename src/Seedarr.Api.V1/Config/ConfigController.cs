@@ -46,6 +46,10 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         SharedValidator.RuleFor(c => c.BindAddress)
             .Must(IsValidBindAddress)
             .WithMessage("Invalid BindAddress. Allowed values are '*', '0.0.0.0', '::', 'localhost', or a valid IP address.");
+
+        SharedValidator.RuleFor(c => c.UrlBase)
+            .Must(u => string.IsNullOrEmpty(u) || (u.StartsWith('/') && !u.EndsWith('/')))
+            .WithMessage("UrlBase must start with '/' and not end with '/'.");
     }
 
     protected override GeneralConfigResource ToResource(IConfigService model)
@@ -235,13 +239,17 @@ public class SeedingConfigController : ConfigController<SeedingConfigResource>
             .InclusiveBetween(0, 100);
 
         SharedValidator.RuleFor(c => c.UploadStoppedMaxPercentage)
-            .InclusiveBetween(0, 100);
+            .InclusiveBetween(0, 100)
+            .GreaterThanOrEqualTo(c => c.UploadStoppedMinPercentage)
+            .WithMessage("UploadStoppedMaxPercentage must be greater than or equal to UploadStoppedMinPercentage.");
 
         SharedValidator.RuleFor(c => c.DownloadStoppedMinPercentage)
             .InclusiveBetween(0, 100);
 
         SharedValidator.RuleFor(c => c.DownloadStoppedMaxPercentage)
-            .InclusiveBetween(0, 100);
+            .InclusiveBetween(0, 100)
+            .GreaterThanOrEqualTo(c => c.DownloadStoppedMinPercentage)
+            .WithMessage("DownloadStoppedMaxPercentage must be greater than or equal to DownloadStoppedMinPercentage.");
 
         SharedValidator.RuleFor(c => c.UploadCustomIntervalMinutes)
             .GreaterThanOrEqualTo(1);
@@ -253,7 +261,9 @@ public class SeedingConfigController : ConfigController<SeedingConfigResource>
             .InclusiveBetween(0.0, 1.0);
 
         SharedValidator.RuleFor(c => c.SpeedVariationMax)
-            .InclusiveBetween(0.0, 1.0);
+            .InclusiveBetween(0.0, 1.0)
+            .GreaterThanOrEqualTo(c => c.SpeedVariationMin)
+            .WithMessage("SpeedVariationMax must be greater than or equal to SpeedVariationMin.");
 
         SharedValidator.RuleFor(c => c.SeedGoalReachedAction)
             .Must(action => string.IsNullOrWhiteSpace(action) || AllowedSeedGoalReachedActions.Contains(action))
@@ -354,7 +364,11 @@ public class BitTorrentConfigController : ConfigController<BitTorrentConfigResou
             .WithMessage("EncryptionMode must be one of: disabled, enabled, required, forced.");
 
         SharedValidator.RuleFor(c => c.CustomScriptTimeoutSeconds)
-            .InclusiveBetween(5, 3600);
+            .GreaterThanOrEqualTo(1);
+
+        SharedValidator.RuleFor(c => c.PeerIdPrefix)
+            .MaximumLength(12)
+            .WithMessage("PeerIdPrefix cannot exceed 12 characters.");
 
         SharedValidator.RuleFor(c => c.OnDownloadCompleteScript)
             .Must(IsValidScriptPath)
@@ -570,6 +584,27 @@ public class SchedulerConfigController : ConfigController<SchedulerConfigResourc
 
         SharedValidator.RuleFor(c => c.SchedulerEndMinute)
             .InclusiveBetween(0, 59);
+
+        SharedValidator.RuleFor(c => c.TimeZone)
+            .Must(IsValidTimeZone)
+            .WithMessage("Invalid TimeZone identifier.");
+    }
+
+    private static bool IsValidTimeZone(string timeZone)
+    {
+        if (string.IsNullOrWhiteSpace(timeZone))
+        {
+            return true;
+        }
+
+        try
+        {
+            return TimeZoneInfo.TryFindSystemTimeZoneById(timeZone, out _);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     protected override SchedulerConfigResource ToResource(IConfigService model)
