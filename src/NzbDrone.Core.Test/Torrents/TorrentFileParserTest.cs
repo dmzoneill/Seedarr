@@ -292,10 +292,50 @@ public class TorrentFileParserTest
         var result = _subject.Parse(stream);
 
         Assert.That(result.Files, Has.Count.EqualTo(2));
-        Assert.That(result.Files[0].Path, Is.EqualTo("folder/file1.txt"));
+        Assert.That(result.Files[0].Path, Is.EqualTo("my-torrent/folder/file1.txt"));
         Assert.That(result.Files[0].Size, Is.EqualTo(1000));
-        Assert.That(result.Files[1].Path, Is.EqualTo("folder/file2.txt"));
+        Assert.That(result.Files[1].Path, Is.EqualTo("my-torrent/folder/file2.txt"));
         Assert.That(result.Files[1].Size, Is.EqualTo(2000));
+    }
+
+    [Test]
+    public void Parse_should_prefix_multi_file_paths_with_root_dir_and_normalize_separators()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1234) },
+                { "path", new BList { new BString("/CD1/"), new BString("01.flac") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(5678) },
+                { "path", new BList { new BString(@"CD2\subfolder"), new BString("02.flac") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString(@"\AlbumXYZ/") },
+            { "piece length", new BNumber(512) },
+            { "pieces", new BString(pieces) },
+            { "files", files }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(2));
+        Assert.That(result.Files[0].Path, Is.EqualTo("AlbumXYZ/CD1/01.flac"));
+        Assert.That(result.Files[0].Size, Is.EqualTo(1234));
+        Assert.That(result.Files[1].Path, Is.EqualTo("AlbumXYZ/CD2/subfolder/02.flac"));
+        Assert.That(result.Files[1].Size, Is.EqualTo(5678));
     }
 
     [Test]
