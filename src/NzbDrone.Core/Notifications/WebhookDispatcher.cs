@@ -29,6 +29,18 @@ public interface IWebhookDispatcher
 
 public class WebhookDispatcher : IWebhookDispatcher
 {
+    private static readonly SocketsHttpHandler SharedHandler = new()
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        PooledConnectionIdleTimeout = TimeSpan.FromMinutes(1),
+        AutomaticDecompression = DecompressionMethods.All,
+    };
+
+    private static readonly HttpClient SharedDefaultClient = new(SharedHandler, disposeHandler: false)
+    {
+        Timeout = TimeSpan.FromSeconds(10)
+    };
+
     private readonly HttpClient _httpClient;
     private readonly AsyncRetryPolicy<HttpResponseMessage> _retryPolicy;
     private readonly Logger _logger;
@@ -46,7 +58,9 @@ public class WebhookDispatcher : IWebhookDispatcher
     {
         _timeout = timeout ?? TimeSpan.FromSeconds(10);
         _allowLoopback = allowLoopback;
-        _httpClient = httpClient ?? new HttpClient { Timeout = _timeout };
+        _httpClient = httpClient ?? (timeout == null || timeout == TimeSpan.FromSeconds(10)
+            ? SharedDefaultClient
+            : new HttpClient(SharedHandler, disposeHandler: false) { Timeout = _timeout });
         _logger = LogManager.GetCurrentClassLogger();
         _retryPolicy = retryPolicy ?? CreateRetryPolicy();
     }
