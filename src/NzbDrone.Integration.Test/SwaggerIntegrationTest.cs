@@ -57,6 +57,7 @@ public class SwaggerIntegrationTest : IntegrationTestBase
 
         Assert.That(html, Does.Contain("swagger-ui"));
         Assert.That(html, Does.Contain("swagger-custom.css"));
+        Assert.That(html, Does.Contain("persistAuthorization"));
     }
 
     [Test]
