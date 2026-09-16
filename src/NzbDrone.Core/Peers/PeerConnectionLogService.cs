@@ -11,6 +11,7 @@ public interface IPeerConnectionLogService
     void LogDisconnected(PeerConnection connection, string torrentName);
     List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end);
     List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end);
+    (int EncryptedCount, int PlaintextCount) GetConnectionCounts(DateTime start, DateTime end);
     void Purge(DateTime before);
 }
 
@@ -77,6 +78,11 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable
     public List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end)
     {
         return _repository.GetByInfoHash(infoHash, start, end);
+    }
+
+    public (int EncryptedCount, int PlaintextCount) GetConnectionCounts(DateTime start, DateTime end)
+    {
+        return _repository.GetConnectionCounts(start, end);
     }
 
     public void Purge(DateTime before)
