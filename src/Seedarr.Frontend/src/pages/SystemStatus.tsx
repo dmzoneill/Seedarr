@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useSystemStatus,
   useHealthChecks,
@@ -7,6 +9,8 @@ import {
   useDownloadClients,
   useIndexers,
 } from "../api/hooks";
+import { apiClient } from "../api/client";
+import { useToast } from "../context/ToastContext";
 import { formatBytes, formatUptime } from "../utils/formatters";
 
 function SystemStatus() {
@@ -17,10 +21,76 @@ function SystemStatus() {
   const { data: downloadClients } = useDownloadClients();
   const { data: indexers } = useIndexers();
 
+  const { showToast } = useToast();
+  const queryClient = useQueryClient();
+  const [showRestartModal, setShowRestartModal] = useState(false);
+  const [showShutdownModal, setShowShutdownModal] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
+  const [isShuttingDown, setIsShuttingDown] = useState(false);
+
   const isLoading = statusLoading || healthLoading || diskLoading;
 
   const warningOrErrorChecks =
     health?.filter((c) => c.type === "Warning" || c.type === "Error") ?? [];
+
+  const handleRestart = async () => {
+    setIsRestarting(true);
+    setShowRestartModal(false);
+    try {
+      await apiClient.post("/system/restart");
+      showToast("System is restarting. Waiting for reconnection...", "info");
+      pollReconnect();
+    } catch (err: any) {
+      setIsRestarting(false);
+      showToast(
+        `Failed to trigger restart: ${err?.message || "Unknown error"}`,
+        "error",
+      );
+    }
+  };
+
+  const pollReconnect = () => {
+    let attempts = 0;
+    const maxAttempts = 30;
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await fetch("/api/v1/system/status");
+        if (res.ok) {
+          clearInterval(interval);
+          setIsRestarting(false);
+          showToast("Seedarr has reconnected successfully!", "success");
+          queryClient.invalidateQueries({ queryKey: ["systemStatus"] });
+        }
+      } catch {
+        // Service is restarting, continue waiting
+      }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(interval);
+        setIsRestarting(false);
+        showToast(
+          "Reconnection timed out. Please refresh the page manually.",
+          "error",
+        );
+      }
+    }, 2000);
+  };
+
+  const handleShutdown = async () => {
+    setIsShuttingDown(true);
+    setShowShutdownModal(false);
+    try {
+      await apiClient.post("/system/shutdown");
+      showToast("System is shutting down. Service is terminating.", "info");
+    } catch (err: any) {
+      setIsShuttingDown(false);
+      showToast(
+        `Failed to trigger shutdown: ${err?.message || "Unknown error"}`,
+        "error",
+      );
+    }
+  };
 
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
@@ -59,16 +129,51 @@ function SystemStatus() {
           </p>
         </div>
 
-        {status && (
-          <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "0.75rem",
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          {status && (
             <span
               className="badge badge-seeding"
               style={{ padding: "0.35rem 0.75rem", fontSize: "0.85rem" }}
             >
               ● Uptime: {formatUptime(status.uptimeSeconds)}
             </span>
-          </div>
-        )}
+          )}
+          <button
+            type="button"
+            className="btn btn-outline btn-small"
+            onClick={() => setShowRestartModal(true)}
+            disabled={isRestarting || isShuttingDown}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+            }}
+          >
+            <span>🔄</span>
+            <span>{isRestarting ? "Restarting..." : "Restart"}</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger btn-small"
+            onClick={() => setShowShutdownModal(true)}
+            disabled={isRestarting || isShuttingDown}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+            }}
+          >
+            <span>⏻</span>
+            <span>{isShuttingDown ? "Shutting Down..." : "Shutdown"}</span>
+          </button>
+        </div>
       </div>
 
       {isLoading && <p className="loading">Loading system status...</p>}
@@ -740,6 +845,120 @@ function SystemStatus() {
           </div>
         </div>
       </div>
+
+      {showRestartModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => !isRestarting && setShowRestartModal(false)}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 460,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid var(--border-light)",
+            }}
+          >
+            <h2 style={{ margin: "0 0 0.75rem", fontSize: "1.2rem" }}>
+              Restart Seedarr
+            </h2>
+            <p
+              style={{
+                margin: "0 0 1.25rem",
+                color: "var(--text-secondary)",
+                fontSize: "0.9rem",
+                lineHeight: 1.4,
+              }}
+            >
+              Are you sure you want to restart Seedarr? Active seeding and
+              downloads will temporarily pause until the service restarts.
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-outline btn-small"
+                onClick={() => setShowRestartModal(false)}
+                disabled={isRestarting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-small"
+                onClick={handleRestart}
+                disabled={isRestarting}
+              >
+                {isRestarting ? "Restarting..." : "Restart"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showShutdownModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => !isShuttingDown && setShowShutdownModal(false)}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 460,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid var(--border-light)",
+            }}
+          >
+            <h2 style={{ margin: "0 0 0.75rem", fontSize: "1.2rem" }}>
+              Shutdown Seedarr
+            </h2>
+            <p
+              style={{
+                margin: "0 0 1.25rem",
+                color: "var(--text-secondary)",
+                fontSize: "0.9rem",
+                lineHeight: 1.4,
+              }}
+            >
+              Are you sure you want to shut down Seedarr? The host process will
+              terminate and will require manual intervention to start again.
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-outline btn-small"
+                onClick={() => setShowShutdownModal(false)}
+                disabled={isShuttingDown}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-small"
+                onClick={handleShutdown}
+                disabled={isShuttingDown}
+              >
+                {isShuttingDown ? "Shutting Down..." : "Shutdown"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

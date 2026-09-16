@@ -35,9 +35,15 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
     {
         if (!_configFileProvider.AuthenticationEnabled)
         {
+            var noAuthClaims = new[]
+            {
+                new Claim(ClaimTypes.Name, "Anonymous"),
+                new Claim(ClaimTypes.Role, "Admin"),
+            };
+            var noAuthIdentity = new ClaimsIdentity(noAuthClaims, "NoAuth");
             return Task.FromResult(AuthenticateResult.Success(
                 new AuthenticationTicket(
-                    new ClaimsPrincipal(new ClaimsIdentity("NoAuth")),
+                    new ClaimsPrincipal(noAuthIdentity),
                     ApiKeyAuthenticationOptions.DefaultScheme)));
         }
 
@@ -82,7 +88,11 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
             return Task.FromResult(AuthenticateResult.Fail("Invalid API Key"));
         }
 
-        var claims = new[] { new Claim(ClaimTypes.Name, "API") };
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.Name, "API"),
+            new Claim(ClaimTypes.Role, "Admin"),
+        };
         var identity = new ClaimsIdentity(claims, ApiKeyAuthenticationOptions.DefaultScheme);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, ApiKeyAuthenticationOptions.DefaultScheme);
