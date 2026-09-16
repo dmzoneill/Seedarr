@@ -497,7 +497,7 @@ public class ConfigService : IConfigService
     // Tracker Server
     public bool TrackerServerEnabled => GetValueBoolean("TrackerServerEnabled", false);
     public bool TrackerHttpEnabled => GetValueBoolean("TrackerHttpEnabled", true);
-    public int TrackerHttpPort => GetValueInt("TrackerHttpPort", 9696);
+    public int TrackerHttpPort => GetValueInt("TrackerHttpPort", 6969);
     public bool TrackerUdpEnabled => GetValueBoolean("TrackerUdpEnabled", true);
     public int TrackerUdpPort => GetValueInt("TrackerUdpPort", 6969);
     public string TrackerBindAddress => GetValue("TrackerBindAddress", "0.0.0.0");

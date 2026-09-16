@@ -363,10 +363,10 @@ public class TrackerServerConfigController : ConfigController<TrackerServerConfi
             .InclusiveBetween(1, 65535);
 
         SharedValidator.RuleFor(c => c.TrackerAnnounceInterval)
-            .GreaterThanOrEqualTo(60);
+            .InclusiveBetween(60, 86400);
 
         SharedValidator.RuleFor(c => c.TrackerMaxPeersPerAnnounce)
-            .GreaterThanOrEqualTo(1);
+            .InclusiveBetween(1, 200);
 
         SharedValidator.RuleFor(c => c.TrackerRateLimitPerMinute)
             .GreaterThanOrEqualTo(1);

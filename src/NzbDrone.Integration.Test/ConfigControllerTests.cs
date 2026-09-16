@@ -108,4 +108,55 @@ public class ConfigControllerTests : IntegrationTestBase
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
+
+    [Test]
+    public async Task PutTrackerServerConfig_with_peers_exceeding_200_returns_400()
+    {
+        var body = new
+        {
+            id = 1,
+            trackerHttpPort = 6969,
+            trackerUdpPort = 6969,
+            trackerAnnounceInterval = 1800,
+            trackerMaxPeersPerAnnounce = 201
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/trackerserver/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task PutTrackerServerConfig_with_announce_interval_exceeding_86400_returns_400()
+    {
+        var body = new
+        {
+            id = 1,
+            trackerHttpPort = 6969,
+            trackerUdpPort = 6969,
+            trackerAnnounceInterval = 86401,
+            trackerMaxPeersPerAnnounce = 50
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/trackerserver/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task PutTrackerServerConfig_with_valid_config_returns_202()
+    {
+        var body = new
+        {
+            id = 1,
+            trackerHttpPort = 6969,
+            trackerUdpPort = 6969,
+            trackerAnnounceInterval = 1800,
+            trackerMaxPeersPerAnnounce = 50
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/trackerserver/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+    }
 }
