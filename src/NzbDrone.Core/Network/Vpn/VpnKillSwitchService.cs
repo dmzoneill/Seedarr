@@ -115,6 +115,7 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
                 string.Equals(iface, "Any", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(iface, "all", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(iface, "0.0.0.0", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(iface, "::", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(iface, "*", StringComparison.OrdinalIgnoreCase))
             {
                 if (_isFailClosedActive)
