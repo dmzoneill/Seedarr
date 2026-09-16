@@ -1,3 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Torznab;
@@ -381,6 +388,177 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
         {
             var result = TorznabIndexer.MapFriendlyCategory(input);
             Assert.That(result, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void ParseResponse_should_prohibit_dtd_entity_expansion()
+        {
+            var xmlWithDtd = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<!DOCTYPE foo [ <!ENTITY xxe SYSTEM ""http://169.254.169.254/latest/meta-data""> ]>
+<rss version=""2.0"">
+    <channel>
+        <item>
+            <title>&xxe;</title>
+            <link>http://indexer.local/torrent/1</link>
+        </item>
+    </channel>
+</rss>";
+
+            Assert.Throws<System.Xml.XmlException>(() => _subject.ParseResponse(xmlWithDtd));
+        }
+
+        [Test]
+        public void FetchTorrentByHash_should_reject_unsafe_enclosure_download_url()
+        {
+            var handler = new TorznabTestHttpMessageHandler();
+            var indexer = new TorznabIndexer(new HttpClient(handler));
+
+            var definition = new IndexerDefinition
+            {
+                Id = 1,
+                Name = "Torznab Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "secret-key"
+            };
+
+            var searchXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"">
+    <channel>
+        <item>
+            <title>Unsafe Enclosure Torrent</title>
+            <enclosure url=""http://169.254.169.254/latest/meta-data"" length=""1024"" />
+        </item>
+    </channel>
+</rss>";
+
+            handler.Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(searchXml)
+            };
+
+            var result = indexer.FetchTorrentByHash(definition, "0123456789abcdef0123456789abcdef01234567");
+
+            Assert.That(result, Is.Null);
+            Assert.That(handler.SentRequests.Count, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void FetchTorrentByHash_should_not_send_api_key_to_cross_origin_download_host()
+        {
+            var handler = new TorznabTestHttpMessageHandler();
+            var indexer = new TorznabIndexer(new HttpClient(handler));
+
+            var definition = new IndexerDefinition
+            {
+                Id = 1,
+                Name = "Torznab Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "secret-key"
+            };
+
+            var searchXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"">
+    <channel>
+        <item>
+            <title>Cross Origin Enclosure Torrent</title>
+            <enclosure url=""http://8.8.4.4:8080/download/1.torrent"" length=""1024"" />
+        </item>
+    </channel>
+</rss>";
+
+            var torrentBytes = new byte[] { 1, 2, 3, 4 };
+
+            handler.Handler = req =>
+            {
+                if (req.RequestUri.ToString().Contains("infohash"))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(searchXml)
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(torrentBytes)
+                };
+            };
+
+            var result = indexer.FetchTorrentByHash(definition, "0123456789abcdef0123456789abcdef01234567");
+
+            Assert.That(result, Is.EqualTo(torrentBytes));
+            Assert.That(handler.SentRequests.Count, Is.EqualTo(2));
+            var dlRequest = handler.SentRequests[1];
+            Assert.That(dlRequest.Headers.Contains("X-Api-Key"), Is.False);
+        }
+
+        [Test]
+        public void FetchTorrentByHash_should_send_api_key_to_same_origin_download_host()
+        {
+            var handler = new TorznabTestHttpMessageHandler();
+            var indexer = new TorznabIndexer(new HttpClient(handler));
+
+            var definition = new IndexerDefinition
+            {
+                Id = 1,
+                Name = "Torznab Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "secret-key"
+            };
+
+            var searchXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"">
+    <channel>
+        <item>
+            <title>Same Origin Enclosure Torrent</title>
+            <enclosure url=""http://8.8.8.8:9696/download/1.torrent"" length=""1024"" />
+        </item>
+    </channel>
+</rss>";
+
+            var torrentBytes = new byte[] { 5, 6, 7, 8 };
+
+            handler.Handler = req =>
+            {
+                if (req.RequestUri.ToString().Contains("infohash"))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(searchXml)
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(torrentBytes)
+                };
+            };
+
+            var result = indexer.FetchTorrentByHash(definition, "0123456789abcdef0123456789abcdef01234567");
+
+            Assert.That(result, Is.EqualTo(torrentBytes));
+            Assert.That(handler.SentRequests.Count, Is.EqualTo(2));
+            var dlRequest = handler.SentRequests[1];
+            Assert.That(dlRequest.Headers.Contains("X-Api-Key"), Is.True);
+            Assert.That(dlRequest.Headers.GetValues("X-Api-Key").First(), Is.EqualTo("secret-key"));
+        }
+
+        private class TorznabTestHttpMessageHandler : HttpMessageHandler
+        {
+            public List<HttpRequestMessage> SentRequests { get; } = new();
+            public Func<HttpRequestMessage, HttpResponseMessage> Handler { get; set; }
+
+            protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                SentRequests.Add(request);
+                return Handler?.Invoke(request) ?? new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                SentRequests.Add(request);
+                return Task.FromResult(Handler?.Invoke(request) ?? new HttpResponseMessage(HttpStatusCode.NotFound));
+            }
         }
     }
 }

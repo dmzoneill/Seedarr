@@ -1,13 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Http;
+using System.Xml;
 using NLog;
+using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Indexers.Torznab;
 
 public class TorznabIndexer : IIndexer
 {
-    private static readonly HttpClient Client = new();
+    private static readonly HttpClient DefaultClient = new();
+    private readonly HttpClient _httpClient;
     private readonly Logger _logger;
 
     public string Name => "Torznab";
@@ -25,8 +29,9 @@ public class TorznabIndexer : IIndexer
         { 8000, new List<int> { 8000, 8010, 8020 } } // Other
     };
 
-    public TorznabIndexer()
+    public TorznabIndexer(HttpClient httpClient = null)
     {
+        _httpClient = httpClient ?? DefaultClient;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -102,7 +107,7 @@ public class TorznabIndexer : IIndexer
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            using var response = Client.Send(request);
+            using var response = _httpClient.Send(request);
 
             if (response.IsSuccessStatusCode)
             {
@@ -153,7 +158,7 @@ public class TorznabIndexer : IIndexer
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            using var response = Client.Send(request);
+            using var response = _httpClient.Send(request);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -161,8 +166,15 @@ public class TorznabIndexer : IIndexer
             }
 
             using var stream = response.Content.ReadAsStream();
-            var doc = new System.Xml.XmlDocument();
-            doc.Load(stream);
+            var doc = new XmlDocument();
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                MaxCharactersFromEntities = 1024
+            };
+            using var reader = XmlReader.Create(stream, settings);
+            doc.Load(reader);
 
             var enclosure = doc.SelectSingleNode("//item/enclosure");
             if (enclosure != null && enclosure.Attributes["url"] != null)
@@ -170,11 +182,26 @@ public class TorznabIndexer : IIndexer
                 var downloadUrl = enclosure.Attributes["url"].Value;
                 if (!string.IsNullOrEmpty(downloadUrl) && !downloadUrl.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
                 {
+                    if (!UrlValidator.IsSafeUrl(downloadUrl))
+                    {
+                        _logger.Warn("Unsafe download URL detected in Torznab enclosure: {0}", downloadUrl);
+                        return null;
+                    }
+
                     using var dlRequest = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
-                    using var dlResponse = Client.Send(dlRequest);
+                    if (!string.IsNullOrWhiteSpace(definition.ApiKey) &&
+                        Uri.TryCreate(downloadUrl, UriKind.Absolute, out var dlUri) &&
+                        !string.IsNullOrWhiteSpace(definition.Url) &&
+                        Uri.TryCreate(definition.Url, UriKind.Absolute, out var indUri) &&
+                        string.Equals(dlUri.Host, indUri.Host, StringComparison.OrdinalIgnoreCase))
+                    {
+                        dlRequest.Headers.Add("X-Api-Key", definition.ApiKey);
+                    }
+
+                    using var dlResponse = _httpClient.Send(dlRequest);
                     if (dlResponse.IsSuccessStatusCode)
                     {
-                        using var ms = new System.IO.MemoryStream();
+                        using var ms = new MemoryStream();
                         dlResponse.Content.ReadAsStream().CopyTo(ms);
                         return ms.ToArray();
                     }
@@ -237,7 +264,7 @@ public class TorznabIndexer : IIndexer
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            using var response = Client.Send(request);
+            using var response = _httpClient.Send(request);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Torznab search returned status code {0}", response.StatusCode);
@@ -273,8 +300,15 @@ public class TorznabIndexer : IIndexer
             return results;
         }
 
-        var doc = new System.Xml.XmlDocument();
-        doc.LoadXml(xml);
+        var doc = new XmlDocument();
+        var settings = new XmlReaderSettings
+        {
+            DtdProcessing = DtdProcessing.Prohibit,
+            XmlResolver = null,
+            MaxCharactersFromEntities = 1024
+        };
+        using var reader = XmlReader.Create(new StringReader(xml), settings);
+        doc.Load(reader);
 
         int? responseOffset = null;
         int? responseTotal = null;

@@ -39,7 +39,8 @@ public class IndexerController : Controller
         IDownloadHistoryService downloadHistoryService,
         IIndexerStatusService indexerStatusService = null,
         IProxySettingsProvider proxySettingsProvider = null,
-        IRssRuleRepository rssRuleRepository = null)
+        IRssRuleRepository rssRuleRepository = null,
+        HttpClient httpClient = null)
     {
         _indexerFactory = indexerFactory;
         _torrentService = torrentService;
@@ -50,9 +51,9 @@ public class IndexerController : Controller
         _indexerStatusService = indexerStatusService ?? new IndexerStatusService();
         _proxySettingsProvider = proxySettingsProvider;
         _rssRuleRepository = rssRuleRepository;
-        _httpClient = proxySettingsProvider != null && proxySettingsProvider.IsEnabled
+        _httpClient = httpClient ?? (proxySettingsProvider != null && proxySettingsProvider.IsEnabled
             ? new HttpClient(proxySettingsProvider.CreateHandler())
-            : new HttpClient();
+            : new HttpClient());
     }
 
     [HttpGet]
@@ -355,6 +356,11 @@ public class IndexerController : Controller
 
         if (!string.IsNullOrWhiteSpace(request.DownloadUrl))
         {
+            if (!UrlValidator.IsSafeUrl(request.DownloadUrl))
+            {
+                return BadRequest("Invalid or unsafe download URL.");
+            }
+
             try
             {
                 using var httpRequest = new HttpRequestMessage(HttpMethod.Get, request.DownloadUrl);
@@ -364,7 +370,13 @@ public class IndexerController : Controller
                     var def = _indexerFactory.Get(request.IndexerId.Value);
                     if (def != null && !string.IsNullOrWhiteSpace(def.ApiKey))
                     {
-                        httpRequest.Headers.Add("X-Api-Key", def.ApiKey);
+                        if (Uri.TryCreate(request.DownloadUrl, UriKind.Absolute, out var downloadUri) &&
+                            !string.IsNullOrWhiteSpace(def.Url) &&
+                            Uri.TryCreate(def.Url, UriKind.Absolute, out var indexerUri) &&
+                            string.Equals(downloadUri.Host, indexerUri.Host, StringComparison.OrdinalIgnoreCase))
+                        {
+                            httpRequest.Headers.Add("X-Api-Key", def.ApiKey);
+                        }
                     }
                 }
 

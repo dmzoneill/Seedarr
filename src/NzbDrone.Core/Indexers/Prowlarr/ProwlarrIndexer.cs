@@ -1,19 +1,22 @@
 using System;
 using System.Net.Http;
 using NLog;
+using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Indexers.Prowlarr;
 
 public class ProwlarrIndexer : IIndexer
 {
-    private static readonly HttpClient Client = new();
+    private static readonly HttpClient DefaultClient = new();
+    private readonly HttpClient _httpClient;
     private readonly Logger _logger;
 
     public string Name => "Prowlarr";
     public string IndexerType => "Prowlarr";
 
-    public ProwlarrIndexer()
+    public ProwlarrIndexer(HttpClient httpClient = null)
     {
+        _httpClient = httpClient ?? DefaultClient;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -38,7 +41,7 @@ public class ProwlarrIndexer : IIndexer
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            using var response = Client.Send(request);
+            using var response = _httpClient.Send(request);
 
             if (response.IsSuccessStatusCode)
             {
@@ -93,7 +96,7 @@ public class ProwlarrIndexer : IIndexer
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Add("X-Api-Key", definition.ApiKey);
-            using var response = Client.Send(request);
+            using var response = _httpClient.Send(request);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -110,10 +113,25 @@ public class ProwlarrIndexer : IIndexer
                     if (element.TryGetProperty("downloadUrl", out var downloadUrlProp) && downloadUrlProp.ValueKind == System.Text.Json.JsonValueKind.String)
                     {
                         var downloadUrl = downloadUrlProp.GetString();
-                        if (!string.IsNullOrEmpty(downloadUrl))
+                        if (!string.IsNullOrEmpty(downloadUrl) && !downloadUrl.StartsWith("magnet:", StringComparison.OrdinalIgnoreCase))
                         {
+                            if (!UrlValidator.IsSafeUrl(downloadUrl))
+                            {
+                                _logger.Warn("Unsafe download URL detected in Prowlarr search result: {0}", downloadUrl);
+                                continue;
+                            }
+
                             using var dlRequest = new HttpRequestMessage(HttpMethod.Get, downloadUrl);
-                            using var dlResponse = Client.Send(dlRequest);
+                            if (!string.IsNullOrWhiteSpace(definition.ApiKey) &&
+                                Uri.TryCreate(downloadUrl, UriKind.Absolute, out var dlUri) &&
+                                !string.IsNullOrWhiteSpace(definition.Url) &&
+                                Uri.TryCreate(definition.Url, UriKind.Absolute, out var indUri) &&
+                                string.Equals(dlUri.Host, indUri.Host, StringComparison.OrdinalIgnoreCase))
+                            {
+                                dlRequest.Headers.Add("X-Api-Key", definition.ApiKey);
+                            }
+
+                            using var dlResponse = _httpClient.Send(dlRequest);
                             if (dlResponse.IsSuccessStatusCode)
                             {
                                 using var ms = new System.IO.MemoryStream();
@@ -166,7 +184,7 @@ public class ProwlarrIndexer : IIndexer
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            using var response = Client.Send(request);
+            using var response = _httpClient.Send(request);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Prowlarr search returned status code {0}", response.StatusCode);
