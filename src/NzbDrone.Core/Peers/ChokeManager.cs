@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
@@ -18,9 +19,12 @@ public interface IChokeManager
     void PeerConnected(PeerConnection connection);
     void PeerDisconnected(PeerConnection connection);
     void PeerInterestedChanged(PeerConnection connection);
+    void PeerBecameSeed(PeerConnection connection);
     void UpdatePeerActivity(PeerConnection connection);
     bool CanUnchoke(PeerConnection connection);
     bool CanUnchoke(string infoHash);
+    bool IsTorrentSeeding(string infoHash);
+    void SetTorrentSeeding(string infoHash, bool isSeeding);
 }
 
 public class ChokeManager : BackgroundService, IChokeManager
@@ -31,9 +35,11 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     private readonly IConnectionManager _connectionManager;
     private readonly IConfigService _configService;
+    private readonly ITorrentService _torrentService;
     private readonly IRandomNumberGenerator _random;
     private readonly Logger _logger;
     private readonly object _lock = new();
+    private readonly HashSet<string> _explicitSeedingTorrents = new(StringComparer.OrdinalIgnoreCase);
 
     private DateTime _lastRegularUnchoke = DateTime.MinValue;
     private DateTime _lastOptimisticUnchoke = DateTime.MinValue;
@@ -41,10 +47,12 @@ public class ChokeManager : BackgroundService, IChokeManager
     public ChokeManager(
         IConnectionManager connectionManager,
         IConfigService configService,
+        ITorrentService torrentService = null,
         IRandomNumberGenerator random = null)
     {
         _connectionManager = connectionManager;
         _configService = configService;
+        _torrentService = torrentService;
         _random = random ?? new RandomNumberGenerator();
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -130,6 +138,16 @@ public class ChokeManager : BackgroundService, IChokeManager
                 }
             }
 
+            // Anti-seed choking: choke any unchoked peer that has become a seed
+            foreach (var conn in connections)
+            {
+                if (!conn.AmChoking && conn.IsSeed)
+                {
+                    conn.IsOptimisticUnchoked = false;
+                    Choke(conn);
+                }
+            }
+
             // Reserve 1 slot for optimistic unchoke if maxUploadSlots > 1
             var regularSlotCount = maxUploadSlots > 1 ? maxUploadSlots - 1 : maxUploadSlots;
 
@@ -143,17 +161,31 @@ public class ChokeManager : BackgroundService, IChokeManager
 
             if (regularSlotCount > 0)
             {
-                // Filter torrent groups that have at least one interested, non-snubbed peer candidate
+                // Filter torrent groups that have at least one interested, non-snubbed, non-seed candidate
                 var torrentGroups = byTorrent
-                    .Select(g => new
+                    .Select(g =>
                     {
-                        InfoHash = g.Key,
-                        Candidates = g
-                            .Where(c => c.PeerInterested && !c.IsSnubbed)
-                            .OrderByDescending(c => c.UploadRate + c.DownloadRate)
-                            .ThenByDescending(c => c.BytesUploaded)
-                            .ThenBy(c => c.ConnectedAt)
-                            .ToList()
+                        var isSeeding = IsTorrentSeeding(g.Key);
+                        var eligible = g.Where(c => c.PeerInterested && !c.IsSnubbed && !c.IsSeed);
+
+                        var candidates = isSeeding
+                            ? eligible
+                                .OrderByDescending(c => c.UploadRate)
+                                .ThenBy(c => c.LastUnchokedAt)
+                                .ThenBy(c => c.ConnectedAt)
+                                .ToList()
+                            : eligible
+                                .OrderByDescending(c => c.UploadRate + c.DownloadRate)
+                                .ThenByDescending(c => c.BytesUploaded)
+                                .ThenBy(c => c.ConnectedAt)
+                                .ToList();
+
+                        return new
+                        {
+                            InfoHash = g.Key,
+                            IsSeeding = isSeeding,
+                            Candidates = candidates
+                        };
                     })
                     .Where(g => g.Candidates.Count > 0)
                     .ToList();
@@ -182,7 +214,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                     {
                         // More active torrents than regular slots: prioritize swarms by highest candidate peer rate
                         var prioritizedTorrents = torrentGroups
-                            .OrderByDescending(g => g.Candidates[0].UploadRate + g.Candidates[0].DownloadRate)
+                            .OrderByDescending(g => g.IsSeeding ? g.Candidates[0].UploadRate : (g.Candidates[0].UploadRate + g.Candidates[0].DownloadRate))
                             .ThenByDescending(g => g.Candidates[0].BytesUploaded)
                             .Take(remainingSlots);
 
@@ -202,9 +234,13 @@ public class ChokeManager : BackgroundService, IChokeManager
                             .OrderByDescending(g =>
                             {
                                 var nextPeer = g.Candidates[allocatedSlots[g.InfoHash]];
-                                return nextPeer.UploadRate + nextPeer.DownloadRate;
+                                return g.IsSeeding ? nextPeer.UploadRate : (nextPeer.UploadRate + nextPeer.DownloadRate);
                             })
-                            .ThenByDescending(g => g.Candidates[allocatedSlots[g.InfoHash]].BytesUploaded)
+                            .ThenBy(g =>
+                            {
+                                var nextPeer = g.Candidates[allocatedSlots[g.InfoHash]];
+                                return g.IsSeeding ? nextPeer.LastUnchokedAt : DateTime.MaxValue;
+                            })
                             .FirstOrDefault();
 
                         if (bestTorrent == null)
@@ -233,8 +269,8 @@ public class ChokeManager : BackgroundService, IChokeManager
                         var leftoverCandidates = torrentGroups
                             .SelectMany(g => g.Candidates)
                             .Where(c => !selectedRegular.Contains(c))
-                            .OrderByDescending(c => c.UploadRate + c.DownloadRate)
-                            .ThenByDescending(c => c.BytesUploaded)
+                            .OrderByDescending(c => IsTorrentSeeding(c.InfoHash) ? c.UploadRate : (c.UploadRate + c.DownloadRate))
+                            .ThenBy(c => IsTorrentSeeding(c.InfoHash) ? c.LastUnchokedAt : DateTime.MaxValue)
                             .ThenBy(c => c.ConnectedAt)
                             .Take(regularSlotCount - selectedRegular.Count);
 
@@ -338,9 +374,9 @@ public class ChokeManager : BackgroundService, IChokeManager
 
             foreach (var group in byTorrent)
             {
-                // Find all interested peers that are currently choked in this torrent swarm
+                // Find all interested peers that are currently choked in this torrent swarm (excluding seeds)
                 var chokedInterested = group
-                    .Where(c => c.PeerInterested && c.AmChoking)
+                    .Where(c => c.PeerInterested && c.AmChoking && !c.IsSeed)
                     .ToList();
 
                 if (chokedInterested.Count == 0)
@@ -376,6 +412,18 @@ public class ChokeManager : BackgroundService, IChokeManager
             return;
         }
 
+        if (connection.IsSeed)
+        {
+            if (!connection.AmChoking)
+            {
+                connection.IsOptimisticUnchoked = false;
+                Choke(connection);
+                PromoteNextEligibleChokedPeer(connection.InfoHash);
+            }
+
+            return;
+        }
+
         if (connection.PeerInterested)
         {
             if (CanUnchoke(connection))
@@ -384,6 +432,26 @@ public class ChokeManager : BackgroundService, IChokeManager
             }
         }
         else
+        {
+            if (!connection.AmChoking)
+            {
+                connection.IsOptimisticUnchoked = false;
+                Choke(connection);
+                PromoteNextEligibleChokedPeer(connection.InfoHash);
+            }
+        }
+    }
+
+    public void PeerBecameSeed(PeerConnection connection)
+    {
+        if (connection == null)
+        {
+            return;
+        }
+
+        connection.IsSeed = true;
+
+        lock (_lock)
         {
             if (!connection.AmChoking)
             {
@@ -406,7 +474,7 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     public bool CanUnchoke(PeerConnection connection)
     {
-        if (connection == null)
+        if (connection == null || connection.IsSeed)
         {
             return false;
         }
@@ -432,6 +500,60 @@ public class ChokeManager : BackgroundService, IChokeManager
         return unchokedCount < maxUploadSlots;
     }
 
+    public bool IsTorrentSeeding(string infoHash)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return false;
+        }
+
+        lock (_lock)
+        {
+            if (_explicitSeedingTorrents.Contains(infoHash))
+            {
+                return true;
+            }
+        }
+
+        if (_torrentService != null)
+        {
+            try
+            {
+                var torrent = _torrentService.FindByInfoHash(infoHash) ?? _torrentService.GetByInfoHash(infoHash);
+                if (torrent != null)
+                {
+                    return torrent.Status == TorrentStatus.Seeding || torrent.Progress >= 1.0;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to check seeding state for torrent {0}", infoHash);
+            }
+        }
+
+        return false;
+    }
+
+    public void SetTorrentSeeding(string infoHash, bool isSeeding)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            if (isSeeding)
+            {
+                _explicitSeedingTorrents.Add(infoHash);
+            }
+            else
+            {
+                _explicitSeedingTorrents.Remove(infoHash);
+            }
+        }
+    }
+
     private void PromoteNextEligibleChokedPeer(string infoHash)
     {
         if (string.IsNullOrEmpty(infoHash))
@@ -454,13 +576,22 @@ public class ChokeManager : BackgroundService, IChokeManager
                     .ToList();
             }
 
-            var nextPeer = torrentConnections
-                .Where(c => c.PeerInterested && c.AmChoking && !c.IsSnubbed)
-                .OrderByDescending(c => c.DownloadRate)
-                .ThenByDescending(c => c.UploadRate)
-                .ThenByDescending(c => c.BytesUploaded)
-                .ThenBy(c => c.ConnectedAt)
-                .FirstOrDefault();
+            var isSeeding = IsTorrentSeeding(infoHash);
+            var eligibleCandidates = torrentConnections
+                .Where(c => c.PeerInterested && c.AmChoking && !c.IsSnubbed && !c.IsSeed);
+
+            var nextPeer = isSeeding
+                ? eligibleCandidates
+                    .OrderByDescending(c => c.UploadRate)
+                    .ThenBy(c => c.LastUnchokedAt)
+                    .ThenBy(c => c.ConnectedAt)
+                    .FirstOrDefault()
+                : eligibleCandidates
+                    .OrderByDescending(c => c.DownloadRate)
+                    .ThenByDescending(c => c.UploadRate)
+                    .ThenByDescending(c => c.BytesUploaded)
+                    .ThenBy(c => c.ConnectedAt)
+                    .FirstOrDefault();
 
             if (nextPeer != null)
             {
@@ -475,6 +606,7 @@ public class ChokeManager : BackgroundService, IChokeManager
         if (connection.AmChoking)
         {
             connection.AmChoking = false;
+            connection.LastUnchokedAt = DateTime.UtcNow;
             try
             {
                 connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
