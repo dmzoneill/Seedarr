@@ -9,6 +9,7 @@ using NzbDrone.Core.Indexers.Prowlarr;
 using NzbDrone.Core.Indexers.Torznab;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Validation;
 using Seedarr.Api.V1.Torrents;
 using Seedarr.Http;
 
@@ -155,6 +156,30 @@ public class IndexerController : Controller
     [HttpPost("test")]
     public ActionResult<IndexerTestResult> TestDirect([FromBody] IndexerDefinition definition)
     {
+        if (definition == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.Url))
+        {
+            return BadRequest("URL cannot be empty");
+        }
+
+        if (!UrlValidator.IsSafeUrl(definition.Url))
+        {
+            return BadRequest("Target host/URL is not permitted.");
+        }
+
+        if (definition.Id > 0 && (string.IsNullOrWhiteSpace(definition.ApiKey) || definition.ApiKey.Contains('*')))
+        {
+            var existing = _indexerFactory.Get(definition.Id);
+            if (existing != null)
+            {
+                definition.ApiKey = existing.ApiKey;
+            }
+        }
+
         IIndexer indexer;
         try
         {
@@ -166,7 +191,7 @@ public class IndexerController : Controller
         }
 
         var result = indexer.TestConnectionDetailed(definition);
-        if (definition.Id > 0)
+        if (definition.Id > 0 && !definition.ApiKey.Contains('*'))
         {
             if (result.Success)
             {
@@ -190,6 +215,11 @@ public class IndexerController : Controller
             return NotFound();
         }
 
+        if (!UrlValidator.IsSafeUrl(definition.Url))
+        {
+            return BadRequest("Target host/URL is not permitted.");
+        }
+
         IIndexer indexer;
         try
         {
@@ -203,11 +233,11 @@ public class IndexerController : Controller
         var result = indexer.TestConnectionDetailed(definition);
         if (result.Success)
         {
-            _indexerStatusService.RecordSuccess(id);
+            _indexerStatusService.RecordSuccess(definition.Id);
         }
         else
         {
-            _indexerStatusService.RecordFailure(id, errorMessage: result.Message);
+            _indexerStatusService.RecordFailure(definition.Id, errorMessage: result.Message);
         }
 
         return Ok(result);

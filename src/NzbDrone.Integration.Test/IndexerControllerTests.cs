@@ -67,7 +67,7 @@ public class IndexerControllerTests : IntegrationTestBase
         {
             name = "Invalid Indexer",
             indexerType = "UnknownType",
-            url = "http://localhost:9696",
+            url = "http://8.8.8.8:9696",
             enable = true
         };
 
@@ -89,7 +89,7 @@ public class IndexerControllerTests : IntegrationTestBase
         {
             name = "Unreachable Prowlarr",
             indexerType = "Prowlarr",
-            url = "http://127.0.0.1:59999",
+            url = "http://198.51.100.1:59999",
             apiKey = "testkey",
             enable = true
         };
@@ -103,6 +103,22 @@ public class IndexerControllerTests : IntegrationTestBase
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.False);
         Assert.That(result.Message, Does.Contain("Unable to connect to Prowlarr"));
+    }
+
+    [Test]
+    public async Task TestDirect_with_unsafe_url_returns_bad_request()
+    {
+        var unsafeDef = new
+        {
+            name = "Metadata Probe",
+            indexerType = "Prowlarr",
+            url = "http://169.254.169.254",
+            apiKey = "testkey",
+            enable = true
+        };
+
+        var response = await PostJsonAsync("/api/v1/indexers/test", unsafeDef);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
     [Test]
