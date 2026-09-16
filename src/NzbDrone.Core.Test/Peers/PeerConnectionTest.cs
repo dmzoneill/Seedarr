@@ -4,8 +4,10 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Simulation.ClientBehavior;
 
 namespace NzbDrone.Core.Test.Peers;
 
@@ -1180,5 +1182,43 @@ public class PeerConnectionTest
             NzbDrone.Core.Peers.Encryption.EncryptionMode.PreferEncrypted);
 
         Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void BuildHandshake_should_preserve_dht_bit_for_public_torrents()
+    {
+        var handshake = PeerConnection.BuildHandshake("0102030405060708091011121314151617181920", "-SD0001-012345678901", isPrivate: false);
+
+        Assert.That(handshake[27] & 0x01, Is.EqualTo(0x01));
+    }
+
+    [Test]
+    public void BuildHandshake_should_mask_dht_bit_for_private_torrents()
+    {
+        var handshake = PeerConnection.BuildHandshake("0102030405060708091011121314151617181920", "-SD0001-012345678901", isPrivate: true);
+
+        Assert.That(handshake[27] & 0x01, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void BuildHandshake_should_mask_dht_bit_when_client_profile_does_not_support_dht()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.SupportsDht.Returns(false);
+
+        var handshake = PeerConnection.BuildHandshake("0102030405060708091011121314151617181920", "-SD0001-012345678901", isPrivate: false, clientProfile: profile);
+
+        Assert.That(handshake[27] & 0x01, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void BuildHandshake_should_preserve_dht_bit_when_client_profile_supports_dht_and_torrent_is_public()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.SupportsDht.Returns(true);
+
+        var handshake = PeerConnection.BuildHandshake("0102030405060708091011121314151617181920", "-SD0001-012345678901", isPrivate: false, clientProfile: profile);
+
+        Assert.That(handshake[27] & 0x01, Is.EqualTo(0x01));
     }
 }

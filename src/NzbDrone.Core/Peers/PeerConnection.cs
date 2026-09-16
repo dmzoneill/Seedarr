@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Text;
 using NLog;
 using NzbDrone.Core.Peers.Encryption;
+using NzbDrone.Core.Simulation.ClientBehavior;
 
 namespace NzbDrone.Core.Peers;
 
@@ -188,11 +189,11 @@ public class PeerConnection : IDisposable
         }
     }
 
-    public bool SendHandshake(string infoHash, string peerId)
+    public bool SendHandshake(string infoHash, string peerId, bool isPrivate = false, IClientProfile clientProfile = null)
     {
         try
         {
-            var handshake = BuildHandshake(infoHash, peerId);
+            var handshake = BuildHandshake(infoHash, peerId, isPrivate, clientProfile);
             _activeStream.Write(handshake, 0, handshake.Length);
             _activeStream.Flush();
             InfoHash = infoHash;
@@ -422,7 +423,7 @@ public class PeerConnection : IDisposable
         SendMessage(new PeerMessage { Type = PeerMessageType.Bitfield, Payload = bitfield });
     }
 
-    private static byte[] BuildHandshake(string infoHash, string peerId)
+    public static byte[] BuildHandshake(string infoHash, string peerId, bool isPrivate = false, IClientProfile clientProfile = null)
     {
         var buffer = new byte[68];
         buffer[0] = 19;
@@ -432,6 +433,11 @@ public class PeerConnection : IDisposable
         buffer[25] |= 0x10; // BEP 10
         buffer[27] |= 0x04; // BEP 6
         buffer[27] |= 0x01; // BEP 5
+
+        if (isPrivate || clientProfile?.SupportsDht == false)
+        {
+            buffer[27] &= unchecked((byte)~0x01);
+        }
 
         var hashBytes = Convert.FromHexString(infoHash);
         Array.Copy(hashBytes, 0, buffer, 28, 20);
