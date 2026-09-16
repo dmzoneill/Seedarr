@@ -83,6 +83,20 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
             DataProtectionProvider = dataProtection,
             Events = new OpenIdConnectEvents
             {
+                OnRedirectToIdentityProvider = context =>
+                {
+                    if (context.Request.IsHttps ||
+                        string.Equals(context.Request.Headers["X-Forwarded-Proto"], "https", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!string.IsNullOrEmpty(context.ProtocolMessage.RedirectUri) &&
+                            context.ProtocolMessage.RedirectUri.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                        {
+                            context.ProtocolMessage.RedirectUri = "https://" + context.ProtocolMessage.RedirectUri["http://".Length..];
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                },
                 OnTokenValidated = context =>
                 {
                     var claims = context.Principal?.Claims.ToList() ?? new List<Claim>();
