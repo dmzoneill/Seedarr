@@ -6,6 +6,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.DiskSpace;
+using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Test.DiskSpace;
 
@@ -340,5 +341,225 @@ public class DiskSpaceServiceTest
         // The result list should contain at most one entry for each root
         // (deduplication via the seen HashSet)
         Assert.That(result.Count, Is.GreaterThanOrEqualTo(1));
+    }
+
+    // --- Edge-triggered transitions and hysteresis tests ---
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_transition_from_Normal_to_Low_and_publish_DiskSpaceLowEvent()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+        const long free = 4L * 1024 * 1024 * 1024; // 4 GB (4%) -> Low
+
+        var state = service.UpdateDiskSpaceHealth("/data", free, total);
+
+        Assert.That(state, Is.EqualTo(DiskSpaceHealthState.Low));
+        eventAggregator.Received(1).PublishEvent(Arg.Is<DiskSpaceLowEvent>(e =>
+            e.DrivePath == "/data" &&
+            e.FreeBytes == free &&
+            e.TotalBytes == total));
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceCriticalEvent>());
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceRestoredEvent>());
+    }
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_not_publish_duplicate_DiskSpaceLowEvent_when_remaining_in_Low()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        service.UpdateDiskSpaceHealth("/data", 4L * 1024 * 1024 * 1024, total);
+        eventAggregator.ClearReceivedCalls();
+
+        var state = service.UpdateDiskSpaceHealth("/data", 4200L * 1024 * 1024, total);
+
+        Assert.That(state, Is.EqualTo(DiskSpaceHealthState.Low));
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceLowEvent>());
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceCriticalEvent>());
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceRestoredEvent>());
+    }
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_transition_from_Low_to_Critical_and_publish_DiskSpaceCriticalEvent()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        service.UpdateDiskSpaceHealth("/data", 4L * 1024 * 1024 * 1024, total);
+        eventAggregator.ClearReceivedCalls();
+
+        const long criticalFree = 800L * 1024 * 1024; // 800 MB -> Critical
+        var state = service.UpdateDiskSpaceHealth("/data", criticalFree, total);
+
+        Assert.That(state, Is.EqualTo(DiskSpaceHealthState.Critical));
+        eventAggregator.Received(1).PublishEvent(Arg.Is<DiskSpaceCriticalEvent>(e =>
+            e.DrivePath == "/data" &&
+            e.FreeBytes == criticalFree));
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceLowEvent>());
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceRestoredEvent>());
+    }
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_not_publish_duplicate_DiskSpaceCriticalEvent_when_remaining_in_Critical()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        service.UpdateDiskSpaceHealth("/data", 800L * 1024 * 1024, total);
+        eventAggregator.ClearReceivedCalls();
+
+        var state = service.UpdateDiskSpaceHealth("/data", 750L * 1024 * 1024, total);
+
+        Assert.That(state, Is.EqualTo(DiskSpaceHealthState.Critical));
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceCriticalEvent>());
+    }
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_respect_hysteresis_and_not_flap_between_Critical_and_Low()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        // Enter Critical at 800 MB (< 1 GB)
+        service.UpdateDiskSpaceHealth("/data", 800L * 1024 * 1024, total);
+        eventAggregator.ClearReceivedCalls();
+
+        // Free space fluctuates to 1.1 GB (above 1 GB, but below 1.25 GB hysteresis recovery)
+        var state = service.UpdateDiskSpaceHealth("/data", 1100L * 1024 * 1024, total);
+
+        Assert.That(state, Is.EqualTo(DiskSpaceHealthState.Critical));
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceCriticalEvent>());
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceLowEvent>());
+    }
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_transition_from_Critical_to_Low_without_publishing_events()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        service.UpdateDiskSpaceHealth("/data", 800L * 1024 * 1024, total);
+        eventAggregator.ClearReceivedCalls();
+
+        // Space rises to 2 GB (>= 1.25 GB, but still < 5 GB / < 5%)
+        var state = service.UpdateDiskSpaceHealth("/data", 2L * 1024 * 1024 * 1024, total);
+
+        Assert.That(state, Is.EqualTo(DiskSpaceHealthState.Low));
+        // Transitioning from Critical to Low must not publish LowEvent or RestoredEvent
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceLowEvent>());
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceRestoredEvent>());
+    }
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_respect_hysteresis_and_not_flap_between_Low_and_Normal()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        // Enter Low
+        service.UpdateDiskSpaceHealth("/data", 4L * 1024 * 1024 * 1024, total);
+        eventAggregator.ClearReceivedCalls();
+
+        // Space increases to 5.5 GB (above 5 GB, but below 6 GB and below 6%)
+        var state = service.UpdateDiskSpaceHealth("/data", 5500L * 1024 * 1024, total);
+
+        Assert.That(state, Is.EqualTo(DiskSpaceHealthState.Low));
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceRestoredEvent>());
+    }
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_transition_from_Low_to_Normal_and_publish_DiskSpaceRestoredEvent()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        service.UpdateDiskSpaceHealth("/data", 4L * 1024 * 1024 * 1024, total);
+        eventAggregator.ClearReceivedCalls();
+
+        const long restoredFree = 10L * 1024 * 1024 * 1024; // 10 GB (10%) >= 6 GB and >= 6%
+        var state = service.UpdateDiskSpaceHealth("/data", restoredFree, total);
+
+        Assert.That(state, Is.EqualTo(DiskSpaceHealthState.Normal));
+        eventAggregator.Received(1).PublishEvent(Arg.Is<DiskSpaceRestoredEvent>(e =>
+            e.DrivePath == "/data" &&
+            e.FreeBytes == restoredFree &&
+            e.TotalBytes == total));
+    }
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_transition_directly_from_Critical_to_Normal_and_publish_DiskSpaceRestoredEvent()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        // Enter Critical
+        service.UpdateDiskSpaceHealth("/data", 500L * 1024 * 1024, total);
+        eventAggregator.ClearReceivedCalls();
+
+        // Large cleanup frees space up to 25 GB (25%)
+        const long restoredFree = 25L * 1024 * 1024 * 1024;
+        var state = service.UpdateDiskSpaceHealth("/data", restoredFree, total);
+
+        Assert.That(state, Is.EqualTo(DiskSpaceHealthState.Normal));
+        eventAggregator.Received(1).PublishEvent(Arg.Is<DiskSpaceRestoredEvent>(e =>
+            e.DrivePath == "/data" &&
+            e.FreeBytes == restoredFree &&
+            e.TotalBytes == total));
+    }
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_transition_directly_from_Normal_to_Critical_and_publish_DiskSpaceCriticalEvent()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        const long criticalFree = 500L * 1024 * 1024;
+        var state = service.UpdateDiskSpaceHealth("/data", criticalFree, total);
+
+        Assert.That(state, Is.EqualTo(DiskSpaceHealthState.Critical));
+        eventAggregator.Received(1).PublishEvent(Arg.Is<DiskSpaceCriticalEvent>(e =>
+            e.DrivePath == "/data" &&
+            e.FreeBytes == criticalFree));
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceLowEvent>());
+    }
+
+    [Test]
+    public void UpdateDiskSpaceHealth_should_track_multiple_drives_independently()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        var state1 = service.UpdateDiskSpaceHealth("/drive1", 50L * 1024 * 1024 * 1024, total);
+        var state2 = service.UpdateDiskSpaceHealth("/drive2", 3L * 1024 * 1024 * 1024, total);
+
+        Assert.That(state1, Is.EqualTo(DiskSpaceHealthState.Normal));
+        Assert.That(state2, Is.EqualTo(DiskSpaceHealthState.Low));
+        Assert.That(service.GetHealthState("/drive1"), Is.EqualTo(DiskSpaceHealthState.Normal));
+        Assert.That(service.GetHealthState("/drive2"), Is.EqualTo(DiskSpaceHealthState.Low));
+    }
+
+    [Test]
+    public void ResetHealthStates_should_clear_tracked_states()
+    {
+        var service = new DiskSpaceService(_appFolderInfo);
+        const long total = 100L * 1024 * 1024 * 1024;
+
+        service.UpdateDiskSpaceHealth("/data", 3L * 1024 * 1024 * 1024, total);
+        Assert.That(service.GetHealthState("/data"), Is.EqualTo(DiskSpaceHealthState.Low));
+
+        service.ResetHealthStates();
+        Assert.That(service.GetHealthState("/data"), Is.EqualTo(DiskSpaceHealthState.Normal));
     }
 }

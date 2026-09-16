@@ -50,6 +50,8 @@ public class DiskSpaceRestoredEvent : IEvent
 
     public long TotalBytes { get; set; }
 
+    public double FreePercentage { get; set; }
+
     public DiskSpaceRestoredEvent()
     {
     }
@@ -59,5 +61,14 @@ public class DiskSpaceRestoredEvent : IEvent
         this.DrivePath = drivePath;
         this.FreeBytes = freeBytes;
         this.TotalBytes = totalBytes;
+        this.FreePercentage = totalBytes > 0 ? (double)freeBytes / totalBytes : 0;
+    }
+
+    public DiskSpaceRestoredEvent(string drivePath, long freeBytes, long totalBytes, double freePercentage)
+    {
+        this.DrivePath = drivePath;
+        this.FreeBytes = freeBytes;
+        this.TotalBytes = totalBytes;
+        this.FreePercentage = freePercentage;
     }
 }
