@@ -1,6 +1,8 @@
 using System;
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -180,7 +182,8 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             var remoteEndpoint = (IPEndPoint)client.Client.RemoteEndPoint;
             var clientIp = remoteEndpoint.Address.ToString();
 
-            using var stream = client.GetStream();
+            using var networkStream = client.GetStream();
+            using var stream = new BufferedStream(networkStream, 4096);
 
             var requestLine = ReadBoundedLine(stream, 2048);
             if (string.IsNullOrEmpty(requestLine))
@@ -202,6 +205,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
                 var rateLimitHeaders = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                 var rateLimitHeaderBytes = Encoding.ASCII.GetBytes(rateLimitHeaders);
                 stream.Write(rateLimitHeaderBytes, 0, rateLimitHeaderBytes.Length);
+                stream.Flush();
                 return;
             }
 
@@ -238,6 +242,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             var headerBytes = Encoding.ASCII.GetBytes(httpHeaders);
             stream.Write(headerBytes, 0, headerBytes.Length);
             stream.Write(bodyBytes, 0, bodyBytes.Length);
+            stream.Flush();
         }
         catch (Exception ex)
         {
@@ -249,29 +254,36 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
     }
 
-    private static string ReadBoundedLine(NetworkStream stream, int maxLength)
+    internal static string ReadBoundedLine(Stream stream, int maxLength)
     {
-        var buffer = new byte[maxLength];
-        var position = 0;
-
-        while (position < maxLength)
+        var buffer = ArrayPool<byte>.Shared.Rent(maxLength);
+        try
         {
-            var b = stream.ReadByte();
+            var position = 0;
 
-            if (b == -1)
+            while (position < maxLength)
             {
-                return position > 0 ? Encoding.Latin1.GetString(buffer, 0, position) : null;
+                var b = stream.ReadByte();
+
+                if (b == -1)
+                {
+                    return position > 0 ? Encoding.Latin1.GetString(buffer, 0, position) : null;
+                }
+
+                if (b == '\n')
+                {
+                    return Encoding.Latin1.GetString(buffer, 0, position).TrimEnd('\r');
+                }
+
+                buffer[position++] = (byte)b;
             }
 
-            if (b == '\n')
-            {
-                return Encoding.Latin1.GetString(buffer, 0, position).TrimEnd('\r');
-            }
-
-            buffer[position++] = (byte)b;
+            return null; // Line too long, reject
         }
-
-        return null; // Line too long, reject
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private static string ExtractInfoHash(string path)
