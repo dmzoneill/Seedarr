@@ -25,7 +25,7 @@ public class PeerConnection : IDisposable
 
     public string RemoteIp { get; }
     public int RemotePort { get; }
-    public string InfoHash { get; private set; }
+    public string InfoHash { get; set; }
     public string PeerId { get; private set; }
     public bool IsConnected => !_isDisposed && (_client != null ? _client.Connected : (_activeStream != null));
     public bool IsEncrypted { get; private set; }
