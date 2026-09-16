@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Dht;
@@ -208,6 +210,21 @@ public class NetworkController : Controller
                 ? global::System.Math.Round(encryptedCount * 100.0 / totalConnections, 1)
                 : 0
         });
+    }
+
+    [HttpPost("test-port")]
+    public async Task<ActionResult<PortTestResult>> TestPortAsync(
+        [FromQuery] int? port = null,
+        CancellationToken cancellationToken = default)
+    {
+        var targetPort = port ?? _configService?.ListeningPort ?? 6881;
+        if (targetPort < 1 || targetPort > 65535)
+        {
+            return BadRequest(new { error = "Port must be between 1 and 65535." });
+        }
+
+        var result = await _networkStatusService.TestPortAsync(targetPort, cancellationToken);
+        return Ok(result);
     }
 }
 

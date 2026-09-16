@@ -1,4 +1,4 @@
-import { useNetworkDiagnostics } from "../api/hooks";
+import { useNetworkDiagnostics, useTestPort } from "../api/hooks";
 
 function EncryptionDonut({
   encrypted,
@@ -91,6 +91,7 @@ function EncryptionDonut({
 
 function SystemNetwork() {
   const { data: diag, isLoading, isError } = useNetworkDiagnostics();
+  const testPortMutation = useTestPort();
 
   if (isLoading) {
     return (
@@ -151,13 +152,56 @@ function SystemNetwork() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
           <span
             className="badge badge-seeding"
             style={{ padding: "0.35rem 0.75rem", fontSize: "0.85rem" }}
           >
             Port {diag.listeningPort} (TCP/UDP)
           </span>
+
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ fontSize: "0.85rem", padding: "0.35rem 0.75rem" }}
+            onClick={() => testPortMutation.mutate(diag.listeningPort)}
+            disabled={testPortMutation.isPending}
+            title="Test external reachability of BitTorrent listening port"
+          >
+            {testPortMutation.isPending ? "Testing..." : "Test Port Reachability"}
+          </button>
+
+          {testPortMutation.data && (
+            <span
+              className={`badge ${testPortMutation.data.isOpen ? "badge-success" : "badge-danger"}`}
+              style={{
+                padding: "0.35rem 0.75rem",
+                fontSize: "0.85rem",
+                backgroundColor: testPortMutation.data.isOpen ? "rgba(40, 167, 69, 0.2)" : "rgba(220, 53, 69, 0.2)",
+                color: testPortMutation.data.isOpen ? "var(--success, #28a745)" : "var(--danger, #dc3545)",
+                border: `1px solid ${testPortMutation.data.isOpen ? "var(--success, #28a745)" : "var(--danger, #dc3545)"}`,
+              }}
+            >
+              {testPortMutation.data.isOpen
+                ? `✓ Reachable / Open (${testPortMutation.data.responseTimeMs ? `${testPortMutation.data.responseTimeMs}ms` : testPortMutation.data.responseTime})`
+                : `✗ Unreachable / Filtered ${testPortMutation.data.errorMessage ? `(${testPortMutation.data.errorMessage})` : ""}`}
+            </span>
+          )}
+
+          {testPortMutation.isError && (
+            <span
+              className="badge badge-danger"
+              style={{
+                padding: "0.35rem 0.75rem",
+                fontSize: "0.85rem",
+                backgroundColor: "rgba(220, 53, 69, 0.2)",
+                color: "var(--danger, #dc3545)",
+                border: "1px solid var(--danger, #dc3545)",
+              }}
+            >
+              Error: {testPortMutation.error?.message || "Failed to test port"}
+            </span>
+          )}
         </div>
       </div>
 
