@@ -22,19 +22,22 @@ function getMatchingDisk(
 ): DiskSpaceInfo | null {
   if (!disks || disks.length === 0) return null;
   const target = (path || "").trim().replace(/\\/g, "/");
-  if (!target) return disks[0] || null;
+  if (!target) return null;
 
   let bestMatch: DiskSpaceInfo | null = null;
   let bestMatchLength = -1;
 
   for (const d of disks) {
     const dPath = d.path.replace(/\\/g, "/");
-    if (target.startsWith(dPath) && dPath.length > bestMatchLength) {
+    const isMatch =
+      target === dPath ||
+      target.startsWith(dPath.endsWith("/") ? dPath : dPath + "/");
+    if (isMatch && dPath.length > bestMatchLength) {
       bestMatch = d;
       bestMatchLength = dPath.length;
     }
   }
-  return bestMatch || disks[0] || null;
+  return bestMatch;
 }
 
 function DiskSpaceBadge({
@@ -42,9 +45,39 @@ function DiskSpaceBadge({
 }: {
   disk: DiskSpaceInfo | null;
 }) {
-  if (!disk) return null;
+  if (!disk) {
+    return (
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "0.4rem",
+          fontSize: "0.75rem",
+          padding: "0.2rem 0.5rem",
+          borderRadius: "4px",
+          backgroundColor: "rgba(255, 255, 255, 0.05)",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+          color: "var(--text-muted, #94a3b8)",
+        }}
+        title="Storage volume is unmonitored or mount point is unmapped"
+      >
+        <span
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            backgroundColor: "var(--text-muted, #94a3b8)",
+            display: "inline-block",
+          }}
+        />
+        <span>Unmonitored / External</span>
+      </div>
+    );
+  }
+
   const used = disk.totalSpace > 0 ? disk.totalSpace - disk.freeSpace : 0;
-  const usedPct = disk.totalSpace > 0 ? (used / disk.totalSpace) * 100 : 0;
+  const rawPct = disk.totalSpace > 0 ? (used / disk.totalSpace) * 100 : 0;
+  const usedPct = Math.max(0, Math.min(100, rawPct));
 
   const color =
     usedPct >= 90
