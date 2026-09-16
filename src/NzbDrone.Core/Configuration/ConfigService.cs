@@ -23,6 +23,9 @@ public interface IConfigService
     bool AutoPruneRemovedArtwork { get; }
     string ThemeStyle { get; }
     string ColorScheme { get; }
+    string UiLanguage { get; }
+    string UiTheme { get; }
+    string UiAccent { get; }
     bool CsrfProtectionEnabled { get; }
     bool HostHeaderValidationEnabled { get; }
     string AllowedHosts { get; }
@@ -335,8 +338,11 @@ public class ConfigService : IConfigService
     // General
     public bool AutoStart => GetValueBoolean("AutoStart", true);
     public bool AutoPruneRemovedArtwork => GetValueBoolean("AutoPruneRemovedArtwork", true);
-    public string ThemeStyle => GetValue("ThemeStyle", "system");
-    public string ColorScheme => GetValue("ColorScheme", "auto");
+    public string ThemeStyle => GetValue("ThemeStyle", GetValue("UiTheme", "system"));
+    public string ColorScheme => GetValue("ColorScheme", GetValue("UiAccent", "auto"));
+    public string UiLanguage => GetValue("UiLanguage", "en");
+    public string UiTheme => GetValue("UiTheme", ThemeStyle);
+    public string UiAccent => GetValue("UiAccent", ColorScheme);
     public bool CsrfProtectionEnabled => GetValueBoolean("CsrfProtectionEnabled", true);
     public bool HostHeaderValidationEnabled => GetValueBoolean("HostHeaderValidationEnabled", false);
     public string AllowedHosts => GetValue("AllowedHosts", "");

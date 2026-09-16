@@ -1,13 +1,20 @@
 using System.IO;
+using System.Linq;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Configuration;
 
-public class LoggingReconfigurationService : IHandle<ConfigSavedEvent>
+public interface ILoggingReconfigurationService
+{
+    void ReconfigureLogging();
+}
+
+public class LoggingReconfigurationService : ILoggingReconfigurationService, IHandle<ConfigSavedEvent>, IHandle<ApplicationStartedEvent>
 {
     private const string FileTargetName = "file";
 
@@ -27,7 +34,12 @@ public class LoggingReconfigurationService : IHandle<ConfigSavedEvent>
         ReconfigureLogging();
     }
 
-    private void ReconfigureLogging()
+    public void Handle(ApplicationStartedEvent message)
+    {
+        ReconfigureLogging();
+    }
+
+    public void ReconfigureLogging()
     {
         var config = LogManager.Configuration;
         if (config == null)
@@ -106,7 +118,7 @@ public class LoggingReconfigurationService : IHandle<ConfigSavedEvent>
         for (var i = config.LoggingRules.Count - 1; i >= 0; i--)
         {
             var rule = config.LoggingRules[i];
-            if (rule.Targets.Count > 0 && rule.Targets[0].Name == targetName)
+            if (rule.Targets.Count > 0 && rule.Targets.Any(t => t.Name == targetName))
             {
                 config.LoggingRules.RemoveAt(i);
             }

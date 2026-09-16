@@ -77,7 +77,13 @@ import {
 } from "./components/icons/AppIcons";
 import { useTheme } from "./context/ThemeContext";
 import { useGeneralConfig, useDownloadClients } from "./api/hooks";
-import { useTranslation } from "./i18n";
+import {
+  useTranslation,
+  useI18nStore,
+  STORAGE_KEY_LANGUAGE,
+  isSupportedLocale,
+  type LocaleCode,
+} from "./i18n";
 import LanguageSelector from "./components/LanguageSelector";
 import { SETTINGS_GROUPS } from "./pages/settings/settingsNavData";
 
@@ -201,6 +207,19 @@ function App() {
   const isSettingsRoute = location.pathname.startsWith("/settings");
   const isSystemRoute = location.pathname.startsWith("/system");
   const { data: generalConfig } = useGeneralConfig();
+
+  useEffect(() => {
+    if (generalConfig?.uiLanguage && isSupportedLocale(generalConfig.uiLanguage)) {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY_LANGUAGE);
+        if (!stored) {
+          useI18nStore.getState().setLocale(generalConfig.uiLanguage as LocaleCode);
+        }
+      } catch {
+        useI18nStore.getState().setLocale(generalConfig.uiLanguage as LocaleCode);
+      }
+    }
+  }, [generalConfig?.uiLanguage]);
   const { data: downloadClients } = useDownloadClients();
   const { showToast } = useToast();
   const [showApiKey, setShowApiKey] = useState(false);

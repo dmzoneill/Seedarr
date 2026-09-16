@@ -6,6 +6,7 @@ import {
   useEffect,
 } from "react";
 import type { ReactNode } from "react";
+import { useGeneralConfig } from "../api/hooks";
 
 export type Theme = "dark" | "light" | "indigo" | "oled" | "slate" | "system";
 export type Accent =
@@ -62,9 +63,12 @@ function getInitialTheme(): Theme {
 
 function getInitialAccent(): Accent {
   try {
-    const stored = localStorage.getItem(STORAGE_ACCENT_KEY) as Accent | null;
-    if (stored && VALID_ACCENTS.includes(stored)) {
-      return stored;
+    const stored = localStorage.getItem(STORAGE_ACCENT_KEY);
+    if (stored === "green") {
+      return "emerald";
+    }
+    if (stored && VALID_ACCENTS.includes(stored as Accent)) {
+      return stored as Accent;
     }
   } catch {
     // localStorage may be unavailable
@@ -75,6 +79,40 @@ function getInitialAccent(): Accent {
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(getInitialTheme);
   const [accent, setAccentState] = useState<Accent>(getInitialAccent);
+  const { data: config } = useGeneralConfig();
+
+  useEffect(() => {
+    if (config) {
+      const serverTheme = (config.uiTheme || config.themeStyle) as Theme;
+      let rawAccent = config.uiAccent || config.colorScheme;
+      if (rawAccent === "green") {
+        rawAccent = "emerald";
+      }
+      const serverAccent = rawAccent as Accent;
+
+      try {
+        const storedTheme = localStorage.getItem(STORAGE_THEME_KEY);
+        if (!storedTheme && serverTheme && VALID_THEMES.includes(serverTheme)) {
+          setThemeState(serverTheme);
+        }
+      } catch {
+        if (serverTheme && VALID_THEMES.includes(serverTheme)) {
+          setThemeState(serverTheme);
+        }
+      }
+
+      try {
+        const storedAccent = localStorage.getItem(STORAGE_ACCENT_KEY);
+        if (!storedAccent && serverAccent && VALID_ACCENTS.includes(serverAccent)) {
+          setAccentState(serverAccent);
+        }
+      } catch {
+        if (serverAccent && VALID_ACCENTS.includes(serverAccent)) {
+          setAccentState(serverAccent);
+        }
+      }
+    }
+  }, [config]);
 
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);

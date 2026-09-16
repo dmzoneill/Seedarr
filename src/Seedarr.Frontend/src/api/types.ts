@@ -279,6 +279,9 @@ export interface GeneralConfig {
   autoStart: boolean;
   themeStyle: string;
   colorScheme: string;
+  uiTheme?: string;
+  uiAccent?: string;
+  uiLanguage?: string;
   watchFolderEnabled: boolean;
   watchFolderPath: string;
   watchFolderScanIntervalSeconds: number;
