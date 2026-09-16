@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
@@ -31,15 +32,20 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
             .GreaterThanOrEqualTo(1);
 
         SharedValidator.RuleFor(c => c.Port)
-            .InclusiveBetween(1, 65535);
+            .InclusiveBetween(1, 65535)
+            .WithMessage("Port must be between 1 and 65535.");
 
         SharedValidator.RuleFor(c => c.SslPort)
-            .InclusiveBetween(1, 65535);
+            .InclusiveBetween(1, 65535)
+            .WithMessage("SSL Port must be between 1 and 65535.");
 
         SharedValidator.RuleFor(c => c.SslPort)
             .NotEqual(c => c.Port)
-            .When(c => c.EnableSsl)
-            .WithMessage("SSL Port cannot be the same as HTTP Port.");
+            .WithMessage("Port and SSL Port cannot be the same.");
+
+        SharedValidator.RuleFor(c => c.BindAddress)
+            .Must(IsValidBindAddress)
+            .WithMessage("Invalid BindAddress. Allowed values are '*', '0.0.0.0', '::', 'localhost', or a valid IP address.");
     }
 
     protected override GeneralConfigResource ToResource(IConfigService model)
@@ -47,11 +53,69 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         return GeneralConfigResourceMapper.ToResource(model, _configFileProvider);
     }
 
+    public static bool IsValidBindAddress(string bindAddress)
+    {
+        if (string.IsNullOrWhiteSpace(bindAddress))
+        {
+            return true;
+        }
+
+        var trimmed = bindAddress.Trim();
+        if (trimmed is "*" or "0.0.0.0" or "::" or "localhost")
+        {
+            return true;
+        }
+
+        return IPAddress.TryParse(trimmed, out _);
+    }
+
+    public static string NormalizeUrlBase(string urlBase)
+    {
+        if (string.IsNullOrWhiteSpace(urlBase))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = urlBase.Trim().Trim('/');
+        return string.IsNullOrEmpty(trimmed) ? string.Empty : "/" + trimmed;
+    }
+
     public override ActionResult<GeneralConfigResource> SaveConfig([FromBody] GeneralConfigResource resource)
     {
         if (resource == null)
         {
             return BadRequest("Request body cannot be empty.");
+        }
+
+        if (resource.Port < 1 || resource.Port > 65535)
+        {
+            return BadRequest("Port must be between 1 and 65535.");
+        }
+
+        if (resource.SslPort < 1 || resource.SslPort > 65535)
+        {
+            return BadRequest("SSL Port must be between 1 and 65535.");
+        }
+
+        if (resource.Port == resource.SslPort)
+        {
+            return BadRequest("Port and SSL Port cannot be the same.");
+        }
+
+        if (!IsValidBindAddress(resource.BindAddress))
+        {
+            return BadRequest("Invalid BindAddress. Allowed values are '*', '0.0.0.0', '::', 'localhost', or a valid IP address.");
+        }
+
+        resource.UrlBase = NormalizeUrlBase(resource.UrlBase);
+
+        if (SharedValidator != null)
+        {
+            var validationResult = SharedValidator.Validate(resource);
+            if (!validationResult.IsValid)
+            {
+                return BadRequest(validationResult.Errors);
+            }
         }
 
         // If the masked API key was sent back or empty, preserve the existing value
