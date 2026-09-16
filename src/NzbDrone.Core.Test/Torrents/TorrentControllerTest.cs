@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
@@ -5,6 +6,9 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Datastore.Events;
+using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 using NzbDrone.SignalR;
@@ -52,6 +56,12 @@ public class TorrentControllerTest
             _signalRBroadcaster,
             _validator,
             categoryService: _categoryService);
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        _controller?.Dispose();
     }
 
     [Test]
@@ -309,5 +319,117 @@ public class TorrentControllerTest
         Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
         var badRequest = (BadRequestObjectResult)result.Result;
         Assert.That(badRequest.Value, Is.EqualTo("Category with ID 999 not found."));
+    }
+
+    [Test]
+    public void Handle_rapid_consecutive_torrent_updates_coalesce_into_throttled_broadcasts()
+    {
+        _signalRBroadcaster.IsConnected.Returns(true);
+        _trackerEntryService.GetByTorrentId(1).Returns(new List<TrackerEntry>());
+
+        for (var i = 0; i < 10; i++)
+        {
+            var torrent = new Torrent
+            {
+                Id = 1,
+                Name = "Rapid Torrent",
+                Downloaded = i * 1024,
+                Progress = i * 10.0,
+            };
+
+            _controller.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+        }
+
+        // Only 1 broadcast immediately (leading edge); subsequent 9 are throttled
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Any<SignalRMessage>());
+
+        _controller.Flush();
+
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+        _signalRBroadcaster.Received(2).BroadcastMessage(Arg.Any<SignalRMessage>());
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TorrentResource)m.Body).Progress == 90.0));
+    }
+
+    [Test]
+    public void Handle_distinct_torrent_ids_are_all_broadcasted()
+    {
+        _signalRBroadcaster.IsConnected.Returns(true);
+        _trackerEntryService.GetByTorrentId(Arg.Any<int>()).Returns(new List<TrackerEntry>());
+
+        var t1 = new Torrent { Id = 1, Name = "Torrent 1" };
+        var t2 = new Torrent { Id = 2, Name = "Torrent 2" };
+        var t3 = new Torrent { Id = 3, Name = "Torrent 3" };
+
+        _controller.Handle(new ModelEvent<Torrent>(t1, ModelAction.Updated));
+        _controller.Handle(new ModelEvent<Torrent>(t2, ModelAction.Updated));
+        _controller.Handle(new ModelEvent<Torrent>(t3, ModelAction.Updated));
+
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => ((TorrentResource)m.Body).Id == 1));
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => ((TorrentResource)m.Body).Id == 2));
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m => ((TorrentResource)m.Body).Id == 3));
+        _signalRBroadcaster.Received(3).BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
+    public void Handle_create_and_delete_events_are_processed_cleanly()
+    {
+        _signalRBroadcaster.IsConnected.Returns(true);
+        _trackerEntryService.GetByTorrentId(Arg.Any<int>()).Returns(new List<TrackerEntry>());
+
+        var torrent = new Torrent { Id = 42, Name = "Lifecycle Torrent" };
+
+        _controller.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Created));
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Created &&
+            ((TorrentResource)m.Body).Id == 42));
+
+        _controller.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(1));
+
+        _controller.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Deleted));
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Deleted &&
+            ((TorrentResource)m.Body).Id == 42));
+        Assert.That(_controller.PendingUpdatesCount, Is.EqualTo(0));
+
+        _controller.Flush();
+        _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            ((TorrentResource)m.Body).Id == 42));
+    }
+
+    [Test]
+    public void GetResourceById_caches_metadata_and_trackers_without_hammering_external_tables()
+    {
+        var mediaService = Substitute.For<IMediaEnrichmentService>();
+        mediaService.GetMetadata(100).Returns(new TorrentMediaMetadata { TorrentId = 100, Title = "Cached Movie" });
+
+        using var controller = new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            _validator,
+            mediaEnrichmentService: mediaService,
+            coalesceWindow: TimeSpan.Zero);
+
+        _signalRBroadcaster.IsConnected.Returns(true);
+        _trackerEntryService.GetByTorrentId(100).Returns(new List<TrackerEntry>());
+
+        var torrent = new Torrent { Id = 100, Name = "Movie Torrent" };
+
+        controller.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+        controller.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+        controller.Handle(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+
+        mediaService.Received(1).GetMetadata(100);
+        _trackerEntryService.Received(1).GetByTorrentId(100);
     }
 }
