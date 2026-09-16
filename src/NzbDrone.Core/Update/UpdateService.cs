@@ -20,6 +20,7 @@ public class UpdateInfo
     public string ReleaseUrl { get; set; }
     public string ReleaseNotes { get; set; }
     public List<ReleaseInfo> Releases { get; set; } = new();
+    public bool IsContainerized { get; set; }
 }
 
 public class ReleaseInfo
@@ -126,12 +127,17 @@ public class UpdateService : IUpdateService
     public Version GetLatestVersion()
     {
         var info = CheckForUpdate();
+        if (SemVersion.TryParse(info.LatestVersion, out var semVer))
+        {
+            return semVer.Core;
+        }
+
         return Version.TryParse(info.LatestVersion, out var version) ? version : null;
     }
 
     private UpdateInfo FetchUpdateInfo()
     {
-        var currentVersion = BuildInfo.Version;
+        var currentVersion = BuildInfo.Version?.ToString() ?? "1.0.0";
 
         try
         {
@@ -187,7 +193,7 @@ public class UpdateService : IUpdateService
 
     private async Task<UpdateInfo> FetchUpdateInfoAsync(CancellationToken cancellationToken)
     {
-        var currentVersion = BuildInfo.Version;
+        var currentVersion = BuildInfo.Version?.ToString() ?? "1.0.0";
 
         try
         {
@@ -237,21 +243,23 @@ public class UpdateService : IUpdateService
         }
     }
 
-    private static UpdateInfo LoadFromChangelogOrFallback(Version currentVersion)
+    private static UpdateInfo LoadFromChangelogOrFallback(string currentVersion)
     {
         var changelogReleases = LoadFromChangelog();
         if (changelogReleases.Count > 0)
         {
-            Version latestVersion = null;
+            SemVersion? latestSemVer = null;
+            string latestVersionStr = null;
             foreach (var r in changelogReleases)
             {
-                if (Version.TryParse(r.Version, out var v) && (latestVersion == null || v > latestVersion))
+                if (SemVersion.TryParse(r.Version, out var v) && (latestSemVer == null || v > latestSemVer.Value))
                 {
-                    latestVersion = v;
+                    latestSemVer = v;
+                    latestVersionStr = r.Version;
                 }
             }
 
-            return BuildResult(currentVersion, latestVersion, changelogReleases);
+            return BuildResult(currentVersion, latestVersionStr, changelogReleases);
         }
 
         return BuildResult(currentVersion, null, new List<ReleaseInfo>());
@@ -304,7 +312,7 @@ public class UpdateService : IUpdateService
         ReleaseInfo currentRelease = null;
         var currentBody = new List<string>();
 
-        var headerRegex = new Regex(@"^##\s+\[?v?([0-9]+(?:\.[0-9]+)+)\]?(?:\(([^)]+)\))?(?:\s*-\s*([0-9]{4}-[0-9]{2}-[0-9]{2}))?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        var headerRegex = new Regex(@"^##\s+\[?v?([0-9]+(?:\.[0-9]+)+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\]?(?:\(([^)]+)\))?(?:\s*-\s*([0-9]{4}-[0-9]{2}-[0-9]{2}))?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         foreach (var line in lines)
         {
@@ -344,7 +352,7 @@ public class UpdateService : IUpdateService
         return releaseList;
     }
 
-    private static UpdateInfo ParseReleasesDocument(JsonDocument doc, Version currentVersion)
+    private static UpdateInfo ParseReleasesDocument(JsonDocument doc, string currentVersion)
     {
         var releases = doc.RootElement;
         if (releases.ValueKind != JsonValueKind.Array)
@@ -353,7 +361,8 @@ public class UpdateService : IUpdateService
         }
 
         var releaseList = new List<ReleaseInfo>();
-        Version latestVersion = null;
+        SemVersion? latestSemVer = null;
+        string latestVersionString = null;
 
         foreach (var release in releases.EnumerateArray())
         {
@@ -370,7 +379,7 @@ public class UpdateService : IUpdateService
                 continue;
             }
 
-            if (!Version.TryParse(versionString, out var parsedVer))
+            if (!SemVersion.TryParse(versionString, out var parsedVer))
             {
                 continue;
             }
@@ -390,25 +399,56 @@ public class UpdateService : IUpdateService
                 Url = htmlUrl,
             });
 
-            if (latestVersion == null || parsedVer > latestVersion)
+            if (latestSemVer == null || parsedVer > latestSemVer.Value)
             {
-                latestVersion = parsedVer;
+                latestSemVer = parsedVer;
+                latestVersionString = versionString;
             }
         }
 
-        return BuildResult(currentVersion, latestVersion, releaseList);
+        return BuildResult(currentVersion, latestVersionString, releaseList);
     }
 
-    private static UpdateInfo BuildResult(Version currentVersion, Version latestVersion, List<ReleaseInfo> releases)
+    private static UpdateInfo BuildResult(string currentVersion, string latestVersion, List<ReleaseInfo> releases)
     {
-        var updateAvailable = latestVersion != null && currentVersion != null && latestVersion > currentVersion;
+        var updateAvailable = false;
+        if (!string.IsNullOrWhiteSpace(latestVersion) && !string.IsNullOrWhiteSpace(currentVersion))
+        {
+            if (SemVersion.TryParse(latestVersion, out var latestSem) && SemVersion.TryParse(currentVersion, out var currentSem))
+            {
+                updateAvailable = latestSem > currentSem;
+            }
+        }
 
         return new UpdateInfo
         {
-            CurrentVersion = currentVersion?.ToString() ?? "1.0.0",
-            LatestVersion = latestVersion?.ToString(),
+            CurrentVersion = currentVersion ?? "1.0.0",
+            LatestVersion = latestVersion,
             UpdateAvailable = updateAvailable,
             Releases = releases,
+            IsContainerized = IsRunningInContainer(),
         };
+    }
+
+    public static bool IsRunningInContainer()
+    {
+        try
+        {
+            if (string.Equals(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"), "true", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (File.Exists("/.dockerenv"))
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            // Ignore file access or environment exceptions
+        }
+
+        return false;
     }
 }

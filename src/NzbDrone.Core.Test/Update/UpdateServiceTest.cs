@@ -25,6 +25,12 @@ public class UpdateServiceTest
     private static UpdateInfo InvokeBuildResult(Version currentVersion, Version latestVersion, List<ReleaseInfo> releases)
     {
         var method = typeof(UpdateService).GetMethod("BuildResult", BindingFlags.NonPublic | BindingFlags.Static);
+        return (UpdateInfo)method.Invoke(null, new object[] { currentVersion?.ToString(), latestVersion?.ToString(), releases });
+    }
+
+    private static UpdateInfo InvokeBuildResult(string currentVersion, string latestVersion, List<ReleaseInfo> releases)
+    {
+        var method = typeof(UpdateService).GetMethod("BuildResult", BindingFlags.NonPublic | BindingFlags.Static);
         return (UpdateInfo)method.Invoke(null, new object[] { currentVersion, latestVersion, releases });
     }
 
@@ -812,5 +818,159 @@ public class UpdateServiceTest
         // Only the first entry (v1.0.0) passes all filters.
         Assert.That(result.Releases, Has.Count.EqualTo(1));
         Assert.That(result.Releases[0].Version, Is.EqualTo("1.0.0"));
+    }
+
+    // --- SemVersion tests ---
+
+    [Test]
+    public void SemVersion_TryParse_should_parse_prerelease_and_build_metadata()
+    {
+        var success = SemVersion.TryParse("v1.5.0-rc.2+build.123", out var semVer);
+
+        Assert.That(success, Is.True);
+        Assert.That(semVer.Major, Is.EqualTo(1));
+        Assert.That(semVer.Minor, Is.EqualTo(5));
+        Assert.That(semVer.Patch, Is.EqualTo(0));
+        Assert.That(semVer.Prerelease, Is.EqualTo("rc.2"));
+        Assert.That(semVer.BuildMetadata, Is.EqualTo("build.123"));
+        Assert.That(semVer.IsPrerelease, Is.True);
+    }
+
+    [Test]
+    public void SemVersion_precedence_release_higher_than_prerelease()
+    {
+        Assert.That(SemVersion.Parse("1.0.0") > SemVersion.Parse("1.0.0-rc1"), Is.True);
+        Assert.That(SemVersion.Parse("1.0.0-rc1") < SemVersion.Parse("1.0.0"), Is.True);
+    }
+
+    [Test]
+    public void SemVersion_precedence_higher_prerelease_wins()
+    {
+        Assert.That(SemVersion.Parse("1.0.0-rc2") > SemVersion.Parse("1.0.0-rc1"), Is.True);
+        Assert.That(SemVersion.Parse("1.0.0-rc.10") > SemVersion.Parse("1.0.0-rc.2"), Is.True);
+        Assert.That(SemVersion.Parse("1.0.0-rc10") > SemVersion.Parse("1.0.0-rc2"), Is.True);
+        Assert.That(SemVersion.Parse("1.0.0-beta.1") < SemVersion.Parse("1.0.0-rc.1"), Is.True);
+    }
+
+    [Test]
+    public void SemVersion_precedence_higher_core_wins()
+    {
+        Assert.That(SemVersion.Parse("1.5.0-rc1") > SemVersion.Parse("1.4.9"), Is.True);
+        Assert.That(SemVersion.Parse("2.0.0-alpha") > SemVersion.Parse("1.9.9"), Is.True);
+    }
+
+    [Test]
+    public void SemVersion_precedence_ignores_build_metadata()
+    {
+        Assert.That(SemVersion.Parse("1.0.0+build1") == SemVersion.Parse("1.0.0+build2"), Is.True);
+    }
+
+    // --- GitHub Release Prerelease parsing tests ---
+
+    [Test]
+    public void CheckForUpdate_should_not_drop_prerelease_versions_from_releases_list()
+    {
+        var json = """
+            [
+                {
+                    "tag_name": "v1.5.0-rc1",
+                    "draft": false,
+                    "published_at": "2024-06-01T00:00:00Z",
+                    "body": "RC1 release",
+                    "html_url": "https://github.com/test/releases/tag/v1.5.0-rc1"
+                },
+                {
+                    "tag_name": "v1.4.0",
+                    "draft": false,
+                    "published_at": "2024-05-01T00:00:00Z",
+                    "body": "Stable release",
+                    "html_url": "https://github.com/test/releases/tag/v1.4.0"
+                }
+            ]
+            """;
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, json);
+        var subject = CreateWithHandler(handler);
+
+        var result = subject.CheckForUpdate();
+
+        Assert.That(result.Releases, Has.Count.EqualTo(2));
+        Assert.That(result.Releases[0].Version, Is.EqualTo("1.5.0-rc1"));
+        Assert.That(result.LatestVersion, Is.EqualTo("1.5.0-rc1"));
+    }
+
+    [Test]
+    public void BuildResult_should_set_update_available_true_for_prerelease_to_full_release()
+    {
+        var result = InvokeBuildResult("1.5.0-rc1", "1.5.0", new List<ReleaseInfo>());
+
+        Assert.That(result.UpdateAvailable, Is.True);
+    }
+
+    [Test]
+    public void BuildResult_should_set_update_available_false_for_full_release_to_prerelease()
+    {
+        var result = InvokeBuildResult("1.5.0", "1.5.0-rc1", new List<ReleaseInfo>());
+
+        Assert.That(result.UpdateAvailable, Is.False);
+    }
+
+    // --- Changelog Markdown prerelease parsing tests ---
+
+    [Test]
+    public void ParseChangelogMarkdown_should_parse_prerelease_version_headers()
+    {
+        var changelog = """
+            # Changelog
+
+            ## [v1.5.0-rc1](https://github.com/dmzoneill/Seedarr/releases/tag/v1.5.0-rc1) - 2026-09-16
+
+            ### ✨ Features
+            - feat: add prerelease support
+
+            ## [1.4.0-beta.2] - 2026-09-01
+
+            ### 🐛 Bug Fixes
+            - fix: beta fix
+            """;
+
+        var releases = UpdateService.ParseChangelogMarkdown(changelog);
+
+        Assert.That(releases, Has.Count.EqualTo(2));
+        Assert.That(releases[0].Version, Is.EqualTo("1.5.0-rc1"));
+        Assert.That(releases[0].Body, Does.Contain("feat: add prerelease support"));
+        Assert.That(releases[1].Version, Is.EqualTo("1.4.0-beta.2"));
+        Assert.That(releases[1].Body, Does.Contain("fix: beta fix"));
+    }
+
+    // --- Container detection tests ---
+
+    [Test]
+    public void IsRunningInContainer_respects_environment_variable()
+    {
+        var prev = Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER");
+        try
+        {
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "true");
+            Assert.That(UpdateService.IsRunningInContainer(), Is.True);
+
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", "false");
+            // If /.dockerenv does not exist on test machine, it should be false
+            if (!System.IO.File.Exists("/.dockerenv"))
+            {
+                Assert.That(UpdateService.IsRunningInContainer(), Is.False);
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER", prev);
+        }
+    }
+
+    [Test]
+    public void BuildResult_should_set_is_containerized()
+    {
+        var result = InvokeBuildResult("1.0.0", "1.1.0", new List<ReleaseInfo>());
+        Assert.That(result.IsContainerized, Is.EqualTo(UpdateService.IsRunningInContainer()));
     }
 }

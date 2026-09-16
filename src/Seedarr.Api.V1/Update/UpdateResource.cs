@@ -11,6 +11,7 @@ public class UpdateResource
     public bool Latest { get; set; }
     public string Url { get; set; }
     public UpdateChanges Changes { get; set; }
+    public bool IsContainerized { get; set; }
 }
 
 public class UpdateChanges
