@@ -492,6 +492,9 @@ public class DhtServiceTest
     [Test]
     public void HandleResponse_should_add_node_from_response_with_id()
     {
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02 }, target);
+
         var nodeId = CreateNodeId(0xBB);
         var message = new BDictionary
         {
@@ -503,7 +506,7 @@ public class DhtServiceTest
             }
         };
 
-        InvokeHandleMessage(message.EncodeAsBytes(), new IPEndPoint(IPAddress.Loopback, 6881));
+        InvokeHandleMessage(message.EncodeAsBytes(), target);
 
         Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(1));
     }
@@ -511,6 +514,9 @@ public class DhtServiceTest
     [Test]
     public void HandleResponse_should_parse_compact_nodes_via_message()
     {
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02 }, target);
+
         var compactData = new byte[26];
         var nodeId = new byte[20];
         nodeId[0] = 0xCC;
@@ -534,7 +540,7 @@ public class DhtServiceTest
             }
         };
 
-        InvokeHandleMessage(message.EncodeAsBytes(), new IPEndPoint(IPAddress.Loopback, 6881));
+        InvokeHandleMessage(message.EncodeAsBytes(), target);
 
         Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(2));
     }
@@ -542,13 +548,16 @@ public class DhtServiceTest
     [Test]
     public void HandleResponse_should_skip_when_no_r_key()
     {
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02 }, target);
+
         var message = new BDictionary
         {
             ["t"] = new BString(new byte[] { 0x01, 0x02 }),
             ["y"] = new BString("r")
         };
 
-        InvokeHandleMessage(message.EncodeAsBytes(), new IPEndPoint(IPAddress.Loopback, 6881));
+        InvokeHandleMessage(message.EncodeAsBytes(), target);
 
         Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(0));
     }
@@ -556,6 +565,9 @@ public class DhtServiceTest
     [Test]
     public void HandleResponse_should_parse_values_from_get_peers_response()
     {
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02 }, target);
+
         var ip = IPAddress.Parse("10.0.0.1");
         var port = 6881;
         var peerData = new byte[6];
@@ -580,7 +592,7 @@ public class DhtServiceTest
 
         // Should not throw and should add the responder node
         Assert.DoesNotThrow(() =>
-            InvokeHandleMessage(message.EncodeAsBytes(), new IPEndPoint(IPAddress.Loopback, 6881)));
+            InvokeHandleMessage(message.EncodeAsBytes(), target));
 
         Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(1));
     }
@@ -588,6 +600,9 @@ public class DhtServiceTest
     [Test]
     public void HandleResponse_should_parse_multiple_peer_values()
     {
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02 }, target);
+
         var values = new BList();
         for (var i = 1; i <= 3; i++)
         {
@@ -614,12 +629,15 @@ public class DhtServiceTest
         };
 
         Assert.DoesNotThrow(() =>
-            InvokeHandleMessage(message.EncodeAsBytes(), new IPEndPoint(IPAddress.Loopback, 6881)));
+            InvokeHandleMessage(message.EncodeAsBytes(), target));
     }
 
     [Test]
     public void HandleResponse_should_skip_non_6_byte_peer_values()
     {
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02 }, target);
+
         // Non-6 byte values should still not crash (they're just skipped in the if check)
         var shortPeerData = new byte[4]; // too short
         var responderId = CreateNodeId(0xAB);
@@ -638,12 +656,15 @@ public class DhtServiceTest
         };
 
         Assert.DoesNotThrow(() =>
-            InvokeHandleMessage(message.EncodeAsBytes(), new IPEndPoint(IPAddress.Loopback, 6881)));
+            InvokeHandleMessage(message.EncodeAsBytes(), target));
     }
 
     [Test]
     public void HandleResponse_should_handle_response_without_id()
     {
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02 }, target);
+
         var message = new BDictionary
         {
             ["t"] = new BString(new byte[] { 0x01, 0x02 }),
@@ -655,7 +676,7 @@ public class DhtServiceTest
         };
 
         Assert.DoesNotThrow(() =>
-            InvokeHandleMessage(message.EncodeAsBytes(), new IPEndPoint(IPAddress.Loopback, 6881)));
+            InvokeHandleMessage(message.EncodeAsBytes(), target));
 
         Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(0));
     }
@@ -663,6 +684,9 @@ public class DhtServiceTest
     [Test]
     public void HandleResponse_should_handle_both_nodes_and_values()
     {
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        AddPendingQuery(new byte[] { 0x01, 0x02 }, target);
+
         // A response can have both nodes and values
         var compactData = new byte[26];
         compactData[0] = 0xCC;
@@ -695,10 +719,111 @@ public class DhtServiceTest
         };
 
         Assert.DoesNotThrow(() =>
-            InvokeHandleMessage(message.EncodeAsBytes(), new IPEndPoint(IPAddress.Loopback, 6881)));
+            InvokeHandleMessage(message.EncodeAsBytes(), target));
 
         // Should have added both the responder node and the compact node
         Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void HandleResponse_from_mismatched_sender_should_be_rejected()
+    {
+        var legitimateTarget = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881);
+        var spoofedSender = new IPEndPoint(IPAddress.Parse("10.0.0.2"), 6881);
+        var txId = new byte[] { 0x11, 0x22, 0x33, 0x44 };
+
+        AddPendingQuery(txId, legitimateTarget);
+
+        var message = new BDictionary
+        {
+            ["t"] = new BString(txId),
+            ["y"] = new BString("r"),
+            ["r"] = new BDictionary
+            {
+                ["id"] = new BString(CreateNodeId(0xEE))
+            }
+        };
+
+        InvokeHandleMessage(message.EncodeAsBytes(), spoofedSender);
+
+        // Spoofed response rejected: node was NOT added to routing table
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(0));
+
+        // Legitimate pending query was NOT removed by the spoofed packet
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(_service);
+        Assert.That(pendingDict.Contains(Convert.ToHexString(txId)), Is.True);
+    }
+
+    [Test]
+    public void HandleResponse_from_matching_sender_should_be_accepted_and_process_peers_and_tokens()
+    {
+        var target = new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881);
+        var txId = new byte[] { 0x11, 0x22, 0x33, 0x44 };
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+
+        AddPendingQuery(txId, target, infoHash: infoHash, isAnnounce: true);
+
+        PeersDiscoveredEventArgs discoveredArgs = null;
+        _service.PeersDiscovered += (s, e) => discoveredArgs = e;
+
+        var peerData = new byte[6];
+        peerData[0] = 10;
+        peerData[1] = 0;
+        peerData[2] = 0;
+        peerData[3] = 5;
+        peerData[4] = (byte)(6881 >> 8);
+        peerData[5] = (byte)(6881 & 0xFF);
+
+        var token = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
+
+        var message = new BDictionary
+        {
+            ["t"] = new BString(txId),
+            ["y"] = new BString("r"),
+            ["r"] = new BDictionary
+            {
+                ["id"] = new BString(CreateNodeId(0xAA)),
+                ["token"] = new BString(token),
+                ["values"] = new BList { new BString(peerData) }
+            }
+        };
+
+        InvokeHandleMessage(message.EncodeAsBytes(), target);
+
+        // Matching response accepted: node added to routing table and peer discovered
+        Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(1));
+        Assert.That(discoveredArgs, Is.Not.Null);
+        Assert.That(discoveredArgs.Peers.Count, Is.EqualTo(1));
+        Assert.That(discoveredArgs.Peers[0].Ip, Is.EqualTo("10.0.0.5"));
+        Assert.That(discoveredArgs.Peers[0].Port, Is.EqualTo(6881));
+
+        // Pending query was consumed
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(_service);
+        Assert.That(pendingDict.Contains(Convert.ToHexString(txId)), Is.False);
+    }
+
+    [Test]
+    public async Task SendGetPeers_and_SendFindNode_should_generate_4_byte_transaction_id()
+    {
+        SetUdpClient();
+        var target = new IPEndPoint(IPAddress.Loopback, 6881);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+
+        await _service.SendGetPeers(target, infoHash);
+
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(_service);
+
+        Assert.That(pendingDict.Count, Is.GreaterThanOrEqualTo(1));
+
+        foreach (var key in pendingDict.Keys)
+        {
+            var txKeyHex = (string)key;
+            var txBytes = Convert.FromHexString(txKeyHex);
+            Assert.That(txBytes.Length, Is.EqualTo(4), "Transaction ID should be exactly 4 bytes (32 bits of entropy)");
+        }
     }
 
     // ── HandleQuery ──────────────────────────────────────────────────
@@ -2105,6 +2230,8 @@ public class DhtServiceTest
             }
         };
 
+        AddPendingQuery(new byte[] { 0x01, 0x02 }, new IPEndPoint(ipA, 6881), svc: service);
+
         invokeMethod.Invoke(service, new object[] { respMsg.EncodeAsBytes(), new IPEndPoint(ipA, 6881) });
 
         // The response handler processes the node ID in the response and adds it to the routing table
@@ -2226,16 +2353,7 @@ public class DhtServiceTest
         var txKey = Convert.ToHexString(txId);
 
         // Inject pending query
-        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
-        var pendingDict = pendingField.GetValue(service);
-        var pendingType = typeof(DhtService).GetNestedType("PendingDhtQuery", BindingFlags.NonPublic);
-        var pendingInstance = Activator.CreateInstance(pendingType);
-        pendingType.GetProperty("QueryType").SetValue(pendingInstance, "get_peers");
-        pendingType.GetProperty("InfoHash").SetValue(pendingInstance, infoHash);
-        pendingType.GetProperty("SentAt").SetValue(pendingInstance, DateTime.UtcNow);
-
-        var addOrUpdateMethod = pendingDict.GetType().GetMethod("TryAdd");
-        addOrUpdateMethod.Invoke(pendingDict, new object[] { txKey, pendingInstance });
+        AddPendingQuery(txId, new IPEndPoint(IPAddress.Loopback, 6881), infoHash: infoHash, svc: service);
 
         PeersDiscoveredEventArgs receivedEvent = null;
         service.PeersDiscovered += (s, e) => receivedEvent = e;
@@ -2505,5 +2623,23 @@ public class DhtServiceTest
             ["a"] = new BDictionary { ["id"] = new BString(nodeId) }
         };
         return message.EncodeAsBytes();
+    }
+
+    private void AddPendingQuery(byte[] txId, IPEndPoint target, byte[] infoHash = null, bool isAnnounce = false, int port = 0, DhtService svc = null)
+    {
+        var targetService = svc ?? _service;
+        var txKey = Convert.ToHexString(txId);
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(targetService);
+        var pendingType = typeof(DhtService).GetNestedType("PendingDhtQuery", BindingFlags.NonPublic);
+        var pendingInstance = Activator.CreateInstance(pendingType);
+        pendingType.GetProperty("QueryType")?.SetValue(pendingInstance, isAnnounce ? "announce_peer" : "get_peers");
+        pendingType.GetProperty("Target")?.SetValue(pendingInstance, target);
+        pendingType.GetProperty("InfoHash")?.SetValue(pendingInstance, infoHash);
+        pendingType.GetProperty("IsAnnounce")?.SetValue(pendingInstance, isAnnounce);
+        pendingType.GetProperty("Port")?.SetValue(pendingInstance, port);
+        pendingType.GetProperty("SentAt")?.SetValue(pendingInstance, DateTime.UtcNow);
+
+        pendingDict[txKey] = pendingInstance;
     }
 }

@@ -518,6 +518,27 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return;
         }
 
+        // Match pending query by transaction ID
+        PendingDhtQuery pending = null;
+        if (message.ContainsKey("t") && message["t"] is BString tStr)
+        {
+            var txKey = Convert.ToHexString(tStr.Value.ToArray());
+            if (_pendingQueries.TryGetValue(txKey, out var query) && sender.Equals(query.Target))
+            {
+                _pendingQueries.TryRemove(txKey, out pending);
+            }
+            else
+            {
+                pending = query;
+            }
+        }
+
+        if (pending == null || !sender.Equals(pending.Target))
+        {
+            _logger.Debug("DHT response rejected: sender {0} does not match query target {1}", sender, pending?.Target);
+            return;
+        }
+
         var response = (BDictionary)message["r"];
 
         if (response.ContainsKey("id"))
@@ -536,14 +557,6 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         {
             var nodesData = ((BString)response["nodes"]).Value;
             ParseCompactNodes(nodesData.Span);
-        }
-
-        // Match pending query by transaction ID
-        PendingDhtQuery pending = null;
-        if (message.ContainsKey("t") && message["t"] is BString tStr)
-        {
-            var txKey = Convert.ToHexString(tStr.Value.ToArray());
-            _pendingQueries.TryRemove(txKey, out pending);
         }
 
         // Parse peer values from get_peers responses
@@ -566,7 +579,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
         if (discoveredPeers.Count > 0)
         {
-            var infoHashHex = pending?.InfoHash != null ? Convert.ToHexString(pending.InfoHash) : null;
+            var infoHashHex = pending.InfoHash != null ? Convert.ToHexString(pending.InfoHash) : null;
             if (!string.IsNullOrEmpty(infoHashHex))
             {
                 _peerDiscovery?.AddPeers(infoHashHex, discoveredPeers, "dht");
@@ -576,7 +589,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         }
 
         // If this was an announce query and we received a token, send announce_peer
-        if (pending?.IsAnnounce == true && response.ContainsKey("token") && pending.InfoHash != null)
+        if (pending.IsAnnounce && response.ContainsKey("token") && pending.InfoHash != null)
         {
             var token = ((BString)response["token"]).Value.ToArray();
             var announcePort = pending.Port > 0 ? pending.Port : (_configService.ListeningPort > 0 ? _configService.ListeningPort : 6881);
@@ -809,7 +822,16 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         await _querySemaphore.WaitAsync(ct);
         try
         {
-            var transactionId = RandomNumberGenerator.GetBytes(2);
+            var transactionId = RandomNumberGenerator.GetBytes(4);
+            var txKey = Convert.ToHexString(transactionId);
+
+            _pendingQueries[txKey] = new PendingDhtQuery
+            {
+                QueryType = "find_node",
+                Target = target,
+                SentAt = DateTime.UtcNow
+            };
+
             var query = new BDictionary
             {
                 ["t"] = new BString(transactionId),
@@ -860,7 +882,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         await _querySemaphore.WaitAsync(ct);
         try
         {
-            var transactionId = RandomNumberGenerator.GetBytes(2);
+            var transactionId = RandomNumberGenerator.GetBytes(4);
             var txKey = Convert.ToHexString(transactionId);
 
             _pendingQueries[txKey] = new PendingDhtQuery
@@ -915,7 +937,17 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         await _querySemaphore.WaitAsync(ct);
         try
         {
-            var transactionId = RandomNumberGenerator.GetBytes(2);
+            var transactionId = RandomNumberGenerator.GetBytes(4);
+            var txKey = Convert.ToHexString(transactionId);
+
+            _pendingQueries[txKey] = new PendingDhtQuery
+            {
+                QueryType = "announce_peer",
+                InfoHash = infoHash,
+                Target = target,
+                SentAt = DateTime.UtcNow
+            };
+
             var args = new BDictionary
             {
                 ["id"] = new BString(_nodeId),
