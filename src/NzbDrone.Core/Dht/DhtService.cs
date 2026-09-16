@@ -36,6 +36,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     private readonly object _secretLock = new();
     private readonly object _stateLock = new();
     private readonly ConcurrentDictionary<string, PendingDhtQuery> _pendingQueries = new();
+    private readonly ConcurrentDictionary<IPAddress, TokenBucket> _rateLimiters = new();
     private UdpClient _udpClient;
     private int _boundPort;
     private CancellationTokenSource _workerCts;
@@ -46,9 +47,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     private byte[] _tokenSecret;
     private byte[] _previousTokenSecret;
     private DateTime _lastSecretRotation;
-
-    private int _queryCount;
-    private DateTime _rateLimitWindowStart;
+    private DateTime _lastRateLimitCleanup;
     private DateTime _nextRefresh;
     private SemaphoreSlim _querySemaphore;
 
@@ -76,7 +75,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         _tokenSecret = RandomNumberGenerator.GetBytes(16);
         _previousTokenSecret = RandomNumberGenerator.GetBytes(16);
         _lastSecretRotation = DateTime.UtcNow;
-        _rateLimitWindowStart = DateTime.UtcNow;
+        _lastRateLimitCleanup = DateTime.UtcNow;
 
         var maxConcurrent = configService.DhtConcurrentQueries;
         _querySemaphore = new SemaphoreSlim(maxConcurrent > 0 ? maxConcurrent : 3, maxConcurrent > 0 ? maxConcurrent : 3);
@@ -228,6 +227,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
                 _udpClient = null;
                 _boundPort = 0;
+                _rateLimiters.Clear();
                 _logger.Info("DHT service stopped");
             }
 
@@ -268,6 +268,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             {
                 RotateSecretIfNeeded();
                 CleanupExpiredQueries();
+                CleanupExpiredRateLimitersIfNeeded();
 
                 // Use query timeout so the loop wakes up periodically for maintenance
                 using var receiveCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
@@ -282,25 +283,6 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                     }
 
                     var result = await client.ReceiveAsync(receiveCts.Token);
-
-                    // Rate limiting
-                    if (_configService.DhtRateLimitEnabled)
-                    {
-                        var now = DateTime.UtcNow;
-                        if ((now - _rateLimitWindowStart).TotalSeconds >= 1.0)
-                        {
-                            _rateLimitWindowStart = now;
-                            _queryCount = 0;
-                        }
-
-                        if (_queryCount >= _configService.DhtMaxQueriesPerSecond)
-                        {
-                            continue;
-                        }
-
-                        _queryCount++;
-                    }
-
                     HandleMessage(result.Buffer, result.RemoteEndPoint);
                 }
                 catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
@@ -450,15 +432,29 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             var parser = new BencodeParser();
             var message = parser.Parse<BDictionary>(data);
 
-            var messageType = ((BString)message["y"]).ToString();
+            if (!message.ContainsKey("y") || message["y"] is not BString yStr)
+            {
+                return;
+            }
+
+            var messageType = yStr.ToString();
 
             switch (messageType)
             {
                 case "q":
+                    if (IsRateLimited(sender.Address))
+                    {
+                        _logger.Debug("DHT query rate limit exceeded for {0}, dropping query", sender.Address);
+                        return;
+                    }
+
                     HandleQuery(message, sender);
                     break;
                 case "r":
                     HandleResponse(message, sender);
+                    break;
+                case "e":
+                    HandleErrorResponse(message, sender);
                     break;
             }
         }
@@ -1079,6 +1075,103 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             _tokenSecret = RandomNumberGenerator.GetBytes(16);
             _lastSecretRotation = DateTime.UtcNow;
             _logger.Debug("DHT token secret rotated");
+        }
+    }
+
+    private bool IsRateLimited(IPAddress address)
+    {
+        if (!_configService.DhtRateLimitEnabled)
+        {
+            return false;
+        }
+
+        var now = DateTime.UtcNow;
+        var maxPerSecond = _configService.DhtMaxQueriesPerSecond;
+
+        if (_rateLimiters.Count > 10000)
+        {
+            CleanupExpiredRateLimiters(now);
+        }
+
+        var bucket = _rateLimiters.GetOrAdd(address, _ => new TokenBucket(maxPerSecond, now));
+        return !bucket.TryConsume(maxPerSecond, now);
+    }
+
+    private void CleanupExpiredRateLimitersIfNeeded()
+    {
+        var now = DateTime.UtcNow;
+        if ((now - _lastRateLimitCleanup).TotalSeconds < 30)
+        {
+            return;
+        }
+
+        CleanupExpiredRateLimiters(now);
+    }
+
+    private void CleanupExpiredRateLimiters(DateTime now)
+    {
+        _lastRateLimitCleanup = now;
+        var cutoff = now.AddMinutes(-2);
+        foreach (var (ip, bucket) in _rateLimiters)
+        {
+            if (bucket.LastSeen < cutoff)
+            {
+                _rateLimiters.TryRemove(ip, out _);
+            }
+        }
+    }
+
+    private void HandleErrorResponse(BDictionary message, IPEndPoint sender)
+    {
+        if (message.ContainsKey("t") && message["t"] is BString tStr)
+        {
+            var txKey = Convert.ToHexString(tStr.Value.ToArray());
+            _pendingQueries.TryRemove(txKey, out _);
+        }
+
+        _logger.Debug("DHT received error response from {0}", sender);
+    }
+
+    private sealed class TokenBucket
+    {
+        private readonly object _lock = new();
+        private double _tokens;
+        private DateTime _lastRefill;
+
+        public DateTime LastSeen { get; private set; }
+
+        public TokenBucket(double capacity, DateTime now)
+        {
+            _tokens = capacity;
+            _lastRefill = now;
+            LastSeen = now;
+        }
+
+        public bool TryConsume(int maxPerSecond, DateTime now)
+        {
+            if (maxPerSecond <= 0)
+            {
+                return false;
+            }
+
+            lock (_lock)
+            {
+                LastSeen = now;
+                var elapsed = (now - _lastRefill).TotalSeconds;
+                if (elapsed > 0)
+                {
+                    _tokens = Math.Min(maxPerSecond, _tokens + (elapsed * maxPerSecond));
+                    _lastRefill = now;
+                }
+
+                if (_tokens >= 1.0)
+                {
+                    _tokens -= 1.0;
+                    return true;
+                }
+
+                return false;
+            }
         }
     }
 

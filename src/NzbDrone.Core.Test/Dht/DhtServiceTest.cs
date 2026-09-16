@@ -1955,8 +1955,6 @@ public class DhtServiceTest
     [Test]
     public async Task ExecuteAsync_should_process_received_packet_through_rate_limiter()
     {
-        // Sends a real UDP packet to port 6882 and verifies the rate-limit counter increments,
-        // exercising the DhtRateLimitEnabled=true code path inside the loop.
         _configService.EnableDht.Returns(true);
         _configService.DhtAutoBootstrap.Returns(false);
         _configService.DhtQueryTimeout.Returns(5);
@@ -1977,14 +1975,12 @@ public class DhtServiceTest
         await Task.Delay(150);
 
         using var sender = new System.Net.Sockets.UdpClient();
-        var pingBytes = BuildPingBytesWithNodeId(new byte[20]);
+        var pingBytes = BuildPingBytesWithNodeId(CreateNodeId(0x42));
         await sender.SendAsync(pingBytes, pingBytes.Length, new IPEndPoint(IPAddress.Loopback, 6882));
 
         await Task.Delay(300);
 
-        var queryCountField = typeof(DhtService).GetField("_queryCount", BindingFlags.NonPublic | BindingFlags.Instance);
-        var queryCount = (int)queryCountField.GetValue(service);
-        Assert.That(queryCount, Is.EqualTo(1), "Rate limit counter should have been incremented after processing one packet");
+        Assert.That(service.RoutingTable.NodeCount, Is.EqualTo(1), "Packet should be processed and node added to routing table");
 
         await cts.CancelAsync();
         await Task.WhenAny(task, Task.Delay(2000));
@@ -1993,8 +1989,8 @@ public class DhtServiceTest
     [Test]
     public async Task ExecuteAsync_should_drop_packet_when_rate_limit_count_is_exceeded()
     {
-        // With DhtMaxQueriesPerSecond=0, any received packet triggers the rate-limit
-        // continue path; HandleMessage is never called so the routing table stays empty.
+        // With DhtMaxQueriesPerSecond=0, any received query triggers the per-IP rate limiter drop path;
+        // HandleQuery is never called so the routing table stays empty.
         _configService.EnableDht.Returns(true);
         _configService.DhtAutoBootstrap.Returns(false);
         _configService.DhtQueryTimeout.Returns(5);
@@ -2020,7 +2016,7 @@ public class DhtServiceTest
 
         await Task.Delay(300);
 
-        // HandleMessage was NOT called — packet was dropped by the rate limiter (continue path)
+        // HandleQuery was NOT called — packet was dropped by the rate limiter
         Assert.That(service.RoutingTable.NodeCount, Is.EqualTo(0));
 
         await cts.CancelAsync();
@@ -2028,48 +2024,152 @@ public class DhtServiceTest
     }
 
     [Test]
-    public async Task ExecuteAsync_should_reset_rate_limit_window_when_more_than_one_second_has_elapsed()
+    public void RateLimiter_should_rate_limit_fast_flood_of_queries_from_single_ip()
     {
-        // After the window expires (>1s), the counter resets to 0 before processing the packet.
-        _configService.EnableDht.Returns(true);
-        _configService.DhtAutoBootstrap.Returns(false);
-        _configService.DhtQueryTimeout.Returns(5);
-        _configService.DhtAnnouncementInterval.Returns(3600);
         _configService.DhtRateLimitEnabled.Returns(true);
-        _configService.DhtMaxQueriesPerSecond.Returns(100);
+        _configService.DhtMaxQueriesPerSecond.Returns(5);
         using var service = new DhtService(_configService);
 
-        var executeMethod = typeof(DhtService).GetMethod("ExecuteAsync", BindingFlags.NonPublic | BindingFlags.Instance);
-        var queryCountField = typeof(DhtService).GetField("_queryCount", BindingFlags.NonPublic | BindingFlags.Instance);
-        var windowField = typeof(DhtService).GetField("_rateLimitWindowStart", BindingFlags.NonPublic | BindingFlags.Instance);
-        using var cts = new CancellationTokenSource();
-        var task = (Task)executeMethod.Invoke(service, new object[] { cts.Token });
+        var ipA = IPAddress.Parse("10.0.0.1");
+        var invokeMethod = typeof(DhtService).GetMethod("HandleMessage", BindingFlags.NonPublic | BindingFlags.Instance);
 
-        if (task.IsCompleted)
+        // Send 10 queries from IP A in quick succession
+        for (var i = 0; i < 10; i++)
         {
-            return; // Port unavailable
+            var msg = BuildQueryMessage("ping", CreateNodeId((byte)(i + 1)));
+            invokeMethod.Invoke(service, new object[] { msg.EncodeAsBytes(), new IPEndPoint(ipA, 6881) });
         }
 
-        await Task.Delay(150);
+        // Only the first 5 queries should have been accepted and added to the routing table
+        Assert.That(service.RoutingTable.NodeCount, Is.EqualTo(5));
+    }
 
-        // Simulate a stale rate-limit window with a high counter
-        queryCountField.SetValue(service, 50);
-        windowField.SetValue(service, DateTime.UtcNow.AddSeconds(-2));
+    [Test]
+    public void RateLimiter_should_accept_queries_from_ip_b_while_ip_a_is_rate_limited()
+    {
+        _configService.DhtRateLimitEnabled.Returns(true);
+        _configService.DhtMaxQueriesPerSecond.Returns(5);
+        using var service = new DhtService(_configService);
 
-        await Task.Delay(50);
+        var ipA = IPAddress.Parse("10.0.0.1");
+        var ipB = IPAddress.Parse("10.0.0.2");
+        var invokeMethod = typeof(DhtService).GetMethod("HandleMessage", BindingFlags.NonPublic | BindingFlags.Instance);
 
-        using var sender = new System.Net.Sockets.UdpClient();
-        var pingBytes = BuildPingBytesWithNodeId(new byte[20]);
-        await sender.SendAsync(pingBytes, pingBytes.Length, new IPEndPoint(IPAddress.Loopback, 6882));
+        // Flood 10 queries from IP A
+        for (var i = 0; i < 10; i++)
+        {
+            var msg = BuildQueryMessage("ping", CreateNodeId((byte)(i + 1)));
+            invokeMethod.Invoke(service, new object[] { msg.EncodeAsBytes(), new IPEndPoint(ipA, 6881) });
+        }
 
-        await Task.Delay(300);
+        Assert.That(service.RoutingTable.NodeCount, Is.EqualTo(5));
 
-        // Window reset → counter goes 0 → 1 (not 51)
-        var queryCount = (int)queryCountField.GetValue(service);
-        Assert.That(queryCount, Is.EqualTo(1), "Rate-limit window should have reset and counter should restart from 1");
+        // IP A is now rate-limited; send an extra query from IP A -> still dropped
+        var msgAExtra = BuildQueryMessage("ping", CreateNodeId(0xAA));
+        invokeMethod.Invoke(service, new object[] { msgAExtra.EncodeAsBytes(), new IPEndPoint(ipA, 6881) });
+        Assert.That(service.RoutingTable.NodeCount, Is.EqualTo(5));
 
-        await cts.CancelAsync();
-        await Task.WhenAny(task, Task.Delay(2000));
+        // Simultaneously, queries from IP B must be accepted
+        for (var i = 0; i < 3; i++)
+        {
+            var msgB = BuildQueryMessage("ping", CreateNodeId((byte)(0xB0 + i)));
+            invokeMethod.Invoke(service, new object[] { msgB.EncodeAsBytes(), new IPEndPoint(ipB, 6881) });
+        }
+
+        Assert.That(service.RoutingTable.NodeCount, Is.EqualTo(8));
+    }
+
+    [Test]
+    public void RateLimiter_should_never_drop_outbound_query_responses()
+    {
+        _configService.DhtRateLimitEnabled.Returns(true);
+        _configService.DhtMaxQueriesPerSecond.Returns(0); // 0 queries allowed per second
+        using var service = new DhtService(_configService);
+
+        var ipA = IPAddress.Parse("10.0.0.1");
+        var invokeMethod = typeof(DhtService).GetMethod("HandleMessage", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        // A query from IP A should be dropped because maxPerSecond is 0
+        var queryMsg = BuildQueryMessage("ping", CreateNodeId(0x11));
+        invokeMethod.Invoke(service, new object[] { queryMsg.EncodeAsBytes(), new IPEndPoint(ipA, 6881) });
+        Assert.That(service.RoutingTable.NodeCount, Is.EqualTo(0));
+
+        // However, a response message (y = "r") from IP A must NOT be dropped by query rate limiting
+        var respMsg = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02 }),
+            ["y"] = new BString("r"),
+            ["r"] = new BDictionary
+            {
+                ["id"] = new BString(CreateNodeId(0x22))
+            }
+        };
+
+        invokeMethod.Invoke(service, new object[] { respMsg.EncodeAsBytes(), new IPEndPoint(ipA, 6881) });
+
+        // The response handler processes the node ID in the response and adds it to the routing table
+        Assert.That(service.RoutingTable.NodeCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void RateLimiter_should_never_drop_error_responses()
+    {
+        _configService.DhtRateLimitEnabled.Returns(true);
+        _configService.DhtMaxQueriesPerSecond.Returns(0);
+        using var service = new DhtService(_configService);
+
+        var ipA = IPAddress.Parse("10.0.0.1");
+        var invokeMethod = typeof(DhtService).GetMethod("HandleMessage", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        var txId = new byte[] { 0x12, 0x34 };
+        var txKey = Convert.ToHexString(txId);
+
+        // Add a pending query
+        var pendingField = typeof(DhtService).GetField("_pendingQueries", BindingFlags.NonPublic | BindingFlags.Instance);
+        var pendingDict = (System.Collections.IDictionary)pendingField.GetValue(service);
+        var pendingType = typeof(DhtService).GetNestedType("PendingDhtQuery", BindingFlags.NonPublic);
+        var pendingObj = Activator.CreateInstance(pendingType);
+        pendingDict.Add(txKey, pendingObj);
+
+        Assert.That(pendingDict.Contains(txKey), Is.True);
+
+        // Error response (y = "e") from IP A should NOT be dropped despite rate limiting
+        var errorMsg = new BDictionary
+        {
+            ["t"] = new BString(txId),
+            ["y"] = new BString("e"),
+            ["e"] = new BList
+            {
+                (BencodeNET.Objects.IBObject)new BNumber(201),
+                (BencodeNET.Objects.IBObject)new BString("Generic error")
+            }
+        };
+
+        invokeMethod.Invoke(service, new object[] { errorMsg.EncodeAsBytes(), new IPEndPoint(ipA, 6881) });
+
+        Assert.That(pendingDict.Contains(txKey), Is.False, "Pending query should be removed upon receiving error response");
+    }
+
+    [Test]
+    public void CleanupExpiredRateLimiters_should_prune_stale_ip_entries()
+    {
+        _configService.DhtRateLimitEnabled.Returns(true);
+        _configService.DhtMaxQueriesPerSecond.Returns(10);
+        using var service = new DhtService(_configService);
+
+        var ip = IPAddress.Parse("10.0.0.99");
+        var invokeMethod = typeof(DhtService).GetMethod("HandleMessage", BindingFlags.NonPublic | BindingFlags.Instance);
+        var msg = BuildQueryMessage("ping", CreateNodeId(0x99));
+        invokeMethod.Invoke(service, new object[] { msg.EncodeAsBytes(), new IPEndPoint(ip, 6881) });
+
+        var limitersField = typeof(DhtService).GetField("_rateLimiters", BindingFlags.NonPublic | BindingFlags.Instance);
+        var limitersDict = (System.Collections.IDictionary)limitersField.GetValue(service);
+        Assert.That(limitersDict.Contains(ip), Is.True);
+
+        var cleanupMethod = typeof(DhtService).GetMethod("CleanupExpiredRateLimiters", BindingFlags.NonPublic | BindingFlags.Instance);
+        cleanupMethod.Invoke(service, new object[] { DateTime.UtcNow.AddMinutes(5) });
+
+        Assert.That(limitersDict.Contains(ip), Is.False, "Stale rate limiter entry should be pruned");
     }
 
     [Test]
