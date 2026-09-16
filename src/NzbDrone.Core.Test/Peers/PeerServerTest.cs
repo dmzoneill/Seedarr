@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
@@ -143,6 +144,24 @@ public class PeerServerTest
             "ValidateInfoHash",
             BindingFlags.NonPublic | BindingFlags.Instance);
         return (bool)method.Invoke(_server, new object[] { skeyHash });
+    }
+
+    private ConcurrentDictionary<string, int> GetConnectionsPerIp(PeerServer server = null)
+    {
+        var target = server ?? _server;
+        var field = typeof(PeerServer).GetField(
+            "_connectionsPerIp",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        return (ConcurrentDictionary<string, int>)field.GetValue(target)!;
+    }
+
+    private void InvokeDecrementConnectionCount(string clientIp, PeerServer server = null)
+    {
+        var target = server ?? _server;
+        var method = typeof(PeerServer).GetMethod(
+            "DecrementConnectionCount",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        method.Invoke(target, new object[] { clientIp });
     }
 
     // Constructor tests
@@ -1480,5 +1499,110 @@ public class PeerServerTest
         // After deletion event, cache is cleared so next message triggers GetByInfoHash again
         InvokeHandleMessage(conn, new PeerMessage { Type = PeerMessageType.Choke });
         _torrentService.Received(2).GetByInfoHash(infoHash);
+    }
+
+    [Test]
+    public void Disconnecting_peer_evicts_ip_entry_from_connectionsPerIp_when_count_reaches_zero()
+    {
+        var dict = GetConnectionsPerIp();
+        var clientIp = "192.168.1.50";
+        dict[clientIp] = 1;
+
+        InvokeDecrementConnectionCount(clientIp);
+
+        Assert.That(dict.ContainsKey(clientIp), Is.False);
+        Assert.That(dict.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Multiple_connections_from_same_ip_evicts_only_when_all_connections_close()
+    {
+        var dict = GetConnectionsPerIp();
+        var clientIp = "10.0.0.1";
+        dict[clientIp] = 2;
+
+        InvokeDecrementConnectionCount(clientIp);
+
+        Assert.That(dict.ContainsKey(clientIp), Is.True);
+        Assert.That(dict[clientIp], Is.EqualTo(1));
+
+        InvokeDecrementConnectionCount(clientIp);
+
+        Assert.That(dict.ContainsKey(clientIp), Is.False);
+        Assert.That(dict.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Exception_during_connection_initialization_releases_and_evicts_ip_reservation()
+    {
+        _configService.BindInterface.Returns("tun0");
+
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.GetVpnInterfaceIpAddress(Arg.Any<AddressFamily>()).Returns((IPAddress)null);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            vpnKillSwitchService: vpnService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "192.168.1.99",
+            Port = 5000,
+            Source = "tracker"
+        };
+
+        var dict = GetConnectionsPerIp(server);
+
+        InvokeConnectToPeer(server, torrent, candidate);
+
+        // Fail-closed occurred during connection initialization; verify IP reservation was evicted
+        Assert.That(dict.ContainsKey(candidate.Ip), Is.False);
+        Assert.That(dict.Count, Is.EqualTo(0));
+
+        server.Dispose();
+    }
+
+    [Test]
+    public void ConnectToPeer_when_exceeding_max_connections_per_ip_evicts_reservation()
+    {
+        _configService.MaxConnectionsPerIp.Returns(1);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "192.168.1.200",
+            Port = 5000,
+            Source = "tracker"
+        };
+
+        var dict = GetConnectionsPerIp();
+        dict[candidate.Ip] = 1;
+
+        InvokeConnectToPeer(_server, torrent, candidate);
+
+        // Exceeded limit: count remains 1 and is not leaked higher
+        Assert.That(dict[candidate.Ip], Is.EqualTo(1));
+
+        InvokeDecrementConnectionCount(candidate.Ip);
+        Assert.That(dict.ContainsKey(candidate.Ip), Is.False);
     }
 }
