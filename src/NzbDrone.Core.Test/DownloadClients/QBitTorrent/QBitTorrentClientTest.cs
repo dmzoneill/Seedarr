@@ -545,4 +545,49 @@ public class QBitTorrentClientTest
         Assert.That(result[0].IsPrivate, Is.True);
         Assert.That(result[1].IsPrivate, Is.False);
     }
+
+    [Test]
+    public async System.Threading.Tasks.Task GetSpeedLimitsAsync_should_return_parsed_speed_limits()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(HttpStatusCode.OK, @"{""up_info_speed"":102400,""dl_info_speed"":204800,""up_rate_limit"":512000,""dl_rate_limit"":1048576}");
+        InjectMockClient(handler);
+
+        var result = await _client.GetSpeedLimitsAsync();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.CurrentUploadRateBps, Is.EqualTo(102400));
+        Assert.That(result.CurrentDownloadRateBps, Is.EqualTo(204800));
+        Assert.That(result.UploadLimitBps, Is.EqualTo(512000));
+        Assert.That(result.DownloadLimitBps, Is.EqualTo(1048576));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SetSpeedLimitsAsync_should_send_requests()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        InjectMockClient(handler);
+
+        await _client.SetSpeedLimitsAsync(500000, 1000000);
+
+        Assert.That(handler.Requests, Has.Count.EqualTo(3)); // login + setUploadLimit + setDownloadLimit
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task SetTorrentLimitsAsync_should_send_requests()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        handler.Enqueue(HttpStatusCode.OK, "Ok.");
+        InjectMockClient(handler);
+
+        await _client.SetTorrentLimitsAsync("hash123", 250000, 500000);
+
+        Assert.That(handler.Requests, Has.Count.EqualTo(3)); // login + setUploadLimit + setDownloadLimit
+    }
 }

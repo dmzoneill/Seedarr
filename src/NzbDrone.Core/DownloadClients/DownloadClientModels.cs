@@ -51,3 +51,11 @@ public class DownloadClientImportRequest
 {
     public System.Collections.Generic.List<string> InfoHashes { get; set; } = new();
 }
+
+public class DownloadClientSpeedLimits
+{
+    public long? UploadLimitBps { get; set; }
+    public long? DownloadLimitBps { get; set; }
+    public long? CurrentUploadRateBps { get; set; }
+    public long? CurrentDownloadRateBps { get; set; }
+}

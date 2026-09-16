@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 
@@ -25,16 +26,23 @@ public class DelugeClient : IDownloadClient, IDisposable
     public string Password { get; set; } = "deluge";
     public string Category { get; set; } = "";
 
-    public DelugeClient()
+    public DelugeClient(HttpClient client = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
-        var handler = new HttpClientHandler
+        if (client != null)
         {
-            CookieContainer = _cookies,
-            CheckCertificateRevocationList = true,
-        };
+            _client = client;
+        }
+        else
+        {
+            var handler = new HttpClientHandler
+            {
+                CookieContainer = _cookies,
+                CheckCertificateRevocationList = true,
+            };
 
-        _client = new HttpClient(handler);
+            _client = new HttpClient(handler);
+        }
     }
 
     private string JsonUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}/json";
@@ -56,6 +64,25 @@ public class DelugeClient : IDownloadClient, IDisposable
 
         using var stream = response.Content.ReadAsStream();
         return JsonDocument.Parse(stream);
+    }
+
+    private async Task<JsonDocument> SendRequestAsync(string method, object[] parameters, CancellationToken cancellationToken = default)
+    {
+        var payload = new
+        {
+            method,
+            @params = parameters,
+            id = _requestId++,
+        };
+
+        var json = JsonSerializer.Serialize(payload);
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var request = new HttpRequestMessage(HttpMethod.Post, JsonUrl) { Content = content };
+        using var response = await _client.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
     }
 
     private bool Authenticate()
@@ -292,6 +319,111 @@ public class DelugeClient : IDownloadClient, IDisposable
     public void Dispose()
     {
         _client?.Dispose();
+    }
+
+    public async Task<DownloadClientSpeedLimits> GetSpeedLimitsAsync(CancellationToken cancellationToken = default)
+    {
+        var result = new DownloadClientSpeedLimits();
+        if (!Authenticate())
+        {
+            return result;
+        }
+
+        try
+        {
+            using var configDoc = await SendRequestAsync("core.get_config", Array.Empty<object>(), cancellationToken);
+            if (configDoc.RootElement.TryGetProperty("result", out var configResult))
+            {
+                if (configResult.TryGetProperty("max_upload_speed", out var upSpeed) && upSpeed.TryGetDouble(out var upVal))
+                {
+                    result.UploadLimitBps = upVal > 0 ? (long)(upVal * 1024) : null;
+                }
+
+                if (configResult.TryGetProperty("max_download_speed", out var downSpeed) && downSpeed.TryGetDouble(out var downVal))
+                {
+                    result.DownloadLimitBps = downVal > 0 ? (long)(downVal * 1024) : null;
+                }
+            }
+
+            using var statsDoc = await SendRequestAsync("core.get_session_status", new object[] { new[] { "upload_rate", "download_rate" } }, cancellationToken);
+            if (statsDoc.RootElement.TryGetProperty("result", out var statsResult))
+            {
+                if (statsResult.TryGetProperty("upload_rate", out var curUp) && curUp.TryGetDouble(out var curUpVal))
+                {
+                    result.CurrentUploadRateBps = (long)curUpVal;
+                }
+
+                if (statsResult.TryGetProperty("download_rate", out var curDown) && curDown.TryGetDouble(out var curDownVal))
+                {
+                    result.CurrentDownloadRateBps = (long)curDownVal;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to get speed limits from Deluge");
+        }
+
+        return result;
+    }
+
+    public async Task SetSpeedLimitsAsync(long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default)
+    {
+        if (!Authenticate())
+        {
+            return;
+        }
+
+        try
+        {
+            var config = new Dictionary<string, object>();
+            if (uploadBps.HasValue)
+            {
+                config["max_upload_speed"] = uploadBps.Value > 0 ? (double)uploadBps.Value / 1024.0 : -1.0;
+            }
+
+            if (downloadBps.HasValue)
+            {
+                config["max_download_speed"] = downloadBps.Value > 0 ? (double)downloadBps.Value / 1024.0 : -1.0;
+            }
+
+            if (config.Count > 0)
+            {
+                using var doc = await SendRequestAsync("core.set_config", new object[] { config }, cancellationToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to set speed limits in Deluge");
+        }
+    }
+
+    public async Task SetTorrentLimitsAsync(string infoHash, long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash) || !Authenticate())
+        {
+            return;
+        }
+
+        try
+        {
+            var options = new Dictionary<string, object>();
+            if (uploadBps.HasValue)
+            {
+                options["max_upload_speed"] = uploadBps.Value > 0 ? (double)uploadBps.Value / 1024.0 : -1.0;
+            }
+
+            if (downloadBps.HasValue)
+            {
+                options["max_download_speed"] = downloadBps.Value > 0 ? (double)downloadBps.Value / 1024.0 : -1.0;
+            }
+
+            using var doc = await SendRequestAsync("core.set_torrent_options", new object[] { new[] { infoHash }, options }, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to set torrent limits in Deluge for {0}", infoHash);
+        }
     }
 
     private static string MapState(string delugeState)

@@ -9,6 +9,7 @@ using NUnit.Framework;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.DownloadClients.Sync;
 using NzbDrone.Core.Indexers;
+using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.DownloadClients.Sync;
@@ -20,6 +21,7 @@ public class DownloadClientSyncServiceTest
     private IIndexerFactory _indexerFactory;
     private ITorrentService _torrentService;
     private ITorrentFileParser _torrentFileParser;
+    private IRemotePathMappingService _remotePathMappingService;
     private TestableDownloadClientSyncService _service;
 
     private class TestableDownloadClientSyncService : DownloadClientSyncService
@@ -31,8 +33,9 @@ public class DownloadClientSyncServiceTest
             IDownloadClientFactory downloadClientFactory,
             IIndexerFactory indexerFactory,
             ITorrentService torrentService,
-            ITorrentFileParser torrentFileParser)
-            : base(downloadClientFactory, indexerFactory, torrentService, torrentFileParser)
+            ITorrentFileParser torrentFileParser,
+            IRemotePathMappingService remotePathMappingService = null)
+            : base(downloadClientFactory, indexerFactory, torrentService, torrentFileParser, remotePathMappingService: remotePathMappingService)
         {
         }
 
@@ -54,12 +57,15 @@ public class DownloadClientSyncServiceTest
         _indexerFactory = Substitute.For<IIndexerFactory>();
         _torrentService = Substitute.For<ITorrentService>();
         _torrentFileParser = Substitute.For<ITorrentFileParser>();
+        _remotePathMappingService = Substitute.For<IRemotePathMappingService>();
+        _remotePathMappingService.Remap(Arg.Any<string>(), Arg.Any<string>()).Returns(x => x.ArgAt<string>(1));
 
         _service = new TestableDownloadClientSyncService(
             _downloadClientFactory,
             _indexerFactory,
             _torrentService,
-            _torrentFileParser);
+            _torrentFileParser,
+            _remotePathMappingService);
     }
 
     [Test]
@@ -855,5 +861,90 @@ public class DownloadClientSyncServiceTest
 
         Assert.That(maxConcurrent, Is.EqualTo(1));
         Assert.That(syncCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Sync_should_remap_torrent_SavePath_and_SourcePath_using_RemotePathMappingService()
+    {
+        var hash = "aaaa111122223333444455556666777788889999";
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Test Torrent",
+                InfoHash = hash,
+                TotalSize = 1000,
+                RemainingSize = 0,
+                OutputPath = "/remote/downloads/movies/test",
+                Status = "seeding"
+            }
+        });
+
+        _remotePathMappingService.Remap("192.168.1.50", "/remote/downloads/movies/test")
+            .Returns("/local/media/movies/test");
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "Remote qBit", ClientType = "QBitTorrent", Host = "192.168.1.50", Enable = true }
+        });
+
+        var result = _service.Sync();
+
+        Assert.That(result.Added, Is.EqualTo(1));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == hash &&
+            t.SavePath == "/local/media/movies/test" &&
+            t.SourcePath == "/local/media/movies/test"));
+    }
+
+    [Test]
+    public void ImportTorrent_should_remap_torrent_SavePath_and_SourcePath_using_RemotePathMappingService()
+    {
+        var hash = "bbbb111122223333444455556666777788889999";
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(new byte[] { 0x64, 0x38, 0x3a });
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Imported Torrent",
+                InfoHash = hash,
+                TotalSize = 5000,
+                RemainingSize = 0,
+                OutputPath = @"D:\Downloads\Torrents\Imported",
+                Status = "seeding"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Imported Torrent",
+            TotalSize = 5000,
+            PieceCount = 10,
+            PieceLength = 500
+        });
+
+        _remotePathMappingService.Remap("qbit-box", @"D:\Downloads\Torrents\Imported")
+            .Returns("/data/torrents/Imported");
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Windows qBit",
+            ClientType = "QBitTorrent",
+            Host = "qbit-box",
+            Enable = true
+        });
+
+        var torrent = _service.ImportTorrent(1, hash);
+
+        Assert.That(torrent, Is.Not.Null);
+        Assert.That(torrent.SavePath, Is.EqualTo("/data/torrents/Imported"));
+        Assert.That(torrent.SourcePath, Is.EqualTo("/data/torrents/Imported"));
     }
 }
