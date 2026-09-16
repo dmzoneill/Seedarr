@@ -85,6 +85,7 @@ public interface IConfigService
     int AltUploadSpeedKbps { get; }
     int AltDownloadSpeedKbps { get; }
     double GlobalSeedRatioLimit { get; }
+    string SeedGoalReachedAction { get; }
 
     // Speed Distribution
     string UploadDistributionAlgorithm { get; }
@@ -401,6 +402,7 @@ public class ConfigService : IConfigService
     public int AltUploadSpeedKbps => GetPositiveSpeedKbps("AltUploadSpeedKbps", 50);
     public int AltDownloadSpeedKbps => GetPositiveSpeedKbps("AltDownloadSpeedKbps", 100);
     public double GlobalSeedRatioLimit => GetValueDouble("GlobalSeedRatioLimit", 0.0);
+    public string SeedGoalReachedAction => GetValue("SeedGoalReachedAction", "Stop");
 
     // Speed Distribution
     public string UploadDistributionAlgorithm => GetValue("UploadDistributionAlgorithm", "Equal");

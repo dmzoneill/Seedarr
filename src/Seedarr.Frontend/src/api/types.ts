@@ -373,6 +373,7 @@ export interface SeedingConfig {
   downloadStoppedMaxPercentage: number;
   speedVariationMin: number;
   speedVariationMax: number;
+  seedGoalReachedAction?: string;
 }
 
 export interface NetworkConfig {

@@ -171,7 +171,16 @@ public class SeedingConfigController : ConfigController<SeedingConfigResource>
 
         SharedValidator.RuleFor(c => c.SpeedVariationMax)
             .InclusiveBetween(0.0, 1.0);
+
+        SharedValidator.RuleFor(c => c.SeedGoalReachedAction)
+            .Must(action => string.IsNullOrWhiteSpace(action) || AllowedSeedGoalReachedActions.Contains(action))
+            .WithMessage("SeedGoalReachedAction must be one of: Stop, Pause, RemoveTorrent, RemoveTorrentAndData.");
     }
+
+    private static readonly HashSet<string> AllowedSeedGoalReachedActions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Stop", "Pause", "RemoveTorrent", "RemoveTorrentAndData"
+    };
 
     protected override SeedingConfigResource ToResource(IConfigService model)
     {
