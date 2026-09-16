@@ -164,6 +164,33 @@ public class PeerServerTest
         method.Invoke(target, new object[] { clientIp });
     }
 
+    private SemaphoreSlim GetHalfOpenSemaphore(PeerServer server = null)
+    {
+        var target = server ?? _server;
+        var field = typeof(PeerServer).GetField(
+            "_halfOpenSemaphore",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        return (SemaphoreSlim)field.GetValue(target)!;
+    }
+
+    private SemaphoreSlim GetConnectionSemaphore(PeerServer server = null)
+    {
+        var target = server ?? _server;
+        var field = typeof(PeerServer).GetField(
+            "_connectionSemaphore",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        return (SemaphoreSlim)field.GetValue(target)!;
+    }
+
+    private Task InvokeProcessIncomingClientAsync(TcpClient client, CancellationToken ct, PeerServer server = null)
+    {
+        var target = server ?? _server;
+        var method = typeof(PeerServer).GetMethod(
+            "ProcessIncomingClientAsync",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        return (Task)method.Invoke(target, new object[] { client, ct })!;
+    }
+
     // Constructor tests
 
     [Test]
@@ -823,7 +850,10 @@ public class PeerServerTest
     {
         var method = typeof(PeerServer).GetMethod(
             "HandleConnection",
-            BindingFlags.NonPublic | BindingFlags.Instance);
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            null,
+            new[] { typeof(TcpClient), typeof(CancellationToken) },
+            null);
         method.Invoke(_server, new object[] { serverTcp, ct });
     }
 
@@ -1604,5 +1634,151 @@ public class PeerServerTest
 
         InvokeDecrementConnectionCount(candidate.Ip);
         Assert.That(dict.ContainsKey(candidate.Ip), Is.False);
+    }
+
+    [Test]
+    public async Task Inbound_connections_acquire_and_release_half_open_semaphore_during_handshake_phase()
+    {
+        var (clientTcp, serverTcp) = CreateRawTcpPair();
+        _clients.Add(clientTcp);
+
+        var halfOpen = GetHalfOpenSemaphore();
+        var initialCount = halfOpen.CurrentCount;
+
+        var infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = infoHash,
+            PieceCount = 10,
+            PieceLength = 16384,
+            Name = "Test"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentService.GetByInfoHash(infoHash).Returns(torrent);
+
+        using var cts = new CancellationTokenSource();
+        var processTask = InvokeProcessIncomingClientAsync(serverTcp, cts.Token);
+
+        // Allow server to accept and acquire semaphores, entering handshake negotiation
+        for (var i = 0; i < 50 && halfOpen.CurrentCount == initialCount; i++)
+        {
+            await Task.Delay(10);
+        }
+
+        // Permit should be acquired during the handshake phase
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(initialCount - 1));
+
+        // Now client sends handshake to complete verification
+        var handshake = BuildBtHandshake(infoHash, "-SD0001-012345678901");
+        var stream = clientTcp.GetStream();
+        await stream.WriteAsync(handshake.AsMemory());
+        await stream.FlushAsync();
+
+        // Once handshake verification succeeds, half-open permit must be released immediately
+        for (var i = 0; i < 50 && halfOpen.CurrentCount < initialCount; i++)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(initialCount));
+
+        // Terminate connection to exit session loop
+        clientTcp.Close();
+        await cts.CancelAsync();
+        try
+        {
+            await processTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    [Test]
+    public async Task Accepted_client_with_null_remote_endpoint_is_disposed_cleanly_without_throwing()
+    {
+        var client = new TcpClient();
+        _clients.Add(client);
+
+        var halfOpen = GetHalfOpenSemaphore();
+        var initialCount = halfOpen.CurrentCount;
+        var dict = GetConnectionsPerIp();
+
+        using var cts = new CancellationTokenSource();
+        Assert.DoesNotThrowAsync(async () => await InvokeProcessIncomingClientAsync(client, cts.Token));
+
+        // Should return gracefully without leaking half-open permits or IP entries
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(initialCount));
+        Assert.That(dict.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task Permitted_limit_of_concurrent_half_open_inbound_connections_is_enforced()
+    {
+        const int maxHalfOpen = 2;
+        var config = Substitute.For<IConfigService>();
+        config.MaxGlobalConnections.Returns(200);
+        config.MaximumHalfOpenConnections.Returns(maxHalfOpen);
+        config.ListeningPort.Returns(0);
+        config.EncryptionMode.Returns("enabled");
+        config.HandshakeTimeoutSeconds.Returns(30);
+        config.MessageReadTimeoutSeconds.Returns(60);
+        config.KeepAliveIntervalSeconds.Returns(120);
+        config.PeerRequestCount.Returns(200);
+        config.PeerIdleChance.Returns(0.0);
+        config.PeerContactIntervalSeconds.Returns(300);
+
+        using var server = new PeerServer(config, _torrentService, _connectionManager, _peerDiscovery, _multiTracker);
+        var halfOpen = GetHalfOpenSemaphore(server);
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(maxHalfOpen));
+
+        var (c1, s1) = CreateRawTcpPair();
+        var (c2, s2) = CreateRawTcpPair();
+        var (c3, s3) = CreateRawTcpPair();
+        _clients.Add(c1);
+        _clients.Add(c2);
+        _clients.Add(c3);
+
+        using var cts = new CancellationTokenSource();
+        var t1 = InvokeProcessIncomingClientAsync(s1, cts.Token, server);
+        var t2 = InvokeProcessIncomingClientAsync(s2, cts.Token, server);
+
+        // Wait until both half-open slots are occupied
+        for (var i = 0; i < 50 && halfOpen.CurrentCount > 0; i++)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(0));
+
+        // Third inbound connection attempts to enter handshake phase while limit is reached
+        using var shortCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        var t3 = InvokeProcessIncomingClientAsync(s3, shortCts.Token, server);
+        await t3;
+
+        // Since limit was reached and token timed out, s3 could not proceed
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(0));
+
+        // Closing c1 frees a half-open slot
+        c1.Close();
+        await cts.CancelAsync();
+        try
+        {
+            await t1;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        try
+        {
+            await t2;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(maxHalfOpen));
     }
 }
