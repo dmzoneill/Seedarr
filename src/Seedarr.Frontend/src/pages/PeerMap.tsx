@@ -4,9 +4,87 @@ import * as d3 from "d3";
 import { usePeerGraph, useTorrents } from "../api/hooks";
 import type { PeerGraphNode } from "../api/types";
 
-interface SimNode extends d3.SimulationNodeDatum, PeerGraphNode {}
-interface SimLink extends d3.SimulationLinkDatum<SimNode> {
+export interface SimNode extends d3.SimulationNodeDatum, PeerGraphNode {}
+export interface SimLink extends d3.SimulationLinkDatum<SimNode> {
   type: string;
+}
+
+export interface TopologySnapshot {
+  nodeIds: Set<string>;
+  linkKeys: Set<string>;
+}
+
+export const getNodeId = (
+  endpoint: string | number | SimNode | d3.SimulationNodeDatum | null | undefined,
+): string => {
+  if (typeof endpoint === "object" && endpoint !== null) {
+    return (endpoint as SimNode).id ?? "";
+  }
+  if (typeof endpoint === "number") {
+    return String(endpoint);
+  }
+  return typeof endpoint === "string" ? endpoint : "";
+};
+
+export function isTopologyChanged(
+  prevTopology: TopologySnapshot | null,
+  currentNodes: { id: string }[],
+  currentLinks: { source: string | number | SimNode; target: string | number | SimNode }[],
+): boolean {
+  if (!prevTopology) return true;
+
+  if (prevTopology.nodeIds.size !== currentNodes.length) return true;
+  if (prevTopology.linkKeys.size !== currentLinks.length) return true;
+
+  for (const node of currentNodes) {
+    if (!prevTopology.nodeIds.has(node.id)) return true;
+  }
+
+  for (const link of currentLinks) {
+    const s = getNodeId(link.source);
+    const t = getNodeId(link.target);
+    const key = `${s}->${t}`;
+    if (!prevTopology.linkKeys.has(key)) return true;
+  }
+
+  return false;
+}
+
+export function mapPreservedNodes(
+  rawNodes: PeerGraphNode[],
+  prevNodes: Map<string, SimNode>,
+  width: number,
+  height: number,
+  baseTorrentRadius: number,
+): SimNode[] {
+  let tIdx = 0;
+  const numTorrents = rawNodes.filter((n) => n.type === "torrent").length;
+
+  return rawNodes.map((n) => {
+    const prev = prevNodes.get(n.id);
+    const node: SimNode = prev
+      ? {
+          ...n,
+          x: prev.x,
+          y: prev.y,
+          vx: prev.vx,
+          vy: prev.vy,
+          fx: prev.fx,
+          fy: prev.fy,
+        }
+      : { ...n };
+
+    if (node.type === "center") {
+      node.fx = width / 2;
+      node.fy = height / 2;
+    } else if (node.type === "torrent" && prev == null) {
+      const angle = (tIdx / (numTorrents || 1)) * 2 * Math.PI - Math.PI / 2;
+      node.x = width / 2 + Math.cos(angle) * baseTorrentRadius;
+      node.y = height / 2 + Math.sin(angle) * baseTorrentRadius;
+      tIdx++;
+    }
+    return node;
+  });
 }
 
 const NODE_COLORS: Record<string, string> = {
@@ -70,6 +148,19 @@ function PeerMap() {
   const mainGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
   const linkGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
   const nodeGroupRef = useRef<d3.Selection<SVGGElement, unknown, null, undefined> | null>(null);
+  const linksRef = useRef<SimLink[]>([]);
+  const prevTopologyRef = useRef<TopologySnapshot | null>(null);
+  const prevDimensionsRef = useRef<{ width: number; height: number } | null>(null);
+
+  // Clean up simulation on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (simulationRef.current) {
+        simulationRef.current.stop();
+        simulationRef.current = null;
+      }
+    };
+  }, []);
 
   // Initialize SVG container & zoom behavior once
   useEffect(() => {
@@ -126,17 +217,13 @@ function PeerMap() {
           n.infoHash === selectedTorrentFilter,
       );
       if (targetTorrentNode) {
-        const connectedPeerIds = new Set(
-          rawLinks
-            .filter(
-              (l) =>
-                l.source === targetTorrentNode.id ||
-                l.target === targetTorrentNode.id,
-            )
-            .map((l) =>
-              l.source === targetTorrentNode.id ? l.target : l.source,
-            ),
-        );
+        const connectedPeerIds = new Set<string>();
+        rawLinks.forEach((l) => {
+          const s = getNodeId(l.source);
+          const t = getNodeId(l.target);
+          if (s === targetTorrentNode.id) connectedPeerIds.add(t);
+          if (t === targetTorrentNode.id) connectedPeerIds.add(s);
+        });
         connectedPeerIds.add(targetTorrentNode.id);
         const centerId = rawNodes.find((n) => n.type === "center")?.id;
         if (centerId) connectedPeerIds.add(centerId);
@@ -144,8 +231,8 @@ function PeerMap() {
         rawNodes = rawNodes.filter((n) => connectedPeerIds.has(n.id));
         rawLinks = rawLinks.filter(
           (l) =>
-            connectedPeerIds.has(l.source as string) &&
-            connectedPeerIds.has(l.target as string),
+            connectedPeerIds.has(getNodeId(l.source)) &&
+            connectedPeerIds.has(getNodeId(l.target)),
         );
       }
     }
@@ -166,28 +253,20 @@ function PeerMap() {
     );
     const peerDistance = Math.max(90, Math.min(130, 800 / (numPeers || 1)));
 
-    let tIdx = 0;
-    const nodes: SimNode[] = rawNodes.map((n) => {
-      const prev = prevNodes.get(n.id);
-      const node: SimNode = prev ? { ...n, x: prev.x, y: prev.y, vx: prev.vx, vy: prev.vy } : { ...n };
-
-      if (node.type === "center") {
-        node.fx = width / 2;
-        node.fy = height / 2;
-      } else if (node.type === "torrent" && prev == null) {
-        const angle = (tIdx / (numTorrents || 1)) * 2 * Math.PI - Math.PI / 2;
-        node.x = width / 2 + Math.cos(angle) * baseTorrentRadius;
-        node.y = height / 2 + Math.sin(angle) * baseTorrentRadius;
-        tIdx++;
-      }
-      return node;
-    });
+    const nodes: SimNode[] = mapPreservedNodes(
+      rawNodes,
+      prevNodes,
+      width,
+      height,
+      baseTorrentRadius,
+    );
 
     const links: SimLink[] = rawLinks.map((l) => ({
       source: l.source,
       target: l.target,
       type: l.type,
     }));
+    linksRef.current = links;
 
     if (!simulationRef.current) {
       simulationRef.current = d3.forceSimulation<SimNode>();
@@ -233,8 +312,8 @@ function PeerMap() {
     const link = linkGroup
       .selectAll<SVGLineElement, SimLink>("line")
       .data(links, (d) => {
-        const s = typeof d.source === "object" ? (d.source as SimNode).id : d.source;
-        const t = typeof d.target === "object" ? (d.target as SimNode).id : d.target;
+        const s = getNodeId(d.source);
+        const t = getNodeId(d.target);
         return `${s}->${t}`;
       })
       .join(
@@ -291,46 +370,54 @@ function PeerMap() {
             .on("mouseenter", (_event, d) => {
               const neighborIds = new Set<string>();
               neighborIds.add(d.id);
-              links.forEach((l) => {
-                const sId = typeof l.source === "object" ? (l.source as SimNode).id : l.source;
-                const tId = typeof l.target === "object" ? (l.target as SimNode).id : l.target;
-                if (sId === d.id) neighborIds.add(tId as string);
-                if (tId === d.id) neighborIds.add(sId as string);
+              linksRef.current.forEach((l) => {
+                const sId = getNodeId(l.source);
+                const tId = getNodeId(l.target);
+                if (sId === d.id) neighborIds.add(tId);
+                if (tId === d.id) neighborIds.add(sId);
               });
 
-              nodeGroup
-                .selectAll<SVGGElement, SimNode>("g.node")
-                .transition()
-                .duration(150)
-                .attr("opacity", (n) => (neighborIds.has(n.id) ? 1 : 0.2));
+              if (nodeGroupRef.current) {
+                nodeGroupRef.current
+                  .selectAll<SVGGElement, SimNode>("g.node")
+                  .transition()
+                  .duration(150)
+                  .attr("opacity", (n) => (neighborIds.has(n.id) ? 1 : 0.2));
+              }
 
-              linkGroup
-                .selectAll<SVGLineElement, SimLink>("line")
-                .transition()
-                .duration(150)
-                .attr("opacity", (l) => {
-                  const sId = typeof l.source === "object" ? (l.source as SimNode).id : l.source;
-                  const tId = typeof l.target === "object" ? (l.target as SimNode).id : l.target;
-                  return sId === d.id || tId === d.id ? 1 : 0.05;
-                })
-                .attr("stroke-width", (l) => {
-                  const sId = typeof l.source === "object" ? (l.source as SimNode).id : l.source;
-                  const tId = typeof l.target === "object" ? (l.target as SimNode).id : l.target;
-                  return sId === d.id || tId === d.id ? 2.5 : 1;
-                });
+              if (linkGroupRef.current) {
+                linkGroupRef.current
+                  .selectAll<SVGLineElement, SimLink>("line")
+                  .transition()
+                  .duration(150)
+                  .attr("opacity", (l) => {
+                    const sId = getNodeId(l.source);
+                    const tId = getNodeId(l.target);
+                    return sId === d.id || tId === d.id ? 1 : 0.05;
+                  })
+                  .attr("stroke-width", (l) => {
+                    const sId = getNodeId(l.source);
+                    const tId = getNodeId(l.target);
+                    return sId === d.id || tId === d.id ? 2.5 : 1;
+                  });
+              }
             })
             .on("mouseleave", () => {
-              nodeGroup
-                .selectAll<SVGGElement, SimNode>("g.node")
-                .transition()
-                .duration(150)
-                .attr("opacity", 1);
-              linkGroup
-                .selectAll<SVGLineElement, SimLink>("line")
-                .transition()
-                .duration(150)
-                .attr("opacity", 0.7)
-                .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1.2));
+              if (nodeGroupRef.current) {
+                nodeGroupRef.current
+                  .selectAll<SVGGElement, SimNode>("g.node")
+                  .transition()
+                  .duration(150)
+                  .attr("opacity", 1);
+              }
+              if (linkGroupRef.current) {
+                linkGroupRef.current
+                  .selectAll<SVGLineElement, SimLink>("line")
+                  .transition()
+                  .duration(150)
+                  .attr("opacity", 0.7)
+                  .attr("stroke-width", (d) => (d.type === "seeds" ? 2 : 1.2));
+              }
             });
 
           g.append("circle")
@@ -452,11 +539,29 @@ function PeerMap() {
       node.attr("transform", (d) => `translate(${d.x ?? 0},${d.y ?? 0})`);
     });
 
-    simulation.alpha(0.3).restart();
+    const topologyChanged = isTopologyChanged(
+      prevTopologyRef.current,
+      nodes,
+      links,
+    );
+    const dimensionsChanged =
+      !prevDimensionsRef.current ||
+      prevDimensionsRef.current.width !== width ||
+      prevDimensionsRef.current.height !== height;
 
-    return () => {
-      simulation.stop();
+    const currentNodeIds = new Set(nodes.map((n) => n.id));
+    const currentLinkKeys = new Set(
+      links.map((l) => `${getNodeId(l.source)}->${getNodeId(l.target)}`),
+    );
+    prevTopologyRef.current = {
+      nodeIds: currentNodeIds,
+      linkKeys: currentLinkKeys,
     };
+    prevDimensionsRef.current = { width, height };
+
+    if (topologyChanged || dimensionsChanged) {
+      simulation.alpha(0.3).restart();
+    }
   }, [graphData, dimensions, selectedTorrentFilter]);
 
   const handleZoomIn = () => {
