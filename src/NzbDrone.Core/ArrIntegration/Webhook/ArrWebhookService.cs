@@ -117,6 +117,23 @@ public class ArrWebhookService : IArrWebhookService
             payload.Release?.ReleaseTitle,
             payload.Release?.Indexer);
 
+        var connection = FindConnection(payload);
+        if (connection != null && !connection.EnableAutomaticAdd)
+        {
+            _logger.Info(
+                "Webhook: automatic add is disabled for connection '{0}' ({1}), skipping torrent '{2}'",
+                connection.Name,
+                connection.ArrType,
+                payload.Release?.ReleaseTitle ?? infoHash);
+
+            return new ArrWebhookResult
+            {
+                Success = true,
+                Message = "Skipped automatic add",
+                InfoHash = infoHash
+            };
+        }
+
         var torrent = new Torrent
         {
             Name = payload.Release?.ReleaseTitle ?? infoHash,
@@ -129,7 +146,6 @@ public class ArrWebhookService : IArrWebhookService
         _torrentService.Add(torrent);
         _logger.Info("Webhook: added '{0}' with basic metadata", torrent.Name);
 
-        var connection = FindConnection(payload);
         if (connection != null)
         {
             _ = EnrichTorrentFromHistoryAsync(torrent.Id, infoHash, downloadId, connection, payload.InstanceName, CancellationToken.None);

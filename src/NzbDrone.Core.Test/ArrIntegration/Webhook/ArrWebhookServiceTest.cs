@@ -147,6 +147,41 @@ public class ArrWebhookServiceTest
     }
 
     [Test]
+    public void ProcessWebhook_should_skip_add_when_enable_automatic_add_is_false()
+    {
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new()
+            {
+                Name = "MySonarr",
+                ArrType = "Sonarr",
+                Enable = true,
+                EnableAutomaticAdd = false
+            }
+        });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Grab",
+            DownloadId = "ABC123DEF",
+            InstanceName = "Sonarr",
+            Release = new ArrWebhookRelease
+            {
+                ReleaseTitle = "Test.Show.S01E01",
+                Indexer = "TestIndexer",
+                Size = 1024000
+            }
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Is.EqualTo("Skipped automatic add"));
+        Assert.That(result.InfoHash, Is.EqualTo("abc123def"));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
     public void ProcessWebhook_should_lowercase_info_hash()
     {
         var payload = new ArrWebhookPayload
