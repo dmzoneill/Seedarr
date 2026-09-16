@@ -19,4 +19,6 @@ public class BulkActionResult
     public int SuccessCount { get; set; }
     public int FailedCount { get; set; }
     public List<string> Errors { get; set; } = new();
+    public List<int> SucceededIds { get; set; } = new();
+    public Dictionary<int, string> FailedIds { get; set; } = new();
 }
