@@ -29,7 +29,10 @@ export function BitTorrentTab() {
 
   useEffect(() => {
     if (config) {
-      setForm(config);
+      setForm({
+        ...config,
+        encryptionMode: config.encryptionMode === "forced" ? "required" : config.encryptionMode,
+      });
       setDirty(false);
     }
   }, [config]);
@@ -51,25 +54,27 @@ export function BitTorrentTab() {
         isPending={save.isPending}
         isError={save.isError}
         isSuccess={save.isSuccess}
-        error={save.error}
-        onSave={() => save.mutate(form, { onSuccess: () => setDirty(false) })}
+        error={save.error as Error | null}
+        onSave={() => {
+          save.mutate(form, { onSuccess: () => setDirty(false) });
+        }}
       />
 
       <SectionCard
-        title="Protocol Features"
-        description="Core BitTorrent discovery extensions, peer exchange, and encryption levels"
+        title="Protocol Extensions"
+        description="P2P swarm communication protocol features"
       >
         <Toggle
           label="DHT"
           checked={form.enableDht}
           onChange={(v) => set("enableDht", v)}
-          hint="Distributed Hash Table (Mainline DHT)"
+          hint="Distributed Hash Table (Mainline DHT) for trackerless peer discovery"
         />
         <Toggle
           label="PEX"
           checked={form.enablePex}
           onChange={(v) => set("enablePex", v)}
-          hint="Peer Exchange protocol (BEP 11)"
+          hint="Peer Exchange (ut_pex) for discovering peers from connected clients"
         />
         <Toggle
           label="LPD"
@@ -79,12 +84,12 @@ export function BitTorrentTab() {
         />
         <SelectInput
           label="Encryption"
-          value={form.encryptionMode}
+          value={form.encryptionMode === "forced" ? "required" : form.encryptionMode}
           onChange={(v) => set("encryptionMode", v)}
           options={[
             { value: "disabled", label: "Disabled (Plain Only)" },
             { value: "enabled", label: "Enabled (Prefer Encrypted)" },
-            { value: "forced", label: "Forced (Encrypted Only)" },
+            { value: "required", label: "Forced (Encrypted Only)" },
           ]}
           hint="Message Stream Encryption (MSE) / Protocol Encryption (PE)"
         />
