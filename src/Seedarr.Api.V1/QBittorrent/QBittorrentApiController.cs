@@ -24,7 +24,7 @@ namespace Seedarr.Api.V1.QBittorrent;
 [Route("api/v2")]
 public class QBittorrentApiController : ControllerBase, IActionFilter
 {
-    private static readonly RpcSessionStore _authenticatedSessions = new();
+    private readonly IRpcSessionStore _sessionStore;
     private static readonly ConcurrentDictionary<string, QBitSessionSyncState> _sessionSyncStates = new(StringComparer.OrdinalIgnoreCase);
     private static DateTime _lastSyncCleanupTime = DateTime.UtcNow;
 
@@ -48,7 +48,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         IConfigService configService,
         ITagService tagService = null,
         IConfigFileProvider configFileProvider = null,
-        HttpClient httpClient = null)
+        HttpClient httpClient = null,
+        IRpcSessionStore sessionStore = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -59,6 +60,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         _tagService = tagService;
         _configFileProvider = configFileProvider;
         _httpClient = httpClient ?? new HttpClient();
+        _sessionStore = sessionStore ?? RpcSessionStore.SharedSessionStore;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -108,7 +110,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         if (Request.Cookies.TryGetValue("SID", out var sid) && !string.IsNullOrWhiteSpace(sid))
         {
-            if (_authenticatedSessions.IsValid(sid))
+            if (_sessionStore.IsValid(sid))
             {
                 return true;
             }
@@ -153,7 +155,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         }
 
         var sid = Guid.NewGuid().ToString("N");
-        _authenticatedSessions.SetSession(sid, DateTime.UtcNow.AddDays(7));
+        _sessionStore.SetSession(sid, DateTime.UtcNow.AddDays(7));
 
         Response.Cookies.Append("SID", sid, new CookieOptions
         {
@@ -170,7 +172,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     {
         if (Request.Cookies.TryGetValue("SID", out var sid) && !string.IsNullOrWhiteSpace(sid))
         {
-            _authenticatedSessions.RemoveSession(sid);
+            _sessionStore.RemoveSession(sid);
             _sessionSyncStates.TryRemove($"sid:{sid}", out _);
         }
 
