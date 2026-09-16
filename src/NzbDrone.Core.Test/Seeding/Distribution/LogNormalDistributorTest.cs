@@ -47,14 +47,24 @@ public class LogNormalDistributorTest
     }
 
     [Test]
-    public void Distribute_should_sum_to_approximately_total_speed()
+    public void Distribute_should_sum_to_exact_total_speed()
     {
         var totalSpeed = 1_000_000L;
         var speeds = _distributor.Distribute(totalSpeed, 10);
 
-        var sum = speeds.Sum();
-        Assert.That(sum, Is.LessThanOrEqualTo(totalSpeed));
-        Assert.That(sum, Is.GreaterThan(totalSpeed * 0.90));
+        Assert.That(speeds.Sum(), Is.EqualTo(totalSpeed));
+    }
+
+    [TestCase(7, 1_000_000L)]
+    [TestCase(50, 5_000_000L)]
+    [TestCase(100, 10_000_000L)]
+    public void Distribute_should_conserve_bandwidth_exactly_and_prevent_tail_starvation(int count, long totalSpeed)
+    {
+        var speeds = _distributor.Distribute(totalSpeed, count);
+
+        Assert.That(speeds, Has.Length.EqualTo(count));
+        Assert.That(speeds.Sum(), Is.EqualTo(totalSpeed));
+        Assert.That(speeds, Is.All.GreaterThanOrEqualTo(1L));
     }
 
     [Test]
