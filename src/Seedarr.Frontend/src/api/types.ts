@@ -708,6 +708,7 @@ export interface UpdateEntry {
   installed: boolean;
   latest: boolean;
   changes: UpdateChanges;
+  isContainerized?: boolean;
 }
 
 export interface LogFile {
