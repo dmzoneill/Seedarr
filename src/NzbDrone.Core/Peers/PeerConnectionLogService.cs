@@ -56,7 +56,7 @@ public class PeerConnectionLogService : IPeerConnectionLogService, IDisposable
     {
         var log = new PeerConnectionLog
         {
-            InfoHash = connection.InfoHash ?? string.Empty,
+            InfoHash = (connection.InfoHash ?? string.Empty).Trim().ToLowerInvariant(),
             TorrentName = torrentName,
             RemoteIp = connection.RemoteIp,
             RemotePort = connection.RemotePort,

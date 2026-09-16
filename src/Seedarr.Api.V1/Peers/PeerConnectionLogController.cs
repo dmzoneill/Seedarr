@@ -48,7 +48,7 @@ public class PeerConnectionLogController : Controller
 
         if (!string.IsNullOrEmpty(infoHash))
         {
-            logs = _logService.GetByInfoHash(infoHash, startDate, endDate);
+            logs = _logService.GetByInfoHash(NormalizeInfoHash(infoHash), startDate, endDate);
         }
         else
         {
@@ -65,7 +65,7 @@ public class PeerConnectionLogController : Controller
 
         var resources = activeConnections.Select(conn => new PeerConnectionLogResource
         {
-            InfoHash = conn.InfoHash,
+            InfoHash = NormalizeInfoHash(conn.InfoHash),
             RemoteIp = conn.RemoteIp,
             RemotePort = conn.RemotePort,
             PeerId = conn.PeerId,
@@ -112,7 +112,13 @@ public class PeerConnectionLogController : Controller
 
         foreach (var log in logs.OrderBy(l => l.Timestamp))
         {
-            var key = $"{log.RemoteIp}:{log.RemotePort}:{log.InfoHash}";
+            var normalizedHash = NormalizeInfoHash(log.InfoHash);
+            if (string.IsNullOrEmpty(normalizedHash))
+            {
+                continue;
+            }
+
+            var key = $"{log.RemoteIp}:{log.RemotePort}:{normalizedHash}";
             if (string.Equals(log.EventType, "Connected", StringComparison.OrdinalIgnoreCase))
             {
                 activeLogs[key] = log;
@@ -127,46 +133,49 @@ public class PeerConnectionLogController : Controller
 
         foreach (var log in activeLogs.Values)
         {
-            if (!string.IsNullOrEmpty(log.InfoHash) && seenTorrents.Add(log.InfoHash))
+            var normalizedHash = NormalizeInfoHash(log.InfoHash);
+            if (string.IsNullOrEmpty(normalizedHash))
+            {
+                continue;
+            }
+
+            if (seenTorrents.Add(normalizedHash))
             {
                 nodes.Add(new PeerGraphNode
                 {
-                    Id = $"torrent:{log.InfoHash}",
-                    Label = log.TorrentName ?? (log.InfoHash.Length >= 8 ? log.InfoHash[..8] : log.InfoHash),
+                    Id = $"torrent:{normalizedHash}",
+                    Label = log.TorrentName ?? (normalizedHash.Length >= 8 ? normalizedHash[..8] : normalizedHash),
                     Type = "torrent",
-                    InfoHash = log.InfoHash,
+                    InfoHash = normalizedHash,
                     IsActive = true,
                 });
 
                 links.Add(new PeerGraphLink
                 {
                     Source = "seedarr",
-                    Target = $"torrent:{log.InfoHash}",
+                    Target = $"torrent:{normalizedHash}",
                     Type = "seeds",
                 });
             }
 
             var peerId = $"{log.RemoteIp}:{log.RemotePort}";
-            var peerKey = $"{peerId}:{log.InfoHash}";
+            var peerKey = $"{peerId}:{normalizedHash}";
             if (seenPeers.Add(peerKey))
             {
                 nodes.Add(new PeerGraphNode
                 {
-                    Id = $"peer:{peerId}:{log.InfoHash}",
+                    Id = $"peer:{peerId}:{normalizedHash}",
                     Label = log.RemoteIp,
                     Type = "peer",
+                    InfoHash = normalizedHash,
                     IsEncrypted = log.IsEncrypted,
                     IsActive = true,
                 });
 
-                var torrentNodeId = !string.IsNullOrEmpty(log.InfoHash)
-                    ? $"torrent:{log.InfoHash}"
-                    : "seedarr";
-
                 links.Add(new PeerGraphLink
                 {
-                    Source = torrentNodeId,
-                    Target = $"peer:{peerId}:{log.InfoHash}",
+                    Source = $"torrent:{normalizedHash}",
+                    Target = $"peer:{peerId}:{normalizedHash}",
                     Type = log.IsEncrypted ? "encrypted" : "plain",
                 });
             }
@@ -176,9 +185,14 @@ public class PeerConnectionLogController : Controller
         if (_torrentService != null)
         {
             var allTorrents = _torrentService.GetAll();
-            foreach (var torrent in allTorrents.Where(t => !string.IsNullOrEmpty(t.InfoHash)))
+            foreach (var torrent in allTorrents)
             {
-                var hash = torrent.InfoHash;
+                var hash = NormalizeInfoHash(torrent.InfoHash);
+                if (string.IsNullOrEmpty(hash))
+                {
+                    continue;
+                }
+
                 if (seenTorrents.Add(hash))
                 {
                     nodes.Add(new PeerGraphNode
@@ -217,6 +231,7 @@ public class PeerConnectionLogController : Controller
                                 Id = $"peer:{peer.Ip}:{peer.Port}:{hash}",
                                 Label = peer.Ip,
                                 Type = "peer",
+                                InfoHash = hash,
                                 IsEncrypted = false,
                                 IsActive = true,
                             });
@@ -250,6 +265,7 @@ public class PeerConnectionLogController : Controller
                                 Id = $"peer:{conn.RemoteIp}:{conn.RemotePort}:{hash}",
                                 Label = conn.RemoteIp,
                                 Type = "peer",
+                                InfoHash = hash,
                                 IsEncrypted = conn.IsEncrypted,
                                 IsActive = true,
                             });
@@ -270,8 +286,14 @@ public class PeerConnectionLogController : Controller
         if (_peerDatabase != null)
         {
             var trackedHashes = _peerDatabase.GetAllInfoHashes();
-            foreach (var hash in trackedHashes)
+            foreach (var unnormalizedHash in trackedHashes)
             {
+                var hash = NormalizeInfoHash(unnormalizedHash);
+                if (string.IsNullOrEmpty(hash))
+                {
+                    continue;
+                }
+
                 if (seenTorrents.Add(hash))
                 {
                     nodes.Add(new PeerGraphNode
@@ -291,7 +313,7 @@ public class PeerConnectionLogController : Controller
                     });
                 }
 
-                var trackerPeers = _peerDatabase.GetPeers(hash);
+                var trackerPeers = _peerDatabase.GetPeers(unnormalizedHash);
                 foreach (var peer in trackerPeers)
                 {
                     var peerKey = $"{peer.Ip}:{peer.Port}:{hash}";
@@ -307,6 +329,7 @@ public class PeerConnectionLogController : Controller
                             Id = $"peer:{peer.Ip}:{peer.Port}:{hash}",
                             Label = peer.Ip,
                             Type = "peer",
+                            InfoHash = hash,
                             IsEncrypted = false,
                             IsActive = true,
                         });
@@ -322,11 +345,19 @@ public class PeerConnectionLogController : Controller
             }
         }
 
+        var validNodeIds = new HashSet<string>(nodes.Select(n => n.Id), StringComparer.Ordinal);
+        links.RemoveAll(l => !validNodeIds.Contains(l.Source) || !validNodeIds.Contains(l.Target));
+
         return Ok(new PeerGraphResource
         {
             Nodes = nodes,
             Links = links,
         });
+    }
+
+    private static string NormalizeInfoHash(string infoHash)
+    {
+        return (infoHash ?? string.Empty).Trim().ToLowerInvariant();
     }
 
     private ActionResult ValidateDateRange(DateTime startDate, DateTime endDate)

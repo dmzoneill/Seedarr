@@ -300,6 +300,140 @@ public class PeerConnectionLogControllerTest
         Assert.That(resources, Is.Empty);
     }
 
+    [Test]
+    public void GetGraph_mixed_and_uppercase_infohashes_produce_lowercase_node_ids_and_links()
+    {
+        var now = DateTime.UtcNow;
+        var start = now.AddHours(-1);
+        var end = now;
+        const string upperHash = "AABBCCDD11223344";
+        const string lowerHash = "aabbccdd11223344";
+
+        var logs = new List<PeerConnectionLog>
+        {
+            new PeerConnectionLog
+            {
+                Id = 1,
+                RemoteIp = "192.168.1.10",
+                RemotePort = 5000,
+                InfoHash = upperHash,
+                TorrentName = "MixedTorrent",
+                EventType = "Connected",
+                Timestamp = now.AddMinutes(-30),
+            },
+        };
+
+        _logService.GetByTimeRange(start, end).Returns(logs);
+        _torrentService.GetAll().Returns(new List<Torrent>
+        {
+            new Torrent { InfoHash = "AaBbCcDd11223344", Name = "MixedTorrent" },
+        });
+        _peerDatabase.GetPeers(lowerHash).Returns(new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "192.168.1.50", Port = 6000 },
+        });
+        _peerDatabase.GetAllInfoHashes().Returns(new List<string> { upperHash });
+
+        var result = _controller.GetGraph(start, end);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var graph = (PeerGraphResource)okResult.Value;
+
+        var torrentNodes = graph.Nodes.Where(n => n.Type == "torrent").ToList();
+        Assert.That(torrentNodes.Count, Is.EqualTo(1));
+        Assert.That(torrentNodes[0].Id, Is.EqualTo($"torrent:{lowerHash}"));
+        Assert.That(torrentNodes[0].InfoHash, Is.EqualTo(lowerHash));
+
+        var seedsLink = graph.Links.FirstOrDefault(l => l.Source == "seedarr" && l.Target == $"torrent:{lowerHash}");
+        Assert.That(seedsLink, Is.Not.Null);
+
+        var peerLink = graph.Links.FirstOrDefault(l => l.Source == $"torrent:{lowerHash}");
+        Assert.That(peerLink, Is.Not.Null);
+        Assert.That(peerLink.Target, Does.StartWith("peer:"));
+        Assert.That(peerLink.Target, Does.EndWith($":{lowerHash}"));
+
+        foreach (var node in graph.Nodes)
+        {
+            Assert.That(node.Id, Is.EqualTo(node.Id.ToLowerInvariant()));
+        }
+
+        foreach (var link in graph.Links)
+        {
+            Assert.That(link.Source, Is.EqualTo(link.Source.ToLowerInvariant()));
+            Assert.That(link.Target, Is.EqualTo(link.Target.ToLowerInvariant()));
+        }
+    }
+
+    [Test]
+    public void GetGraph_referential_integrity_ensures_all_link_endpoints_exist_in_nodes()
+    {
+        var now = DateTime.UtcNow;
+        var start = now.AddHours(-1);
+        var end = now;
+
+        _logService.GetByTimeRange(start, end).Returns(new List<PeerConnectionLog>());
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _peerDatabase.GetAllInfoHashes().Returns(new List<string>());
+
+        var result = _controller.GetGraph(start, end);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var graph = (PeerGraphResource)okResult.Value;
+
+        var nodeIds = new HashSet<string>(graph.Nodes.Select(n => n.Id));
+        foreach (var link in graph.Links)
+        {
+            Assert.That(nodeIds.Contains(link.Source), Is.True, $"Link Source '{link.Source}' must exist in nodes");
+            Assert.That(nodeIds.Contains(link.Target), Is.True, $"Link Target '{link.Target}' must exist in nodes");
+        }
+    }
+
+    [Test]
+    public void GetGraph_empty_or_null_infohash_logs_are_not_linked_to_root_hub()
+    {
+        var now = DateTime.UtcNow;
+        var start = now.AddHours(-1);
+        var end = now;
+
+        var logs = new List<PeerConnectionLog>
+        {
+            new PeerConnectionLog
+            {
+                Id = 1,
+                RemoteIp = "192.168.1.99",
+                RemotePort = 5555,
+                InfoHash = null,
+                EventType = "Connected",
+                Timestamp = now.AddMinutes(-10),
+            },
+            new PeerConnectionLog
+            {
+                Id = 2,
+                RemoteIp = "192.168.1.98",
+                RemotePort = 5556,
+                InfoHash = "   ",
+                EventType = "Connected",
+                Timestamp = now.AddMinutes(-5),
+            },
+        };
+
+        _logService.GetByTimeRange(start, end).Returns(logs);
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _peerDatabase.GetAllInfoHashes().Returns(new List<string>());
+
+        var result = _controller.GetGraph(start, end);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var graph = (PeerGraphResource)okResult.Value;
+
+        Assert.That(graph.Nodes.Count, Is.EqualTo(1));
+        Assert.That(graph.Nodes[0].Id, Is.EqualTo("seedarr"));
+        Assert.That(graph.Links, Is.Empty);
+    }
+
     private static PeerConnection CreateMockPeerConnection(string ip, int port, string infoHash, string peerId, bool isEncrypted)
     {
         var conn = new PeerConnection(new MemoryStream(), ip, port);

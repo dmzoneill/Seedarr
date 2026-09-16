@@ -125,6 +125,19 @@ public class PeerConnectionLogServiceTest
     }
 
     [Test]
+    public void LogConnected_should_normalize_info_hash_to_lowercase()
+    {
+        var conn = CreateTestConnection();
+        typeof(PeerConnection).GetProperty("InfoHash")?.SetValue(conn, "AABBCCDD11223344");
+        PeerConnectionLog capturedLog = null;
+        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
+
+        _service.LogConnected(conn, "test.torrent");
+
+        Assert.That(capturedLog.InfoHash, Is.EqualTo("aabbccdd11223344"));
+    }
+
+    [Test]
     public void LogConnected_should_include_remote_ip_and_port()
     {
         var conn = CreateTestConnection();

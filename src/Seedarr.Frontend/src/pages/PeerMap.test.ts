@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { PeerGraphNode } from "../api/types";
 import {
+  filterValidLinks,
   getNodeId,
   isTopologyChanged,
   mapPreservedNodes,
@@ -152,5 +153,59 @@ describe("PeerMap: isTopologyChanged", () => {
       { source: "node-2", target: "node-3" },
     ];
     assert.equal(isTopologyChanged(snapshot, currentNodes, addedLinks), true);
+  });
+});
+
+describe("PeerMap: filterValidLinks", () => {
+  it("keeps links where both source and target exist in nodes", () => {
+    const nodes = [{ id: "center" }, { id: "torrent-1" }, { id: "peer-1" }];
+    const links = [
+      { source: "center", target: "torrent-1" },
+      { source: "torrent-1", target: "peer-1" },
+    ];
+
+    const result = filterValidLinks(links, nodes);
+    assert.equal(result.length, 2);
+  });
+
+  it("filters out links referencing non-existent source node", () => {
+    const nodes = [{ id: "torrent-1" }, { id: "peer-1" }];
+    const links = [
+      { source: "non-existent-source", target: "torrent-1" },
+      { source: "torrent-1", target: "peer-1" },
+    ];
+
+    const result = filterValidLinks(links, nodes);
+    assert.equal(result.length, 1);
+    assert.equal(result[0].source, "torrent-1");
+    assert.equal(result[0].target, "peer-1");
+  });
+
+  it("filters out links referencing non-existent target node", () => {
+    const nodes = [{ id: "torrent-1" }];
+    const links = [
+      { source: "torrent-1", target: "missing-peer" },
+    ];
+
+    const result = filterValidLinks(links, nodes);
+    assert.equal(result.length, 0);
+  });
+
+  it("handles object node references for source and target", () => {
+    const nodes = [{ id: "torrent-1" }, { id: "peer-1" }];
+    const links = [
+      {
+        source: { id: "torrent-1", label: "T1", type: "torrent" } as SimNode,
+        target: { id: "peer-1", label: "P1", type: "peer" } as SimNode,
+      },
+      {
+        source: { id: "torrent-1", label: "T1", type: "torrent" } as SimNode,
+        target: { id: "missing", label: "M", type: "peer" } as SimNode,
+      },
+    ];
+
+    const result = filterValidLinks(links, nodes);
+    assert.equal(result.length, 1);
+    assert.equal(getNodeId(result[0].target), "peer-1");
   });
 });
