@@ -47,7 +47,7 @@ public class ChokeManagerTest
     public void ProcessRegularUnchoke_should_allocate_slots_per_torrent_swarm()
     {
         // 2 torrents, each with 5 interested peers
-        // MaxUploadSlots = 4 => regularSlotCount = 3 per torrent
+        // MaxUploadSlots = 4 => regularSlotCount = 3
         for (var i = 1; i <= 5; i++)
         {
             CreatePeer("hashA", 1000 + i, rate: i * 100);
@@ -59,19 +59,65 @@ public class ChokeManagerTest
         var unchokedA = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
         var unchokedB = _connections.Where(c => c.InfoHash == "hashB" && !c.AmChoking).ToList();
 
-        // Each torrent should have exactly 3 regular unchoked slots allocated
-        Assert.That(unchokedA.Count, Is.EqualTo(3));
-        Assert.That(unchokedB.Count, Is.EqualTo(3));
+        // Total regular unchoked slots across swarms should equal regularSlotCount (3)
+        Assert.That(unchokedA.Count + unchokedB.Count, Is.EqualTo(3));
 
-        // The highest upload rate peers should be selected for each torrent
+        // Both torrents should receive at least 1 baseline unchoke slot
+        Assert.That(unchokedA.Count, Is.GreaterThanOrEqualTo(1));
+        Assert.That(unchokedB.Count, Is.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_prevent_cross_swarm_starvation_when_one_torrent_has_faster_peers()
+    {
+        // MaxUploadSlots = 4 => regularSlotCount = 3
+        // Torrent A has high speed peers, Torrent B has lower speed peers
+        for (var i = 1; i <= 5; i++)
+        {
+            CreatePeer("hashA", 1000 + i, rate: 1000 * i);
+            CreatePeer("hashB", 2000 + i, rate: 10 * i);
+        }
+
+        _subject.ProcessRegularUnchoke();
+
+        var unchokedA = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
+        var unchokedB = _connections.Where(c => c.InfoHash == "hashB" && !c.AmChoking).ToList();
+
+        // Total regular unchoked slots must not exceed regularSlotCount (3)
+        Assert.That(unchokedA.Count + unchokedB.Count, Is.EqualTo(3));
+
+        // Torrent B must receive unchoke slots and not be completely starved by Torrent A
+        Assert.That(unchokedB.Count, Is.EqualTo(1));
+        Assert.That(unchokedA.Count, Is.EqualTo(2));
+
+        // Torrent B should unchoke its highest-rate peer (port 2005)
+        Assert.That(unchokedB.Single().RemotePort, Is.EqualTo(2005));
+
+        // Torrent A should unchoke its top peers (ports 1005, 1004)
+        Assert.That(unchokedA.Select(c => c.RemotePort), Is.EquivalentTo(new[] { 1004, 1005 }));
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_utilize_all_available_regular_slots_for_single_torrent()
+    {
+        // MaxUploadSlots = 4 => regularSlotCount = 3
+        for (var i = 1; i <= 5; i++)
+        {
+            CreatePeer("hashA", 1000 + i, rate: i * 100);
+        }
+
+        _subject.ProcessRegularUnchoke();
+
+        var unchokedA = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
+
+        // Single torrent should fully utilize all 3 available regular slots
+        Assert.That(unchokedA.Count, Is.EqualTo(3));
         Assert.That(unchokedA.Select(c => c.RemotePort), Is.EquivalentTo(new[] { 1003, 1004, 1005 }));
-        Assert.That(unchokedB.Select(c => c.RemotePort), Is.EquivalentTo(new[] { 2003, 2004, 2005 }));
     }
 
     [Test]
     public void ProcessOptimisticUnchoke_should_unchoke_one_choked_peer_per_torrent()
     {
-        // MaxUploadSlots = 4 => 3 regular + 1 optimistic per torrent
         for (var i = 1; i <= 5; i++)
         {
             CreatePeer("hashA", 1000 + i, rate: i * 100);
@@ -84,12 +130,13 @@ public class ChokeManagerTest
         var unchokedA = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
         var unchokedB = _connections.Where(c => c.InfoHash == "hashB" && !c.AmChoking).ToList();
 
-        // 3 regular + 1 optimistic = 4 per torrent
-        Assert.That(unchokedA.Count, Is.EqualTo(4));
-        Assert.That(unchokedB.Count, Is.EqualTo(4));
-
+        // Exactly one optimistic unchoke per torrent
         Assert.That(unchokedA.Count(c => c.IsOptimisticUnchoked), Is.EqualTo(1));
         Assert.That(unchokedB.Count(c => c.IsOptimisticUnchoked), Is.EqualTo(1));
+
+        // Both torrents have active unchoked peers (regular + optimistic)
+        Assert.That(unchokedA.Count, Is.GreaterThanOrEqualTo(2));
+        Assert.That(unchokedB.Count, Is.GreaterThanOrEqualTo(2));
     }
 
     [Test]

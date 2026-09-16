@@ -136,22 +136,113 @@ public class ChokeManager : BackgroundService, IChokeManager
             // Group connections by infoHash to balance slots across swarms
             var byTorrent = connections
                 .Where(c => !string.IsNullOrEmpty(c.InfoHash))
-                .GroupBy(c => c.InfoHash, StringComparer.OrdinalIgnoreCase);
+                .GroupBy(c => c.InfoHash, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
             var selectedRegular = new HashSet<PeerConnection>();
 
-            foreach (var group in byTorrent)
+            if (regularSlotCount > 0)
             {
-                var candidatePeers = group
-                    .Where(c => c.PeerInterested && !c.IsSnubbed)
-                    .OrderByDescending(c => c.UploadRate + c.DownloadRate)
-                    .ThenByDescending(c => c.BytesUploaded)
-                    .ThenBy(c => c.ConnectedAt)
-                    .Take(regularSlotCount);
+                // Filter torrent groups that have at least one interested, non-snubbed peer candidate
+                var torrentGroups = byTorrent
+                    .Select(g => new
+                    {
+                        InfoHash = g.Key,
+                        Candidates = g
+                            .Where(c => c.PeerInterested && !c.IsSnubbed)
+                            .OrderByDescending(c => c.UploadRate + c.DownloadRate)
+                            .ThenByDescending(c => c.BytesUploaded)
+                            .ThenBy(c => c.ConnectedAt)
+                            .ToList()
+                    })
+                    .Where(g => g.Candidates.Count > 0)
+                    .ToList();
 
-                foreach (var peer in candidatePeers)
+                if (torrentGroups.Count > 0)
                 {
-                    selectedRegular.Add(peer);
+                    var allocatedSlots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var tg in torrentGroups)
+                    {
+                        allocatedSlots[tg.InfoHash] = 0;
+                    }
+
+                    var remainingSlots = regularSlotCount;
+
+                    // 1. Fair allocation: Allocate baseline minimum (1 slot) to each active torrent with interested peers (up to available regularSlotCount)
+                    if (torrentGroups.Count <= remainingSlots)
+                    {
+                        foreach (var tg in torrentGroups)
+                        {
+                            allocatedSlots[tg.InfoHash] = 1;
+                        }
+
+                        remainingSlots -= torrentGroups.Count;
+                    }
+                    else
+                    {
+                        // More active torrents than regular slots: prioritize swarms by highest candidate peer rate
+                        var prioritizedTorrents = torrentGroups
+                            .OrderByDescending(g => g.Candidates[0].UploadRate + g.Candidates[0].DownloadRate)
+                            .ThenByDescending(g => g.Candidates[0].BytesUploaded)
+                            .Take(remainingSlots);
+
+                        foreach (var tg in prioritizedTorrents)
+                        {
+                            allocatedSlots[tg.InfoHash] = 1;
+                        }
+
+                        remainingSlots = 0;
+                    }
+
+                    // 2. Distribute remaining discretionary slots among active torrents with demand by best candidate rates
+                    while (remainingSlots > 0)
+                    {
+                        var bestTorrent = torrentGroups
+                            .Where(g => g.Candidates.Count > allocatedSlots[g.InfoHash])
+                            .OrderByDescending(g =>
+                            {
+                                var nextPeer = g.Candidates[allocatedSlots[g.InfoHash]];
+                                return nextPeer.UploadRate + nextPeer.DownloadRate;
+                            })
+                            .ThenByDescending(g => g.Candidates[allocatedSlots[g.InfoHash]].BytesUploaded)
+                            .FirstOrDefault();
+
+                        if (bestTorrent == null)
+                        {
+                            break;
+                        }
+
+                        allocatedSlots[bestTorrent.InfoHash]++;
+                        remainingSlots--;
+                    }
+
+                    // 3. Select top candidates per torrent up to its allocated slot count into selectedRegular
+                    foreach (var tg in torrentGroups)
+                    {
+                        var slotsForTorrent = allocatedSlots[tg.InfoHash];
+                        var selectedForTorrent = tg.Candidates.Take(slotsForTorrent);
+                        foreach (var peer in selectedForTorrent)
+                        {
+                            selectedRegular.Add(peer);
+                        }
+                    }
+
+                    // 4. Fill any leftover unfilled slots from remaining top candidates globally so no upload slots are wasted
+                    if (selectedRegular.Count < regularSlotCount)
+                    {
+                        var leftoverCandidates = torrentGroups
+                            .SelectMany(g => g.Candidates)
+                            .Where(c => !selectedRegular.Contains(c))
+                            .OrderByDescending(c => c.UploadRate + c.DownloadRate)
+                            .ThenByDescending(c => c.BytesUploaded)
+                            .ThenBy(c => c.ConnectedAt)
+                            .Take(regularSlotCount - selectedRegular.Count);
+
+                        foreach (var peer in leftoverCandidates)
+                        {
+                            selectedRegular.Add(peer);
+                        }
+                    }
                 }
             }
 
