@@ -1,25 +1,110 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useGeneralConfig } from "../api/hooks";
 import { apiClient } from "../api/client";
 import { useToast } from "../context/ToastContext";
+
+interface SwaggerWindow extends Window {
+  ui?: {
+    preauthorizeApiKey?: (name: string, value: string) => void;
+  };
+}
+
+const copyToClipboard = async (text: string): Promise<boolean> => {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fallback below
+    }
+  }
+
+  // Fallback for non-secure HTTP contexts
+  try {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const success = document.execCommand("copy");
+    document.body.removeChild(textArea);
+    return success;
+  } catch {
+    return false;
+  }
+};
 
 function ApiDocsPage() {
   const { data: generalConfig } = useGeneralConfig();
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  const handleCopyKey = async () => {
+  const injectApiKeyToSwagger = useCallback((key: string) => {
+    try {
+      const cw = iframeRef.current?.contentWindow as SwaggerWindow | null;
+      if (!cw) return;
+      const tryAuthorize = () => {
+        if (cw.ui?.preauthorizeApiKey) {
+          cw.ui.preauthorizeApiKey("ApiKeyHeader", key);
+          cw.ui.preauthorizeApiKey("ApiKeyQuery", key);
+          return true;
+        }
+        return false;
+      };
+      if (!tryAuthorize()) {
+        const interval = setInterval(() => {
+          if (tryAuthorize() || !iframeRef.current) {
+            clearInterval(interval);
+          }
+        }, 200);
+        setTimeout(() => clearInterval(interval), 5000);
+      }
+    } catch {
+      // Ignore cross-origin or load timing errors
+    }
+  }, []);
+
+  const getResolvedApiKey = useCallback(async (): Promise<string | null> => {
     try {
       let key = generalConfig?.apiKey;
       if (!key || key.includes("*")) {
         const res = await apiClient.getApiKey();
         key = res.apiKey;
       }
-      if (key && !key.includes("*")) {
-        await navigator.clipboard.writeText(key);
-        setCopied(true);
-        showToast("API Key copied to clipboard!", "success");
-        setTimeout(() => setCopied(false), 2000);
+      return key && !key.includes("*") ? key : null;
+    } catch {
+      return null;
+    }
+  }, [generalConfig?.apiKey]);
+
+  useEffect(() => {
+    let isMounted = true;
+    getResolvedApiKey().then((key) => {
+      if (isMounted && key) {
+        injectApiKeyToSwagger(key);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [getResolvedApiKey, injectApiKeyToSwagger]);
+
+  const handleCopyKey = async () => {
+    try {
+      const key = await getResolvedApiKey();
+      if (key) {
+        const success = await copyToClipboard(key);
+        if (success) {
+          injectApiKeyToSwagger(key);
+          setCopied(true);
+          showToast("API Key copied to clipboard!", "success");
+          setTimeout(() => setCopied(false), 2000);
+        } else {
+          showToast("Failed to copy API Key", "error");
+        }
       } else {
         showToast("No API Key available", "error");
       }
@@ -34,6 +119,13 @@ function ApiDocsPage() {
 
   const handleOpenFullPage = () => {
     window.open("/swagger/index.html", "_blank", "noopener,noreferrer");
+  };
+
+  const handleIframeLoad = async () => {
+    const key = await getResolvedApiKey();
+    if (key) {
+      injectApiKeyToSwagger(key);
+    }
   };
 
   return (
@@ -131,8 +223,10 @@ function ApiDocsPage() {
         }}
       >
         <iframe
+          ref={iframeRef}
           src="/swagger/index.html"
           title="Seedarr REST API Documentation"
+          onLoad={handleIframeLoad}
           style={{
             width: "100%",
             height: "100%",
