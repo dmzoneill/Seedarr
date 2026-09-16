@@ -61,12 +61,13 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         }
 
         var trimmed = bindAddress.Trim();
-        if (trimmed is "*" or "0.0.0.0" or "::" or "localhost")
+        var clean = trimmed.Trim('[', ']');
+        if (clean is "*" or "0.0.0.0" or "::" or "localhost")
         {
             return true;
         }
 
-        return IPAddress.TryParse(trimmed, out _);
+        return IPAddress.TryParse(clean, out _);
     }
 
     public static string NormalizeUrlBase(string urlBase)
