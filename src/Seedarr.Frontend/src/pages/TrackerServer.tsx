@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router";
 import {
   useTrackerServerStats,
@@ -13,12 +13,44 @@ import { getMediaDeepLink } from "../utils/arrLinks";
 import { useToast } from "../context/ToastContext";
 import type { TrackerServerConfig } from "../api/types";
 
+type SortField =
+  | "peers"
+  | "seeders"
+  | "leechers"
+  | "activity"
+  | "name"
+  | "uploaded"
+  | "downloaded"
+  | "completed";
+
+type SortDirection = "asc" | "desc";
+
+function SortArrow({ direction }: { direction: SortDirection }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="currentColor"
+      style={{ marginLeft: "4px", opacity: 0.8 }}
+    >
+      {direction === "asc" ? (
+        <polygon points="5,2 9,8 1,8" />
+      ) : (
+        <polygon points="5,8 1,2 9,2" />
+      )}
+    </svg>
+  );
+}
+
 function TrackerServer() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [filterScope, setFilterScope] = useState<
     "all" | "internal" | "external"
   >("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<SortField>("peers");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   const { data: stats, isLoading: statsLoading } = useTrackerServerStats();
   const { data: torrents, isLoading: torrentsLoading } =
@@ -43,27 +75,110 @@ function TrackerServer() {
       ...config,
       trackerServerEnabled: !config.trackerServerEnabled,
     };
-    saveConfig.mutate(updated);
+    saveConfig.mutate(updated, {
+      onSuccess: (cfg) => {
+        showToast(
+          `Tracker server ${cfg.trackerServerEnabled ? "enabled" : "disabled"} successfully`,
+          "success"
+        );
+      },
+      onError: (err: unknown) => {
+        const message = err instanceof Error ? err.message : "Unknown error";
+        showToast(`Failed to update tracker daemon: ${message}`, "error");
+      },
+    });
   }
 
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard.writeText(text);
-    showToast(`Copied ${label} announce URL to clipboard`, "success");
+  const handleSort = (field: SortField) => {
+    if (sortBy === field) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortDirection(field === "name" ? "asc" : "desc");
+    }
   };
 
-  const filteredTorrents = (torrents ?? []).filter((t) => {
-    if (filterScope === "internal" && !t.isInternal) return false;
-    if (filterScope === "external" && t.isInternal) return false;
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      const matchName = t.name?.toLowerCase().includes(q);
-      const matchTitle = t.mediaTitle?.toLowerCase().includes(q);
-      const matchHash = t.infoHash?.toLowerCase().includes(q);
-      const matchGenre = t.genres?.some((g) => g.toLowerCase().includes(q));
-      if (!matchName && !matchTitle && !matchHash && !matchGenre) return false;
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      showToast(`Copied ${label} announce URL to clipboard`, "success");
+    } catch {
+      showToast(`Failed to copy ${label} announce URL`, "error");
     }
-    return true;
-  });
+  };
+
+  const sortedTorrents = useMemo(() => {
+    const filtered = (torrents ?? []).filter((t) => {
+      if (filterScope === "internal" && !t.isInternal) return false;
+      if (filterScope === "external" && t.isInternal) return false;
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase();
+        const matchName = t.name?.toLowerCase().includes(q);
+        const matchTitle = t.mediaTitle?.toLowerCase().includes(q);
+        const matchHash = t.infoHash?.toLowerCase().includes(q);
+        const matchGenre = t.genres?.some((g) => g.toLowerCase().includes(q));
+        if (!matchName && !matchTitle && !matchHash && !matchGenre) return false;
+      }
+      return true;
+    });
+
+    return filtered.sort((a, b) => {
+      let cmp = 0;
+      switch (sortBy) {
+        case "peers":
+          cmp = (a.peerCount ?? 0) - (b.peerCount ?? 0);
+          break;
+        case "seeders":
+          cmp = (a.seeders ?? 0) - (b.seeders ?? 0);
+          break;
+        case "leechers":
+          cmp = (a.leechers ?? 0) - (b.leechers ?? 0);
+          break;
+        case "name": {
+          const titleA = (a.mediaTitle || a.name || "").toLowerCase();
+          const titleB = (b.mediaTitle || b.name || "").toLowerCase();
+          cmp = titleA.localeCompare(titleB);
+          break;
+        }
+        case "activity": {
+          const timeA = a.lastActivity ? new Date(a.lastActivity).getTime() : 0;
+          const timeB = b.lastActivity ? new Date(b.lastActivity).getTime() : 0;
+          cmp = timeA - timeB;
+          break;
+        }
+        case "uploaded":
+          cmp = (a.uploaded ?? 0) - (b.uploaded ?? 0);
+          break;
+        case "downloaded":
+          cmp = (a.downloaded ?? 0) - (b.downloaded ?? 0);
+          break;
+        case "completed":
+          cmp = (a.completed ?? 0) - (b.completed ?? 0);
+          break;
+        default:
+          cmp = 0;
+      }
+
+      if (cmp !== 0) {
+        return sortDirection === "asc" ? cmp : -cmp;
+      }
+
+      // Deterministic tie-breaker: infoHash
+      return (a.infoHash || "").localeCompare(b.infoHash || "");
+    });
+  }, [torrents, filterScope, searchTerm, sortBy, sortDirection]);
 
   return (
     <div
@@ -335,43 +450,102 @@ function TrackerServer() {
         <div
           style={{
             display: "flex",
-            gap: "0.5rem",
+            gap: "0.75rem",
             alignItems: "center",
-            minWidth: "260px",
+            flexWrap: "wrap",
             flex: "1",
-            maxWidth: "450px",
+            justifyContent: "flex-end",
           }}
         >
-          <input
-            type="text"
-            className="form-control"
-            placeholder="Search tracked torrents, titles, hash..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "0.4rem 0.75rem",
-              borderRadius: "6px",
-              border: "1px solid var(--border-light)",
-              backgroundColor: "var(--bg-primary)",
-              color: "inherit",
-              fontSize: "0.85rem",
-            }}
-          />
-          {searchTerm && (
+          {/* Swarm Sort Controls */}
+          <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
+            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 500 }}>
+              Sort:
+            </span>
+            <select
+              className="form-control"
+              value={sortBy}
+              onChange={(e) => {
+                const newSort = e.target.value as SortField;
+                setSortBy(newSort);
+                setSortDirection(newSort === "name" ? "asc" : "desc");
+              }}
+              style={{
+                fontSize: "0.82rem",
+                padding: "0.35rem 0.6rem",
+                borderRadius: "6px",
+                border: "1px solid var(--border-light)",
+                backgroundColor: "var(--bg-primary)",
+                color: "inherit",
+              }}
+            >
+              <option value="peers">Peers</option>
+              <option value="seeders">Seeders</option>
+              <option value="leechers">Leechers</option>
+              <option value="activity">Last Activity</option>
+              <option value="name">Name</option>
+              <option value="uploaded">Uploaded</option>
+              <option value="downloaded">Downloaded</option>
+              <option value="completed">Completed</option>
+            </select>
             <button
               className="btn btn-outline"
-              onClick={() => setSearchTerm("")}
+              onClick={() => setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"))}
               style={{
-                fontSize: "0.75rem",
-                padding: "0.35rem 0.5rem",
+                fontSize: "0.82rem",
+                padding: "0.35rem 0.6rem",
                 borderRadius: "6px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.3rem",
               }}
-              title="Clear search filter"
+              title={`Sort ${sortDirection === "asc" ? "Descending" : "Ascending"}`}
             >
-              ✕
+              <span>{sortDirection === "asc" ? "▲ Asc" : "▼ Desc"}</span>
             </button>
-          )}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "0.5rem",
+              alignItems: "center",
+              minWidth: "200px",
+              maxWidth: "350px",
+              flex: "1",
+            }}
+          >
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Search tracked torrents, titles, hash..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "0.4rem 0.75rem",
+                borderRadius: "6px",
+                border: "1px solid var(--border-light)",
+                backgroundColor: "var(--bg-primary)",
+                color: "inherit",
+                fontSize: "0.85rem",
+              }}
+            />
+            {searchTerm && (
+              <button
+                className="btn btn-outline"
+                onClick={() => setSearchTerm("")}
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "0.35rem 0.5rem",
+                  borderRadius: "6px",
+                }}
+                title="Clear search filter"
+              >
+                ✕
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -380,7 +554,7 @@ function TrackerServer() {
         <div className="card" style={{ padding: "3rem", textAlign: "center" }}>
           <p className="loading">Loading tracked swarms & rich metadata...</p>
         </div>
-      ) : filteredTorrents.length === 0 ? (
+      ) : sortedTorrents.length === 0 ? (
         <div
           className="card empty-state"
           style={{ padding: "3.5rem 1rem", textAlign: "center" }}
@@ -426,7 +600,7 @@ function TrackerServer() {
             width: "100%",
           }}
         >
-          {filteredTorrents.map((t) => {
+          {sortedTorrents.map((t) => {
             const displayTitle = t.mediaTitle || t.name;
             const hasPoster = Boolean(t.posterUrl);
             const arrLink = getMediaDeepLink(
@@ -772,19 +946,91 @@ function TrackerServer() {
                 <tr>
                   <th className="torrent-table-th">Cover</th>
                   <th className="torrent-table-th">Source</th>
-                  <th className="torrent-table-th">Name</th>
-                  <th className="torrent-table-th">Seeders</th>
-                  <th className="torrent-table-th">Leechers</th>
-                  <th className="torrent-table-th">Uploaded</th>
-                  <th className="torrent-table-th">Downloaded</th>
-                  <th className="torrent-table-th">Completed</th>
-                  <th className="torrent-table-th">Peers</th>
-                  <th className="torrent-table-th">Last Activity</th>
+                  <th
+                    className="torrent-table-th"
+                    onClick={() => handleSort("name")}
+                    style={{ cursor: "pointer", userSelect: "none" }}
+                    title="Click to sort by Name"
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                      Name {sortBy === "name" && <SortArrow direction={sortDirection} />}
+                    </span>
+                  </th>
+                  <th
+                    className="torrent-table-th"
+                    onClick={() => handleSort("seeders")}
+                    style={{ cursor: "pointer", userSelect: "none" }}
+                    title="Click to sort by Seeders"
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                      Seeders {sortBy === "seeders" && <SortArrow direction={sortDirection} />}
+                    </span>
+                  </th>
+                  <th
+                    className="torrent-table-th"
+                    onClick={() => handleSort("leechers")}
+                    style={{ cursor: "pointer", userSelect: "none" }}
+                    title="Click to sort by Leechers"
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                      Leechers {sortBy === "leechers" && <SortArrow direction={sortDirection} />}
+                    </span>
+                  </th>
+                  <th
+                    className="torrent-table-th"
+                    onClick={() => handleSort("uploaded")}
+                    style={{ cursor: "pointer", userSelect: "none" }}
+                    title="Click to sort by Uploaded"
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                      Uploaded {sortBy === "uploaded" && <SortArrow direction={sortDirection} />}
+                    </span>
+                  </th>
+                  <th
+                    className="torrent-table-th"
+                    onClick={() => handleSort("downloaded")}
+                    style={{ cursor: "pointer", userSelect: "none" }}
+                    title="Click to sort by Downloaded"
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                      Downloaded {sortBy === "downloaded" && <SortArrow direction={sortDirection} />}
+                    </span>
+                  </th>
+                  <th
+                    className="torrent-table-th"
+                    onClick={() => handleSort("completed")}
+                    style={{ cursor: "pointer", userSelect: "none" }}
+                    title="Click to sort by Completed"
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                      Completed {sortBy === "completed" && <SortArrow direction={sortDirection} />}
+                    </span>
+                  </th>
+                  <th
+                    className="torrent-table-th"
+                    onClick={() => handleSort("peers")}
+                    style={{ cursor: "pointer", userSelect: "none" }}
+                    title="Click to sort by Total Peers"
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                      Peers {sortBy === "peers" && <SortArrow direction={sortDirection} />}
+                    </span>
+                  </th>
+                  <th
+                    className="torrent-table-th"
+                    onClick={() => handleSort("activity")}
+                    style={{ cursor: "pointer", userSelect: "none" }}
+                    title="Click to sort by Last Activity"
+                  >
+                    <span style={{ display: "inline-flex", alignItems: "center" }}>
+                      Last Activity {sortBy === "activity" && <SortArrow direction={sortDirection} />}
+                    </span>
+                  </th>
                   <th className="torrent-table-th">Info Hash</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredTorrents.map((t) => {
+                {sortedTorrents.map((t) => {
                   const displayTitle = t.mediaTitle || t.name;
                   return (
                     <tr key={t.infoHash} className="torrent-table-row">
