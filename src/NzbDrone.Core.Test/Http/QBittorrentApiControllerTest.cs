@@ -434,4 +434,205 @@ public class QBittorrentApiControllerTest
         Assert.That(existingTorrent.RatioLimit, Is.EqualTo(2.0));
         _torrentService.Received().Update(existingTorrent);
     }
+
+    [Test]
+    public void GetTorrentsInfo_Sorting_ByName_And_Reverse()
+    {
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Name = "Beta", InfoHash = "hash1", TotalSize = 1000 },
+            new Torrent { Id = 2, Name = "Alpha", InfoHash = "hash2", TotalSize = 1000 },
+            new Torrent { Id = 3, Name = "Gamma", InfoHash = "hash3", TotalSize = 1000 },
+        };
+        _torrentService.GetAll().Returns(torrents);
+
+        var ascResult = _controller.GetTorrentsInfo(sort: "name", reverse: false);
+        var ascList = ((OkObjectResult)ascResult.Result).Value as List<Dictionary<string, object>>;
+        Assert.That(ascList, Is.Not.Null);
+        Assert.That(ascList.Select(x => x["name"]).ToList(), Is.EqualTo(new[] { "Alpha", "Beta", "Gamma" }));
+
+        var descResult = _controller.GetTorrentsInfo(sort: "name", reverse: true);
+        var descList = ((OkObjectResult)descResult.Result).Value as List<Dictionary<string, object>>;
+        Assert.That(descList, Is.Not.Null);
+        Assert.That(descList.Select(x => x["name"]).ToList(), Is.EqualTo(new[] { "Gamma", "Beta", "Alpha" }));
+    }
+
+    [Test]
+    public void GetTorrentsInfo_Pagination_With_Limit_And_Offset()
+    {
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Name = "Torrent1", InfoHash = "hash1", TotalSize = 1000 },
+            new Torrent { Id = 2, Name = "Torrent2", InfoHash = "hash2", TotalSize = 1000 },
+            new Torrent { Id = 3, Name = "Torrent3", InfoHash = "hash3", TotalSize = 1000 },
+            new Torrent { Id = 4, Name = "Torrent4", InfoHash = "hash4", TotalSize = 1000 },
+            new Torrent { Id = 5, Name = "Torrent5", InfoHash = "hash5", TotalSize = 1000 },
+        };
+        _torrentService.GetAll().Returns(torrents);
+
+        var pageResult = _controller.GetTorrentsInfo(sort: "name", offset: 1, limit: 2);
+        var pageList = ((OkObjectResult)pageResult.Result).Value as List<Dictionary<string, object>>;
+        Assert.That(pageList, Is.Not.Null);
+        Assert.That(pageList.Count, Is.EqualTo(2));
+        Assert.That(pageList.Select(x => x["name"]).ToList(), Is.EqualTo(new[] { "Torrent2", "Torrent3" }));
+
+        var lastPageResult = _controller.GetTorrentsInfo(sort: "name", offset: 3, limit: 5);
+        var lastPageList = ((OkObjectResult)lastPageResult.Result).Value as List<Dictionary<string, object>>;
+        Assert.That(lastPageList, Is.Not.Null);
+        Assert.That(lastPageList.Count, Is.EqualTo(2));
+        Assert.That(lastPageList.Select(x => x["name"]).ToList(), Is.EqualTo(new[] { "Torrent4", "Torrent5" }));
+    }
+
+    [Test]
+    public void GetTransferInfo_Includes_RateLimits_And_DhtNodes()
+    {
+        _configService.MaxDownloadSpeedKbps.Returns(2000);
+        _configService.MaxUploadSpeedKbps.Returns(1000);
+        _configService.AlternativeSpeedEnabled.Returns(false);
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var result = _controller.GetTransferInfo();
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var dict = ((OkObjectResult)result.Result).Value as Dictionary<string, object>;
+        Assert.That(dict, Is.Not.Null);
+        Assert.That(dict["dl_rate_limit"], Is.EqualTo(2000 * 1024));
+        Assert.That(dict["up_rate_limit"], Is.EqualTo(1000 * 1024));
+        Assert.That(dict["dht_nodes"], Is.EqualTo(0));
+
+        // Test unlimited (0)
+        _configService.MaxDownloadSpeedKbps.Returns(0);
+        _configService.MaxUploadSpeedKbps.Returns(0);
+
+        var unlimitedResult = _controller.GetTransferInfo();
+        var unlimitedDict = ((OkObjectResult)unlimitedResult.Result).Value as Dictionary<string, object>;
+        Assert.That(unlimitedDict, Is.Not.Null);
+        Assert.That(unlimitedDict["dl_rate_limit"], Is.EqualTo(0));
+        Assert.That(unlimitedDict["up_rate_limit"], Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GetFiles_Handles_Completed_Vs_Partial_Files()
+    {
+        var partialTorrent = new Torrent
+        {
+            Id = 10,
+            Name = "PartialTorrent",
+            InfoHash = "partialhash123",
+            TotalSize = 2000,
+            PieceCount = 20,
+            Progress = 0.5,
+            Status = TorrentStatus.Downloading,
+        };
+
+        var file1 = new TorrentFile
+        {
+            Id = 1,
+            TorrentId = 10,
+            Path = "File1.mkv",
+            Size = 1000,
+            PieceOffset = 0,
+            PieceCount = 10,
+        };
+
+        var file2 = new TorrentFile
+        {
+            Id = 2,
+            TorrentId = 10,
+            Path = "File2.mkv",
+            Size = 1000,
+            PieceOffset = 10,
+            PieceCount = 10,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { partialTorrent });
+        _torrentFileService.GetByTorrentId(10).Returns(new List<TorrentFile> { file1, file2 });
+
+        var partialResult = _controller.GetFiles("partialhash123");
+        Assert.That(partialResult.Result, Is.InstanceOf<OkObjectResult>());
+        var partialFiles = ((OkObjectResult)partialResult.Result).Value as List<Dictionary<string, object>>;
+        Assert.That(partialFiles, Is.Not.Null);
+        Assert.That(partialFiles.Count, Is.EqualTo(2));
+
+        // First file should be completed (1.0) and marked as seed
+        Assert.That(partialFiles[0]["name"], Is.EqualTo("File1.mkv"));
+        Assert.That(partialFiles[0]["progress"], Is.EqualTo(1.0));
+        Assert.That(partialFiles[0]["is_seed"], Is.True);
+
+        // Second file should not be completed (0.0) and not marked as seed
+        Assert.That(partialFiles[1]["name"], Is.EqualTo("File2.mkv"));
+        Assert.That(partialFiles[1]["progress"], Is.EqualTo(0.0));
+        Assert.That(partialFiles[1]["is_seed"], Is.False);
+
+        // For fully completed torrent, all files should have progress 1.0 and is_seed = true
+        var completedTorrent = new Torrent
+        {
+            Id = 11,
+            Name = "CompletedTorrent",
+            InfoHash = "completehash123",
+            TotalSize = 2000,
+            PieceCount = 20,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding,
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { completedTorrent });
+        _torrentFileService.GetByTorrentId(11).Returns(new List<TorrentFile> { file1, file2 });
+
+        var completedResult = _controller.GetFiles("completehash123");
+        var completedFiles = ((OkObjectResult)completedResult.Result).Value as List<Dictionary<string, object>>;
+        Assert.That(completedFiles, Is.Not.Null);
+        Assert.That(completedFiles[0]["progress"], Is.EqualTo(1.0));
+        Assert.That(completedFiles[0]["is_seed"], Is.True);
+        Assert.That(completedFiles[1]["progress"], Is.EqualTo(1.0));
+        Assert.That(completedFiles[1]["is_seed"], Is.True);
+    }
+
+    [Test]
+    public void GetFiles_Calculates_Progress_From_Disk_File_When_Present()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var diskFilePath = Path.Combine(tempDir, "DiskFile.mkv");
+            File.WriteAllBytes(diskFilePath, new byte[500]);
+
+            var torrent = new Torrent
+            {
+                Id = 12,
+                Name = "DiskTorrent",
+                InfoHash = "diskhash123",
+                TotalSize = 1000,
+                PieceCount = 10,
+                Progress = 0.0,
+                SourcePath = tempDir,
+                Status = TorrentStatus.Downloading,
+            };
+
+            var file = new TorrentFile
+            {
+                Id = 3,
+                TorrentId = 12,
+                Path = "DiskFile.mkv",
+                Size = 1000,
+                PieceOffset = 0,
+                PieceCount = 10,
+            };
+
+            _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+            _torrentFileService.GetByTorrentId(12).Returns(new List<TorrentFile> { file });
+
+            var result = _controller.GetFiles("diskhash123");
+            var files = ((OkObjectResult)result.Result).Value as List<Dictionary<string, object>>;
+            Assert.That(files, Is.Not.Null);
+            Assert.That(files[0]["progress"], Is.EqualTo(0.5));
+            Assert.That(files[0]["is_seed"], Is.False);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
 }
