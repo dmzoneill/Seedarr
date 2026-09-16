@@ -166,12 +166,12 @@ public class TrackerServerTests : ApiTestBase
             using var doc = JsonDocument.Parse(json);
             var serverEnabled = doc.RootElement.TryGetProperty("trackerServerEnabled", out var se) && se.GetBoolean();
             var httpEnabled = doc.RootElement.TryGetProperty("trackerHttpEnabled", out var he) && he.GetBoolean();
-            var port = doc.RootElement.TryGetProperty("trackerHttpPort", out var p) ? p.GetInt32() : 9696;
+            var port = doc.RootElement.TryGetProperty("trackerHttpPort", out var p) ? p.GetInt32() : 6969;
             return (serverEnabled && httpEnabled, port);
         }
         catch
         {
-            return (false, 9696);
+            return (false, 6969);
         }
     }
 

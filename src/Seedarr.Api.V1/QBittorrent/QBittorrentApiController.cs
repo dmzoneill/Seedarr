@@ -221,7 +221,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             ["alt_dl_limit"] = (_configService?.AltDownloadSpeedKbps ?? 100) * 1024,
             ["alt_up_limit"] = (_configService?.AltUploadSpeedKbps ?? 50) * 1024,
             ["enable_embedded_tracker"] = _configService?.TrackerServerEnabled ?? false,
-            ["embedded_tracker_port"] = _configService?.TrackerHttpPort ?? 9696,
+            ["embedded_tracker_port"] = _configService?.TrackerHttpPort ?? 6969,
             ["auto_shutdown_on_downloads_finished"] = false,
         });
     }
