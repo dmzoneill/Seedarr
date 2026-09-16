@@ -154,11 +154,18 @@ public class ChokeManager : BackgroundService, IChokeManager
                 }
             }
 
+            var promotedSwarms = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var conn in connections)
             {
                 var isOptimistic = conn.IsOptimisticUnchoked;
                 if (selectedRegular.Contains(conn))
                 {
+                    if (isOptimistic && !string.IsNullOrEmpty(conn.InfoHash))
+                    {
+                        promotedSwarms.Add(conn.InfoHash);
+                    }
+
                     conn.IsOptimisticUnchoked = false;
                     if (conn.AmChoking)
                     {
@@ -170,6 +177,35 @@ public class ChokeManager : BackgroundService, IChokeManager
                     if (!conn.AmChoking)
                     {
                         Choke(conn);
+                    }
+                }
+            }
+
+            if (maxUploadSlots > 1 && promotedSwarms.Count > 0)
+            {
+                foreach (var group in byTorrent)
+                {
+                    if (!promotedSwarms.Contains(group.Key))
+                    {
+                        continue;
+                    }
+
+                    var hasOptimisticPeer = group.Any(c => c.IsOptimisticUnchoked && !c.AmChoking);
+                    if (!hasOptimisticPeer)
+                    {
+                        var eligibleCandidates = group
+                            .Where(c => !selectedRegular.Contains(c) && c.PeerInterested && c.AmChoking)
+                            .ToList();
+
+                        if (eligibleCandidates.Count > 0)
+                        {
+                            var chosenIndex = _random.Next(0, eligibleCandidates.Count);
+                            var chosen = eligibleCandidates[chosenIndex];
+
+                            chosen.IsOptimisticUnchoked = true;
+                            _logger.Debug("Immediately elected replacement optimistic peer {0}:{1} for torrent {2}", chosen.RemoteIp, chosen.RemotePort, group.Key);
+                            Unchoke(chosen);
+                        }
                     }
                 }
             }
