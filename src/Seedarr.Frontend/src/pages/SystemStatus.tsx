@@ -502,10 +502,11 @@ function SystemStatus() {
               </thead>
               <tbody>
                 {diskSpace.map((d, i) => {
-                  const usedPercent =
+                  const rawPercent =
                     d.totalSpace > 0
                       ? ((d.totalSpace - d.freeSpace) / d.totalSpace) * 100
                       : 0;
+                  const usedPercent = Math.max(0, Math.min(100, rawPercent));
                   let barClass = "disk-progress-bar";
                   if (usedPercent >= 90)
                     barClass += " disk-progress-bar-danger";
