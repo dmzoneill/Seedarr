@@ -242,7 +242,8 @@ public class DownloadHistoryController : Controller
             SavePath = savePath,
             Category = category,
             DownloadClientId = downloadClientId,
-            SourcePath = sourcePath
+            SourcePath = sourcePath,
+            IsPrivate = model.IsPrivate
         };
     }
 

@@ -39,7 +39,7 @@ public interface ITrackerBoostService
     Task<TorrentTrackerInspectionResult> InspectTorrentTrackersAsync(int torrentId);
     Task<TorrentTrackerInspectionResult> InspectHashTrackersAsync(string infoHash, string name = "");
     Task<SwarmBoostResult> BoostTorrentAsync(int torrentId, bool onlyVerified = true);
-    Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "", bool onlyVerified = true);
+    Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "", bool onlyVerified = true, bool force = false);
     Task<SwarmBoostResult> InjectTrackerToTorrentAsync(int torrentId, string trackerUrl, bool force = false);
     Task<SwarmBoostResult> InjectTrackerToHashAsync(string infoHash, string trackerUrl, bool force = false);
     Task<List<SwarmBoostResult>> BoostAllTorrentsAsync(bool onlyVerified = true);
@@ -1115,7 +1115,8 @@ public class TrackerBoostService : ITrackerBoostService
             return await InspectTorrentTrackersAsync(torrent.Id);
         }
 
-        return await InspectHashInternalAsync(0, !string.IsNullOrWhiteSpace(name) ? name : infoHash, infoHash, false);
+        var isPrivate = IsHashPrivate(infoHash);
+        return await InspectHashInternalAsync(0, !string.IsNullOrWhiteSpace(name) ? name : infoHash, infoHash, isPrivate);
     }
 
     private async Task<TorrentTrackerInspectionResult> InspectHashInternalAsync(int torrentId, string torrentName, string infoHash, bool isPrivate)
@@ -1388,12 +1389,40 @@ public class TrackerBoostService : ITrackerBoostService
         };
     }
 
-    public async Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "", bool onlyVerified = true)
+    public async Task<SwarmBoostResult> BoostHashAsync(string infoHash, string name = "", bool onlyVerified = true, bool force = false)
     {
         var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
         if (torrent != null)
         {
+            if (torrent.IsPrivate && !force)
+            {
+                LogActivity("Warn", "Inject", $"Boosting skipped for private torrent '{torrent.Name}' (BEP 27 protection)", infoHash: torrent.InfoHash);
+                return new SwarmBoostResult
+                {
+                    TorrentId = torrent.Id,
+                    TorrentName = torrent.Name,
+                    InfoHash = torrent.InfoHash,
+                    IsPrivate = true,
+                    Boosted = false,
+                    Message = "Skipped: Private torrents are protected from external tracker injection."
+                };
+            }
+
             return await BoostTorrentAsync(torrent.Id, onlyVerified);
+        }
+
+        if (!force && IsHashPrivate(infoHash))
+        {
+            LogActivity("Warn", "Inject", $"Boosting skipped for private torrent hash '{infoHash}' (BEP 27 protection)", infoHash: infoHash);
+            return new SwarmBoostResult
+            {
+                TorrentId = 0,
+                TorrentName = !string.IsNullOrWhiteSpace(name) ? name : infoHash,
+                InfoHash = infoHash,
+                IsPrivate = true,
+                Boosted = false,
+                Message = "Skipped: Private torrents are protected from external tracker injection."
+            };
         }
 
         var inspection = await InspectHashTrackersAsync(infoHash, name);
@@ -1421,6 +1450,7 @@ public class TrackerBoostService : ITrackerBoostService
             TorrentId = 0,
             TorrentName = !string.IsNullOrWhiteSpace(name) ? name : infoHash,
             InfoHash = infoHash,
+            IsPrivate = inspection.IsPrivate,
             Boosted = clientCount > 0 && trackerUrls.Count > 0,
             AddedTrackersCount = trackerUrls.Count,
             AddedTrackers = trackerUrls,
@@ -1507,6 +1537,20 @@ public class TrackerBoostService : ITrackerBoostService
             return await InjectTrackerToTorrentAsync(torrent.Id, trackerUrl, force);
         }
 
+        if (!force && IsHashPrivate(infoHash))
+        {
+            LogActivity("Warn", "Inject", $"Injection skipped for private torrent hash '{infoHash}' (BEP 27 protection)", trackerUrl, infoHash);
+            return await Task.FromResult(new SwarmBoostResult
+            {
+                TorrentId = 0,
+                TorrentName = infoHash,
+                InfoHash = infoHash,
+                IsPrivate = true,
+                Boosted = false,
+                Message = "Skipped: Private torrents are protected from external tracker injection."
+            });
+        }
+
         var injected = InjectIntoDownloadClients(infoHash, new[] { trackerUrl.Trim() });
         ReannounceDownloadClients(infoHash);
         LogActivity("Success", "Inject", $"Injected tracker {trackerUrl} into hash {infoHash} across {injected} download client(s) and reannounced", trackerUrl, infoHash);
@@ -1526,8 +1570,14 @@ public class TrackerBoostService : ITrackerBoostService
     {
         var results = new List<SwarmBoostResult>();
 
-        var torrents = _torrentService.GetAll().Where(t => !t.IsPrivate).ToList();
-        foreach (var t in torrents)
+        var allTorrents = _torrentService.GetAll();
+        var privateHashes = allTorrents
+            .Where(t => t.IsPrivate && !string.IsNullOrWhiteSpace(t.InfoHash))
+            .Select(t => t.InfoHash)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var publicTorrents = allTorrents.Where(t => !t.IsPrivate).ToList();
+        foreach (var t in publicTorrents)
         {
             var res = await BoostTorrentAsync(t.Id, onlyVerified);
             results.Add(res);
@@ -1536,6 +1586,8 @@ public class TrackerBoostService : ITrackerBoostService
         try
         {
             var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+            var processedClientHashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var clientDef in clients)
             {
                 try
@@ -1549,9 +1601,15 @@ public class TrackerBoostService : ITrackerBoostService
                     var items = provider.GetItems();
                     foreach (var item in items)
                     {
-                        if (!string.IsNullOrWhiteSpace(item.InfoHash) && !torrents.Any(t => string.Equals(t.InfoHash, item.InfoHash, StringComparison.OrdinalIgnoreCase)))
+                        if (string.IsNullOrWhiteSpace(item.InfoHash) || item.IsPrivate || privateHashes.Contains(item.InfoHash))
                         {
-                            var res = await BoostHashAsync(item.InfoHash, item.Title, onlyVerified);
+                            continue;
+                        }
+
+                        if (!publicTorrents.Any(t => string.Equals(t.InfoHash, item.InfoHash, StringComparison.OrdinalIgnoreCase)) &&
+                            processedClientHashes.Add(item.InfoHash))
+                        {
+                            var res = await BoostHashAsync(item.InfoHash, item.Title, onlyVerified, force: false);
                             results.Add(res);
                         }
                     }
@@ -1912,39 +1970,56 @@ public class TrackerBoostService : ITrackerBoostService
         }
     }
 
-    private static IDownloadClient CreateDownloadClient(DownloadClientDefinition definition)
+    private IDownloadClient CreateDownloadClient(DownloadClientDefinition definition)
     {
-        return definition.ClientType switch
+        return _downloadClientFactory.CreateClient(definition);
+    }
+
+    private bool IsHashPrivate(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
         {
-            "QBitTorrent" => new NzbDrone.Core.DownloadClients.QBitTorrent.QBitTorrentClient
+            return false;
+        }
+
+        var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+        if (torrent != null)
+        {
+            return torrent.IsPrivate;
+        }
+
+        try
+        {
+            var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+            foreach (var clientDef in clients)
             {
-                Host = definition.Host,
-                Port = definition.Port,
-                UseSsl = definition.UseSsl,
-                Username = definition.Username,
-                Password = definition.Password,
-                Category = definition.Category,
-            },
-            "Transmission" => new NzbDrone.Core.DownloadClients.Transmission.TransmissionClient
-            {
-                Host = definition.Host,
-                Port = definition.Port,
-                UseSsl = definition.UseSsl,
-                Username = definition.Username,
-                Password = definition.Password,
-                Category = definition.Category,
-            },
-            "Deluge" => new NzbDrone.Core.DownloadClients.Deluge.DelugeClient
-            {
-                Host = definition.Host,
-                Port = definition.Port,
-                UseSsl = definition.UseSsl,
-                Username = definition.Username,
-                Password = definition.Password,
-                Category = definition.Category,
-            },
-            _ => null
-        };
+                try
+                {
+                    var client = CreateDownloadClient(clientDef);
+                    if (client == null)
+                    {
+                        continue;
+                    }
+
+                    var items = client.GetItems();
+                    var item = items?.FirstOrDefault(i => string.Equals(i.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+                    if (item != null && item.IsPrivate)
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to check item privacy in client {0} for {1}", clientDef.Name, infoHash);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to query download clients for privacy check of hash {0}", infoHash);
+        }
+
+        return false;
     }
 
     private static void BinaryPrimitivesWriteInt64BigEndian(byte[] dest, int offset, long value)

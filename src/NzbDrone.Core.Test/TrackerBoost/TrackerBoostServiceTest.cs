@@ -220,4 +220,105 @@ public class TrackerBoostServiceTest
         var result = TrackerBoostService.IsValidPublicTrackerUrl(url);
         Assert.That(result, Is.EqualTo(expected));
     }
+
+    [Test]
+    public async Task BoostHashAsync_skips_private_torrent_in_seedarr_when_force_false()
+    {
+        var privateTorrent = new Torrent { Id = 1, IsPrivate = true, InfoHash = "privhash1", Name = "Private Torrent" };
+        _torrentService.GetAll().Returns(new List<Torrent> { privateTorrent });
+
+        var result = await _service.BoostHashAsync("privhash1", force: false);
+
+        Assert.That(result.IsPrivate, Is.True);
+        Assert.That(result.Boosted, Is.False);
+        Assert.That(result.Message, Does.Contain("Private torrents are protected"));
+    }
+
+    [Test]
+    public async Task BoostHashAsync_skips_private_torrent_in_download_client_when_force_false()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        var clientDef = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", Enable = true, ClientType = "QBitTorrent" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        downloadClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { InfoHash = "clientprivhash", IsPrivate = true, Title = "Client Private" }
+        });
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        var result = await _service.BoostHashAsync("clientprivhash", force: false);
+
+        Assert.That(result.IsPrivate, Is.True);
+        Assert.That(result.Boosted, Is.False);
+        Assert.That(result.Message, Does.Contain("Private torrents are protected"));
+        downloadClient.DidNotReceive().AddTrackers(Arg.Any<string>(), Arg.Any<IEnumerable<string>>());
+    }
+
+    [Test]
+    public async Task InjectTrackerToHashAsync_skips_private_torrent_in_download_client_when_force_false()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        var clientDef = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", Enable = true, ClientType = "QBitTorrent" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        downloadClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { InfoHash = "clientprivhash", IsPrivate = true }
+        });
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        var result = await _service.InjectTrackerToHashAsync("clientprivhash", "udp://tracker.public.org:1337/announce", force: false);
+
+        Assert.That(result.IsPrivate, Is.True);
+        Assert.That(result.Boosted, Is.False);
+        Assert.That(result.Message, Does.Contain("Private torrents are protected"));
+        downloadClient.DidNotReceive().AddTrackers(Arg.Any<string>(), Arg.Any<IEnumerable<string>>());
+    }
+
+    [Test]
+    public async Task InjectTrackerToHashAsync_allows_private_torrent_when_force_true()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        var clientDef = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", Enable = true, ClientType = "QBitTorrent" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        downloadClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { InfoHash = "clientprivhash", IsPrivate = true }
+        });
+        downloadClient.AddTrackers("clientprivhash", Arg.Any<IEnumerable<string>>()).Returns(true);
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        var result = await _service.InjectTrackerToHashAsync("clientprivhash", "udp://tracker.public.org:1337/announce", force: true);
+
+        Assert.That(result.Boosted, Is.True);
+        downloadClient.Received(1).AddTrackers("clientprivhash", Arg.Any<IEnumerable<string>>());
+    }
+
+    [Test]
+    public async Task BoostAllTorrentsAsync_skips_private_torrents_in_seedarr_and_download_clients()
+    {
+        var privateTorrent = new Torrent { Id = 1, IsPrivate = true, InfoHash = "seedarrprivhash", Name = "Seedarr Private" };
+        _torrentService.GetAll().Returns(new List<Torrent> { privateTorrent });
+
+        var clientDef = new DownloadClientDefinition { Id = 1, Name = "qBittorrent", Enable = true, ClientType = "QBitTorrent" };
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition> { clientDef });
+
+        var downloadClient = Substitute.For<IDownloadClient>();
+        downloadClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { InfoHash = "seedarrprivhash", IsPrivate = true },
+            new() { InfoHash = "clientprivhash", IsPrivate = true }
+        });
+        _downloadClientFactory.CreateClient(clientDef).Returns(downloadClient);
+
+        var results = await _service.BoostAllTorrentsAsync();
+
+        Assert.That(results, Is.Empty);
+        downloadClient.DidNotReceive().AddTrackers(Arg.Any<string>(), Arg.Any<IEnumerable<string>>());
+    }
 }

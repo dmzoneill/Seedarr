@@ -1282,7 +1282,7 @@ export function useInjectTrackerToTorrent() {
   return useMutation<
     SwarmBoostResult,
     Error,
-    { torrentId?: number; infoHash?: string; trackerUrl: string }
+    { torrentId?: number; infoHash?: string; trackerUrl: string; force?: boolean }
   >({
     mutationFn: (payload) => apiClient.post("/trackerboost/inject", payload),
     onSuccess: (_, vars) => {

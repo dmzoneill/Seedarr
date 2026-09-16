@@ -129,6 +129,12 @@ function TrackerBoost() {
       });
     });
 
+    const privateHashes = new Set(
+      (torrents ?? [])
+        .filter((t) => t.isPrivate && t.infoHash)
+        .map((t) => t.infoHash.toLowerCase()),
+    );
+
     (history ?? []).forEach((h) => {
       const hash = (h.infoHash || "").toLowerCase();
       if (hash && !seenHashes.has(hash)) {
@@ -141,7 +147,7 @@ function TrackerBoost() {
           totalSize: h.totalSize,
           ratio: 0,
           seeders: 0,
-          isPrivate: false,
+          isPrivate: h.isPrivate ?? privateHashes.has(hash),
           sourceType: "real_client",
           clientName: h.source || "Download Client",
         });
