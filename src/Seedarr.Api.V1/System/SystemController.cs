@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Migration;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
@@ -29,6 +30,7 @@ public class SystemController : ControllerBase
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IHostApplicationLifetime _lifetime;
     private readonly IConfigService _configService;
+    private readonly IMainDatabase _mainDatabase;
 
     public SystemController(
         ITaskManager taskManager,
@@ -36,7 +38,8 @@ public class SystemController : ControllerBase
         IManageCommandQueue commandQueueManager,
         IAppFolderInfo appFolderInfo,
         IHostApplicationLifetime lifetime,
-        IConfigService configService = null)
+        IConfigService configService = null,
+        IMainDatabase mainDatabase = null)
     {
         _taskManager = taskManager;
         _scheduledTasks = scheduledTasks ?? Enumerable.Empty<IScheduledTask>();
@@ -44,6 +47,7 @@ public class SystemController : ControllerBase
         _appFolderInfo = appFolderInfo;
         _lifetime = lifetime;
         _configService = configService;
+        _mainDatabase = mainDatabase;
     }
 
     /// <summary>
@@ -65,6 +69,8 @@ public class SystemController : ControllerBase
         var isDebug = false;
 #endif
 
+        var dbType = _mainDatabase?.DatabaseType.ToString() ?? "SQLite";
+
         return Ok(new SystemResource
         {
             AppName = BuildInfo.AppName,
@@ -83,10 +89,44 @@ public class SystemController : ControllerBase
             AppDataPath = _appFolderInfo.AppDataFolder,
             IsDocker = isDocker,
             IsDebug = isDebug,
-            DatabaseVersion = "SQLite",
-            DatabaseMigration = NzbDroneMigrationBase.LatestMigration.ToString(),
+            DatabaseVersion = dbType,
+            DatabaseMigration = GetDatabaseMigrationVersion(),
             UptimeSeconds = (DateTime.UtcNow - StartTime).TotalSeconds,
         });
+    }
+
+    private string GetDatabaseMigrationVersion()
+    {
+        if (_mainDatabase != null)
+        {
+            try
+            {
+                using var conn = _mainDatabase.OpenConnection();
+                if (conn != null)
+                {
+                    using var cmd = conn.CreateCommand();
+                    if (cmd != null)
+                    {
+                        cmd.CommandText = "SELECT Version FROM VersionInfo ORDER BY AppliedOn DESC, Version DESC LIMIT 1";
+                        var result = cmd.ExecuteScalar();
+                        if (result != null && result != DBNull.Value)
+                        {
+                            var versionStr = result.ToString();
+                            if (!string.IsNullOrWhiteSpace(versionStr))
+                            {
+                                return versionStr;
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fall back to compile-time latest migration if query fails or database is uninitialized
+            }
+        }
+
+        return NzbDroneMigrationBase.LatestMigration.ToString();
     }
 
     /// <summary>
