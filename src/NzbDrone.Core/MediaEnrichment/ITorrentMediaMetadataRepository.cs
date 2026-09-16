@@ -7,4 +7,6 @@ public interface ITorrentMediaMetadataRepository : IBasicRepository<TorrentMedia
     TorrentMediaMetadata GetByTorrentId(int torrentId);
 
     void DeleteByTorrentId(int torrentId);
+
+    TorrentMediaMetadata Upsert(TorrentMediaMetadata metadata);
 }

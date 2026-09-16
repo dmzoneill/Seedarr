@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
@@ -54,6 +56,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
     private readonly HttpClient _explicitHttpClient;
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
+    private readonly ConcurrentDictionary<int, SemaphoreSlim> _torrentLocks = new();
 
     private static readonly Regex SceneTagsRegex = new(
         @"\b(1080p|720p|2160p|4k|uhd|hdr|hdr10|hdr10plus|dv|dovi|remux|bluray|blu-ray|bdrip|web-dl|webrip|web|hdtv|x264|x265|h264|h265|hevc|av1|xvid|aac|dts|dts-hd|truehd|atmos|flac|mp3|extended|repack|proper|complete|season|\bS\d{1,2}(E\d{1,2})?\b|\bEP?\d{1,3}\b)\b.*$",
@@ -90,159 +93,166 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             return null;
         }
 
-        _logger.Debug("Enriching metadata for torrent: {0}", torrent.Name);
-
-        var existing = torrent.Id > 0 ? _repository.GetByTorrentId(torrent.Id) : null;
-        var metadata = existing ?? new TorrentMediaMetadata { TorrentId = torrent.Id };
-
-        // 1. Inspect container metadata if local file is available or from torrent name
-        if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+        SemaphoreSlim semaphore = null;
+        if (torrent.Id > 0)
         {
-            try
+            semaphore = _torrentLocks.GetOrAdd(torrent.Id, static _ => new SemaphoreSlim(1, 1));
+            await semaphore.WaitAsync().ConfigureAwait(false);
+        }
+
+        try
+        {
+            _logger.Debug("Enriching metadata for torrent: {0}", torrent.Name);
+
+            var existing = torrent.Id > 0 && _repository != null ? _repository.GetByTorrentId(torrent.Id) : null;
+            var metadata = existing ?? new TorrentMediaMetadata { TorrentId = torrent.Id };
+
+            // 1. Inspect container metadata if local file is available or from torrent name
+            if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
             {
-                var containerInfo = _inspector.InspectFile(filePath);
-                if (containerInfo != null)
+                try
                 {
-                    metadata.MediaInfoJson = JsonSerializer.Serialize(containerInfo);
+                    var containerInfo = _inspector.InspectFile(filePath);
+                    if (containerInfo != null)
+                    {
+                        metadata.MediaInfoJson = JsonSerializer.Serialize(containerInfo);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to inspect media file: {0}", filePath);
                 }
             }
-            catch (Exception ex)
+
+            // 2. Parse release title & year
+            var cleanTitle = CleanReleaseTitle(torrent.Name);
+            var parsedYear = ExtractYear(torrent.Name);
+
+            // 3. Query connected Servarr APIs (Sonarr / Radarr / Lidarr) if configured
+            var arrMetadata = await QueryServarrAsync(torrent, cleanTitle);
+            if (arrMetadata != null)
             {
-                _logger.Warn(ex, "Failed to inspect media file: {0}", filePath);
+                if (!string.IsNullOrEmpty(arrMetadata.Title))
+                {
+                    metadata.Title = arrMetadata.Title;
+                }
+
+                if (arrMetadata.Year.HasValue && arrMetadata.Year.Value > 0)
+                {
+                    metadata.Year = arrMetadata.Year.Value;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.Overview))
+                {
+                    metadata.Overview = arrMetadata.Overview;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.PosterUrl))
+                {
+                    metadata.PosterUrl = arrMetadata.PosterUrl;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.FanartUrl))
+                {
+                    metadata.BackdropUrl = arrMetadata.FanartUrl;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.BannerUrl))
+                {
+                    metadata.BannerUrl = arrMetadata.BannerUrl;
+                }
+
+                if (arrMetadata.Genres != null && arrMetadata.Genres.Count > 0)
+                {
+                    metadata.Genres = string.Join(", ", arrMetadata.Genres);
+                }
+
+                if (arrMetadata.Rating.HasValue && arrMetadata.Rating.Value > 0)
+                {
+                    metadata.Rating = arrMetadata.Rating.Value;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.ImdbId))
+                {
+                    metadata.ImdbId = arrMetadata.ImdbId;
+                }
+
+                if (arrMetadata.TmdbId.HasValue && arrMetadata.TmdbId.Value > 0)
+                {
+                    metadata.TmdbId = arrMetadata.TmdbId.Value.ToString();
+                }
+
+                if (arrMetadata.TvdbId.HasValue && arrMetadata.TvdbId.Value > 0)
+                {
+                    metadata.TvdbId = arrMetadata.TvdbId.Value.ToString();
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.MediaType))
+                {
+                    metadata.ArrType = NormalizeArrType(arrMetadata.MediaType);
+                }
+
+                if (arrMetadata.MediaId.HasValue && arrMetadata.MediaId.Value > 0)
+                {
+                    metadata.ArrMediaId = arrMetadata.MediaId.Value;
+                }
+
+                if (arrMetadata.Actors != null && arrMetadata.Actors.Count > 0)
+                {
+                    metadata.Cast = string.Join(", ", arrMetadata.Actors.Select(a => a.Name).Where(n => !string.IsNullOrWhiteSpace(n)));
+                }
             }
+
+            // 4. Fallbacks
+            if (string.IsNullOrEmpty(metadata.Title))
+            {
+                metadata.Title = torrent.Name;
+            }
+
+            if (metadata.Year == 0 && parsedYear > 0)
+            {
+                metadata.Year = parsedYear;
+            }
+
+            if (string.IsNullOrEmpty(metadata.ArrType))
+            {
+                metadata.ArrType = GuessArrType(torrent.Label, torrent.Name);
+            }
+
+            if (string.IsNullOrEmpty(metadata.MediaInfoJson))
+            {
+                var guessed = _inspector.Inspect(new MemoryStream(new byte[8]), torrent.Name);
+                if (guessed != null)
+                {
+                    metadata.MediaInfoJson = JsonSerializer.Serialize(guessed);
+                }
+            }
+
+            // 5. Cache remote or local poster & backdrop
+            if (!string.IsNullOrEmpty(metadata.PosterUrl) && string.IsNullOrEmpty(metadata.PosterLocalPath))
+            {
+                metadata.PosterLocalPath = await CacheArtworkAsync(metadata.PosterUrl, torrent.Id, "poster");
+            }
+
+            if (!string.IsNullOrEmpty(metadata.BackdropUrl) && string.IsNullOrEmpty(metadata.BackdropLocalPath))
+            {
+                metadata.BackdropLocalPath = await CacheArtworkAsync(metadata.BackdropUrl, torrent.Id, "backdrop");
+            }
+
+            // 6. Persist to database
+            if (torrent.Id > 0 && _repository != null)
+            {
+                metadata = _repository.Upsert(metadata) ?? metadata;
+
+                _eventAggregator?.PublishEvent(new MediaEnrichedEvent { TorrentId = torrent.Id, Metadata = metadata });
+            }
+
+            return metadata;
         }
-
-        // 2. Parse release title & year
-        var cleanTitle = CleanReleaseTitle(torrent.Name);
-        var parsedYear = ExtractYear(torrent.Name);
-
-        // 3. Query connected Servarr APIs (Sonarr / Radarr / Lidarr) if configured
-        var arrMetadata = await QueryServarrAsync(torrent, cleanTitle);
-        if (arrMetadata != null)
+        finally
         {
-            if (!string.IsNullOrEmpty(arrMetadata.Title))
-            {
-                metadata.Title = arrMetadata.Title;
-            }
-
-            if (arrMetadata.Year.HasValue && arrMetadata.Year.Value > 0)
-            {
-                metadata.Year = arrMetadata.Year.Value;
-            }
-
-            if (!string.IsNullOrEmpty(arrMetadata.Overview))
-            {
-                metadata.Overview = arrMetadata.Overview;
-            }
-
-            if (!string.IsNullOrEmpty(arrMetadata.PosterUrl))
-            {
-                metadata.PosterUrl = arrMetadata.PosterUrl;
-            }
-
-            if (!string.IsNullOrEmpty(arrMetadata.FanartUrl))
-            {
-                metadata.BackdropUrl = arrMetadata.FanartUrl;
-            }
-
-            if (!string.IsNullOrEmpty(arrMetadata.BannerUrl))
-            {
-                metadata.BannerUrl = arrMetadata.BannerUrl;
-            }
-
-            if (arrMetadata.Genres != null && arrMetadata.Genres.Count > 0)
-            {
-                metadata.Genres = string.Join(", ", arrMetadata.Genres);
-            }
-
-            if (arrMetadata.Rating.HasValue && arrMetadata.Rating.Value > 0)
-            {
-                metadata.Rating = arrMetadata.Rating.Value;
-            }
-
-            if (!string.IsNullOrEmpty(arrMetadata.ImdbId))
-            {
-                metadata.ImdbId = arrMetadata.ImdbId;
-            }
-
-            if (arrMetadata.TmdbId.HasValue && arrMetadata.TmdbId.Value > 0)
-            {
-                metadata.TmdbId = arrMetadata.TmdbId.Value.ToString();
-            }
-
-            if (arrMetadata.TvdbId.HasValue && arrMetadata.TvdbId.Value > 0)
-            {
-                metadata.TvdbId = arrMetadata.TvdbId.Value.ToString();
-            }
-
-            if (!string.IsNullOrEmpty(arrMetadata.MediaType))
-            {
-                metadata.ArrType = NormalizeArrType(arrMetadata.MediaType);
-            }
-
-            if (arrMetadata.MediaId.HasValue && arrMetadata.MediaId.Value > 0)
-            {
-                metadata.ArrMediaId = arrMetadata.MediaId.Value;
-            }
-
-            if (arrMetadata.Actors != null && arrMetadata.Actors.Count > 0)
-            {
-                metadata.Cast = string.Join(", ", arrMetadata.Actors.Select(a => a.Name).Where(n => !string.IsNullOrWhiteSpace(n)));
-            }
+            semaphore?.Release();
         }
-
-        // 4. Fallbacks
-        if (string.IsNullOrEmpty(metadata.Title))
-        {
-            metadata.Title = torrent.Name;
-        }
-
-        if (metadata.Year == 0 && parsedYear > 0)
-        {
-            metadata.Year = parsedYear;
-        }
-
-        if (string.IsNullOrEmpty(metadata.ArrType))
-        {
-            metadata.ArrType = GuessArrType(torrent.Label, torrent.Name);
-        }
-
-        if (string.IsNullOrEmpty(metadata.MediaInfoJson))
-        {
-            var guessed = _inspector.Inspect(new MemoryStream(new byte[8]), torrent.Name);
-            if (guessed != null)
-            {
-                metadata.MediaInfoJson = JsonSerializer.Serialize(guessed);
-            }
-        }
-
-        // 5. Cache remote or local poster & backdrop
-        if (!string.IsNullOrEmpty(metadata.PosterUrl) && string.IsNullOrEmpty(metadata.PosterLocalPath))
-        {
-            metadata.PosterLocalPath = await CacheArtworkAsync(metadata.PosterUrl, torrent.Id, "poster");
-        }
-
-        if (!string.IsNullOrEmpty(metadata.BackdropUrl) && string.IsNullOrEmpty(metadata.BackdropLocalPath))
-        {
-            metadata.BackdropLocalPath = await CacheArtworkAsync(metadata.BackdropUrl, torrent.Id, "backdrop");
-        }
-
-        // 6. Persist to database
-        if (torrent.Id > 0 && _repository != null)
-        {
-            if (existing == null)
-            {
-                _repository.Insert(metadata);
-            }
-            else
-            {
-                _repository.Update(metadata);
-            }
-
-            _eventAggregator?.PublishEvent(new MediaEnrichedEvent { TorrentId = torrent.Id, Metadata = metadata });
-        }
-
-        return metadata;
     }
 
     public TorrentMediaMetadata GetMetadata(int torrentId)
@@ -280,6 +290,8 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
 
             _repository.DeleteByTorrentId(torrentId);
         }
+
+        _torrentLocks.TryRemove(torrentId, out _);
     }
 
     public void DeleteMediaCache(int torrentId)
