@@ -250,4 +250,52 @@ public class PeerConnectionLogRepositoryTest
         var all = _subject.All();
         Assert.That(all, Is.Empty);
     }
+
+    [Test]
+    public void GetConnectionCounts_should_return_encrypted_and_plaintext_counts()
+    {
+        var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+
+        _subject.Insert(new PeerConnectionLog
+        {
+            InfoHash = "aaa",
+            RemoteIp = "127.0.0.1",
+            IsEncrypted = true,
+            EventType = "Connected",
+            Timestamp = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc)
+        });
+
+        _subject.Insert(new PeerConnectionLog
+        {
+            InfoHash = "bbb",
+            RemoteIp = "127.0.0.1",
+            IsEncrypted = true,
+            EventType = "Connected",
+            Timestamp = new DateTime(2026, 1, 3, 0, 0, 0, DateTimeKind.Utc)
+        });
+
+        _subject.Insert(new PeerConnectionLog
+        {
+            InfoHash = "ccc",
+            RemoteIp = "127.0.0.1",
+            IsEncrypted = false,
+            EventType = "Connected",
+            Timestamp = new DateTime(2026, 1, 4, 0, 0, 0, DateTimeKind.Utc)
+        });
+
+        _subject.Insert(new PeerConnectionLog
+        {
+            InfoHash = "ddd",
+            RemoteIp = "127.0.0.1",
+            IsEncrypted = true,
+            EventType = "Disconnected",
+            Timestamp = new DateTime(2026, 1, 5, 0, 0, 0, DateTimeKind.Utc)
+        });
+
+        var (encrypted, plaintext) = _subject.GetConnectionCounts(start, end);
+
+        Assert.That(encrypted, Is.EqualTo(2));
+        Assert.That(plaintext, Is.EqualTo(1));
+    }
 }

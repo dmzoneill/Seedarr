@@ -10,6 +10,7 @@ public interface IPeerConnectionLogRepository : IBasicRepository<PeerConnectionL
 {
     List<PeerConnectionLog> GetByTimeRange(DateTime start, DateTime end);
     List<PeerConnectionLog> GetByInfoHash(string infoHash, DateTime start, DateTime end);
+    (int EncryptedCount, int PlaintextCount) GetConnectionCounts(DateTime start, DateTime end);
     void Purge(DateTime before);
 }
 
@@ -37,6 +38,30 @@ public class PeerConnectionLogRepository : BasicRepository<PeerConnectionLog>, I
         return connection.Query<PeerConnectionLog>(
             $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash AND \"Timestamp\" >= @Start AND \"Timestamp\" <= @End ORDER BY \"Timestamp\" DESC",
             new { InfoHash = infoHash, Start = start, End = end }).ToList();
+    }
+
+    public (int EncryptedCount, int PlaintextCount) GetConnectionCounts(DateTime start, DateTime end)
+    {
+        using var connection = _database.OpenConnection();
+        var isEncryptedValues = connection.Query<bool>(
+            $"SELECT \"IsEncrypted\" FROM \"{_table}\" WHERE \"EventType\" = 'Connected' AND \"Timestamp\" >= @Start AND \"Timestamp\" <= @End",
+            new { Start = start, End = end });
+
+        var encrypted = 0;
+        var plaintext = 0;
+        foreach (var isEncrypted in isEncryptedValues)
+        {
+            if (isEncrypted)
+            {
+                encrypted++;
+            }
+            else
+            {
+                plaintext++;
+            }
+        }
+
+        return (encrypted, plaintext);
     }
 
     public void Purge(DateTime before)

@@ -7,38 +7,117 @@ function EncryptionDonut({
   encrypted: number;
   plaintext: number;
 }) {
-  const total = encrypted + plaintext;
-  if (total === 0) return null;
+  const enc = Number(encrypted) || 0;
+  const plain = Number(plaintext) || 0;
+  const total = enc + plain;
 
-  const encPct = encrypted / total;
   const radius = 35;
   const circumference = 2 * Math.PI * radius;
+
+  if (total === 0 || isNaN(total)) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+        <svg width={84} height={84} viewBox="0 0 80 80">
+          <circle
+            cx={40}
+            cy={40}
+            r={radius}
+            fill="none"
+            stroke="var(--border-light, #333)"
+            strokeWidth={10}
+          />
+          <text
+            x={40}
+            y={45}
+            textAnchor="middle"
+            fontSize={13}
+            fontWeight={700}
+            fill="var(--text-muted, #888)"
+          >
+            0%
+          </text>
+        </svg>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            fontSize: "0.85rem",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                backgroundColor: "var(--success, #28a745)",
+                opacity: 0.5,
+              }}
+            />
+            <span style={{ color: "var(--text-muted)" }}>
+              Encrypted: <strong>0</strong>
+            </span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                backgroundColor: "var(--danger, #dc3545)",
+                opacity: 0.5,
+              }}
+            />
+            <span style={{ color: "var(--text-muted)" }}>
+              Plaintext: <strong>0</strong>
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const rawPct = enc / total;
+  const encPct = Math.max(0, Math.min(1, isNaN(rawPct) ? 0 : rawPct));
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
       <svg width={84} height={84} viewBox="0 0 80 80">
-        <circle
-          cx={40}
-          cy={40}
-          r={radius}
-          fill="none"
-          stroke="var(--success, #28a745)"
-          strokeWidth={10}
-          strokeDasharray={`${encPct * circumference} ${circumference}`}
-          strokeDashoffset={0}
-          transform="rotate(-90 40 40)"
-        />
-        <circle
-          cx={40}
-          cy={40}
-          r={radius}
-          fill="none"
-          stroke="var(--danger, #dc3545)"
-          strokeWidth={10}
-          strokeDasharray={`${(1 - encPct) * circumference} ${circumference}`}
-          strokeDashoffset={-encPct * circumference}
-          transform="rotate(-90 40 40)"
-        />
+        {encPct > 0 && (
+          <circle
+            cx={40}
+            cy={40}
+            r={radius}
+            fill="none"
+            stroke="var(--success, #28a745)"
+            strokeWidth={10}
+            strokeDasharray={
+              encPct === 1
+                ? `${circumference} 0`
+                : `${encPct * circumference} ${circumference}`
+            }
+            strokeDashoffset={0}
+            transform="rotate(-90 40 40)"
+          />
+        )}
+        {encPct < 1 && (
+          <circle
+            cx={40}
+            cy={40}
+            r={radius}
+            fill="none"
+            stroke="var(--danger, #dc3545)"
+            strokeWidth={10}
+            strokeDasharray={
+              encPct === 0
+                ? `${circumference} 0`
+                : `${(1 - encPct) * circumference} ${circumference}`
+            }
+            strokeDashoffset={encPct === 0 ? 0 : -encPct * circumference}
+            transform="rotate(-90 40 40)"
+          />
+        )}
         <text
           x={40}
           y={45}
@@ -68,7 +147,7 @@ function EncryptionDonut({
             }}
           />
           <span>
-            Encrypted: <strong>{encrypted}</strong>
+            Encrypted: <strong>{enc}</strong>
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -81,7 +160,7 @@ function EncryptionDonut({
             }}
           />
           <span>
-            Plaintext: <strong>{plaintext}</strong>
+            Plaintext: <strong>{plain}</strong>
           </span>
         </div>
       </div>
@@ -339,7 +418,8 @@ function SystemNetwork() {
               encrypted={diag.encryptedConnections}
               plaintext={diag.plaintextConnections}
             />
-            {diag.encryptedConnections + diag.plaintextConnections === 0 && (
+            {(Number(diag.encryptedConnections) || 0) +
+              (Number(diag.plaintextConnections) || 0) === 0 && (
               <p
                 style={{
                   color: "var(--text-muted)",

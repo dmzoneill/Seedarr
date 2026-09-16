@@ -64,15 +64,56 @@ public class NetworkController : Controller
         }
     }
 
+    private static readonly object _diagnosticsCacheLock = new();
+    private static readonly global::System.TimeSpan _diagnosticsCacheDuration = global::System.TimeSpan.FromSeconds(30);
+    private static global::System.DateTime _lastDiagnosticsQueryTime = global::System.DateTime.MinValue;
+    private static int _cachedEncryptedCount;
+    private static int _cachedPlaintextCount;
+
+    public static void InvalidateDiagnosticsCache()
+    {
+        lock (_diagnosticsCacheLock)
+        {
+            _lastDiagnosticsQueryTime = global::System.DateTime.MinValue;
+            _cachedEncryptedCount = 0;
+            _cachedPlaintextCount = 0;
+        }
+    }
+
     [HttpGet("diagnostics")]
     public ActionResult<NetworkDiagnostics> GetDiagnostics()
     {
         var status = _networkStatusService.GetStatus();
         var now = global::System.DateTime.UtcNow;
-        var recentLogs = _peerLogService?.GetByTimeRange(now.AddHours(-24), now) ?? new List<NzbDrone.Core.Peers.PeerConnectionLog>();
 
-        var encryptedCount = recentLogs.Count(l => l.IsEncrypted && l.EventType == "Connected");
-        var plaintextCount = recentLogs.Count(l => !l.IsEncrypted && l.EventType == "Connected");
+        int encryptedCount;
+        int plaintextCount;
+
+        lock (_diagnosticsCacheLock)
+        {
+            if (now - _lastDiagnosticsQueryTime < _diagnosticsCacheDuration)
+            {
+                encryptedCount = _cachedEncryptedCount;
+                plaintextCount = _cachedPlaintextCount;
+            }
+            else
+            {
+                if (_peerLogService != null)
+                {
+                    (encryptedCount, plaintextCount) = _peerLogService.GetConnectionCounts(now.AddHours(-24), now);
+                }
+                else
+                {
+                    encryptedCount = 0;
+                    plaintextCount = 0;
+                }
+
+                _cachedEncryptedCount = encryptedCount;
+                _cachedPlaintextCount = plaintextCount;
+                _lastDiagnosticsQueryTime = now;
+            }
+        }
+
         var totalConnections = encryptedCount + plaintextCount;
 
         return Ok(new NetworkDiagnostics
