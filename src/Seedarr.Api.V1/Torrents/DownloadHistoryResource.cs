@@ -26,4 +26,8 @@ public class DownloadHistoryResource : RestResource
     public string RemovalReason { get; set; }
     public string DataJson { get; set; }
     public MediaMetadata Metadata { get; set; }
+    public string SavePath { get; set; }
+    public string Category { get; set; }
+    public int? DownloadClientId { get; set; }
+    public string SourcePath { get; set; }
 }

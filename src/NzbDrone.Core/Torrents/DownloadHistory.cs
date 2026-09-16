@@ -24,4 +24,16 @@ public class DownloadHistory : ModelBase
     public string Status { get; set; } = "Active";
     public string RemovalReason { get; set; }
     public string DataJson { get; set; }
+
+    [Ignore]
+    public string SavePath { get; set; }
+
+    [Ignore]
+    public string Category { get; set; }
+
+    [Ignore]
+    public int? DownloadClientId { get; set; }
+
+    [Ignore]
+    public string SourcePath { get; set; }
 }
