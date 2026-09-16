@@ -36,9 +36,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
 
   const handleLocalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (!password) {
       setError(
-        t("login.enterPassword", undefined, "Please enter your API Key or password."),
+        t("login.enterPassword", undefined, "Please enter your password or API key."),
       );
       return;
     }
@@ -51,7 +52,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
     } catch (err: any) {
       setError(
         err?.message ||
-          t("login.invalidCredentials", undefined, "Invalid credentials or API Key."),
+          t("login.invalidCredentials", undefined, "Invalid credentials. Please verify your username and password or API key."),
       );
     } finally {
       setLoading(false);
@@ -252,6 +253,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
+              disabled={loading}
               placeholder="admin"
               style={{
                 width: "100%",
@@ -263,6 +265,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
+                opacity: loading ? 0.7 : 1,
+                cursor: loading ? "not-allowed" : "text",
               }}
             />
           </div>
@@ -283,6 +287,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
               placeholder="••••••••••••••••"
               autoFocus
               style={{
@@ -295,6 +300,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 fontSize: "14px",
                 outline: "none",
                 boxSizing: "border-box",
+                opacity: loading ? 0.7 : 1,
+                cursor: loading ? "not-allowed" : "text",
               }}
             />
           </div>
@@ -314,18 +321,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
                 gap: "8px",
                 color: "#94A3B8",
                 fontSize: "13px",
-                cursor: "pointer",
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.7 : 1,
               }}
             >
               <input
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={loading}
                 style={{
                   accentColor: "#c8a84e",
                   width: "16px",
                   height: "16px",
-                  cursor: "pointer",
+                  cursor: loading ? "not-allowed" : "pointer",
                 }}
               />
               {t("auth.rememberMe", undefined, "Remember me")}
