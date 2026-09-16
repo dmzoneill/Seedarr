@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using NSubstitute;
 using NUnit.Framework;
@@ -141,6 +142,87 @@ namespace NzbDrone.Core.Test.Network
             Assert.That(handler.Proxy, Is.Not.Null);
             var proxy = handler.Proxy as WebProxy;
             Assert.That(proxy.Credentials, Is.Not.Null);
+            var creds = proxy.Credentials as NetworkCredential;
+            Assert.That(creds, Is.Not.Null);
+            Assert.That(creds.UserName, Is.EqualTo("user"));
+            Assert.That(creds.Password, Is.EqualTo("pass"));
+        }
+
+        [Test]
+        public void CreateHandler_should_return_socks5h_proxy_handler_when_socks5_enabled()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("Socks5");
+            _configService.GetValue("ProxyHost", "").Returns("proxy.example.com");
+            _configService.GetValueInt("ProxyPort", 8080).Returns(1080);
+
+            var handler = _subject.CreateHandler();
+
+            Assert.That(handler, Is.Not.Null);
+            Assert.That(handler.Proxy, Is.Not.Null);
+            Assert.That(handler.UseProxy, Is.True);
+            var proxy = handler.Proxy as WebProxy;
+            Assert.That(proxy, Is.Not.Null);
+            Assert.That(proxy.Address, Is.EqualTo(new Uri("socks5h://proxy.example.com:1080")));
+            Assert.That(proxy.Address.Scheme, Is.EqualTo("socks5h"));
+
+            var iProxy = handler.Proxy as IWebProxy;
+            Assert.That(iProxy, Is.Not.Null);
+            var transportUri = iProxy.GetProxy(new Uri("http://tracker.example.com"));
+            Assert.That(transportUri.Scheme, Is.EqualTo("socks5"));
+        }
+
+        [Test]
+        public void CreateHandler_should_set_credentials_when_socks5_auth_enabled()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("Socks5");
+            _configService.GetValue("ProxyHost", "").Returns("proxy.example.com");
+            _configService.GetValueInt("ProxyPort", 8080).Returns(1080);
+            _configService.GetValue("ProxyUsername", "").Returns("socksuser");
+            _configService.GetValue("ProxyPassword", "").Returns("sockspass");
+            _configService.ProxyAuthEnabled.Returns(true);
+
+            var handler = _subject.CreateHandler();
+
+            Assert.That(handler, Is.Not.Null);
+            Assert.That(handler.Proxy, Is.Not.Null);
+            var proxy = handler.Proxy as WebProxy;
+            Assert.That(proxy, Is.Not.Null);
+            Assert.That(proxy.Credentials, Is.Not.Null);
+            var creds = proxy.Credentials as NetworkCredential;
+            Assert.That(creds, Is.Not.Null);
+            Assert.That(creds.UserName, Is.EqualTo("socksuser"));
+            Assert.That(creds.Password, Is.EqualTo("sockspass"));
+        }
+
+        [Test]
+        public void CreateHandler_should_not_set_credentials_when_auth_disabled()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("Socks5");
+            _configService.GetValue("ProxyHost", "").Returns("proxy.example.com");
+            _configService.GetValueInt("ProxyPort", 8080).Returns(1080);
+            _configService.GetValue("ProxyUsername", "").Returns("user");
+            _configService.GetValue("ProxyPassword", "").Returns("pass");
+            _configService.ProxyAuthEnabled.Returns(false);
+
+            var handler = _subject.CreateHandler();
+
+            Assert.That(handler, Is.Not.Null);
+            Assert.That(handler.Proxy, Is.Not.Null);
+            var proxy = handler.Proxy as WebProxy;
+            Assert.That(proxy, Is.Not.Null);
+            Assert.That(proxy.Credentials, Is.Null);
+        }
+
+        [Test]
+        public void CreateHandler_should_return_plain_handler_when_host_is_empty()
+        {
+            _configService.GetValue("ProxyType", "None").Returns("Socks5");
+            _configService.GetValue("ProxyHost", "").Returns("");
+
+            var handler = _subject.CreateHandler();
+
+            Assert.That(handler, Is.Not.Null);
+            Assert.That(handler.Proxy, Is.Null);
         }
     }
 }

@@ -21,7 +21,7 @@ public interface IProxySettingsProvider
     string Username { get; }
     string Password { get; }
     bool IsEnabled { get; }
-    HttpClientHandler CreateHandler();
+    SocketsHttpHandler CreateHandler();
 }
 
 public class ProxySettingsProvider : IProxySettingsProvider
@@ -42,35 +42,37 @@ public class ProxySettingsProvider : IProxySettingsProvider
     public string Password => _configService.GetValue("ProxyPassword", "");
     public bool IsEnabled => Type != ProxyType.None && !string.IsNullOrEmpty(Host);
 
-    public HttpClientHandler CreateHandler()
+    public SocketsHttpHandler CreateHandler()
     {
         if (!IsEnabled)
         {
-            return new HttpClientHandler();
+            return new SocketsHttpHandler();
         }
 
         var proxyUri = Type switch
         {
             ProxyType.Http => $"http://{Host}:{Port}",
-            ProxyType.Socks5 => $"socks5://{Host}:{Port}",
+            ProxyType.Socks5 => $"socks5h://{Host}:{Port}",
             _ => null
         };
 
         if (proxyUri == null)
         {
-            return new HttpClientHandler();
+            return new SocketsHttpHandler();
         }
 
         _logger.Debug("Using proxy: {0}", proxyUri);
 
-        var proxy = new WebProxy(proxyUri);
+        var proxy = Type == ProxyType.Socks5
+            ? (WebProxy)new Socks5hWebProxy(proxyUri)
+            : new WebProxy(proxyUri);
 
         if (_configService.ProxyAuthEnabled)
         {
             proxy.Credentials = new NetworkCredential(Username, Password);
         }
 
-        return new HttpClientHandler
+        return new SocketsHttpHandler
         {
             Proxy = proxy,
             UseProxy = true
