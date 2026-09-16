@@ -105,4 +105,36 @@ public class DownloadClientControllerTests : IntegrationTestBase
         var response = await PostJsonAsync("/api/v1/downloadclients/999999/import/deadbeef", new { });
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
     }
+
+    [Test]
+    public async Task Create_with_invalid_port_returns_bad_request()
+    {
+        var clientDef = new
+        {
+            name = "Invalid Port Client",
+            clientType = "QBitTorrent",
+            host = "localhost",
+            port = 70000,
+            enable = true
+        };
+
+        var response = await PostJsonAsync("/api/v1/downloadclients", clientDef);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task Create_with_empty_name_returns_bad_request()
+    {
+        var clientDef = new
+        {
+            name = "",
+            clientType = "QBitTorrent",
+            host = "localhost",
+            port = 8080,
+            enable = true
+        };
+
+        var response = await PostJsonAsync("/api/v1/downloadclients", clientDef);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
 }

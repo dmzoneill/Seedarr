@@ -607,6 +607,7 @@ export interface DownloadClientDefinition {
   implementation: string;
   configContract: string;
   enable: boolean;
+  tags?: number[];
 }
 
 export interface DownloadClientRemoteItem {
