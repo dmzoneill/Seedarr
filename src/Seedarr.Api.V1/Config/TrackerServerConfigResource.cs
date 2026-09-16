@@ -7,9 +7,9 @@ public class TrackerServerConfigResource : RestResource
 {
     public bool TrackerServerEnabled { get; set; }
     public bool TrackerHttpEnabled { get; set; } = true;
-    public int TrackerHttpPort { get; set; } = 9696;
+    public int TrackerHttpPort { get; set; } = 6969;
     public bool TrackerUdpEnabled { get; set; } = true;
-    public int TrackerUdpPort { get; set; } = 9696;
+    public int TrackerUdpPort { get; set; } = 6969;
     public string TrackerBindAddress { get; set; } = "0.0.0.0";
     public int TrackerAnnounceInterval { get; set; } = 1800;
     public int TrackerMaxPeersPerAnnounce { get; set; } = 50;

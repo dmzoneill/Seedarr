@@ -16,7 +16,7 @@ export function TrackerServerTab() {
     id: 1,
     trackerServerEnabled: false,
     trackerHttpEnabled: true,
-    trackerHttpPort: 9696,
+    trackerHttpPort: 6969,
     trackerUdpEnabled: true,
     trackerUdpPort: 6969,
     trackerBindAddress: "0.0.0.0",
@@ -274,8 +274,29 @@ export function TrackerServerTab() {
           min={1}
           max={65535}
           disabled={!form.trackerHttpEnabled}
-          hint="Port for HTTP announces (e.g. 9696)"
+          hint="Port for HTTP announces (e.g. 6969)"
         />
+        {form.trackerHttpPort === 9696 && (
+          <div
+            style={{
+              marginTop: "0.5rem",
+              padding: "0.6rem 0.8rem",
+              borderRadius: "6px",
+              backgroundColor: "rgba(245, 158, 11, 0.15)",
+              border: "1px solid rgba(245, 158, 11, 0.4)",
+              color: "#fbbf24",
+              fontSize: "0.85rem",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+            }}
+          >
+            <span>⚠️</span>
+            <span>
+              Port 9696 is the default port for Prowlarr. If running Prowlarr on the same network interface, choose an alternate port (e.g. 7070) to avoid socket collisions.
+            </span>
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard
@@ -308,15 +329,17 @@ export function TrackerServerTab() {
           value={form.trackerAnnounceInterval}
           onChange={(v) => set("trackerAnnounceInterval", v)}
           min={60}
+          max={86400}
           suffix="seconds"
-          hint="Standard announce interval returned to connecting peers"
+          hint="Standard announce interval returned to connecting peers (60 - 86400s)"
         />
         <NumberInput
           label="Max Peers Per Announce"
           value={form.trackerMaxPeersPerAnnounce}
           onChange={(v) => set("trackerMaxPeersPerAnnounce", v)}
           min={1}
-          hint="Maximum peer IPs returned per announce response"
+          max={200}
+          hint="Maximum peer IPs returned per announce response (1 - 200)"
         />
         <Toggle
           label="Enable Scrape"
