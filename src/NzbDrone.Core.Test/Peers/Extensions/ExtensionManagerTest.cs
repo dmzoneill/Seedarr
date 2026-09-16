@@ -5,6 +5,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers.Extensions;
+using NzbDrone.Core.Simulation.ClientBehavior;
 
 namespace NzbDrone.Core.Test.Peers.Extensions;
 
@@ -167,6 +168,43 @@ public class ExtensionManagerTest
         _configService.ExtensionFastExtension.Returns(true);
 
         Assert.That(_manager.FastExtensionEnabled, Is.True);
+    }
+
+    [Test]
+    public void BuildExtensionHandshake_should_contain_v_key_with_default_client_version()
+    {
+        var result = _manager.BuildExtensionHandshake();
+        var dict = ParseBencode(result);
+
+        Assert.That(dict.ContainsKey("v"), Is.True);
+        Assert.That(((BString)dict["v"]).ToString(), Does.StartWith("Seedarr/"));
+    }
+
+    [Test]
+    public void BuildExtensionHandshake_should_populate_v_key_with_client_profile_user_agent()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.UserAgent.Returns("Transmission/3.00");
+
+        var result = _manager.BuildExtensionHandshake(false, profile);
+        var dict = ParseBencode(result);
+
+        Assert.That(dict.ContainsKey("v"), Is.True);
+        Assert.That(((BString)dict["v"]).ToString(), Is.EqualTo("Transmission/3.00"));
+    }
+
+    [Test]
+    public void BuildExtensionHandshake_should_fallback_to_client_profile_name_when_user_agent_is_null()
+    {
+        var profile = Substitute.For<IClientProfile>();
+        profile.UserAgent.Returns((string)null);
+        profile.Name.Returns("qBittorrent 4.4.2");
+
+        var result = _manager.BuildExtensionHandshake(false, profile);
+        var dict = ParseBencode(result);
+
+        Assert.That(dict.ContainsKey("v"), Is.True);
+        Assert.That(((BString)dict["v"]).ToString(), Is.EqualTo("qBittorrent 4.4.2"));
     }
 
     private static BDictionary ParseBencode(byte[] data)

@@ -770,10 +770,11 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
                 return;
             }
 
-            var peerId = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                ? (_clientBehaviorSimulator.GetActiveProfile(torrent.IsPrivate)?.GeneratePeerId() ?? "-SD1000-000000000000")
-                : "-SD1000-000000000000";
-            connection.SendHandshake(torrent.InfoHash, peerId);
+            var profile = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                ? _clientBehaviorSimulator.GetActiveProfile(torrent.IsPrivate)
+                : null;
+            var peerId = profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+            connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile);
 
             if (!connection.ReceiveHandshake())
             {
@@ -791,7 +792,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
 
             if (connection.SupportsExtensionProtocol && _extensionManager != null)
             {
-                var extHandshake = _extensionManager.BuildExtensionHandshake(torrent.IsPrivate);
+                var extHandshake = _extensionManager.BuildExtensionHandshake(torrent.IsPrivate, profile);
                 var payload = new byte[extHandshake.Length + 1];
                 payload[0] = 0;
                 Array.Copy(extHandshake, 0, payload, 1, extHandshake.Length);
@@ -935,8 +936,11 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
                 return;
             }
 
-            var peerId = "-SD1000-000000000000";
-            connection.SendHandshake(torrent.InfoHash, peerId);
+            var profile = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                ? _clientBehaviorSimulator.GetActiveProfile(torrent.IsPrivate)
+                : null;
+            var peerId = profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+            connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile);
 
             _logger.Debug(
                 "Peer {0} connected (encrypted: {1}, method: {2})",
@@ -951,7 +955,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
 
             if (connection.SupportsExtensionProtocol && _extensionManager != null)
             {
-                var extHandshake = _extensionManager.BuildExtensionHandshake(torrent.IsPrivate);
+                var extHandshake = _extensionManager.BuildExtensionHandshake(torrent.IsPrivate, profile);
                 var payload = new byte[extHandshake.Length + 1];
                 payload[0] = 0;
                 Array.Copy(extHandshake, 0, payload, 1, extHandshake.Length);

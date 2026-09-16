@@ -1,13 +1,15 @@
 using System.Collections.Generic;
 using BencodeNET.Objects;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Simulation.ClientBehavior;
 
 namespace NzbDrone.Core.Peers.Extensions;
 
 public interface IExtensionManager
 {
     Dictionary<string, int> GetSupportedExtensions(bool isPrivate = false);
-    byte[] BuildExtensionHandshake(bool isPrivate = false);
+    byte[] BuildExtensionHandshake(bool isPrivate = false, IClientProfile clientProfile = null);
     bool FastExtensionEnabled { get; }
 }
 
@@ -46,7 +48,7 @@ public class ExtensionManager : IExtensionManager
         return extensions;
     }
 
-    public byte[] BuildExtensionHandshake(bool isPrivate = false)
+    public byte[] BuildExtensionHandshake(bool isPrivate = false, IClientProfile clientProfile = null)
     {
         var extensions = GetSupportedExtensions(isPrivate);
         var mDict = new BDictionary();
@@ -55,9 +57,12 @@ public class ExtensionManager : IExtensionManager
             mDict[kvp.Key] = new BNumber(kvp.Value);
         }
 
+        var clientVersion = clientProfile?.UserAgent ?? clientProfile?.Name ?? (BuildInfo.Version != null ? $"Seedarr/{BuildInfo.Version}" : "Seedarr/1.0.0");
+
         var dict = new BDictionary
         {
-            ["m"] = mDict
+            ["m"] = mDict,
+            ["v"] = new BString(clientVersion)
         };
 
         return dict.EncodeAsBytes();
