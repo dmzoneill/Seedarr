@@ -134,6 +134,9 @@ public class Startup
             options.Cookie.Name = "Seedarr_Auth";
             options.Cookie.HttpOnly = true;
             options.Cookie.SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax;
+            options.Cookie.SecurePolicy = Microsoft.AspNetCore.Http.CookieSecurePolicy.SameAsRequest;
+            var urlBase = configFileProvider?.UrlBase?.Trim();
+            options.Cookie.Path = string.IsNullOrWhiteSpace(urlBase) ? "/" : (urlBase.StartsWith('/') ? urlBase : "/" + urlBase);
             options.ExpireTimeSpan = TimeSpan.FromDays(30);
             options.SlidingExpiration = true;
             options.LoginPath = "/login";
@@ -230,10 +233,17 @@ public class Startup
     {
         app.UseExceptionHandler();
 
-        app.UseForwardedHeaders(new ForwardedHeadersOptions
+        var forwardedHeadersOptions = new ForwardedHeadersOptions
         {
-            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
-        });
+            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost,
+            ForwardLimit = null,
+        };
+#pragma warning disable ASPDEPR005
+        forwardedHeadersOptions.KnownNetworks.Clear();
+#pragma warning restore ASPDEPR005
+        forwardedHeadersOptions.KnownIPNetworks.Clear();
+        forwardedHeadersOptions.KnownProxies.Clear();
+        app.UseForwardedHeaders(forwardedHeadersOptions);
 
         var configFileProvider = app.Services.GetRequiredService<IConfigFileProvider>();
 
