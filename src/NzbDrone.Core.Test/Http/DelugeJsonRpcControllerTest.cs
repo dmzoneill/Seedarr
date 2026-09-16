@@ -156,4 +156,74 @@ public class DelugeJsonRpcControllerTest
         Assert.That(resDoc.RootElement.ValueKind, Is.EqualTo(JsonValueKind.Array));
         Assert.That(resDoc.RootElement.GetArrayLength(), Is.EqualTo(2));
     }
+
+    [Test]
+    public async Task HandleRpc_LabelGetLabels_Returns_Merged_TagService_And_Torrent_Labels()
+    {
+        _tagService.GetAll().Returns(new List<Tag>
+        {
+            new Tag { Id = 1, Label = "delugeTag1" },
+            new Tag { Id = 2, Label = "delugeTag2" },
+        });
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Label = "delugeTag2, delugeTag3; delugeTag4",
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var json = "{\"method\": \"label.get_labels\", \"params\": [], \"id\": 123}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)result;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var resultArr = resDoc.RootElement.GetProperty("result");
+        Assert.That(resultArr.ValueKind, Is.EqualTo(JsonValueKind.Array));
+
+        var labels = new List<string>();
+        foreach (var item in resultArr.EnumerateArray())
+        {
+            labels.Add(item.GetString());
+        }
+
+        Assert.That(labels, Does.Contain("delugeTag1"));
+        Assert.That(labels, Does.Contain("delugeTag2"));
+        Assert.That(labels, Does.Contain("delugeTag3"));
+        Assert.That(labels, Does.Contain("delugeTag4"));
+        Assert.That(labels.Count, Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task HandleRpc_LabelRemove_Deletes_From_TagService_And_Torrents()
+    {
+        var tag1 = new Tag { Id = 5, Label = "removetag" };
+        var tag2 = new Tag { Id = 6, Label = "keep" };
+        _tagService.GetAll().Returns(new List<Tag> { tag1, tag2 });
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Label = "removetag, keep",
+            TagIds = new List<int> { 5, 6 },
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _tagService.SyncTagsFromLabels(Arg.Any<IEnumerable<string>>()).Returns(new List<int> { 6 });
+
+        var json = "{\"method\": \"label.remove\", \"params\": [\"removetag\"], \"id\": 456}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+
+        _tagService.Received(1).Delete(5);
+        _tagService.DidNotReceive().Delete(6);
+        Assert.That(torrent.Label, Is.EqualTo("keep"));
+        Assert.That(torrent.TagIds, Is.EqualTo(new List<int> { 6 }));
+        _torrentService.Received(1).Update(torrent);
+    }
 }
