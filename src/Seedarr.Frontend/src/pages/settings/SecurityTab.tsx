@@ -111,6 +111,7 @@ export function SecurityTab() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [revealedApiKey, setRevealedApiKey] = useState<string | null>(null);
   const [loadingApiKey, setLoadingApiKey] = useState(false);
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
 
   useEffect(() => {
     if (config) {
@@ -136,14 +137,19 @@ export function SecurityTab() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && editingProvider) {
-        setEditingProvider(null);
-        setShowSecret(false);
+      if (e.key === "Escape") {
+        if (showRegenerateModal) {
+          setShowRegenerateModal(false);
+        }
+        if (editingProvider) {
+          setEditingProvider(null);
+          setShowSecret(false);
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [editingProvider]);
+  }, [editingProvider, showRegenerateModal]);
 
   const loadProviders = async () => {
     try {
@@ -677,7 +683,7 @@ export function SecurityTab() {
             <button
               type="button"
               className="btn btn-outline"
-              onClick={generateApiKey}
+              onClick={() => setShowRegenerateModal(true)}
               style={{ marginBottom: "0.25rem", whiteSpace: "nowrap" }}
             >
               🔄 Regenerate
@@ -960,6 +966,71 @@ export function SecurityTab() {
                   Save Provider
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* API Key Regeneration Confirmation Modal */}
+      {showRegenerateModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => setShowRegenerateModal(false)}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: "520px" }}
+          >
+            <h2
+              className="modal-title"
+              style={{
+                fontSize: "1.25rem",
+                fontWeight: 700,
+                margin: "0 0 16px 0",
+              }}
+            >
+              Regenerate API Key
+            </h2>
+            <div
+              style={{
+                backgroundColor: "var(--danger-bg-alert, rgba(239, 68, 68, 0.1))",
+                border: "1px solid var(--danger-border-alert, rgba(239, 68, 68, 0.3))",
+                color: "var(--danger, #ef4444)",
+                padding: "12px 16px",
+                borderRadius: "6px",
+                fontSize: "0.9rem",
+                lineHeight: "1.5",
+                marginBottom: "20px",
+              }}
+            >
+              Regenerating the API key will immediately invalidate the existing token and disconnect Sonarr, Radarr, Lidarr, Prowlarr, and external automation scripts. Are you sure you want to regenerate?
+            </div>
+            <div
+              className="modal-actions"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "8px",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => setShowRegenerateModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => {
+                  setShowRegenerateModal(false);
+                  generateApiKey();
+                }}
+              >
+                Regenerate API Key
+              </button>
             </div>
           </div>
         </div>
