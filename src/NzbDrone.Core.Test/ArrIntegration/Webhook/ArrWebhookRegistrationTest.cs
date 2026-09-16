@@ -55,6 +55,44 @@ public class ArrWebhookRegistrationTest
     }
 
     [Test]
+    public void GetSeedarrBaseUrl_should_use_ssl_port_when_enable_ssl_is_true()
+    {
+        _configFileProvider.BindAddress.Returns("myhost");
+        _configFileProvider.Port.Returns(8080);
+        _configFileProvider.SslPort.Returns(8443);
+        _configFileProvider.EnableSsl.Returns(true);
+        _configFileProvider.UrlBase.Returns("");
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("https://myhost:8443"));
+    }
+
+    [TestCase("seedarr", "/seedarr")]
+    [TestCase("seedarr/", "/seedarr")]
+    [TestCase("/seedarr", "/seedarr")]
+    [TestCase("/seedarr/", "/seedarr")]
+    [TestCase("", "")]
+    [TestCase(null, "")]
+    public void GetSeedarrBaseUrl_should_cleanly_join_url_base(string urlBaseInput, string expectedSuffix)
+    {
+        _configFileProvider.BindAddress.Returns("myhost");
+        _configFileProvider.Port.Returns(8080);
+        _configFileProvider.EnableSsl.Returns(false);
+        _configFileProvider.UrlBase.Returns(urlBaseInput);
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo($"http://myhost:8080{expectedSuffix}"));
+    }
+
+    [Test]
     public void GetSeedarrBaseUrl_should_replace_wildcard_with_hostname()
     {
         _configFileProvider.BindAddress.Returns("*");

@@ -255,6 +255,10 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             return envUrl.TrimEnd('/');
         }
 
+        var scheme = _configFileProvider.EnableSsl ? "https" : "http";
+        var port = _configFileProvider.EnableSsl ? _configFileProvider.SslPort : _configFileProvider.Port;
+        var urlBase = NormalizeUrlBase(_configFileProvider.UrlBase);
+
         var connectionHost = connection?.WebhookHost;
         if (!string.IsNullOrWhiteSpace(connectionHost))
         {
@@ -264,24 +268,21 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                 return connectionHost.TrimEnd('/');
             }
 
-            var scheme = _configFileProvider.EnableSsl ? "https" : "http";
-            return $"{scheme}://{connectionHost}:{_configFileProvider.Port}{_configFileProvider.UrlBase ?? ""}";
+            return $"{scheme}://{connectionHost}:{port}{urlBase}";
         }
 
         var envHost = Environment.GetEnvironmentVariable("SEEDARR_HOST");
         if (!string.IsNullOrWhiteSpace(envHost))
         {
-            var scheme = _configFileProvider.EnableSsl ? "https" : "http";
-            return $"{scheme}://{envHost}:{_configFileProvider.Port}{_configFileProvider.UrlBase ?? ""}";
+            return $"{scheme}://{envHost}:{port}{urlBase}";
         }
 
         var bindAddress = _configFileProvider.BindAddress;
-        var port = _configFileProvider.Port;
-        var urlBase = _configFileProvider.UrlBase ?? "";
 
         if (string.IsNullOrWhiteSpace(bindAddress) ||
             bindAddress == "*" ||
             bindAddress == "0.0.0.0" ||
+            bindAddress == "::" ||
             IsHexContainerId(bindAddress))
         {
             if (IsLoopbackOrLocalhost(connection?.Url))
@@ -295,8 +296,18 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             }
         }
 
-        var schemeDefault = _configFileProvider.EnableSsl ? "https" : "http";
-        return $"{schemeDefault}://{bindAddress}:{port}{urlBase}";
+        return $"{scheme}://{bindAddress}:{port}{urlBase}";
+    }
+
+    private static string NormalizeUrlBase(string urlBase)
+    {
+        if (string.IsNullOrWhiteSpace(urlBase))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = urlBase.Trim().Trim('/');
+        return string.IsNullOrEmpty(trimmed) ? string.Empty : "/" + trimmed;
     }
 
     private static bool IsLoopbackOrLocalhost(string url)

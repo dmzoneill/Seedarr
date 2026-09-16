@@ -252,6 +252,23 @@ public class Startup
         app.UseMiddleware<HostHeaderValidationMiddleware>();
         app.UseMiddleware<CsrfProtectionMiddleware>();
 
+        var urlBase = configFileProvider.UrlBase?.Trim().Trim('/');
+        var pathBase = !string.IsNullOrEmpty(urlBase) ? "/" + urlBase : string.Empty;
+        if (!string.IsNullOrEmpty(pathBase))
+        {
+            app.UsePathBase(pathBase);
+            app.Use(async (context, next) =>
+            {
+                if (context.Request.Path == "/" && !context.Request.PathBase.HasValue)
+                {
+                    context.Response.Redirect(pathBase + "/");
+                    return;
+                }
+
+                await next();
+            });
+        }
+
         app.UseDefaultFiles();
         app.UseStaticFiles(new StaticFileOptions
         {
@@ -356,9 +373,9 @@ public class Startup
             swaggerApp.UseSwagger();
             swaggerApp.UseSwaggerUI(c =>
             {
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Seedarr REST API v1");
+                c.SwaggerEndpoint($"{pathBase}/swagger/v1/swagger.json", "Seedarr REST API v1");
                 c.RoutePrefix = "swagger";
-                c.InjectStylesheet("/swagger-custom.css");
+                c.InjectStylesheet($"{pathBase}/swagger-custom.css");
                 c.ConfigObject.PersistAuthorization = true;
             });
         });
