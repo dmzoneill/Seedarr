@@ -58,6 +58,7 @@ export class ExponentialBackoffRetryPolicy implements IRetryPolicy {
 
 let connection: HubConnection | null = null;
 let startPromise: Promise<void> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 const statusListeners = new Set<(status: ConnectionStatus) => void>();
 
 function notifyStatus(status: ConnectionStatus) {
@@ -91,10 +92,25 @@ export function getSignalRConnection(): HubConnection {
 
     connection.onreconnecting(() => notifyStatus("reconnecting"));
     connection.onreconnected(() => notifyStatus("connected"));
-    connection.onclose(() => {
+    connection.onclose((error) => {
       notifyStatus("disconnected");
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      const errorMsg =
+        error?.message || (typeof error === "string" ? error : "") || "";
+      if (
+        errorMsg.includes("401") ||
+        errorMsg.includes("403") ||
+        errorMsg.includes("Unauthorized") ||
+        errorMsg.includes("Forbidden")
+      ) {
+        return;
+      }
       // If closed, trigger reconnection after a short delay
-      setTimeout(() => {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
         if (connection?.state === HubConnectionState.Disconnected) {
           startSignalR();
         }
@@ -105,7 +121,14 @@ export function getSignalRConnection(): HubConnection {
 }
 
 export async function startSignalR(): Promise<void> {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   const conn = getSignalRConnection();
+  if (conn.state === HubConnectionState.Connecting) {
+    return startPromise ?? undefined;
+  }
   if (conn.state === HubConnectionState.Disconnected) {
     if (!startPromise) {
       startPromise = conn
@@ -126,14 +149,27 @@ export async function startSignalR(): Promise<void> {
 }
 
 export async function reconnectSignalR(): Promise<void> {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
   const conn = getSignalRConnection();
   if (conn.state === HubConnectionState.Connected) {
     return;
   }
-  if (
-    conn.state === HubConnectionState.Connecting ||
-    conn.state === HubConnectionState.Reconnecting
-  ) {
+  if (conn.state === HubConnectionState.Connecting) {
+    if (startPromise) {
+      try {
+        await startPromise;
+      } catch {
+        // ignore in-flight start error
+      }
+    }
+    if (conn.state === HubConnectionState.Connected) {
+      return;
+    }
+  }
+  if (conn.state === HubConnectionState.Reconnecting) {
     try {
       await conn.stop();
     } catch {

@@ -700,14 +700,18 @@ function App() {
       </aside>
 
       <div className="main-wrapper">
-        {isReconnecting && (
+        {!connected && (
           <div
             role="alert"
             className="signalr-reconnection-banner"
             style={{
-              backgroundColor: "rgba(245, 158, 11, 0.15)",
-              borderBottom: "1px solid rgba(245, 158, 11, 0.4)",
-              color: "#fbbf24",
+              backgroundColor: isReconnecting
+                ? "rgba(245, 158, 11, 0.15)"
+                : "rgba(239, 68, 68, 0.15)",
+              borderBottom: isReconnecting
+                ? "1px solid rgba(245, 158, 11, 0.4)"
+                : "1px solid rgba(239, 68, 68, 0.4)",
+              color: isReconnecting ? "#fbbf24" : "#fca5a5",
               padding: "0.5rem 1.25rem",
               display: "flex",
               alignItems: "center",
@@ -730,18 +734,28 @@ function App() {
                   width: "8px",
                   height: "8px",
                   borderRadius: "50%",
-                  backgroundColor: "#f59e0b",
+                  backgroundColor: isReconnecting ? "#f59e0b" : "#ef4444",
                   display: "inline-block",
-                  boxShadow: "0 0 8px #f59e0b",
-                  animation: "skeleton-pulse 1.5s infinite ease-in-out",
+                  boxShadow: isReconnecting
+                    ? "0 0 8px #f59e0b"
+                    : "0 0 8px #ef4444",
+                  animation: isReconnecting
+                    ? "skeleton-pulse 1.5s infinite ease-in-out"
+                    : undefined,
                 }}
               />
               <span>
-                {t(
-                  "signalr.reconnecting",
-                  undefined,
-                  "Real-time connection lost. Attempting to reconnect...",
-                )}
+                {isReconnecting
+                  ? t(
+                      "signalr.reconnecting",
+                      undefined,
+                      "Real-time connection lost. Attempting to reconnect...",
+                    )
+                  : t(
+                      "signalr.disconnected",
+                      undefined,
+                      "Disconnected from server. Click Retry Now to reconnect.",
+                    )}
               </span>
             </div>
             <button
@@ -749,8 +763,8 @@ function App() {
               onClick={() => reconnect()}
               className="btn btn-small"
               style={{
-                backgroundColor: "#f59e0b",
-                color: "#000",
+                backgroundColor: isReconnecting ? "#f59e0b" : "#ef4444",
+                color: isReconnecting ? "#000" : "#fff",
                 fontWeight: 600,
                 border: "none",
                 padding: "0.2rem 0.65rem",
