@@ -9,7 +9,7 @@ import {
   useArrSync,
 } from "../../api/hooks";
 import type { ArrConnection, ArrTestResult } from "../../api/types";
-import { TextInput, SelectInput, Toggle, SectionCard } from "./shared";
+import { TextInput, SelectInput, Toggle, NumberInput, SectionCard } from "./shared";
 
 export function ConnectionsTab() {
   const { data: connections, isLoading } = useArrConnections();
@@ -33,6 +33,7 @@ export function ConnectionsTab() {
     url: "http://localhost:8989",
     apiKey: "",
     enable: true,
+    syncIntervalMinutes: 60,
     syncEnabled: true,
     enableAutomaticAdd: true,
     webhookEnabled: true,
@@ -47,12 +48,19 @@ export function ConnectionsTab() {
 
   const handleSave = () => {
     if (!editing) return;
-    if (editing.id) {
-      updateMutation.mutate(editing as ArrConnection, {
+    const toSave: Partial<ArrConnection> = {
+      ...editing,
+      syncIntervalMinutes: Math.min(
+        1440,
+        Math.max(5, editing.syncIntervalMinutes ?? 60),
+      ),
+    };
+    if (toSave.id) {
+      updateMutation.mutate(toSave as ArrConnection, {
         onSuccess: () => setEditing(null),
       });
     } else {
-      createMutation.mutate(editing, { onSuccess: () => setEditing(null) });
+      createMutation.mutate(toSave, { onSuccess: () => setEditing(null) });
     }
   };
 
@@ -186,7 +194,7 @@ export function ConnectionsTab() {
                 )}
                 {conn.syncEnabled && (
                   <span className="provider-card-badge provider-card-badge-blue">
-                    Sync
+                    Sync ({conn.syncIntervalMinutes ?? 60}m)
                   </span>
                 )}
                 {conn.enableAutomaticAdd && (
@@ -303,6 +311,18 @@ export function ConnectionsTab() {
               checked={editing.syncEnabled ?? true}
               onChange={(v) => setEditing({ ...editing, syncEnabled: v })}
             />
+            {editing.syncEnabled !== false && (
+              <NumberInput
+                label="Sync Interval (minutes)"
+                value={editing.syncIntervalMinutes ?? 60}
+                onChange={(v) =>
+                  setEditing({ ...editing, syncIntervalMinutes: v })
+                }
+                min={5}
+                max={1440}
+                hint="Periodic background sync interval (5 - 1440 minutes)"
+              />
+            )}
             <Toggle
               label="Auto Add"
               checked={editing.enableAutomaticAdd ?? true}
