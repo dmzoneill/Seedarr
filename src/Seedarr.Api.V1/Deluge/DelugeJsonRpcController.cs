@@ -22,7 +22,7 @@ namespace Seedarr.Api.V1.Deluge;
 [Route("json")]
 public class DelugeJsonRpcController : ControllerBase
 {
-    private static readonly RpcSessionStore _authenticatedSessions = new();
+    private readonly IRpcSessionStore _sessionStore;
 
     private static readonly JsonSerializerOptions _delugeJsonOptions = new()
     {
@@ -48,7 +48,8 @@ public class DelugeJsonRpcController : ControllerBase
         IConfigService configService,
         ITagService tagService = null,
         IConfigFileProvider configFileProvider = null,
-        HttpClient httpClient = null)
+        HttpClient httpClient = null,
+        IRpcSessionStore sessionStore = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -58,6 +59,7 @@ public class DelugeJsonRpcController : ControllerBase
         _tagService = tagService;
         _configFileProvider = configFileProvider;
         _httpClient = httpClient ?? new HttpClient();
+        _sessionStore = sessionStore ?? RpcSessionStore.SharedSessionStore;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -73,14 +75,14 @@ public class DelugeJsonRpcController : ControllerBase
             return true;
         }
 
-        if (HttpContext?.Items.TryGetValue("deluge-session", out var itemSid) == true && itemSid is string s && _authenticatedSessions.IsValid(s))
+        if (HttpContext?.Items.TryGetValue("deluge-session", out var itemSid) == true && itemSid is string s && _sessionStore.IsValid(s))
         {
             return true;
         }
 
         if (Request?.Cookies.TryGetValue("_session_id", out var sid1) == true && !string.IsNullOrWhiteSpace(sid1))
         {
-            if (_authenticatedSessions.IsValid(sid1))
+            if (_sessionStore.IsValid(sid1))
             {
                 return true;
             }
@@ -88,7 +90,7 @@ public class DelugeJsonRpcController : ControllerBase
 
         if (Request?.Cookies.TryGetValue("deluge-session", out var sid2) == true && !string.IsNullOrWhiteSpace(sid2))
         {
-            if (_authenticatedSessions.IsValid(sid2))
+            if (_sessionStore.IsValid(sid2))
             {
                 return true;
             }
@@ -313,7 +315,7 @@ public class DelugeJsonRpcController : ControllerBase
         if (loginSuccess)
         {
             var sid = Guid.NewGuid().ToString("N");
-            _authenticatedSessions.SetSession(sid, DateTime.UtcNow.AddDays(7));
+            _sessionStore.SetSession(sid, DateTime.UtcNow.AddDays(7));
             if (HttpContext != null)
             {
                 HttpContext.Items["deluge-session"] = sid;
@@ -344,18 +346,18 @@ public class DelugeJsonRpcController : ControllerBase
     {
         if (HttpContext?.Items.TryGetValue("deluge-session", out var itemSid) == true && itemSid is string s)
         {
-            _authenticatedSessions.RemoveSession(s);
+            _sessionStore.RemoveSession(s);
             HttpContext.Items.Remove("deluge-session");
         }
 
         if (Request?.Cookies.TryGetValue("_session_id", out var sid1) == true && !string.IsNullOrWhiteSpace(sid1))
         {
-            _authenticatedSessions.RemoveSession(sid1);
+            _sessionStore.RemoveSession(sid1);
         }
 
         if (Request?.Cookies.TryGetValue("deluge-session", out var sid2) == true && !string.IsNullOrWhiteSpace(sid2))
         {
-            _authenticatedSessions.RemoveSession(sid2);
+            _sessionStore.RemoveSession(sid2);
         }
 
         Response?.Cookies.Delete("_session_id");

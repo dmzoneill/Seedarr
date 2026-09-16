@@ -63,6 +63,7 @@ public class Startup
         services.AddDataProtection();
         services.AddHttpClient();
         services.AddSingleton<ICertificateManager, CertificateManager>();
+        services.AddSingleton<IRpcSessionStore, RpcSessionStore>();
 
         var configFileProvider = this._container.Resolve<IConfigFileProvider>();
         if (configFileProvider.EnableSsl && configFileProvider.RedirectHttpToHttps)
