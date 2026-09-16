@@ -1,4 +1,8 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
@@ -49,7 +53,7 @@ public class NotificationControllerTest
             OnHealthRestored = false,
             OnManualInteractionRequired = false,
             OnApplicationUpdate = false,
-            Categories = new List<string> { "Movies" }
+            Categories = new List<string> { "Movies" },
         };
 
         var result = _controller.Create(resource);
@@ -68,7 +72,7 @@ public class NotificationControllerTest
             Implementation = "Webhook",
             OnGrab = true,
             Categories = new List<string> { "Movies", "TV" },
-            Tags = new List<int> { 1, 2 }
+            Tags = new List<int> { 1, 2 },
         };
 
         _notificationRepository.Insert(Arg.Any<NotificationDefinition>())
@@ -170,7 +174,7 @@ public class NotificationControllerTest
             Implementation = "Webhook",
             OnSeedGoalReached = true,
             Categories = new List<string> { "Anime", "Documentary" },
-            Tags = new List<int> { 5 }
+            Tags = new List<int> { 5 },
         };
 
         _notificationRepository.Get(10).Returns(existing);
@@ -204,15 +208,15 @@ public class NotificationControllerTest
                 Id = 1,
                 Name = "N1",
                 Categories = new List<string> { "Cat1" },
-                Tags = new List<int> { 10 }
+                Tags = new List<int> { 10 },
             },
             new NotificationDefinition
             {
                 Id = 2,
                 Name = "N2",
                 Categories = null,
-                Tags = null
-            }
+                Tags = null,
+            },
         };
 
         _notificationRepository.All().Returns(list);
@@ -230,5 +234,226 @@ public class NotificationControllerTest
         Assert.That(items[1].Categories, Is.Empty);
         Assert.That(items[1].Tags, Is.Not.Null);
         Assert.That(items[1].Tags, Is.Empty);
+    }
+
+    [Test]
+    public async Task TestDirect_should_return_bad_request_when_resource_is_null()
+    {
+        var result = await _controller.TestDirect(null);
+        Assert.That(result.Result, Is.InstanceOf<BadRequestResult>());
+    }
+
+    [Test]
+    public async Task TestDirect_CustomScript_should_fail_when_path_is_empty()
+    {
+        var resource = new NotificationResource
+        {
+            Implementation = "CustomScript",
+            Settings = "{\"path\":\"\"}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("Script path is required"));
+    }
+
+    [Test]
+    public async Task TestDirect_CustomScript_should_fail_when_path_contains_null_byte()
+    {
+        var resource = new NotificationResource
+        {
+            Implementation = "CustomScript",
+            Settings = "{\"path\":\"/usr/bin/script\0.sh\"}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("invalid characters"));
+    }
+
+    [Test]
+    public async Task TestDirect_CustomScript_should_fail_when_path_is_relative()
+    {
+        var resource = new NotificationResource
+        {
+            Implementation = "CustomScript",
+            Settings = "{\"path\":\"relative/path/script.sh\"}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("absolute path"));
+    }
+
+    [TestCase("/tmp/exploit.sh")]
+    [TestCase("/var/tmp/script.sh")]
+    [TestCase("/home/user/my_script.sh")]
+    [TestCase("/root/run.sh")]
+    public async Task TestDirect_CustomScript_should_fail_when_path_is_outside_authorized_directories(string unauthorizedPath)
+    {
+        var resource = new NotificationResource
+        {
+            Implementation = "CustomScript",
+            Settings = $"{{\"path\":\"{unauthorizedPath}\"}}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("not permitted"));
+    }
+
+    [Test]
+    public async Task TestDirect_CustomScript_should_fail_when_file_does_not_exist_in_authorized_directory()
+    {
+        var nonexistentPath = OperatingSystem.IsWindows()
+            ? @"C:\Program Files\Seedarr\Scripts\nonexistent_test_script_9999.bat"
+            : "/usr/local/bin/nonexistent_test_script_9999.sh";
+
+        var resource = new NotificationResource
+        {
+            Implementation = "CustomScript",
+            Settings = $"{{\"path\":\"{nonexistentPath}\"}}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("does not exist"));
+    }
+
+    [TestCase("http://127.0.0.1:8080/webhook")]
+    [TestCase("http://localhost:5000/api")]
+    [TestCase("http://169.254.169.254/latest/meta-data")]
+    [TestCase("http://metadata.google.internal/computeMetadata/v1/")]
+    public async Task Test_Webhook_should_reject_ssrf_urls(string prohibitedUrl)
+    {
+        var resource = new NotificationResource
+        {
+            Implementation = "Webhook",
+            Settings = $"{{\"url\":\"{prohibitedUrl}\"}}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("SSRF protection"));
+    }
+
+    [Test]
+    public async Task Test_Webhook_should_fail_when_url_is_missing()
+    {
+        var resource = new NotificationResource
+        {
+            Implementation = "Webhook",
+            Settings = "{\"url\":\"\"}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("URL is required"));
+    }
+
+    [Test]
+    public async Task Test_Webhook_should_return_detailed_diagnostic_on_http_failure()
+    {
+        var publicUrl = "https://93.184.216.34/webhook";
+        _webhookDispatcher.DispatchDetailedAsync(Arg.Is(publicUrl), Arg.Any<object>(), Arg.Any<string>())
+            .Returns(new WebhookDispatchResult
+            {
+                Success = false,
+                StatusCode = HttpStatusCode.InternalServerError,
+                Message = "Webhook endpoint returned HTTP 500 (Internal Server Error).",
+            });
+
+        var resource = new NotificationResource
+        {
+            Implementation = "Webhook",
+            Settings = $"{{\"url\":\"{publicUrl}\"}}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("HTTP 500"));
+    }
+
+    [TestCase("127.0.0.1")]
+    [TestCase("localhost")]
+    [TestCase("169.254.169.254")]
+    public async Task Test_Email_should_fail_when_host_is_unsafe(string unsafeHost)
+    {
+        var resource = new NotificationResource
+        {
+            Implementation = "Email",
+            Settings = $"{{\"host\":\"{unsafeHost}\",\"port\":587,\"to\":\"user@example.com\",\"from\":\"test@example.com\"}}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("not permitted"));
+    }
+
+    [TestCase(22)]
+    [TestCase(80)]
+    [TestCase(8080)]
+    public async Task Test_Email_should_fail_when_port_is_prohibited(int prohibitedPort)
+    {
+        var resource = new NotificationResource
+        {
+            Implementation = "Email",
+            Settings = $"{{\"host\":\"93.184.216.34\",\"port\":{prohibitedPort},\"to\":\"user@example.com\",\"from\":\"test@example.com\"}}",
+        };
+
+        var actionResult = await _controller.TestDirect(resource);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var testResult = okResult.Value as NotificationTestResult;
+        Assert.That(testResult, Is.Not.Null);
+        Assert.That(testResult.Success, Is.False);
+        Assert.That(testResult.Message, Does.Contain("port"));
+        Assert.That(testResult.Message, Does.Contain("is not permitted"));
     }
 }

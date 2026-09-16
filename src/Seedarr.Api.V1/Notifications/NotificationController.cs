@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -143,6 +144,35 @@ public class NotificationController : Controller
         return await TestInternal(item);
     }
 
+    private static readonly string[] AllowedScriptDirectories = OperatingSystem.IsWindows()
+        ? new[] { @"C:\Program Files\Seedarr\Scripts", @"C:\ProgramData\Seedarr\Scripts" }
+        : new[] { "/usr/local/bin", "/usr/bin", "/opt/seedarr/scripts", "/var/lib/seedarr/scripts", "/etc/seedarr/scripts" };
+
+    private static bool IsInAllowedDirectory(string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath))
+        {
+            return false;
+        }
+
+        foreach (var dir in AllowedScriptDirectories)
+        {
+            var fullDir = Path.GetFullPath(dir);
+            if (!fullDir.EndsWith(Path.DirectorySeparatorChar.ToString()))
+            {
+                fullDir += Path.DirectorySeparatorChar;
+            }
+
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            if (fullPath.StartsWith(fullDir, comparison) || string.Equals(fullPath, Path.GetFullPath(dir), comparison))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Tests a transient notification configuration without saving it first.
     /// </summary>
@@ -152,6 +182,71 @@ public class NotificationController : Controller
         if (resource == null)
         {
             return BadRequest();
+        }
+
+        if (string.Equals(resource.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
+        {
+            var (scriptPath, _) = CustomScriptService.ParseSettings(resource.Settings);
+            if (string.IsNullOrWhiteSpace(scriptPath))
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = "Script path is required.",
+                });
+            }
+
+            if (scriptPath.Contains('\0') || scriptPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = "Script path contains invalid characters.",
+                });
+            }
+
+            if (!Path.IsPathRooted(scriptPath))
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = "Script path must be an absolute path.",
+                });
+            }
+
+            var fullPath = Path.GetFullPath(scriptPath);
+
+            var isSavedScript = false;
+            if (resource.Id > 0)
+            {
+                var existing = _notificationRepository.Get(resource.Id);
+                if (existing != null && string.Equals(existing.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
+                {
+                    var (savedPath, _) = CustomScriptService.ParseSettings(existing.Settings);
+                    if (string.Equals(savedPath, scriptPath, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    {
+                        isSavedScript = true;
+                    }
+                }
+            }
+
+            if (!isSavedScript && !IsInAllowedDirectory(fullPath))
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = $"Custom script path '{fullPath}' is not permitted. Transient scripts must be located within authorized directories ({string.Join(", ", AllowedScriptDirectories)}).",
+                });
+            }
+
+            if (!global::System.IO.File.Exists(fullPath))
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = $"Script file does not exist: {fullPath}",
+                });
+            }
         }
 
         var model = ToModel(resource);
@@ -255,7 +350,44 @@ public class NotificationController : Controller
         if (string.Equals(notif.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
         {
             var (scriptPath, scriptArgs) = CustomScriptService.ParseSettings(notif.Settings);
-            var success = await _customScriptService.ExecuteScriptAsync(scriptPath, null, "Test", scriptArgs);
+            if (string.IsNullOrWhiteSpace(scriptPath))
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = "Script path is required.",
+                });
+            }
+
+            if (scriptPath.Contains('\0') || scriptPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = "Script path contains invalid characters.",
+                });
+            }
+
+            if (!Path.IsPathRooted(scriptPath))
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = "Script path must be an absolute path.",
+                });
+            }
+
+            var fullPath = Path.GetFullPath(scriptPath);
+            if (!global::System.IO.File.Exists(fullPath))
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = $"Script file does not exist: {fullPath}",
+                });
+            }
+
+            var success = await _customScriptService.ExecuteScriptAsync(fullPath, null, "Test", scriptArgs);
             return Ok(new NotificationTestResult
             {
                 Success = success,
@@ -273,6 +405,22 @@ public class NotificationController : Controller
                     Message = "Email test notification sent successfully.",
                 });
             }
+            catch (ArgumentException ex)
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = $"Failed to send email test notification: {ex.Message}",
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = $"Failed to send email test notification: {ex.Message}",
+                });
+            }
             catch (Exception ex)
             {
                 return Ok(new NotificationTestResult
@@ -286,11 +434,30 @@ public class NotificationController : Controller
         {
             var targetUrl = NotificationEventHandler.ResolveTargetUrl(notif.Implementation, notif.Settings);
             var customHeaders = NotificationEventHandler.ResolveCustomHeaders(notif.Implementation, notif.Settings);
-            var success = await _webhookDispatcher.DispatchAsync(targetUrl, payload, customHeaders);
+
+            if (string.IsNullOrWhiteSpace(targetUrl))
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = "Target webhook URL is required.",
+                });
+            }
+
+            if (!WebhookDispatcher.IsValidTargetUrl(targetUrl))
+            {
+                return Ok(new NotificationTestResult
+                {
+                    Success = false,
+                    Message = $"Target URL '{targetUrl}' is prohibited (SSRF protection: loopback, link-local, and cloud metadata addresses are not permitted).",
+                });
+            }
+
+            var result = await _webhookDispatcher.DispatchDetailedAsync(targetUrl, payload, customHeaders);
             return Ok(new NotificationTestResult
             {
-                Success = success,
-                Message = success ? "Webhook dispatched successfully." : "Webhook dispatch failed.",
+                Success = result.Success,
+                Message = result.Message,
             });
         }
     }

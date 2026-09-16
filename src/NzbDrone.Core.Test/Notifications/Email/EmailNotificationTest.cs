@@ -121,7 +121,8 @@ public class EmailNotificationTest
     private TestEmailNotification CreateConfiguredSubject(string toAddresses = "to@example.com")
     {
         var subject = new TestEmailNotification();
-        subject.Settings.SmtpHost = "smtp.example.com";
+        subject.Settings.SmtpHost = "93.184.216.34";
+        subject.Settings.SmtpPort = 587;
         subject.Settings.FromAddress = "from@example.com";
         subject.Settings.ToAddresses = toAddresses;
         return subject;
@@ -300,5 +301,51 @@ public class EmailNotificationTest
         var subject = CreateConfiguredSubject("  ,  ,  ");
 
         Assert.DoesNotThrow(() => subject.OnTorrentAdded("test.torrent"));
+    }
+
+    [TestCase("127.0.0.1")]
+    [TestCase("localhost")]
+    [TestCase("10.0.0.1")]
+    [TestCase("192.168.1.1")]
+    [TestCase("172.16.0.1")]
+    [TestCase("169.254.169.254")]
+    [TestCase("metadata.google.internal")]
+    public void SendEmail_should_not_send_when_smtp_host_is_unsafe(string unsafeHost)
+    {
+        var subject = CreateConfiguredSubject();
+        subject.Settings.SmtpHost = unsafeHost;
+
+        subject.OnTorrentAdded("test.torrent");
+
+        Assert.That(subject.SmtpSendCalled, Is.False);
+    }
+
+    [TestCase(21)]
+    [TestCase(22)]
+    [TestCase(80)]
+    [TestCase(443)]
+    [TestCase(8080)]
+    public void SendEmail_should_not_send_when_smtp_port_is_not_permitted(int prohibitedPort)
+    {
+        var subject = CreateConfiguredSubject();
+        subject.Settings.SmtpPort = prohibitedPort;
+
+        subject.OnTorrentAdded("test.torrent");
+
+        Assert.That(subject.SmtpSendCalled, Is.False);
+    }
+
+    [TestCase(25)]
+    [TestCase(465)]
+    [TestCase(587)]
+    [TestCase(2525)]
+    public void SendEmail_should_send_when_smtp_port_is_allowed(int allowedPort)
+    {
+        var subject = CreateConfiguredSubject();
+        subject.Settings.SmtpPort = allowedPort;
+
+        subject.OnTorrentAdded("test.torrent");
+
+        Assert.That(subject.SmtpSendCalled, Is.True);
     }
 }
