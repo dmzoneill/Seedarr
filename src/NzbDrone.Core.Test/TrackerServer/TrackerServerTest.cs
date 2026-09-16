@@ -116,11 +116,11 @@ public class TrackerServerTest
         return ((Dictionary<string, string> Parameters, string Error))method.Invoke(_trackerServer, new object[] { path });
     }
 
-    private static string InvokeReadBoundedLine(NetworkStream stream, int maxLength)
+    private static string InvokeReadBoundedLine(Stream stream, int maxLength)
     {
         var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
             "ReadBoundedLine",
-            BindingFlags.NonPublic | BindingFlags.Static);
+            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
         return (string)method.Invoke(null, new object[] { stream, maxLength });
     }
 
@@ -1266,6 +1266,65 @@ public class TrackerServerTest
         var result = InvokeReadBoundedLine(pair.ClientStream, 10);
 
         Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ReadBoundedLine_with_buffered_stream_parses_request_line_and_headers_correctly()
+    {
+        var rawRequest = "GET /announce?info_hash=abcdefghijklmnopqrst&port=6881 HTTP/1.1\r\n" +
+                         "Host: localhost:6969\r\n" +
+                         "User-Agent: Transmission/3.00\r\n" +
+                         "Accept: */*\r\n" +
+                         "\r\n";
+
+        using var memoryStream = new MemoryStream(Encoding.ASCII.GetBytes(rawRequest));
+        using var bufferedStream = new BufferedStream(memoryStream, 4096);
+
+        var requestLine = InvokeReadBoundedLine(bufferedStream, 2048);
+        var header1 = InvokeReadBoundedLine(bufferedStream, 1024);
+        var header2 = InvokeReadBoundedLine(bufferedStream, 1024);
+        var header3 = InvokeReadBoundedLine(bufferedStream, 1024);
+        var emptyLine = InvokeReadBoundedLine(bufferedStream, 1024);
+
+        Assert.That(requestLine, Is.EqualTo("GET /announce?info_hash=abcdefghijklmnopqrst&port=6881 HTTP/1.1"));
+        Assert.That(header1, Is.EqualTo("Host: localhost:6969"));
+        Assert.That(header2, Is.EqualTo("User-Agent: Transmission/3.00"));
+        Assert.That(header3, Is.EqualTo("Accept: */*"));
+        Assert.That(emptyLine, Is.EqualTo(""));
+    }
+
+    [Test]
+    public void ReadBoundedLine_with_buffered_stream_enforces_max_length_boundary()
+    {
+        var oversizedHeader = "X-Oversized-Header: " + new string('Z', 200) + "\r\n";
+        using var memoryStream = new MemoryStream(Encoding.ASCII.GetBytes(oversizedHeader));
+        using var bufferedStream = new BufferedStream(memoryStream, 4096);
+
+        var result = InvokeReadBoundedLine(bufferedStream, 50);
+
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ReadBoundedLine_with_buffered_stream_handles_empty_stream_gracefully()
+    {
+        using var memoryStream = new MemoryStream(Array.Empty<byte>());
+        using var bufferedStream = new BufferedStream(memoryStream, 4096);
+
+        var result = InvokeReadBoundedLine(bufferedStream, 1024);
+
+        Assert.That(result, Is.Null);
+    }
+
+    [Test]
+    public void ReadBoundedLine_with_buffered_stream_handles_malformed_unterminated_line_gracefully()
+    {
+        using var memoryStream = new MemoryStream(Encoding.ASCII.GetBytes("MALFORMED_NO_NEWLINE"));
+        using var bufferedStream = new BufferedStream(memoryStream, 4096);
+
+        var result = InvokeReadBoundedLine(bufferedStream, 1024);
+
+        Assert.That(result, Is.EqualTo("MALFORMED_NO_NEWLINE"));
     }
 
     // ---- HandleRequest integration via real TCP (covers HTTP response generation) ----
