@@ -124,12 +124,16 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         }
 
         // If the masked API key was sent back or empty, preserve the existing value
-        if (string.IsNullOrWhiteSpace(resource.ApiKey) || resource.ApiKey.Contains('*'))
+        if (string.IsNullOrWhiteSpace(resource.ApiKey) ||
+            resource.ApiKey == "(unchanged)" ||
+            resource.ApiKey == GeneralConfigResourceMapper.GetMaskedApiKey(_configFileProvider.ApiKey))
         {
             resource.ApiKey = _configFileProvider.ApiKey;
         }
 
-        if (resource.SslCertPassword != null && resource.SslCertPassword.Contains('*'))
+        if (resource.SslCertPassword == null ||
+            resource.SslCertPassword == "(unchanged)" ||
+            resource.SslCertPassword == GeneralConfigResourceMapper.SecretMask)
         {
             resource.SslCertPassword = _configFileProvider.SslCertPassword;
         }
@@ -191,7 +195,9 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
         }
 
         var password = request.SslCertPassword;
-        if (password != null && password.Contains('*'))
+        if (password == null ||
+            password == "(unchanged)" ||
+            password == GeneralConfigResourceMapper.SecretMask)
         {
             password = _configFileProvider.SslCertPassword;
         }
@@ -332,7 +338,9 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
         }
 
         // If the masked proxy password was sent back, preserve the existing value
-        if (resource.ProxyPassword != null && resource.ProxyPassword.Contains('*'))
+        if (resource.ProxyPassword == null ||
+            resource.ProxyPassword == "(unchanged)" ||
+            resource.ProxyPassword == NetworkConfigResourceMapper.SecretMask)
         {
             resource.ProxyPassword = _configService.ProxyPassword;
         }

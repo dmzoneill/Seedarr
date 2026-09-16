@@ -192,4 +192,246 @@ public class ConfigControllerTests
         Assert.That(GeneralConfigController.NormalizeUrlBase(""), Is.EqualTo(string.Empty));
         Assert.That(GeneralConfigController.NormalizeUrlBase(null), Is.EqualTo(string.Empty));
     }
+
+    [Test]
+    public void SaveConfig_with_new_ssl_cert_password_containing_asterisks_saves_password()
+    {
+        _configFileProvider.SslCertPassword.Returns("OldPass123");
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            SslCertPassword = "P@ssw*rd#2026",
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.SslCertPassword, Is.EqualTo("P@ssw*rd#2026"));
+        _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["SslCertPassword"] == "P@ssw*rd#2026"));
+    }
+
+    [Test]
+    public void SaveConfig_with_exact_mask_preserves_existing_ssl_cert_password()
+    {
+        _configFileProvider.SslCertPassword.Returns("ExistingSecret123");
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            SslCertPassword = "********",
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.SslCertPassword, Is.EqualTo("ExistingSecret123"));
+        _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["SslCertPassword"] == "ExistingSecret123"));
+    }
+
+    [Test]
+    public void SaveConfig_with_unchanged_sentinel_preserves_existing_ssl_cert_password()
+    {
+        _configFileProvider.SslCertPassword.Returns("ExistingSecret123");
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            SslCertPassword = "(unchanged)",
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.SslCertPassword, Is.EqualTo("ExistingSecret123"));
+        _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["SslCertPassword"] == "ExistingSecret123"));
+    }
+
+    [Test]
+    public void SaveConfig_with_null_preserves_existing_ssl_cert_password()
+    {
+        _configFileProvider.SslCertPassword.Returns("ExistingSecret123");
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            SslCertPassword = null,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.SslCertPassword, Is.EqualTo("ExistingSecret123"));
+        _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["SslCertPassword"] == "ExistingSecret123"));
+    }
+
+    [Test]
+    public void SaveConfig_with_new_api_key_containing_asterisks_saves_new_key()
+    {
+        _configFileProvider.ApiKey.Returns("1234567890abcdef");
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            ApiKey = "my*custom*api*key*2026",
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.ApiKey, Is.EqualTo("my*custom*api*key*2026"));
+        _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["ApiKey"] == "my*custom*api*key*2026"));
+    }
+
+    [Test]
+    public void SaveConfig_with_masked_api_key_preserves_existing_api_key()
+    {
+        _configFileProvider.ApiKey.Returns("1234567890abcdef");
+        var masked = GeneralConfigResourceMapper.GetMaskedApiKey("1234567890abcdef");
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            ApiKey = masked,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.ApiKey, Is.EqualTo("1234567890abcdef"));
+        _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["ApiKey"] == "1234567890abcdef"));
+    }
+
+    [Test]
+    public void SaveConfig_with_unchanged_sentinel_preserves_existing_api_key()
+    {
+        _configFileProvider.ApiKey.Returns("1234567890abcdef");
+
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "*",
+            WatchFolderScanIntervalSeconds = 10,
+            ApiKey = "(unchanged)",
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.ApiKey, Is.EqualTo("1234567890abcdef"));
+        _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["ApiKey"] == "1234567890abcdef"));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TestSsl_with_new_password_containing_asterisks_passes_new_password()
+    {
+        _configFileProvider.SslCertPassword.Returns("OldPass123");
+        _certificateManager.ValidateCertificateAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<bool>())
+            .Returns(new SslCertificateValidationResult { IsValid = true });
+
+        var request = new SslTestRequest
+        {
+            SslCertPath = "/path/cert.pfx",
+            SslKeyPath = "",
+            SslCertPassword = "P@ssw*rd#2026",
+            BindAddress = "*",
+            SslPort = 9899,
+        };
+
+        var result = await _controller.TestSsl(request);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        await _certificateManager.Received(1).ValidateCertificateAsync(
+            request.SslCertPath,
+            request.SslKeyPath,
+            "P@ssw*rd#2026",
+            request.BindAddress,
+            request.SslPort,
+            true);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TestSsl_with_exact_mask_passes_existing_password()
+    {
+        _configFileProvider.SslCertPassword.Returns("StoredSecret123");
+        _certificateManager.ValidateCertificateAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<bool>())
+            .Returns(new SslCertificateValidationResult { IsValid = true });
+
+        var request = new SslTestRequest
+        {
+            SslCertPath = "/path/cert.pfx",
+            SslKeyPath = "",
+            SslCertPassword = "********",
+            BindAddress = "*",
+            SslPort = 9899,
+        };
+
+        var result = await _controller.TestSsl(request);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        await _certificateManager.Received(1).ValidateCertificateAsync(
+            request.SslCertPath,
+            request.SslKeyPath,
+            "StoredSecret123",
+            request.BindAddress,
+            request.SslPort,
+            true);
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task TestSsl_with_unchanged_sentinel_passes_existing_password()
+    {
+        _configFileProvider.SslCertPassword.Returns("StoredSecret123");
+        _certificateManager.ValidateCertificateAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<bool>())
+            .Returns(new SslCertificateValidationResult { IsValid = true });
+
+        var request = new SslTestRequest
+        {
+            SslCertPath = "/path/cert.pfx",
+            SslKeyPath = "",
+            SslCertPassword = "(unchanged)",
+            BindAddress = "*",
+            SslPort = 9899,
+        };
+
+        var result = await _controller.TestSsl(request);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        await _certificateManager.Received(1).ValidateCertificateAsync(
+            request.SslCertPath,
+            request.SslKeyPath,
+            "StoredSecret123",
+            request.BindAddress,
+            request.SslPort,
+            true);
+    }
 }
