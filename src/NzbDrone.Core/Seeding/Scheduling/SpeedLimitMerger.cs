@@ -6,14 +6,19 @@ public static class SpeedLimitMerger
 {
     public static SpeedLimits Apply(SpeedLimits limits, long uploadBps, long downloadBps)
     {
-        if (uploadBps > 0)
+        if (limits == null)
+        {
+            return null;
+        }
+
+        if (uploadBps >= 0)
         {
             limits.MaxUploadSpeed = limits.MaxUploadSpeed == SpeedLimits.Unlimited
                 ? uploadBps
                 : Math.Min(limits.MaxUploadSpeed, uploadBps);
         }
 
-        if (downloadBps > 0)
+        if (downloadBps >= 0)
         {
             limits.MaxDownloadSpeed = limits.MaxDownloadSpeed == SpeedLimits.Unlimited
                 ? downloadBps

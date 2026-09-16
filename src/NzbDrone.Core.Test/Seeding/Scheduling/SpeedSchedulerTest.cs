@@ -260,11 +260,11 @@ public class SpeedSchedulerTest
     }
 
     [Test]
-    public void GetLimitsAt_should_use_unlimited_when_schedule_speed_is_zero()
+    public void GetLimitsAt_should_use_zero_bps_pause_when_schedule_speed_is_zero()
     {
         var schedule = new SpeedSchedule
         {
-            Name = "NoLimit",
+            Name = "PauseSchedule",
             Days = ScheduleDays.All,
             StartTime = new TimeOnly(0, 0),
             EndTime = new TimeOnly(23, 59),
@@ -278,8 +278,85 @@ public class SpeedSchedulerTest
         var limits = _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
 
         Assert.That(limits.IsScheduleActive, Is.True);
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(0));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GetLimitsAt_should_use_unlimited_when_schedule_speed_is_minus_one()
+    {
+        var schedule = new SpeedSchedule
+        {
+            Name = "UnlimitedSchedule",
+            Days = ScheduleDays.All,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(23, 59),
+            MaxUploadSpeed = -1,
+            MaxDownloadSpeed = -1,
+            IsEnabled = true,
+            Priority = 1
+        };
+        _repository.GetEnabled().Returns(new List<SpeedSchedule> { schedule });
+
+        var limits = _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.That(limits.IsScheduleActive, Is.True);
         Assert.That(limits.MaxUploadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
         Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(SpeedLimits.Unlimited));
+    }
+
+    [Test]
+    public void GetLimitsAt_should_remain_active_throughout_midnight_59th_minute()
+    {
+        var schedule = new SpeedSchedule
+        {
+            Name = "DayUntilMidnight",
+            Days = ScheduleDays.Monday,
+            StartTime = new TimeOnly(8, 0),
+            EndTime = new TimeOnly(23, 59),
+            MaxUploadSpeed = 500_000,
+            MaxDownloadSpeed = 500_000,
+            IsEnabled = true,
+            Priority = 1
+        };
+        _repository.GetEnabled().Returns(new List<SpeedSchedule> { schedule });
+
+        var at15Seconds = new DateTime(2026, 8, 10, 23, 59, 15, DateTimeKind.Utc);
+        var limits15 = _scheduler.GetLimitsAt(at15Seconds);
+        Assert.That(limits15.IsScheduleActive, Is.True);
+
+        var at59Seconds = new DateTime(2026, 8, 10, 23, 59, 59, DateTimeKind.Utc);
+        var limits59 = _scheduler.GetLimitsAt(at59Seconds);
+        Assert.That(limits59.IsScheduleActive, Is.True);
+    }
+
+    [Test]
+    public void GetLimitsAt_should_treat_identical_start_and_end_as_24_hour_schedule()
+    {
+        var schedule = new SpeedSchedule
+        {
+            Name = "AllDayMonday",
+            Days = ScheduleDays.Monday,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(0, 0),
+            MaxUploadSpeed = 100_000,
+            MaxDownloadSpeed = 100_000,
+            IsEnabled = true,
+            Priority = 1
+        };
+        _repository.GetEnabled().Returns(new List<SpeedSchedule> { schedule });
+
+        var mondayMidnight = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(mondayMidnight).IsScheduleActive, Is.True);
+
+        var mondayNoon = new DateTime(2026, 8, 10, 12, 0, 0, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(mondayNoon).IsScheduleActive, Is.True);
+
+        var mondayLate = new DateTime(2026, 8, 10, 23, 59, 59, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(mondayLate).IsScheduleActive, Is.True);
+
+        var tuesdayNoon = new DateTime(2026, 8, 11, 12, 0, 0, DateTimeKind.Utc);
+        Assert.That(_scheduler.GetLimitsAt(tuesdayNoon).IsScheduleActive, Is.False);
     }
 
     [Test]
