@@ -12,6 +12,7 @@ import {
   useDeleteRssRule,
   useSyncRss,
   useCategories,
+  useDownloadClients,
   useTags,
 } from "../../api/hooks";
 import type { IndexerDefinition, IndexerTestResult, RssRule } from "../../api/types";
@@ -20,6 +21,9 @@ import { useToast } from "../../context/ToastContext";
 
 export function IndexersTab() {
   const { showToast } = useToast();
+
+  // Download clients
+  const { data: downloadClients } = useDownloadClients();
 
   // Indexers
   const { data: indexers, isLoading } = useIndexers();
@@ -53,6 +57,7 @@ export function IndexersTab() {
     enableSearch: true,
     categories: "",
     downloadClientId: 0,
+    tags: [],
     enable: true,
   };
 
@@ -270,6 +275,7 @@ export function IndexersTab() {
                     if (window.confirm(`Are you sure you want to delete indexer "${idx.name}"?`)) {
                       deleteMutation.mutate(idx.id, {
                         onSuccess: () => showToast(`Indexer "${idx.name}" deleted`, "info"),
+                        onError: (err) => showToast(err?.message || "Failed to delete indexer", "error"),
                       });
                     }
                   }}
@@ -520,15 +526,138 @@ export function IndexersTab() {
               }}
               type="password"
             />
-            <TextInput
-              label="API Path"
-              value={editing.apiPath || "/api"}
-              onChange={(v) => {
-                setEditing({ ...editing, apiPath: v });
-                setModalTestResult(null);
-              }}
-              placeholder="api"
-            />
+            {editing.indexerType !== "Prowlarr" && (
+              <TextInput
+                label="API Path"
+                value={editing.apiPath || "/api"}
+                onChange={(v) => {
+                  setEditing({ ...editing, apiPath: v });
+                  setModalTestResult(null);
+                }}
+                placeholder="api"
+              />
+            )}
+            <div className="form-group" style={{ marginBottom: "1rem" }}>
+              <label
+                className="form-label"
+                style={{
+                  display: "block",
+                  marginBottom: "0.35rem",
+                  fontSize: "0.85rem",
+                  fontWeight: 500,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Download Client
+              </label>
+              <select
+                className="form-select"
+                value={editing.downloadClientId || 0}
+                onChange={(e) => {
+                  setEditing({
+                    ...editing,
+                    downloadClientId: Number(e.target.value),
+                  });
+                  setModalTestResult(null);
+                }}
+                style={{
+                  width: "100%",
+                  padding: "0.45rem 0.65rem",
+                  borderRadius: "6px",
+                  border: "1px solid var(--border-color)",
+                  backgroundColor: "var(--bg-secondary)",
+                  color: "var(--text-primary)",
+                }}
+              >
+                <option value={0}>Default / None</option>
+                {downloadClients?.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name} ({client.clientType})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group" style={{ marginBottom: "1rem" }}>
+              <label
+                className="form-label"
+                style={{
+                  display: "block",
+                  marginBottom: "0.35rem",
+                  fontSize: "0.85rem",
+                  fontWeight: 500,
+                  color: "var(--text-secondary)",
+                }}
+              >
+                Tags
+              </label>
+              <select
+                multiple
+                className="form-select"
+                value={(editing.tags || []).map(String)}
+                onChange={(e) => {
+                  const selectedOptions = Array.from(
+                    e.target.selectedOptions,
+                    (option) => Number(option.value),
+                  );
+                  setEditing({ ...editing, tags: selectedOptions });
+                  setModalTestResult(null);
+                }}
+                style={{
+                  width: "100%",
+                  borderRadius: "6px",
+                  minHeight: "75px",
+                  border: "1px solid var(--border-color)",
+                  backgroundColor: "var(--bg-secondary)",
+                  color: "var(--text-primary)",
+                }}
+              >
+                {tags?.map((tag) => (
+                  <option key={tag.id} value={tag.id}>
+                    {tag.label}
+                  </option>
+                ))}
+              </select>
+              {editing.tags && editing.tags.length > 0 && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.35rem",
+                    marginTop: "0.5rem",
+                  }}
+                >
+                  {editing.tags.map((tagId) => {
+                    const tag = tags?.find((t) => t.id === tagId);
+                    return tag ? (
+                      <span
+                        key={tagId}
+                        className="badge badge-primary"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          padding: "0.2rem 0.5rem",
+                          fontSize: "0.75rem",
+                          cursor: "pointer",
+                        }}
+                        title="Click to remove tag"
+                        onClick={() => {
+                          setEditing({
+                            ...editing,
+                            tags: (editing.tags || []).filter(
+                              (id) => id !== tagId,
+                            ),
+                          });
+                          setModalTestResult(null);
+                        }}
+                      >
+                        {tag.label} ✕
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
+            </div>
             <TextInput
               label="Categories"
               value={

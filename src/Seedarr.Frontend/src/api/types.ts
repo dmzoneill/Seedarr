@@ -636,6 +636,7 @@ export interface IndexerDefinition {
   enableSearch: boolean;
   categories: string;
   downloadClientId: number;
+  tags?: number[];
   implementation: string;
   configContract: string;
   enable: boolean;
