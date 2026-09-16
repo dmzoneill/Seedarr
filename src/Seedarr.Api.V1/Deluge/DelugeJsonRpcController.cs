@@ -501,11 +501,7 @@ public class DelugeJsonRpcController : ControllerBase
         var newLabel = GetFirstStringParam(paramsElem);
         if (!string.IsNullOrWhiteSpace(newLabel) && _tagService != null)
         {
-            var existing = _tagService.GetAll().FirstOrDefault(t => string.Equals(t.Label, newLabel, StringComparison.OrdinalIgnoreCase));
-            if (existing == null)
-            {
-                _tagService.Add(new Tag { Label = newLabel });
-            }
+            _tagService.SyncTagsFromLabels(new[] { newLabel });
         }
 
         return DelugeResult(new { result = true, error = (object)null, id });
@@ -533,13 +529,17 @@ public class DelugeJsonRpcController : ControllerBase
             ["apply_max"] = false,
             ["max_download_speed"] = -1,
             ["max_upload_speed"] = -1,
-            ["apply_queue"] = false,
+            ["max_connections"] = -1,
+            ["max_upload_slots"] = -1,
+            ["is_auto_managed"] = false,
+            ["auto_managed"] = false,
             ["stop_at_ratio"] = false,
             ["stop_ratio"] = 2.0,
             ["remove_at_ratio"] = false,
-            ["apply_move_completed"] = false,
-            ["move_completed_path"] = string.Empty,
+            ["move_completed"] = false,
+            ["move_completed_path"] = string.Empty
         };
+
         return DelugeResult(new { result = labelOpts, error = (object)null, id });
     }
 
@@ -560,6 +560,13 @@ public class DelugeJsonRpcController : ControllerBase
                 if (torrent != null)
                 {
                     torrent.Label = labelName;
+                    if (_tagService != null)
+                    {
+                        torrent.TagIds = !string.IsNullOrWhiteSpace(labelName)
+                            ? _tagService.SyncTagsFromLabels(new[] { labelName })
+                            : new List<int>();
+                    }
+
                     _torrentService.Update(torrent);
                 }
             }
@@ -1013,7 +1020,13 @@ public class DelugeJsonRpcController : ControllerBase
 
         if (options.TryGetProperty("label", out var lblProp) && lblProp.ValueKind == JsonValueKind.String)
         {
-            added.Label = lblProp.GetString();
+            var lblStr = lblProp.GetString();
+            added.Label = lblStr;
+            if (_tagService != null && !string.IsNullOrWhiteSpace(lblStr))
+            {
+                added.TagIds = _tagService.SyncTagsFromLabels(new[] { lblStr });
+            }
+
             needsUpdate = true;
         }
 

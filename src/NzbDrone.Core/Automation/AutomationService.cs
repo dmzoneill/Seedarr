@@ -281,27 +281,20 @@ public class AutomationService : IAutomationService
     private void ApplyTorrentMutations(Torrent torrent, AutomationExecutionResult result)
     {
         var changed = false;
+        var tagsModified = false;
 
         // Tags to add
         if (result.TagsToAdd.Count > 0)
         {
-            var allTags = _tagService.GetAll();
-            var tagLookup = allTags.ToDictionary(t => t.Label, t => t.Id, StringComparer.OrdinalIgnoreCase);
-
+            var tagIdsToAdd = _tagService.SyncTagsFromLabels(result.TagsToAdd);
             torrent.TagIds ??= new List<int>();
-            foreach (var tagLabel in result.TagsToAdd)
+            foreach (var tagId in tagIdsToAdd)
             {
-                if (!tagLookup.TryGetValue(tagLabel, out var tagId))
-                {
-                    var created = _tagService.Add(new Tag { Label = tagLabel });
-                    tagId = created.Id;
-                    tagLookup[tagLabel] = tagId;
-                }
-
                 if (!torrent.TagIds.Contains(tagId))
                 {
                     torrent.TagIds.Add(tagId);
                     changed = true;
+                    tagsModified = true;
                 }
             }
         }
@@ -319,9 +312,15 @@ public class AutomationService : IAutomationService
                     if (torrent.TagIds.Remove(tagId))
                     {
                         changed = true;
+                        tagsModified = true;
                     }
                 }
             }
+        }
+
+        if (tagsModified)
+        {
+            torrent.Label = string.Join(", ", _tagService.GetLabelsForTagIds(torrent.TagIds));
         }
 
         // Category change

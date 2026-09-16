@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Automation;
@@ -89,5 +90,37 @@ for (var i = 0; i < 2000; i++) {
             s.Id == 1 &&
             s.LastExecutionLog != null &&
             s.LastExecutionLog.Length <= AutomationService.MaxPersistedLogCharacters));
+    }
+
+    [Test]
+    public void ExecuteScript_with_tags_mutation_updates_torrent_TagIds_and_Label()
+    {
+        var torrent = new Torrent
+        {
+            Id = 42,
+            Name = "My Torrent",
+            TagIds = new List<int> { 1 },
+            Label = "Action",
+        };
+
+        var script = new AutomationScript
+        {
+            Id = 1,
+            Name = "Tag Script",
+            Language = AutomationLanguage.JavaScript,
+            Code = "torrent.addTag('Comedy');",
+        };
+
+        _tagService.SyncTagsFromLabels(Arg.Is<IEnumerable<string>>(labels => labels.Contains("Comedy")))
+            .Returns(new List<int> { 2 });
+        _tagService.GetLabelsForTagIds(Arg.Is<IEnumerable<int>>(ids => ids.Contains(1) && ids.Contains(2)))
+            .Returns(new List<string> { "Action", "Comedy" });
+
+        var result = _subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(torrent.TagIds, Is.EquivalentTo(new[] { 1, 2 }));
+        Assert.That(torrent.Label, Is.EqualTo("Action, Comedy"));
+        _torrentRepository.Received(1).Update(torrent);
     }
 }

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Transmission;
 
@@ -172,5 +173,48 @@ public class TransmissionRpcControllerTest
 
         _torrentImportService.Received(1).ImportFromMagnet(magnet);
         _torrentService.Received().Update(Arg.Is<Torrent>(t => t.Status == TorrentStatus.Paused));
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentSet_WithLabels_Sets_Both_TagIds_And_Label()
+    {
+        var tagService = Substitute.For<ITagService>();
+        var controller = new TransmissionRpcController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _configFileProvider,
+            tagService);
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Headers["X-Transmission-Session-Id"] = "test-session-id";
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        var torrent = new Torrent
+        {
+            Id = 5,
+            InfoHash = "abcde",
+        };
+        _torrentService.Get(5).Returns(torrent);
+        tagService.SyncTagsFromLabels(Arg.Any<IEnumerable<string>>()).Returns(new List<int> { 10, 20 });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-set",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[5]").RootElement,
+                ["labels"] = JsonDocument.Parse("[\"alpha\", \"beta\"]").RootElement,
+            },
+        };
+
+        var result = await controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(torrent.Label, Is.EqualTo("alpha,beta"));
+        Assert.That(torrent.TagIds, Is.EqualTo(new List<int> { 10, 20 }));
+        _torrentService.Received(1).Update(torrent);
     }
 }
