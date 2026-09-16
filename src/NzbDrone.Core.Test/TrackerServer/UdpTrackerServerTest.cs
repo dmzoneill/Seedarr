@@ -109,8 +109,18 @@ public class UdpTrackerServerTest
     {
         var method = typeof(UdpTrackerServer).GetMethod(
             "IsRateLimited",
-            BindingFlags.NonPublic | BindingFlags.Instance);
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(string) });
         return (bool)method.Invoke(_udpTrackerServer, new object[] { ip });
+    }
+
+    private bool InvokeIsRateLimited(string ip, string infoHash)
+    {
+        var method = typeof(UdpTrackerServer).GetMethod(
+            "IsRateLimited",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(string), typeof(string) });
+        return (bool)method.Invoke(_udpTrackerServer, new object[] { ip, infoHash });
     }
 
     private void InvokePurgeExpiredConnections()
@@ -786,6 +796,19 @@ public class UdpTrackerServerTest
     }
 
     [Test]
+    public void IsRateLimited_should_track_different_swarms_on_same_ip_independently()
+    {
+        _configService.TrackerRateLimitPerMinute.Returns(2);
+
+        InvokeIsRateLimited("10.0.0.1", "hashA");
+        InvokeIsRateLimited("10.0.0.1", "hashA");
+        InvokeIsRateLimited("10.0.0.1", "hashA");
+
+        Assert.That(InvokeIsRateLimited("10.0.0.1", "hashA"), Is.True);
+        Assert.That(InvokeIsRateLimited("10.0.0.1", "hashB"), Is.False);
+    }
+
+    [Test]
     public void PurgeExpiredConnections_should_not_throw_when_empty()
     {
         Assert.DoesNotThrow(() => InvokePurgeExpiredConnections());
@@ -972,6 +995,26 @@ public class UdpTrackerServerTest
         InvokeHandleDatagram(client, datagram, remote);
 
         Assert.That(GetConnectionIdCount(), Is.GreaterThan(initialCount));
+    }
+
+    [Test]
+    public void HandleDatagram_should_silently_drop_packet_when_rate_limited()
+    {
+        _configService.TrackerRateLimitPerMinute.Returns(1);
+
+        using var receiver = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var remote = (IPEndPoint)receiver.Client.LocalEndPoint;
+        using var sender = new UdpClient(0, AddressFamily.InterNetwork);
+
+        var datagram = BuildDatagram(ProtocolMagic, 0, 42);
+
+        var clientIp = remote.Address.ToString();
+        InvokeIsRateLimited(clientIp);
+        InvokeIsRateLimited(clientIp);
+
+        InvokeHandleDatagram(sender, datagram, remote);
+
+        Assert.That(receiver.Available, Is.EqualTo(0));
     }
 
     [Test]
