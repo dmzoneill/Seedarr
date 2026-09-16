@@ -357,24 +357,25 @@ public class TorznabIndexer : IIndexer
                 var attrNodes = item.SelectNodes("*[local-name()='attr']");
                 if (attrNodes != null)
                 {
+                    int? rawPeers = null;
+                    var explicitLeechers = false;
+
                     foreach (System.Xml.XmlNode attr in attrNodes)
                     {
                         var name = attr.Attributes?["name"]?.Value?.ToLowerInvariant();
                         var val = attr.Attributes?["value"]?.Value;
                         if (name == "seeders" && int.TryParse(val, out var seeds))
                         {
-                            release.Seeders = seeds;
+                            release.Seeders = Math.Max(0, seeds);
                         }
                         else if (name == "leechers" && int.TryParse(val, out var leechers))
                         {
-                            release.Leechers = leechers;
+                            release.Leechers = Math.Max(0, leechers);
+                            explicitLeechers = true;
                         }
                         else if (name == "peers" && int.TryParse(val, out var peers))
                         {
-                            if (!release.Leechers.HasValue)
-                            {
-                                release.Leechers = peers;
-                            }
+                            rawPeers = Math.Max(0, peers);
                         }
                         else if (name == "infohash")
                         {
@@ -390,16 +391,18 @@ public class TorznabIndexer : IIndexer
                         }
                         else if (name == "downloadvolumefactor")
                         {
-                            if (double.TryParse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dvf))
+                            if (double.TryParse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var dvf)
+                                && double.IsFinite(dvf) && dvf >= 0.0)
                             {
-                                release.DownloadVolumeFactor = dvf;
+                                release.DownloadVolumeFactor = Math.Clamp(dvf, 0.0, 10.0);
                             }
                         }
                         else if (name == "uploadvolumefactor")
                         {
-                            if (double.TryParse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var uvf))
+                            if (double.TryParse(val, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var uvf)
+                                && double.IsFinite(uvf) && uvf >= 0.0)
                             {
-                                release.UploadVolumeFactor = uvf;
+                                release.UploadVolumeFactor = Math.Clamp(uvf, 0.0, 10.0);
                             }
                         }
                         else if (name == "freeleech")
@@ -410,6 +413,11 @@ public class TorznabIndexer : IIndexer
                                 release.DownloadVolumeFactor = 0.0;
                             }
                         }
+                    }
+
+                    if (!explicitLeechers && rawPeers.HasValue)
+                    {
+                        release.Leechers = Math.Max(0, rawPeers.Value - (release.Seeders ?? 0));
                     }
                 }
 

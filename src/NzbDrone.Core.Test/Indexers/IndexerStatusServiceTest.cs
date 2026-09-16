@@ -60,4 +60,91 @@ public class IndexerStatusServiceTest
         Assert.That(_service.CalculateBackoff(8), Is.EqualTo(TimeSpan.FromHours(24)));
         Assert.That(_service.CalculateBackoff(10), Is.EqualTo(TimeSpan.FromHours(24)));
     }
+
+    [Test]
+    public void IsDisabled_should_decay_consecutive_failures_when_backoff_window_has_elapsed()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Fail 1");
+        currentTime = currentTime.AddMinutes(1);
+        service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Fail 2");
+
+        var statusBefore = service.GetStatus(1);
+        Assert.That(statusBefore.ConsecutiveFailures, Is.EqualTo(2));
+        Assert.That(service.IsDisabled(1), Is.True);
+
+        // Advance time past the 15-minute backoff window
+        currentTime = currentTime.AddMinutes(16);
+
+        // When IsDisabled is checked after backoff expires, it decays failure and returns false
+        Assert.That(service.IsDisabled(1), Is.False);
+
+        var statusAfter = service.GetStatus(1);
+        Assert.That(statusAfter.ConsecutiveFailures, Is.EqualTo(1));
+        Assert.That(statusAfter.DisabledTill, Is.Null);
+    }
+
+    [Test]
+    public void DecayFailures_should_reset_failure_metadata_when_decaying_to_zero()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        service.RecordFailure(1, (int)HttpStatusCode.BadGateway, "Bad Gateway");
+        Assert.That(service.IsDisabled(1), Is.True);
+
+        // Advance time past the 5-minute backoff window
+        currentTime = currentTime.AddMinutes(6);
+
+        var status = service.GetStatus(1);
+        Assert.That(status.ConsecutiveFailures, Is.EqualTo(0));
+        Assert.That(status.DisabledTill, Is.Null);
+        Assert.That(status.InitialFailure, Is.Null);
+        Assert.That(status.LastFailureMessage, Is.Null);
+        Assert.That(status.LastStatusCode, Is.Null);
+    }
+
+    [Test]
+    public void RecordFailure_after_decay_should_increment_from_decayed_count()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        // 3 consecutive failures -> 30 min backoff
+        service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Fail 1");
+        service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Fail 2");
+        service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Fail 3");
+
+        Assert.That(service.GetStatus(1).ConsecutiveFailures, Is.EqualTo(3));
+
+        // Advance time past 30 min backoff
+        currentTime = currentTime.AddMinutes(31);
+
+        // Next failure occurs after decay
+        service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Fail after decay");
+
+        // Failures should have decayed from 3 to 2, then incremented to 3 (not 4)
+        var status = service.GetStatus(1);
+        Assert.That(status.ConsecutiveFailures, Is.EqualTo(3));
+        // Backoff for 3 failures should be 30 minutes, not 1 hour (4 failures)
+        Assert.That(status.DisabledTill, Is.EqualTo(currentTime.Add(TimeSpan.FromMinutes(30))));
+    }
+
+    [Test]
+    public void GetAllStatuses_should_decay_expired_statuses()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Fail 1");
+        service.RecordFailure(2, (int)HttpStatusCode.ServiceUnavailable, "Fail 2");
+
+        currentTime = currentTime.AddMinutes(6);
+
+        var statuses = service.GetAllStatuses();
+        Assert.That(statuses[1].ConsecutiveFailures, Is.EqualTo(0));
+        Assert.That(statuses[2].ConsecutiveFailures, Is.EqualTo(0));
+    }
 }

@@ -9,10 +9,17 @@ public class IndexerStatusService : IIndexerStatusService
 {
     private readonly ConcurrentDictionary<int, IndexerStatus> _statuses = new();
     private readonly Logger _logger;
+    private readonly Func<DateTime> _nowProvider;
 
     public IndexerStatusService()
+        : this(null)
+    {
+    }
+
+    public IndexerStatusService(Func<DateTime> nowProvider)
     {
         _logger = LogManager.GetCurrentClassLogger();
+        _nowProvider = nowProvider ?? (() => DateTime.UtcNow);
     }
 
     public void RecordSuccess(int indexerId)
@@ -35,7 +42,9 @@ public class IndexerStatusService : IIndexerStatusService
         var status = _statuses.GetOrAdd(indexerId, id => new IndexerStatus { IndexerId = id });
         lock (status)
         {
-            var now = DateTime.UtcNow;
+            var now = _nowProvider();
+            DecayFailuresIfExpired(status, now);
+
             if (!status.InitialFailure.HasValue)
             {
                 status.InitialFailure = now;
@@ -63,12 +72,13 @@ public class IndexerStatusService : IIndexerStatusService
         {
             lock (status)
             {
+                var now = _nowProvider();
                 if (status.DisabledTill.HasValue)
                 {
-                    if (status.DisabledTill.Value <= DateTime.UtcNow)
+                    if (status.DisabledTill.Value <= now)
                     {
-                        // Automatic recovery: backoff window has elapsed
-                        status.DisabledTill = null;
+                        // Automatic recovery: backoff window has elapsed; decay failure count
+                        DecayFailuresIfExpired(status, now);
                         return false;
                     }
 
@@ -86,6 +96,8 @@ public class IndexerStatusService : IIndexerStatusService
         {
             lock (status)
             {
+                var now = _nowProvider();
+                DecayFailuresIfExpired(status, now);
                 return new IndexerStatus
                 {
                     IndexerId = status.IndexerId,
@@ -105,10 +117,12 @@ public class IndexerStatusService : IIndexerStatusService
     public IReadOnlyDictionary<int, IndexerStatus> GetAllStatuses()
     {
         var dict = new Dictionary<int, IndexerStatus>();
+        var now = _nowProvider();
         foreach (var kvp in _statuses)
         {
             lock (kvp.Value)
             {
+                DecayFailuresIfExpired(kvp.Value, now);
                 dict[kvp.Key] = new IndexerStatus
                 {
                     IndexerId = kvp.Value.IndexerId,
@@ -123,6 +137,24 @@ public class IndexerStatusService : IIndexerStatusService
         }
 
         return dict;
+    }
+
+    private static void DecayFailuresIfExpired(IndexerStatus status, DateTime now)
+    {
+        if (status.DisabledTill.HasValue && status.DisabledTill.Value <= now)
+        {
+            status.DisabledTill = null;
+            if (status.ConsecutiveFailures > 0)
+            {
+                status.ConsecutiveFailures--;
+                if (status.ConsecutiveFailures == 0)
+                {
+                    status.InitialFailure = null;
+                    status.LastFailureMessage = null;
+                    status.LastStatusCode = null;
+                }
+            }
+        }
     }
 
     public void Reset(int indexerId)

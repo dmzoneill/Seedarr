@@ -113,7 +113,7 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
         <item>
             <title>Test.Release.Peers.Only</title>
             <torznab:attr name=""seeders"" value=""10"" />
-            <torznab:attr name=""peers"" value=""7"" />
+            <torznab:attr name=""peers"" value=""17"" />
         </item>
     </channel>
 </rss>";
@@ -257,6 +257,118 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             Assert.That(results[1].DownloadVolumeFactor, Is.EqualTo(0.5));
             Assert.That(results[1].UploadVolumeFactor, Is.EqualTo(1.0));
             Assert.That(results[1].IsFreeleech, Is.False);
+        }
+
+        [Test]
+        public void ParseResponse_should_calculate_leechers_as_peers_minus_seeders()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <item>
+            <title>Test.Release.Swarm</title>
+            <torznab:attr name=""seeders"" value=""30"" />
+            <torznab:attr name=""peers"" value=""45"" />
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].Seeders, Is.EqualTo(30));
+            Assert.That(results[0].Leechers, Is.EqualTo(15));
+        }
+
+        [Test]
+        public void ParseResponse_should_clamp_leechers_to_zero_when_peers_less_than_seeders()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <item>
+            <title>Test.Release.Underflow</title>
+            <torznab:attr name=""seeders"" value=""50"" />
+            <torznab:attr name=""peers"" value=""20"" />
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].Seeders, Is.EqualTo(50));
+            Assert.That(results[0].Leechers, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void ParseResponse_should_clamp_negative_seeders_and_leechers_to_zero()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <item>
+            <title>Test.Release.Negative</title>
+            <torznab:attr name=""seeders"" value=""-5"" />
+            <torznab:attr name=""leechers"" value=""-2"" />
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].Seeders, Is.EqualTo(0));
+            Assert.That(results[0].Leechers, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void ParseResponse_should_reject_nan_infinity_and_negative_volume_factors()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <item>
+            <title>Test.Release.InvalidFactors</title>
+            <torznab:attr name=""downloadvolumefactor"" value=""NaN"" />
+            <torznab:attr name=""uploadvolumefactor"" value=""-1.0"" />
+        </item>
+        <item>
+            <title>Test.Release.InfinityFactors</title>
+            <torznab:attr name=""downloadvolumefactor"" value=""Infinity"" />
+            <torznab:attr name=""uploadvolumefactor"" value=""-Infinity"" />
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(2));
+            Assert.That(results[0].DownloadVolumeFactor, Is.Null);
+            Assert.That(results[0].UploadVolumeFactor, Is.Null);
+            Assert.That(results[1].DownloadVolumeFactor, Is.Null);
+            Assert.That(results[1].UploadVolumeFactor, Is.Null);
+        }
+
+        [Test]
+        public void ParseResponse_should_clamp_excessive_volume_factors_to_ten()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <item>
+            <title>Test.Release.HighFactors</title>
+            <torznab:attr name=""downloadvolumefactor"" value=""15.5"" />
+            <torznab:attr name=""uploadvolumefactor"" value=""100.0"" />
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].DownloadVolumeFactor, Is.EqualTo(10.0));
+            Assert.That(results[0].UploadVolumeFactor, Is.EqualTo(10.0));
         }
 
         [TestCase("movies", "2000,2010,2020,2030,2040,2045,2050,2060,2070,2080,2090")]
