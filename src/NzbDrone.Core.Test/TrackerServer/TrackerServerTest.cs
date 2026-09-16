@@ -86,8 +86,18 @@ public class TrackerServerTest
     {
         var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
             "IsRateLimited",
-            BindingFlags.NonPublic | BindingFlags.Instance);
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(string) });
         return (bool)method.Invoke(_trackerServer, new object[] { ip });
+    }
+
+    private bool InvokeIsRateLimited(string ip, string infoHash)
+    {
+        var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
+            "IsRateLimited",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(string), typeof(string) });
+        return (bool)method.Invoke(_trackerServer, new object[] { ip, infoHash });
     }
 
     private void InvokePurgeExpiredRateLimits()
@@ -943,6 +953,19 @@ public class TrackerServerTest
         }
     }
 
+    [Test]
+    public void IsRateLimited_should_track_different_swarms_on_same_ip_independently()
+    {
+        _configService.TrackerRateLimitPerMinute.Returns(2);
+
+        InvokeIsRateLimited("192.168.1.1", "hashA");
+        InvokeIsRateLimited("192.168.1.1", "hashA");
+        InvokeIsRateLimited("192.168.1.1", "hashA");
+
+        Assert.That(InvokeIsRateLimited("192.168.1.1", "hashA"), Is.True);
+        Assert.That(InvokeIsRateLimited("192.168.1.1", "hashB"), Is.False);
+    }
+
     // ---- PurgeExpiredRateLimits tests ----
 
     [Test]
@@ -1310,15 +1333,31 @@ public class TrackerServerTest
     {
         _configService.TrackerRateLimitPerMinute.Returns(1);
 
-        // Pre-warm the rate limiter by calling IsRateLimited for 127.0.0.1 (the loopback IP
-        // that HandleRequest will see). After 2 calls, count=2 which exceeds limit=1.
-        InvokeIsRateLimited("127.0.0.1");
-        InvokeIsRateLimited("127.0.0.1");
+        // Pre-warm the rate limiter by calling IsRateLimited for 127.0.0.1 and the test info_hash.
+        // After 2 calls, count=2 which exceeds limit=1.
+        InvokeIsRateLimited("127.0.0.1", "74657374");
+        InvokeIsRateLimited("127.0.0.1", "74657374");
 
         // This request from 127.0.0.1 should now be rate limited
         var (response, _) = SendHttpRequestViaHandleRequest(
             "GET /announce?info_hash=test&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
         Assert.That(response, Does.StartWith("HTTP/1.1 429"));
+    }
+
+    [Test]
+    public void HandleRequest_should_allow_different_info_hashes_from_same_ip_when_one_is_rate_limited()
+    {
+        _configService.TrackerRateLimitPerMinute.Returns(1);
+        _peerDatabase.GetPeers(Arg.Any<string>()).Returns(new List<TrackerPeerEntry>());
+
+        // Rate limit swarm "74657374" (info_hash=test) on 127.0.0.1
+        InvokeIsRateLimited("127.0.0.1", "74657374");
+        InvokeIsRateLimited("127.0.0.1", "74657374");
+
+        // Request for info_hash=other should succeed with 200 OK because rate limits are per swarm
+        var (response, _) = SendHttpRequestViaHandleRequest(
+            "GET /announce?info_hash=other&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+        Assert.That(response, Does.StartWith("HTTP/1.1 200 OK"));
     }
 
     [Test]
