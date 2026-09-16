@@ -159,4 +159,68 @@ public class ConfigControllerTests : IntegrationTestBase
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
     }
+
+    [Test]
+    public async Task PutSimulationConfig_with_invalid_traffic_profile_returns_400()
+    {
+        var body = new
+        {
+            id = 1,
+            trafficPatternProfile = "invalid_profile_xyz",
+            primaryClient = "qbittorrent",
+            swarmPeerAnalysisDepth = 50
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/simulation/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task PutSimulationConfig_with_invalid_primary_client_returns_400()
+    {
+        var body = new
+        {
+            id = 1,
+            trafficPatternProfile = "balanced",
+            primaryClient = "fake_client_123",
+            swarmPeerAnalysisDepth = 50
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/simulation/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task PutSimulationConfig_with_depth_out_of_range_returns_400()
+    {
+        var body = new
+        {
+            id = 1,
+            trafficPatternProfile = "balanced",
+            primaryClient = "qbittorrent",
+            swarmPeerAnalysisDepth = 9999
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/simulation/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
+
+    [Test]
+    public async Task PutSimulationConfig_with_valid_parameters_returns_202()
+    {
+        var body = new
+        {
+            id = 1,
+            trafficPatternProfile = "conservative",
+            primaryClient = "qbittorrent",
+            swarmPeerAnalysisDepth = 100
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/simulation/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+    }
 }

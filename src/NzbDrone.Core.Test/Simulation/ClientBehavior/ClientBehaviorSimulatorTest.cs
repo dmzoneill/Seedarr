@@ -240,4 +240,37 @@ public class ClientBehaviorSimulatorTest
 
         Assert.That(result, Is.EqualTo(0.33).Within(0.001));
     }
+
+    [Test]
+    public void GetActiveProfile_should_lock_to_primary_client_and_suppress_switching_when_isPrivateTorrent_is_true()
+    {
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.PrimaryClient.Returns("qBittorrent");
+        _configService.ClientProfileSwitching.Returns(true);
+        _configService.SwitchClientProbability.Returns(1.0);
+
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory);
+
+        for (var i = 0; i < 10; i++)
+        {
+            var profile = _simulator.GetActiveProfile(isPrivateTorrent: true);
+            Assert.That(profile.Name, Is.EqualTo("qBittorrent 4.4.2"), "Private torrent must lock to primary client without rotating");
+        }
+    }
+
+    [Test]
+    public void GetActiveProfile_should_allow_switching_when_isPrivateTorrent_is_false()
+    {
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.PrimaryClient.Returns("qBittorrent");
+        _configService.ClientProfileSwitching.Returns(true);
+        _configService.SwitchClientProbability.Returns(1.0);
+
+        _simulator = new ClientBehaviorSimulator(_configService, _profileFactory);
+
+        var profile1 = _simulator.GetActiveProfile(isPrivateTorrent: false);
+        var profile2 = _simulator.GetActiveProfile(isPrivateTorrent: false);
+
+        Assert.That(profile2.Name, Is.Not.EqualTo(profile1.Name), "Public torrent should switch when probability is 1.0");
+    }
 }
