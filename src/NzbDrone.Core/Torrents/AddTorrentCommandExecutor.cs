@@ -98,9 +98,19 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
             TrackerUrl = parsed.AnnounceUrl,
             SourcePath = command.FilePath,
             DateAdded = DateTime.UtcNow,
-            Status = _configService.AutoStart ? TorrentStatus.Seeding : TorrentStatus.Stopped,
-            Progress = 0.0
+            Progress = command.Progress ?? 0.0,
+            ForceCompleted = command.ForceCompleted ?? false
         };
+
+        var initialStatus = TorrentStatus.Stopped;
+        if (_configService.AutoStart)
+        {
+            initialStatus = (torrent.Progress >= 1.0 || torrent.ForceCompleted)
+                ? TorrentStatus.Seeding
+                : TorrentStatus.Downloading;
+        }
+
+        torrent.Status = initialStatus;
 
         var added = _torrentService.Add(torrent);
 

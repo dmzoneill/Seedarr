@@ -132,7 +132,7 @@ public class WatchFolderServiceTest
     }
 
     [Test]
-    public async Task ExecuteAsync_should_set_status_to_seeding_when_auto_start_enabled()
+    public async Task ExecuteAsync_should_set_status_to_downloading_when_auto_start_enabled_and_progress_zero()
     {
         var watchDir = Path.Combine(_tempDir, "watch");
         Directory.CreateDirectory(watchDir);
@@ -159,7 +159,7 @@ public class WatchFolderServiceTest
         await _subject.StartAsync(cts.Token);
         await Task.Delay(3500);
 
-        _torrentService.Received().Add(Arg.Is<Torrent>(t => t.Status == TorrentStatus.Seeding));
+        _torrentService.Received().Add(Arg.Is<Torrent>(t => t.Status == TorrentStatus.Downloading));
     }
 
     [Test]
