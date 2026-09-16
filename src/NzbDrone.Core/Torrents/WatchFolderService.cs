@@ -201,9 +201,18 @@ public class WatchFolderService : BackgroundService
                 TrackerUrl = parsed.AnnounceUrl,
                 SourcePath = filePath,
                 DateAdded = DateTime.UtcNow,
-                Status = autoStart ? TorrentStatus.Seeding : TorrentStatus.Stopped,
                 Progress = 0.0
             };
+
+            var initialStatus = TorrentStatus.Stopped;
+            if (autoStart)
+            {
+                initialStatus = (torrent.Progress >= 1.0 || torrent.ForceCompleted)
+                    ? TorrentStatus.Seeding
+                    : TorrentStatus.Downloading;
+            }
+
+            torrent.Status = initialStatus;
 
             if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
             {

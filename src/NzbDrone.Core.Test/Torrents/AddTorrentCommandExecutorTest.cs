@@ -156,7 +156,7 @@ public class AddTorrentCommandExecutorTest
     }
 
     [Test]
-    public void Execute_should_set_status_to_seeding_when_autostart_is_true()
+    public void Execute_should_set_status_to_downloading_when_autostart_is_true_and_progress_zero()
     {
         _configService.AutoStart.Returns(true);
         var command = new AddTorrentCommand { FilePath = "/path/to/test.torrent" };
@@ -170,6 +170,48 @@ public class AddTorrentCommandExecutorTest
         _parser.Parse("/path/to/test.torrent").Returns(parsed);
         _torrentService.ExistsByInfoHash("autostarthash").Returns(false);
         _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 103 });
+
+        _subject.Execute(command);
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.Status == TorrentStatus.Downloading));
+    }
+
+    [Test]
+    public void Execute_should_set_status_to_seeding_when_autostart_is_true_and_progress_is_complete()
+    {
+        _configService.AutoStart.Returns(true);
+        var command = new AddTorrentCommand { FilePath = "/path/to/test.torrent", Progress = 1.0 };
+        var parsed = new ParsedTorrent
+        {
+            Name = "CompleteTorrent",
+            InfoHash = "completehash",
+            TotalSize = 1000
+        };
+
+        _parser.Parse("/path/to/test.torrent").Returns(parsed);
+        _torrentService.ExistsByInfoHash("completehash").Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 104 });
+
+        _subject.Execute(command);
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.Status == TorrentStatus.Seeding));
+    }
+
+    [Test]
+    public void Execute_should_set_status_to_seeding_when_autostart_is_true_and_force_completed()
+    {
+        _configService.AutoStart.Returns(true);
+        var command = new AddTorrentCommand { FilePath = "/path/to/test.torrent", ForceCompleted = true };
+        var parsed = new ParsedTorrent
+        {
+            Name = "ForceCompletedTorrent",
+            InfoHash = "forcecompletedhash",
+            TotalSize = 1000
+        };
+
+        _parser.Parse("/path/to/test.torrent").Returns(parsed);
+        _torrentService.ExistsByInfoHash("forcecompletedhash").Returns(false);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 105 });
 
         _subject.Execute(command);
 
