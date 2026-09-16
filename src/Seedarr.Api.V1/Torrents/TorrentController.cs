@@ -511,6 +511,37 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             try
             {
                 var imported = _torrentImportService.ImportFromMagnet(resource.MagnetLink);
+                var shouldUpdate = false;
+
+                if (!string.IsNullOrWhiteSpace(resource.Category))
+                {
+                    imported.Category = resource.Category;
+                    shouldUpdate = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(resource.SavePath))
+                {
+                    imported.SavePath = resource.SavePath;
+                    shouldUpdate = true;
+                }
+
+                if (resource.SequentialDownload)
+                {
+                    imported.SequentialDownload = true;
+                    shouldUpdate = true;
+                }
+
+                if (string.Equals(resource.Status, "Paused", StringComparison.OrdinalIgnoreCase))
+                {
+                    imported.Status = TorrentStatus.Paused;
+                    shouldUpdate = true;
+                }
+
+                if (shouldUpdate)
+                {
+                    _torrentService.Update(imported);
+                }
+
                 return Created($"/api/v1/torrent/{imported.Id}", TorrentResourceMapper.ToResource(imported));
             }
             catch (ArgumentException ex)
@@ -547,7 +578,12 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]
-    public IActionResult Upload([FromForm(Name = "file")] List<IFormFile> files)
+    public IActionResult Upload(
+        [FromForm(Name = "file")] List<IFormFile> files,
+        [FromForm] string category = null,
+        [FromForm] string savePath = null,
+        [FromForm] bool? sequentialDownload = null,
+        [FromForm] bool? paused = null)
     {
         if (files == null || files.Count == 0)
         {
@@ -568,6 +604,37 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             {
                 using var stream = file.OpenReadStream();
                 var torrent = _torrentImportService.ImportFromFile(stream, file.FileName);
+                var shouldUpdate = false;
+
+                if (!string.IsNullOrWhiteSpace(category))
+                {
+                    torrent.Category = category;
+                    shouldUpdate = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(savePath))
+                {
+                    torrent.SavePath = savePath;
+                    shouldUpdate = true;
+                }
+
+                if (sequentialDownload == true)
+                {
+                    torrent.SequentialDownload = true;
+                    shouldUpdate = true;
+                }
+
+                if (paused == true)
+                {
+                    torrent.Status = TorrentStatus.Paused;
+                    shouldUpdate = true;
+                }
+
+                if (shouldUpdate)
+                {
+                    _torrentService.Update(torrent);
+                }
+
                 added.Add(TorrentResourceMapper.ToResource(torrent));
             }
             catch (Exception ex)

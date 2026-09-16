@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { SeedingConfig } from "../../api/types";
 import { formatSpeed } from "../../utils/formatters";
 import { useTranslation } from "../../i18n";
@@ -67,6 +68,19 @@ export function TorrentToolbar({
   onToggleQuickControls,
 }: TorrentToolbarProps) {
   const { t } = useTranslation();
+  const [localFilter, setLocalFilter] = useState(filter);
+
+  useEffect(() => {
+    setLocalFilter(filter);
+  }, [filter]);
+
+  useEffect(() => {
+    if (localFilter === filter) return;
+    const timer = setTimeout(() => {
+      onFilterChange(localFilter);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [localFilter, filter, onFilterChange]);
 
   return (
     <div className="page-header">
@@ -209,8 +223,8 @@ export function TorrentToolbar({
           type="text"
           className="search-input"
           placeholder={t("torrents.filterPlaceholder", undefined, "Filter torrents...")}
-          value={filter}
-          onChange={(e) => onFilterChange(e.target.value)}
+          value={localFilter}
+          onChange={(e) => setLocalFilter(e.target.value)}
         />
         <div className="view-toggle">
           <button

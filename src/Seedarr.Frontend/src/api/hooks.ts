@@ -85,8 +85,16 @@ export function useRefetchInterval(): number {
     : DEFAULT_REFETCH_MS;
 }
 
-type AddTorrentInput =
-  { files: File[]; magnetLink?: never } | { magnetLink: string; files?: never };
+export interface IngestionOptions {
+  category?: string;
+  savePath?: string;
+  paused?: boolean;
+  sequentialDownload?: boolean;
+}
+
+export type AddTorrentInput =
+  | ({ files: File[]; magnetLink?: never } & IngestionOptions)
+  | ({ magnetLink: string; files?: never } & IngestionOptions);
 
 export interface TorrentUploadFailure {
   fileName: string;
@@ -239,12 +247,27 @@ export function useAddTorrent() {
       if (input.files && input.files.length > 0) {
         const formData = new FormData();
         input.files.forEach((file) => formData.append("file", file));
+        if (input.category) formData.append("category", input.category);
+        if (input.savePath) formData.append("savePath", input.savePath);
+        if (input.paused !== undefined)
+          formData.append("paused", String(input.paused));
+        if (input.sequentialDownload !== undefined)
+          formData.append(
+            "sequentialDownload",
+            String(input.sequentialDownload),
+          );
         return apiClient.postForm<AddTorrentResult>(
           "/torrent/upload",
           formData,
         );
       }
-      return apiClient.post("/torrent", { magnetLink: input.magnetLink });
+      return apiClient.post("/torrent", {
+        magnetLink: input.magnetLink,
+        category: input.category,
+        savePath: input.savePath,
+        sequentialDownload: input.sequentialDownload,
+        status: input.paused ? "Paused" : undefined,
+      });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["torrents"] }),
   });

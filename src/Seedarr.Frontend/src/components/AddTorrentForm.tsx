@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
 import {
   useAddTorrent,
+  useCategories,
   useIndexers,
   useIndexerSearch,
   useDownloadIndexerRelease,
@@ -9,6 +10,7 @@ import {
 } from "../api/hooks";
 import { formatBytes, formatDate } from "../utils/formatters";
 import { useToast } from "../context/ToastContext";
+import { validateTorrentFile, parseMagnetUri } from "../utils/magnetParser";
 import type { ReleaseInfo } from "../api/types";
 
 export interface AddTorrentFormProps {
@@ -20,32 +22,6 @@ export interface AddTorrentFormProps {
 }
 
 export type InputMode = "file" | "magnet" | "search";
-
-interface MagnetInfo {
-  name?: string;
-  hash?: string;
-  trackerCount: number;
-}
-
-function parseMagnetPreview(uri: string): MagnetInfo | null {
-  const trimmed = uri.trim();
-  if (!trimmed.startsWith("magnet:?")) return null;
-  try {
-    const rawParams = trimmed.substring(8);
-    const params = new URLSearchParams(rawParams);
-    const xt = params.get("xt") || "";
-    const hash = xt.replace(/^urn:btih:/i, "").substring(0, 40);
-    const name = params.get("dn") || undefined;
-    const trackers = params.getAll("tr");
-    return {
-      name: name ? decodeURIComponent(name.replace(/\+/g, " ")) : undefined,
-      hash: hash || undefined,
-      trackerCount: trackers.length,
-    };
-  } catch {
-    return null;
-  }
-}
 
 export function AddTorrentForm({
   initialMode = "file",
@@ -63,6 +39,18 @@ export function AddTorrentForm({
   const addTorrent = useAddTorrent();
   const { showToast } = useToast();
   const navigate = useNavigate();
+
+  // Ingestion Controls State
+  const { data: categories } = useCategories();
+  const [selectedCategory, setSelectedCategory] = useState<string>("");
+  const [customSavePath, setCustomSavePath] = useState<string>("");
+  const [startPaused, setStartPaused] = useState<boolean>(false);
+  const [sequentialDownload, setSequentialDownload] = useState<boolean>(false);
+
+  const activeCategoryObj = useMemo(
+    () => categories?.find((c) => c.name === selectedCategory),
+    [categories, selectedCategory],
+  );
 
   // Indexer Search State
   const [searchQuery, setSearchQuery] = useState(initialQuery);
@@ -103,23 +91,38 @@ export function AddTorrentForm({
     }
   }, [searchQuery, activeSearchTerm]);
 
-  const addFiles = useCallback((incoming: FileList | File[]) => {
-    const torrentFiles = Array.from(incoming).filter((f) =>
-      f.name.endsWith(".torrent"),
-    );
-    if (torrentFiles.length === 0) return;
-    setFiles((prev) => {
-      const existing = new Set(prev.map((f) => f.name));
-      const merged = [...prev];
-      for (const f of torrentFiles) {
-        if (!existing.has(f.name)) {
-          merged.push(f);
-          existing.add(f.name);
+  const addFiles = useCallback(
+    (incoming: FileList | File[]) => {
+      const list = Array.from(incoming);
+      const validFiles: File[] = [];
+
+      for (const f of list) {
+        const validation = validateTorrentFile({ name: f.name, size: f.size });
+        if (!validation.valid) {
+          showToast(
+            `${f.name}: ${validation.error || "Invalid torrent file"}`,
+            "error",
+          );
+        } else {
+          validFiles.push(f);
         }
       }
-      return merged;
-    });
-  }, []);
+
+      if (validFiles.length === 0) return;
+      setFiles((prev) => {
+        const existing = new Set(prev.map((f) => f.name));
+        const merged = [...prev];
+        for (const f of validFiles) {
+          if (!existing.has(f.name)) {
+            merged.push(f);
+            existing.add(f.name);
+          }
+        }
+        return merged;
+      });
+    },
+    [showToast],
+  );
 
   const removeFile = (name: string) => {
     setFiles((prev) => prev.filter((f) => f.name !== name));
@@ -152,10 +155,20 @@ export function AddTorrentForm({
   };
 
   const handleSubmit = () => {
+    const finalSavePath =
+      customSavePath.trim() || activeCategoryObj?.savePath || undefined;
+    const finalCategory = selectedCategory || undefined;
+
     if (mode === "file" && files.length > 0) {
       setResultMessage(null);
       addTorrent.mutate(
-        { files },
+        {
+          files,
+          category: finalCategory,
+          savePath: finalSavePath,
+          paused: startPaused,
+          sequentialDownload,
+        },
         {
           onSuccess: (result: AddTorrentResult) => {
             if (result.failed.length === 0) {
@@ -176,7 +189,13 @@ export function AddTorrentForm({
       );
     } else if (mode === "magnet" && magnetLink.trim()) {
       addTorrent.mutate(
-        { magnetLink: magnetLink.trim() },
+        {
+          magnetLink: magnetLink.trim(),
+          category: finalCategory,
+          savePath: finalSavePath,
+          paused: startPaused,
+          sequentialDownload,
+        },
         {
           onSuccess: () => {
             showToast("Magnet link added successfully", "success");
@@ -228,11 +247,26 @@ export function AddTorrentForm({
     );
   };
 
-  const isMagnetValid = magnetLink.trim().startsWith("magnet:?");
-  const magnetPreview = useMemo(
-    () => parseMagnetPreview(magnetLink),
+  const parsedMagnet = useMemo(
+    () => parseMagnetUri(magnetLink),
     [magnetLink],
   );
+  const isMagnetValid = parsedMagnet.valid;
+  const magnetPreview = useMemo(() => {
+    if (
+      !parsedMagnet.valid &&
+      !parsedMagnet.name &&
+      parsedMagnet.trackers.length === 0
+    ) {
+      return null;
+    }
+    return {
+      name: parsedMagnet.name,
+      hash: parsedMagnet.infoHash,
+      trackerCount: parsedMagnet.trackers.length,
+      isV2: parsedMagnet.isV2,
+    };
+  }, [parsedMagnet]);
   const canSubmit =
     (mode === "file" && files.length > 0) ||
     (mode === "magnet" && isMagnetValid);
@@ -648,15 +682,40 @@ export function AddTorrentForm({
                   </div>
                 )}
                 {magnetPreview?.hash && (
-                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.5rem",
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <span
                       style={{ color: "var(--text-muted)", minWidth: "75px" }}
                     >
                       Info Hash:
                     </span>
-                    <span style={{ fontFamily: "monospace", color: "#60a5fa" }}>
+                    <span
+                      style={{
+                        fontFamily: "monospace",
+                        color: "#60a5fa",
+                        wordBreak: "break-all",
+                      }}
+                    >
                       {magnetPreview.hash}
                     </span>
+                    {magnetPreview.isV2 && (
+                      <span
+                        className="badge badge-primary"
+                        style={{
+                          fontSize: "0.68rem",
+                          padding: "0.1rem 0.35rem",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        v2 (BEP 52)
+                      </span>
+                    )}
                   </div>
                 )}
                 {magnetPreview?.trackerCount !== undefined &&
@@ -1066,6 +1125,160 @@ export function AddTorrentForm({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {mode !== "search" && (
+        <div
+          style={{
+            marginTop: "1rem",
+            padding: "0.85rem 1rem",
+            backgroundColor: "var(--bg-secondary, rgba(255,255,255,0.03))",
+            borderRadius: "6px",
+            border: "1px solid var(--border-light, rgba(255,255,255,0.1))",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              color: "var(--text-primary)",
+            }}
+          >
+            ⚙️ Ingestion Options
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "0.75rem",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.25rem",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--text-secondary)",
+                  fontWeight: 500,
+                }}
+              >
+                Category
+              </label>
+              <select
+                className="form-input"
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                style={{
+                  fontSize: "0.85rem",
+                  padding: "0.4rem 0.6rem",
+                  borderRadius: "4px",
+                  background: "var(--bg-primary)",
+                  color: "inherit",
+                  border: "1px solid var(--border-light)",
+                }}
+              >
+                <option value="">(None)</option>
+                {categories?.map((cat) => (
+                  <option key={cat.id} value={cat.name}>
+                    {cat.name} {cat.savePath ? `(${cat.savePath})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.25rem",
+              }}
+            >
+              <label
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--text-secondary)",
+                  fontWeight: 500,
+                }}
+              >
+                Save Path
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder={
+                  activeCategoryObj?.savePath
+                    ? `Default: ${activeCategoryObj.savePath}`
+                    : "e.g. /downloads"
+                }
+                value={customSavePath}
+                onChange={(e) => setCustomSavePath(e.target.value)}
+                style={{
+                  fontSize: "0.85rem",
+                  padding: "0.4rem 0.6rem",
+                  borderRadius: "4px",
+                  background: "var(--bg-primary)",
+                  color: "inherit",
+                  border: "1px solid var(--border-light)",
+                }}
+              />
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "1.5rem",
+              alignItems: "center",
+              paddingTop: "0.25rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={startPaused}
+                onChange={(e) => setStartPaused(e.target.checked)}
+              />
+              <span>⏸️ Start Paused</span>
+            </label>
+
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={sequentialDownload}
+                onChange={(e) => setSequentialDownload(e.target.checked)}
+              />
+              <span>⏩ Sequential Download</span>
+            </label>
+          </div>
         </div>
       )}
 
