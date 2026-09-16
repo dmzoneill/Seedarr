@@ -265,7 +265,9 @@ public class SpeedScheduler : ISpeedScheduler
             else
             {
                 // Overnight schedule (e.g. 22:00 - 06:00)
-                if (schedule.Days.HasFlag(todayFlag) && (currentTime >= schedule.StartTime || IsCurrentTimeBeforeEnd(currentTime, schedule.EndTime)))
+                // Evening half: On the start day, active only once StartTime is reached.
+                // Morning half: On the following day, active until EndTime is reached.
+                if (schedule.Days.HasFlag(todayFlag) && currentTime >= schedule.StartTime)
                 {
                     active.Add(schedule);
                 }
