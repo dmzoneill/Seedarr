@@ -102,7 +102,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is resolved internally from server metadata storage")]
     public ActionResult GetCover(int torrentId, string filename)
     {
-        if (string.IsNullOrWhiteSpace(filename))
+        if (string.IsNullOrWhiteSpace(filename) || filename.Contains("..") || filename.Contains('/') || filename.Contains('\\'))
         {
             return NotFound();
         }
@@ -119,7 +119,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is resolved internally from server metadata storage")]
     private ActionResult ServeArtwork(int torrentId, string type)
     {
-        if (string.IsNullOrWhiteSpace(type) || !ValidArtworkTypes.Contains(type))
+        if (torrentId <= 0 || string.IsNullOrWhiteSpace(type) || !ValidArtworkTypes.Contains(type))
         {
             return NotFound();
         }
@@ -148,7 +148,23 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             return NotFound();
         }
 
-        var ext = Path.GetExtension(path).ToLowerInvariant();
+        var fullPath = Path.GetFullPath(path);
+
+        if (_appFolderInfo != null && !string.IsNullOrEmpty(_appFolderInfo.AppDataFolder))
+        {
+            var mediaCoverRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCover"))
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var mediaCacheRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCache"))
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+            if (!fullPath.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) &&
+                !fullPath.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound();
+            }
+        }
+
+        var ext = Path.GetExtension(fullPath).ToLowerInvariant();
         var contentType = ext switch
         {
             ".png" => "image/png",
@@ -159,7 +175,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             _ => "application/octet-stream",
         };
 
-        return PhysicalFile(Path.GetFullPath(path), contentType);
+        return PhysicalFile(fullPath, contentType);
     }
 
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is resolved internally from server metadata storage")]
@@ -167,29 +183,44 @@ public class MediaCoverController : RestController<MediaMetadataResource>
     {
         var candidateDirs = new List<string>();
 
-        if (_appFolderInfo != null)
+        if (_appFolderInfo != null && !string.IsNullOrEmpty(_appFolderInfo.AppDataFolder))
         {
+            var mediaCoverRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCover"))
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var mediaCacheRoot = Path.GetFullPath(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCache"))
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
             candidateDirs.Add(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCover", torrentId.ToString()));
             candidateDirs.Add(Path.Combine(_appFolderInfo.AppDataFolder, "MediaCache", torrentId.ToString()));
-        }
 
-        if (meta != null)
-        {
-            if (!string.IsNullOrEmpty(meta.PosterLocalPath))
+            if (meta != null)
             {
-                var dir = Path.GetDirectoryName(meta.PosterLocalPath);
-                if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir) && !candidateDirs.Contains(dir))
+                if (!string.IsNullOrEmpty(meta.PosterLocalPath))
                 {
-                    candidateDirs.Add(dir);
+                    var fullPoster = Path.GetFullPath(meta.PosterLocalPath);
+                    if (fullPoster.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) ||
+                        fullPoster.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var dir = Path.GetDirectoryName(fullPoster);
+                        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir) && !candidateDirs.Contains(dir))
+                        {
+                            candidateDirs.Add(dir);
+                        }
+                    }
                 }
-            }
 
-            if (!string.IsNullOrEmpty(meta.BackdropLocalPath))
-            {
-                var dir = Path.GetDirectoryName(meta.BackdropLocalPath);
-                if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir) && !candidateDirs.Contains(dir))
+                if (!string.IsNullOrEmpty(meta.BackdropLocalPath))
                 {
-                    candidateDirs.Add(dir);
+                    var fullBackdrop = Path.GetFullPath(meta.BackdropLocalPath);
+                    if (fullBackdrop.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) ||
+                        fullBackdrop.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var dir = Path.GetDirectoryName(fullBackdrop);
+                        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir) && !candidateDirs.Contains(dir))
+                        {
+                            candidateDirs.Add(dir);
+                        }
+                    }
                 }
             }
         }
