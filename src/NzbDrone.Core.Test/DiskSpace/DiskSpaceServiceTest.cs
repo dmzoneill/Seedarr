@@ -5,6 +5,7 @@ using System.Reflection;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.DiskSpace;
 
 namespace NzbDrone.Core.Test.DiskSpace;
@@ -340,5 +341,89 @@ public class DiskSpaceServiceTest
         // The result list should contain at most one entry for each root
         // (deduplication via the seen HashSet)
         Assert.That(result.Count, Is.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    public void GetDiskSpace_should_not_mask_root_drive_when_appdata_folder_is_configured()
+    {
+        _appFolderInfo.AppDataFolder.Returns("/tmp/appdata");
+        _appFolderInfo.StartUpFolder.Returns("/tmp/startup");
+        _subject = new DiskSpaceService(_appFolderInfo);
+
+        var result = _subject.GetDiskSpace();
+
+        // Both the AppData entry and the root drive should be present
+        var appData = result.FirstOrDefault(d => d.Label == "AppData");
+        var rootDrive = result.FirstOrDefault(d => d.Path == "/" || d.Path == "C:\\");
+
+        Assert.That(appData, Is.Not.Null, "AppData entry should be present");
+        Assert.That(rootDrive, Is.Not.Null, "Root drive should not be masked by AppData");
+        Assert.That(rootDrive.Label, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public void GetDiskSpace_should_include_category_save_paths_from_repository()
+    {
+        var categoryRepo = Substitute.For<ICategoryRepository>();
+        var categories = new List<Category>
+        {
+            new() { Id = 1, Name = "Movies", SavePath = "/tmp/movies" },
+        };
+        categoryRepo.All().Returns(categories);
+
+        _subject = new DiskSpaceService(_appFolderInfo, categoryRepo);
+
+        var result = _subject.GetDiskSpace();
+
+        var categoryEntry = result.FirstOrDefault(d => d.Label == "Movies" || d.Path == "/tmp/movies");
+        Assert.That(categoryEntry, Is.Not.Null, "Category save path should be included from repository");
+    }
+
+    [Test]
+    public void GetDiskSpace_should_include_category_save_paths_from_service()
+    {
+        var categoryService = Substitute.For<ICategoryService>();
+        var categories = new List<Category>
+        {
+            new() { Id = 2, Name = "TV", SavePath = "/tmp/tv" },
+        };
+        categoryService.GetAll().Returns(categories);
+
+        _subject = new DiskSpaceService(_appFolderInfo, null, categoryService);
+
+        var result = _subject.GetDiskSpace();
+
+        var categoryEntry = result.FirstOrDefault(d => d.Label == "TV" || d.Path == "/tmp/tv");
+        Assert.That(categoryEntry, Is.Not.Null, "Category save path should be included from service");
+    }
+
+    [Test]
+    public void GetDiskSpace_should_deduplicate_categories_sharing_same_root()
+    {
+        var categoryRepo = Substitute.For<ICategoryRepository>();
+        var categories = new List<Category>
+        {
+            new() { Id = 1, Name = "Cat1", SavePath = "/tmp/cat1" },
+            new() { Id = 2, Name = "Cat2", SavePath = "/tmp/cat2" },
+        };
+        categoryRepo.All().Returns(categories);
+
+        _subject = new DiskSpaceService(_appFolderInfo, categoryRepo);
+
+        var result = _subject.GetDiskSpace();
+
+        // Both /tmp/cat1 and /tmp/cat2 share root "/". Only the first should be added as a category entry.
+        var categoryEntries = result.Where(d => d.Label == "Cat1" || d.Label == "Cat2").ToList();
+        Assert.That(categoryEntries.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void GetDiskSpace_with_custom_drive_timeout_should_execute_gracefully()
+    {
+        _subject.DriveTimeout = TimeSpan.FromMilliseconds(100);
+
+        var result = _subject.GetDiskSpace();
+
+        Assert.That(result, Is.Not.Null);
     }
 }
