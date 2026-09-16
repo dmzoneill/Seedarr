@@ -12,4 +12,5 @@ public interface IProviderFactory<TProvider, TProviderDefinition>
     void Update(TProviderDefinition definition);
     void Delete(int id);
     List<TProvider> GetAvailableProviders();
+    List<TProviderDefinition> GetDefaultDefinitions();
 }

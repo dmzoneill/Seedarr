@@ -224,4 +224,19 @@ public class ProviderFactoryTest
         Assert.That(result[1].Name, Is.EqualTo("B"));
         Assert.That(result[2].Name, Is.EqualTo("C"));
     }
+
+    [Test]
+    public void GetDefaultDefinitions_should_delegate_to_service_factory()
+    {
+        var provider1 = new ConcreteTestProvider1();
+        var provider2 = new ConcreteTestProvider2();
+        _serviceFactory.BuildAll<ITestProvider>().Returns(new List<ITestProvider> { provider1, provider2 });
+
+        var result = _subject.GetDefaultDefinitions();
+
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result[0].Name, Is.EqualTo("ConcreteTestProvider1"));
+        Assert.That(result[1].Name, Is.EqualTo("ConcreteTestProvider2"));
+        _serviceFactory.Received(1).BuildAll<ITestProvider>();
+    }
 }
