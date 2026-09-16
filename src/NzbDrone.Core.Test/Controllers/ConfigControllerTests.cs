@@ -171,6 +171,10 @@ public class ConfigControllerTests
         Assert.That(GeneralConfigController.IsValidBindAddress("localhost"), Is.True);
         Assert.That(GeneralConfigController.IsValidBindAddress("127.0.0.1"), Is.True);
         Assert.That(GeneralConfigController.IsValidBindAddress("fe80::1"), Is.True);
+        Assert.That(GeneralConfigController.IsValidBindAddress("[::1]"), Is.True);
+        Assert.That(GeneralConfigController.IsValidBindAddress("[fe80::1]"), Is.True);
+        Assert.That(GeneralConfigController.IsValidBindAddress("[127.0.0.1]"), Is.True);
+        Assert.That(GeneralConfigController.IsValidBindAddress("[::]"), Is.True);
         Assert.That(GeneralConfigController.IsValidBindAddress(""), Is.True);
         Assert.That(GeneralConfigController.IsValidBindAddress(null), Is.True);
 

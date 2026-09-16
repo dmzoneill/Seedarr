@@ -7,6 +7,7 @@ using DryIoc;
 using DryIoc.Microsoft.DependencyInjection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using NzbDrone.Common.Composition;
@@ -45,66 +46,7 @@ public static class Bootstrap
 
         builder.WebHost.ConfigureKestrel(serverOptions =>
         {
-            serverOptions.AddServerHeader = false;
-
-            if (urls == null)
-            {
-                var bindAddress = configProvider.BindAddress?.Trim() ?? "*";
-                if (bindAddress is "*" or "0.0.0.0" or "")
-                {
-                    serverOptions.ListenAnyIP(configProvider.Port);
-                    if (configProvider.EnableSsl)
-                    {
-                        try
-                        {
-                            _ = certManager.GetOrCreateCertificate(configProvider);
-                            serverOptions.ListenAnyIP(configProvider.SslPort, listenOptions =>
-                            {
-                                listenOptions.UseHttps(httpsOptions =>
-                                {
-                                    httpsOptions.ServerCertificateSelector = (connectionContext, name) => certManager.GetOrCreateCertificate(configProvider);
-                                });
-                            });
-                            Logger.Info("Configured SSL dual-stack listener on port {0}", configProvider.SslPort);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Error(ex, "Failed to initialize SSL listener on port {0}. HTTPS will not be active.", configProvider.SslPort);
-                        }
-                    }
-                }
-                else
-                {
-                    var ip = bindAddress switch
-                    {
-                        "localhost" or "127.0.0.1" => IPAddress.Loopback,
-                        _ when IPAddress.TryParse(bindAddress, out var parsed) => parsed,
-                        _ => IPAddress.Any,
-                    };
-
-                    serverOptions.Listen(ip, configProvider.Port);
-
-                    if (configProvider.EnableSsl)
-                    {
-                        try
-                        {
-                            _ = certManager.GetOrCreateCertificate(configProvider);
-                            serverOptions.Listen(ip, configProvider.SslPort, listenOptions =>
-                            {
-                                listenOptions.UseHttps(httpsOptions =>
-                                {
-                                    httpsOptions.ServerCertificateSelector = (connectionContext, name) => certManager.GetOrCreateCertificate(configProvider);
-                                });
-                            });
-                            Logger.Info("Configured SSL on {0}:{1}", ip, configProvider.SslPort);
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Error(ex, "Failed to initialize SSL listener on port {0}. HTTPS will not be active.", configProvider.SslPort);
-                        }
-                    }
-                }
-            }
+            ConfigureKestrel(serverOptions, configProvider, certManager, urls);
         });
 
         builder.Host.UseServiceProviderFactory(
@@ -141,8 +83,12 @@ public static class Bootstrap
         }
         else
         {
-            var httpUrl = $"http://{configProvider.BindAddress}:{configProvider.Port}";
-            Logger.Info("Listening on {0}", httpUrl);
+            var isPortCollision = HasPortCollision(configProvider);
+            if (!isPortCollision)
+            {
+                var httpUrl = $"http://{configProvider.BindAddress}:{configProvider.Port}";
+                Logger.Info("Listening on {0}", httpUrl);
+            }
 
             if (configProvider.EnableSsl)
             {
@@ -152,6 +98,124 @@ public static class Bootstrap
         }
 
         return app;
+    }
+
+    public static void ConfigureKestrelLimits(KestrelServerOptions serverOptions)
+    {
+        serverOptions.Limits.MaxRequestBodySize = 500 * 1024 * 1024; // 500 MB
+        serverOptions.Limits.MaxConcurrentConnections = 1000;
+        serverOptions.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(2);
+        serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(30);
+    }
+
+    public static IPAddress ResolveBindAddress(string bindAddress)
+    {
+        if (string.IsNullOrWhiteSpace(bindAddress))
+        {
+            return IPAddress.Any;
+        }
+
+        var cleanAddress = bindAddress.Trim().Trim('[', ']');
+
+        return cleanAddress switch
+        {
+            "*" or "0.0.0.0" => IPAddress.Any,
+            "localhost" or "127.0.0.1" => IPAddress.Loopback,
+            "::1" => IPAddress.IPv6Loopback,
+            _ when IPAddress.TryParse(cleanAddress, out var parsed) => parsed,
+            _ => IPAddress.Any,
+        };
+    }
+
+    public static bool HasPortCollision(bool enableSsl, int port, int sslPort)
+    {
+        return enableSsl && port == sslPort;
+    }
+
+    public static bool HasPortCollision(IConfigFileProvider configProvider)
+    {
+        return configProvider != null && HasPortCollision(configProvider.EnableSsl, configProvider.Port, configProvider.SslPort);
+    }
+
+    public static void ConfigureKestrel(
+        KestrelServerOptions serverOptions,
+        IConfigFileProvider configProvider,
+        ICertificateManager certManager,
+        string[] urls = null)
+    {
+        serverOptions.AddServerHeader = false;
+        ConfigureKestrelLimits(serverOptions);
+
+        if (urls != null)
+        {
+            return;
+        }
+
+        var isPortCollision = HasPortCollision(configProvider);
+        if (isPortCollision)
+        {
+            Logger.Warn("HTTP port and SSL port are both configured to {0} with SSL enabled. Skipping unencrypted HTTP listener to prevent port collision.", configProvider.Port);
+        }
+
+        var bindAddress = configProvider?.BindAddress?.Trim() ?? "*";
+        var cleanAddress = bindAddress.Trim().Trim('[', ']');
+
+        if (cleanAddress is "*" or "0.0.0.0" or "")
+        {
+            if (!isPortCollision)
+            {
+                serverOptions.ListenAnyIP(configProvider.Port);
+            }
+
+            if (configProvider.EnableSsl)
+            {
+                try
+                {
+                    _ = certManager.GetOrCreateCertificate(configProvider);
+                    serverOptions.ListenAnyIP(configProvider.SslPort, listenOptions =>
+                    {
+                        listenOptions.UseHttps(httpsOptions =>
+                        {
+                            httpsOptions.ServerCertificateSelector = (connectionContext, name) => certManager.GetOrCreateCertificate(configProvider);
+                        });
+                    });
+                    Logger.Info("Configured SSL dual-stack listener on port {0}", configProvider.SslPort);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to initialize SSL listener on port {0}. HTTPS will not be active.", configProvider.SslPort);
+                }
+            }
+        }
+        else
+        {
+            var ip = ResolveBindAddress(bindAddress);
+
+            if (!isPortCollision)
+            {
+                serverOptions.Listen(ip, configProvider.Port);
+            }
+
+            if (configProvider.EnableSsl)
+            {
+                try
+                {
+                    _ = certManager.GetOrCreateCertificate(configProvider);
+                    serverOptions.Listen(ip, configProvider.SslPort, listenOptions =>
+                    {
+                        listenOptions.UseHttps(httpsOptions =>
+                        {
+                            httpsOptions.ServerCertificateSelector = (connectionContext, name) => certManager.GetOrCreateCertificate(configProvider);
+                        });
+                    });
+                    Logger.Info("Configured SSL on {0}:{1}", ip, configProvider.SslPort);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "Failed to initialize SSL listener on port {0}. HTTPS will not be active.", configProvider.SslPort);
+                }
+            }
+        }
     }
 
     public static void Start(StartupContext startupContext)
