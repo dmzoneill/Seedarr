@@ -12,4 +12,6 @@ public interface IManageCommandQueue
     IEnumerable<CommandModel> GetAll();
     IEnumerable<CommandModel> GetStarted();
     IEnumerable<CommandModel> GetQueued();
+    CommandModel Get(int id);
+    bool Cancel(int id);
 }

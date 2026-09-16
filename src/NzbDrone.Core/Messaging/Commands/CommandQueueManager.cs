@@ -90,6 +90,32 @@ public class CommandQueueManager : IManageCommandQueue, IDisposable
         return _repository.GetByStatus(CommandStatus.Queued);
     }
 
+    public CommandModel Get(int id)
+    {
+        return _repository.Get(id);
+    }
+
+    public bool Cancel(int id)
+    {
+        var command = _repository.Get(id);
+        if (command == null)
+        {
+            return false;
+        }
+
+        if (command.Status == CommandStatus.Queued || command.Status == CommandStatus.Started)
+        {
+            command.Status = CommandStatus.Cancelled;
+            command.EndedAt = DateTime.UtcNow;
+            command.Message = "Cancelled by user";
+            _repository.Update(command);
+            _logger.Info("Cancelled command {0} (id: {1})", command.Name, id);
+            return true;
+        }
+
+        return false;
+    }
+
     private void CleanupOldCommands()
     {
         var cutoff = DateTime.UtcNow.AddDays(-7);

@@ -12,4 +12,5 @@ public class ScheduledTaskResource
     public DateTime? LastStartTime { get; set; }
     public TimeSpan? LastDuration { get; set; }
     public DateTime? NextExecution { get; set; }
+    public bool IsRunning { get; set; }
 }

@@ -169,4 +169,88 @@ public class TaskManagerTest
         _repository.Received(1).Insert(Arg.Is<ScheduledTask>(t =>
             t.TypeName == typeof(AnotherScheduledTask).FullName));
     }
+
+    [Test]
+    public void RecordTaskStarted_should_track_running_and_update_last_start_time()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        Assert.That(_subject.IsRunning("TestTask"), Is.False);
+
+        _subject.RecordTaskStarted("TestTask");
+
+        Assert.That(_subject.IsRunning("TestTask"), Is.True);
+        _repository.Received(1).Update(Arg.Is<ScheduledTask>(t => t.LastStartTime.HasValue));
+    }
+
+    [Test]
+    public void RecordTaskStarted_should_throw_when_task_already_running()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        _subject.RecordTaskStarted("TestTask");
+
+        Assert.Throws<InvalidOperationException>(() => _subject.RecordTaskStarted("TestTask"));
+    }
+
+    [Test]
+    public void RecordTaskFinished_should_clear_running_and_update_last_execution()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        var startTime = DateTime.UtcNow;
+        _subject.RecordTaskStarted("TestTask");
+        Assert.That(_subject.IsRunning("TestTask"), Is.True);
+
+        _subject.RecordTaskFinished("TestTask", startTime);
+        Assert.That(_subject.IsRunning("TestTask"), Is.False);
+
+        _repository.Received().Update(Arg.Is<ScheduledTask>(t =>
+            t.LastStartTime == startTime && t.LastExecution >= startTime));
+    }
+
+    [Test]
+    public void Handle_should_reset_stale_in_flight_tasks()
+    {
+        var staleTask = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = typeof(FakeScheduledTask).FullName,
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddHours(-2),
+            LastStartTime = DateTime.UtcNow.AddHours(-1) // LastStartTime > LastExecution
+        };
+        _repository.All().Returns(new List<ScheduledTask> { staleTask });
+        var scheduledTasks = new List<IScheduledTask> { new FakeScheduledTask() };
+        _subject = new TaskManager(_repository, scheduledTasks);
+
+        _subject.Handle(new ApplicationStartedEvent());
+
+        _repository.Received().Update(Arg.Is<ScheduledTask>(t =>
+            t.LastStartTime == t.LastExecution));
+    }
 }

@@ -106,9 +106,16 @@ public class SystemController : ControllerBase
                 ? taskInstance.GetType().Name
                 : (t.TypeName.Contains('.') ? t.TypeName.Substring(t.TypeName.LastIndexOf('.') + 1) : t.TypeName);
 
+            var isRunning = _taskManager.IsRunning(t.TypeName) ||
+                            (t.LastStartTime.HasValue && t.LastStartTime.Value > t.LastExecution);
+
             TimeSpan? lastDuration = null;
 
-            if (t.LastStartTime.HasValue)
+            if (isRunning && t.LastStartTime.HasValue)
+            {
+                lastDuration = DateTime.UtcNow - t.LastStartTime.Value;
+            }
+            else if (t.LastStartTime.HasValue)
             {
                 lastDuration = t.LastExecution - t.LastStartTime.Value;
 
@@ -129,7 +136,8 @@ public class SystemController : ControllerBase
                 LastExecution = t.LastExecution,
                 LastStartTime = t.LastStartTime,
                 LastDuration = lastDuration,
-                NextExecution = nextExecution
+                NextExecution = nextExecution,
+                IsRunning = isRunning
             };
         }).ToList());
     }
@@ -161,7 +169,23 @@ public class SystemController : ControllerBase
 
         if (task == null)
         {
-            return NotFound(new { message = $"Task '{name}' not found" });
+            var taskInstance = _scheduledTasks.FirstOrDefault(st =>
+                string.Equals(st.GetType().FullName, name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(st.GetType().Name, name, StringComparison.OrdinalIgnoreCase));
+
+            if (taskInstance != null)
+            {
+                task = new ScheduledTask
+                {
+                    TypeName = taskInstance.GetType().FullName,
+                    Interval = taskInstance.DefaultInterval,
+                    LastExecution = DateTime.UtcNow
+                };
+            }
+            else
+            {
+                return NotFound(new { message = $"Task '{name}' not found" });
+            }
         }
 
         return RunScheduledTask(task);
@@ -178,22 +202,14 @@ public class SystemController : ControllerBase
             return NotFound(new { message = $"Task implementation for {task.TypeName} not found" });
         }
 
-        global::System.Threading.Tasks.Task.Run(() =>
+        if (_taskManager.IsRunning(task.TypeName))
         {
-            var startTime = DateTime.UtcNow;
-            _taskManager.RecordTaskStarted(task.TypeName);
+            return Conflict(new { message = $"Task {task.TypeName} is already running" });
+        }
 
-            try
-            {
-                taskInstance.Execute();
-            }
-            finally
-            {
-                _taskManager.RecordTaskFinished(task.TypeName, startTime);
-            }
-        });
+        var command = _commandQueueManager.Push(new ScheduledTaskCommand { TaskName = task.TypeName }, CommandTrigger.Manual);
 
-        return Ok(new { message = $"Task {task.TypeName} execution started" });
+        return Ok(new { message = $"Task {task.TypeName} execution started", commandId = command.Id });
     }
 
     /// <summary>
@@ -217,10 +233,32 @@ public class SystemController : ControllerBase
                 duration = DateTime.UtcNow - c.StartedAt.Value;
             }
 
+            var name = c.Name;
+            if ((c.Name == "ScheduledTaskCommand" || c.Name == "ScheduledTask") && !string.IsNullOrEmpty(c.Body))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(c.Body);
+                    if (doc.RootElement.TryGetProperty("taskName", out var tnProp) ||
+                        doc.RootElement.TryGetProperty("TaskName", out tnProp))
+                    {
+                        var taskName = tnProp.GetString();
+                        if (!string.IsNullOrEmpty(taskName))
+                        {
+                            name = taskName.Contains('.') ? taskName.Substring(taskName.LastIndexOf('.') + 1) : taskName;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Ignore JSON parsing errors
+                }
+            }
+
             return new CommandResource
             {
                 Id = c.Id,
-                Name = c.Name,
+                Name = name,
                 Status = c.Status.ToString().ToLowerInvariant(),
                 QueuedAt = c.QueuedAt,
                 StartedAt = c.StartedAt,
@@ -229,6 +267,34 @@ public class SystemController : ControllerBase
                 Message = c.Message
             };
         }).ToList());
+    }
+
+    /// <summary>
+    /// Cancels a queued or running command by ID.
+    /// </summary>
+    /// <param name="id">The command ID.</param>
+    /// <returns>Result of the cancellation.</returns>
+    [HttpDelete("command/{id:int}")]
+    public ActionResult CancelCommand(int id)
+    {
+        var command = _commandQueueManager.Get(id);
+        if (command == null)
+        {
+            return NotFound(new { message = $"Command with ID {id} not found" });
+        }
+
+        if (command.Status != CommandStatus.Queued && command.Status != CommandStatus.Started)
+        {
+            return BadRequest(new { message = $"Command {id} is in status '{command.Status}' and cannot be cancelled" });
+        }
+
+        var cancelled = _commandQueueManager.Cancel(id);
+        if (!cancelled)
+        {
+            return BadRequest(new { message = $"Command {id} could not be cancelled" });
+        }
+
+        return Ok(new { message = $"Command {id} cancelled" });
     }
 
     [HttpPost("command")]
