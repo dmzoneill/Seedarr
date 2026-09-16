@@ -21,6 +21,38 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             new { InfoHash = infoHash }) > 0;
     }
 
+    public void UpdateCategoryName(string oldCategoryName, string newCategoryName)
+    {
+        if (string.IsNullOrWhiteSpace(oldCategoryName) || string.IsNullOrWhiteSpace(newCategoryName))
+        {
+            return;
+        }
+
+        RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            connection.Execute(
+                $"UPDATE \"{_table}\" SET \"Category\" = @NewName WHERE LOWER(\"Category\") = LOWER(@OldName)",
+                new { OldName = oldCategoryName.Trim(), NewName = newCategoryName.Trim() });
+        });
+    }
+
+    public void ClearCategory(string categoryName)
+    {
+        if (string.IsNullOrWhiteSpace(categoryName))
+        {
+            return;
+        }
+
+        RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            connection.Execute(
+                $"UPDATE \"{_table}\" SET \"Category\" = '' WHERE LOWER(\"Category\") = LOWER(@CategoryName)",
+                new { CategoryName = categoryName.Trim() });
+        });
+    }
+
     public override void Delete(int id)
     {
         RetryPolicy.Execute(() =>
