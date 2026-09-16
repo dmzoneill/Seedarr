@@ -41,8 +41,33 @@ export function calculateHnrStatus(
   torrent: Torrent,
   requiredHours: number = 72,
 ): HnrStatus {
+  if (!torrent.isPrivate) {
+    return {
+      isCleared: true,
+      requiredSeconds: 0,
+      seededSeconds: torrent.seedingTime || 0,
+      progressPercent: 100,
+      remainingSeconds: 0,
+      label: "Public Swarm (No HnR rules)",
+    };
+  }
+
   const requiredSeconds = requiredHours * 3600;
   const seededSeconds = torrent.seedingTime || 0;
+  const isCompleted =
+    torrent.status === "Seeding" || (torrent.progress ?? 0) >= 1.0;
+
+  if (!isCompleted) {
+    return {
+      isCleared: false,
+      requiredSeconds,
+      seededSeconds,
+      progressPercent: 0,
+      remainingSeconds: requiredSeconds,
+      label: "Downloading (HnR timer starts after completion)",
+    };
+  }
+
   const ratio = Number.isFinite(torrent.ratio) ? torrent.ratio : 0;
 
   if (ratio >= 1.0 || seededSeconds >= requiredSeconds) {

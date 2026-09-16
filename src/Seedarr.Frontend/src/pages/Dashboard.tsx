@@ -138,8 +138,9 @@ function Dashboard() {
   );
 
   const hnrPendingCount = useMemo(() => {
-    return (torrents ?? []).filter((t) => !calculateHnrStatus(t).isCleared)
-      .length;
+    return (torrents ?? []).filter(
+      (t) => Boolean(t.isPrivate) && !calculateHnrStatus(t).isCleared,
+    ).length;
   }, [torrents]);
 
   const totalSize = (torrents ?? []).reduce((sum, t) => sum + t.totalSize, 0);
