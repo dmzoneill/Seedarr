@@ -36,7 +36,7 @@ public interface ITrackerMetricService
     TrackerMetric GetMetric(int id);
     TrackerMetric GetMetricByUrl(string url);
     TrackerMetricsSummary GetSummary();
-    List<TrackerMetricSnapshot> GetHistory(int id, int hours = 24);
+    List<TrackerMetricSnapshot> GetHistory(int id, int hours = 24, int limit = 500);
     void ResetMetrics(int id);
     void DeleteMetric(int id);
     void SeedFromExistingTrackers();
@@ -418,10 +418,12 @@ public class TrackerMetricService : ITrackerMetricService
         return metric;
     }
 
-    public List<TrackerMetricSnapshot> GetHistory(int id, int hours = 24)
+    public List<TrackerMetricSnapshot> GetHistory(int id, int hours = 24, int limit = 500)
     {
-        var since = DateTime.UtcNow.AddHours(-Math.Max(1, hours));
-        return _snapshotRepository.GetHistory(id, since);
+        var clampedHours = Math.Clamp(hours, 1, 168);
+        var clampedLimit = Math.Clamp(limit, 1, 2000);
+        var since = DateTime.UtcNow.AddHours(-clampedHours);
+        return _snapshotRepository.GetHistory(id, since, clampedLimit);
     }
 
     public void ResetMetrics(int id)

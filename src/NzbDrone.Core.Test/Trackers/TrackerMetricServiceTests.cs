@@ -329,7 +329,7 @@ public class TrackerMetricServiceTests
         };
 
         _metricRepository.Get(42).Returns(metric);
-        _snapshotRepository.GetHistory(42, Arg.Any<DateTime>()).Returns(history);
+        _snapshotRepository.GetHistory(42, Arg.Any<DateTime>(), Arg.Any<int>()).Returns(history);
 
         var result = _service.GetMetric(42);
 
@@ -337,5 +337,40 @@ public class TrackerMetricServiceTests
         Assert.That(result.LatencyP50Ms, Is.EqualTo(80.0));
         Assert.That(result.LatencyP95Ms, Is.EqualTo(98.0));
         Assert.That(result.LatencyP99Ms, Is.EqualTo(99.6));
+    }
+
+    [Test]
+    public void GetHistory_clamps_hours_and_limit_to_safe_bounds()
+    {
+        var expectedSnapshots = new List<TrackerMetricSnapshot>
+        {
+            new() { Id = 1, TrackerMetricId = 10, ResponseTimeMs = 50 }
+        };
+
+        _snapshotRepository.GetHistory(10, Arg.Any<DateTime>(), 1).Returns(expectedSnapshots);
+
+        var resultLower = _service.GetHistory(10, hours: 0, limit: 0);
+
+        Assert.That(resultLower, Is.SameAs(expectedSnapshots));
+        _snapshotRepository.Received(1).GetHistory(10, Arg.Is<DateTime>(d => d >= DateTime.UtcNow.AddMinutes(-70) && d <= DateTime.UtcNow.AddMinutes(-50)), 1);
+
+        _snapshotRepository.GetHistory(10, Arg.Any<DateTime>(), 2000).Returns(expectedSnapshots);
+
+        var resultUpper = _service.GetHistory(10, hours: 500, limit: 5000);
+
+        Assert.That(resultUpper, Is.SameAs(expectedSnapshots));
+        _snapshotRepository.Received(1).GetHistory(10, Arg.Is<DateTime>(d => d >= DateTime.UtcNow.AddHours(-169) && d <= DateTime.UtcNow.AddHours(-167)), 2000);
+    }
+
+    [Test]
+    public void GetHistory_uses_default_hours_and_limit_when_not_specified()
+    {
+        var expectedSnapshots = new List<TrackerMetricSnapshot>();
+        _snapshotRepository.GetHistory(10, Arg.Any<DateTime>(), 500).Returns(expectedSnapshots);
+
+        var result = _service.GetHistory(10);
+
+        Assert.That(result, Is.SameAs(expectedSnapshots));
+        _snapshotRepository.Received(1).GetHistory(10, Arg.Is<DateTime>(d => d >= DateTime.UtcNow.AddHours(-25) && d <= DateTime.UtcNow.AddHours(-23)), 500);
     }
 }
