@@ -9,6 +9,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using BencodeNET.Objects;
+using BencodeNET.Parsing;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -1110,6 +1111,195 @@ public class DhtServiceTest
             InvokeHandleMessage(message.EncodeAsBytes(), new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881)));
 
         Assert.That(_service.RoutingTable.NodeCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task HandleGetPeers_with_more_than_50_peers_should_truncate_values_to_50()
+    {
+        SetUdpClient();
+        using var listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var listenerEp = (IPEndPoint)listener.Client.LocalEndPoint;
+
+        var nodeId = CreateNodeId(0x42);
+        var infoHash = RandomNumberGenerator.GetBytes(20);
+
+        for (var i = 1; i <= 60; i++)
+        {
+            _service.PeerStore.AddPeer(infoHash, IPAddress.Parse($"192.168.1.{(i % 250) + 1}"), 5000 + i);
+        }
+
+        Assert.That(_service.PeerStore.GetPeers(infoHash).Count, Is.EqualTo(60));
+
+        var message = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x01, 0x02 }),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("get_peers"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(nodeId),
+                ["info_hash"] = new BString(infoHash)
+            }
+        };
+
+        InvokeHandleMessage(message.EncodeAsBytes(), listenerEp);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var result = await listener.ReceiveAsync(cts.Token);
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(result.Buffer);
+
+        Assert.That(response["y"].ToString(), Is.EqualTo("r"));
+        var responseDict = (BDictionary)response["r"];
+        Assert.That(responseDict.ContainsKey("values"), Is.True);
+        var values = (BList)responseDict["values"];
+        Assert.That(values.Count, Is.EqualTo(50));
+    }
+
+    [Test]
+    public async Task HandleQuery_with_unknown_query_type_should_send_error_204_method_unknown()
+    {
+        SetUdpClient();
+        using var listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var listenerEp = (IPEndPoint)listener.Client.LocalEndPoint;
+
+        var txId = new byte[] { 0xAA, 0xBB };
+        var nodeId = CreateNodeId(0x42);
+        var message = new BDictionary
+        {
+            ["t"] = new BString(txId),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("nonexistent_query"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(nodeId)
+            }
+        };
+
+        InvokeHandleMessage(message.EncodeAsBytes(), listenerEp);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var result = await listener.ReceiveAsync(cts.Token);
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(result.Buffer);
+
+        Assert.That(response["y"].ToString(), Is.EqualTo("e"));
+        Assert.That(response["t"].ToString(), Is.EqualTo(new BString(txId).ToString()));
+        var errList = (BList)response["e"];
+        Assert.That(((BNumber)errList[0]).Value, Is.EqualTo(204));
+        Assert.That(errList[1].ToString(), Is.EqualTo("Method Unknown"));
+    }
+
+    [Test]
+    public async Task HandleQuery_with_malformed_or_missing_arguments_should_send_error_203_protocol_error()
+    {
+        SetUdpClient();
+        using var listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var listenerEp = (IPEndPoint)listener.Client.LocalEndPoint;
+
+        var txId = new byte[] { 0x05, 0x06 };
+        var nodeId = CreateNodeId(0x42);
+
+        // Missing info_hash in get_peers query
+        var message = new BDictionary
+        {
+            ["t"] = new BString(txId),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("get_peers"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(nodeId)
+            }
+        };
+
+        InvokeHandleMessage(message.EncodeAsBytes(), listenerEp);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var result = await listener.ReceiveAsync(cts.Token);
+        var parser = new BencodeParser();
+        var response = parser.Parse<BDictionary>(result.Buffer);
+
+        Assert.That(response["y"].ToString(), Is.EqualTo("e"));
+        var errList = (BList)response["e"];
+        Assert.That(((BNumber)errList[0]).Value, Is.EqualTo(203));
+        Assert.That(errList[1].ToString(), Is.EqualTo("Protocol Error"));
+    }
+
+    [Test]
+    public async Task HandleAnnouncePeer_with_invalid_port_or_info_hash_should_be_rejected()
+    {
+        SetUdpClient();
+        using var listener = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var listenerEp = (IPEndPoint)listener.Client.LocalEndPoint;
+
+        var nodeId = CreateNodeId(0x42);
+        var validHash = RandomNumberGenerator.GetBytes(20);
+        var invalidHash = new byte[10]; // Invalid length != 20
+
+        var generateMethod = typeof(DhtService).GetMethod("GenerateToken", BindingFlags.NonPublic | BindingFlags.Instance);
+        var token = (byte[])generateMethod.Invoke(_service, new object[] { listenerEp.Address });
+
+        // Test 1: Invalid infoHash length (!= 20)
+        var msgInvalidHash = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x11, 0x22 }),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("announce_peer"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(nodeId),
+                ["info_hash"] = new BString(invalidHash),
+                ["token"] = new BString(token),
+                ["port"] = new BNumber(6881)
+            }
+        };
+
+        InvokeHandleMessage(msgInvalidHash.EncodeAsBytes(), listenerEp);
+
+        using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2)))
+        {
+            var result = await listener.ReceiveAsync(cts.Token);
+            var parser = new BencodeParser();
+            var response = parser.Parse<BDictionary>(result.Buffer);
+
+            Assert.That(response["y"].ToString(), Is.EqualTo("e"));
+            var errList = (BList)response["e"];
+            Assert.That(((BNumber)errList[0]).Value, Is.EqualTo(203));
+            Assert.That(errList[1].ToString(), Is.EqualTo("Protocol Error"));
+        }
+
+        Assert.That(_service.PeerStore.HasPeers(invalidHash), Is.False);
+
+        // Test 2: Invalid port (e.g. 70000)
+        var msgInvalidPort = new BDictionary
+        {
+            ["t"] = new BString(new byte[] { 0x33, 0x44 }),
+            ["y"] = new BString("q"),
+            ["q"] = new BString("announce_peer"),
+            ["a"] = new BDictionary
+            {
+                ["id"] = new BString(nodeId),
+                ["info_hash"] = new BString(validHash),
+                ["token"] = new BString(token),
+                ["port"] = new BNumber(70000)
+            }
+        };
+
+        InvokeHandleMessage(msgInvalidPort.EncodeAsBytes(), listenerEp);
+
+        using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2)))
+        {
+            var result = await listener.ReceiveAsync(cts.Token);
+            var parser = new BencodeParser();
+            var response = parser.Parse<BDictionary>(result.Buffer);
+
+            Assert.That(response["y"].ToString(), Is.EqualTo("e"));
+            var errList = (BList)response["e"];
+            Assert.That(((BNumber)errList[0]).Value, Is.EqualTo(203));
+            Assert.That(errList[1].ToString(), Is.EqualTo("Protocol Error"));
+        }
+
+        Assert.That(_service.PeerStore.HasPeers(validHash), Is.False);
     }
 
     // ── SendGetPeers / SendAnnouncePeer / SendFindNode ───────────────

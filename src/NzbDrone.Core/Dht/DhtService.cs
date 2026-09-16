@@ -470,9 +470,18 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     private void HandleQuery(BDictionary message, IPEndPoint sender)
     {
-        var queryType = ((BString)message["q"]).ToString();
-        var args = (BDictionary)message["a"];
-        var transactionId = (BString)message["t"];
+        var transactionId = message.ContainsKey("t") && message["t"] is BString tStr
+            ? tStr
+            : new BString(Array.Empty<byte>());
+
+        if (!message.ContainsKey("q") || message["q"] is not BString qStr ||
+            !message.ContainsKey("a") || message["a"] is not BDictionary args)
+        {
+            SendErrorResponse(sender, transactionId, 203, "Protocol Error");
+            return;
+        }
+
+        var queryType = qStr.ToString();
 
         switch (queryType)
         {
@@ -488,12 +497,15 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             case "announce_peer":
                 HandleAnnouncePeerQuery(args, sender, transactionId);
                 break;
+            default:
+                SendErrorResponse(sender, transactionId, 204, "Method Unknown");
+                break;
         }
 
         // Add querying node to routing table
-        if (args.ContainsKey("id"))
+        if (args.ContainsKey("id") && args["id"] is BString idStr && idStr.Value.Length == 20)
         {
-            var nodeId = ((BString)args["id"]).Value.ToArray();
+            var nodeId = idStr.Value.ToArray();
             _routingTable.AddNode(new DhtNode
             {
                 NodeId = nodeId,
@@ -588,12 +600,13 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     private void HandleGetPeersQuery(BDictionary args, IPEndPoint sender, BString transactionId)
     {
-        if (!args.ContainsKey("info_hash"))
+        if (!args.ContainsKey("info_hash") || args["info_hash"] is not BString hashStr || hashStr.Value.Length != 20)
         {
+            SendErrorResponse(sender, transactionId, 203, "Protocol Error");
             return;
         }
 
-        var infoHash = ((BString)args["info_hash"]).Value.ToArray();
+        var infoHash = hashStr.Value.ToArray();
         var token = GenerateToken(sender.Address);
 
         var responseDict = new BDictionary
@@ -606,13 +619,13 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         if (peers.Count > 0)
         {
             var values = new BList();
-            foreach (var peer in peers)
+            foreach (var peer in peers.Take(50))
             {
                 values.Add(new BString(peer));
             }
 
             responseDict["values"] = values;
-            _logger.Debug("DHT get_peers from {0}: returning {1} peers for {2}", sender, peers.Count, Convert.ToHexString(infoHash));
+            _logger.Debug("DHT get_peers from {0}: returning {1} peers for {2}", sender, values.Count, Convert.ToHexString(infoHash));
         }
         else
         {
@@ -634,13 +647,20 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     private void HandleAnnouncePeerQuery(BDictionary args, IPEndPoint sender, BString transactionId)
     {
-        if (!args.ContainsKey("info_hash") || !args.ContainsKey("token"))
+        if (!args.ContainsKey("info_hash") || args["info_hash"] is not BString hashStr || hashStr.Value.Length != 20)
         {
+            SendErrorResponse(sender, transactionId, 203, "Protocol Error");
             return;
         }
 
-        var infoHash = ((BString)args["info_hash"]).Value.ToArray();
-        var receivedToken = ((BString)args["token"]).Value.ToArray();
+        if (!args.ContainsKey("token") || args["token"] is not BString tokenStr)
+        {
+            SendErrorResponse(sender, transactionId, 203, "Protocol Error");
+            return;
+        }
+
+        var infoHash = hashStr.Value.ToArray();
+        var receivedToken = tokenStr.Value.ToArray();
 
         if (!ValidateToken(receivedToken, sender.Address))
         {
@@ -653,15 +673,43 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         var port = sender.Port;
         if (args.ContainsKey("implied_port"))
         {
-            var impliedPort = ((BNumber)args["implied_port"]).Value;
-            if (impliedPort == 0 && args.ContainsKey("port"))
+            if (args["implied_port"] is not BNumber impliedNumber)
             {
-                port = (int)((BNumber)args["port"]).Value;
+                SendErrorResponse(sender, transactionId, 203, "Protocol Error");
+                return;
+            }
+
+            var impliedPort = impliedNumber.Value;
+            if (impliedPort == 0)
+            {
+                if (args.ContainsKey("port"))
+                {
+                    if (args["port"] is not BNumber portNumber)
+                    {
+                        SendErrorResponse(sender, transactionId, 203, "Protocol Error");
+                        return;
+                    }
+
+                    port = (int)portNumber.Value;
+                }
             }
         }
         else if (args.ContainsKey("port"))
         {
-            port = (int)((BNumber)args["port"]).Value;
+            if (args["port"] is not BNumber portNumber)
+            {
+                SendErrorResponse(sender, transactionId, 203, "Protocol Error");
+                return;
+            }
+
+            port = (int)portNumber.Value;
+        }
+
+        if (port < 1 || port > 65535)
+        {
+            _logger.Debug("DHT announce_peer from {0}: invalid port {1}", sender, port);
+            SendErrorResponse(sender, transactionId, 203, "Protocol Error");
+            return;
         }
 
         _peerStore.AddPeer(infoHash, sender.Address, port);
@@ -743,16 +791,16 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         _udpClient?.Send(bytes, bytes.Length, sender);
     }
 
-    private void SendErrorResponse(IPEndPoint target, BString transactionId, int code, string message)
+    private void SendErrorResponse(IPEndPoint target, BString transactionId, int errorCode, string errorMessage)
     {
         var error = new BDictionary
         {
-            ["t"] = transactionId,
+            ["t"] = transactionId ?? new BString(Array.Empty<byte>()),
             ["y"] = new BString("e"),
             ["e"] = new BList
             {
-                (IBObject)new BNumber(code),
-                (IBObject)new BString(message)
+                (IBObject)new BNumber(errorCode),
+                (IBObject)new BString(errorMessage)
             }
         };
 
