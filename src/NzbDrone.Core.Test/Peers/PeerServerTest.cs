@@ -189,9 +189,34 @@ public class PeerServerTest
     }
 
     [Test]
-    public void GetEncryptionMode_should_return_prefer_plain_text_for_disabled()
+    public void GetEncryptionMode_should_return_require_encrypted_for_forced()
     {
-        _configService.EncryptionMode.Returns("disabled");
+        _configService.EncryptionMode.Returns("forced");
+
+        var result = InvokeGetEncryptionMode();
+
+        Assert.That(result, Is.EqualTo(EncryptionMode.RequireEncrypted));
+    }
+
+    [TestCase("FORCED")]
+    [TestCase("Required")]
+    [TestCase("REQUIRED")]
+    public void GetEncryptionMode_should_be_case_insensitive_for_require_encrypted(string mode)
+    {
+        _configService.EncryptionMode.Returns(mode);
+
+        var result = InvokeGetEncryptionMode();
+
+        Assert.That(result, Is.EqualTo(EncryptionMode.RequireEncrypted));
+    }
+
+    [TestCase("disabled")]
+    [TestCase("plain")]
+    [TestCase("none")]
+    [TestCase("DISABLED")]
+    public void GetEncryptionMode_should_return_prefer_plain_text_for_disabled_synonyms(string mode)
+    {
+        _configService.EncryptionMode.Returns(mode);
 
         var result = InvokeGetEncryptionMode();
 
@@ -222,6 +247,16 @@ public class PeerServerTest
     public void GetEncryptionMode_should_return_prefer_encrypted_for_empty_string()
     {
         _configService.EncryptionMode.Returns("");
+
+        var result = InvokeGetEncryptionMode();
+
+        Assert.That(result, Is.EqualTo(EncryptionMode.PreferEncrypted));
+    }
+
+    [Test]
+    public void GetEncryptionMode_should_return_prefer_encrypted_for_null()
+    {
+        _configService.EncryptionMode.Returns((string)null);
 
         var result = InvokeGetEncryptionMode();
 
