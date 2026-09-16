@@ -1,11 +1,16 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network;
+using Open.Nat;
 
 namespace NzbDrone.Core.Test.Network;
 
@@ -149,5 +154,123 @@ public class UpnpServiceTest
         var evt = new UpnpMappingCreatedEvent(0);
 
         Assert.That(evt.ExternalPort, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void PortMapping_ErrorMessage_should_be_null_by_default()
+    {
+        var mapping = new PortMapping();
+
+        Assert.That(mapping.ErrorMessage, Is.Null);
+    }
+
+    [Test]
+    public void PortMapping_ErrorMessage_should_be_settable()
+    {
+        var mapping = new PortMapping
+        {
+            ErrorMessage = "Test error"
+        };
+
+        Assert.That(mapping.ErrorMessage, Is.EqualTo("Test error"));
+    }
+
+    [Test]
+    public async Task CreateMappings_should_not_publish_event_if_peer_port_mapping_fails()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerHttpPort.Returns(9696);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Is<Mapping>(m => m.PublicPort == 6881 && m.Protocol == Protocol.Tcp))
+            .ThrowsAsync(new Exception("Port map failed"));
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<UpnpMappingCreatedEvent>());
+    }
+
+    [Test]
+    public async Task CreateMappings_should_set_IsActive_false_and_record_error_on_failure()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerHttpPort.Returns(9696);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>())
+            .ThrowsAsync(new Exception("Gateway error"));
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+
+        var mappings = service.GetMappings();
+        Assert.That(mappings, Is.Not.Empty);
+        Assert.That(mappings.All(m => !m.IsActive), Is.True);
+        Assert.That(mappings[0].ErrorMessage, Does.Contain("Gateway error"));
+    }
+
+    [Test]
+    public async Task CreateMappings_should_set_IsActive_true_and_publish_event_on_success()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerHttpPort.Returns(9696);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<UpnpMappingCreatedEvent>(e => e.ExternalPort == 6881));
+        var mappings = service.GetMappings();
+        Assert.That(mappings, Is.Not.Empty);
+        Assert.That(mappings.All(m => m.IsActive), Is.True);
+        Assert.That(mappings.All(m => m.ErrorMessage == null), Is.True);
+        Assert.That(service.ExternalIp, Is.EqualTo("203.0.113.1"));
+        Assert.That(service.IsAvailable, Is.True);
+    }
+
+    [Test]
+    public async Task CreateMappings_should_detect_port_conflict_code_718()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerHttpPort.Returns(9696);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>())
+            .ThrowsAsync(CreateMappingException(718, "ConflictInMappingEntry"));
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<UpnpMappingCreatedEvent>());
+        var mappings = service.GetMappings();
+        Assert.That(mappings, Is.Not.Empty);
+        Assert.That(mappings[0].IsActive, Is.False);
+        Assert.That(mappings[0].ErrorMessage, Does.Contain("718").And.Contain("Conflict"));
+    }
+
+    private static MappingException CreateMappingException(int errorCode, string errorText)
+    {
+        var ctor = typeof(MappingException).GetConstructor(
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance,
+            null,
+            new[] { typeof(int), typeof(string) },
+            null);
+
+        if (ctor != null)
+        {
+            return (MappingException)ctor.Invoke(new object[] { errorCode, errorText });
+        }
+
+        var ex = (MappingException)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(MappingException));
+        var prop = typeof(MappingException).GetProperty("ErrorCode");
+        prop?.SetValue(ex, errorCode);
+        return ex;
     }
 }
