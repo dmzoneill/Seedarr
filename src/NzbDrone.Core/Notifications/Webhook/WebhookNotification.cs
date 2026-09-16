@@ -82,6 +82,11 @@ public class WebhookNotification : INotificationService
                 using var content = new StringContent(json, Encoding.UTF8, "application/json");
                 using var request = new HttpRequestMessage(HttpMethod.Post, WebhookUrl) { Content = content };
                 using var response = _httpClient.Send(request, ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException($"Webhook dispatch failed with HTTP {(int)response.StatusCode} {response.StatusCode}", null, response.StatusCode);
+                }
+
                 _logger.Debug("Webhook sent to {0}, status: {1}", WebhookUrl, response.StatusCode);
             });
         }

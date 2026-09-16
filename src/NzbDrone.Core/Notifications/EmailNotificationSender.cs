@@ -158,6 +158,12 @@ public static class EmailNotificationSender
         var torrentDetails = torrent != null
             ? $"Torrent: {torrent.Name}\nCategory: {torrent.Label ?? "None"}\nProgress: {torrent.Progress * 100:F1}%\nStatus: {torrent.Status}\nSize: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
             : NotificationPayloadBuilder.ExtractMessage(genericPayload, $"Event: {eventType}");
+        var err = NotificationPayloadBuilder.ExtractErrorMessage(genericPayload);
+        if (!string.IsNullOrWhiteSpace(err))
+        {
+            torrentDetails += $"\nError: {err}";
+        }
+
         var overview = NotificationPayloadBuilder.ExtractOverview(meta);
         var body = !string.IsNullOrWhiteSpace(overview)
             ? $"{torrentDetails}\n\n{overview}"

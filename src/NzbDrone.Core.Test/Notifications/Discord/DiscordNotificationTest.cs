@@ -385,4 +385,15 @@ public class DiscordNotificationTest
 
         Assert.DoesNotThrow(() => subject.OnHealthIssue("Test", "message"));
     }
+
+    [Test]
+    public void OnTorrentAdded_should_not_throw_when_http_returns_server_error()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.InternalServerError, "Server error");
+        var subject = WithHandler(handler);
+        subject.WebhookUrl = "http://8.8.8.8/webhook";
+
+        Assert.DoesNotThrow(() => subject.OnTorrentAdded("test.torrent"));
+    }
 }

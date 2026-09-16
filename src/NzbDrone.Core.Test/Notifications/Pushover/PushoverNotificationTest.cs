@@ -168,4 +168,16 @@ public class PushoverNotificationTest
 
         Assert.DoesNotThrow(() => subject.OnHealthIssue("Test", "message"));
     }
+
+    [Test]
+    public void OnTorrentAdded_should_not_throw_when_http_returns_server_error()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.InternalServerError, "Server error");
+        var subject = WithHandler(handler);
+        subject.ApiToken = "test-token";
+        subject.UserKey = "test-user-key";
+
+        Assert.DoesNotThrow(() => subject.OnTorrentAdded("test.torrent"));
+    }
 }

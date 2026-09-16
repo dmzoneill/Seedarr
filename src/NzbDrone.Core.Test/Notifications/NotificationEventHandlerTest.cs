@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -287,5 +288,235 @@ public class NotificationEventHandlerTest
             Assert.That(dispatchedUrls, Contains.Item("http://test/untagged"));
             Assert.That(dispatchedUrls, Does.Not.Contain("http://test/tagged"));
         }
+    }
+
+    [Test]
+    public async Task Handle_ArchiveExtractionFailedEvent_dispatches_single_notification_when_both_health_and_manual_enabled()
+    {
+        var dispatchCount = 0;
+        var signal = new TaskCompletionSource<bool>();
+
+        _webhookDispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true))
+            .AndDoes(_ =>
+            {
+                Interlocked.Increment(ref dispatchCount);
+                signal.TrySetResult(true);
+            });
+
+        var notif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Error Notif",
+            Implementation = "Webhook",
+            Enable = true,
+            OnHealthIssue = true,
+            OnManualInteractionRequired = true,
+            Settings = "{\"url\":\"http://test/hook\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { notif });
+
+        var torrent = new Torrent { Id = 42, Name = "Extracted File Torrent" };
+        _handler.Handle(new ArchiveExtractionFailedEvent(torrent, "Archive checksum mismatch"));
+
+        await Task.WhenAny(signal.Task, Task.Delay(300));
+        await Task.Delay(50);
+
+        Assert.That(dispatchCount, Is.EqualTo(1), "Extraction failed event must dispatch exactly one notification");
+    }
+
+    [Test]
+    public async Task Handle_ArchiveExtractionFailedEvent_includes_error_message_in_payload()
+    {
+        object capturedPayload = null;
+        var signal = new TaskCompletionSource<bool>();
+
+        _webhookDispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true))
+            .AndDoes(callInfo =>
+            {
+                capturedPayload = callInfo.Arg<object>();
+                signal.TrySetResult(true);
+            });
+
+        var notif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Error Notif",
+            Implementation = "Webhook",
+            Enable = true,
+            OnHealthIssue = true,
+            Settings = "{\"url\":\"http://test/hook\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { notif });
+
+        var torrent = new Torrent { Id = 42, Name = "Extracted File Torrent" };
+        var errorMessage = "Archive checksum mismatch in file part 2";
+        _handler.Handle(new ArchiveExtractionFailedEvent(torrent, errorMessage));
+
+        var completed = await Task.WhenAny(signal.Task, Task.Delay(300));
+        Assert.That(completed, Is.EqualTo(signal.Task), "Notification should be dispatched");
+        Assert.That(capturedPayload, Is.Not.Null);
+
+        var extractedError = NotificationPayloadBuilder.ExtractErrorMessage(capturedPayload);
+        Assert.That(extractedError, Is.EqualTo(errorMessage), "Payload must preserve the ArchiveExtractionFailedEvent ErrorMessage");
+    }
+
+    [Test]
+    public async Task Handle_TorrentStatusChangedEvent_Error_dispatches_single_notification_when_both_health_and_manual_enabled()
+    {
+        var dispatchCount = 0;
+        var signal = new TaskCompletionSource<bool>();
+
+        _webhookDispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true))
+            .AndDoes(_ =>
+            {
+                Interlocked.Increment(ref dispatchCount);
+                signal.TrySetResult(true);
+            });
+
+        var notif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Error Notif",
+            Implementation = "Webhook",
+            Enable = true,
+            OnHealthIssue = true,
+            OnManualInteractionRequired = true,
+            Settings = "{\"url\":\"http://test/hook\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { notif });
+
+        var torrent = new Torrent { Id = 42, Name = "Error Torrent" };
+        _handler.Handle(new TorrentStatusChangedEvent(torrent, TorrentStatus.Downloading, TorrentStatus.Error));
+
+        await Task.WhenAny(signal.Task, Task.Delay(300));
+        await Task.Delay(50);
+
+        Assert.That(dispatchCount, Is.EqualTo(1), "Torrent error status event must dispatch exactly one notification");
+    }
+
+    [Test]
+    public async Task Handle_HealthIssueEvent_without_torrent_dispatches_only_to_channels_matching_tags_or_untagged()
+    {
+        var dispatchedUrls = new List<string>();
+        var lockObj = new object();
+        var signal = new TaskCompletionSource<bool>();
+
+        _webhookDispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true))
+            .AndDoes(callInfo =>
+            {
+                lock (lockObj)
+                {
+                    dispatchedUrls.Add(callInfo.Arg<string>());
+                }
+
+                signal.TrySetResult(true);
+            });
+
+        var untaggedNotif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Untagged Notif",
+            Implementation = "Webhook",
+            Enable = true,
+            OnHealthIssue = true,
+            Tags = new List<int>(),
+            Settings = "{\"url\":\"http://test/untagged\"}"
+        };
+
+        var taggedNotif = new NotificationDefinition
+        {
+            Id = 2,
+            Name = "Tagged Notif",
+            Implementation = "Webhook",
+            Enable = true,
+            OnHealthIssue = true,
+            Tags = new List<int> { 50 },
+            Settings = "{\"url\":\"http://test/tagged\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { untaggedNotif, taggedNotif });
+
+        _handler.Handle(new HealthIssueEvent(null, "System", "Disk space critical", isResolved: false));
+
+        await Task.WhenAny(signal.Task, Task.Delay(300));
+
+        lock (lockObj)
+        {
+            Assert.That(dispatchedUrls, Contains.Item("http://test/untagged"));
+            Assert.That(dispatchedUrls, Does.Not.Contain("http://test/tagged"));
+        }
+    }
+
+    [Test]
+    public async Task Dispatch_throttles_concurrency_at_configured_limit()
+    {
+        var currentConcurrency = 0;
+        var maxObservedConcurrency = 0;
+        var concurrencyLock = new object();
+
+        using var handlerWithLimit = new NotificationEventHandler(
+            _notificationRepository,
+            _webhookDispatcher,
+            _customScriptService,
+            maxConcurrentDispatches: 2);
+
+        var dispatchCount = 5;
+        var completedTcs = new TaskCompletionSource<bool>();
+        var completedCount = 0;
+
+        _webhookDispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(async _ =>
+            {
+                lock (concurrencyLock)
+                {
+                    currentConcurrency++;
+                    if (currentConcurrency > maxObservedConcurrency)
+                    {
+                        maxObservedConcurrency = currentConcurrency;
+                    }
+                }
+
+                await Task.Delay(50);
+
+                lock (concurrencyLock)
+                {
+                    currentConcurrency--;
+                    completedCount++;
+                    if (completedCount == dispatchCount)
+                    {
+                        completedTcs.TrySetResult(true);
+                    }
+                }
+
+                return true;
+            });
+
+        var notif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Limit Notif",
+            Implementation = "Webhook",
+            Enable = true,
+            OnGrab = true,
+            Settings = "{\"url\":\"http://test/hook\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { notif });
+
+        for (var i = 0; i < dispatchCount; i++)
+        {
+            handlerWithLimit.Handle(new TorrentAddedEvent(new Torrent { Id = i + 1, Name = $"Torrent {i}" }));
+        }
+
+        var completed = await Task.WhenAny(completedTcs.Task, Task.Delay(2000));
+        Assert.That(completed, Is.EqualTo(completedTcs.Task), "All throttled dispatches should complete");
+        Assert.That(maxObservedConcurrency, Is.LessThanOrEqualTo(2), "Observed concurrency should never exceed configured limit of 2");
     }
 }
