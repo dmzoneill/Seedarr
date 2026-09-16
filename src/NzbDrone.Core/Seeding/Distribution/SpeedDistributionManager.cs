@@ -17,6 +17,7 @@ public interface ISpeedDistributionManager
     long[] DistributeDownloadSpeeds(int torrentCount, long maxSpeed, double[] priorityWeights);
     List<string> GetAvailableDistributions();
     string CurrentDistribution { get; }
+    void InvalidateCache();
 }
 
 public class SpeedDistributionManager : ISpeedDistributionManager
@@ -35,11 +36,15 @@ public class SpeedDistributionManager : ISpeedDistributionManager
     private long[] _cachedUploadSpeeds;
     private int _cachedUploadCount;
     private long _cachedUploadMaxSpeed;
+    private string _cachedUploadAlgorithm;
+    private int _cachedUploadSpreadPercentage;
 
     private DateTime _lastDownloadRedistribution = DateTime.MinValue;
     private long[] _cachedDownloadSpeeds;
     private int _cachedDownloadCount;
     private long _cachedDownloadMaxSpeed;
+    private string _cachedDownloadAlgorithm;
+    private int _cachedDownloadSpreadPercentage;
 
     public string CurrentDistribution => _configService.UploadDistributionAlgorithm;
 
@@ -84,12 +89,18 @@ public class SpeedDistributionManager : ISpeedDistributionManager
                 _cachedUploadSpeeds,
                 _cachedUploadCount,
                 _cachedUploadMaxSpeed,
+                _cachedUploadAlgorithm,
+                _cachedUploadSpreadPercentage,
                 torrentCount,
-                maxSpeed))
+                maxSpeed,
+                algorithm,
+                spread))
             {
                 _cachedUploadSpeeds = DistributeWithConfig(torrentCount, maxSpeed, algorithm, spread);
                 _cachedUploadCount = torrentCount;
                 _cachedUploadMaxSpeed = maxSpeed;
+                _cachedUploadAlgorithm = algorithm;
+                _cachedUploadSpreadPercentage = spread;
                 _lastUploadRedistribution = _clock.UtcNow;
                 _logger.Debug(
                     "Redistributed upload speeds using {0} (spread {1}%) across {2} torrents",
@@ -98,7 +109,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
                     torrentCount);
             }
 
-            return _cachedUploadSpeeds;
+            return (long[])_cachedUploadSpeeds.Clone();
         }
     }
 
@@ -124,12 +135,18 @@ public class SpeedDistributionManager : ISpeedDistributionManager
                 _cachedDownloadSpeeds,
                 _cachedDownloadCount,
                 _cachedDownloadMaxSpeed,
+                _cachedDownloadAlgorithm,
+                _cachedDownloadSpreadPercentage,
                 torrentCount,
-                maxSpeed))
+                maxSpeed,
+                algorithm,
+                spread))
             {
                 _cachedDownloadSpeeds = DistributeWithConfig(torrentCount, maxSpeed, algorithm, spread);
                 _cachedDownloadCount = torrentCount;
                 _cachedDownloadMaxSpeed = maxSpeed;
+                _cachedDownloadAlgorithm = algorithm;
+                _cachedDownloadSpreadPercentage = spread;
                 _lastDownloadRedistribution = _clock.UtcNow;
                 _logger.Debug(
                     "Redistributed download speeds using {0} (spread {1}%) across {2} torrents",
@@ -138,7 +155,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
                     torrentCount);
             }
 
-            return _cachedDownloadSpeeds;
+            return (long[])_cachedDownloadSpeeds.Clone();
         }
     }
 
@@ -146,6 +163,29 @@ public class SpeedDistributionManager : ISpeedDistributionManager
     {
         var speeds = DistributeDownloadSpeeds(torrentCount, maxSpeed);
         return ApplyPriorityWeights(speeds, priorityWeights);
+    }
+
+    public void InvalidateCache()
+    {
+        lock (_uploadCacheLock)
+        {
+            _cachedUploadSpeeds = null;
+            _cachedUploadCount = 0;
+            _cachedUploadMaxSpeed = 0;
+            _cachedUploadAlgorithm = null;
+            _cachedUploadSpreadPercentage = 0;
+            _lastUploadRedistribution = DateTime.MinValue;
+        }
+
+        lock (_downloadCacheLock)
+        {
+            _cachedDownloadSpeeds = null;
+            _cachedDownloadCount = 0;
+            _cachedDownloadMaxSpeed = 0;
+            _cachedDownloadAlgorithm = null;
+            _cachedDownloadSpreadPercentage = 0;
+            _lastDownloadRedistribution = DateTime.MinValue;
+        }
     }
 
     public List<string> GetAvailableDistributions()
@@ -224,10 +264,18 @@ public class SpeedDistributionManager : ISpeedDistributionManager
         long[] cached,
         int cachedCount,
         long cachedMaxSpeed,
+        string cachedAlgorithm,
+        int cachedSpreadPercentage,
         int currentCount,
-        long currentMaxSpeed)
+        long currentMaxSpeed,
+        string currentAlgorithm,
+        int currentSpreadPercentage)
     {
-        if (cached == null || cachedCount != currentCount || cachedMaxSpeed != currentMaxSpeed)
+        if (cached == null ||
+            cachedCount != currentCount ||
+            cachedMaxSpeed != currentMaxSpeed ||
+            !string.Equals(cachedAlgorithm, currentAlgorithm, StringComparison.OrdinalIgnoreCase) ||
+            cachedSpreadPercentage != currentSpreadPercentage)
         {
             return true;
         }

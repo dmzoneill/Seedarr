@@ -178,7 +178,9 @@ public class SpeedDistributionManagerTest
         var first = _manager.DistributeUploadSpeeds(3, 500_000L);
         var second = _manager.DistributeUploadSpeeds(3, 500_000L);
 
-        Assert.That(second, Is.SameAs(first));
+        Assert.That(second, Is.EqualTo(first));
+        Assert.That(second, Is.Not.SameAs(first));
+        _equalDistributor.Received(1).Distribute(Arg.Any<long>(), 3);
     }
 
     [Test]
@@ -258,7 +260,9 @@ public class SpeedDistributionManagerTest
         var first = _manager.DistributeDownloadSpeeds(3, 500_000L);
         var second = _manager.DistributeDownloadSpeeds(3, 500_000L);
 
-        Assert.That(second, Is.SameAs(first));
+        Assert.That(second, Is.EqualTo(first));
+        Assert.That(second, Is.Not.SameAs(first));
+        _equalDistributor.Received(1).Distribute(Arg.Any<long>(), 3);
     }
 
     [Test]
@@ -375,5 +379,116 @@ public class SpeedDistributionManagerTest
 
         _manager.DistributeDownloadSpeeds(3, 500_000L);
         _equalDistributor.Received(2).Distribute(Arg.Any<long>(), 3);
+    }
+
+    [Test]
+    public void DistributeUploadSpeeds_should_redistribute_when_algorithm_changes_in_fixed_mode()
+    {
+        _configService.UploadRedistributionMode.Returns("fixed");
+        _configService.UploadDistributionAlgorithm.Returns("Equal");
+
+        _manager.DistributeUploadSpeeds(3, 500_000L);
+        _equalDistributor.Received(1).Distribute(500_000L, 3);
+
+        _configService.UploadDistributionAlgorithm.Returns("Pareto");
+
+        _manager.DistributeUploadSpeeds(3, 500_000L);
+        _paretoDistributor.Received(1).Distribute(500_000L, 3);
+    }
+
+    [Test]
+    public void DistributeDownloadSpeeds_should_redistribute_when_algorithm_changes_in_fixed_mode()
+    {
+        _configService.DownloadRedistributionMode.Returns("fixed");
+        _configService.DownloadDistributionAlgorithm.Returns("Equal");
+
+        _manager.DistributeDownloadSpeeds(3, 500_000L);
+        _equalDistributor.Received(1).Distribute(500_000L, 3);
+
+        _configService.DownloadDistributionAlgorithm.Returns("Pareto");
+
+        _manager.DistributeDownloadSpeeds(3, 500_000L);
+        _paretoDistributor.Received(1).Distribute(500_000L, 3);
+    }
+
+    [Test]
+    public void DistributeUploadSpeeds_should_redistribute_when_spread_percentage_changes_in_fixed_mode()
+    {
+        _configService.UploadRedistributionMode.Returns("fixed");
+        _configService.UploadDistributionSpreadPercentage.Returns(100);
+
+        _manager.DistributeUploadSpeeds(3, 500_000L);
+        _equalDistributor.Received(1).Distribute(500_000L, 3);
+
+        _configService.UploadDistributionSpreadPercentage.Returns(50);
+
+        _manager.DistributeUploadSpeeds(3, 500_000L);
+        _equalDistributor.Received(2).Distribute(500_000L, 3);
+    }
+
+    [Test]
+    public void DistributeDownloadSpeeds_should_redistribute_when_spread_percentage_changes_in_fixed_mode()
+    {
+        _configService.DownloadRedistributionMode.Returns("fixed");
+        _configService.DownloadDistributionSpreadPercentage.Returns(100);
+
+        _manager.DistributeDownloadSpeeds(3, 500_000L);
+        _equalDistributor.Received(1).Distribute(500_000L, 3);
+
+        _configService.DownloadDistributionSpreadPercentage.Returns(50);
+
+        _manager.DistributeDownloadSpeeds(3, 500_000L);
+        _equalDistributor.Received(2).Distribute(500_000L, 3);
+    }
+
+    [Test]
+    public void DistributeUploadSpeeds_mutating_returned_array_should_not_affect_subsequent_calls()
+    {
+        _configService.UploadRedistributionMode.Returns("fixed");
+
+        var first = _manager.DistributeUploadSpeeds(3, 300_000L);
+        var originalFirstValue = first[0];
+
+        first[0] = 999_999L;
+
+        var second = _manager.DistributeUploadSpeeds(3, 300_000L);
+
+        Assert.That(second[0], Is.EqualTo(originalFirstValue));
+        Assert.That(second[0], Is.Not.EqualTo(999_999L));
+    }
+
+    [Test]
+    public void DistributeDownloadSpeeds_mutating_returned_array_should_not_affect_subsequent_calls()
+    {
+        _configService.DownloadRedistributionMode.Returns("fixed");
+
+        var first = _manager.DistributeDownloadSpeeds(3, 300_000L);
+        var originalFirstValue = first[0];
+
+        first[0] = 999_999L;
+
+        var second = _manager.DistributeDownloadSpeeds(3, 300_000L);
+
+        Assert.That(second[0], Is.EqualTo(originalFirstValue));
+        Assert.That(second[0], Is.Not.EqualTo(999_999L));
+    }
+
+    [Test]
+    public void InvalidateCache_should_force_redistribution_on_next_call()
+    {
+        _configService.UploadRedistributionMode.Returns("fixed");
+        _configService.DownloadRedistributionMode.Returns("fixed");
+
+        _manager.DistributeUploadSpeeds(3, 500_000L);
+        _manager.DistributeDownloadSpeeds(3, 500_000L);
+
+        _equalDistributor.Received(2).Distribute(Arg.Any<long>(), 3);
+
+        _manager.InvalidateCache();
+
+        _manager.DistributeUploadSpeeds(3, 500_000L);
+        _manager.DistributeDownloadSpeeds(3, 500_000L);
+
+        _equalDistributor.Received(4).Distribute(Arg.Any<long>(), 3);
     }
 }
