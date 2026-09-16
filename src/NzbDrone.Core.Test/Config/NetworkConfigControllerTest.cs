@@ -68,4 +68,112 @@ public class NetworkConfigControllerTest
 
         Assert.That(result.Result, Is.Null.Or.Not.InstanceOf<BadRequestObjectResult>());
     }
+
+    [Test]
+    public void SaveConfig_with_new_proxy_password_containing_asterisks_saves_password()
+    {
+        _configService.ProxyPassword.Returns("OldProxyPass123");
+
+        var resource = new NetworkConfigResource
+        {
+            ListeningPort = 51413,
+            MaxGlobalConnections = 200,
+            MaxPerTorrentConnections = 50,
+            MaxUploadSlots = 4,
+            MaxConnectionsPerIp = 5,
+            MaximumHalfOpenConnections = 50,
+            PeerDscp = 0,
+            PeerTos = 0,
+            ProxyPort = 8080,
+            ProxyPassword = "*Proxy*Pass*",
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.ProxyPassword, Is.EqualTo("*Proxy*Pass*"));
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["ProxyPassword"] == "*Proxy*Pass*"));
+    }
+
+    [Test]
+    public void SaveConfig_with_exact_mask_preserves_existing_proxy_password()
+    {
+        _configService.ProxyPassword.Returns("ExistingProxySecret123");
+
+        var resource = new NetworkConfigResource
+        {
+            ListeningPort = 51413,
+            MaxGlobalConnections = 200,
+            MaxPerTorrentConnections = 50,
+            MaxUploadSlots = 4,
+            MaxConnectionsPerIp = 5,
+            MaximumHalfOpenConnections = 50,
+            PeerDscp = 0,
+            PeerTos = 0,
+            ProxyPort = 8080,
+            ProxyPassword = "********",
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.ProxyPassword, Is.EqualTo("ExistingProxySecret123"));
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["ProxyPassword"] == "ExistingProxySecret123"));
+    }
+
+    [Test]
+    public void SaveConfig_with_unchanged_sentinel_preserves_existing_proxy_password()
+    {
+        _configService.ProxyPassword.Returns("ExistingProxySecret123");
+
+        var resource = new NetworkConfigResource
+        {
+            ListeningPort = 51413,
+            MaxGlobalConnections = 200,
+            MaxPerTorrentConnections = 50,
+            MaxUploadSlots = 4,
+            MaxConnectionsPerIp = 5,
+            MaximumHalfOpenConnections = 50,
+            PeerDscp = 0,
+            PeerTos = 0,
+            ProxyPort = 8080,
+            ProxyPassword = "(unchanged)",
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.ProxyPassword, Is.EqualTo("ExistingProxySecret123"));
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["ProxyPassword"] == "ExistingProxySecret123"));
+    }
+
+    [Test]
+    public void SaveConfig_with_null_preserves_existing_proxy_password()
+    {
+        _configService.ProxyPassword.Returns("ExistingProxySecret123");
+
+        var resource = new NetworkConfigResource
+        {
+            ListeningPort = 51413,
+            MaxGlobalConnections = 200,
+            MaxPerTorrentConnections = 50,
+            MaxUploadSlots = 4,
+            MaxConnectionsPerIp = 5,
+            MaximumHalfOpenConnections = 50,
+            PeerDscp = 0,
+            PeerTos = 0,
+            ProxyPort = 8080,
+            ProxyPassword = null,
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+        Assert.That(resource.ProxyPassword, Is.EqualTo("ExistingProxySecret123"));
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (string)d["ProxyPassword"] == "ExistingProxySecret123"));
+    }
 }

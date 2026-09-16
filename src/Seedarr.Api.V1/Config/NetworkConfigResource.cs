@@ -29,6 +29,8 @@ public class NetworkConfigResource : RestResource
 
 public static class NetworkConfigResourceMapper
 {
+    public const string SecretMask = "********";
+
     public static NetworkConfigResource ToResource(IConfigService model)
     {
         return new NetworkConfigResource
@@ -52,7 +54,7 @@ public static class NetworkConfigResourceMapper
             ProxyPort = model.ProxyPort,
             ProxyAuthEnabled = model.ProxyAuthEnabled,
             ProxyUsername = model.ProxyUsername,
-            ProxyPassword = string.IsNullOrEmpty(model.ProxyPassword) ? "" : "********"
+            ProxyPassword = string.IsNullOrEmpty(model.ProxyPassword) ? "" : SecretMask
         };
     }
 }

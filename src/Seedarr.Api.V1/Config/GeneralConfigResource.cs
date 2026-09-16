@@ -64,14 +64,21 @@ public class GeneralConfigResource : RestResource
 
 public static class GeneralConfigResourceMapper
 {
-    public static GeneralConfigResource ToResource(IConfigService config, IConfigFileProvider fileProvider)
+    public const string SecretMask = "********";
+
+    public static string GetMaskedApiKey(string apiKey)
     {
-        var apiKey = fileProvider?.ApiKey;
-        var maskedApiKey = !string.IsNullOrEmpty(apiKey)
+        return !string.IsNullOrEmpty(apiKey)
             ? (apiKey.Length > 4
                 ? new string('*', apiKey.Length - 4) + apiKey[^4..]
                 : new string('*', apiKey.Length))
             : string.Empty;
+    }
+
+    public static GeneralConfigResource ToResource(IConfigService config, IConfigFileProvider fileProvider)
+    {
+        var apiKey = fileProvider?.ApiKey;
+        var maskedApiKey = GetMaskedApiKey(apiKey);
 
         return new GeneralConfigResource
         {
@@ -96,7 +103,7 @@ public static class GeneralConfigResourceMapper
             SslPort = fileProvider?.SslPort ?? 0,
             SslCertPath = fileProvider?.SslCertPath,
             SslKeyPath = fileProvider?.SslKeyPath,
-            SslCertPassword = string.IsNullOrEmpty(fileProvider?.SslCertPassword) ? string.Empty : "********",
+            SslCertPassword = string.IsNullOrEmpty(fileProvider?.SslCertPassword) ? string.Empty : SecretMask,
             RedirectHttpToHttps = fileProvider?.RedirectHttpToHttps ?? false,
             CsrfProtectionEnabled = config?.CsrfProtectionEnabled ?? true,
             HostHeaderValidationEnabled = config?.HostHeaderValidationEnabled ?? false,
