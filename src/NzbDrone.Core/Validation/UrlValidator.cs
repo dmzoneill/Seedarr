@@ -22,14 +22,39 @@ public static class UrlValidator
             return false;
         }
 
-        if (IPAddress.TryParse(uri.Host, out var ip))
+        return IsSafeHost(uri.Host);
+    }
+
+    public static bool IsSafeHost(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return false;
+        }
+
+        var trimmedHost = host.Trim().Trim('[', ']');
+
+        if (string.Equals(trimmedHost, "localhost", StringComparison.OrdinalIgnoreCase) ||
+            trimmedHost.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmedHost, "metadata.google.internal", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(trimmedHost, "instance-data", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (IPAddress.TryParse(trimmedHost, out var ip))
         {
             return !IsPrivateIp(ip);
         }
 
         try
         {
-            var addresses = Dns.GetHostAddresses(uri.Host);
+            var addresses = Dns.GetHostAddresses(trimmedHost);
+            if (addresses.Length == 0)
+            {
+                return false;
+            }
+
             foreach (var addr in addresses)
             {
                 if (IsPrivateIp(addr))

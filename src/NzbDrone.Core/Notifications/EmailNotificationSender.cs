@@ -1,13 +1,17 @@
 using System;
+using System.Linq;
 using System.Net;
 using System.Net.Mail;
 using System.Text.Json;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Notifications;
 
 public static class EmailNotificationSender
 {
+    private static readonly int[] AllowedSmtpPorts = { 25, 465, 587, 2525 };
+
     public static void SendEmailNotification(
         string settings,
         string eventType,
@@ -21,7 +25,7 @@ public static class EmailNotificationSender
             throw new ArgumentException("Email settings are required.", nameof(settings));
         }
 
-        var host = "localhost";
+        string host = null;
         var port = 25;
         var ssl = false;
         string user = null;
@@ -35,7 +39,7 @@ public static class EmailNotificationSender
             var root = doc.RootElement;
             if (root.TryGetProperty("server", out var s) || root.TryGetProperty("host", out s))
             {
-                host = s.GetString() ?? host;
+                host = s.GetString();
             }
 
             if (root.TryGetProperty("port", out var p))
@@ -132,6 +136,21 @@ public static class EmailNotificationSender
         if (string.IsNullOrWhiteSpace(to))
         {
             throw new InvalidOperationException("Recipient email address ('to') is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            throw new ArgumentException("SMTP host is required.", nameof(settings));
+        }
+
+        if (!UrlValidator.IsSafeHost(host))
+        {
+            throw new ArgumentException($"Target SMTP host '{host}' is not permitted.", nameof(settings));
+        }
+
+        if (!AllowedSmtpPorts.Contains(port))
+        {
+            throw new ArgumentException($"SMTP port {port} is not permitted. Allowed ports: {string.Join(", ", AllowedSmtpPorts)}.", nameof(settings));
         }
 
         var torrentName = torrent?.Name ?? NotificationPayloadBuilder.ExtractMessage(genericPayload, eventType);

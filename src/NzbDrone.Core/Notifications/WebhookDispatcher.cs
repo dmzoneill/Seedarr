@@ -14,9 +14,17 @@ using Polly.Retry;
 
 namespace NzbDrone.Core.Notifications;
 
+public class WebhookDispatchResult
+{
+    public bool Success { get; set; }
+    public HttpStatusCode? StatusCode { get; set; }
+    public string Message { get; set; }
+}
+
 public interface IWebhookDispatcher
 {
     Task<bool> DispatchAsync(string targetUrl, object payload, string customHeadersJson = null, CancellationToken cancellationToken = default);
+    Task<WebhookDispatchResult> DispatchDetailedAsync(string targetUrl, object payload, string customHeadersJson = null, CancellationToken cancellationToken = default);
 }
 
 public class WebhookDispatcher : IWebhookDispatcher
@@ -265,15 +273,29 @@ public class WebhookDispatcher : IWebhookDispatcher
 
     public async Task<bool> DispatchAsync(string targetUrl, object payload, string customHeadersJson = null, CancellationToken cancellationToken = default)
     {
+        var result = await DispatchDetailedAsync(targetUrl, payload, customHeadersJson, cancellationToken).ConfigureAwait(false);
+        return result.Success;
+    }
+
+    public async Task<WebhookDispatchResult> DispatchDetailedAsync(string targetUrl, object payload, string customHeadersJson = null, CancellationToken cancellationToken = default)
+    {
         if (string.IsNullOrWhiteSpace(targetUrl))
         {
-            return false;
+            return new WebhookDispatchResult
+            {
+                Success = false,
+                Message = "Target webhook URL is required.",
+            };
         }
 
         if (!IsValidTargetUrl(targetUrl, _allowLoopback))
         {
             _logger.Warn("Webhook dispatch blocked: Invalid or prohibited target URL (SSRF protection): {0}", targetUrl);
-            return false;
+            return new WebhookDispatchResult
+            {
+                Success = false,
+                Message = $"Target URL '{targetUrl}' is prohibited (SSRF protection: loopback, link-local, and cloud metadata addresses are not permitted).",
+            };
         }
 
         try
@@ -289,16 +311,49 @@ public class WebhookDispatcher : IWebhookDispatcher
             if (response.IsSuccessStatusCode)
             {
                 _logger.Info("Webhook successfully dispatched to {0} (Status: {1})", targetUrl, response.StatusCode);
-                return true;
+                return new WebhookDispatchResult
+                {
+                    Success = true,
+                    StatusCode = response.StatusCode,
+                    Message = $"Webhook dispatched successfully (HTTP {(int)response.StatusCode} {response.StatusCode}).",
+                };
             }
 
             _logger.Warn("Webhook dispatch to {0} returned non-success status code: {1}", targetUrl, response.StatusCode);
-            return false;
+            return new WebhookDispatchResult
+            {
+                Success = false,
+                StatusCode = response.StatusCode,
+                Message = $"Webhook endpoint returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase ?? response.StatusCode.ToString()}).",
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.Error(ex, "HTTP error while dispatching webhook to {0}", targetUrl);
+            return new WebhookDispatchResult
+            {
+                Success = false,
+                StatusCode = ex.StatusCode,
+                Message = $"HTTP request failed: {ex.Message}",
+            };
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
+        {
+            _logger.Error(ex, "Webhook dispatch to {0} timed out", targetUrl);
+            return new WebhookDispatchResult
+            {
+                Success = false,
+                Message = "Webhook request timed out.",
+            };
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to dispatch webhook to {0}", targetUrl);
-            return false;
+            return new WebhookDispatchResult
+            {
+                Success = false,
+                Message = $"Webhook dispatch failed: {ex.Message}",
+            };
         }
     }
 

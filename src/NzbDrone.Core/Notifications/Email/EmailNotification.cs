@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Mail;
 using NLog;
+using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Notifications.Email;
 
@@ -24,6 +25,7 @@ public class EmailSettings
 public class EmailNotification : INotificationService
 {
     private const string SubjectPrefix = "[Seedarr]";
+    private static readonly int[] AllowedSmtpPorts = { 25, 465, 587, 2525 };
 
     private readonly Logger _logger;
 
@@ -68,6 +70,18 @@ public class EmailNotification : INotificationService
         if (string.IsNullOrWhiteSpace(Settings.SmtpHost))
         {
             _logger.Warn("Email SMTP host is not configured");
+            return;
+        }
+
+        if (!UrlValidator.IsSafeHost(Settings.SmtpHost))
+        {
+            _logger.Warn("Email SMTP host '{0}' is not permitted (private or loopback address)", Settings.SmtpHost);
+            return;
+        }
+
+        if (!AllowedSmtpPorts.Contains(Settings.SmtpPort))
+        {
+            _logger.Warn("Email SMTP port {0} is not permitted. Allowed ports: {1}", Settings.SmtpPort, string.Join(", ", AllowedSmtpPorts));
             return;
         }
 
