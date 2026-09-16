@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
@@ -28,7 +29,13 @@ public class MediaCoverSecurityTest
         _appFolderInfo = Substitute.For<IAppFolderInfo>();
         _appFolderInfo.AppDataFolder.Returns(_tempAppData);
 
-        _controller = new MediaCoverController(_enrichmentService, _appFolderInfo);
+        _controller = new MediaCoverController(_enrichmentService, _appFolderInfo)
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext(),
+            },
+        };
     }
 
     [TearDown]
@@ -186,5 +193,87 @@ public class MediaCoverSecurityTest
         Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
         var lastAccess = File.GetLastAccessTimeUtc(posterFile);
         Assert.That(lastAccess, Is.GreaterThan(pastTime.AddDays(1)));
+    }
+
+    [Test]
+    public void MediaCoverController_serving_svg_sets_csp_and_nosniff_headers_and_enables_range_processing()
+    {
+        var coverDir = Path.Combine(_tempAppData, "MediaCover", "10");
+        Directory.CreateDirectory(coverDir);
+        var svgFile = Path.Combine(coverDir, "poster.svg");
+        File.WriteAllText(svgFile, "<svg></svg>");
+
+        _enrichmentService.GetMetadata(10).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 10,
+            PosterLocalPath = svgFile,
+        });
+
+        var result = _controller.GetPoster(10);
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.ContentType, Is.EqualTo("image/svg+xml"));
+        Assert.That(fileResult.EnableRangeProcessing, Is.True);
+        Assert.That(_controller.Response.Headers["X-Content-Type-Options"].ToString(), Is.EqualTo("nosniff"));
+        Assert.That(_controller.Response.Headers["Content-Security-Policy"].ToString(), Is.EqualTo("default-src 'none'; style-src 'unsafe-inline'; sandbox"));
+    }
+
+    [Test]
+    public void MediaCoverController_serving_image_sets_nosniff_and_enables_range_processing()
+    {
+        var coverDir = Path.Combine(_tempAppData, "MediaCover", "10");
+        Directory.CreateDirectory(coverDir);
+        var posterFile = Path.Combine(coverDir, "poster.jpg");
+        File.WriteAllBytes(posterFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+        _enrichmentService.GetMetadata(10).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 10,
+            PosterLocalPath = posterFile,
+        });
+
+        var result = _controller.GetPoster(10);
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var fileResult = (PhysicalFileResult)result;
+        Assert.That(fileResult.ContentType, Is.EqualTo("image/jpeg"));
+        Assert.That(fileResult.EnableRangeProcessing, Is.True);
+        Assert.That(_controller.Response.Headers["X-Content-Type-Options"].ToString(), Is.EqualTo("nosniff"));
+        Assert.That(_controller.Response.Headers.ContainsKey("Content-Security-Policy"), Is.False);
+    }
+
+    [Test]
+    public void MediaCoverController_GetPlaceholder_escapes_xml_entities_and_sets_security_headers()
+    {
+        _enrichmentService.GetMetadata(20).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 20,
+            Title = "Malicious Movie <script>alert('xss')</script> & \"more\"",
+            ArrType = "<category>",
+        });
+
+        var result = _controller.GetPlaceholder(20);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var contentResult = (ContentResult)result;
+        Assert.That(contentResult.ContentType, Is.EqualTo("image/svg+xml; charset=utf-8"));
+        Assert.That(contentResult.Content, Does.Not.Contain("<script>"));
+        Assert.That(contentResult.Content, Does.Contain("&lt;script&gt;alert(&apos;xss&apos;)&lt;/script&gt; &amp; &quot;more&quot;"));
+        Assert.That(contentResult.Content, Does.Not.Contain("<category>"));
+        Assert.That(contentResult.Content, Does.Contain("&lt;category&gt;"));
+        Assert.That(_controller.Response.Headers["X-Content-Type-Options"].ToString(), Is.EqualTo("nosniff"));
+        Assert.That(_controller.Response.Headers["Content-Security-Policy"].ToString(), Is.EqualTo("default-src 'none'; style-src 'unsafe-inline'; sandbox"));
+    }
+
+    [TestCase("<script>alert(1)</script>", "&lt;script&gt;alert(1)&lt;/script&gt;")]
+    [TestCase("foo & bar \"quotes\" 'single' <tag>", "foo &amp; bar &quot;quotes&quot; &apos;single&apos; &lt;tag&gt;")]
+    public void GeneratePlaceholderSvg_escapes_special_characters_against_xss(string input, string expectedSubstring)
+    {
+        var svg = MediaCoverController.GeneratePlaceholderSvg(input, input);
+
+        Assert.That(svg, Does.Not.Contain("<script>"));
+        Assert.That(svg, Does.Not.Contain("<tag>"));
+        Assert.That(svg, Does.Contain(expectedSubstring));
     }
 }

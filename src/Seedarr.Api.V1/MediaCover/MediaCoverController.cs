@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Security;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
@@ -116,6 +118,42 @@ public class MediaCoverController : RestController<MediaMetadataResource>
         return ServeArtwork(torrentId, type);
     }
 
+    [HttpGet("{torrentId:int}/placeholder.svg")]
+    [HttpGet("{torrentId:int}/placeholder")]
+    [AllowAnonymous]
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Placeholder is dynamically generated in memory")]
+    public ActionResult GetPlaceholder(int torrentId)
+    {
+        if (torrentId <= 0)
+        {
+            return NotFound();
+        }
+
+        var meta = _mediaEnrichmentService.GetMetadata(torrentId);
+        var title = meta?.Title ?? $"Torrent #{torrentId}";
+        var svg = GeneratePlaceholderSvg(title, meta?.ArrType);
+
+        if (Response != null)
+        {
+            Response.Headers["X-Content-Type-Options"] = "nosniff";
+            Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+        }
+
+        return Content(svg, "image/svg+xml", Encoding.UTF8);
+    }
+
+    public static string GeneratePlaceholderSvg(string title, string category = null)
+    {
+        var safeTitle = !string.IsNullOrEmpty(title) ? SecurityElement.Escape(title) : string.Empty;
+        var safeCategory = !string.IsNullOrEmpty(category) ? SecurityElement.Escape(category) : string.Empty;
+
+        return $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"450\" viewBox=\"0 0 300 450\">" +
+               $"<rect width=\"100%\" height=\"100%\" fill=\"#1e1e1e\"/>" +
+               $"<text x=\"50%\" y=\"48%\" font-family=\"sans-serif\" font-size=\"18\" fill=\"#ffffff\" text-anchor=\"middle\" dominant-baseline=\"middle\">{safeTitle}</text>" +
+               $"{(!string.IsNullOrEmpty(safeCategory) ? $"<text x=\"50%\" y=\"56%\" font-family=\"sans-serif\" font-size=\"14\" fill=\"#aaaaaa\" text-anchor=\"middle\">{safeCategory}</text>" : string.Empty)}" +
+               $"</svg>";
+    }
+
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is resolved internally from server metadata storage")]
     private ActionResult ServeArtwork(int torrentId, string type)
     {
@@ -184,7 +222,16 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             _logger.Debug(ex, "Failed to update last access time for {0}", fullPath);
         }
 
-        return PhysicalFile(fullPath, contentType);
+        if (Response != null)
+        {
+            Response.Headers["X-Content-Type-Options"] = "nosniff";
+            if (string.Equals(contentType, "image/svg+xml", StringComparison.OrdinalIgnoreCase))
+            {
+                Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+            }
+        }
+
+        return PhysicalFile(fullPath, contentType, enableRangeProcessing: true);
     }
 
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is resolved internally from server metadata storage")]
