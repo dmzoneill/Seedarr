@@ -10,6 +10,7 @@ import type {
   SystemStatus,
   HealthCheckResult,
   NetworkStatus,
+  NetworkInterfaceResource,
   Peer,
   TrackerEntry,
   TrackerServerTorrent,
@@ -389,6 +390,13 @@ export function useNetworkStatus() {
   return useQuery<NetworkStatus>({
     queryKey: ["network", "status"],
     queryFn: () => apiClient.get("/network/status"),
+  });
+}
+
+export function useNetworkInterfaces() {
+  return useQuery<NetworkInterfaceResource[]>({
+    queryKey: ["network", "interfaces"],
+    queryFn: () => apiClient.get("/network/interfaces"),
   });
 }
 
