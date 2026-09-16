@@ -23,6 +23,52 @@ public class BackupControllerTest
     }
 
     [Test]
+    public void CreateBackup_when_successful_should_return_ok_with_backup_resource()
+    {
+        _backupService.CreateBackup(Arg.Any<BackupType>()).Returns(new BackupInfo
+        {
+            Name = "seedarr_backup_1.0_2026-01-01.zip",
+            Path = "/path/to/backup.zip",
+            Size = 1024,
+            Time = DateTime.UtcNow
+        });
+
+        var result = _controller.CreateBackup();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        Assert.That(okResult.Value, Is.InstanceOf<BackupResource>());
+        var resource = (BackupResource)okResult.Value;
+        Assert.That(resource.Name, Is.EqualTo("seedarr_backup_1.0_2026-01-01.zip"));
+        Assert.That(resource.Size, Is.EqualTo(1024));
+    }
+
+    [Test]
+    public void CreateBackup_when_db_not_found_should_return_bad_request()
+    {
+        _backupService.CreateBackup(Arg.Any<BackupType>()).Returns((BackupInfo)null);
+
+        var result = _controller.CreateBackup();
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value?.ToString(), Does.Contain("Database file not found"));
+    }
+
+    [Test]
+    public void CreateBackup_when_insufficient_disk_space_should_return_bad_request()
+    {
+        _backupService.When(s => s.CreateBackup(Arg.Any<BackupType>()))
+            .Do(_ => throw new InvalidOperationException("Insufficient disk space to create backup. Required: 500 MB, Available: 100 MB."));
+
+        var result = _controller.CreateBackup();
+
+        Assert.That(result.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result.Result;
+        Assert.That(badRequest.Value?.ToString(), Does.Contain("Insufficient disk space to create backup"));
+    }
+
+    [Test]
     public void DeleteBackup_by_id_should_delete_backup_at_index()
     {
         _backupService.GetBackups().Returns(new List<BackupInfo>

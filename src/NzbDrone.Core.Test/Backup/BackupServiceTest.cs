@@ -388,4 +388,23 @@ public class BackupServiceTest
 
         Assert.That(result, Is.Not.Null);
     }
+
+    [Test]
+    public void CreateBackup_should_throw_and_publish_BackupFailedEvent_when_disk_space_is_insufficient()
+    {
+        CreateTestSqliteDatabase();
+        var dbPath = Path.Combine(_tempDir, "seedarr.db");
+        using (var fs = new FileStream(dbPath, FileMode.Open, FileAccess.Write))
+        {
+            fs.SetLength(500L * 1024 * 1024 * 1024 * 1024); // 500 TB sparse file
+        }
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _subject.CreateBackup(BackupType.Manual));
+        Assert.That(ex.Message, Does.Contain("Insufficient disk space to create backup"));
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<BackupFailedEvent>(e =>
+            e.Type == BackupType.Manual &&
+            e.ErrorMessage.Contains("Insufficient disk space") &&
+            e.Exception is InvalidOperationException));
+    }
 }
