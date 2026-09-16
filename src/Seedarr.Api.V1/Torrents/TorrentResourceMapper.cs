@@ -55,6 +55,8 @@ public static class TorrentResourceMapper
             SortOrder = model.SortOrder,
             ForceCompleted = model.ForceCompleted,
             SeedingTime = model.SeedingTime,
+            RatioLimit = model.RatioLimit,
+            SeedingTimeLimit = model.SeedingTimeLimit,
             TagIds = model.TagIds != null ? new List<int>(model.TagIds) : new List<int>()
         };
 
@@ -117,6 +119,8 @@ public static class TorrentResourceMapper
             SortOrder = resource.SortOrder,
             ForceCompleted = resource.ForceCompleted,
             SeedingTime = resource.SeedingTime,
+            RatioLimit = resource.RatioLimit,
+            SeedingTimeLimit = resource.SeedingTimeLimit,
             TagIds = resource.TagIds != null ? new List<int>(resource.TagIds) : new List<int>()
         };
     }

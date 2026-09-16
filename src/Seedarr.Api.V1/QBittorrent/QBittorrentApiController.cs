@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http.Security;
@@ -24,9 +25,11 @@ namespace Seedarr.Api.V1.QBittorrent;
 [Route("api/v2")]
 public class QBittorrentApiController : ControllerBase, IActionFilter
 {
-    private readonly IRpcSessionStore _sessionStore;
     private static readonly ConcurrentDictionary<string, QBitSessionSyncState> _sessionSyncStates = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly HttpClient DefaultHttpClient = new();
     private static DateTime _lastSyncCleanupTime = DateTime.UtcNow;
+
+    private readonly IRpcSessionStore _sessionStore;
 
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileService _torrentFileService;
@@ -49,7 +52,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         ITagService tagService = null,
         IConfigFileProvider configFileProvider = null,
         HttpClient httpClient = null,
-        IRpcSessionStore sessionStore = null)
+        IRpcSessionStore sessionStore = null,
+        IHttpClientFactory httpClientFactory = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -59,7 +63,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         _configService = configService;
         _tagService = tagService;
         _configFileProvider = configFileProvider;
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? httpClientFactory?.CreateClient() ?? DefaultHttpClient;
         _sessionStore = sessionStore ?? RpcSessionStore.SharedSessionStore;
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -446,7 +450,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 ["state"] = state,
                 ["seq_dl"] = t.SequentialDownload,
                 ["f_l_piece_prio"] = false,
-                ["category"] = t.Label ?? string.Empty,
+                ["category"] = t.Category ?? string.Empty,
                 ["tags"] = t.Label ?? string.Empty,
                 ["save_path"] = savePath,
                 ["content_path"] = contentPath,
@@ -455,10 +459,10 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 ["amount_left"] = amountLeft,
                 ["downloaded"] = t.Downloaded,
                 ["uploaded"] = t.Uploaded,
-                ["max_ratio"] = -1.0,
-                ["max_seeding_time"] = -1,
-                ["ratio_limit"] = -2.0,
-                ["seeding_time_limit"] = -2,
+                ["max_ratio"] = t.RatioLimit ?? -1.0,
+                ["max_seeding_time"] = t.SeedingTimeLimit ?? -1,
+                ["ratio_limit"] = t.RatioLimit ?? -2.0,
+                ["seeding_time_limit"] = t.SeedingTimeLimit ?? -2,
                 ["seeding_time"] = t.SeedingTime,
                 ["last_activity"] = new DateTimeOffset(t.LastActive ?? t.DateAdded).ToUnixTimeSeconds(),
                 ["is_private"] = t.IsPrivate,
@@ -504,9 +508,17 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                     var added = _torrentImportService.ImportFromMagnet(trimmed);
                     ApplyTorrentRequestOptions(added, request);
                 }
+                catch (DuplicateTorrentException dupEx)
+                {
+                    TryHandleExistingTorrent(dupEx.InfoHash, request);
+                }
                 catch (Exception ex)
                 {
-                    _logger.Warn(ex, "Failed to import torrent from magnet: {0}", trimmed);
+                    var hash = TryExtractMagnetHash(trimmed);
+                    if (string.IsNullOrWhiteSpace(hash) || !TryHandleExistingTorrent(hash, request))
+                    {
+                        _logger.Warn(ex, "Failed to import torrent from magnet: {0}", trimmed);
+                    }
                 }
 
                 continue;
@@ -534,8 +546,24 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
             var bytes = await resp.Content.ReadAsByteArrayAsync();
             using var ms = new MemoryStream(bytes);
-            var added = _torrentImportService.ImportFromFile(ms, "downloaded.torrent");
-            ApplyTorrentRequestOptions(added, request);
+            try
+            {
+                var added = _torrentImportService.ImportFromFile(ms, "downloaded.torrent");
+                ApplyTorrentRequestOptions(added, request);
+            }
+            catch (DuplicateTorrentException dupEx)
+            {
+                TryHandleExistingTorrent(dupEx.InfoHash, request);
+            }
+            catch (Exception ex)
+            {
+                ms.Position = 0;
+                var parsed = TryParseTorrentStream(ms);
+                if (parsed == null || !TryHandleExistingTorrent(parsed.InfoHash, request))
+                {
+                    _logger.Error(ex, "Failed to download torrent file from URL: {0}", url);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -560,8 +588,33 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             try
             {
                 using var stream = file.OpenReadStream();
-                var added = _torrentImportService.ImportFromFile(stream, file.FileName);
-                ApplyTorrentRequestOptions(added, request);
+                try
+                {
+                    var added = _torrentImportService.ImportFromFile(stream, file.FileName);
+                    ApplyTorrentRequestOptions(added, request);
+                }
+                catch (DuplicateTorrentException dupEx)
+                {
+                    TryHandleExistingTorrent(dupEx.InfoHash, request);
+                }
+                catch (Exception)
+                {
+                    var handled = false;
+                    if (stream.CanSeek)
+                    {
+                        stream.Position = 0;
+                        var parsed = TryParseTorrentStream(stream);
+                        if (parsed != null && TryHandleExistingTorrent(parsed.InfoHash, request))
+                        {
+                            handled = true;
+                        }
+                    }
+
+                    if (!handled)
+                    {
+                        throw;
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -584,7 +637,6 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         if (!string.IsNullOrWhiteSpace(request.Category))
         {
             added.Category = request.Category;
-            added.Label = request.Category;
             needsUpdate = true;
         }
 
@@ -623,11 +675,13 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         if (request.RatioLimit.HasValue)
         {
+            added.RatioLimit = request.RatioLimit.Value;
             needsUpdate = true;
         }
 
         if (request.SeedingTimeLimit.HasValue)
         {
+            added.SeedingTimeLimit = request.SeedingTimeLimit.Value;
             needsUpdate = true;
         }
 
@@ -645,6 +699,47 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         if (needsUpdate)
         {
             _torrentService.Update(added);
+        }
+    }
+
+    private bool TryHandleExistingTorrent(string infoHash, QBitAddTorrentsRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        var existing = _torrentService.GetByInfoHash(infoHash);
+        if (existing == null)
+        {
+            return false;
+        }
+
+        ApplyTorrentRequestOptions(existing, request);
+        return true;
+    }
+
+    private static string TryExtractMagnetHash(string magnetUri)
+    {
+        try
+        {
+            return MagnetLinkParser.Parse(magnetUri).InfoHash;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private ParsedTorrent TryParseTorrentStream(Stream stream)
+    {
+        try
+        {
+            return _torrentFileParser?.Parse(stream);
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -981,13 +1076,13 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     {
         var torrents = _torrentService.GetAll();
         var defaultPath = _configService?.WatchFolderPath ?? "/downloads";
-        var distinctLabels = torrents
-            .Select(t => t.Label)
+        var distinctCategories = torrents
+            .Select(t => !string.IsNullOrWhiteSpace(t.Category) ? t.Category : t.Label)
             .Where(l => !string.IsNullOrWhiteSpace(l))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        var result = distinctLabels.ToDictionary(
+        var result = distinctCategories.ToDictionary(
             c => c,
             c => (object)new { name = c, savePath = Path.Combine(defaultPath, c) });
 
@@ -1689,6 +1784,16 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         var torrents = ResolveTorrents(hashes);
         foreach (var torrent in torrents)
         {
+            if (ratioLimit.HasValue)
+            {
+                torrent.RatioLimit = ratioLimit.Value;
+            }
+
+            if (seedingTimeLimit.HasValue)
+            {
+                torrent.SeedingTimeLimit = seedingTimeLimit.Value;
+            }
+
             _torrentService.Update(torrent);
         }
 
@@ -1892,6 +1997,8 @@ public record QBitTorrentSnapshot
     public long CompletionOn { get; init; }
     public bool SeqDl { get; init; }
     public bool FLPiecePrio { get; init; }
+    public double RatioLimit { get; init; } = -2.0;
+    public int SeedingTimeLimit { get; init; } = -2;
 
     public static QBitTorrentSnapshot FromTorrent(Torrent torrent, string savePath = "", string contentPath = "")
     {
@@ -1909,7 +2016,7 @@ public record QBitTorrentSnapshot
             DlSpeed = torrent.DownloadSpeed,
             UpSpeed = torrent.UploadSpeed,
             State = QBittorrentApiController.MapToQBitState(torrent.Status, torrent.Progress),
-            Category = torrent.Label ?? string.Empty,
+            Category = torrent.Category ?? string.Empty,
             Tags = torrent.Label ?? string.Empty,
             SavePath = savePath ?? string.Empty,
             ContentPath = contentPath ?? string.Empty,
@@ -1924,6 +2031,8 @@ public record QBitTorrentSnapshot
             CompletionOn = completionOn,
             SeqDl = torrent.SequentialDownload,
             FLPiecePrio = false,
+            RatioLimit = torrent.RatioLimit ?? -2.0,
+            SeedingTimeLimit = torrent.SeedingTimeLimit ?? -2,
         };
     }
 }
