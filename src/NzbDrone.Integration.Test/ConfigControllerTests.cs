@@ -299,4 +299,18 @@ public class ConfigControllerTests : IntegrationTestBase
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
     }
+
+    [Test]
+    public async Task PutSeedingConfig_with_invalid_seedGoalReachedAction_returns_400()
+    {
+        var body = new
+        {
+            id = 1,
+            seedGoalReachedAction = "InvalidAction"
+        };
+
+        var response = await PutJsonAsync("/api/v1/config/seeding/1", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+    }
 }

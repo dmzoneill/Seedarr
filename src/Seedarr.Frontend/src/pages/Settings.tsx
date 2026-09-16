@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useParams } from "react-router";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SeedingTab } from "./settings/SeedingTab";
@@ -82,6 +83,28 @@ const sectionDescriptions: Record<string, string> = {
   advanced: "System logging verbosity, diagnostics, and developer flags",
 };
 
+const TAB_COMPONENTS: Record<string, React.ComponentType> = {
+  general: GeneralTab,
+  webui: WebUiSettingsTab,
+  security: SecurityTab,
+  notifications: NotificationsTab,
+  categories: CategorySettingsTab,
+  "custom-scripts": CustomScriptsTab,
+  seeding: SeedingTab,
+  bittorrent: BitTorrentTab,
+  network: NetworkSettingsTab,
+  proxy: ProxySettingsTab,
+  "peer-protocol": PeerProtocolTab,
+  protocols: ProtocolsTab,
+  simulation: SimulationTab,
+  "tracker-server": TrackerServerTab,
+  scheduler: SchedulerTab,
+  indexers: IndexersTab,
+  connections: ConnectionsTab,
+  "download-clients": DownloadClientsTab,
+  advanced: AdvancedTab,
+};
+
 function Settings() {
   const { section } = useParams<{ section?: string }>();
   const activeSection = section || "general";
@@ -89,6 +112,18 @@ function Settings() {
   const description =
     sectionDescriptions[activeSection] ||
     "Manage Seedarr application and operational parameters";
+
+  const tabKey = activeSection === "watch-folder" ? "general" : activeSection;
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([tabKey]));
+
+  useEffect(() => {
+    setVisitedTabs((prev) => {
+      if (prev.has(tabKey)) return prev;
+      const next = new Set(prev);
+      next.add(tabKey);
+      return next;
+    });
+  }, [tabKey]);
 
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
@@ -128,27 +163,24 @@ function Settings() {
         </div>
       </div>
 
-      {(activeSection === "general" || activeSection === "watch-folder") && (
-        <GeneralTab />
-      )}
-      {activeSection === "webui" && <WebUiSettingsTab />}
-      {activeSection === "security" && <SecurityTab />}
-      {activeSection === "notifications" && <NotificationsTab />}
-      {activeSection === "categories" && <CategorySettingsTab />}
-      {activeSection === "custom-scripts" && <CustomScriptsTab />}
-      {activeSection === "seeding" && <SeedingTab />}
-      {activeSection === "bittorrent" && <BitTorrentTab />}
-      {activeSection === "network" && <NetworkSettingsTab />}
-      {activeSection === "proxy" && <ProxySettingsTab />}
-      {activeSection === "peer-protocol" && <PeerProtocolTab />}
-      {activeSection === "protocols" && <ProtocolsTab />}
-      {activeSection === "simulation" && <SimulationTab />}
-      {activeSection === "tracker-server" && <TrackerServerTab />}
-      {activeSection === "scheduler" && <SchedulerTab />}
-      {activeSection === "indexers" && <IndexersTab />}
-      {activeSection === "connections" && <ConnectionsTab />}
-      {activeSection === "download-clients" && <DownloadClientsTab />}
-      {activeSection === "advanced" && <AdvancedTab />}
+      {Array.from(visitedTabs).map((key) => {
+        const Comp = TAB_COMPONENTS[key];
+        if (!Comp) return null;
+
+        const isVisible =
+          key === "general"
+            ? activeSection === "general" || activeSection === "watch-folder"
+            : activeSection === key;
+
+        return (
+          <div
+            key={key}
+            style={{ display: isVisible ? "block" : "none" }}
+          >
+            <Comp />
+          </div>
+        );
+      })}
     </div>
   );
 }
