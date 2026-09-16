@@ -118,6 +118,50 @@ public class ArrSyncService : IArrSyncService
                         continue;
                     }
 
+                    if (!definition.EnableAutomaticAdd)
+                    {
+                        result.Skipped++;
+                        existingHashes.Add(record.InfoHash.ToLowerInvariant());
+
+                        if (_downloadHistoryService != null && _downloadHistoryService.GetByInfoHash(record.InfoHash) == null)
+                        {
+                            var historyTorrent = new Torrent
+                            {
+                                Name = record.Title,
+                                InfoHash = record.InfoHash.ToLowerInvariant(),
+                                TotalSize = record.Size,
+                                DateAdded = DateTime.UtcNow,
+                                Status = TorrentStatus.Queued
+                            };
+
+                            var hist = _downloadHistoryService.RecordTorrentAdded(
+                                historyTorrent,
+                                source: definition.ArrType,
+                                downloadUrl: record.DownloadUrl,
+                                indexerName: record.Indexer);
+
+                            if (hist != null && _metadataEnricherService != null && record.MediaId.HasValue)
+                            {
+                                try
+                                {
+                                    var meta = _metadataEnricherService.FetchMetadataForRecord(record, definition);
+                                    if (meta != null)
+                                    {
+                                        hist.DataJson = System.Text.Json.JsonSerializer.Serialize(meta);
+                                        hist.Source = definition.ArrType;
+                                        _downloadHistoryService.Update(hist);
+                                    }
+                                }
+                                catch (Exception enrichEx)
+                                {
+                                    _logger.Debug(enrichEx, "Could not enrich metadata for skipped record {0}", record.Title);
+                                }
+                            }
+                        }
+
+                        continue;
+                    }
+
                     var torrent = new Torrent
                     {
                         Name = record.Title,

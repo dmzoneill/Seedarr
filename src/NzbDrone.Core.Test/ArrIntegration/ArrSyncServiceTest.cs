@@ -26,8 +26,9 @@ public class ArrSyncServiceTest
         public TestableArrSyncService(
             IArrConnectionFactory connectionFactory,
             ITorrentService torrentService,
-            IArrConnection provider)
-            : base(connectionFactory, torrentService)
+            IArrConnection provider,
+            IDownloadHistoryService downloadHistoryService = null)
+            : base(connectionFactory, torrentService, downloadHistoryService)
         {
             _provider = provider;
         }
@@ -35,8 +36,8 @@ public class ArrSyncServiceTest
         protected override IArrConnection CreateProvider(ArrConnectionDefinition definition) => _provider;
     }
 
-    private ArrSyncService CreateTestableService(IArrConnection provider) =>
-        new TestableArrSyncService(_connectionFactory, _torrentService, provider);
+    private ArrSyncService CreateTestableService(IArrConnection provider, IDownloadHistoryService downloadHistoryService = null) =>
+        new TestableArrSyncService(_connectionFactory, _torrentService, provider, downloadHistoryService);
 
     private static ArrConnectionDefinition EnabledDefinition(string arrType = "Sonarr") =>
         new() { Enable = true, SyncEnabled = true, ArrType = arrType, Name = "Test" };
@@ -605,6 +606,75 @@ public class ArrSyncServiceTest
         Assert.That(result.Skipped, Is.EqualTo(1));
         Assert.That(result.Added, Is.EqualTo(0));
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void Sync_should_skip_and_not_add_to_torrent_service_when_enable_automatic_add_is_false()
+    {
+        var provider = Substitute.For<IArrConnection>();
+        provider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>
+        {
+            new() { InfoHash = "abc123", Title = "Release without auto-add" }
+        });
+        var def = new ArrConnectionDefinition
+        {
+            Enable = true,
+            SyncEnabled = true,
+            EnableAutomaticAdd = false,
+            ArrType = "Sonarr",
+            Name = "Test"
+        };
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { def });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var result = CreateTestableService(provider).Sync();
+
+        Assert.That(result.Added, Is.EqualTo(0));
+        Assert.That(result.Skipped, Is.EqualTo(1));
+        Assert.That(result.Failed, Is.EqualTo(0));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void Sync_should_record_in_download_history_when_enable_automatic_add_is_false()
+    {
+        var provider = Substitute.For<IArrConnection>();
+        provider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>
+        {
+            new()
+            {
+                InfoHash = "def456",
+                Title = "Release without auto-add",
+                Size = 5000,
+                DownloadUrl = "http://example.com/dl",
+                Indexer = "NZBGeek"
+            }
+        });
+        var def = new ArrConnectionDefinition
+        {
+            Enable = true,
+            SyncEnabled = true,
+            EnableAutomaticAdd = false,
+            ArrType = "Sonarr",
+            Name = "Test"
+        };
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { def });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var historyService = Substitute.For<IDownloadHistoryService>();
+        historyService.GetByInfoHash("def456").Returns((DownloadHistory)null);
+
+        var result = CreateTestableService(provider, historyService).Sync();
+
+        Assert.That(result.Added, Is.EqualTo(0));
+        Assert.That(result.Skipped, Is.EqualTo(1));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+        historyService.Received(1).RecordTorrentAdded(
+            Arg.Is<Torrent>(t => t.InfoHash == "def456" && t.Name == "Release without auto-add"),
+            "Sonarr",
+            null,
+            "http://example.com/dl",
+            "NZBGeek");
     }
 
     [Test]
