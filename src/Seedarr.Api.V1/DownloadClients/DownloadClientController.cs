@@ -55,6 +55,12 @@ public class DownloadClientController : Controller
             return BadRequest("Request body cannot be null");
         }
 
+        var validationError = ValidateDefinition(definition);
+        if (validationError != null)
+        {
+            return BadRequest(validationError);
+        }
+
         if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
             definition.Implementation = $"{definition.ClientType}Client";
@@ -75,6 +81,12 @@ public class DownloadClientController : Controller
         if (definition == null)
         {
             return BadRequest("Request body cannot be null");
+        }
+
+        var validationError = ValidateDefinition(definition);
+        if (validationError != null)
+        {
+            return BadRequest(validationError);
         }
 
         var existing = _downloadClientFactory.Get(id);
@@ -259,5 +271,25 @@ public class DownloadClientController : Controller
             },
             _ => throw new ArgumentException($"Unknown client type: {definition.ClientType}"),
         };
+    }
+
+    private static string ValidateDefinition(DownloadClientDefinition definition)
+    {
+        if (string.IsNullOrWhiteSpace(definition.Name))
+        {
+            return "Name is required";
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.Host))
+        {
+            return "Host is required";
+        }
+
+        if (definition.Port < 1 || definition.Port > 65535)
+        {
+            return "Port must be between 1 and 65535";
+        }
+
+        return null;
     }
 }

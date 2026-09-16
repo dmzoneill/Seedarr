@@ -7,11 +7,13 @@ import {
   useTestDownloadClient,
   useTestDirectDownloadClient,
   useDownloadClientSync,
+  useTags,
 } from "../../api/hooks";
 import type {
   DownloadClientDefinition,
   DownloadClientTestResult,
 } from "../../api/types";
+import { useToast } from "../../context/ToastContext";
 import {
   TextInput,
   SelectInput,
@@ -21,7 +23,9 @@ import {
 } from "./shared";
 
 export function DownloadClientsTab() {
+  const { showToast } = useToast();
   const { data: clients, isLoading } = useDownloadClients();
+  const { data: allTags } = useTags();
   const createMutation = useCreateDownloadClient();
   const updateMutation = useUpdateDownloadClient();
   const deleteMutation = useDeleteDownloadClient();
@@ -46,6 +50,7 @@ export function DownloadClientsTab() {
     password: "",
     category: "",
     enable: true,
+    tags: [],
   };
 
   const clientDefaults: Record<string, { port: number }> = {
@@ -56,7 +61,7 @@ export function DownloadClientsTab() {
 
   const handleOpenModal = (client: Partial<DownloadClientDefinition>) => {
     setModalTestResult(null);
-    setEditing({ ...client });
+    setEditing({ ...client, tags: client.tags || [] });
   };
 
   const handleSave = () => {
@@ -119,9 +124,12 @@ export function DownloadClientsTab() {
             onClick={() => {
               syncMutation.mutate(undefined, {
                 onSuccess: (res) =>
-                  alert(
-                    `Sync Complete.\nAdded: ${res.added}\nSkipped: ${res.skipped}\nFailed: ${res.failed}`,
+                  showToast(
+                    `Sync Complete: ${res.added} added, ${res.skipped} skipped, ${res.failed} failed`,
+                    "success",
                   ),
+                onError: (err) =>
+                  showToast(err.message || "Torrent sync failed", "error"),
               });
             }}
             disabled={syncMutation.isPending}
@@ -167,7 +175,18 @@ export function DownloadClientsTab() {
                   title="Delete Client"
                   onClick={(e) => {
                     e.stopPropagation();
-                    deleteMutation.mutate(client.id);
+                    if (
+                      window.confirm(
+                        `Are you sure you want to delete download client "${client.name}"?`,
+                      )
+                    ) {
+                      deleteMutation.mutate(client.id, {
+                        onSuccess: () =>
+                          showToast("Download client deleted", "success"),
+                        onError: () =>
+                          showToast("Failed to delete download client", "error"),
+                      });
+                    }
                   }}
                 >
                   &#x2715;
@@ -194,6 +213,29 @@ export function DownloadClientsTab() {
                   </span>
                 )}
               </div>
+              {client.tags && client.tags.length > 0 && allTags && (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "0.25rem",
+                    marginTop: "0.35rem",
+                  }}
+                >
+                  {client.tags.map((tagId) => {
+                    const t = allTags.find((tag) => tag.id === tagId);
+                    return t ? (
+                      <span
+                        key={tagId}
+                        className="provider-card-badge provider-card-badge-gray"
+                        style={{ fontSize: "0.7rem" }}
+                      >
+                        🏷️ {t.label}
+                      </span>
+                    ) : null;
+                  })}
+                </div>
+              )}
               <div className="provider-card-info">
                 {client.host}:{client.port}
               </div>
@@ -298,14 +340,16 @@ export function DownloadClientsTab() {
                 setEditing({ ...editing, useSsl: v });
               }}
             />
-            <TextInput
-              label="Username"
-              value={editing.username || ""}
-              onChange={(v) => {
-                setModalTestResult(null);
-                setEditing({ ...editing, username: v });
-              }}
-            />
+            {editing.clientType !== "Deluge" && (
+              <TextInput
+                label="Username"
+                value={editing.username || ""}
+                onChange={(v) => {
+                  setModalTestResult(null);
+                  setEditing({ ...editing, username: v });
+                }}
+              />
+            )}
             <TextInput
               label="Password"
               value={editing.password || ""}
@@ -324,6 +368,72 @@ export function DownloadClientsTab() {
               }}
               hint="Filter by category"
             />
+            <div className="form-group">
+              <label className="form-label">Tags</label>
+              <div className="form-input-wrapper">
+                <select
+                  multiple
+                  className="form-select"
+                  value={(editing.tags || []).map(String)}
+                  onChange={(e) => {
+                    const selectedOptions = Array.from(
+                      e.target.selectedOptions,
+                      (option) => Number(option.value),
+                    );
+                    setEditing({ ...editing, tags: selectedOptions });
+                  }}
+                  style={{ borderRadius: "6px", minHeight: "80px" }}
+                >
+                  {allTags?.map((tag) => (
+                    <option key={tag.id} value={tag.id}>
+                      {tag.label}
+                    </option>
+                  ))}
+                </select>
+                {editing.tags && editing.tags.length > 0 && (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "0.35rem",
+                      marginTop: "0.5rem",
+                    }}
+                  >
+                    {editing.tags.map((tagId) => {
+                      const tag = allTags?.find((t) => t.id === tagId);
+                      return tag ? (
+                        <span
+                          key={tagId}
+                          className="badge badge-primary"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            padding: "0.2rem 0.5rem",
+                            fontSize: "0.75rem",
+                            cursor: "pointer",
+                          }}
+                          title="Click to remove tag"
+                          onClick={() => {
+                            setEditing({
+                              ...editing,
+                              tags: (editing.tags || []).filter(
+                                (id) => id !== tagId,
+                              ),
+                            });
+                          }}
+                        >
+                          {tag.label} ✕
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+                <span className="form-hint">
+                  Assign tags to this download client (hold Ctrl/Cmd to select multiple)
+                </span>
+              </div>
+            </div>
             <Toggle
               label="Enabled"
               checked={editing.enable ?? true}
