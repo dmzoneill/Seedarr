@@ -4,6 +4,7 @@ import {
   useSaveNetworkConfig,
   useNetworkStatus,
   useNetworkInterfaces,
+  useTestPort,
 } from "../../api/hooks";
 import { SaveBar, SectionCard, NumberInput, TextInput, SelectInput, Toggle } from "./shared";
 
@@ -14,6 +15,7 @@ export function NetworkSettingsTab() {
   const { data: interfaces, isLoading: loadingInterfaces } =
     useNetworkInterfaces();
   const [customInterfaceMode, setCustomInterfaceMode] = useState(false);
+  const testPortMutation = useTestPort();
 
   const [form, setForm] = useState({
     listeningPort: 51413,
@@ -165,14 +167,60 @@ export function NetworkSettingsTab() {
             gap: "1rem",
           }}
         >
-          <NumberInput
-            label="BitTorrent Listening Port"
-            value={form.listeningPort}
-            onChange={(v) => update("listeningPort", v)}
-            min={1}
-            max={65535}
-            hint="TCP/UDP port for inbound swarm peer connections (default: 51413 / 6881)"
-          />
+          <div>
+            <NumberInput
+              label="BitTorrent Listening Port"
+              value={form.listeningPort}
+              onChange={(v) => update("listeningPort", v)}
+              min={1}
+              max={65535}
+              hint="TCP/UDP port for inbound swarm peer connections (default: 51413 / 6881)"
+            />
+            <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ fontSize: "0.85rem", padding: "0.3rem 0.65rem" }}
+                onClick={() => testPortMutation.mutate(form.listeningPort)}
+                disabled={testPortMutation.isPending}
+                title="Test external reachability of configured listening port"
+              >
+                {testPortMutation.isPending ? "Testing..." : "Test Port Reachability"}
+              </button>
+
+              {testPortMutation.data && (
+                <span
+                  className={`badge ${testPortMutation.data.isOpen ? "badge-success" : "badge-danger"}`}
+                  style={{
+                    padding: "0.3rem 0.65rem",
+                    fontSize: "0.8rem",
+                    backgroundColor: testPortMutation.data.isOpen ? "rgba(40, 167, 69, 0.2)" : "rgba(220, 53, 69, 0.2)",
+                    color: testPortMutation.data.isOpen ? "var(--success, #28a745)" : "var(--danger, #dc3545)",
+                    border: `1px solid ${testPortMutation.data.isOpen ? "var(--success, #28a745)" : "var(--danger, #dc3545)"}`,
+                  }}
+                >
+                  {testPortMutation.data.isOpen
+                    ? `✓ Reachable / Open (${testPortMutation.data.responseTimeMs ? `${testPortMutation.data.responseTimeMs}ms` : testPortMutation.data.responseTime})`
+                    : `✗ Unreachable / Filtered ${testPortMutation.data.errorMessage ? `(${testPortMutation.data.errorMessage})` : ""}`}
+                </span>
+              )}
+
+              {testPortMutation.isError && (
+                <span
+                  className="badge badge-danger"
+                  style={{
+                    padding: "0.3rem 0.65rem",
+                    fontSize: "0.8rem",
+                    backgroundColor: "rgba(220, 53, 69, 0.2)",
+                    color: "var(--danger, #dc3545)",
+                    border: "1px solid var(--danger, #dc3545)",
+                  }}
+                >
+                  Error: {testPortMutation.error?.message || "Failed to test port"}
+                </span>
+              )}
+            </div>
+          </div>
 
           <div
             style={{

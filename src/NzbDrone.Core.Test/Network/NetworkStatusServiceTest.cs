@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
@@ -127,6 +129,60 @@ namespace NzbDrone.Core.Test.Network
 
             Assert.That(result, Is.Not.Null);
             Assert.That(result, Is.InstanceOf<List<string>>());
+        }
+
+        [Test]
+        public async Task TestPortAsync_should_return_open_when_listener_is_running()
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+            try
+            {
+                _upnpService.ExternalIp.Returns("127.0.0.1");
+
+                var result = await _subject.TestPortAsync(port);
+
+                Assert.That(result.IsOpen, Is.True);
+                Assert.That(result.Port, Is.EqualTo(port));
+                Assert.That(result.ExternalIp, Is.EqualTo("127.0.0.1"));
+                Assert.That(result.ErrorMessage, Is.Null);
+                Assert.That(result.ResponseTime, Is.GreaterThanOrEqualTo(System.TimeSpan.Zero));
+            }
+            finally
+            {
+                listener.Stop();
+            }
+        }
+
+        [Test]
+        public async Task TestPortAsync_should_return_closed_when_port_is_not_listening()
+        {
+            var listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            listener.Stop();
+
+            _upnpService.ExternalIp.Returns("127.0.0.1");
+
+            var result = await _subject.TestPortAsync(port);
+
+            Assert.That(result.IsOpen, Is.False);
+            Assert.That(result.Port, Is.EqualTo(port));
+            Assert.That(result.ErrorMessage, Is.Not.Null);
+        }
+
+        [Test]
+        public async Task TestPortAsync_should_handle_cancellation()
+        {
+            var canceledToken = new CancellationToken(true);
+
+            _upnpService.ExternalIp.Returns("127.0.0.1");
+
+            var result = await _subject.TestPortAsync(65530, canceledToken);
+
+            Assert.That(result.IsOpen, Is.False);
         }
     }
 }
