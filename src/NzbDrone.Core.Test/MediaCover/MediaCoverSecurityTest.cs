@@ -163,4 +163,28 @@ public class MediaCoverSecurityTest
 
         Assert.That(result, Is.InstanceOf<NotFoundResult>());
     }
+
+    [Test]
+    public void MediaCoverController_updates_last_access_time_when_serving_artwork()
+    {
+        var coverDir = Path.Combine(_tempAppData, "MediaCover", "10");
+        Directory.CreateDirectory(coverDir);
+        var posterFile = Path.Combine(coverDir, "poster.jpg");
+        File.WriteAllBytes(posterFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+        var pastTime = DateTime.UtcNow.AddDays(-5);
+        File.SetLastAccessTimeUtc(posterFile, pastTime);
+
+        _enrichmentService.GetMetadata(10).Returns(new TorrentMediaMetadata
+        {
+            TorrentId = 10,
+            PosterLocalPath = posterFile
+        });
+
+        var result = _controller.GetPoster(10);
+
+        Assert.That(result, Is.InstanceOf<PhysicalFileResult>());
+        var lastAccess = File.GetLastAccessTimeUtc(posterFile);
+        Assert.That(lastAccess, Is.GreaterThan(pastTime.AddDays(1)));
+    }
 }

@@ -42,6 +42,8 @@ public interface IMediaEnrichmentService
     void DeleteMediaCache(int torrentId);
 
     Task<string> CacheArtworkAsync(string url, int torrentId, string type, CancellationToken cancellationToken = default);
+
+    void EvictMediaCoverCache();
 }
 
 public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDeletedEvent>
@@ -57,6 +59,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _torrentLocks = new();
+    private readonly object _evictionLock = new();
 
     private static readonly Regex SceneTagsRegex = new(
         @"\b(1080p|720p|2160p|4k|uhd|hdr|hdr10|hdr10plus|dv|dovi|remux|bluray|blu-ray|bdrip|web-dl|webrip|web|hdtv|x264|x265|h264|h265|hevc|av1|xvid|aac|dts|dts-hd|truehd|atmos|flac|mp3|extended|repack|proper|complete|season|\bS\d{1,2}(E\d{1,2})?\b|\bEP?\d{1,3}\b)\b.*$",
@@ -404,9 +407,28 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                     }
 
                     var localFile = Path.Combine(cacheDir, $"{type}{ext}");
-                    await File.WriteAllBytesAsync(localFile, localBytes, cancellationToken).ConfigureAwait(false);
-                    _logger.Debug("Copied validated local {0} artwork from {1} to {2}", type, url, localFile);
-                    return localFile;
+                    var tmpLocalFile = $"{localFile}.tmp.{Guid.NewGuid():N}";
+                    try
+                    {
+                        await File.WriteAllBytesAsync(tmpLocalFile, localBytes, cancellationToken).ConfigureAwait(false);
+                        File.Move(tmpLocalFile, localFile, overwrite: true);
+                        _logger.Debug("Copied validated local {0} artwork from {1} to {2}", type, url, localFile);
+                        EvictMediaCoverCache();
+                        return localFile;
+                    }
+                    finally
+                    {
+                        if (File.Exists(tmpLocalFile))
+                        {
+                            try
+                            {
+                                File.Delete(tmpLocalFile);
+                            }
+                            catch
+                            {
+                            }
+                        }
+                    }
                 }
 
                 _logger.Warn("Local artwork file does not exist: {0}", url);
@@ -452,9 +474,28 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 return null;
             }
 
-            await File.WriteAllBytesAsync(destFile, bytes, cancellationToken).ConfigureAwait(false);
-            _logger.Debug("Cached {0} artwork to {1}", type, destFile);
-            return destFile;
+            var tmpFile = $"{destFile}.tmp.{Guid.NewGuid():N}";
+            try
+            {
+                await File.WriteAllBytesAsync(tmpFile, bytes, cancellationToken).ConfigureAwait(false);
+                File.Move(tmpFile, destFile, overwrite: true);
+                _logger.Debug("Cached {0} artwork to {1}", type, destFile);
+                EvictMediaCoverCache();
+                return destFile;
+            }
+            finally
+            {
+                if (File.Exists(tmpFile))
+                {
+                    try
+                    {
+                        File.Delete(tmpFile);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -503,6 +544,211 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         }
 
         return false;
+    }
+
+    public void EvictMediaCoverCache()
+    {
+        if (_appFolderInfo == null || string.IsNullOrWhiteSpace(_appFolderInfo.AppDataFolder))
+        {
+            return;
+        }
+
+        lock (_evictionLock)
+        {
+            try
+            {
+                var baseDirs = new[]
+                {
+                    Path.Combine(_appFolderInfo.AppDataFolder, "MediaCover"),
+                    Path.Combine(_appFolderInfo.AppDataFolder, "MediaCache"),
+                };
+
+                var existingDirs = baseDirs.Where(Directory.Exists).ToList();
+                if (existingDirs.Count == 0)
+                {
+                    return;
+                }
+
+                var allFiles = new List<FileInfo>();
+                foreach (var dir in existingDirs)
+                {
+                    try
+                    {
+                        var dirInfo = new DirectoryInfo(dir);
+                        allFiles.AddRange(dirInfo.EnumerateFiles("*", SearchOption.AllDirectories));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to enumerate files in {0}", dir);
+                    }
+                }
+
+                var ttlDays = _configService?.MediaCoverCacheTtlDays ?? 60;
+                var maxMb = _configService?.MediaCoverMaxCacheSizeMb ?? 1024;
+
+                var remainingFiles = new List<FileInfo>();
+                long totalSize = 0;
+
+                // 1. Prune expired files based on TTL
+                var hasTtl = ttlDays > 0;
+                var ttlCutoff = hasTtl ? DateTime.UtcNow.AddDays(-ttlDays) : DateTime.MinValue;
+
+                foreach (var file in allFiles)
+                {
+                    // Clean up orphaned tmp files older than 1 hour
+                    if (file.Name.Contains(".tmp.") && file.LastWriteTimeUtc < DateTime.UtcNow.AddHours(-1))
+                    {
+                        try
+                        {
+                            file.Delete();
+                        }
+                        catch
+                        {
+                        }
+
+                        continue;
+                    }
+
+                    var effectiveTime = GetLastAccessOrWriteTime(file);
+                    if (hasTtl && effectiveTime < ttlCutoff)
+                    {
+                        try
+                        {
+                            file.Delete();
+                            _logger.Debug("Evicted expired artwork file (TTL {0} days): {1}", ttlDays, file.FullName);
+                            continue;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Warn(ex, "Failed to delete expired artwork file: {0}", file.FullName);
+                        }
+                    }
+
+                    remainingFiles.Add(file);
+                    try
+                    {
+                        totalSize += file.Length;
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                // 2. Enforce disk quota via LRU eviction
+                var maxQuotaBytes = maxMb * 1024L * 1024L;
+                if (maxQuotaBytes > 0 && totalSize > maxQuotaBytes)
+                {
+                    var targetQuotaBytes = (long)(maxQuotaBytes * 0.85);
+                    _logger.Info(
+                        "MediaCover cache size ({0:N0} bytes) exceeds quota ({1:N0} bytes). Evicting down to 85% ({2:N0} bytes)...",
+                        totalSize,
+                        maxQuotaBytes,
+                        targetQuotaBytes);
+
+                    var orderedFiles = remainingFiles
+                        .OrderBy(GetLastAccessOrWriteTime)
+                        .ToList();
+
+                    foreach (var file in orderedFiles)
+                    {
+                        if (totalSize < targetQuotaBytes)
+                        {
+                            break;
+                        }
+
+                        try
+                        {
+                            var len = file.Length;
+                            file.Delete();
+                            totalSize -= len;
+                            _logger.Debug("Evicted LRU artwork file: {0}", file.FullName);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Warn(ex, "Failed to delete artwork file during quota eviction: {0}", file.FullName);
+                        }
+                    }
+                }
+
+                // 3. Clean up empty subdirectories
+                foreach (var dir in existingDirs)
+                {
+                    try
+                    {
+                        CleanEmptySubdirectories(new DirectoryInfo(dir));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(ex, "Failed to clean empty subdirectories in {0}", dir);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to execute MediaCover cache eviction");
+            }
+        }
+    }
+
+    private static DateTime GetLastAccessOrWriteTime(FileInfo file)
+    {
+        try
+        {
+            var access = file.LastAccessTimeUtc;
+            if (access > DateTime.MinValue && access.Year > 1980)
+            {
+                return access;
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            var write = file.LastWriteTimeUtc;
+            if (write > DateTime.MinValue && write.Year > 1980)
+            {
+                return write;
+            }
+        }
+        catch
+        {
+        }
+
+        return DateTime.UtcNow;
+    }
+
+    private static void CleanEmptySubdirectories(DirectoryInfo root)
+    {
+        if (!root.Exists)
+        {
+            return;
+        }
+
+        foreach (var subDir in root.EnumerateDirectories())
+        {
+            CleanEmptySubdirectoriesRecursive(subDir);
+        }
+    }
+
+    private static void CleanEmptySubdirectoriesRecursive(DirectoryInfo directory)
+    {
+        foreach (var subDir in directory.EnumerateDirectories())
+        {
+            CleanEmptySubdirectoriesRecursive(subDir);
+        }
+
+        if (!directory.EnumerateFileSystemInfos().Any())
+        {
+            try
+            {
+                directory.Delete();
+            }
+            catch
+            {
+            }
+        }
     }
 
     internal string GetServarrApiKey(string url)
