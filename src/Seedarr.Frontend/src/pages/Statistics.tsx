@@ -333,7 +333,7 @@ function Statistics() {
                             </td>
                             <td>
                               <span
-                                className={`badge ${t.ratio >= 2.0 ? "badge-primary" : t.ratio >= 1.0 ? "badge-secondary" : "badge-outline"}`}
+                                className={`badge ${Number.isFinite(t.ratio) && t.ratio >= 2.0 ? "badge-primary" : Number.isFinite(t.ratio) && t.ratio >= 1.0 ? "badge-secondary" : "badge-outline"}`}
                                 style={{ fontSize: "0.75rem" }}
                               >
                                 {formatRatio(t.ratio)}
@@ -725,24 +725,62 @@ function Statistics() {
                       <td>{formatBytes(tb.totalDownloaded)}</td>
                       <td>
                         <span
-                          className={`badge ${tb.ratio >= 2.0 ? "badge-primary" : tb.ratio >= 1.0 ? "badge-secondary" : "badge-outline"}`}
+                          className={`badge ${Number.isFinite(tb.ratio) && tb.ratio >= 2.0 ? "badge-primary" : Number.isFinite(tb.ratio) && tb.ratio >= 1.0 ? "badge-secondary" : "badge-outline"}`}
                           style={{ fontSize: "0.75rem" }}
                         >
                           {formatRatio(tb.ratio)}
                         </span>
                       </td>
                       <td>
-                        <span
-                          style={{
-                            fontWeight: 600,
-                            color:
-                              tb.bufferBytes > 0
-                                ? "var(--accent, #c8a84e)"
-                                : "inherit",
-                          }}
-                        >
-                          +{formatBytes(tb.bufferBytes)}
-                        </span>
+                        {tb.bufferBytes < 0 ? (
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                color: "var(--color-danger, #e74c3c)",
+                              }}
+                            >
+                              -{formatBytes(Math.abs(tb.bufferBytes))}
+                            </span>
+                            <span
+                              className="badge badge-danger"
+                              style={{
+                                fontSize: "0.7rem",
+                                padding: "0.15rem 0.45rem",
+                                backgroundColor: "rgba(231, 76, 60, 0.2)",
+                                color: "var(--color-danger, #e74c3c)",
+                                border: "1px solid var(--color-danger, #e74c3c)",
+                                fontWeight: 600,
+                              }}
+                            >
+                              Deficit
+                            </span>
+                          </div>
+                        ) : tb.bufferBytes > 0 ? (
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              color: "var(--accent, #c8a84e)",
+                            }}
+                          >
+                            +{formatBytes(tb.bufferBytes)}
+                          </span>
+                        ) : (
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              color: "var(--text-muted, #888)",
+                            }}
+                          >
+                            0 B
+                          </span>
+                        )}
                       </td>
                       <td style={{ textAlign: "right" }}>
                         <span
@@ -834,7 +872,7 @@ function Statistics() {
                   <SeedingSimulator
                     currentUploaded={t.uploaded}
                     totalSize={t.totalSize}
-                    currentRatio={t.ratio}
+                    currentRatio={Number.isFinite(t.ratio) ? t.ratio : 0}
                     currentUploadSpeed={t.uploadSpeed}
                     seedingTimeSeconds={t.seedingTime}
                   />
