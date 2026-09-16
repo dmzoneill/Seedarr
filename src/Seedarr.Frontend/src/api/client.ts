@@ -57,10 +57,11 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {},
+    options: RequestInit & { responseType?: "blob" | "json" } = {},
   ): Promise<T> {
+    const isBlob = options.responseType === "blob";
     const headers: HeadersInit = {
-      "Content-Type": "application/json",
+      ...(isBlob ? {} : { "Content-Type": "application/json" }),
       ...options.headers,
     };
 
@@ -85,11 +86,18 @@ class ApiClient {
       return null as unknown as T;
     }
 
+    if (isBlob) {
+      return (await response.blob()) as unknown as T;
+    }
+
     return response.json();
   }
 
-  get<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, { method: "GET" });
+  get<T>(
+    endpoint: string,
+    options?: RequestInit & { responseType?: "blob" | "json" },
+  ): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: "GET" });
   }
 
   post<T>(endpoint: string, body?: unknown): Promise<T> {
