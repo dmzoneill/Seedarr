@@ -499,4 +499,51 @@ public class LocalPeerDiscoveryTest
 
         Assert.Pass("Service started and stopped without hanging");
     }
+
+    [Test]
+    public void Handle_ConfigSavedEvent_should_start_lpd_when_toggled_to_enabled()
+    {
+        _configService.EnableLpd.Returns(false);
+        using var lpd = new LocalPeerDiscovery(_configService, _torrentService, _peerDiscovery);
+
+        Assert.That(lpd.IsRunning, Is.False);
+
+        _configService.EnableLpd.Returns(true);
+        Assert.DoesNotThrow(() => lpd.Handle(new ConfigSavedEvent()));
+    }
+
+    [Test]
+    public void Handle_ConfigSavedEvent_should_stop_lpd_when_toggled_to_disabled()
+    {
+        _configService.EnableLpd.Returns(true);
+        using var lpd = new LocalPeerDiscovery(_configService, _torrentService, _peerDiscovery);
+
+        lpd.Handle(new ConfigSavedEvent());
+
+        _configService.EnableLpd.Returns(false);
+        lpd.Handle(new ConfigSavedEvent());
+
+        Assert.That(lpd.IsRunning, Is.False);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_when_disabled_stays_alive_and_toggles_via_ConfigSavedEvent()
+    {
+        _configService.EnableLpd.Returns(false);
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        using var lpd = new LocalPeerDiscovery(_configService, _torrentService, _peerDiscovery);
+
+        await lpd.StartAsync(CancellationToken.None);
+        Assert.That(lpd.IsRunning, Is.False);
+
+        _configService.EnableLpd.Returns(true);
+        lpd.Handle(new ConfigSavedEvent());
+
+        _configService.EnableLpd.Returns(false);
+        lpd.Handle(new ConfigSavedEvent());
+        Assert.That(lpd.IsRunning, Is.False);
+
+        using var stopCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        await lpd.StopAsync(stopCts.Token);
+    }
 }
