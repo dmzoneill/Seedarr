@@ -1026,6 +1026,70 @@ namespace NzbDrone.Core.Test.Configuration
         }
 
         [Test]
+        public void UploadStoppedMaxPercentage_should_not_be_less_than_UploadStoppedMinPercentage()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "UploadStoppedMinPercentage", Value = "60" },
+                new ConfigModel { Key = "UploadStoppedMaxPercentage", Value = "20" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.UploadStoppedMinPercentage, Is.EqualTo(60));
+            Assert.That(_subject.UploadStoppedMaxPercentage, Is.EqualTo(60));
+        }
+
+        [Test]
+        public void DownloadStoppedMaxPercentage_should_not_be_less_than_DownloadStoppedMinPercentage()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "DownloadStoppedMinPercentage", Value = "50" },
+                new ConfigModel { Key = "DownloadStoppedMaxPercentage", Value = "30" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.DownloadStoppedMinPercentage, Is.EqualTo(50));
+            Assert.That(_subject.DownloadStoppedMaxPercentage, Is.EqualTo(50));
+        }
+
+        [Test]
+        public void SpeedVariationMax_should_not_be_less_than_SpeedVariationMin()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "SpeedVariationMin", Value = "0.7" },
+                new ConfigModel { Key = "SpeedVariationMax", Value = "0.3" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.SpeedVariationMin, Is.EqualTo(0.7));
+            Assert.That(_subject.SpeedVariationMax, Is.EqualTo(0.7));
+        }
+
+        [Test]
+        public void CustomScriptTimeoutSeconds_should_default_to_60()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.CustomScriptTimeoutSeconds, Is.EqualTo(60));
+        }
+
+        [TestCase(0)]
+        [TestCase(-1)]
+        [TestCase(-100)]
+        public void CustomScriptTimeoutSeconds_should_enforce_minimum_of_1(int invalidTimeout)
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "CustomScriptTimeoutSeconds", Value = invalidTimeout.ToString() }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.CustomScriptTimeoutSeconds, Is.EqualTo(1));
+        }
+
+        [Test]
         public void DownloadThresholdPercent_should_default_to_30()
         {
             _repository.All().Returns(new List<ConfigModel>().AsQueryable());

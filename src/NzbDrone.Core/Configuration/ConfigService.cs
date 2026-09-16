@@ -410,7 +410,7 @@ public class ConfigService : IConfigService
     public string ScriptTorrentDoneFilename => GetValue("ScriptTorrentDoneFilename", string.Empty);
     public string ScriptTorrentAddedFilename => GetValue("ScriptTorrentAddedFilename", string.Empty);
     public string ScriptTorrentDoneSeedingFilename => GetValue("ScriptTorrentDoneSeedingFilename", string.Empty);
-    public int CustomScriptTimeoutSeconds => GetValueInt("CustomScriptTimeoutSeconds", 60);
+    public int CustomScriptTimeoutSeconds => Math.Max(1, GetValueInt("CustomScriptTimeoutSeconds", 60));
 
     // Speed
     public int HistoryRetentionDays => GetValueInt("HistoryRetentionDays", 30);
@@ -431,15 +431,15 @@ public class ConfigService : IConfigService
     public string UploadRedistributionMode => GetValue("UploadRedistributionMode", "tick");
     public int UploadCustomIntervalMinutes => GetValueInt("UploadCustomIntervalMinutes", 5);
     public int UploadStoppedMinPercentage => GetValueInt("UploadStoppedMinPercentage", 20);
-    public int UploadStoppedMaxPercentage => GetValueInt("UploadStoppedMaxPercentage", 40);
+    public int UploadStoppedMaxPercentage => Math.Max(UploadStoppedMinPercentage, GetValueInt("UploadStoppedMaxPercentage", 40));
     public string DownloadDistributionAlgorithm => GetValue("DownloadDistributionAlgorithm", "Equal");
     public int DownloadDistributionSpreadPercentage => GetValueInt("DownloadDistributionSpreadPercentage", 50);
     public string DownloadRedistributionMode => GetValue("DownloadRedistributionMode", "tick");
     public int DownloadCustomIntervalMinutes => GetValueInt("DownloadCustomIntervalMinutes", 5);
     public int DownloadStoppedMinPercentage => GetValueInt("DownloadStoppedMinPercentage", 20);
-    public int DownloadStoppedMaxPercentage => GetValueInt("DownloadStoppedMaxPercentage", 40);
+    public int DownloadStoppedMaxPercentage => Math.Max(DownloadStoppedMinPercentage, GetValueInt("DownloadStoppedMaxPercentage", 40));
     public double SpeedVariationMin => GetValueDouble("SpeedVariationMin", 0.2);
-    public double SpeedVariationMax => GetValueDouble("SpeedVariationMax", 0.8);
+    public double SpeedVariationMax => Math.Max(SpeedVariationMin, GetValueDouble("SpeedVariationMax", 0.8));
     public int DownloadThresholdPercent => GetValueInt("DownloadThresholdPercent", 30);
 
     // Scheduler
