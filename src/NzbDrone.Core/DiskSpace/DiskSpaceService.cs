@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -7,6 +8,16 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.DiskSpace;
+
+/// <summary>
+/// Health states for disk space monitoring.
+/// </summary>
+public enum DiskSpaceHealthState
+{
+    Normal,
+    Low,
+    Critical,
+}
 
 /// <summary>
 /// Provides disk space information for relevant locations.
@@ -18,6 +29,21 @@ public interface IDiskSpaceService
     /// </summary>
     /// <returns>A list of disk space information.</returns>
     List<DiskSpaceInfo> GetDiskSpace();
+
+    /// <summary>
+    /// Gets the current health state for the specified drive path.
+    /// </summary>
+    DiskSpaceHealthState GetHealthState(string path);
+
+    /// <summary>
+    /// Updates and evaluates disk space health state for a path.
+    /// </summary>
+    DiskSpaceHealthState UpdateDiskSpaceHealth(string path, long freeSpace, long totalSpace);
+
+    /// <summary>
+    /// Clears any cached health states.
+    /// </summary>
+    void ResetHealthStates();
 }
 
 /// <summary>
@@ -25,9 +51,18 @@ public interface IDiskSpaceService
 /// </summary>
 public class DiskSpaceService : IDiskSpaceService
 {
+    public const long CriticalBytesThreshold = 1024L * 1024 * 1024; // 1 GB
+    public const long CriticalRecoveryBytesThreshold = 1280L * 1024 * 1024; // 1.25 GB
+    public const long LowBytesThreshold = 5L * 1024 * 1024 * 1024; // 5 GB
+    public const double LowPercentThreshold = 0.05; // 5%
+    public const long NormalRecoveryBytesThreshold = 6L * 1024 * 1024 * 1024; // 6 GB
+    public const double NormalRecoveryPercentThreshold = 0.06; // 6%
+
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
+    private readonly ConcurrentDictionary<string, DiskSpaceHealthState> _healthStates = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _stateLock = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DiskSpaceService"/> class.
@@ -39,6 +74,56 @@ public class DiskSpaceService : IDiskSpaceService
         _appFolderInfo = appFolderInfo;
         _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    /// <inheritdoc/>
+    public DiskSpaceHealthState GetHealthState(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return DiskSpaceHealthState.Normal;
+        }
+
+        return _healthStates.TryGetValue(path, out var state) ? state : DiskSpaceHealthState.Normal;
+    }
+
+    /// <inheritdoc/>
+    public void ResetHealthStates()
+    {
+        _healthStates.Clear();
+    }
+
+    /// <inheritdoc/>
+    public DiskSpaceHealthState UpdateDiskSpaceHealth(string path, long freeSpace, long totalSpace)
+    {
+        if (string.IsNullOrWhiteSpace(path) || totalSpace <= 0)
+        {
+            return DiskSpaceHealthState.Normal;
+        }
+
+        var freePercentage = (double)freeSpace / totalSpace;
+        DiskSpaceHealthState oldState;
+        DiskSpaceHealthState newState;
+        bool transitionOccurred = false;
+
+        lock (_stateLock)
+        {
+            oldState = _healthStates.GetOrAdd(path, DiskSpaceHealthState.Normal);
+            newState = ComputeNextHealthState(oldState, freeSpace, totalSpace, freePercentage);
+
+            if (newState != oldState)
+            {
+                _healthStates[path] = newState;
+                transitionOccurred = true;
+            }
+        }
+
+        if (transitionOccurred && _eventAggregator != null)
+        {
+            PublishHealthTransitionEvent(path, oldState, newState, freeSpace, totalSpace, freePercentage);
+        }
+
+        return newState;
     }
 
     /// <inheritdoc/>
@@ -77,19 +162,6 @@ public class DiskSpaceService : IDiskSpaceService
                         TotalSpace = drive.TotalSize,
                     };
                     result.Add(info);
-
-                    if (_eventAggregator != null && info.TotalSpace > 0)
-                    {
-                        var freePercentage = (double)info.FreeSpace / info.TotalSpace;
-                        if (info.FreeSpace < 1024L * 1024 * 1024)
-                        {
-                            _eventAggregator.PublishEvent(new DiskSpaceCriticalEvent(info.Path, info.FreeSpace));
-                        }
-                        else if (info.FreeSpace < 5L * 1024 * 1024 * 1024 || freePercentage < 0.05)
-                        {
-                            _eventAggregator.PublishEvent(new DiskSpaceLowEvent(info.Path, info.FreeSpace, info.TotalSpace, freePercentage));
-                        }
-                    }
                 }
             }
             catch (Exception ex)
@@ -98,7 +170,110 @@ public class DiskSpaceService : IDiskSpaceService
             }
         }
 
+        foreach (var info in result)
+        {
+            if (info.TotalSpace > 0)
+            {
+                UpdateDiskSpaceHealth(info.Path, info.FreeSpace, info.TotalSpace);
+            }
+        }
+
         return result;
+    }
+
+    private DiskSpaceHealthState ComputeNextHealthState(
+        DiskSpaceHealthState currentState,
+        long freeSpace,
+        long totalSpace,
+        double freePercentage)
+    {
+        switch (currentState)
+        {
+            case DiskSpaceHealthState.Critical:
+                if (IsNormalRecovery(freeSpace, totalSpace, freePercentage))
+                {
+                    return DiskSpaceHealthState.Normal;
+                }
+
+                if (freeSpace >= CriticalRecoveryBytesThreshold)
+                {
+                    return DiskSpaceHealthState.Low;
+                }
+
+                return DiskSpaceHealthState.Critical;
+
+            case DiskSpaceHealthState.Low:
+                if (freeSpace < CriticalBytesThreshold)
+                {
+                    return DiskSpaceHealthState.Critical;
+                }
+
+                if (IsNormalRecovery(freeSpace, totalSpace, freePercentage))
+                {
+                    return DiskSpaceHealthState.Normal;
+                }
+
+                return DiskSpaceHealthState.Low;
+
+            case DiskSpaceHealthState.Normal:
+            default:
+                if (freeSpace < CriticalBytesThreshold)
+                {
+                    return DiskSpaceHealthState.Critical;
+                }
+
+                if (IsLow(freeSpace, totalSpace, freePercentage))
+                {
+                    return DiskSpaceHealthState.Low;
+                }
+
+                return DiskSpaceHealthState.Normal;
+        }
+    }
+
+    private static bool IsLow(long freeSpace, long totalSpace, double freePercentage)
+    {
+        if (totalSpace > 0 && totalSpace < LowBytesThreshold)
+        {
+            return freePercentage < LowPercentThreshold;
+        }
+
+        return freeSpace < LowBytesThreshold || freePercentage < LowPercentThreshold;
+    }
+
+    private static bool IsNormalRecovery(long freeSpace, long totalSpace, double freePercentage)
+    {
+        if (totalSpace > 0 && totalSpace < NormalRecoveryBytesThreshold)
+        {
+            return freePercentage >= NormalRecoveryPercentThreshold;
+        }
+
+        return freeSpace >= NormalRecoveryBytesThreshold && freePercentage >= NormalRecoveryPercentThreshold;
+    }
+
+    private void PublishHealthTransitionEvent(
+        string path,
+        DiskSpaceHealthState oldState,
+        DiskSpaceHealthState newState,
+        long freeSpace,
+        long totalSpace,
+        double freePercentage)
+    {
+        if (newState == DiskSpaceHealthState.Critical)
+        {
+            _logger.Warn("Disk space on {0} entered CRITICAL state: {1} bytes free", path, freeSpace);
+            _eventAggregator.PublishEvent(new DiskSpaceCriticalEvent(path, freeSpace));
+        }
+        else if (oldState == DiskSpaceHealthState.Normal && newState == DiskSpaceHealthState.Low)
+        {
+            _logger.Warn("Disk space on {0} entered LOW state: {1} bytes free ({2:P1})", path, freeSpace, freePercentage);
+            _eventAggregator.PublishEvent(new DiskSpaceLowEvent(path, freeSpace, totalSpace, freePercentage));
+        }
+        else if ((oldState == DiskSpaceHealthState.Critical || oldState == DiskSpaceHealthState.Low) && newState == DiskSpaceHealthState.Normal)
+        {
+            _logger.Info("Disk space on {0} RESTORED to normal: {1} bytes free ({2:P1})", path, freeSpace, freePercentage);
+            _eventAggregator.PublishEvent(new DiskSpaceRestoredEvent(path, freeSpace, totalSpace));
+        }
     }
 
     private void AddDriveInfo(
