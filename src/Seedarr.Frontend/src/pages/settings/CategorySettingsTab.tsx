@@ -251,6 +251,14 @@ export function CategorySettingsTab({
   };
 
   const handleDelete = (cat: Category) => {
+    if (cat.isDefault) {
+      showToast(
+        "Cannot delete the default category. Designate another category as default first.",
+        "error",
+      );
+      return;
+    }
+
     if (
       !window.confirm(
         `Are you sure you want to delete category "${cat.name}"?`,
@@ -492,11 +500,17 @@ export function CategorySettingsTab({
                             type="button"
                             className="btn btn-danger btn-small"
                             onClick={() => handleDelete(cat)}
-                            disabled={deleteMutation.isPending}
-                            title={`Delete ${cat.name}`}
+                            disabled={deleteMutation.isPending || cat.isDefault}
+                            title={
+                              cat.isDefault
+                                ? "Cannot delete the default category. Designate another category as default first."
+                                : `Delete ${cat.name}`
+                            }
                             style={{
                               padding: "0.2rem 0.5rem",
                               fontSize: "0.75rem",
+                              cursor: cat.isDefault ? "not-allowed" : "pointer",
+                              opacity: cat.isDefault ? 0.5 : 1,
                             }}
                           >
                             Delete

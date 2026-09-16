@@ -121,10 +121,18 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
 
     [HttpDelete("{id:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public ActionResult Delete(int id)
     {
-        _categoryService.Delete(id);
-        return NoContent();
+        try
+        {
+            _categoryService.Delete(id);
+            return NoContent();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     private static bool IsValidSavePath(string savePath, out string errorMessage)

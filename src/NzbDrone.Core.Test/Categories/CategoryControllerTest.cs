@@ -219,4 +219,26 @@ public class CategoryControllerTest
             m.Name == "category" &&
             m.Body is CategoryResource));
     }
+
+    [Test]
+    public void Delete_with_valid_id_returns_no_content()
+    {
+        var result = _controller.Delete(1);
+
+        Assert.That(result, Is.InstanceOf<NoContentResult>());
+        _categoryService.Received(1).Delete(1);
+    }
+
+    [Test]
+    public void Delete_when_service_throws_invalid_operation_exception_returns_bad_request()
+    {
+        _categoryService.When(x => x.Delete(1)).Do(_ =>
+            throw new InvalidOperationException("Cannot delete category 'Default' because it is configured as the default category. Designate another category as default before deleting this one."));
+
+        var result = _controller.Delete(1);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value, Does.Contain("Cannot delete category 'Default'"));
+    }
 }

@@ -84,12 +84,12 @@ public class CategoryService : ICategoryService
         }
 
         _logger.Info("Adding category: {0}", category.Name);
-        if (category.IsDefault)
+        var inserted = _repository.Insert(category);
+        if (inserted.IsDefault)
         {
-            ClearExistingDefaults(0);
+            ClearExistingDefaults(inserted.Id);
         }
 
-        var inserted = _repository.Insert(category);
         _eventAggregator?.PublishEvent(new CategoryUpdatedEvent { Category = inserted });
         return inserted;
     }
@@ -131,12 +131,7 @@ public class CategoryService : ICategoryService
 
     private void ClearExistingDefaults(int currentCategoryId)
     {
-        var existingDefaults = _repository.All().Where(c => c.IsDefault && c.Id != currentCategoryId);
-        foreach (var existing in existingDefaults)
-        {
-            existing.IsDefault = false;
-            _repository.Update(existing);
-        }
+        _repository.SetExclusiveDefault(currentCategoryId);
     }
 
     public void Delete(int id)
@@ -145,6 +140,11 @@ public class CategoryService : ICategoryService
         if (cat == null)
         {
             return;
+        }
+
+        if (cat.IsDefault)
+        {
+            throw new InvalidOperationException($"Cannot delete category '{cat.Name}' because it is configured as the default category. Designate another category as default before deleting this one.");
         }
 
         _logger.Info("Deleting category id: {0} ({1})", id, cat.Name);
