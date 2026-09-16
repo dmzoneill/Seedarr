@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Authentication;
 
@@ -83,9 +84,21 @@ public class IdentityProviderService : IIdentityProviderService
                 _ => provider.IssuerUrl,
             };
 
-            if (string.IsNullOrEmpty(targetUrl))
+            if (string.IsNullOrWhiteSpace(targetUrl))
             {
-                return true;
+                return false;
+            }
+
+            if (!UrlValidator.IsSafeUrl(targetUrl))
+            {
+                _logger.Warn("Blocked unsafe target URL for identity provider {0}: {1}", provider.Name, targetUrl);
+                return false;
+            }
+
+            if (!Uri.TryCreate(targetUrl, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            {
+                _logger.Warn("Blocked non-HTTPS target URL for identity provider {0}: {1}", provider.Name, targetUrl);
+                return false;
             }
 
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));

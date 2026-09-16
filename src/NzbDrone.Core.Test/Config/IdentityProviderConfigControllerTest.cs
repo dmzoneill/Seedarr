@@ -312,4 +312,127 @@ public class IdentityProviderConfigControllerTest
         Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
         _providerService.DidNotReceive().Update(Arg.Any<IdentityProviderDefinition>());
     }
+
+    [TestCase("a")] // Too short (< 2 chars)
+    [TestCase("this-provider-id-is-far-too-long-for-the-allowed-32-chars")] // Too long (> 32 chars)
+    [TestCase("has space")]
+    [TestCase("has.dot")]
+    [TestCase("has/slash")]
+    [TestCase("has@special")]
+    public void Create_WhenProviderIdViolatesRegex_ReturnsBadRequest(string invalidProviderId)
+    {
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = invalidProviderId,
+            Name = "Valid Name",
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.DidNotReceive().Add(Arg.Any<IdentityProviderDefinition>());
+    }
+
+    [TestCase("Cookies")]
+    [TestCase("cookies")]
+    [TestCase("COOKIES")]
+    [TestCase("SeedarrApiKey")]
+    [TestCase("seedarrapikey")]
+    [TestCase("Bearer")]
+    [TestCase("bearer")]
+    [TestCase("Basic")]
+    [TestCase("basic")]
+    public void Create_WhenProviderIdIsReservedSchemeName_ReturnsBadRequest(string reservedProviderId)
+    {
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = reservedProviderId,
+            Name = "Valid Name",
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.DidNotReceive().Add(Arg.Any<IdentityProviderDefinition>());
+    }
+
+    [TestCase("not-a-valid-uri")]
+    [TestCase("/relative/path")]
+    [TestCase("ftp://example.com/oauth")]
+    public void Create_WhenIssuerUrlIsInvalid_ReturnsBadRequest(string invalidIssuerUrl)
+    {
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "valid-id",
+            Name = "Valid Name",
+            IssuerUrl = invalidIssuerUrl,
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.DidNotReceive().Add(Arg.Any<IdentityProviderDefinition>());
+    }
+
+    [Test]
+    public void Create_WhenIssuerUrlIsValidHttpsUri_Succeeds()
+    {
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "valid-id",
+            Name = "Valid Name",
+            IssuerUrl = "https://accounts.google.com",
+            ClientId = "test-client",
+        };
+
+        _providerService.Add(Arg.Any<IdentityProviderDefinition>()).Returns(callInfo =>
+        {
+            var def = callInfo.Arg<IdentityProviderDefinition>();
+            def.Id = 99;
+            return def;
+        });
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.TypeOf<CreatedResult>());
+        _providerService.Received(1).Add(Arg.Is<IdentityProviderDefinition>(p =>
+            p.ProviderId == "valid-id" &&
+            p.IssuerUrl == "https://accounts.google.com"));
+    }
+
+    [TestCase("Cookies")]
+    [TestCase("SeedarrApiKey")]
+    [TestCase("Bearer")]
+    [TestCase("Basic")]
+    public void Update_WhenProviderIdIsReservedSchemeName_ReturnsBadRequest(string reservedProviderId)
+    {
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = reservedProviderId,
+            Name = "Valid Name",
+        };
+
+        var result = _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.DidNotReceive().Update(Arg.Any<IdentityProviderDefinition>());
+    }
+
+    [TestCase("not-a-valid-uri")]
+    [TestCase("/relative/path")]
+    [TestCase("ftp://example.com/oauth")]
+    public void Update_WhenIssuerUrlIsInvalid_ReturnsBadRequest(string invalidIssuerUrl)
+    {
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "valid-id",
+            Name = "Valid Name",
+            IssuerUrl = invalidIssuerUrl,
+        };
+
+        var result = _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+        _providerService.DidNotReceive().Update(Arg.Any<IdentityProviderDefinition>());
+    }
 }
