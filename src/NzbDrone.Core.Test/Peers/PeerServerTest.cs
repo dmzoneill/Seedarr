@@ -121,12 +121,12 @@ public class PeerServerTest
         return (EncryptionMode)method.Invoke(_server, Array.Empty<object>());
     }
 
-    private void InvokeHandleMessage(PeerConnection connection, PeerMessage message)
+    private void InvokeHandleMessage(PeerConnection connection, PeerMessage message, Torrent torrent = null)
     {
         var method = typeof(PeerServer).GetMethod(
             "HandleMessage",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Invoke(_server, new object[] { connection, message });
+        method.Invoke(_server, new object[] { connection, message, torrent });
     }
 
     private static void InvokeHandlePieceRequest(PeerConnection connection, byte[] payload)
@@ -1391,5 +1391,94 @@ public class PeerServerTest
         _peerDiscovery.Received().MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
 
         server.Dispose();
+    }
+
+    [Test]
+    public void HandleMessage_should_use_supplied_torrent_without_calling_GetAll()
+    {
+        var conn = CreateTestConnection();
+        conn.InfoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = conn.InfoHash,
+            PieceCount = 10
+        };
+
+        var message = new PeerMessage { Type = PeerMessageType.Choke };
+        InvokeHandleMessage(conn, message, torrent);
+
+        _torrentService.DidNotReceive().GetAll();
+        _torrentService.DidNotReceive().GetByInfoHash(Arg.Any<string>());
+    }
+
+    [Test]
+    public void HandleMessage_should_use_cached_torrent_without_calling_GetAll()
+    {
+        var conn = CreateTestConnection();
+        conn.InfoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = conn.InfoHash,
+            PieceCount = 10
+        };
+
+        _torrentService.GetByInfoHash(conn.InfoHash).Returns(torrent);
+
+        var message1 = new PeerMessage { Type = PeerMessageType.Choke };
+        var message2 = new PeerMessage { Type = PeerMessageType.Choke };
+
+        // First message resolves from service and populates cache
+        InvokeHandleMessage(conn, message1);
+
+        // Second message uses in-memory cache
+        InvokeHandleMessage(conn, message2);
+
+        _torrentService.DidNotReceive().GetAll();
+        _torrentService.Received(1).GetByInfoHash(conn.InfoHash);
+    }
+
+    [Test]
+    public void TorrentUpdatedEvent_should_update_cached_torrent()
+    {
+        var infoHash = "0102030405060708091011121314151617181920";
+        var torrent1 = new Torrent { Id = 1, InfoHash = infoHash, Name = "Original" };
+        var torrent2 = new Torrent { Id = 1, InfoHash = infoHash, Name = "Updated" };
+
+        _torrentService.GetByInfoHash(infoHash).Returns(torrent1, torrent2);
+
+        var conn = CreateTestConnection();
+        conn.InfoHash = infoHash;
+
+        InvokeHandleMessage(conn, new PeerMessage { Type = PeerMessageType.Choke });
+        _torrentService.Received(1).GetByInfoHash(infoHash);
+
+        _server.Handle(new TorrentUpdatedEvent(torrent2));
+
+        // After update event, cache is updated with torrent2 so GetByInfoHash is not called again
+        InvokeHandleMessage(conn, new PeerMessage { Type = PeerMessageType.Choke });
+        _torrentService.Received(1).GetByInfoHash(infoHash);
+    }
+
+    [Test]
+    public void TorrentDeletedEvent_should_evict_cached_torrent()
+    {
+        var infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent { Id = 1, InfoHash = infoHash };
+
+        _torrentService.GetByInfoHash(infoHash).Returns(torrent);
+
+        var conn = CreateTestConnection();
+        conn.InfoHash = infoHash;
+
+        InvokeHandleMessage(conn, new PeerMessage { Type = PeerMessageType.Choke });
+        _torrentService.Received(1).GetByInfoHash(infoHash);
+
+        _server.Handle(new TorrentDeletedEvent(1, torrent));
+
+        // After deletion event, cache is cleared so next message triggers GetByInfoHash again
+        InvokeHandleMessage(conn, new PeerMessage { Type = PeerMessageType.Choke });
+        _torrentService.Received(2).GetByInfoHash(infoHash);
     }
 }

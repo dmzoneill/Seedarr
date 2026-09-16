@@ -19,7 +19,7 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
-public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
+public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>
 {
     private const int OutgoingConnectTimeoutMs = 5000;
     private readonly IConfigService _configService;
@@ -42,6 +42,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new();
+    private readonly ConcurrentDictionary<string, Torrent> _torrentCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Logger _logger;
     private readonly object _listenerLock = new();
     private readonly SemaphoreSlim _rebindSignal = new(0, 1);
@@ -131,6 +132,34 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
     public void Handle(VpnInterfaceRestoredEvent message)
     {
         OnVpnRestored(message?.InterfaceName);
+    }
+
+    public void Handle(TorrentUpdatedEvent message)
+    {
+        if (!string.IsNullOrEmpty(message?.Torrent?.InfoHash))
+        {
+            _torrentCache[message.Torrent.InfoHash] = message.Torrent;
+        }
+    }
+
+    public void Handle(TorrentDeletedEvent message)
+    {
+        var infoHash = message?.Torrent?.InfoHash;
+        if (!string.IsNullOrEmpty(infoHash))
+        {
+            _torrentCache.TryRemove(infoHash, out _);
+        }
+        else if (message?.TorrentId > 0)
+        {
+            foreach (var kvp in _torrentCache)
+            {
+                if (kvp.Value?.Id == message.TorrentId)
+                {
+                    _torrentCache.TryRemove(kvp.Key, out _);
+                    break;
+                }
+            }
+        }
     }
 
     public override void Dispose()
@@ -858,6 +887,11 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
     {
         try
         {
+            if (torrent != null && !string.IsNullOrEmpty(torrent.InfoHash))
+            {
+                _torrentCache[torrent.InfoHash] = torrent;
+            }
+
             while (connection.IsConnected)
             {
                 if (_vpnKillSwitchService?.IsFailClosedActive == true)
@@ -883,7 +917,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
                     continue;
                 }
 
-                HandleMessage(connection, message);
+                HandleMessage(connection, message, torrent);
             }
         }
         catch (Exception ex)
@@ -927,8 +961,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
                 return;
             }
 
-            var torrents = _torrentService.GetAll();
-            var torrent = torrents.Find(t => string.Equals(t.InfoHash, connection.InfoHash, StringComparison.OrdinalIgnoreCase));
+            var torrent = GetCachedTorrent(connection.InfoHash);
 
             if (torrent == null)
             {
@@ -1013,7 +1046,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
                     continue;
                 }
 
-                HandleMessage(connection, message);
+                HandleMessage(connection, message, torrent);
             }
         }
         catch (Exception ex)
@@ -1039,13 +1072,30 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>
         });
     }
 
-    private void HandleMessage(PeerConnection connection, PeerMessage message)
+    private Torrent GetCachedTorrent(string infoHash)
     {
-        Torrent torrent = null;
-        if (!string.IsNullOrEmpty(connection?.InfoHash) && _torrentService != null)
+        if (string.IsNullOrEmpty(infoHash) || _torrentService == null)
         {
-            torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, connection.InfoHash, StringComparison.OrdinalIgnoreCase));
+            return null;
         }
+
+        if (_torrentCache.TryGetValue(infoHash, out var cachedTorrent))
+        {
+            return cachedTorrent;
+        }
+
+        var torrent = _torrentService.GetByInfoHash(infoHash);
+        if (torrent != null)
+        {
+            _torrentCache[infoHash] = torrent;
+        }
+
+        return torrent;
+    }
+
+    private void HandleMessage(PeerConnection connection, PeerMessage message, Torrent torrent = null)
+    {
+        torrent ??= GetCachedTorrent(connection?.InfoHash);
 
         switch (message.Type)
         {
