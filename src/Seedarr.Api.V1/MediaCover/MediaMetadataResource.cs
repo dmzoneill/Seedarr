@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 using NzbDrone.Core.MediaEnrichment;
 using Seedarr.Http.REST;
 
@@ -21,10 +22,12 @@ public class MediaMetadataResource : RestResource
 
     public string PosterUrl { get; set; }
 
+    [JsonIgnore]
     public string PosterLocalPath { get; set; }
 
     public string BackdropUrl { get; set; }
 
+    [JsonIgnore]
     public string BackdropLocalPath { get; set; }
 
     public string MediaInfoJson { get; set; }
@@ -77,9 +80,7 @@ public static class MediaMetadataResourceMapper
             Year = model.Year,
             Overview = model.Overview,
             PosterUrl = posterUrl,
-            PosterLocalPath = model.PosterLocalPath,
             BackdropUrl = backdropUrl,
-            BackdropLocalPath = model.BackdropLocalPath,
             BannerUrl = model.BannerUrl,
             MediaInfoJson = model.MediaInfoJson,
             Genres = string.IsNullOrWhiteSpace(model.Genres)
