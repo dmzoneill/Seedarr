@@ -4,10 +4,8 @@ using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.DownloadClients;
-using NzbDrone.Core.DownloadClients.Deluge;
-using NzbDrone.Core.DownloadClients.QBitTorrent;
-using NzbDrone.Core.DownloadClients.Transmission;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Validation;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.DownloadClients;
@@ -96,7 +94,7 @@ public class DownloadClientController : Controller
         }
 
         // If password is omitted, empty, or masked, preserve the existing value
-        if (string.IsNullOrWhiteSpace(definition.Password) || definition.Password == PasswordMask || definition.Password.Contains('*'))
+        if (string.IsNullOrWhiteSpace(definition.Password) || definition.Password == PasswordMask)
         {
             definition.Password = existing.Password;
         }
@@ -121,10 +119,19 @@ public class DownloadClientController : Controller
             return NotFound();
         }
 
+        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}"))
+        {
+            return BadRequest("Target host/URL is not permitted.");
+        }
+
         IDownloadClient client;
         try
         {
-            client = CreateClient(definition);
+            client = _downloadClientFactory.CreateClient(definition);
+            if (client == null)
+            {
+                return BadRequest(new { message = $"Unknown client type: {definition.ClientType}" });
+            }
         }
         catch (ArgumentException ex)
         {
@@ -138,7 +145,17 @@ public class DownloadClientController : Controller
     [HttpPost("test")]
     public ActionResult<DownloadClientTestResult> TestDirect([FromBody] DownloadClientDefinition definition)
     {
-        if (definition.Id > 0 && definition.Password == PasswordMask)
+        if (definition == null)
+        {
+            return BadRequest("Request body cannot be null");
+        }
+
+        if (!UrlValidator.IsSafeUrl($"http://{definition.Host}:{definition.Port}"))
+        {
+            return BadRequest("Target host/URL is not permitted.");
+        }
+
+        if (definition.Id > 0 && (string.IsNullOrWhiteSpace(definition.Password) || definition.Password == PasswordMask))
         {
             var existing = _downloadClientFactory.Get(definition.Id);
             if (existing != null)
@@ -150,7 +167,11 @@ public class DownloadClientController : Controller
         IDownloadClient client;
         try
         {
-            client = CreateClient(definition);
+            client = _downloadClientFactory.CreateClient(definition);
+            if (client == null)
+            {
+                return Ok(DownloadClientTestResult.Fail($"Invalid configuration: Unknown client type: {definition.ClientType}"));
+            }
         }
         catch (ArgumentException ex)
         {
@@ -224,40 +245,5 @@ public class DownloadClientController : Controller
         var clone = definition.Clone();
         clone.Password = string.IsNullOrEmpty(clone.Password) ? "" : PasswordMask;
         return clone;
-    }
-
-    private static IDownloadClient CreateClient(DownloadClientDefinition definition)
-    {
-        return definition.ClientType switch
-        {
-            "QBitTorrent" => new QBitTorrentClient
-            {
-                Host = definition.Host,
-                Port = definition.Port,
-                UseSsl = definition.UseSsl,
-                Username = definition.Username,
-                Password = definition.Password,
-                Category = definition.Category,
-            },
-            "Transmission" => new TransmissionClient
-            {
-                Host = definition.Host,
-                Port = definition.Port,
-                UseSsl = definition.UseSsl,
-                Username = definition.Username,
-                Password = definition.Password,
-                Category = definition.Category,
-            },
-            "Deluge" => new DelugeClient
-            {
-                Host = definition.Host,
-                Port = definition.Port,
-                UseSsl = definition.UseSsl,
-                Username = definition.Username,
-                Password = definition.Password,
-                Category = definition.Category,
-            },
-            _ => throw new ArgumentException($"Unknown client type: {definition.ClientType}"),
-        };
     }
 }
