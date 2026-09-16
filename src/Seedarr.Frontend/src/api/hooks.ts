@@ -43,6 +43,7 @@ import type {
   PeerConnectionLogEntry,
   TorrentEventLogEntry,
   NetworkDiagnostics,
+  PortTestResult,
   DownloadHistoryEntry,
   ReleaseInfo,
   DownloadReleaseRequest,
@@ -932,6 +933,13 @@ export function useNetworkDiagnostics() {
     queryKey: ["network", "diagnostics"],
     queryFn: () => apiClient.get("/network/diagnostics"),
     refetchInterval: interval,
+  });
+}
+
+export function useTestPort() {
+  return useMutation<PortTestResult, Error, number | undefined>({
+    mutationFn: (port?: number) =>
+      apiClient.post<PortTestResult>(`/network/test-port${port ? `?port=${port}` : ""}`),
   });
 }
 
