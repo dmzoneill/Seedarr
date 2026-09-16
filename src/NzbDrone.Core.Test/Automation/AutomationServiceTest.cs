@@ -1,0 +1,93 @@
+using System;
+using System.Collections.Generic;
+using NSubstitute;
+using NUnit.Framework;
+using NzbDrone.Core.Automation;
+using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Tags;
+using NzbDrone.Core.Torrents;
+
+namespace NzbDrone.Core.Test.Automation;
+
+[TestFixture]
+public class AutomationServiceTest
+{
+    private IAutomationScriptRepository _scriptRepository;
+    private ITorrentRepository _torrentRepository;
+    private ITagService _tagService;
+    private IEventAggregator _eventAggregator;
+    private AutomationService _subject;
+
+    [SetUp]
+    public void SetUp()
+    {
+        _scriptRepository = Substitute.For<IAutomationScriptRepository>();
+        _torrentRepository = Substitute.For<ITorrentRepository>();
+        _tagService = Substitute.For<ITagService>();
+        _eventAggregator = Substitute.For<IEventAggregator>();
+
+        _subject = new AutomationService(
+            _scriptRepository,
+            _torrentRepository,
+            _tagService,
+            _eventAggregator);
+    }
+
+    [Test]
+    public void TruncateExecutionLog_should_return_null_when_null()
+    {
+        Assert.That(AutomationService.TruncateExecutionLog(null), Is.Null);
+    }
+
+    [Test]
+    public void TruncateExecutionLog_should_return_empty_when_empty()
+    {
+        Assert.That(AutomationService.TruncateExecutionLog(string.Empty), Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public void TruncateExecutionLog_should_return_original_when_within_limit()
+    {
+        var log = "Standard execution log line 1\nStandard execution log line 2";
+        var result = AutomationService.TruncateExecutionLog(log);
+
+        Assert.That(result, Is.EqualTo(log));
+    }
+
+    [Test]
+    public void TruncateExecutionLog_should_truncate_to_max_chars_when_exceeding_limit()
+    {
+        var largeLog = new string('x', 60000);
+        var result = AutomationService.TruncateExecutionLog(largeLog, AutomationService.MaxPersistedLogCharacters);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result!.Length, Is.EqualTo(AutomationService.MaxPersistedLogCharacters));
+        Assert.That(result, Does.Contain("... [OUTPUT TRUNCATED FOR DATABASE STORAGE] ..."));
+    }
+
+    [Test]
+    public void ExecuteScript_should_truncate_LastExecutionLog_before_persisting()
+    {
+        var script = new AutomationScript
+        {
+            Id = 1,
+            Name = "Noisy Script",
+            Language = AutomationLanguage.JavaScript,
+            Code = @"
+for (var i = 0; i < 2000; i++) {
+    console.log('Repeated log entry ' + i + ' padding with extra text 0123456789abcdef');
+}
+",
+        };
+
+        var result = _subject.ExecuteScript(script);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(script.LastExecutionLog, Is.Not.Null);
+        Assert.That(script.LastExecutionLog!.Length, Is.LessThanOrEqualTo(AutomationService.MaxPersistedLogCharacters));
+        _scriptRepository.Received(1).Update(Arg.Is<AutomationScript>(s =>
+            s.Id == 1 &&
+            s.LastExecutionLog != null &&
+            s.LastExecutionLog.Length <= AutomationService.MaxPersistedLogCharacters));
+    }
+}
