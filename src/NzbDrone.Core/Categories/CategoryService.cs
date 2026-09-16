@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 
@@ -44,16 +46,19 @@ public class CategoryService : ICategoryService
     private readonly ICategoryRepository _repository;
     private readonly IEventAggregator _eventAggregator;
     private readonly ITorrentRepository _torrentRepository;
+    private readonly ITorrentService _torrentService;
     private readonly Logger _logger;
 
     public CategoryService(
         ICategoryRepository repository,
         IEventAggregator eventAggregator,
-        ITorrentRepository torrentRepository = null)
+        ITorrentRepository torrentRepository = null,
+        ITorrentService torrentService = null)
     {
         _repository = repository;
         _eventAggregator = eventAggregator;
         _torrentRepository = torrentRepository;
+        _torrentService = torrentService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -125,11 +130,11 @@ public class CategoryService : ICategoryService
 
         var updated = _repository.Update(category);
 
-        if (_torrentRepository != null && existing != null &&
+        if (existing != null &&
             !string.IsNullOrWhiteSpace(existing.Name) &&
             !string.Equals(existing.Name, updated.Name, StringComparison.OrdinalIgnoreCase))
         {
-            _torrentRepository.UpdateCategoryName(existing.Name, updated.Name);
+            SyncTorrentsOnCategoryRename(existing.Name, updated.Name);
         }
 
         _eventAggregator?.PublishEvent(new CategoryUpdatedEvent { Category = updated });
@@ -156,9 +161,34 @@ public class CategoryService : ICategoryService
 
         _logger.Info("Deleting category id: {0} ({1})", id, cat.Name);
 
-        if (_torrentRepository != null && !string.IsNullOrWhiteSpace(cat.Name))
+        var affectedTorrentIds = new List<int>();
+
+        if (!string.IsNullOrWhiteSpace(cat.Name))
         {
-            _torrentRepository.ClearCategory(cat.Name);
+            var torrents = GetTorrents();
+            foreach (var torrent in torrents)
+            {
+                var changed = false;
+
+                if (string.Equals(torrent.Category, cat.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    torrent.Category = string.Empty;
+                    changed = true;
+                }
+
+                var scrubbedLabel = ScrubLabelOnDelete(torrent.Label, cat.Name);
+                if (!string.Equals(torrent.Label, scrubbedLabel, StringComparison.Ordinal))
+                {
+                    torrent.Label = scrubbedLabel;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    affectedTorrentIds.Add(torrent.Id);
+                    UpdateTorrent(torrent);
+                }
+            }
         }
 
         _repository.Delete(id);
@@ -166,7 +196,152 @@ public class CategoryService : ICategoryService
         {
             CategoryId = id,
             CategoryName = cat.Name,
+            AffectedTorrentIds = affectedTorrentIds,
         });
+    }
+
+    private void SyncTorrentsOnCategoryRename(string oldName, string newName)
+    {
+        var torrents = GetTorrents();
+        foreach (var torrent in torrents)
+        {
+            var changed = false;
+
+            if (string.Equals(torrent.Category, oldName, StringComparison.OrdinalIgnoreCase))
+            {
+                torrent.Category = newName;
+                changed = true;
+            }
+
+            var updatedLabel = SynchronizeLabelOnRename(torrent.Label, oldName, newName);
+            if (!string.Equals(torrent.Label, updatedLabel, StringComparison.Ordinal))
+            {
+                torrent.Label = updatedLabel;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                UpdateTorrent(torrent);
+            }
+        }
+    }
+
+    private IEnumerable<Torrent> GetTorrents()
+    {
+        if (_torrentService != null)
+        {
+            return _torrentService.GetAll();
+        }
+
+        if (_torrentRepository != null)
+        {
+            return _torrentRepository.All().ToList();
+        }
+
+        return Enumerable.Empty<Torrent>();
+    }
+
+    private void UpdateTorrent(Torrent torrent)
+    {
+        if (_torrentService != null)
+        {
+            _torrentService.Update(torrent);
+        }
+        else if (_torrentRepository != null)
+        {
+            _torrentRepository.Update(torrent);
+            _eventAggregator?.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+            _eventAggregator?.PublishEvent(new TorrentUpdatedEvent(torrent));
+        }
+    }
+
+    public static string SynchronizeLabelOnRename(string label, string oldCategoryName, string newCategoryName)
+    {
+        if (string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(oldCategoryName))
+        {
+            return label;
+        }
+
+        var trimmedOld = oldCategoryName.Trim();
+        var trimmedNew = (newCategoryName ?? string.Empty).Trim();
+
+        if (string.Equals(label.Trim(), trimmedOld, StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmedNew;
+        }
+
+        var hasDelimiter = label.Contains(',') || label.Contains(';');
+        if (!hasDelimiter)
+        {
+            return label;
+        }
+
+        var delimiter = label.Contains(';') && !label.Contains(',') ? ';' : ',';
+        var tokens = label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                          .Select(t => t.Trim())
+                          .Where(t => !string.IsNullOrEmpty(t))
+                          .ToList();
+
+        var changed = false;
+        for (var i = 0; i < tokens.Count; i++)
+        {
+            if (string.Equals(tokens[i], trimmedOld, StringComparison.OrdinalIgnoreCase))
+            {
+                tokens[i] = trimmedNew;
+                changed = true;
+            }
+        }
+
+        if (!changed)
+        {
+            return label;
+        }
+
+        var joinSeparator = delimiter == ';' ? "; " : ", ";
+        return string.Join(joinSeparator, tokens.Where(t => !string.IsNullOrEmpty(t)));
+    }
+
+    public static string ScrubLabelOnDelete(string label, string categoryNameToRemove)
+    {
+        if (string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(categoryNameToRemove))
+        {
+            return label ?? string.Empty;
+        }
+
+        var trimmedCategory = categoryNameToRemove.Trim();
+
+        if (string.Equals(label.Trim(), trimmedCategory, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        var hasDelimiter = label.Contains(',') || label.Contains(';');
+        if (!hasDelimiter)
+        {
+            return label;
+        }
+
+        var delimiter = label.Contains(';') && !label.Contains(',') ? ';' : ',';
+        var tokens = label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                          .Select(t => t.Trim())
+                          .Where(t => !string.IsNullOrEmpty(t))
+                          .ToList();
+
+        var remaining = tokens.Where(t => !string.Equals(t, trimmedCategory, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        if (remaining.Count == tokens.Count)
+        {
+            return label;
+        }
+
+        if (remaining.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var joinSeparator = delimiter == ';' ? "; " : ", ";
+        return string.Join(joinSeparator, remaining);
     }
 
     public string GetSavePathForCategory(string categoryName, string defaultPath = "")

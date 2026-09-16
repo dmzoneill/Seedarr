@@ -681,6 +681,12 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                 if (!string.IsNullOrWhiteSpace(resource.Category))
                 {
                     imported.Category = resource.Category;
+                    if (_categoryService != null)
+                    {
+                        var cat = _categoryService.GetByName(resource.Category);
+                        ApplyCategoryLimits(imported, cat);
+                    }
+
                     shouldUpdate = true;
                 }
 
@@ -826,6 +832,12 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                 if (!string.IsNullOrWhiteSpace(category))
                 {
                     torrent.Category = category;
+                    if (_categoryService != null)
+                    {
+                        var cat = _categoryService.GetByName(category);
+                        ApplyCategoryLimits(torrent, cat);
+                    }
+
                     shouldUpdate = true;
                 }
 
@@ -1008,6 +1020,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         var action = resource.Action.Trim().ToLowerInvariant();
         string resolvedCategoryName = null;
+        Category resolvedCategory = null;
         if (action == "setcategory" && resource.CategoryId.HasValue && resource.CategoryId.Value > 0)
         {
             var cat = _categoryService?.Get(resource.CategoryId.Value);
@@ -1017,13 +1030,14 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             }
 
             resolvedCategoryName = cat.Name;
+            resolvedCategory = cat;
         }
 
         foreach (var id in resource.TorrentIds)
         {
             try
             {
-                ExecuteActionForTorrent(id, resource, resolvedCategoryName);
+                ExecuteActionForTorrent(id, resource, resolvedCategoryName, resolvedCategory);
                 result.SucceededIds.Add(id);
                 result.SuccessCount++;
             }
@@ -1039,7 +1053,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return Ok(result);
     }
 
-    private void ExecuteActionForTorrent(int id, BulkTorrentActionResource resource, string resolvedCategoryName = null)
+    private void ExecuteActionForTorrent(int id, BulkTorrentActionResource resource, string resolvedCategoryName = null, Category resolvedCategory = null)
     {
         var action = resource.Action.Trim().ToLowerInvariant();
         switch (action)
@@ -1123,16 +1137,27 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                     throw new KeyNotFoundException($"Torrent {id} not found");
                 }
 
+                var category = resolvedCategory;
                 var categoryName = resolvedCategoryName;
-                if (categoryName == null && resource.CategoryId.HasValue && resource.CategoryId.Value > 0 && _categoryService != null)
+                if (category == null && resource.CategoryId.HasValue && resource.CategoryId.Value > 0 && _categoryService != null)
                 {
-                    var cat = _categoryService.Get(resource.CategoryId.Value);
-                    categoryName = cat?.Name;
+                    category = _categoryService.Get(resource.CategoryId.Value);
+                    categoryName = category?.Name;
+                }
+                else if (category == null && !string.IsNullOrWhiteSpace(categoryName) && _categoryService != null)
+                {
+                    category = _categoryService.GetByName(categoryName);
                 }
 
-                torrent.Category = categoryName;
+                torrent.Category = category?.Name ?? categoryName;
+
+                if (category != null)
+                {
+                    ApplyCategoryLimits(torrent, category);
+                }
+
                 _torrentService.Update(torrent);
-                _eventLogService?.Info(id, "Category", $"Category set to '{categoryName ?? "None"}'");
+                _eventLogService?.Info(id, "Category", $"Category set to '{torrent.Category ?? "None"}'");
                 break;
             }
 
@@ -1332,8 +1357,26 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             TimeStamp = log.TimeStamp,
             Level = log.Level,
             Source = log.Source,
-            Message = log.Message
+            Message = log.Message,
         };
+    }
+
+    private static void ApplyCategoryLimits(Torrent torrent, Category category)
+    {
+        if (torrent == null || category == null)
+        {
+            return;
+        }
+
+        if (category.DefaultDownloadLimit > 0 && torrent.DownloadLimit <= 0)
+        {
+            torrent.DownloadLimit = category.DefaultDownloadLimit;
+        }
+
+        if (category.DefaultUploadLimit > 0 && torrent.UploadLimit <= 0)
+        {
+            torrent.UploadLimit = category.DefaultUploadLimit;
+        }
     }
 }
 

@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Categories;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 
@@ -150,17 +153,56 @@ public class CategoryServiceTest
     }
 
     [Test]
-    public void Update_renamed_category_updates_associated_torrents()
+    public void Update_renamed_category_updates_associated_torrents_and_synchronizes_label()
     {
         var oldCat = new Category { Id = 1, Name = "OldName", IsDefault = false };
         var newCat = new Category { Id = 1, Name = "NewName", IsDefault = false };
 
+        var torrent1 = new Torrent { Id = 1, Category = "OldName", Label = "OldName, 1080p" };
+        var torrent2 = new Torrent { Id = 2, Category = "Other", Label = "Action; OldName" };
+        var torrent3 = new Torrent { Id = 3, Category = "Unrelated", Label = "Comedy" };
+
         _repository.Get(1).Returns(oldCat);
         _repository.Update(newCat).Returns(newCat);
+        _torrentRepository.All().Returns(new[] { torrent1, torrent2, torrent3 });
 
         _subject.Update(newCat);
 
-        _torrentRepository.Received(1).UpdateCategoryName("OldName", "NewName");
+        Assert.That(torrent1.Category, Is.EqualTo("NewName"));
+        Assert.That(torrent1.Label, Is.EqualTo("NewName, 1080p"));
+        Assert.That(torrent2.Category, Is.EqualTo("Other"));
+        Assert.That(torrent2.Label, Is.EqualTo("Action; NewName"));
+        Assert.That(torrent3.Category, Is.EqualTo("Unrelated"));
+        Assert.That(torrent3.Label, Is.EqualTo("Comedy"));
+
+        _torrentRepository.Received(1).Update(torrent1);
+        _torrentRepository.Received(1).Update(torrent2);
+        _torrentRepository.DidNotReceive().Update(torrent3);
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent1));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent2));
+        _eventAggregator.Received().PublishEvent(Arg.Is<ModelEvent<Torrent>>(e => e.Model == torrent1 && e.Action == ModelAction.Updated));
+    }
+
+    [Test]
+    public void Update_renamed_category_with_torrent_service_updates_via_torrent_service()
+    {
+        var oldCat = new Category { Id = 1, Name = "OldName", IsDefault = false };
+        var newCat = new Category { Id = 1, Name = "NewName", IsDefault = false };
+        var torrent = new Torrent { Id = 10, Category = "OldName", Label = "OldName" };
+
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var service = new CategoryService(_repository, _eventAggregator, _torrentRepository, torrentService);
+
+        _repository.Get(1).Returns(oldCat);
+        _repository.Update(newCat).Returns(newCat);
+
+        service.Update(newCat);
+
+        Assert.That(torrent.Category, Is.EqualTo("NewName"));
+        Assert.That(torrent.Label, Is.EqualTo("NewName"));
+        torrentService.Received(1).Update(torrent);
     }
 
     [Test]
@@ -174,7 +216,7 @@ public class CategoryServiceTest
 
         _subject.Update(newCat);
 
-        _torrentRepository.DidNotReceive().UpdateCategoryName(Arg.Any<string>(), Arg.Any<string>());
+        _torrentRepository.DidNotReceive().Update(Arg.Any<Torrent>());
     }
 
     [Test]
@@ -202,19 +244,69 @@ public class CategoryServiceTest
     }
 
     [Test]
-    public void Delete_when_category_is_not_default_deletes_and_clears_torrent_categories()
+    public void Delete_when_category_is_not_default_deletes_clears_torrent_categories_scrubs_label_and_publishes_events()
     {
         var cat = new Category { Id = 5, Name = "Anime", IsDefault = false };
+        var torrent1 = new Torrent { Id = 1, Category = "Anime", Label = "Anime, 1080p" };
+        var torrent2 = new Torrent { Id = 2, Category = "Other", Label = "Drama; Anime" };
+        var torrent3 = new Torrent { Id = 3, Category = "Anime", Label = "Anime" };
+        var torrent4 = new Torrent { Id = 4, Category = "Movies", Label = "Unrelated" };
 
         _repository.Get(5).Returns(cat);
+        _torrentRepository.All().Returns(new[] { torrent1, torrent2, torrent3, torrent4 });
 
         _subject.Delete(5);
 
-        _torrentRepository.Received(1).ClearCategory("Anime");
+        Assert.That(torrent1.Category, Is.EqualTo(string.Empty));
+        Assert.That(torrent1.Label, Is.EqualTo("1080p"));
+        Assert.That(torrent2.Category, Is.EqualTo("Other"));
+        Assert.That(torrent2.Label, Is.EqualTo("Drama"));
+        Assert.That(torrent3.Category, Is.EqualTo(string.Empty));
+        Assert.That(torrent3.Label, Is.EqualTo(string.Empty));
+        Assert.That(torrent4.Category, Is.EqualTo("Movies"));
+        Assert.That(torrent4.Label, Is.EqualTo("Unrelated"));
+
+        _torrentRepository.Received(1).Update(torrent1);
+        _torrentRepository.Received(1).Update(torrent2);
+        _torrentRepository.Received(1).Update(torrent3);
+        _torrentRepository.DidNotReceive().Update(torrent4);
         _repository.Received(1).Delete(5);
-        _eventAggregator.Received(1).PublishEvent(Arg.Is<CategoryDeletedEvent>(e =>
+
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent1));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent2));
+        _eventAggregator.Received().PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent3));
+        _eventAggregator.Received().PublishEvent(Arg.Is<CategoryDeletedEvent>(e =>
             e.CategoryId == 5 &&
-            e.CategoryName == "Anime"));
+            e.CategoryName == "Anime" &&
+            e.AffectedTorrentIds.Count == 3 &&
+            e.AffectedTorrentIds.Contains(1) &&
+            e.AffectedTorrentIds.Contains(2) &&
+            e.AffectedTorrentIds.Contains(3)));
+    }
+
+    [Test]
+    public void SynchronizeLabelOnRename_replaces_exact_and_delimited_labels()
+    {
+        Assert.That(CategoryService.SynchronizeLabelOnRename("Movies", "Movies", "Films"), Is.EqualTo("Films"));
+        Assert.That(CategoryService.SynchronizeLabelOnRename("movies", "Movies", "Films"), Is.EqualTo("Films"));
+        Assert.That(CategoryService.SynchronizeLabelOnRename("Movies, 1080p", "Movies", "Films"), Is.EqualTo("Films, 1080p"));
+        Assert.That(CategoryService.SynchronizeLabelOnRename("1080p, Movies", "Movies", "Films"), Is.EqualTo("1080p, Films"));
+        Assert.That(CategoryService.SynchronizeLabelOnRename("SciFi; Movies; Action", "Movies", "Films"), Is.EqualTo("SciFi; Films; Action"));
+        Assert.That(CategoryService.SynchronizeLabelOnRename("Movies 1080p", "Movies", "Films"), Is.EqualTo("Movies 1080p"));
+        Assert.That(CategoryService.SynchronizeLabelOnRename(null, "Movies", "Films"), Is.Null);
+    }
+
+    [Test]
+    public void ScrubLabelOnDelete_removes_exact_and_delimited_labels()
+    {
+        Assert.That(CategoryService.ScrubLabelOnDelete("Anime", "Anime"), Is.EqualTo(string.Empty));
+        Assert.That(CategoryService.ScrubLabelOnDelete("anime", "Anime"), Is.EqualTo(string.Empty));
+        Assert.That(CategoryService.ScrubLabelOnDelete("Anime, 1080p", "Anime"), Is.EqualTo("1080p"));
+        Assert.That(CategoryService.ScrubLabelOnDelete("1080p, Anime", "Anime"), Is.EqualTo("1080p"));
+        Assert.That(CategoryService.ScrubLabelOnDelete("SciFi; Anime; Action", "Anime"), Is.EqualTo("SciFi; Action"));
+        Assert.That(CategoryService.ScrubLabelOnDelete("Anime; Anime", "Anime"), Is.EqualTo(string.Empty));
+        Assert.That(CategoryService.ScrubLabelOnDelete("Anime 1080p", "Anime"), Is.EqualTo("Anime 1080p"));
+        Assert.That(CategoryService.ScrubLabelOnDelete(null, "Anime"), Is.EqualTo(string.Empty));
     }
 
     [Test]
