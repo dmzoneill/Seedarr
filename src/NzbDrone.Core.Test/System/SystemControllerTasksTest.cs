@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using NSubstitute;
@@ -227,5 +228,85 @@ public class SystemControllerTasksTest
         var resources = okResult.Value as List<CommandResource>;
         Assert.That(resources, Has.Count.EqualTo(1));
         Assert.That(resources[0].Name, Is.EqualTo("CleanDatabase"));
+    }
+
+    [Test]
+    public void GetCommand_returns_command_when_found()
+    {
+        var model = new CommandModel
+        {
+            Id = 42,
+            Name = "SyncArrCommand",
+            Status = CommandStatus.Started,
+            QueuedAt = DateTime.UtcNow,
+            StartedAt = DateTime.UtcNow
+        };
+        _commandQueueManager.Get(42).Returns(model);
+
+        var actionResult = _controller.GetCommand(42);
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var resource = okResult.Value as CommandResource;
+        Assert.That(resource, Is.Not.Null);
+        Assert.That(resource.Id, Is.EqualTo(42));
+        Assert.That(resource.Name, Is.EqualTo("SyncArrCommand"));
+        Assert.That(resource.Status, Is.EqualTo("started"));
+    }
+
+    [Test]
+    public void GetCommand_returns_not_found_when_missing()
+    {
+        _commandQueueManager.Get(99).Returns((CommandModel)null);
+
+        var actionResult = _controller.GetCommand(99);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public void PushCommand_returns_bad_request_when_payload_is_not_json_object()
+    {
+        using var doc = JsonDocument.Parse("[\"item1\", \"item2\"]");
+
+        var actionResult = _controller.PushCommand(doc.RootElement);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = actionResult.Result as BadRequestObjectResult;
+        Assert.That(badRequest.Value, Is.EqualTo("Command payload must be a JSON object."));
+    }
+
+    [Test]
+    public void PushCommand_returns_bad_request_when_name_is_missing()
+    {
+        using var doc = JsonDocument.Parse("{\"key\": \"value\"}");
+
+        var actionResult = _controller.PushCommand(doc.RootElement);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void PushCommand_pushes_raw_command_and_returns_resource()
+    {
+        using var doc = JsonDocument.Parse("{\"name\": \"SyncArr\"}");
+        var model = new CommandModel
+        {
+            Id = 15,
+            Name = "SyncArr",
+            Status = CommandStatus.Queued,
+            QueuedAt = DateTime.UtcNow
+        };
+        _commandQueueManager.PushRaw("SyncArr", Arg.Any<string>(), CommandTrigger.Manual).Returns(model);
+
+        var actionResult = _controller.PushCommand(doc.RootElement);
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var resource = okResult.Value as CommandResource;
+        Assert.That(resource, Is.Not.Null);
+        Assert.That(resource.Id, Is.EqualTo(15));
+        Assert.That(resource.Name, Is.EqualTo("SyncArr"));
+        Assert.That(resource.Status, Is.EqualTo("queued"));
     }
 }
