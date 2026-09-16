@@ -72,7 +72,7 @@ public class TorrentService : ITorrentService
             return null;
         }
 
-        return _repository.GetByInfoHash(infoHash);
+        return _repository.GetByInfoHash(infoHash.Trim().ToLowerInvariant());
     }
 
     public Torrent FindByInfoHash(string infoHash)
@@ -82,12 +82,22 @@ public class TorrentService : ITorrentService
 
     public bool ExistsByInfoHash(string infoHash)
     {
-        return _repository.ExistsByInfoHash(infoHash);
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        return _repository.ExistsByInfoHash(infoHash.Trim().ToLowerInvariant());
     }
 
     public Torrent Add(Torrent torrent)
     {
         ArgumentNullException.ThrowIfNull(torrent);
+
+        if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
+        {
+            torrent.InfoHash = torrent.InfoHash.Trim().ToLowerInvariant();
+        }
 
         _logger.Info("Adding torrent: {0}", torrent.Name);
 
@@ -115,6 +125,13 @@ public class TorrentService : ITorrentService
 
     public Torrent Update(Torrent torrent)
     {
+        ArgumentNullException.ThrowIfNull(torrent);
+
+        if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
+        {
+            torrent.InfoHash = torrent.InfoHash.Trim().ToLowerInvariant();
+        }
+
         _logger.Debug("Updating torrent: {0}", torrent.Name);
         var updated = _repository.Update(torrent);
         _eventAggregator.PublishEvent(new ModelEvent<Torrent>(updated, ModelAction.Updated));

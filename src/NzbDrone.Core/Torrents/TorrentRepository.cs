@@ -22,12 +22,14 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             return false;
         }
 
+        var normalized = infoHash.Trim().ToLowerInvariant();
+
         return RetryPolicy.Execute(() =>
         {
             using var connection = _database.OpenConnection();
             return connection.QueryFirstOrDefault<int>(
-                $"SELECT COUNT(1) FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash",
-                new { InfoHash = infoHash }) > 0;
+                $"SELECT COUNT(1) FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash COLLATE NOCASE",
+                new { InfoHash = normalized }) > 0;
         });
     }
 
@@ -38,10 +40,17 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             return null;
         }
 
+        var normalized = infoHash.Trim().ToLowerInvariant();
+
         using var connection = _database.OpenConnection();
         return connection.QueryFirstOrDefault<Torrent>(
-            $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash",
-            new { InfoHash = infoHash });
+            $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash COLLATE NOCASE",
+            new { InfoHash = normalized });
+    }
+
+    public Torrent FindByInfoHash(string infoHash)
+    {
+        return GetByInfoHash(infoHash);
     }
 
     public Torrent FindByInfoHash(string infoHash)
@@ -56,7 +65,7 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             return new List<Torrent>();
         }
 
-        var hashes = infoHashes.Where(h => !string.IsNullOrWhiteSpace(h)).Distinct().ToList();
+        var hashes = infoHashes.Where(h => !string.IsNullOrWhiteSpace(h)).Select(h => h.Trim().ToLowerInvariant()).Distinct().ToList();
         if (hashes.Count == 0)
         {
             return new List<Torrent>();
@@ -68,7 +77,7 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
         foreach (var batch in hashes.Chunk(500))
         {
             var records = connection.Query<Torrent>(
-                $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" IN @Hashes",
+                $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" COLLATE NOCASE IN @Hashes",
                 new { Hashes = batch });
 
             result.AddRange(records);

@@ -125,4 +125,25 @@ public class TorrentRepositoryTest
         Assert.That(_subject.ExistsByInfoHash("hash123"), Is.True);
         Assert.That(_subject.ExistsByInfoHash("nonexistent"), Is.False);
     }
+
+    [Test]
+    public void ExistsByInfoHash_matches_case_insensitively_and_trimmed()
+    {
+        InsertTorrent("Torrent 1", "Movies", "a1b2c3d4e5f6");
+
+        Assert.That(_subject.ExistsByInfoHash("A1B2C3D4E5F6"), Is.True);
+        Assert.That(_subject.ExistsByInfoHash("  a1b2c3d4e5f6  "), Is.True);
+        Assert.That(_subject.ExistsByInfoHash("  A1B2c3D4e5F6  "), Is.True);
+    }
+
+    [Test]
+    public void GetByInfoHash_matches_case_insensitively_and_trimmed()
+    {
+        InsertTorrent("Torrent 1", "Movies", "a1b2c3d4e5f6");
+
+        var result = _subject.GetByInfoHash("  A1B2C3D4E5F6  ");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Name, Is.EqualTo("Torrent 1"));
+    }
 }
