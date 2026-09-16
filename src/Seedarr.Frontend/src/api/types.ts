@@ -608,6 +608,7 @@ export interface DownloadClientDefinition {
   host: string;
   port: number;
   useSsl: boolean;
+  urlBase?: string;
   username: string;
   password: string;
   category: string;

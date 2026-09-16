@@ -11,7 +11,7 @@ import {
 } from "../api/hooks";
 import { useToast } from "../context/ToastContext";
 import { formatBytes } from "../utils/formatters";
-import { getMediaDeepLink } from "../utils/arrLinks";
+import { getMediaDeepLink, getDownloadClientUrl } from "../utils/arrLinks";
 
 export default function DownloadClientTorrents() {
   const { id } = useParams<{ id: string }>();
@@ -358,7 +358,7 @@ export default function DownloadClientTorrents() {
 
           {client?.host && (
             <a
-              href={`${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}`}
+              href={getDownloadClientUrl(client)}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-outline"

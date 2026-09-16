@@ -12,6 +12,7 @@ import {
 import { apiClient } from "../api/client";
 import { useToast } from "../context/ToastContext";
 import { formatBytes, formatUptime } from "../utils/formatters";
+import { getDownloadClientUrl } from "../utils/arrLinks";
 
 function SystemStatus() {
   const { data: status, isLoading: statusLoading } = useSystemStatus();
@@ -473,7 +474,7 @@ function SystemStatus() {
                     <td style={{ textAlign: "right" }}>
                       {client.host && (
                         <a
-                          href={`${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}`}
+                          href={getDownloadClientUrl(client)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="btn btn-small btn-outline"

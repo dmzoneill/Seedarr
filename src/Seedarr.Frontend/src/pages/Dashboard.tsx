@@ -18,7 +18,7 @@ import {
   formatDate,
   extractTrackerDomain,
 } from "../utils/formatters";
-import { getMediaDeepLink } from "../utils/arrLinks";
+import { getMediaDeepLink, getDownloadClientUrl } from "../utils/arrLinks";
 import { calculateAchievements, calculateHnrStatus } from "../utils/milestones";
 import HealthAlerts from "../components/HealthAlerts";
 import SpeedGraph from "../components/SpeedGraph";
@@ -765,7 +765,7 @@ function Dashboard() {
                   </div>
                   {client.host && (
                     <a
-                      href={`${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}`}
+                      href={getDownloadClientUrl(client)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="btn btn-small btn-outline"

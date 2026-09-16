@@ -21,6 +21,7 @@ import {
   NumberInput,
   SectionCard,
 } from "./shared";
+import { getDownloadClientUrl } from "../../utils/arrLinks";
 
 export function DownloadClientsTab() {
   const { showToast } = useToast();
@@ -149,7 +150,7 @@ export function DownloadClientsTab() {
               <div className="provider-card-actions">
                 {client.host && (
                   <a
-                    href={`${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}`}
+                    href={getDownloadClientUrl(client)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="provider-card-action"
@@ -339,6 +340,16 @@ export function DownloadClientsTab() {
                 setModalTestResult(null);
                 setEditing({ ...editing, useSsl: v });
               }}
+            />
+            <TextInput
+              label="URL Base"
+              value={editing.urlBase || ""}
+              onChange={(v) => {
+                setModalTestResult(null);
+                setEditing({ ...editing, urlBase: v });
+              }}
+              placeholder="e.g. qbittorrent or transmission/web"
+              hint="Subpath for reverse proxies or subpath-hosted Web UIs"
             />
             {editing.clientType !== "Deluge" && (
               <TextInput

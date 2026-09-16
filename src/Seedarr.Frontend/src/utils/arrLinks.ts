@@ -10,15 +10,20 @@ export function getArrInstanceUrl(
   connections: ArrConnection[] | undefined,
 ): string | null {
   if (!source || !connections) return null;
-  const cleanedSource = source.toLowerCase();
+  const cleanedSource = source.trim().toLowerCase();
+  if (!cleanedSource) return null;
 
   const match = connections.find(
     (c) =>
       c.enable &&
-      (c.arrType?.toLowerCase() === cleanedSource ||
-        c.name?.toLowerCase() === cleanedSource ||
-        cleanedSource.includes(c.arrType?.toLowerCase() ?? "") ||
-        cleanedSource.includes(c.name?.toLowerCase() ?? "")),
+      ((c.arrType && c.arrType.toLowerCase() === cleanedSource) ||
+        (c.name && c.name.toLowerCase() === cleanedSource) ||
+        (c.arrType &&
+          c.arrType.trim() !== "" &&
+          cleanedSource.includes(c.arrType.trim().toLowerCase())) ||
+        (c.name &&
+          c.name.trim() !== "" &&
+          cleanedSource.includes(c.name.trim().toLowerCase()))),
   );
 
   if (!match?.url) return null;
@@ -26,6 +31,17 @@ export function getArrInstanceUrl(
   return trimmed.startsWith("http://") || trimmed.startsWith("https://")
     ? trimmed
     : `http://${trimmed}`;
+}
+
+export function getDownloadClientUrl(client: {
+  host?: string | null;
+  port?: number | null;
+  useSsl?: boolean | null;
+  urlBase?: string | null;
+}): string {
+  if (!client.host) return "";
+  const urlBase = (client.urlBase || "").replace(/^\/+|\/+$/g, "");
+  return `${client.useSsl ? "https" : "http"}://${client.host}${client.port ? `:${client.port}` : ""}${urlBase ? `/${urlBase}` : ""}`;
 }
 
 export function getMediaDeepLink(
