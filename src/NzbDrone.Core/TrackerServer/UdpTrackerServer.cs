@@ -115,22 +115,21 @@ public class UdpTrackerServer : BackgroundService
                 return;
             }
 
+            var connectionId = BinaryPrimitives.ReadInt64BigEndian(data.AsSpan(0, 8));
+            var action = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(8, 4));
             var transactionId = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(12, 4));
             var clientIp = remote.Address.ToString();
 
-            if (IsRateLimited(clientIp))
+            string infoHash = null;
+            if (action == AnnounceAction && data.Length >= 16 + InfoHashLength)
             {
-                var errorResponse = BuildErrorResponse(transactionId, "Rate limit exceeded");
-                lock (_sendLock)
-                {
-                    client.Send(errorResponse, errorResponse.Length, remote);
-                }
-
-                return;
+                infoHash = ConvertInfoHashToHex(data, 16);
             }
 
-            var connectionId = BinaryPrimitives.ReadInt64BigEndian(data.AsSpan(0, 8));
-            var action = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(8, 4));
+            if (IsRateLimited(clientIp, infoHash))
+            {
+                return;
+            }
 
             var response = action switch
             {
@@ -392,7 +391,9 @@ public class UdpTrackerServer : BackgroundService
         }
     }
 
-    private bool IsRateLimited(string ip)
+    private bool IsRateLimited(string ip) => IsRateLimited(ip, null);
+
+    private bool IsRateLimited(string ip, string infoHash)
     {
         var rateLimit = _configService.TrackerRateLimitPerMinute;
 
@@ -401,9 +402,10 @@ public class UdpTrackerServer : BackgroundService
             return false;
         }
 
+        var key = string.IsNullOrEmpty(infoHash) ? ip : $"{ip}:{infoHash.ToLowerInvariant()}";
         var now = DateTime.UtcNow;
         var entry = _rateLimits.AddOrUpdate(
-            ip,
+            key,
             _ => new RateLimitEntry { Count = 1, WindowStart = now },
             (_, existing) =>
             {

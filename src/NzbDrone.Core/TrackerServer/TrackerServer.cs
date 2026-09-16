@@ -182,14 +182,6 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
             using var stream = client.GetStream();
 
-            if (IsRateLimited(clientIp))
-            {
-                var rateLimitHeaders = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                var rateLimitHeaderBytes = Encoding.ASCII.GetBytes(rateLimitHeaders);
-                stream.Write(rateLimitHeaderBytes, 0, rateLimitHeaderBytes.Length);
-                return;
-            }
-
             var requestLine = ReadBoundedLine(stream, 2048);
             if (string.IsNullOrEmpty(requestLine))
             {
@@ -203,6 +195,15 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             }
 
             var path = parts[1];
+            var infoHash = ExtractInfoHash(path);
+
+            if (IsRateLimited(clientIp, infoHash))
+            {
+                var rateLimitHeaders = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                var rateLimitHeaderBytes = Encoding.ASCII.GetBytes(rateLimitHeaders);
+                stream.Write(rateLimitHeaderBytes, 0, rateLimitHeaderBytes.Length);
+                return;
+            }
 
             // Drain remaining headers to prevent connection reset
             string line;
@@ -271,6 +272,18 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         return null; // Line too long, reject
+    }
+
+    private static string ExtractInfoHash(string path)
+    {
+        var queryIndex = path.IndexOf('?');
+        if (queryIndex < 0)
+        {
+            return null;
+        }
+
+        var parameters = ParseQueryString(path[(queryIndex + 1)..]);
+        return parameters.GetValueOrDefault("info_hash");
     }
 
     private (Dictionary<string, string> Parameters, string Error) ParseRequest(string path)
@@ -532,7 +545,9 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         return chunks.ToArray();
     }
 
-    private bool IsRateLimited(string ip)
+    private bool IsRateLimited(string ip) => IsRateLimited(ip, null);
+
+    private bool IsRateLimited(string ip, string infoHash)
     {
         var rateLimit = _configService.TrackerRateLimitPerMinute;
 
@@ -541,9 +556,10 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             return false;
         }
 
+        var key = string.IsNullOrEmpty(infoHash) ? ip : $"{ip}:{infoHash.ToLowerInvariant()}";
         var now = DateTime.UtcNow;
         var entry = _rateLimits.AddOrUpdate(
-            ip,
+            key,
             _ => new RateLimitEntry { Count = 1, WindowStart = now },
             (_, existing) =>
             {
