@@ -522,6 +522,8 @@ public class NotificationController : Controller
             OnHealthRestored = n.OnHealthRestored,
             OnManualInteractionRequired = n.OnManualInteractionRequired,
             OnApplicationUpdate = n.OnApplicationUpdate,
+            OnBackupComplete = n.OnBackupComplete,
+            OnBackupFailed = n.OnBackupFailed,
             Tags = n.Tags != null ? new List<int>(n.Tags) : new List<int>(),
             Categories = n.Categories != null ? new List<string>(n.Categories) : new List<string>(),
         };
@@ -885,6 +887,8 @@ public class NotificationController : Controller
             OnHealthRestored = r.OnHealthRestored,
             OnManualInteractionRequired = r.OnManualInteractionRequired,
             OnApplicationUpdate = r.OnApplicationUpdate,
+            OnBackupComplete = r.OnBackupComplete,
+            OnBackupFailed = r.OnBackupFailed,
             Tags = r.Tags ?? new List<int>(),
             Categories = r.Categories ?? new List<string>(),
         };
@@ -901,7 +905,9 @@ public class NotificationController : Controller
                resource.OnHealthIssue ||
                resource.OnHealthRestored ||
                resource.OnManualInteractionRequired ||
-               resource.OnApplicationUpdate;
+               resource.OnApplicationUpdate ||
+               resource.OnBackupComplete ||
+               resource.OnBackupFailed;
     }
 
     private static string ExtractSetting(string settings, params string[] propertyNames)

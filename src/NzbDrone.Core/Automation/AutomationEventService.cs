@@ -2,6 +2,7 @@
 using System;
 using System.Linq;
 using NLog;
+using NzbDrone.Core.Backup;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Lifecycle;
@@ -46,6 +47,7 @@ public class AutomationEventService :
     IHandle<MediaInspectionFailedEvent>,
     IHandle<ArrImportCompletedEvent>,
     IHandle<ApplicationUpdatedEvent>,
+    IHandle<BackupCreatedEvent>,
     IHandle<BackupCompletedEvent>,
     IHandle<BackupFailedEvent>,
     IHandle<TaskFailedEvent>
@@ -285,6 +287,11 @@ public class AutomationEventService :
     public void Handle(ApplicationUpdatedEvent message)
     {
         DispatchTrigger(AutomationTrigger.ApplicationUpdated, null);
+    }
+
+    public void Handle(BackupCreatedEvent message)
+    {
+        DispatchTrigger(AutomationTrigger.BackupCompleted, null);
     }
 
     public void Handle(BackupCompletedEvent message)

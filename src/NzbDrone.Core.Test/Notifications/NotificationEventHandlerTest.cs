@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Backup;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Torrents;
 
@@ -518,5 +519,111 @@ public class NotificationEventHandlerTest
         var completed = await Task.WhenAny(completedTcs.Task, Task.Delay(2000));
         Assert.That(completed, Is.EqualTo(completedTcs.Task), "All throttled dispatches should complete");
         Assert.That(maxObservedConcurrency, Is.LessThanOrEqualTo(2), "Observed concurrency should never exceed configured limit of 2");
+    }
+
+    [Test]
+    public async Task Handle_BackupCreatedEvent_dispatches_when_OnBackupComplete_is_enabled()
+    {
+        var dispatchedSignal = new TaskCompletionSource<bool>();
+        _webhookDispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true))
+            .AndDoes(_ => dispatchedSignal.TrySetResult(true));
+
+        var notif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Backup Complete Notif",
+            Implementation = "Webhook",
+            Enable = true,
+            OnBackupComplete = true,
+            Settings = "{\"url\":\"http://test/backup-complete\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { notif });
+
+        _handler.Handle(new BackupCreatedEvent("/path/to/backup.zip", "backup.zip", BackupType.Scheduled, 1024));
+
+        var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(300));
+        Assert.That(completed, Is.EqualTo(dispatchedSignal.Task), "Notification should be dispatched for BackupCreatedEvent");
+    }
+
+    [Test]
+    public async Task Handle_BackupCreatedEvent_skips_when_OnBackupComplete_is_disabled()
+    {
+        var dispatchedSignal = new TaskCompletionSource<bool>();
+        _webhookDispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true))
+            .AndDoes(_ => dispatchedSignal.TrySetResult(true));
+
+        var notif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "No Backup Complete Notif",
+            Implementation = "Webhook",
+            Enable = true,
+            OnBackupComplete = false,
+            Settings = "{\"url\":\"http://test/backup-complete\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { notif });
+
+        _handler.Handle(new BackupCreatedEvent("/path/to/backup.zip", "backup.zip", BackupType.Manual, 1024));
+
+        var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(150));
+        Assert.That(completed, Is.Not.EqualTo(dispatchedSignal.Task), "Notification should not be dispatched when OnBackupComplete is false");
+    }
+
+    [Test]
+    public async Task Handle_BackupFailedEvent_dispatches_when_OnBackupFailed_is_enabled()
+    {
+        var dispatchedSignal = new TaskCompletionSource<bool>();
+        _webhookDispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true))
+            .AndDoes(_ => dispatchedSignal.TrySetResult(true));
+
+        var notif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Backup Failed Notif",
+            Implementation = "Webhook",
+            Enable = true,
+            OnBackupFailed = true,
+            OnHealthIssue = false,
+            Settings = "{\"url\":\"http://test/backup-failed\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { notif });
+
+        _handler.Handle(new BackupFailedEvent(BackupType.Scheduled, "Disk full"));
+
+        var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(300));
+        Assert.That(completed, Is.EqualTo(dispatchedSignal.Task), "Notification should be dispatched for BackupFailedEvent");
+    }
+
+    [Test]
+    public async Task Handle_BackupFailedEvent_dispatches_when_OnHealthIssue_is_enabled()
+    {
+        var dispatchedSignal = new TaskCompletionSource<bool>();
+        _webhookDispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true))
+            .AndDoes(_ => dispatchedSignal.TrySetResult(true));
+
+        var notif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Health Issue Notif",
+            Implementation = "Webhook",
+            Enable = true,
+            OnBackupFailed = false,
+            OnHealthIssue = true,
+            Settings = "{\"url\":\"http://test/health-issue\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { notif });
+
+        _handler.Handle(new BackupFailedEvent(BackupType.Manual, "Database locked"));
+
+        var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(300));
+        Assert.That(completed, Is.EqualTo(dispatchedSignal.Task), "Notification should be dispatched for BackupFailedEvent via OnHealthIssue");
     }
 }
