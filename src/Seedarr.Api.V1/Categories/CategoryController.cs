@@ -71,9 +71,21 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
         }
 
         resource.Name = trimmedName;
+        if (!string.IsNullOrWhiteSpace(resource.SavePath))
+        {
+            resource.SavePath = NormalizeSavePath(resource.SavePath);
+        }
+
         var model = CategoryResourceMapper.ToModel(resource);
-        var inserted = _categoryService.Add(model);
-        return Ok(CategoryResourceMapper.ToResource(inserted));
+        try
+        {
+            var inserted = _categoryService.Add(model);
+            return Ok(CategoryResourceMapper.ToResource(inserted));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpPut("{id:int}")]
@@ -113,10 +125,22 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
         }
 
         resource.Name = trimmedName;
+        if (!string.IsNullOrWhiteSpace(resource.SavePath))
+        {
+            resource.SavePath = NormalizeSavePath(resource.SavePath);
+        }
+
         var model = CategoryResourceMapper.ToModel(resource);
         model.Id = targetId;
-        var updated = _categoryService.Update(model);
-        return Ok(CategoryResourceMapper.ToResource(updated));
+        try
+        {
+            var updated = _categoryService.Update(model);
+            return Ok(CategoryResourceMapper.ToResource(updated));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpDelete("{id:int}")]
@@ -162,6 +186,12 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
             return false;
         }
 
+        if (!IsPathRooted(savePath))
+        {
+            errorMessage = "Save path must be an absolute path (e.g. '/downloads/movies' or 'D:\\Downloads\\Movies').";
+            return false;
+        }
+
         try
         {
             _ = Path.GetFullPath(savePath);
@@ -173,6 +203,50 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
         }
 
         return true;
+    }
+
+    private static bool IsPathRooted(string path)
+    {
+        if (Path.IsPathRooted(path))
+        {
+            return true;
+        }
+
+        // Support Windows drive roots (e.g. D:\path or C:/path) on non-Windows platforms
+        if (path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && (path[2] == '\\' || path[2] == '/'))
+        {
+            return true;
+        }
+
+        // Support UNC paths (\\server\share) on non-Windows platforms
+        if (path.Length >= 2 && path[0] == '\\' && path[1] == '\\')
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static string NormalizeSavePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = path.Trim();
+        var root = Path.GetPathRoot(trimmed);
+        if (!string.IsNullOrEmpty(root) && string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed;
+        }
+
+        if (trimmed.Length == 3 && char.IsLetter(trimmed[0]) && trimmed[1] == ':' && (trimmed[2] == '\\' || trimmed[2] == '/'))
+        {
+            return trimmed;
+        }
+
+        return trimmed.TrimEnd('/', '\\');
     }
 
     protected override CategoryResource GetResourceById(Category model)

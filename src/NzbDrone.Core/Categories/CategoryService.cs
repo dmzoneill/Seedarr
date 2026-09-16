@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using NLog;
 using NzbDrone.Core.Messaging.Events;
@@ -84,6 +85,13 @@ public class CategoryService : ICategoryService
         }
 
         _logger.Info("Adding category: {0}", category.Name);
+
+        if (!string.IsNullOrWhiteSpace(category.SavePath))
+        {
+            category.SavePath = NormalizeSavePath(category.SavePath);
+            VerifySavePathAccess(category.SavePath);
+        }
+
         var inserted = _repository.Insert(category);
         if (inserted.IsDefault)
         {
@@ -103,6 +111,12 @@ public class CategoryService : ICategoryService
 
         _logger.Info("Updating category: {0}", category.Name);
         var existing = _repository.Get(category.Id);
+
+        if (!string.IsNullOrWhiteSpace(category.SavePath))
+        {
+            category.SavePath = NormalizeSavePath(category.SavePath);
+            VerifySavePathAccess(category.SavePath);
+        }
 
         if (category.IsDefault)
         {
@@ -173,5 +187,42 @@ public class CategoryService : ICategoryService
         }
 
         return defaultPath;
+    }
+
+    private static void VerifySavePathAccess(string savePath)
+    {
+        try
+        {
+            var dirInfo = Directory.CreateDirectory(savePath);
+            var testFile = Path.Combine(dirInfo.FullName, $".seedarr_perm_{Guid.NewGuid():N}.tmp");
+            File.WriteAllText(testFile, "test");
+            File.Delete(testFile);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Cannot access or write to save path '{savePath}': {ex.Message}", ex);
+        }
+    }
+
+    public static string NormalizeSavePath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = path.Trim();
+        var root = Path.GetPathRoot(trimmed);
+        if (!string.IsNullOrEmpty(root) && string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed;
+        }
+
+        if (trimmed.Length == 3 && char.IsLetter(trimmed[0]) && trimmed[1] == ':' && (trimmed[2] == '\\' || trimmed[2] == '/'))
+        {
+            return trimmed;
+        }
+
+        return trimmed.TrimEnd('/', '\\');
     }
 }

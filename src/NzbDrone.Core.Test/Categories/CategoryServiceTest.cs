@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Categories;
@@ -214,5 +215,87 @@ public class CategoryServiceTest
         _eventAggregator.Received(1).PublishEvent(Arg.Is<CategoryDeletedEvent>(e =>
             e.CategoryId == 5 &&
             e.CategoryName == "Anime"));
+    }
+
+    [Test]
+    public void Add_with_accessible_save_path_creates_directory_and_normalizes_trailing_slash()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "seedarr_cat_test_" + Guid.NewGuid().ToString("N"));
+        var cat = new Category { Name = "ValidPathCat", SavePath = tempDir + "//" };
+        _repository.Insert(Arg.Any<Category>()).Returns(callInfo => callInfo.Arg<Category>());
+
+        try
+        {
+            var result = _subject.Add(cat);
+            Assert.That(result.SavePath, Is.EqualTo(tempDir));
+            Assert.That(Directory.Exists(tempDir), Is.True);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
+
+    [Test]
+    public void Add_with_inaccessible_save_path_throws_InvalidOperationException()
+    {
+        var inaccessiblePath = OperatingSystem.IsWindows()
+            ? "Z:\\NonExistentDrive\\Inaccessible"
+            : "/root/seedarr_inaccessible_test_dir_" + Guid.NewGuid().ToString("N");
+        var cat = new Category { Name = "InaccessibleCat", SavePath = inaccessiblePath };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _subject.Add(cat));
+        Assert.That(ex.Message, Does.Contain("Cannot access or write to save path"));
+        _repository.DidNotReceive().Insert(Arg.Any<Category>());
+    }
+
+    [Test]
+    public void Update_with_accessible_save_path_normalizes_trailing_slash_and_verifies_access()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "seedarr_cat_test_" + Guid.NewGuid().ToString("N"));
+        var cat = new Category { Id = 1, Name = "Movies", SavePath = tempDir + "/" };
+        _repository.Get(1).Returns(new Category { Id = 1, Name = "Movies", SavePath = "/old/path" });
+        _repository.Update(Arg.Any<Category>()).Returns(callInfo => callInfo.Arg<Category>());
+
+        try
+        {
+            var result = _subject.Update(cat);
+            Assert.That(result.SavePath, Is.EqualTo(tempDir));
+            Assert.That(Directory.Exists(tempDir), Is.True);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
+
+    [Test]
+    public void Update_with_inaccessible_save_path_throws_InvalidOperationException()
+    {
+        var inaccessiblePath = OperatingSystem.IsWindows()
+            ? "Z:\\NonExistentDrive\\Inaccessible"
+            : "/root/seedarr_inaccessible_test_dir_" + Guid.NewGuid().ToString("N");
+        var cat = new Category { Id = 1, Name = "Movies", SavePath = inaccessiblePath };
+        _repository.Get(1).Returns(new Category { Id = 1, Name = "Movies", SavePath = "/old/path" });
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _subject.Update(cat));
+        Assert.That(ex.Message, Does.Contain("Cannot access or write to save path"));
+        _repository.DidNotReceive().Update(Arg.Any<Category>());
+    }
+
+    [Test]
+    public void NormalizeSavePath_normalizes_trailing_slashes_and_handles_root()
+    {
+        Assert.That(CategoryService.NormalizeSavePath("/downloads/movies/"), Is.EqualTo("/downloads/movies"));
+        Assert.That(CategoryService.NormalizeSavePath("/downloads/movies///"), Is.EqualTo("/downloads/movies"));
+        Assert.That(CategoryService.NormalizeSavePath("/"), Is.EqualTo("/"));
+        Assert.That(CategoryService.NormalizeSavePath(""), Is.EqualTo(string.Empty));
+        Assert.That(CategoryService.NormalizeSavePath(null), Is.EqualTo(string.Empty));
     }
 }
