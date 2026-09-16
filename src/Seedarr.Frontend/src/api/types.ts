@@ -763,6 +763,7 @@ export interface PeerGraphNode {
   type: "center" | "torrent" | "peer";
   infoHash?: string;
   isEncrypted?: boolean;
+  isActive?: boolean;
 }
 
 export interface PeerGraphLink {
