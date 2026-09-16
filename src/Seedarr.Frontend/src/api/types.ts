@@ -627,6 +627,7 @@ export interface DownloadClientRemoteItem {
   status: string;
   outputPath: string;
   category: string;
+  isPrivate?: boolean;
   isInLibrary: boolean;
   libraryTorrentId?: number | null;
 }

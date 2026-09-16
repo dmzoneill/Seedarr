@@ -83,7 +83,7 @@ public class DelugeClient : IDownloadClient, IDisposable
 
         try
         {
-            var fields = new[] { "hash", "name", "total_size", "total_remaining", "state", "save_path", "label" };
+            var fields = new[] { "hash", "name", "total_size", "total_remaining", "state", "save_path", "label", "private" };
             var filters = new Dictionary<string, object>();
 
             if (!string.IsNullOrEmpty(Category))
@@ -107,6 +107,10 @@ public class DelugeClient : IDownloadClient, IDisposable
             {
                 var t = prop.Value;
                 var state = t.TryGetProperty("state", out var s) ? s.GetString() : "unknown";
+                var isPrivate = t.TryGetProperty("private", out var ip) &&
+                    (ip.ValueKind == JsonValueKind.True ||
+                     (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
+                     (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
 
                 items.Add(new DownloadClientItem
                 {
@@ -117,6 +121,7 @@ public class DelugeClient : IDownloadClient, IDisposable
                     Status = MapState(state),
                     OutputPath = t.TryGetProperty("save_path", out var sp) ? sp.GetString() : "",
                     Category = t.TryGetProperty("label", out var l) ? l.GetString() : "",
+                    IsPrivate = isPrivate,
                 });
             }
 

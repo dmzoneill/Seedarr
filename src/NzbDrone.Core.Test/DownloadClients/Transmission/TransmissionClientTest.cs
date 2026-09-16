@@ -702,4 +702,23 @@ public class TransmissionClientTest
         Assert.That(decoded, Is.EqualTo("testuser:testpass"));
         request.Dispose();
     }
+
+    [Test]
+    public void GetItems_should_extract_is_private_flag_correctly()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""arguments"":{""torrents"":[" +
+            @"{""hashString"":""priv1"",""name"":""Private Torrent"",""totalSize"":1000,""leftUntilDone"":0,""status"":6,""isPrivate"":true}," +
+            @"{""hashString"":""pub1"",""name"":""Public Torrent"",""totalSize"":2000,""leftUntilDone"":0,""status"":6,""isPrivate"":false}" +
+            @"]},""result"":""success""}");
+        InjectMockClient(handler);
+
+        var result = _client.GetItems();
+
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result[0].IsPrivate, Is.True);
+        Assert.That(result[1].IsPrivate, Is.False);
+    }
 }

@@ -91,6 +91,11 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             {
                 var state = t.TryGetProperty("state", out var s) ? s.GetString() : "unknown";
 
+                var isPrivate = t.TryGetProperty("is_private", out var ip) &&
+                    (ip.ValueKind == JsonValueKind.True ||
+                     (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
+                     (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
+
                 items.Add(new DownloadClientItem
                 {
                     InfoHash = t.TryGetProperty("hash", out var h) ? h.GetString() : "",
@@ -100,6 +105,7 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                     Status = MapState(state),
                     OutputPath = t.TryGetProperty("save_path", out var sp) ? sp.GetString() : "",
                     Category = t.TryGetProperty("category", out var c) ? c.GetString() : "",
+                    IsPrivate = isPrivate,
                 });
             }
 

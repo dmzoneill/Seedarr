@@ -27,6 +27,7 @@ public class DownloadClientItem
     public string Status { get; set; }
     public string OutputPath { get; set; }
     public string Category { get; set; }
+    public bool IsPrivate { get; set; }
 }
 
 public class DownloadClientRemoteItem
@@ -40,6 +41,7 @@ public class DownloadClientRemoteItem
     public string Status { get; set; }
     public string OutputPath { get; set; }
     public string Category { get; set; }
+    public bool IsPrivate { get; set; }
     public bool IsInLibrary { get; set; }
     public int? LibraryTorrentId { get; set; }
 }
