@@ -823,6 +823,35 @@ public class ArrWebhookRegistrationTest
     }
 
     [Test]
+    public void UnregisterWebhook_with_injected_client_should_return_true_when_delete_returns_not_found()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            @"[{""id"":88,""name"":""Seedarr"",""fields"":[{""name"":""url"",""value"":""http://localhost:9898/api/v1/webhook/arr""}]}]");
+        handler.Enqueue(HttpStatusCode.NotFound, @"{}");
+
+        var registration = CreateWithMockClient(handler);
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "test-key"
+        };
+
+        var result = registration.UnregisterWebhook(connection);
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void UnregisterWebhook_should_return_true_when_connection_is_null()
+    {
+        var result = _registration.UnregisterWebhook(null);
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
     public void UnregisterWebhook_with_injected_client_should_return_true_when_no_webhook_registered()
     {
         var handler = new MockHttpMessageHandler();

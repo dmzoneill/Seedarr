@@ -141,6 +141,11 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
     public bool UnregisterWebhook(ArrConnectionDefinition connection)
     {
+        if (connection == null || string.IsNullOrWhiteSpace(connection.Url))
+        {
+            return true;
+        }
+
         try
         {
             var apiVersion = connection.ArrType == "Lidarr" ? "v1" : "v3";
@@ -157,7 +162,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
 
                 using var response = _client.Send(request, ct);
-                if (response.IsSuccessStatusCode)
+                if (response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound)
                 {
                     _logger.Info("Unregistered Seedarr webhook from {0}", connection.ArrType);
                     return true;
@@ -169,7 +174,7 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Failed to unregister webhook from {0}", connection.ArrType);
+            _logger.Warn(ex, "Failed to unregister webhook from {0}", connection.ArrType);
             return false;
         }
     }
