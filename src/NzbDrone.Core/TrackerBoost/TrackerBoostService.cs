@@ -747,6 +747,7 @@ public class TrackerBoostService : ITrackerBoostService
     {
         var trackers = _trackerRepository.All().Where(t => t.Enabled).ToList();
         var testedCount = 0;
+        var updatedTrackers = new ConcurrentBag<TrackerBoostTracker>();
 
         using var semaphore = new SemaphoreSlim(16);
         var tasks = trackers.Select(async tracker =>
@@ -784,14 +785,14 @@ public class TrackerBoostService : ITrackerBoostService
                     LogActivity("Error", "Health", $"Probe failed / connection timeout for {tracker.Url} - marked Offline", tracker.Url);
                 }
 
-                _trackerRepository.Update(tracker);
+                updatedTrackers.Add(tracker);
                 Interlocked.Increment(ref testedCount);
             }
             catch (Exception ex)
             {
                 tracker.Status = TrackerHealthStatus.Offline;
                 tracker.FailedScrapes++;
-                _trackerRepository.Update(tracker);
+                updatedTrackers.Add(tracker);
                 LogActivity("Error", "Health", $"Probe exception for {tracker.Url}: {ex.Message} - marked Offline", tracker.Url);
             }
             finally
@@ -801,6 +802,12 @@ public class TrackerBoostService : ITrackerBoostService
         });
 
         await Task.WhenAll(tasks);
+
+        if (!updatedTrackers.IsEmpty)
+        {
+            _trackerRepository.UpdateMany(updatedTrackers);
+        }
+
         _lastScanTime = DateTime.UtcNow;
         LogActivity("Info", "Health", $"Completed health scan of {testedCount} candidate tracker(s)");
         return testedCount;
@@ -830,7 +837,15 @@ public class TrackerBoostService : ITrackerBoostService
             await client.SendAsync(packet, packet.Length, endpoint);
 
             using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
-            var result = await client.ReceiveAsync(cts.Token);
+            UdpReceiveResult result;
+            try
+            {
+                result = await client.ReceiveAsync(cts.Token);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
+            {
+                return false;
+            }
 
             if (result.Buffer.Length >= 16)
             {
@@ -842,6 +857,10 @@ public class TrackerBoostService : ITrackerBoostService
                 }
             }
 
+            return false;
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
+        {
             return false;
         }
         catch
@@ -920,7 +939,16 @@ public class TrackerBoostService : ITrackerBoostService
             await client.SendAsync(connectPacket, connectPacket.Length, endpoint);
 
             using var connectCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
-            var connectResult = await client.ReceiveAsync(connectCts.Token);
+            UdpReceiveResult connectResult;
+            try
+            {
+                connectResult = await client.ReceiveAsync(connectCts.Token);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
+            {
+                return (false, 0, 0, 0);
+            }
+
             if (connectResult.Buffer.Length < 16)
             {
                 return (false, 0, 0, 0);
@@ -946,7 +974,16 @@ public class TrackerBoostService : ITrackerBoostService
             await client.SendAsync(scrapePacket, scrapePacket.Length, endpoint);
 
             using var scrapeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
-            var scrapeResult = await client.ReceiveAsync(scrapeCts.Token);
+            UdpReceiveResult scrapeResult;
+            try
+            {
+                scrapeResult = await client.ReceiveAsync(scrapeCts.Token);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
+            {
+                return (false, 0, 0, 0);
+            }
+
             if (scrapeResult.Buffer.Length < 20)
             {
                 return (false, 0, 0, 0);
@@ -964,6 +1001,10 @@ public class TrackerBoostService : ITrackerBoostService
             var leechers = ReadInt32BigEndian(scrapeResult.Buffer, 16);
 
             return (true, Math.Max(0, seeders), Math.Max(0, leechers), Math.Max(0, completed));
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or SocketException or ObjectDisposedException)
+        {
+            return (false, 0, 0, 0);
         }
         catch
         {
@@ -1057,6 +1098,7 @@ public class TrackerBoostService : ITrackerBoostService
 
         var allKnownTrackers = _trackerRepository.All().Where(t => t.Enabled).ToList();
         var detections = new List<TorrentTrackerDetection>();
+        var trackersToUpdate = new ConcurrentBag<TrackerBoostTracker>();
 
         using var semaphore = new SemaphoreSlim(12);
         var tasks = allKnownTrackers.Select(async tracker =>
@@ -1097,7 +1139,7 @@ public class TrackerBoostService : ITrackerBoostService
                             tracker.Status = TrackerHealthStatus.Alive;
                             tracker.LastSuccess = DateTime.UtcNow;
                             tracker.LastScraped = DateTime.UtcNow;
-                            _trackerRepository.Update(tracker);
+                            trackersToUpdate.Add(tracker);
                         }
 
                         if (detection.IsVerified)
@@ -1135,6 +1177,11 @@ public class TrackerBoostService : ITrackerBoostService
         });
 
         await Task.WhenAll(tasks);
+
+        if (!trackersToUpdate.IsEmpty)
+        {
+            _trackerRepository.UpdateMany(trackersToUpdate);
+        }
 
         foreach (var entry in attachedMap.Values)
         {
