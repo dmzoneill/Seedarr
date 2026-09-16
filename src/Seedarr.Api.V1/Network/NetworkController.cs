@@ -46,22 +46,135 @@ public class NetworkController : Controller
     }
 
     [HttpGet("interfaces")]
-    public ActionResult<List<string>> GetInterfaces()
+    public ActionResult<List<NetworkInterfaceResource>> GetInterfaces()
     {
         try
         {
             var ifaces = global::System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
-                .Where(nic => nic.OperationalStatus == global::System.Net.NetworkInformation.OperationalStatus.Up &&
-                    nic.NetworkInterfaceType != global::System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
-                .Select(nic => nic.Name)
-                .Distinct()
+                .Where(nic => nic.NetworkInterfaceType != global::System.Net.NetworkInformation.NetworkInterfaceType.Loopback)
+                .Select(nic =>
+                {
+                    var isVpn = IsVpnOrTunnel(nic.Name, nic.NetworkInterfaceType, nic.Description);
+                    var type = ClassifyInterfaceType(nic.Name, nic.NetworkInterfaceType, isVpn);
+                    var addresses = new List<string>();
+
+                    try
+                    {
+                        var ipProps = nic.GetIPProperties();
+                        if (ipProps?.UnicastAddresses != null)
+                        {
+                            foreach (var addr in ipProps.UnicastAddresses)
+                            {
+                                if (addr?.Address != null &&
+                                    (addr.Address.AddressFamily == global::System.Net.Sockets.AddressFamily.InterNetwork ||
+                                     addr.Address.AddressFamily == global::System.Net.Sockets.AddressFamily.InterNetworkV6))
+                                {
+                                    addresses.Add(addr.Address.ToString());
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore exceptions reading IP properties on inactive or restricted adapters
+                    }
+
+                    return new NetworkInterfaceResource
+                    {
+                        Name = nic.Name,
+                        Description = nic.Description ?? string.Empty,
+                        Type = type,
+                        Status = nic.OperationalStatus.ToString(),
+                        Addresses = addresses,
+                        IsVpn = isVpn
+                    };
+                })
+                .OrderByDescending(i => i.IsVpn)
+                .ThenByDescending(i => i.Status == "Up")
+                .ThenBy(i => i.Name)
                 .ToList();
+
             return Ok(ifaces);
         }
         catch
         {
-            return Ok(new List<string>());
+            return Ok(new List<NetworkInterfaceResource>());
         }
+    }
+
+    public static bool IsVpnOrTunnel(string name, global::System.Net.NetworkInformation.NetworkInterfaceType interfaceType, string description)
+    {
+        if (interfaceType == global::System.Net.NetworkInformation.NetworkInterfaceType.Tunnel ||
+            interfaceType == global::System.Net.NetworkInformation.NetworkInterfaceType.Ppp)
+        {
+            return true;
+        }
+
+        var lowerName = name?.ToLowerInvariant() ?? string.Empty;
+        if (lowerName.StartsWith("tun") ||
+            lowerName.StartsWith("wg") ||
+            lowerName.StartsWith("tap") ||
+            lowerName.StartsWith("ppp") ||
+            lowerName.StartsWith("utun") ||
+            lowerName.StartsWith("tailscale") ||
+            lowerName.StartsWith("zt") ||
+            lowerName.Contains("vpn") ||
+            lowerName.Contains("wireguard") ||
+            lowerName.Contains("openvpn"))
+        {
+            return true;
+        }
+
+        var lowerDesc = description?.ToLowerInvariant() ?? string.Empty;
+        if (lowerDesc.Contains("vpn") ||
+            lowerDesc.Contains("wireguard") ||
+            lowerDesc.Contains("openvpn") ||
+            lowerDesc.Contains("tunnel") ||
+            lowerDesc.Contains("tap-windows") ||
+            lowerDesc.Contains("wintun") ||
+            lowerDesc.Contains("tailscale") ||
+            lowerDesc.Contains("zerotier"))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public static string ClassifyInterfaceType(string name, global::System.Net.NetworkInformation.NetworkInterfaceType interfaceType, bool isVpn)
+    {
+        if (isVpn ||
+            interfaceType == global::System.Net.NetworkInformation.NetworkInterfaceType.Tunnel ||
+            interfaceType == global::System.Net.NetworkInformation.NetworkInterfaceType.Ppp)
+        {
+            return "Tunnel";
+        }
+
+        if (interfaceType == global::System.Net.NetworkInformation.NetworkInterfaceType.Wireless80211)
+        {
+            return "Wireless";
+        }
+
+        var lowerName = name?.ToLowerInvariant() ?? string.Empty;
+        if (lowerName.StartsWith("wlan") || lowerName.StartsWith("wl") || lowerName.StartsWith("wifi"))
+        {
+            return "Wireless";
+        }
+
+        if (lowerName.StartsWith("veth") ||
+            lowerName.StartsWith("docker") ||
+            lowerName.StartsWith("br-") ||
+            lowerName.StartsWith("virbr") ||
+            lowerName.StartsWith("cni") ||
+            lowerName.StartsWith("flannel") ||
+            lowerName.StartsWith("vmnet") ||
+            lowerName.StartsWith("vboxnet") ||
+            lowerName.Contains("bridge"))
+        {
+            return "Virtual";
+        }
+
+        return "Physical";
     }
 
     [HttpGet("diagnostics")]
@@ -115,4 +228,14 @@ public class NetworkDiagnostics
     public int EncryptedConnections { get; set; }
     public int PlaintextConnections { get; set; }
     public double EncryptionPercentage { get; set; }
+}
+
+public class NetworkInterfaceResource
+{
+    public string Name { get; set; }
+    public string Description { get; set; }
+    public string Type { get; set; } // Physical, Wireless, Tunnel, Virtual
+    public string Status { get; set; } // Up, Down, Testing
+    public List<string> Addresses { get; set; } = new();
+    public bool IsVpn { get; set; }
 }
