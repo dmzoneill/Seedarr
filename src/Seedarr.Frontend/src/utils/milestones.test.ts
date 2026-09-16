@@ -296,6 +296,9 @@ describe("milestones: calculateTrackerBuffers", () => {
 describe("milestones: calculateHnrStatus", () => {
   it("should not clear HNR when ratio is Infinity", () => {
     const torrent = createMockTorrent({
+      isPrivate: true,
+      status: "Seeding",
+      progress: 1.0,
       ratio: Infinity,
       seedingTime: 1000, // < 72h
     });
@@ -303,5 +306,72 @@ describe("milestones: calculateHnrStatus", () => {
     const status = calculateHnrStatus(torrent, 72);
 
     assert.equal(status.isCleared, false);
+  });
+
+  it("should return cleared for public torrents without HnR rules", () => {
+    const torrent = createMockTorrent({
+      isPrivate: false,
+      seedingTime: 120,
+    });
+
+    const status = calculateHnrStatus(torrent, 72);
+
+    assert.equal(status.isCleared, true);
+    assert.equal(status.requiredSeconds, 0);
+    assert.equal(status.progressPercent, 100);
+    assert.equal(status.remainingSeconds, 0);
+    assert.equal(status.label, "Public Swarm (No HnR rules)");
+  });
+
+  it("should not clear HNR for incomplete private torrent even with ratio >= 1.0", () => {
+    const torrent = createMockTorrent({
+      isPrivate: true,
+      status: "Downloading",
+      progress: 0.5,
+      ratio: 1.5,
+      seedingTime: 3600,
+    });
+
+    const status = calculateHnrStatus(torrent, 72);
+
+    assert.equal(status.isCleared, false);
+    assert.equal(status.progressPercent, 0);
+    assert.equal(status.remainingSeconds, 72 * 3600);
+    assert.equal(
+      status.label,
+      "Downloading (HnR timer starts after completion)",
+    );
+  });
+
+  it("should clear HNR for completed private torrent with ratio >= 1.0", () => {
+    const torrent = createMockTorrent({
+      isPrivate: true,
+      status: "Seeding",
+      progress: 1.0,
+      ratio: 1.2,
+      seedingTime: 1000,
+    });
+
+    const status = calculateHnrStatus(torrent, 72);
+
+    assert.equal(status.isCleared, true);
+    assert.equal(status.progressPercent, 100);
+    assert.equal(status.label, "Cleared (1.0+ Ratio)");
+  });
+
+  it("should clear HNR for completed private torrent with seed time met", () => {
+    const torrent = createMockTorrent({
+      isPrivate: true,
+      status: "Seeding",
+      progress: 1.0,
+      ratio: 0.5,
+      seedingTime: 72 * 3600,
+    });
+
+    const status = calculateHnrStatus(torrent, 72);
+
+    assert.equal(status.isCleared, true);
+    assert.equal(status.progressPercent, 100);
+    assert.equal(status.label, "Cleared (72h Met)");
   });
 });
