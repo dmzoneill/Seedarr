@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   useIndexers,
   useCreateIndexer,
@@ -11,6 +11,8 @@ import {
   useUpdateRssRule,
   useDeleteRssRule,
   useSyncRss,
+  useCategories,
+  useTags,
 } from "../../api/hooks";
 import type { IndexerDefinition, IndexerTestResult, RssRule } from "../../api/types";
 import { TextInput, SelectInput, Toggle, NumberInput, SectionCard } from "./shared";
@@ -30,13 +32,16 @@ export function IndexersTab() {
   const [testResults, setTestResults] = useState<Record<number, boolean | null>>({});
   const [modalTestResult, setModalTestResult] = useState<IndexerTestResult | null>(null);
 
-  // RSS Rules
+  // RSS Rules, Categories, Tags
   const { data: rssRules, isLoading: isRssRulesLoading } = useRssRules();
+  const { data: categories } = useCategories();
+  const { data: tags } = useTags();
   const createRuleMutation = useCreateRssRule();
   const updateRuleMutation = useUpdateRssRule();
   const deleteRuleMutation = useDeleteRssRule();
   const syncRssMutation = useSyncRss();
   const [editingRule, setEditingRule] = useState<Partial<RssRule> | null>(null);
+  const [syncCooldownRemaining, setSyncCooldownRemaining] = useState<number>(0);
 
   const defaultIndexer: Partial<IndexerDefinition> = {
     name: "Prowlarr",
@@ -63,7 +68,26 @@ export function IndexersTab() {
     freeleechOnly: false,
     categoryId: 0,
     indexerIds: [],
+    tags: [],
   };
+
+  const categoryOptions = useMemo(() => {
+    const opts = [{ value: "0", label: "None / Default" }];
+    if (categories) {
+      categories.forEach((cat) => {
+        opts.push({ value: cat.id.toString(), label: cat.name });
+      });
+    }
+    return opts;
+  }, [categories]);
+
+  useEffect(() => {
+    if (syncCooldownRemaining <= 0) return;
+    const timer = setInterval(() => {
+      setSyncCooldownRemaining((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [syncCooldownRemaining]);
 
   const handleSave = () => {
     if (!editing) return;
@@ -156,6 +180,7 @@ export function IndexersTab() {
       freeleechOnly: Boolean(editingRule.freeleechOnly),
       categoryId: Number(editingRule.categoryId) || 0,
       indexerIds: editingRule.indexerIds || [],
+      tags: editingRule.tags || [],
     };
 
     if (editingRule.id) {
@@ -182,11 +207,14 @@ export function IndexersTab() {
   };
 
   const handleSyncRssNow = () => {
+    if (syncCooldownRemaining > 0 || syncRssMutation.isPending) return;
     syncRssMutation.mutate(undefined, {
       onSuccess: (res) => {
+        setSyncCooldownRemaining(15);
         showToast(`RSS sync completed successfully (${res.grabbedCount} releases grabbed)`, "success");
       },
       onError: (err: any) => {
+        setSyncCooldownRemaining(15);
         showToast(err?.message || "RSS sync failed", "error");
       },
     });
@@ -316,9 +344,13 @@ export function IndexersTab() {
             type="button"
             className="btn btn-outline btn-small"
             onClick={handleSyncRssNow}
-            disabled={syncRssMutation.isPending}
+            disabled={syncRssMutation.isPending || syncCooldownRemaining > 0}
           >
-            {syncRssMutation.isPending ? "Syncing RSS..." : "🔄 Sync RSS Now"}
+            {syncRssMutation.isPending
+              ? "Syncing RSS..."
+              : syncCooldownRemaining > 0
+                ? `🔄 Sync RSS (${syncCooldownRemaining}s)`
+                : "🔄 Sync RSS Now"}
           </button>
         </div>
 
@@ -374,7 +406,12 @@ export function IndexersTab() {
                 )}
                 {rule.categoryId > 0 && (
                   <span className="provider-card-badge provider-card-badge-blue">
-                    Cat: {rule.categoryId}
+                    Cat: {categories?.find((c) => c.id === rule.categoryId)?.name || rule.categoryId}
+                  </span>
+                )}
+                {rule.tags && rule.tags.length > 0 && (
+                  <span className="provider-card-badge provider-card-badge-gold">
+                    {rule.tags.length} {rule.tags.length === 1 ? "Tag" : "Tags"}
                   </span>
                 )}
                 <span className="provider-card-badge provider-card-badge-blue">
@@ -720,13 +757,77 @@ export function IndexersTab() {
               min={0}
               hint="Maximum age of releases in days to match (0 = no limit)"
             />
-            <NumberInput
-              label="Category ID"
-              value={editingRule.categoryId ?? 0}
-              onChange={(v) => setEditingRule({ ...editingRule, categoryId: v })}
-              min={0}
-              hint="Category ID to assign to grabbed torrents (0 = default)"
+            <SelectInput
+              label="Category"
+              value={String(editingRule.categoryId ?? 0)}
+              onChange={(v) =>
+                setEditingRule({ ...editingRule, categoryId: Number(v) || 0 })
+              }
+              options={categoryOptions}
+              hint="Category to assign to grabbed torrents"
             />
+            <div className="form-group">
+              <label className="form-label">Tags</label>
+              <div className="form-input-wrapper">
+                {tags && tags.length > 0 ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: "0.4rem",
+                      padding: "0.4rem 0",
+                    }}
+                  >
+                    {tags.map((tag) => {
+                      const isSelected = (editingRule.tags || []).includes(
+                        tag.id,
+                      );
+                      return (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          className={`badge ${
+                            isSelected ? "badge-primary" : "badge-secondary"
+                          }`}
+                          style={{
+                            cursor: "pointer",
+                            padding: "0.3rem 0.6rem",
+                            fontSize: "0.82rem",
+                            borderRadius: "4px",
+                            border: isSelected
+                              ? "1px solid var(--accent)"
+                              : "1px solid var(--border-light)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                            background: isSelected ? undefined : "transparent",
+                          }}
+                          onClick={() => {
+                            const current = editingRule.tags || [];
+                            const updated = isSelected
+                              ? current.filter((id) => id !== tag.id)
+                              : [...current, tag.id];
+                            setEditingRule({ ...editingRule, tags: updated });
+                          }}
+                        >
+                          <span>{isSelected ? "✓" : "+"}</span>
+                          <span>{tag.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <span
+                    style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}
+                  >
+                    No tags configured. Create tags in Settings &gt; Tags.
+                  </span>
+                )}
+                <span className="form-hint">
+                  Tags to apply to torrents grabbed by this rule
+                </span>
+              </div>
+            </div>
             <TextInput
               label="Assigned Indexer IDs (Comma-separated)"
               value={

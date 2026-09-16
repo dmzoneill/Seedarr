@@ -194,6 +194,7 @@ public class NetworkController : Controller
             _cachedPlaintextCount = 0;
         }
     }
+
     [HttpGet("diagnostics")]
     public ActionResult<NetworkDiagnostics> GetDiagnostics()
     {

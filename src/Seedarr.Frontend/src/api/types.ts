@@ -660,6 +660,7 @@ export interface RssRule {
   freeleechOnly: boolean;
   categoryId: number;
   indexerIds: number[];
+  tags?: number[];
 }
 
 export interface TrackerEntry {

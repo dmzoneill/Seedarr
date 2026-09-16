@@ -212,7 +212,7 @@ export async function reconnectSignalR(): Promise<void> {
         // ignore in-flight start error
       }
     }
-    if (conn.state === HubConnectionState.Connected) {
+    if ((conn.state as HubConnectionState) === HubConnectionState.Connected) {
       return;
     }
   }

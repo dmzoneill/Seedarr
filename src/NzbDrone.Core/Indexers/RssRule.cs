@@ -26,4 +26,6 @@ public class RssRule : ModelBase
     public int CategoryId { get; set; }
 
     public List<int> IndexerIds { get; set; } = new();
+
+    public List<int> Tags { get; set; } = new();
 }

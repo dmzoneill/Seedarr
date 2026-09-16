@@ -46,6 +46,15 @@ public class RssRuleResource : RestResource
         get => _indexerIds;
         set => _indexerIds = value ?? new List<int>();
     }
+
+    private List<int> _tags = new();
+
+    [JsonConverter(typeof(IntListOrCommaSeparatedConverter))]
+    public List<int> Tags
+    {
+        get => _tags;
+        set => _tags = value ?? new List<int>();
+    }
 }
 
 public class IntListOrCommaSeparatedConverter : JsonConverter<List<int>>
