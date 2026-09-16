@@ -13,7 +13,8 @@ public class WebhookNotification : INotificationService
 {
     private static readonly HttpClient SharedHttpClient = new(new SocketsHttpHandler
     {
-        PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+        PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        AllowAutoRedirect = false,
     });
 
     private static readonly ResiliencePipeline SharedPolicy = ResiliencePolicies.GetWebhookPolicy();

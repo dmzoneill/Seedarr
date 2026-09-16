@@ -197,4 +197,32 @@ public class UrlValidatorTest
     {
         Assert.That(UrlValidator.IsSafeUrl("http://[2606:4700:4700::1111]/api"), Is.True);
     }
+
+    [Test]
+    public void IsSafeUrl_should_return_false_for_cgnat()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://100.64.0.1/api"), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://100.127.255.255/api"), Is.False);
+    }
+
+    [Test]
+    public void IsSafeUrl_with_allowLoopback_true_should_permit_loopback()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://127.0.0.1/api", allowLoopback: true), Is.True);
+        Assert.That(UrlValidator.IsSafeUrl("http://localhost/api", allowLoopback: true), Is.True);
+        Assert.That(UrlValidator.IsSafeUrl("http://[::1]/api", allowLoopback: true), Is.True);
+    }
+
+    [Test]
+    public void IsSafeUrl_with_allowLoopback_true_should_still_reject_private_and_cloud_metadata()
+    {
+        Assert.That(UrlValidator.IsSafeUrl("http://169.254.169.254/latest/meta-data", allowLoopback: true), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://metadata.google.internal/computeMetadata/v1/", allowLoopback: true), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://instance-data", allowLoopback: true), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://10.0.0.1/api", allowLoopback: true), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://192.168.1.1/api", allowLoopback: true), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://172.16.0.1/api", allowLoopback: true), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://100.64.0.1/api", allowLoopback: true), Is.False);
+        Assert.That(UrlValidator.IsSafeUrl("http://[fd00::1]/api", allowLoopback: true), Is.False);
+    }
 }
