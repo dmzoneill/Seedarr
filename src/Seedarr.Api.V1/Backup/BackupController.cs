@@ -135,8 +135,23 @@ public class BackupController : Controller
             return BadRequest(new { message = "Invalid backup file name" });
         }
 
-        _backupService.RestoreBackup(safeFileName);
-        return Ok(new { message = "Backup restored. Restart required." });
+        try
+        {
+            _backupService.RestoreBackup(safeFileName);
+            return Ok(new { message = "Backup restored. Restart required." });
+        }
+        catch (FileNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidDataException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (IOException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 }
 

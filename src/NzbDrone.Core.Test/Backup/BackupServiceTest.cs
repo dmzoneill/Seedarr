@@ -226,18 +226,66 @@ public class BackupServiceTest
         Directory.CreateDirectory(backupDir);
         var backupPath = Path.Combine(backupDir, "restore_test.zip");
 
+        var dummyDbBytes = new byte[512];
+        var header = System.Text.Encoding.ASCII.GetBytes("SQLite format 3\0");
+        Array.Copy(header, 0, dummyDbBytes, 0, header.Length);
+
         using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
         {
             var entry = zip.CreateEntry("seedarr.db");
-            using var writer = new StreamWriter(entry.Open());
-            writer.Write("restored db content");
+            using var stream = entry.Open();
+            stream.Write(dummyDbBytes, 0, dummyDbBytes.Length);
         }
 
         _subject.RestoreBackup("restore_test.zip");
 
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
         Assert.That(File.Exists(dbRestorePath), Is.True);
-        Assert.That(File.ReadAllText(dbRestorePath), Is.EqualTo("restored db content"));
+        Assert.That(File.ReadAllBytes(dbRestorePath), Is.EqualTo(dummyDbBytes));
+    }
+
+    [Test]
+    public void RestoreBackup_should_throw_when_db_entry_is_too_small()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        var backupPath = Path.Combine(backupDir, "restore_small.zip");
+
+        using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+        {
+            var entry = zip.CreateEntry("seedarr.db");
+            using var stream = entry.Open();
+            stream.Write(new byte[50]);
+        }
+
+        Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("restore_small.zip"));
+
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+        Assert.That(File.Exists(dbRestorePath), Is.False);
+    }
+
+    [Test]
+    public void RestoreBackup_should_throw_when_db_entry_header_is_corrupt()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        var backupPath = Path.Combine(backupDir, "restore_corrupt_header.zip");
+
+        var corruptBytes = new byte[512];
+        var invalidHeader = System.Text.Encoding.ASCII.GetBytes("Corrupt format 1\0");
+        Array.Copy(invalidHeader, 0, corruptBytes, 0, invalidHeader.Length);
+
+        using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+        {
+            var entry = zip.CreateEntry("seedarr.db");
+            using var stream = entry.Open();
+            stream.Write(corruptBytes, 0, corruptBytes.Length);
+        }
+
+        Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("restore_corrupt_header.zip"));
+
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+        Assert.That(File.Exists(dbRestorePath), Is.False);
     }
 
     [Test]
