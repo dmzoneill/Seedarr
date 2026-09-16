@@ -1,4 +1,5 @@
 using System;
+using NLog;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Messaging.Events;
@@ -11,10 +12,18 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
     where TModel : ModelBase, new()
 {
     private readonly IBroadcastSignalRMessage _signalRBroadcaster;
+    private readonly Logger _logger;
 
     protected RestControllerWithSignalR(IBroadcastSignalRMessage signalRBroadcaster)
     {
         _signalRBroadcaster = signalRBroadcaster;
+        _logger = LogManager.GetLogger(GetType().ToString());
+    }
+
+    protected RestControllerWithSignalR(IBroadcastSignalRMessage signalRBroadcaster, Logger logger)
+    {
+        _signalRBroadcaster = signalRBroadcaster;
+        _logger = logger ?? LogManager.GetLogger(GetType().ToString());
     }
 
     [Microsoft.AspNetCore.Mvc.NonAction]
@@ -25,13 +34,23 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
             return;
         }
 
-        var resource = GetResourceById(message.Model);
-        if (resource == null)
+        if (message?.Model == null)
         {
             return;
         }
 
-        BroadcastResourceChange(message.Action, resource);
+        try
+        {
+            var resource = GetResourceById(message.Model);
+            if (resource != null)
+            {
+                BroadcastResourceChange(message.Action, resource);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to broadcast SignalR model event for {0}", typeof(TModel).Name);
+        }
     }
 
     protected virtual TResource GetResourceById(TModel model)
