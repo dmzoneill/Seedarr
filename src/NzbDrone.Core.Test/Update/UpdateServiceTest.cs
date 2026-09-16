@@ -943,6 +943,88 @@ public class UpdateServiceTest
         Assert.That(releases[1].Body, Does.Contain("fix: beta fix"));
     }
 
+    [Test]
+    public void ParseChangelogMarkdown_header_with_date_in_parentheses_sets_published_at_and_fallback_url()
+    {
+        var changelog = """
+            # Changelog
+
+            ## 1.2.0 (2026-09-01)
+
+            - Initial release
+            """;
+
+        var releases = UpdateService.ParseChangelogMarkdown(changelog);
+
+        Assert.That(releases, Has.Count.EqualTo(1));
+        Assert.That(releases[0].Version, Is.EqualTo("1.2.0"));
+        Assert.That(releases[0].PublishedAt.Year, Is.EqualTo(2026));
+        Assert.That(releases[0].PublishedAt.Month, Is.EqualTo(9));
+        Assert.That(releases[0].PublishedAt.Day, Is.EqualTo(1));
+        Assert.That(releases[0].Url, Is.EqualTo("https://github.com/dmzoneill/Seedarr/releases/tag/v1.2.0"));
+        Assert.That(releases[0].Url, Is.Not.EqualTo("2026-09-01"));
+    }
+
+    [Test]
+    public void ParseChangelogMarkdown_header_with_brackets_and_date_in_parentheses_sets_published_at_and_fallback_url()
+    {
+        var changelog = """
+            # Changelog
+
+            ## [1.2.0] (2026-09-01)
+
+            - Initial release
+            """;
+
+        var releases = UpdateService.ParseChangelogMarkdown(changelog);
+
+        Assert.That(releases, Has.Count.EqualTo(1));
+        Assert.That(releases[0].Version, Is.EqualTo("1.2.0"));
+        Assert.That(releases[0].PublishedAt.Year, Is.EqualTo(2026));
+        Assert.That(releases[0].PublishedAt.Month, Is.EqualTo(9));
+        Assert.That(releases[0].PublishedAt.Day, Is.EqualTo(1));
+        Assert.That(releases[0].Url, Is.EqualTo("https://github.com/dmzoneill/Seedarr/releases/tag/v1.2.0"));
+    }
+
+    [Test]
+    public void ParseChangelogMarkdown_header_with_url_in_parentheses_sets_url()
+    {
+        var changelog = """
+            # Changelog
+
+            ## 1.2.0 (https://github.com/dmzoneill/Seedarr/releases/tag/v1.2.0)
+
+            - Initial release
+            """;
+
+        var releases = UpdateService.ParseChangelogMarkdown(changelog);
+
+        Assert.That(releases, Has.Count.EqualTo(1));
+        Assert.That(releases[0].Version, Is.EqualTo("1.2.0"));
+        Assert.That(releases[0].Url, Is.EqualTo("https://github.com/dmzoneill/Seedarr/releases/tag/v1.2.0"));
+    }
+
+    [Test]
+    public void ParseChangelogMarkdown_header_with_url_and_hyphenated_date_sets_url_and_published_at()
+    {
+        var changelog = """
+            # Changelog
+
+            ## 1.2.0 (https://github.com/dmzoneill/Seedarr/releases/tag/v1.2.0) - 2026-09-01
+
+            - Initial release
+            """;
+
+        var releases = UpdateService.ParseChangelogMarkdown(changelog);
+
+        Assert.That(releases, Has.Count.EqualTo(1));
+        Assert.That(releases[0].Version, Is.EqualTo("1.2.0"));
+        Assert.That(releases[0].Url, Is.EqualTo("https://github.com/dmzoneill/Seedarr/releases/tag/v1.2.0"));
+        Assert.That(releases[0].PublishedAt.Year, Is.EqualTo(2026));
+        Assert.That(releases[0].PublishedAt.Month, Is.EqualTo(9));
+        Assert.That(releases[0].PublishedAt.Day, Is.EqualTo(1));
+    }
+
     // --- Container detection tests ---
 
     [Test]

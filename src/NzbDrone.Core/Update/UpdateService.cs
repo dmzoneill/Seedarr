@@ -312,7 +312,7 @@ public class UpdateService : IUpdateService
         ReleaseInfo currentRelease = null;
         var currentBody = new List<string>();
 
-        var headerRegex = new Regex(@"^##\s+\[?v?([0-9]+(?:\.[0-9]+)+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\]?(?:\(([^)]+)\))?(?:\s*-\s*([0-9]{4}-[0-9]{2}-[0-9]{2}))?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        var headerRegex = new Regex(@"^##\s+\[?v?([0-9]+(?:\.[0-9]+)+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\]?\s*(?:\(([^)]+)\))?(?:\s*-\s*([0-9]{4}-[0-9]{2}-[0-9]{2}))?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
         foreach (var line in lines)
         {
@@ -327,8 +327,31 @@ public class UpdateService : IUpdateService
                 }
 
                 var ver = match.Groups[1].Value.Trim();
-                var url = match.Groups[2].Success && !string.IsNullOrWhiteSpace(match.Groups[2].Value) ? match.Groups[2].Value : $"https://github.com/dmzoneill/Seedarr/releases/tag/v{ver}";
-                var pubDate = match.Groups[3].Success && DateTime.TryParse(match.Groups[3].Value, out var dt) ? dt : DateTime.UtcNow;
+                string url = null;
+                var pubDate = DateTime.UtcNow;
+
+                if (match.Groups[2].Success && !string.IsNullOrWhiteSpace(match.Groups[2].Value))
+                {
+                    var val = match.Groups[2].Value.Trim();
+                    if (Uri.TryCreate(val, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+                    {
+                        url = val;
+                    }
+                    else if (DateTime.TryParse(val, out var parsedDate))
+                    {
+                        pubDate = parsedDate;
+                    }
+                }
+
+                if (match.Groups[3].Success && DateTime.TryParse(match.Groups[3].Value, out var dt))
+                {
+                    pubDate = dt;
+                }
+
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    url = $"https://github.com/dmzoneill/Seedarr/releases/tag/v{ver}";
+                }
 
                 currentRelease = new ReleaseInfo
                 {
