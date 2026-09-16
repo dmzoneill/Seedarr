@@ -608,6 +608,7 @@ function SystemNetwork() {
                     <td style={{ textAlign: "right" }}>
                       <span
                         className={`badge ${pm.isActive ? "badge-seeding" : "badge-stopped"}`}
+                        title={pm.errorMessage || undefined}
                       >
                         {pm.isActive ? "Active" : "Inactive"}
                       </span>

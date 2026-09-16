@@ -259,6 +259,7 @@ export interface PortMapping {
   protocol: string;
   description: string;
   isActive: boolean;
+  errorMessage?: string | null;
 }
 
 export interface Peer {
