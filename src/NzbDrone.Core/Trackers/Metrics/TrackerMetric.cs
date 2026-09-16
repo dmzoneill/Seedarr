@@ -38,4 +38,31 @@ public class TrackerMetric : ModelBase
     public long MinResponseTimeMs { get; set; }
     public long MaxResponseTimeMs { get; set; }
     public int ConsecutiveFailures { get; set; }
+
+    [Ignore]
+    public double LatencyP50Ms { get; set; }
+
+    [Ignore]
+    public double LatencyP95Ms { get; set; }
+
+    [Ignore]
+    public double LatencyP99Ms { get; set; }
+
+    [Ignore]
+    public double P50LatencyMs { get => LatencyP50Ms; set => LatencyP50Ms = value; }
+
+    [Ignore]
+    public double P95LatencyMs { get => LatencyP95Ms; set => LatencyP95Ms = value; }
+
+    [Ignore]
+    public double P99LatencyMs { get => LatencyP99Ms; set => LatencyP99Ms = value; }
+
+    [Ignore]
+    public double P50ResponseTimeMs { get => LatencyP50Ms; set => LatencyP50Ms = value; }
+
+    [Ignore]
+    public double P95ResponseTimeMs { get => LatencyP95Ms; set => LatencyP95Ms = value; }
+
+    [Ignore]
+    public double P99ResponseTimeMs { get => LatencyP99Ms; set => LatencyP99Ms = value; }
 }

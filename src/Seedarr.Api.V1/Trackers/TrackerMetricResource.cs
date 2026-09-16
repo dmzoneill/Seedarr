@@ -41,6 +41,15 @@ public class TrackerMetricResource
     public long MinResponseTimeMs { get; set; }
     public long MaxResponseTimeMs { get; set; }
     public int ConsecutiveFailures { get; set; }
+    public double LatencyP50Ms { get; set; }
+    public double LatencyP95Ms { get; set; }
+    public double LatencyP99Ms { get; set; }
+    public double P50LatencyMs { get => LatencyP50Ms; set => LatencyP50Ms = value; }
+    public double P95LatencyMs { get => LatencyP95Ms; set => LatencyP95Ms = value; }
+    public double P99LatencyMs { get => LatencyP99Ms; set => LatencyP99Ms = value; }
+    public double P50ResponseTimeMs { get => LatencyP50Ms; set => LatencyP50Ms = value; }
+    public double P95ResponseTimeMs { get => LatencyP95Ms; set => LatencyP95Ms = value; }
+    public double P99ResponseTimeMs { get => LatencyP99Ms; set => LatencyP99Ms = value; }
 }
 
 public static class TrackerMetricResourceMapper
@@ -97,7 +106,10 @@ public static class TrackerMetricResourceMapper
             LastResponseTimeMs = model.LastResponseTimeMs,
             MinResponseTimeMs = model.MinResponseTimeMs,
             MaxResponseTimeMs = model.MaxResponseTimeMs,
-            ConsecutiveFailures = model.ConsecutiveFailures
+            ConsecutiveFailures = model.ConsecutiveFailures,
+            LatencyP50Ms = model.LatencyP50Ms,
+            LatencyP95Ms = model.LatencyP95Ms,
+            LatencyP99Ms = model.LatencyP99Ms
         };
     }
 }
