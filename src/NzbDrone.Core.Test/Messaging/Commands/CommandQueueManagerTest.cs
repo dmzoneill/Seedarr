@@ -220,4 +220,79 @@ public class CommandQueueManagerTest
     {
         Assert.DoesNotThrow(() => InvokeCleanupOldCommands());
     }
+
+    [Test]
+    public void Get_should_call_repository_get_with_id()
+    {
+        var expected = new CommandModel { Id = 42, Name = "Target" };
+        _repository.Get(42).Returns(expected);
+
+        var result = _subject.Get(42);
+
+        Assert.That(result, Is.SameAs(expected));
+        _repository.Received(1).Get(42);
+    }
+
+    [Test]
+    public void Cancel_should_cancel_queued_command_and_return_true()
+    {
+        var command = new CommandModel { Id = 1, Name = "QueuedCmd", Status = CommandStatus.Queued };
+        _repository.Get(1).Returns(command);
+
+        var result = _subject.Cancel(1);
+
+        Assert.That(result, Is.True);
+        Assert.That(command.Status, Is.EqualTo(CommandStatus.Cancelled));
+        Assert.That(command.EndedAt, Is.Not.Null);
+        Assert.That(command.Message, Is.EqualTo("Cancelled by user"));
+        _repository.Received(1).Update(command);
+    }
+
+    [Test]
+    public void Cancel_should_cancel_started_command_and_return_true()
+    {
+        var command = new CommandModel { Id = 2, Name = "StartedCmd", Status = CommandStatus.Started };
+        _repository.Get(2).Returns(command);
+
+        var result = _subject.Cancel(2);
+
+        Assert.That(result, Is.True);
+        Assert.That(command.Status, Is.EqualTo(CommandStatus.Cancelled));
+        _repository.Received(1).Update(command);
+    }
+
+    [Test]
+    public void Cancel_should_return_false_when_command_not_found()
+    {
+        _repository.Get(999).Returns((CommandModel)null);
+
+        var result = _subject.Cancel(999);
+
+        Assert.That(result, Is.False);
+        _repository.DidNotReceive().Update(Arg.Any<CommandModel>());
+    }
+
+    [Test]
+    public void Cancel_should_return_false_when_command_already_completed()
+    {
+        var command = new CommandModel { Id = 3, Name = "DoneCmd", Status = CommandStatus.Completed };
+        _repository.Get(3).Returns(command);
+
+        var result = _subject.Cancel(3);
+
+        Assert.That(result, Is.False);
+        _repository.DidNotReceive().Update(Arg.Any<CommandModel>());
+    }
+
+    [Test]
+    public void Cancel_should_return_false_when_command_already_failed()
+    {
+        var command = new CommandModel { Id = 4, Name = "FailCmd", Status = CommandStatus.Failed };
+        _repository.Get(4).Returns(command);
+
+        var result = _subject.Cancel(4);
+
+        Assert.That(result, Is.False);
+        _repository.DidNotReceive().Update(Arg.Any<CommandModel>());
+    }
 }

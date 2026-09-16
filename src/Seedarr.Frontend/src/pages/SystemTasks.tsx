@@ -11,6 +11,7 @@ interface ScheduledTask {
   lastStartTime: string | null;
   lastDuration: string | null;
   nextExecution: string | null;
+  isRunning?: boolean;
 }
 
 interface CommandItem {
@@ -170,6 +171,19 @@ function SystemTasks() {
     },
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: (commandId: number) =>
+      apiClient.delete(`/system/command/${commandId}`),
+    onSuccess: () => {
+      showToast("Command cancelled", "success");
+      queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
+    },
+    onError: (err: Error) => {
+      showToast(`Failed to cancel command: ${err.message}`, "error");
+    },
+  });
+
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
       {/* Header Banner */}
@@ -285,9 +299,19 @@ function SystemTasks() {
                 {tasks.map((task) => (
                   <tr key={task.typeName} className="torrent-table-row">
                     <td>
-                      <strong style={{ color: "var(--text-primary)" }}>
-                        {formatTaskName(task.typeName)}
-                      </strong>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <strong style={{ color: "var(--text-primary)" }}>
+                          {formatTaskName(task.typeName)}
+                        </strong>
+                        {task.isRunning && (
+                          <span
+                            className="badge badge-seeding"
+                            style={{ fontSize: "0.7rem", padding: "0.15rem 0.4rem" }}
+                          >
+                            ⏳ Running
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <span className="badge badge-secondary">
@@ -301,6 +325,17 @@ function SystemTasks() {
                       <code style={{ fontSize: "0.8rem" }}>
                         {formatDuration(task.lastDuration)}
                       </code>
+                      {task.isRunning && (
+                        <span
+                          style={{
+                            fontSize: "0.75rem",
+                            color: "var(--text-muted)",
+                            marginLeft: "0.3rem",
+                          }}
+                        >
+                          (elapsed)
+                        </span>
+                      )}
                     </td>
                     <td
                       title={formatDateTime(task.nextExecution)}
@@ -322,10 +357,10 @@ function SystemTasks() {
                           gap: "0.3rem",
                         }}
                         onClick={() => executeMutation.mutate(task)}
-                        disabled={executeMutation.isPending}
-                        title="Execute task now"
+                        disabled={task.isRunning || executeMutation.isPending}
+                        title={task.isRunning ? "Task is currently running" : "Execute task now"}
                       >
-                        ⚡ Run Now
+                        {task.isRunning ? "⏳ Running..." : "⚡ Run Now"}
                       </button>
                     </td>
                   </tr>
@@ -400,6 +435,7 @@ function SystemTasks() {
                   <th className="torrent-table-th">Started</th>
                   <th className="torrent-table-th">Ended</th>
                   <th className="torrent-table-th">Duration</th>
+                  <th className="torrent-table-th" style={{ textAlign: "right" }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -437,6 +473,24 @@ function SystemTasks() {
                       <code style={{ fontSize: "0.8rem" }}>
                         {formatDuration(cmd.duration)}
                       </code>
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      {(cmd.status === "queued" || cmd.status === "started") && (
+                        <button
+                          className="btn btn-outline"
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "0.2rem 0.5rem",
+                            color: "var(--color-danger, #e55353)",
+                            borderColor: "var(--color-danger, #e55353)",
+                          }}
+                          onClick={() => cancelMutation.mutate(cmd.id)}
+                          disabled={cancelMutation.isPending}
+                          title="Cancel command"
+                        >
+                          ✕ Cancel
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

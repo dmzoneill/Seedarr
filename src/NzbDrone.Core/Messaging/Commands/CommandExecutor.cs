@@ -36,8 +36,16 @@ public class CommandExecutor : ICommandExecutor
 
         try
         {
+            var current = _repository.Get(command.Id);
+            if (current != null && current.Status == CommandStatus.Cancelled)
+            {
+                _logger.Debug("Command {0} (id: {1}) was cancelled before execution started", command.Name, command.Id);
+                return;
+            }
+
             command.Status = CommandStatus.Started;
             command.StartedAt = DateTime.UtcNow;
+            _repository.Update(command);
 
             var commandType = FindCommandType(command.Name);
             if (commandType == null)
@@ -67,11 +75,25 @@ public class CommandExecutor : ICommandExecutor
             var executeMethod = handlerType.GetMethod("Execute");
             executeMethod!.Invoke(handler, new[] { typedCommand });
 
+            current = _repository.Get(command.Id);
+            if (current != null && current.Status == CommandStatus.Cancelled)
+            {
+                _logger.Debug("Command {0} (id: {1}) was cancelled during execution", command.Name, command.Id);
+                return;
+            }
+
             command.Status = CommandStatus.Completed;
             _logger.Debug("Completed {0}", command.Name);
         }
         catch (Exception ex)
         {
+            var current = _repository.Get(command.Id);
+            if (current != null && current.Status == CommandStatus.Cancelled)
+            {
+                _logger.Debug("Command {0} (id: {1}) was cancelled", command.Name, command.Id);
+                return;
+            }
+
             var inner = ex is TargetInvocationException tie ? tie.InnerException ?? ex : ex;
             command.Status = CommandStatus.Failed;
             command.Message = inner.Message;
@@ -79,8 +101,12 @@ public class CommandExecutor : ICommandExecutor
         }
         finally
         {
-            command.EndedAt = DateTime.UtcNow;
-            _repository.Update(command);
+            var current = _repository.Get(command.Id);
+            if (current == null || current.Status != CommandStatus.Cancelled)
+            {
+                command.EndedAt = DateTime.UtcNow;
+                _repository.Update(command);
+            }
         }
     }
 
@@ -100,7 +126,8 @@ public class CommandExecutor : ICommandExecutor
                     }
                 })
                 .FirstOrDefault(t =>
-                    t.Name == n &&
+                    (string.Equals(t.Name, n, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(t.Name, n + "Command", StringComparison.OrdinalIgnoreCase)) &&
                     t.IsClass &&
                     !t.IsAbstract &&
                     typeof(Command).IsAssignableFrom(t)));

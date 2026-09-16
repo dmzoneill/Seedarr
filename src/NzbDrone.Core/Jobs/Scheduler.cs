@@ -37,6 +37,13 @@ public class Scheduler : BackgroundService
 
                     if (dueAt <= DateTime.UtcNow)
                     {
+                        if (_taskManager.IsRunning(next.TypeName))
+                        {
+                            _logger.Debug("Scheduled task already running: {0}", next.TypeName);
+                            await Task.Delay(50, stoppingToken);
+                            continue;
+                        }
+
                         _logger.Debug("Executing scheduled task: {0}", next.TypeName);
                         var startTime = DateTime.UtcNow;
                         _taskManager.RecordTaskStarted(next.TypeName);
