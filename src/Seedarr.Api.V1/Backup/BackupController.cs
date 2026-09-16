@@ -35,20 +35,27 @@ public class BackupController : Controller
     [HttpPost]
     public ActionResult<BackupResource> CreateBackup()
     {
-        var backup = _backupService.CreateBackup();
-
-        if (backup == null)
+        try
         {
-            return BadRequest(new { message = "Database file not found, cannot create backup" });
+            var backup = _backupService.CreateBackup();
+
+            if (backup == null)
+            {
+                return BadRequest(new { message = "Database file not found, cannot create backup" });
+            }
+
+            return Ok(new BackupResource
+            {
+                Id = 1,
+                Name = backup.Name,
+                Size = backup.Size,
+                Time = backup.Time
+            });
         }
-
-        return Ok(new BackupResource
+        catch (InvalidOperationException ex)
         {
-            Id = 1,
-            Name = backup.Name,
-            Size = backup.Size,
-            Time = backup.Time
-        });
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpDelete("{id:int}")]

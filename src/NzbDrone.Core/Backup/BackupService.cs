@@ -73,6 +73,31 @@ public class BackupService : IBackupService
                     return null;
                 }
 
+                var dbFileInfo = new FileInfo(dbPath);
+                var requiredSpace = (dbFileInfo.Length * 3) + (100 * 1024 * 1024);
+
+                try
+                {
+                    var root = Path.GetPathRoot(Path.GetFullPath(_appFolderInfo.AppDataFolder)) ?? "/";
+                    var drive = new DriveInfo(root);
+                    if (drive.IsReady && drive.AvailableFreeSpace < requiredSpace)
+                    {
+                        var msg = $"Insufficient disk space to create backup. Required: {requiredSpace / (1024 * 1024)} MB, Available: {drive.AvailableFreeSpace / (1024 * 1024)} MB.";
+                        _logger.Warn(msg);
+                        var ex = new InvalidOperationException(msg);
+                        _eventAggregator?.PublishEvent(new BackupFailedEvent(type, msg, ex));
+                        throw ex;
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Unable to determine free disk space for backup pre-flight check");
+                }
+
                 var dbStagingPath = dbPath + ".backup-staging";
 
                 try
@@ -135,6 +160,10 @@ public class BackupService : IBackupService
             _eventAggregator?.PublishEvent(new BackupCreatedEvent(backupInfo.Path, backupInfo.Name, type, backupInfo.Size));
 
             return backupInfo;
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
