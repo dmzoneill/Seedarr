@@ -44,6 +44,11 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             new { InfoHash = infoHash });
     }
 
+    public Torrent FindByInfoHash(string infoHash)
+    {
+        return GetByInfoHash(infoHash);
+    }
+
     public List<Torrent> GetByInfoHashes(IEnumerable<string> infoHashes)
     {
         if (infoHashes == null)

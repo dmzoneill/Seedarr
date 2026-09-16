@@ -16,6 +16,7 @@ public interface ITorrentService
     List<Torrent> GetByInfoHashes(IEnumerable<string> infoHashes);
     Torrent Get(int id);
     Torrent GetByInfoHash(string infoHash);
+    Torrent FindByInfoHash(string infoHash);
     bool ExistsByInfoHash(string infoHash);
     Torrent Add(Torrent torrent);
     Torrent Update(Torrent torrent);
@@ -72,6 +73,11 @@ public class TorrentService : ITorrentService
         }
 
         return _repository.GetByInfoHash(infoHash);
+    }
+
+    public Torrent FindByInfoHash(string infoHash)
+    {
+        return GetByInfoHash(infoHash);
     }
 
     public bool ExistsByInfoHash(string infoHash)

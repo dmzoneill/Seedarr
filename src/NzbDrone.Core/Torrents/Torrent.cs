@@ -198,11 +198,14 @@ public class Torrent : ModelBase
     }
 
     /// <summary>
-    /// Pauses torrent execution.
+    /// Pauses torrent execution and zeroes out transient transfer speeds.
     /// </summary>
     public void Pause()
     {
         TransitionTo(TorrentStatus.Paused);
+        UploadSpeed = 0;
+        DownloadSpeed = 0;
+        Active = false;
     }
 
     /// <summary>

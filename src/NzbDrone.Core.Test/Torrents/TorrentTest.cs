@@ -268,9 +268,16 @@ public class TorrentTest
 
         torrent.Pause();
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+        Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
+        Assert.That(torrent.DownloadSpeed, Is.EqualTo(0));
+        Assert.That(torrent.Active, Is.False);
 
         torrent.Resume();
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
+
+        torrent.UploadSpeed = 150;
+        torrent.DownloadSpeed = 250;
+        torrent.Active = true;
 
         torrent.Stop();
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));

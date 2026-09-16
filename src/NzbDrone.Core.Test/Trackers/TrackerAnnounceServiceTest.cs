@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 using NzbDrone.Core.Trackers.Metrics;
@@ -20,6 +22,7 @@ public class TrackerAnnounceServiceTest
     private ITorrentEventLogService _eventLogService;
     private IConfigService _configService;
     private ITrackerMetricService _trackerMetricService;
+    private ITorrentService _torrentService;
     private TrackerAnnounceService _service;
 
     [SetUp]
@@ -31,6 +34,7 @@ public class TrackerAnnounceServiceTest
         _eventLogService = Substitute.For<ITorrentEventLogService>();
         _configService = Substitute.For<IConfigService>();
         _trackerMetricService = Substitute.For<ITrackerMetricService>();
+        _torrentService = Substitute.For<ITorrentService>();
 
         _configService.ListeningPort.Returns(51413);
         _configService.AnnounceIntervalSeconds.Returns(1800);
@@ -41,7 +45,9 @@ public class TrackerAnnounceServiceTest
             _peerDiscovery,
             _eventLogService,
             _configService,
-            _trackerMetricService);
+            _trackerMetricService,
+            eventAggregator: null,
+            torrentService: _torrentService);
     }
 
     [Test]
@@ -232,5 +238,55 @@ public class TrackerAnnounceServiceTest
         Assert.That(tracker.SuccessfulAnnounces, Is.EqualTo(5));
 
         _trackerEntryService.Received(1).Update(tracker);
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_send_stopped_event_when_torrent_is_stopped()
+    {
+        var torrent = new Torrent
+        {
+            Id = 50,
+            Name = "Stopped.Movie",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Status = TorrentStatus.Stopped
+        };
+
+        var tracker = new TrackerEntry { Id = 1, TorrentId = 50, Url = "http://tracker.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(50).Returns(new List<TrackerEntry> { tracker });
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.Event == "stopped" && r.NumWant == 0),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public async Task HandleStoppedEventAsync_should_announce_stopped_event_to_trackers()
+    {
+        var torrent = new Torrent
+        {
+            Id = 60,
+            Name = "Stopped.Show",
+            InfoHash = "fedcba9876543210fedcba9876543210fedcba98",
+            Status = TorrentStatus.Stopped
+        };
+
+        var tracker = new TrackerEntry { Id = 2, TorrentId = 60, Url = "http://tracker2.org/announce", Enabled = true };
+        _torrentService.Get(60).Returns(torrent);
+        _trackerEntryService.GetByTorrentId(60).Returns(new List<TrackerEntry> { tracker });
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        await _service.HandleStoppedEventAsync(new SeedingStoppedEvent(60));
+
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.Event == "stopped" && r.NumWant == 0),
+            Arg.Any<List<List<string>>>());
     }
 }
