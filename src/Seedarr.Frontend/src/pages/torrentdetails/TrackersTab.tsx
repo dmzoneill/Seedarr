@@ -5,6 +5,7 @@ import {
   useTrackerBoostTrackers,
   useInspectTorrentTrackers,
   useAddTorrentTracker,
+  useUpdateTorrentTracker,
   useDeleteTorrentTracker,
   useBoostTorrent,
   useAnnounceTorrentTracker,
@@ -75,6 +76,7 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
     torrent.id > 0,
   );
   const addTracker = useAddTorrentTracker();
+  const updateTracker = useUpdateTorrentTracker();
   const deleteTracker = useDeleteTorrentTracker();
   const boostTorrent = useBoostTorrent();
   const announceTracker = useAnnounceTorrentTracker();
@@ -269,7 +271,8 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
             <thead>
               <tr>
                 <th className="torrent-table-th">URL</th>
-                <th className="torrent-table-th">Tier</th>
+                <th className="torrent-table-th" style={{ width: "70px" }}>Tier</th>
+                <th className="torrent-table-th" style={{ textAlign: "center", width: "70px" }}>Enabled</th>
                 <th className="torrent-table-th">Status</th>
                 <th className="torrent-table-th">Seeders</th>
                 <th className="torrent-table-th">Leechers</th>
@@ -304,7 +307,47 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
                         <span>{tracker.url}</span>
                       </div>
                     </td>
-                    <td>{tracker.tier}</td>
+                    <td style={{ width: "65px" }}>
+                      <input
+                        type="number"
+                        min={0}
+                        max={99}
+                        value={tracker.tier}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (!isNaN(val)) {
+                            updateTracker.mutate({
+                              torrentId: torrent.id,
+                              trackerId: tracker.id,
+                              tier: val,
+                            });
+                          }
+                        }}
+                        className="form-input"
+                        style={{
+                          width: "55px",
+                          padding: "0.2rem 0.4rem",
+                          fontSize: "0.85rem",
+                          textAlign: "center",
+                        }}
+                        title="Edit tracker tier"
+                      />
+                    </td>
+                    <td style={{ textAlign: "center", width: "70px" }}>
+                      <input
+                        type="checkbox"
+                        checked={tracker.enabled}
+                        onChange={(e) => {
+                          updateTracker.mutate({
+                            torrentId: torrent.id,
+                            trackerId: tracker.id,
+                            enabled: e.target.checked,
+                          });
+                        }}
+                        style={{ cursor: "pointer" }}
+                        title={tracker.enabled ? "Disable tracker" : "Enable tracker"}
+                      />
+                    </td>
                     <td>
                       <span
                         className={`badge ${ind.badgeClass}`}
@@ -386,97 +429,116 @@ export function TrackersTab({ torrent }: { torrent: Torrent }) {
       )}
 
       {/* Action bar below listed trackers */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          padding: "0.75rem 0 0.25rem 0",
-          marginTop: "0.75rem",
-          borderTop: "1px solid var(--border)",
-          flexWrap: "wrap",
-        }}
-      >
-        <label
+      {torrent.isPrivate ? (
+        <div
+          className="health-alert health-alert-notice"
           style={{
-            fontSize: "0.85rem",
-            fontWeight: 500,
-            color: "var(--text-secondary)",
-          }}
-        >
-          Add Tracker:
-        </label>
-        <button
-          type="button"
-          className="form-control btn-action"
-          style={{
-            flex: "1 1 280px",
-            maxWidth: "520px",
-            padding: "0.35rem 0.75rem",
-            fontSize: "0.85rem",
-            textAlign: "left",
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            cursor: "pointer",
+            gap: "0.5rem",
+            padding: "0.75rem 1rem",
+            marginTop: "0.75rem",
+            borderRadius: "6px",
+            fontSize: "0.875rem",
           }}
-          onClick={() => setShowPickerModal(true)}
-          title="Open tracker picker to select, search, and filter trackers"
         >
-          <span
-            style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
-          >
-            <span>🎯</span>
-            {selectedUrls.size === 0 ? (
-              <span style={{ color: "var(--text-muted)" }}>
-                Choose Trackers to Add... (0 Selected)
-              </span>
-            ) : (
-              <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
-                {selectedUrls.size} Tracker{selectedUrls.size === 1 ? "" : "s"}{" "}
-                Selected (Click to change)
-              </span>
-            )}
-          </span>
-
-          <span
-            className={`badge ${selectedUrls.size > 0 ? "badge-success" : "badge-secondary"}`}
-            style={{ fontSize: "0.7rem", padding: "0.15rem 0.45rem" }}
-          >
-            {selectedUrls.size} Selected
-          </span>
-        </button>
-
-        <button
-          className="btn btn-sm btn-primary"
-          onClick={handleAddAndAnnounceSelected}
-          disabled={
-            isAddingBatch ||
-            selectedUrls.size === 0 ||
-            !availableTrackers ||
-            availableTrackers.length === 0
-          }
-          title="Add selected tracker(s) to this torrent and trigger announce"
+          <span>🔒 Private Swarm — Trackers are managed exclusively by the private indexer (BEP 27).</span>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            padding: "0.75rem 0 0.25rem 0",
+            marginTop: "0.75rem",
+            borderTop: "1px solid var(--border)",
+            flexWrap: "wrap",
+          }}
         >
-          {isAddingBatch
-            ? "Adding..."
-            : selectedUrls.size > 0
-              ? `+ Add & Announce (${selectedUrls.size})`
-              : "+ Add & Announce"}
-        </button>
-      </div>
+          <label
+            style={{
+              fontSize: "0.85rem",
+              fontWeight: 500,
+              color: "var(--text-secondary)",
+            }}
+          >
+            Add Tracker:
+          </label>
+          <button
+            type="button"
+            className="form-control btn-action"
+            style={{
+              flex: "1 1 280px",
+              maxWidth: "520px",
+              padding: "0.35rem 0.75rem",
+              fontSize: "0.85rem",
+              textAlign: "left",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              cursor: "pointer",
+            }}
+            onClick={() => setShowPickerModal(true)}
+            title="Open tracker picker to select, search, and filter trackers"
+          >
+            <span
+              style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
+            >
+              <span>🎯</span>
+              {selectedUrls.size === 0 ? (
+                <span style={{ color: "var(--text-muted)" }}>
+                  Choose Trackers to Add... (0 Selected)
+                </span>
+              ) : (
+                <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>
+                  {selectedUrls.size} Tracker{selectedUrls.size === 1 ? "" : "s"}{" "}
+                  Selected (Click to change)
+                </span>
+              )}
+            </span>
 
-      <TrackerMultiSelectModal
-        isOpen={showPickerModal}
-        onClose={() => setShowPickerModal(false)}
-        trackers={pickerTrackers}
-        selectedUrls={selectedUrls}
-        onToggleUrl={handleToggleUrl}
-        onSelectBatch={handleSelectBatch}
-        onClearSelection={handleClearSelection}
-        onAddAndAnnounce={handleAddAndAnnounceSelected}
-        isAdding={isAddingBatch}
-      />
+            <span
+              className={`badge ${selectedUrls.size > 0 ? "badge-success" : "badge-secondary"}`}
+              style={{ fontSize: "0.7rem", padding: "0.15rem 0.45rem" }}
+            >
+              {selectedUrls.size} Selected
+            </span>
+          </button>
+
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={handleAddAndAnnounceSelected}
+            disabled={
+              isAddingBatch ||
+              selectedUrls.size === 0 ||
+              !availableTrackers ||
+              availableTrackers.length === 0
+            }
+            title="Add selected tracker(s) to this torrent and trigger announce"
+          >
+            {isAddingBatch
+              ? "Adding..."
+              : selectedUrls.size > 0
+                ? `+ Add & Announce (${selectedUrls.size})`
+                : "+ Add & Announce"}
+          </button>
+        </div>
+      )}
+
+      {!torrent.isPrivate && (
+        <TrackerMultiSelectModal
+          isOpen={showPickerModal}
+          onClose={() => setShowPickerModal(false)}
+          trackers={pickerTrackers}
+          selectedUrls={selectedUrls}
+          onToggleUrl={handleToggleUrl}
+          onSelectBatch={handleSelectBatch}
+          onClearSelection={handleClearSelection}
+          onAddAndAnnounce={handleAddAndAnnounceSelected}
+          isAdding={isAddingBatch}
+        />
+      )}
     </div>
   );
 }

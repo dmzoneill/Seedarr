@@ -354,6 +354,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return NotFound();
         }
 
+        if (torrent.IsPrivate)
+        {
+            return BadRequest(new { message = "Cannot add external trackers to a private torrent (BEP 27)." });
+        }
+
         var clean = resource.Url.Trim();
         var existing = _trackerEntryService.GetByTorrentId(torrentId)
             .FirstOrDefault(t => string.Equals((t.Url ?? string.Empty).Trim(), clean, StringComparison.OrdinalIgnoreCase));
@@ -398,6 +403,53 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         var updatedEntry = _trackerEntryService.GetByTorrentId(torrentId).FirstOrDefault(t => t.Id == entry.Id) ?? entry;
 
         return Ok(TorrentResourceMapper.ToTrackerResource(updatedEntry));
+    }
+
+    [HttpPut("{torrentId:int}/trackers/{trackerId:int}")]
+    public ActionResult<TrackerEntryResource> UpdateTracker(int torrentId, int trackerId, [FromBody] UpdateTorrentTrackerResource resource)
+    {
+        if (resource == null)
+        {
+            return BadRequest(new { message = "Update resource is required." });
+        }
+
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var trackers = _trackerEntryService.GetByTorrentId(torrentId);
+        var target = trackers.FirstOrDefault(t => t.Id == trackerId);
+        if (target == null)
+        {
+            return NotFound();
+        }
+
+        if (resource.Tier.HasValue)
+        {
+            target.Tier = Math.Max(0, resource.Tier.Value);
+        }
+
+        if (resource.Enabled.HasValue)
+        {
+            target.Enabled = resource.Enabled.Value;
+        }
+
+        _trackerEntryService.Update(target);
+        _eventLogService.Info(torrentId, "Tracker", $"Updated tracker {target.Url}: Tier={target.Tier}, Enabled={target.Enabled}");
+
+        var remaining = _trackerEntryService.GetByTorrentId(torrentId);
+        var primaryTracker = remaining.Where(t => t.Enabled).OrderBy(t => t.Tier).FirstOrDefault()?.Url
+            ?? remaining.OrderBy(t => t.Tier).FirstOrDefault()?.Url;
+
+        if (torrent.TrackerUrl != primaryTracker)
+        {
+            torrent.TrackerUrl = primaryTracker;
+            _torrentService.Update(torrent);
+        }
+
+        return Ok(TorrentResourceMapper.ToTrackerResource(target));
     }
 
     [HttpDelete("{torrentId:int}/trackers/{trackerId:int}")]
@@ -1001,4 +1053,10 @@ public class AddTorrentTrackerResource
 {
     public string Url { get; set; } = string.Empty;
     public int Tier { get; set; } = 1;
+}
+
+public class UpdateTorrentTrackerResource
+{
+    public int? Tier { get; set; }
+    public bool? Enabled { get; set; }
 }
