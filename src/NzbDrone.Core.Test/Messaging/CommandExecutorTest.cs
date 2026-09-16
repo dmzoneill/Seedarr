@@ -33,6 +33,7 @@ internal class ThrowingCommandExecutor : IExecute<ThrowingCommand>
 internal class StubCommandRepository : IBasicRepository<CommandModel>
 {
     public CommandModel LastUpdated { get; private set; }
+    public List<CommandModel> UpdatedSnapshots { get; } = new();
 
     public CommandModel Get(int id) => null;
 
@@ -43,6 +44,15 @@ internal class StubCommandRepository : IBasicRepository<CommandModel>
     public CommandModel Update(CommandModel model)
     {
         LastUpdated = model;
+        UpdatedSnapshots.Add(new CommandModel
+        {
+            Id = model.Id,
+            Name = model.Name,
+            Status = model.Status,
+            StartedAt = model.StartedAt,
+            EndedAt = model.EndedAt,
+            Message = model.Message
+        });
         return model;
     }
 
@@ -194,5 +204,36 @@ public class CommandExecutorTest
         var command = new CommandModel { Name = "NotAReal Command" };
 
         Assert.DoesNotThrow(() => _subject.Execute(command));
+    }
+
+    [Test]
+    public void Execute_should_persist_started_status_when_execution_begins()
+    {
+        var command = new CommandModel { Name = "SampleCommand", Body = "{}" };
+
+        _subject.Execute(command);
+
+        Assert.That(_repository.UpdatedSnapshots, Has.Count.GreaterThanOrEqualTo(2));
+        Assert.That(_repository.UpdatedSnapshots[0].Status, Is.EqualTo(CommandStatus.Started));
+        Assert.That(_repository.UpdatedSnapshots[0].StartedAt, Is.Not.Null);
+    }
+
+    [TestCase("SampleCommand")]
+    [TestCase("samplecommand")]
+    [TestCase("Sample")]
+    [TestCase("sample")]
+    public void FindCommandType_resolves_commands_case_insensitively_and_with_or_without_command_suffix(string commandName)
+    {
+        var resolved = CommandExecutor.FindCommandType(commandName);
+
+        Assert.That(resolved, Is.EqualTo(typeof(SampleCommand)));
+    }
+
+    [Test]
+    public void FindCommandType_returns_null_for_unknown_or_empty_command()
+    {
+        Assert.That(CommandExecutor.FindCommandType("NonExistentCommand"), Is.Null);
+        Assert.That(CommandExecutor.FindCommandType(string.Empty), Is.Null);
+        Assert.That(CommandExecutor.FindCommandType(null), Is.Null);
     }
 }

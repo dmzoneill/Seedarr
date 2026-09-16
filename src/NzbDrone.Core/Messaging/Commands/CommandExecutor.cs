@@ -110,10 +110,26 @@ public class CommandExecutor : ICommandExecutor
         }
     }
 
-    private static Type FindCommandType(string name)
+    /// <summary>
+    /// Resolves a command type by name, case-insensitively and tolerating missing or redundant 'Command' suffix.
+    /// </summary>
+    /// <param name="name">The command name to look up.</param>
+    /// <returns>The resolved Type or null if not found.</returns>
+    public static Type FindCommandType(string name)
     {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
         return CommandTypeCache.GetOrAdd(name, static n =>
-            AppDomain.CurrentDomain.GetAssemblies()
+        {
+            var trimmed = n.Trim();
+            var nameWithoutSuffix = trimmed.EndsWith("Command", StringComparison.OrdinalIgnoreCase)
+                ? trimmed[..^7]
+                : trimmed;
+
+            return AppDomain.CurrentDomain.GetAssemblies()
                 .SelectMany(a =>
                 {
                     try
@@ -126,11 +142,23 @@ public class CommandExecutor : ICommandExecutor
                     }
                 })
                 .FirstOrDefault(t =>
-                    (string.Equals(t.Name, n, StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(t.Name, n + "Command", StringComparison.OrdinalIgnoreCase)) &&
-                    t.IsClass &&
-                    !t.IsAbstract &&
-                    typeof(Command).IsAssignableFrom(t)));
+                {
+                    if (!t.IsClass || t.IsAbstract || !typeof(Command).IsAssignableFrom(t))
+                    {
+                        return false;
+                    }
+
+                    var typeName = t.Name;
+                    var typeNameWithoutSuffix = typeName.EndsWith("Command", StringComparison.OrdinalIgnoreCase)
+                        ? typeName[..^7]
+                        : typeName;
+
+                    return string.Equals(typeName, trimmed, StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(typeName, trimmed + "Command", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(typeNameWithoutSuffix, trimmed, StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(typeNameWithoutSuffix, nameWithoutSuffix, StringComparison.OrdinalIgnoreCase);
+                });
+        });
     }
 
     private static Command DeserializeCommand(string body, Type commandType)

@@ -261,53 +261,24 @@ public class SystemController : ControllerBase
     public ActionResult<List<CommandResource>> GetCommands()
     {
         var commands = _commandQueueManager.GetAll();
-        return Ok(commands.Select(c =>
+        return Ok(commands.Select(MapToResource).ToList());
+    }
+
+    /// <summary>
+    /// Gets a command by ID.
+    /// </summary>
+    /// <param name="id">The command ID.</param>
+    /// <returns>The command resource if found; otherwise, NotFound.</returns>
+    [HttpGet("command/{id:int}")]
+    public ActionResult<CommandResource> GetCommand(int id)
+    {
+        var command = _commandQueueManager.Get(id);
+        if (command == null)
         {
-            TimeSpan? duration = null;
+            return NotFound(new { message = $"Command with ID {id} not found" });
+        }
 
-            if (c.StartedAt.HasValue && c.EndedAt.HasValue)
-            {
-                duration = c.EndedAt.Value - c.StartedAt.Value;
-            }
-            else if (c.StartedAt.HasValue)
-            {
-                duration = DateTime.UtcNow - c.StartedAt.Value;
-            }
-
-            var name = c.Name;
-            if ((c.Name == "ScheduledTaskCommand" || c.Name == "ScheduledTask") && !string.IsNullOrEmpty(c.Body))
-            {
-                try
-                {
-                    using var doc = JsonDocument.Parse(c.Body);
-                    if (doc.RootElement.TryGetProperty("taskName", out var tnProp) ||
-                        doc.RootElement.TryGetProperty("TaskName", out tnProp))
-                    {
-                        var taskName = tnProp.GetString();
-                        if (!string.IsNullOrEmpty(taskName))
-                        {
-                            name = taskName.Contains('.') ? taskName.Substring(taskName.LastIndexOf('.') + 1) : taskName;
-                        }
-                    }
-                }
-                catch
-                {
-                    // Ignore JSON parsing errors
-                }
-            }
-
-            return new CommandResource
-            {
-                Id = c.Id,
-                Name = name,
-                Status = c.Status.ToString().ToLowerInvariant(),
-                QueuedAt = c.QueuedAt,
-                StartedAt = c.StartedAt,
-                EndedAt = c.EndedAt,
-                Duration = duration,
-                Message = c.Message
-            };
-        }).ToList());
+        return Ok(MapToResource(command));
     }
 
     /// <summary>
@@ -341,6 +312,11 @@ public class SystemController : ControllerBase
     [HttpPost("command")]
     public ActionResult<CommandResource> PushCommand([FromBody] JsonElement body)
     {
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            return BadRequest("Command payload must be a JSON object.");
+        }
+
         if (!body.TryGetProperty("name", out var nameProp) || nameProp.ValueKind != JsonValueKind.String)
         {
             return BadRequest(new { message = "Command 'name' is required" });
@@ -361,6 +337,54 @@ public class SystemController : ControllerBase
             Status = model.Status.ToString().ToLowerInvariant(),
             QueuedAt = model.QueuedAt
         });
+    }
+
+    private static CommandResource MapToResource(CommandModel c)
+    {
+        TimeSpan? duration = null;
+
+        if (c.StartedAt.HasValue && c.EndedAt.HasValue)
+        {
+            duration = c.EndedAt.Value - c.StartedAt.Value;
+        }
+        else if (c.StartedAt.HasValue)
+        {
+            duration = DateTime.UtcNow - c.StartedAt.Value;
+        }
+
+        var name = c.Name;
+        if ((c.Name == "ScheduledTaskCommand" || c.Name == "ScheduledTask") && !string.IsNullOrEmpty(c.Body))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(c.Body);
+                if (doc.RootElement.TryGetProperty("taskName", out var tnProp) ||
+                    doc.RootElement.TryGetProperty("TaskName", out tnProp))
+                {
+                    var taskName = tnProp.GetString();
+                    if (!string.IsNullOrEmpty(taskName))
+                    {
+                        name = taskName.Contains('.') ? taskName.Substring(taskName.LastIndexOf('.') + 1) : taskName;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore JSON parsing errors
+            }
+        }
+
+        return new CommandResource
+        {
+            Id = c.Id,
+            Name = name,
+            Status = c.Status.ToString().ToLowerInvariant(),
+            QueuedAt = c.QueuedAt,
+            StartedAt = c.StartedAt,
+            EndedAt = c.EndedAt,
+            Duration = duration,
+            Message = c.Message
+        };
     }
 
     [HttpPost("restart")]
