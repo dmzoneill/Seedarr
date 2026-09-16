@@ -9,7 +9,7 @@ namespace NzbDrone.Core.Simulation.ClientBehavior;
 
 public interface IClientBehaviorSimulator
 {
-    IClientProfile GetActiveProfile();
+    IClientProfile GetActiveProfile(bool isPrivateTorrent = false);
     bool IsEnabled { get; }
     double GetEffectiveDropoutProbability(double baseProbability);
     double GetEffectiveRotationPercentage(double basePercentage);
@@ -41,8 +41,18 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator
 
     public bool IsEnabled => _configService.ClientBehaviorEngineEnabled;
 
-    public IClientProfile GetActiveProfile()
+    public IClientProfile GetActiveProfile(bool isPrivateTorrent = false)
     {
+        if (isPrivateTorrent)
+        {
+            _logger.Trace("Private torrent detected: suppressing client identity rotation and locking to primary client");
+            lock (_lock)
+            {
+                _currentProfile = GetDefaultProfile();
+                return _currentProfile;
+            }
+        }
+
         if (!_configService.ClientBehaviorEngineEnabled)
         {
             _logger.Trace("Client behavior engine disabled, returning default profile");

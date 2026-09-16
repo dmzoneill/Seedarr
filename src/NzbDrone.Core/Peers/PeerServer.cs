@@ -488,7 +488,7 @@ public class PeerServer : BackgroundService
             }
 
             var peerId = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                ? (_clientBehaviorSimulator.GetActiveProfile()?.GeneratePeerId() ?? "-SD1000-000000000000")
+                ? (_clientBehaviorSimulator.GetActiveProfile(torrent.IsPrivate)?.GeneratePeerId() ?? "-SD1000-000000000000")
                 : "-SD1000-000000000000";
             connection.SendHandshake(torrent.InfoHash, peerId);
 
