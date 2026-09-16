@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -57,7 +58,7 @@ public class TrackerBoostService : ITrackerBoostService
 
     private static readonly HttpClient HttpClient = new(new HttpClientHandler { CheckCertificateRevocationList = true }) { Timeout = TimeSpan.FromSeconds(6) };
     private static readonly BencodeParser BParser = new();
-    private static readonly ConcurrentDictionary<string, (DateTime BoostedAt, HashSet<string> InjectedTrackers)> BoostHistory = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentDictionary<string, (DateTime BoostedAt, ImmutableHashSet<string> InjectedTrackers)> BoostHistory = new(StringComparer.OrdinalIgnoreCase);
     private static readonly ConcurrentQueue<TrackerBoostLogEntry> LogBuffer = new();
 
     private static readonly string[] DefaultBootstrapTrackers = new[]
@@ -84,6 +85,50 @@ public class TrackerBoostService : ITrackerBoostService
     private static int _totalTrackersInjected;
     private static int _totalVerifiedMatchesCount;
     private static int _nextLogId;
+
+    public static int TotalTorrentsBoosted => Volatile.Read(ref _totalTorrentsBoosted);
+
+    public static int TotalTrackersInjected => Volatile.Read(ref _totalTrackersInjected);
+
+    public static int TotalVerifiedMatchesCount => Volatile.Read(ref _totalVerifiedMatchesCount);
+
+    public static void IncrementTorrentsBoosted() => Interlocked.Increment(ref _totalTorrentsBoosted);
+
+    public static void AddTrackersInjected(int count) => Interlocked.Add(ref _totalTrackersInjected, count);
+
+    public static void AddVerifiedMatches(int count) => Interlocked.Add(ref _totalVerifiedMatchesCount, count);
+
+    public static void RecordBoostHistory(string infoHash, IEnumerable<string> trackers)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash) || trackers == null)
+        {
+            return;
+        }
+
+        var trackerList = trackers as IList<string> ?? trackers.ToList();
+        if (trackerList.Count == 0)
+        {
+            return;
+        }
+
+        BoostHistory.AddOrUpdate(
+            infoHash,
+            _ => (DateTime.UtcNow, trackerList.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase)),
+            (_, old) => (DateTime.UtcNow, (old.InjectedTrackers ?? ImmutableHashSet<string>.Empty).Union(trackerList)));
+    }
+
+    public static bool TryGetBoostHistory(string infoHash, out (DateTime BoostedAt, ImmutableHashSet<string> InjectedTrackers) history)
+    {
+        return BoostHistory.TryGetValue(infoHash, out history);
+    }
+
+    public static void ResetMetricsAndHistory()
+    {
+        BoostHistory.Clear();
+        Interlocked.Exchange(ref _totalTorrentsBoosted, 0);
+        Interlocked.Exchange(ref _totalTrackersInjected, 0);
+        Interlocked.Exchange(ref _totalVerifiedMatchesCount, 0);
+    }
 
     private readonly ITrackerBoostTrackerRepository _trackerRepository;
     private readonly ITorrentService _torrentService;
@@ -329,9 +374,9 @@ public class TrackerBoostService : ITrackerBoostService
             ProwlarrTrackersCount = all.Count(t => t.Source == TrackerSourceType.Prowlarr),
             PublicListTrackersCount = all.Count(t => t.Source == TrackerSourceType.PublicList),
             ActiveTorrentTrackersCount = all.Count(t => t.Source == TrackerSourceType.ActiveTorrent),
-            TorrentsBoostedCount = _totalTorrentsBoosted,
-            ExtraTrackersInjectedCount = _totalTrackersInjected,
-            TotalVerifiedMatchesCount = _totalVerifiedMatchesCount,
+            TorrentsBoostedCount = TotalTorrentsBoosted,
+            ExtraTrackersInjectedCount = TotalTrackersInjected,
+            TotalVerifiedMatchesCount = TotalVerifiedMatchesCount,
             AutoBoostEnabled = settings.AutoBoostEnabled,
             AutoHarvestEnabled = settings.AutoHarvestEnabled,
             LastScanTime = _lastScanTime,
@@ -784,20 +829,16 @@ public class TrackerBoostService : ITrackerBoostService
             var endpoint = new IPEndPoint(addresses[0], port);
             await client.SendAsync(packet, packet.Length, endpoint);
 
-            var receiveTask = client.ReceiveAsync();
-            var completedTask = await Task.WhenAny(receiveTask, Task.Delay(2500));
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
+            var result = await client.ReceiveAsync(cts.Token);
 
-            if (completedTask == receiveTask)
+            if (result.Buffer.Length >= 16)
             {
-                var result = await receiveTask;
-                if (result.Buffer.Length >= 16)
+                var responseAction = ReadInt32BigEndian(result.Buffer, 0);
+                var responseTransactionId = ReadInt32BigEndian(result.Buffer, 4);
+                if (responseAction == 0 && responseTransactionId == transactionId)
                 {
-                    var responseAction = ReadInt32BigEndian(result.Buffer, 0);
-                    var responseTransactionId = ReadInt32BigEndian(result.Buffer, 4);
-                    if (responseAction == 0 && responseTransactionId == transactionId)
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
 
@@ -878,13 +919,8 @@ public class TrackerBoostService : ITrackerBoostService
 
             await client.SendAsync(connectPacket, connectPacket.Length, endpoint);
 
-            var connectReceive = client.ReceiveAsync();
-            if (await Task.WhenAny(connectReceive, Task.Delay(2500)) != connectReceive)
-            {
-                return (false, 0, 0, 0);
-            }
-
-            var connectResult = await connectReceive;
+            using var connectCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
+            var connectResult = await client.ReceiveAsync(connectCts.Token);
             if (connectResult.Buffer.Length < 16)
             {
                 return (false, 0, 0, 0);
@@ -909,13 +945,8 @@ public class TrackerBoostService : ITrackerBoostService
 
             await client.SendAsync(scrapePacket, scrapePacket.Length, endpoint);
 
-            var scrapeReceive = client.ReceiveAsync();
-            if (await Task.WhenAny(scrapeReceive, Task.Delay(2500)) != scrapeReceive)
-            {
-                return (false, 0, 0, 0);
-            }
-
-            var scrapeResult = await scrapeReceive;
+            using var scrapeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2500));
+            var scrapeResult = await client.ReceiveAsync(scrapeCts.Token);
             if (scrapeResult.Buffer.Length < 20)
             {
                 return (false, 0, 0, 0);
@@ -1128,7 +1159,7 @@ public class TrackerBoostService : ITrackerBoostService
             }
         }
 
-        var hasBoost = BoostHistory.TryGetValue(infoHash, out var boostInfo);
+        var hasBoost = TryGetBoostHistory(infoHash, out var boostInfo);
 
         return new TorrentTrackerInspectionResult
         {
@@ -1138,7 +1169,7 @@ public class TrackerBoostService : ITrackerBoostService
             IsPrivate = isPrivate,
             IsBoosted = hasBoost,
             BoostedAt = hasBoost ? boostInfo.BoostedAt : null,
-            InjectedTrackersCount = hasBoost ? boostInfo.InjectedTrackers.Count : 0,
+            InjectedTrackersCount = hasBoost && boostInfo.InjectedTrackers != null ? boostInfo.InjectedTrackers.Count : 0,
             TotalTrackersChecked = detections.Count,
             AttachedTrackersCount = detections.Count(d => d.IsAttached),
             DetectedTrackersCount = detections.Count(d => d.IsDetected),
@@ -1220,19 +1251,13 @@ public class TrackerBoostService : ITrackerBoostService
 
         if (addedList.Count > 0)
         {
-            _totalTorrentsBoosted++;
-            _totalTrackersInjected += addedList.Count;
-            _totalVerifiedMatchesCount += addedList.Count;
+            Interlocked.Increment(ref _totalTorrentsBoosted);
+            Interlocked.Add(ref _totalTrackersInjected, addedList.Count);
+            Interlocked.Add(ref _totalVerifiedMatchesCount, addedList.Count);
 
             var clientCount = InjectIntoDownloadClients(torrent.InfoHash, addedList);
 
-            var existingHistory = BoostHistory.GetOrAdd(torrent.InfoHash, _ => (DateTime.UtcNow, new HashSet<string>(StringComparer.OrdinalIgnoreCase)));
-            foreach (var url in addedList)
-            {
-                existingHistory.InjectedTrackers.Add(url);
-            }
-
-            BoostHistory[torrent.InfoHash] = (DateTime.UtcNow, existingHistory.InjectedTrackers);
+            RecordBoostHistory(torrent.InfoHash, addedList);
 
             _logger.Info(
                 "Boosted torrent {0} with {1} verified trackers (+{2} seeds, +{3} leeches) into {4} download client(s)",
@@ -1305,13 +1330,11 @@ public class TrackerBoostService : ITrackerBoostService
 
         if (clientCount > 0 && trackerUrls.Count > 0)
         {
-            var existingHistory = BoostHistory.GetOrAdd(infoHash, _ => (DateTime.UtcNow, new HashSet<string>(StringComparer.OrdinalIgnoreCase)));
-            foreach (var url in trackerUrls)
-            {
-                existingHistory.InjectedTrackers.Add(url);
-            }
+            Interlocked.Increment(ref _totalTorrentsBoosted);
+            Interlocked.Add(ref _totalTrackersInjected, trackerUrls.Count);
+            Interlocked.Add(ref _totalVerifiedMatchesCount, trackerUrls.Count);
 
-            BoostHistory[infoHash] = (DateTime.UtcNow, existingHistory.InjectedTrackers);
+            RecordBoostHistory(infoHash, trackerUrls);
             LogActivity("Success", "Inject", $"Injected {trackerUrls.Count} verified tracker(s) into hash {infoHash} across {clientCount} download client(s)", infoHash: infoHash);
         }
 
@@ -1372,7 +1395,7 @@ public class TrackerBoostService : ITrackerBoostService
                 MinAnnounceInterval = 900
             };
             _trackerEntryService.Add(entry);
-            _totalTrackersInjected++;
+            Interlocked.Increment(ref _totalTrackersInjected);
         }
 
         if (string.IsNullOrWhiteSpace(torrent.TrackerUrl))
@@ -1723,25 +1746,43 @@ public class TrackerBoostService : ITrackerBoostService
             return 0;
         }
 
+        var trackerList = trackers as IList<string> ?? trackers.ToList();
+        if (trackerList.Count == 0)
+        {
+            return 0;
+        }
+
         var count = 0;
         try
         {
             var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
-            foreach (var clientDef in clients)
+            if (clients.Count == 0)
+            {
+                return 0;
+            }
+
+            var tasks = clients.Select(async clientDef =>
             {
                 try
                 {
                     var provider = CreateDownloadClient(clientDef);
-                    if (provider != null && provider.AddTrackers(infoHash, trackers))
+                    if (provider == null)
                     {
-                        count++;
+                        return false;
                     }
+
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                    return await Task.Run(() => provider.AddTrackers(infoHash, trackerList), cts.Token).WaitAsync(cts.Token);
                 }
                 catch (Exception ex)
                 {
                     _logger.Debug(ex, "Failed to add trackers to client {0} for {1}", clientDef.Name, infoHash);
+                    return false;
                 }
-            }
+            }).ToList();
+
+            var results = Task.WhenAll(tasks).GetAwaiter().GetResult();
+            count = results.Count(success => success);
         }
         catch (Exception ex)
         {
@@ -1761,18 +1802,31 @@ public class TrackerBoostService : ITrackerBoostService
         try
         {
             var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
-            foreach (var clientDef in clients)
+            if (clients.Count == 0)
+            {
+                return;
+            }
+
+            var tasks = clients.Select(async clientDef =>
             {
                 try
                 {
                     var provider = CreateDownloadClient(clientDef);
-                    provider?.Reannounce(infoHash);
+                    if (provider == null)
+                    {
+                        return;
+                    }
+
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                    await Task.Run(() => provider.Reannounce(infoHash), cts.Token).WaitAsync(cts.Token);
                 }
                 catch (Exception ex)
                 {
                     _logger.Debug(ex, "Failed to reannounce in client {0} for {1}", clientDef.Name, infoHash);
                 }
-            }
+            }).ToList();
+
+            Task.WhenAll(tasks).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
