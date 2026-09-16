@@ -102,10 +102,36 @@ export default function SignalRProvider() {
       connection.on(event, handler);
     }
 
+    // 3. Reconnection query cache synchronization
+    const handleReconnected = () => {
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
+      queryClient.invalidateQueries({ queryKey: ["seeding", "stats"] });
+      queryClient.invalidateQueries({ queryKey: ["seeding", "history"] });
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      queryClient.invalidateQueries({ queryKey: ["health"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "status"] });
+      queryClient.invalidateQueries({ queryKey: ["diskspace"] });
+      queryClient.invalidateQueries({ queryKey: ["automation"] });
+      queryClient.invalidateQueries({ queryKey: ["automation", "scripts"] });
+    };
+
+    connection.onreconnected(handleReconnected);
+
     return () => {
       connection.off("receiveMessage", onReceiveMessage);
       for (const [event, handler] of handlers) {
         connection.off(event, handler);
+      }
+      const callbacks = (
+        connection as unknown as { _reconnectedCallbacks?: Array<unknown> }
+      )._reconnectedCallbacks;
+      if (callbacks) {
+        const idx = callbacks.indexOf(handleReconnected);
+        if (idx !== -1) {
+          callbacks.splice(idx, 1);
+        }
       }
     };
   }, [connection, queryClient]);

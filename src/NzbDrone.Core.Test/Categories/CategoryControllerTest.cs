@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Categories;
+using NzbDrone.Core.Datastore.Events;
 using NzbDrone.SignalR;
 using Seedarr.Api.V1.Categories;
 
@@ -181,5 +182,41 @@ public class CategoryControllerTest
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _categoryService.Received(1).Update(Arg.Is<Category>(c => c.SavePath == "/new/downloads/movies"));
+    }
+
+    [Test]
+    public void Handle_with_null_model_does_not_throw_and_does_not_broadcast()
+    {
+        _signalRBroadcaster.IsConnected.Returns(true);
+        var modelEvent = new ModelEvent<Category>(ModelAction.Updated, null);
+
+        Assert.DoesNotThrow(() => _controller.Handle(modelEvent));
+        _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
+    public void Handle_when_not_connected_does_not_broadcast()
+    {
+        _signalRBroadcaster.IsConnected.Returns(false);
+        var category = new Category { Id = 1, Name = "Movies", SavePath = "/downloads" };
+        var modelEvent = new ModelEvent<Category>(ModelAction.Updated, category);
+
+        _controller.Handle(modelEvent);
+        _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
+    }
+
+    [Test]
+    public void Handle_with_valid_model_broadcasts_when_connected()
+    {
+        _signalRBroadcaster.IsConnected.Returns(true);
+        var category = new Category { Id = 1, Name = "Movies", SavePath = "/downloads" };
+        var modelEvent = new ModelEvent<Category>(ModelAction.Updated, category);
+
+        _controller.Handle(modelEvent);
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Action == ModelAction.Updated &&
+            m.Name == "category" &&
+            m.Body is CategoryResource
+        ));
     }
 }
