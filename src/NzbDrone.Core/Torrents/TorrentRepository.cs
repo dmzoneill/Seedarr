@@ -23,6 +23,19 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             new { InfoHash = infoHash }) > 0;
     }
 
+    public Torrent GetByInfoHash(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return null;
+        }
+
+        using var connection = _database.OpenConnection();
+        return connection.QueryFirstOrDefault<Torrent>(
+            $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash",
+            new { InfoHash = infoHash });
+    }
+
     public List<Torrent> GetByInfoHashes(IEnumerable<string> infoHashes)
     {
         if (infoHashes == null)

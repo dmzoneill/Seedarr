@@ -50,19 +50,106 @@ public class TorrentImportServiceTests
     }
 
     [Test]
-    public void ImportFromFile_should_throw_when_info_hash_already_exists()
+    public void ImportFromFile_should_merge_trackers_when_torrent_already_exists()
     {
         using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
         var parsed = new ParsedTorrent
         {
             Name = "Existing Torrent",
-            InfoHash = "abc123def456abc123def456abc123def456abcd"
+            InfoHash = "abc123def456abc123def456abc123def456abcd",
+            AnnounceList = new List<List<string>>
+            {
+                new() { "http://tracker1.example.com/announce", "http://tracker2.example.com/announce" }
+            }
         };
-        _parser.Parse(stream).Returns(parsed);
-        _torrentService.ExistsByInfoHash(parsed.InfoHash).Returns(true);
 
-        var ex = Assert.Throws<InvalidOperationException>(() => _subject.ImportFromFile(stream, "test.torrent"));
-        Assert.That(ex.Message, Does.Contain("already exists"));
+        var existing = new Torrent
+        {
+            Id = 55,
+            Name = "Existing Torrent",
+            InfoHash = parsed.InfoHash
+        };
+
+        _parser.Parse(stream).Returns(parsed);
+        _torrentService.GetByInfoHash(parsed.InfoHash).Returns(existing);
+        _trackerEntryService.GetByTorrentId(55).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 55, Url = "http://tracker1.example.com/announce", Tier = 0 }
+        });
+
+        var result = _subject.ImportFromFile(stream, "test.torrent");
+
+        Assert.That(result, Is.SameAs(existing));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 55 && t.Url == "http://tracker2.example.com/announce" && t.Tier == 0 && t.Enabled));
+        _trackerEntryService.DidNotReceive().Add(Arg.Is<TrackerEntry>(t => t.Url == "http://tracker1.example.com/announce"));
+        _eventLogService.Received(1).Info(55, "Update", Arg.Is<string>(msg => msg.Contains("Existing Torrent") && msg.Contains("updated with new trackers")));
+    }
+
+    [Test]
+    public void ImportFromFile_should_preserve_tier_indices_when_merging_trackers()
+    {
+        using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var parsed = new ParsedTorrent
+        {
+            Name = "Tiered Torrent",
+            InfoHash = "abc123def456abc123def456abc123def456abcd",
+            AnnounceList = new List<List<string>>
+            {
+                new() { "http://tier0.example.com/announce" },
+                new() { "http://tier1.example.com/announce" },
+                new() { "http://tier2.example.com/announce" }
+            }
+        };
+
+        var existing = new Torrent
+        {
+            Id = 60,
+            Name = "Tiered Torrent",
+            InfoHash = parsed.InfoHash
+        };
+
+        _parser.Parse(stream).Returns(parsed);
+        _torrentService.GetByInfoHash(parsed.InfoHash).Returns(existing);
+        _trackerEntryService.GetByTorrentId(60).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 60, Url = "http://tier0.example.com/announce", Tier = 0 }
+        });
+
+        var result = _subject.ImportFromFile(stream, "test.torrent");
+
+        Assert.That(result, Is.SameAs(existing));
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 60 && t.Url == "http://tier1.example.com/announce" && t.Tier == 1));
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 60 && t.Url == "http://tier2.example.com/announce" && t.Tier == 2));
+    }
+
+    [Test]
+    public void ImportFromFile_should_merge_single_announce_url_into_tier_zero()
+    {
+        using var stream = new MemoryStream(new byte[] { 1, 2, 3 });
+        var parsed = new ParsedTorrent
+        {
+            Name = "Single Announce Torrent",
+            InfoHash = "abc123def456abc123def456abc123def456abcd",
+            AnnounceUrl = "http://newtracker.example.com/announce",
+            AnnounceList = null
+        };
+
+        var existing = new Torrent
+        {
+            Id = 65,
+            Name = "Single Announce Torrent",
+            InfoHash = parsed.InfoHash
+        };
+
+        _parser.Parse(stream).Returns(parsed);
+        _torrentService.GetByInfoHash(parsed.InfoHash).Returns(existing);
+        _trackerEntryService.GetByTorrentId(65).Returns(new List<TrackerEntry>());
+
+        var result = _subject.ImportFromFile(stream, "test.torrent");
+
+        Assert.That(result, Is.SameAs(existing));
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 65 && t.Url == "http://newtracker.example.com/announce" && t.Tier == 0 && t.Enabled));
     }
 
     [Test]
@@ -162,13 +249,29 @@ public class TorrentImportServiceTests
     }
 
     [Test]
-    public void ImportFromMagnet_should_throw_when_info_hash_already_exists()
+    public void ImportFromMagnet_should_merge_trackers_when_torrent_already_exists()
     {
-        var magnetUri = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Duplicate";
-        _torrentService.ExistsByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(true);
+        var magnetUri = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Duplicate&tr=http%3A%2F%2Ftracker1.org%2Fannounce&tr=http%3A%2F%2Ftracker2.org%2Fannounce";
+        var existing = new Torrent
+        {
+            Id = 88,
+            Name = "Duplicate",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567"
+        };
 
-        var ex = Assert.Throws<InvalidOperationException>(() => _subject.ImportFromMagnet(magnetUri));
-        Assert.That(ex.Message, Does.Contain("already exists"));
+        _torrentService.GetByInfoHash("0123456789abcdef0123456789abcdef01234567").Returns(existing);
+        _trackerEntryService.GetByTorrentId(88).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 88, Url = "http://tracker1.org/announce", Tier = 0 }
+        });
+
+        var result = _subject.ImportFromMagnet(magnetUri);
+
+        Assert.That(result, Is.SameAs(existing));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 88 && t.Url == "http://tracker2.org/announce" && t.Tier == 1 && t.Enabled));
+        _trackerEntryService.DidNotReceive().Add(Arg.Is<TrackerEntry>(t => t.Url == "http://tracker1.org/announce"));
+        _eventLogService.Received(1).Info(88, "Update", Arg.Is<string>(msg => msg.Contains("Duplicate") && msg.Contains("updated with new trackers")));
     }
 
     [Test]

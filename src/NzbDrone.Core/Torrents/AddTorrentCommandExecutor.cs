@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Commands;
@@ -40,9 +42,45 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
 
         var parsed = _parser.Parse(command.FilePath);
 
-        if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
+        var existing = _torrentService.GetByInfoHash(parsed.InfoHash);
+        if (existing != null)
         {
-            _logger.Info("Torrent already exists with info hash {0}, skipping", parsed.InfoHash);
+            _logger.Info("Torrent already exists with info hash {0}, merging trackers", parsed.InfoHash);
+            var existingTrackers = _trackerEntryService.GetByTorrentId(existing.Id);
+            var existingUrls = new HashSet<string>(existingTrackers.Select(t => t.Url), StringComparer.OrdinalIgnoreCase);
+
+            if (parsed.AnnounceList != null && parsed.AnnounceList.Count > 0)
+            {
+                for (var tier = 0; tier < parsed.AnnounceList.Count; tier++)
+                {
+                    foreach (var url in parsed.AnnounceList[tier])
+                    {
+                        if (!string.IsNullOrWhiteSpace(url) && existingUrls.Add(url))
+                        {
+                            _trackerEntryService.Add(new TrackerEntry
+                            {
+                                TorrentId = existing.Id,
+                                Url = url,
+                                Tier = tier,
+                                Status = TrackerStatus.Unknown,
+                                Enabled = true
+                            });
+                        }
+                    }
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(parsed.AnnounceUrl) && existingUrls.Add(parsed.AnnounceUrl))
+            {
+                _trackerEntryService.Add(new TrackerEntry
+                {
+                    TorrentId = existing.Id,
+                    Url = parsed.AnnounceUrl,
+                    Tier = 0,
+                    Status = TrackerStatus.Unknown,
+                    Enabled = true
+                });
+            }
+
             return;
         }
 

@@ -565,9 +565,49 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             return BadRequest(new { message = "'InfoHash' must be a 40-character hexadecimal string." });
         }
 
-        if (_torrentService.ExistsByInfoHash(resource.InfoHash))
+        var existing = _torrentService.GetByInfoHash(resource.InfoHash);
+        if (existing != null)
         {
-            return Conflict(new { message = $"Torrent with info hash '{resource.InfoHash}' already exists." });
+            if (resource.Trackers != null && resource.Trackers.Count > 0)
+            {
+                var existingTrackers = _trackerEntryService.GetByTorrentId(existing.Id);
+                var existingUrls = new HashSet<string>(existingTrackers.Select(t => t.Url), StringComparer.OrdinalIgnoreCase);
+
+                var tier = 0;
+                foreach (var url in resource.Trackers)
+                {
+                    if (!string.IsNullOrWhiteSpace(url) && existingUrls.Add(url))
+                    {
+                        _trackerEntryService.Add(new TrackerEntry
+                        {
+                            TorrentId = existing.Id,
+                            Url = url,
+                            Tier = tier,
+                            Enabled = true
+                        });
+                    }
+
+                    tier++;
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(resource.TrackerUrl))
+            {
+                var existingTrackers = _trackerEntryService.GetByTorrentId(existing.Id);
+                var existingUrls = new HashSet<string>(existingTrackers.Select(t => t.Url), StringComparer.OrdinalIgnoreCase);
+
+                if (existingUrls.Add(resource.TrackerUrl))
+                {
+                    _trackerEntryService.Add(new TrackerEntry
+                    {
+                        TorrentId = existing.Id,
+                        Url = resource.TrackerUrl,
+                        Tier = 0,
+                        Enabled = true
+                    });
+                }
+            }
+
+            return Ok(TorrentResourceMapper.ToResource(existing));
         }
 
         var torrent = TorrentResourceMapper.ToModel(resource);
