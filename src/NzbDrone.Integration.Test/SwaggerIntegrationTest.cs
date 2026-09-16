@@ -1,8 +1,11 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using NUnit.Framework;
+using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Integration.Test;
 
@@ -19,6 +22,10 @@ public class SwaggerIntegrationTest : IntegrationTestBase
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), jsonBody);
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/json"));
+        Assert.That(response.Headers.Contains("X-Frame-Options"), Is.True);
+        Assert.That(response.Headers.GetValues("X-Frame-Options").First(), Is.EqualTo("SAMEORIGIN"));
+        Assert.That(response.Headers.Contains("Content-Security-Policy"), Is.True);
+        Assert.That(response.Headers.GetValues("Content-Security-Policy").First(), Does.Contain("frame-ancestors 'self'"));
 
         var json = await response.Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(json);
@@ -53,10 +60,66 @@ public class SwaggerIntegrationTest : IntegrationTestBase
         var response = await GetAsync("/swagger/index.html");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Headers.Contains("X-Frame-Options"), Is.True);
+        Assert.That(response.Headers.GetValues("X-Frame-Options").First(), Is.EqualTo("SAMEORIGIN"));
+        Assert.That(response.Headers.Contains("Content-Security-Policy"), Is.True);
+        Assert.That(response.Headers.GetValues("Content-Security-Policy").First(), Does.Contain("frame-ancestors 'self'"));
         var html = await response.Content.ReadAsStringAsync();
 
         Assert.That(html, Does.Contain("swagger-ui"));
         Assert.That(html, Does.Contain("swagger-custom.css"));
+    }
+
+    [Test]
+    public async Task Swagger_endpoints_require_authentication_when_enabled()
+    {
+        var configProvider = GlobalSetup.Factory.Services.GetRequiredService<IConfigFileProvider>();
+        using var unauthenticatedClient = GlobalSetup.Factory.CreateClient();
+
+        try
+        {
+            configProvider.SaveConfigDictionary(new Dictionary<string, object>
+            {
+                { "AuthenticationEnabled", true }
+            });
+
+            // 1. Unauthenticated request to /swagger/v1/swagger.json returns 401
+            var unauthJsonResponse = await unauthenticatedClient.GetAsync("/swagger/v1/swagger.json");
+            Assert.That(unauthJsonResponse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+            Assert.That(unauthJsonResponse.Headers.Contains("X-Frame-Options"), Is.True);
+            Assert.That(unauthJsonResponse.Headers.GetValues("X-Frame-Options").First(), Is.EqualTo("SAMEORIGIN"));
+            Assert.That(unauthJsonResponse.Headers.Contains("Content-Security-Policy"), Is.True);
+            Assert.That(unauthJsonResponse.Headers.GetValues("Content-Security-Policy").First(), Does.Contain("frame-ancestors 'self'"));
+
+            // 2. Unauthenticated request to /swagger/index.html returns 401
+            var unauthUiResponse = await unauthenticatedClient.GetAsync("/swagger/index.html");
+            Assert.That(unauthUiResponse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+            Assert.That(unauthUiResponse.Headers.Contains("X-Frame-Options"), Is.True);
+            Assert.That(unauthUiResponse.Headers.GetValues("X-Frame-Options").First(), Is.EqualTo("SAMEORIGIN"));
+            Assert.That(unauthUiResponse.Headers.Contains("Content-Security-Policy"), Is.True);
+            Assert.That(unauthUiResponse.Headers.GetValues("Content-Security-Policy").First(), Does.Contain("frame-ancestors 'self'"));
+
+            // 3. Authenticated request with X-Api-Key header returns 200
+            var authJsonResponse = await Client.GetAsync("/swagger/v1/swagger.json");
+            Assert.That(authJsonResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+            var authUiResponse = await Client.GetAsync("/swagger/index.html");
+            Assert.That(authUiResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+            // 4. Authenticated request with query parameter returns 200
+            var queryJsonResponse = await unauthenticatedClient.GetAsync($"/swagger/v1/swagger.json?apikey={ApiKey}");
+            Assert.That(queryJsonResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+            var queryUiResponse = await unauthenticatedClient.GetAsync($"/swagger/index.html?apikey={ApiKey}");
+            Assert.That(queryUiResponse.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        }
+        finally
+        {
+            configProvider.SaveConfigDictionary(new Dictionary<string, object>
+            {
+                { "AuthenticationEnabled", false }
+            });
+        }
     }
 
     [Test]
