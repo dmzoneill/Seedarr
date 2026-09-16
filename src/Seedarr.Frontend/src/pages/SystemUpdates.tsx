@@ -33,6 +33,8 @@ function SystemUpdates() {
     updates.length > 0 &&
     updates.every((u) => !u.latest || u.installed);
 
+  const isContainerized = updates?.some((u) => u.isContainerized) ?? false;
+
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
       {/* Header Banner */}
@@ -81,6 +83,42 @@ function SystemUpdates() {
 
       {updates && (
         <>
+          {/* Container Environment Alert Banner */}
+          {isContainerized && (
+            <div
+              className="card"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.75rem",
+                padding: "1rem 1.25rem",
+                marginBottom: "1.25rem",
+                borderRadius: "8px",
+                backgroundColor: "rgba(0, 123, 255, 0.12)",
+                border: "1px solid rgba(0, 123, 255, 0.35)",
+                color: "var(--info, #17a2b8)",
+              }}
+            >
+              <span style={{ display: "flex", alignItems: "center", fontSize: "1.2rem" }}>
+                🐳
+              </span>
+              <div style={{ fontSize: "0.9rem" }}>
+                Seedarr is running inside a Docker container. Update your deployment by pulling the latest image:{" "}
+                <code
+                  style={{
+                    backgroundColor: "rgba(0, 0, 0, 0.25)",
+                    padding: "0.2rem 0.4rem",
+                    borderRadius: "4px",
+                    fontFamily: "monospace",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  docker compose pull &amp;&amp; docker compose up -d
+                </code>
+              </div>
+            </div>
+          )}
+
           {/* Status Alert Banner */}
           <div
             className="card"
