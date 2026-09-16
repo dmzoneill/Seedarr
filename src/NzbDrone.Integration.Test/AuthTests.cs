@@ -24,4 +24,14 @@ public class AuthTests : IntegrationTestBase
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }
+
+    [Test]
+    public async Task Login_with_empty_password_returns_400_with_harmonized_error()
+    {
+        var response = await PostJsonAsync("/api/v1/auth/login", new { Username = "admin", Password = "" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var content = await response.Content.ReadAsStringAsync();
+        Assert.That(content, Does.Contain("Password or API key is required"));
+    }
 }

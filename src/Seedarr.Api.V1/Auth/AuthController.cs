@@ -65,7 +65,7 @@ public class AuthController : ControllerBase
     {
         if (request == null || string.IsNullOrWhiteSpace(request.Password))
         {
-            return BadRequest(new { error = "Password is required" });
+            return BadRequest(new { error = "Password or API key is required" });
         }
 
         var masterApiKey = _configFileProvider.ApiKey;
@@ -80,7 +80,7 @@ public class AuthController : ControllerBase
         if (!isValid)
         {
             await Task.Delay(300);
-            return Unauthorized(new { error = "Invalid username or password" });
+            return Unauthorized(new { error = "Invalid credentials. Please verify your username and password or API key." });
         }
 
         var username = !string.IsNullOrWhiteSpace(enteredUser) ? enteredUser : "admin";
