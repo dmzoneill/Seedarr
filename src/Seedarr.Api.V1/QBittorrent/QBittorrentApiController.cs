@@ -341,7 +341,11 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         [FromQuery] string filter = null,
         [FromQuery] string category = null,
         [FromQuery] string tag = null,
-        [FromQuery] string hashes = null)
+        [FromQuery] string hashes = null,
+        [FromQuery] string sort = null,
+        [FromQuery] bool reverse = false,
+        [FromQuery] int? limit = null,
+        [FromQuery] int? offset = null)
     {
         var torrents = _torrentService.GetAll();
 
@@ -471,7 +475,50 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             };
         }).ToList();
 
-        return Ok(result);
+        IEnumerable<Dictionary<string, object>> query = result;
+
+        if (!string.IsNullOrWhiteSpace(sort))
+        {
+            var sortKey = sort.Trim().ToLowerInvariant();
+            Func<Dictionary<string, object>, object> selector = sortKey switch
+            {
+                "name" => d => d.TryGetValue("name", out var v) ? v as string ?? string.Empty : string.Empty,
+                "size" or "total_size" => d => d.TryGetValue("size", out var v) && v is long l ? l : 0L,
+                "progress" => d => d.TryGetValue("progress", out var v) && v is double dbl ? dbl : 0.0,
+                "eta" => d => d.TryGetValue("eta", out var v) && v is long l ? l : 0L,
+                "ratio" => d => d.TryGetValue("ratio", out var v) && v is double dbl ? dbl : 0.0,
+                "added_on" => d => d.TryGetValue("added_on", out var v) && v is long l ? l : 0L,
+                "num_seeds" or "num_complete" => d => d.TryGetValue("num_seeds", out var v) && v is int i ? i : 0,
+                "num_leechs" or "num_incomplete" => d => d.TryGetValue("num_leechs", out var v) && v is int i ? i : 0,
+                "dlspeed" => d => d.TryGetValue("dlspeed", out var v) && v is long l ? l : 0L,
+                "upspeed" => d => d.TryGetValue("upspeed", out var v) && v is long l ? l : 0L,
+                _ => d =>
+                {
+                    var match = d.FirstOrDefault(kv => string.Equals(kv.Key, sortKey, StringComparison.OrdinalIgnoreCase));
+                    return match.Value;
+                },
+            };
+
+            query = reverse
+                ? query.OrderByDescending(selector, QBitDynamicPropertyComparer.Instance)
+                : query.OrderBy(selector, QBitDynamicPropertyComparer.Instance);
+        }
+        else if (reverse)
+        {
+            query = query.Reverse();
+        }
+
+        if (offset.HasValue && offset.Value > 0)
+        {
+            query = query.Skip(offset.Value);
+        }
+
+        if (limit.HasValue && limit.Value > 0)
+        {
+            query = query.Take(limit.Value);
+        }
+
+        return Ok(query.ToList());
     }
 
     [HttpPost("torrents/add")]
@@ -807,16 +854,113 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         }
 
         var files = _torrentFileService.GetByTorrentId(torrent.Id);
-        var result = files.Select((f, index) => new Dictionary<string, object>
+        var savePath = !string.IsNullOrWhiteSpace(torrent.SourcePath) ? torrent.SourcePath : (_configService?.WatchFolderPath ?? "/downloads");
+        var isTorrentComplete = torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding;
+
+        long cumulativeBytes = 0;
+        var downloadedBytes = torrent.Downloaded > 0 ? torrent.Downloaded : (long)(torrent.Progress * torrent.TotalSize);
+        var completedPieces = torrent.PieceCount > 0 ? (int)Math.Round(torrent.Progress * torrent.PieceCount) : 0;
+
+        var result = new List<Dictionary<string, object>>();
+
+        for (var index = 0; index < files.Count; index++)
         {
-            ["index"] = index,
-            ["name"] = f.Path ?? string.Empty,
-            ["size"] = f.Size,
-            ["progress"] = torrent.Progress,
-            ["priority"] = 1,
-            ["is_seed"] = torrent.Progress >= 1.0,
-            ["piece_range"] = new[] { f.PieceOffset, f.PieceOffset + f.PieceCount - 1 },
-        }).ToList();
+            var f = files[index];
+            var fileStartByte = cumulativeBytes;
+            cumulativeBytes += f.Size;
+            var fileEndByte = cumulativeBytes;
+
+            double fileProgress;
+
+            if (isTorrentComplete)
+            {
+                fileProgress = 1.0;
+            }
+            else
+            {
+                var diskProgress = -1.0;
+                var matchedFilePath = ResolveTorrentFilePath(savePath, torrent.Name, f.Path);
+                if (matchedFilePath != null)
+                {
+                    try
+                    {
+                        var fi = new FileInfo(matchedFilePath);
+                        if (fi.Exists)
+                        {
+                            diskProgress = f.Size > 0 ? Math.Clamp((double)fi.Length / f.Size, 0.0, 1.0) : 1.0;
+                        }
+                    }
+                    catch
+                    {
+                        // File access error; fallback to piece/byte calculation.
+                    }
+                }
+
+                var pieceProgress = -1.0;
+                if (torrent.PieceCount > 0 && f.PieceCount > 0)
+                {
+                    var startPiece = f.PieceOffset;
+                    var endPiece = f.PieceOffset + f.PieceCount;
+                    if (completedPieces >= endPiece)
+                    {
+                        pieceProgress = 1.0;
+                    }
+                    else if (completedPieces <= startPiece)
+                    {
+                        pieceProgress = 0.0;
+                    }
+                    else
+                    {
+                        pieceProgress = Math.Clamp((double)(completedPieces - startPiece) / f.PieceCount, 0.0, 1.0);
+                    }
+                }
+                else
+                {
+                    if (f.Size <= 0 || downloadedBytes >= fileEndByte)
+                    {
+                        pieceProgress = 1.0;
+                    }
+                    else if (downloadedBytes <= fileStartByte)
+                    {
+                        pieceProgress = 0.0;
+                    }
+                    else
+                    {
+                        pieceProgress = Math.Clamp((double)(downloadedBytes - fileStartByte) / f.Size, 0.0, 1.0);
+                    }
+                }
+
+                if (diskProgress >= 0.0 && pieceProgress >= 0.0)
+                {
+                    fileProgress = Math.Max(diskProgress, pieceProgress);
+                }
+                else if (diskProgress >= 0.0)
+                {
+                    fileProgress = diskProgress;
+                }
+                else if (pieceProgress >= 0.0)
+                {
+                    fileProgress = pieceProgress;
+                }
+                else
+                {
+                    fileProgress = torrent.Progress;
+                }
+            }
+
+            var isSeed = fileProgress >= 1.0;
+
+            result.Add(new Dictionary<string, object>
+            {
+                ["index"] = index,
+                ["name"] = f.Path ?? string.Empty,
+                ["size"] = f.Size,
+                ["progress"] = Math.Round(fileProgress, 4),
+                ["priority"] = 1,
+                ["is_seed"] = isSeed,
+                ["piece_range"] = new[] { f.PieceOffset, f.PieceOffset + Math.Max(0, f.PieceCount - 1) },
+            });
+        }
 
         return Ok(result);
     }
@@ -1380,6 +1524,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             var totalDl = torrents.Sum(t => t.Downloaded);
             var totalUl = torrents.Sum(t => t.Uploaded);
             var globalRatio = totalDl > 0 ? (double)totalUl / totalDl : 0.0;
+            var freeSpace = GetFreeDiskSpace(defaultPath);
 
             var serverState = new
             {
@@ -1398,7 +1543,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 alt_up_limit = (_configService?.AltUploadSpeedKbps ?? 50) * 1024,
                 connection_status = "connected",
                 dht_nodes = 0,
-                free_space_on_disk = 100L * 1024 * 1024 * 1024,
+                free_space_on_disk = freeSpace,
                 global_ratio = Math.Round(globalRatio, 2),
                 refresh_interval = 2000,
             };
@@ -1556,12 +1701,25 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     public ActionResult<Dictionary<string, object>> GetTransferInfo()
     {
         var torrents = _torrentService.GetAll();
+        var dlLimitKbps = _configService?.AlternativeSpeedEnabled == true
+            ? (_configService?.AltDownloadSpeedKbps ?? 0)
+            : (_configService?.MaxDownloadSpeedKbps ?? 0);
+        var upLimitKbps = _configService?.AlternativeSpeedEnabled == true
+            ? (_configService?.AltUploadSpeedKbps ?? 0)
+            : (_configService?.MaxUploadSpeedKbps ?? 0);
+
+        var dlRateLimit = dlLimitKbps > 0 ? dlLimitKbps * 1024 : 0;
+        var upRateLimit = upLimitKbps > 0 ? upLimitKbps * 1024 : 0;
+
         return Ok(new Dictionary<string, object>
         {
             ["dl_info_speed"] = torrents.Sum(t => t.DownloadSpeed),
             ["up_info_speed"] = torrents.Sum(t => t.UploadSpeed),
             ["dl_info_data"] = torrents.Sum(t => t.Downloaded),
             ["up_info_data"] = torrents.Sum(t => t.Uploaded),
+            ["dl_rate_limit"] = dlRateLimit,
+            ["up_rate_limit"] = upRateLimit,
+            ["dht_nodes"] = 0,
             ["connection_status"] = "connected",
         });
     }
@@ -1972,6 +2130,80 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         return 8640000;
     }
+
+    private static string ResolveTorrentFilePath(string savePath, string torrentName, string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return null;
+        }
+
+        if (Path.IsPathRooted(filePath) && global::System.IO.File.Exists(filePath))
+        {
+            return filePath;
+        }
+
+        if (!string.IsNullOrWhiteSpace(savePath))
+        {
+            if (!string.IsNullOrWhiteSpace(torrentName))
+            {
+                var combined = Path.Combine(savePath, torrentName, filePath);
+                if (global::System.IO.File.Exists(combined))
+                {
+                    return combined;
+                }
+            }
+
+            var direct = Path.Combine(savePath, filePath);
+            if (global::System.IO.File.Exists(direct))
+            {
+                return direct;
+            }
+        }
+
+        return null;
+    }
+
+    private static long GetFreeDiskSpace(string path)
+    {
+        const long fallback = 100L * 1024 * 1024 * 1024;
+
+        try
+        {
+            var targetPath = !string.IsNullOrWhiteSpace(path) ? path : "/";
+            var fullPath = Path.GetFullPath(targetPath);
+            var root = Path.GetPathRoot(fullPath);
+            if (string.IsNullOrEmpty(root))
+            {
+                root = fullPath;
+            }
+
+            var drive = new DriveInfo(root);
+            if (drive.IsReady)
+            {
+                return drive.AvailableFreeSpace;
+            }
+        }
+        catch
+        {
+            // Drive lookup failed; try current directory root or fallback.
+        }
+
+        try
+        {
+            var rootDrive = new DriveInfo(Path.GetPathRoot(Environment.CurrentDirectory) ?? "/");
+            if (rootDrive.IsReady)
+            {
+                return rootDrive.AvailableFreeSpace;
+            }
+        }
+        catch
+        {
+            // Fallback to default.
+        }
+
+        return fallback;
+    }
 }
 
 public record QBitTorrentSnapshot
@@ -2045,4 +2277,69 @@ public class QBitSessionSyncState
     public List<(string Hash, int RemovedAtRid)> RemovedTorrents { get; } = new();
     public object Lock { get; } = new();
     public DateTime LastAccessed { get; set; } = DateTime.UtcNow;
+}
+
+internal sealed class QBitDynamicPropertyComparer : IComparer<object>
+{
+    public static readonly QBitDynamicPropertyComparer Instance = new();
+
+    public int Compare(object x, object y)
+    {
+        if (ReferenceEquals(x, y))
+        {
+            return 0;
+        }
+
+        if (x == null)
+        {
+            return -1;
+        }
+
+        if (y == null)
+        {
+            return 1;
+        }
+
+        if (x is string sx && y is string sy)
+        {
+            return string.Compare(sx, sy, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (x is double dx && y is double dy)
+        {
+            return dx.CompareTo(dy);
+        }
+
+        if (x is long lx && y is long ly)
+        {
+            return lx.CompareTo(ly);
+        }
+
+        if (x is int ix && y is int iy)
+        {
+            return ix.CompareTo(iy);
+        }
+
+        if (IsNumeric(x) && IsNumeric(y))
+        {
+            return Convert.ToDouble(x).CompareTo(Convert.ToDouble(y));
+        }
+
+        if (x is IComparable compX)
+        {
+            try
+            {
+                return compX.CompareTo(y);
+            }
+            catch
+            {
+                // Fall back to string comparison.
+            }
+        }
+
+        return string.Compare(x.ToString(), y.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsNumeric(object val) =>
+        val is byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal;
 }
