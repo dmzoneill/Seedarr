@@ -464,4 +464,57 @@ public class SpeedSchedulerTest
         var limitsWeekend = _scheduler.GetLimitsAt(saturday);
         Assert.That(limitsWeekend.IsScheduleActive, Is.False);
     }
+
+    [Test]
+    public void GetLimitsAt_should_cache_enabled_schedules_across_calls()
+    {
+        _repository.GetEnabled().Returns(Enumerable.Empty<SpeedSchedule>());
+
+        _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+        _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 13, 0, 0, DateTimeKind.Utc));
+
+        _repository.Received(1).GetEnabled();
+    }
+
+    [Test]
+    public void Add_should_invalidate_cache()
+    {
+        _repository.GetEnabled().Returns(Enumerable.Empty<SpeedSchedule>());
+
+        _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+        _repository.Received(1).GetEnabled();
+
+        _scheduler.Add(new SpeedSchedule { Name = "NewSchedule" });
+
+        _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+        _repository.Received(2).GetEnabled();
+    }
+
+    [Test]
+    public void Update_should_invalidate_cache()
+    {
+        _repository.GetEnabled().Returns(Enumerable.Empty<SpeedSchedule>());
+
+        _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+        _repository.Received(1).GetEnabled();
+
+        _scheduler.Update(new SpeedSchedule { Id = 1, Name = "UpdatedSchedule" });
+
+        _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+        _repository.Received(2).GetEnabled();
+    }
+
+    [Test]
+    public void Delete_should_invalidate_cache()
+    {
+        _repository.GetEnabled().Returns(Enumerable.Empty<SpeedSchedule>());
+
+        _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+        _repository.Received(1).GetEnabled();
+
+        _scheduler.Delete(1);
+
+        _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+        _repository.Received(2).GetEnabled();
+    }
 }

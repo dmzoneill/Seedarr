@@ -341,7 +341,7 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
       >
         <h3 style={{ margin: 0, fontSize: "1.05rem" }}>Weekly Schedule View</h3>
         <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-          24-Hour Time Matrix
+          24-Hour Time Matrix (Server Time)
         </span>
       </div>
 
@@ -404,6 +404,7 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
                   return isTodayEvening || isPrevDayMorning;
                 }
               });
+              active.sort((a, b) => a.priority - b.priority);
               const top = active[0];
               return (
                 <div
