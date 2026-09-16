@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { useLogFiles, useClearLogFiles, useSystemStatus } from "../api/hooks";
+import { apiClient } from "../api/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
 
@@ -86,6 +88,8 @@ function SystemLogFiles() {
   const { data: status } = useSystemStatus();
   const clearLogFiles = useClearLogFiles();
   const queryClient = useQueryClient();
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
   const logPath = status?.appDataPath
     ? `${status.appDataPath}/logs`
@@ -96,7 +100,39 @@ function SystemLogFiles() {
   };
 
   const handleClear = () => {
-    clearLogFiles.mutate();
+    setConfirmClear(true);
+  };
+
+  const handleConfirmClear = () => {
+    clearLogFiles.mutate(undefined, {
+      onSettled: () => setConfirmClear(false),
+    });
+  };
+
+  const handleDownload = async (filename: string) => {
+    try {
+      setDownloadingFile(filename);
+      const res = await apiClient.get<Blob | { data: Blob }>(
+        `/log/file/${encodeURIComponent(filename)}`,
+        { responseType: "blob" },
+      );
+      const blob =
+        res && typeof res === "object" && "data" in res
+          ? (res as { data: Blob }).data
+          : (res as Blob);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to download log file", err);
+    } finally {
+      setDownloadingFile(null);
+    }
   };
 
   return (
@@ -278,20 +314,24 @@ function SystemLogFiles() {
                     <td>{formatRelativeTime(file.lastWriteTime)}</td>
                     <td>{formatFileSize(file.size)}</td>
                     <td style={{ textAlign: "right" }}>
-                      <a
-                        href={`/api/v1/log/file/${file.filename}`}
+                      <button
+                        type="button"
                         className="btn btn-outline btn-small"
-                        download
+                        onClick={() => handleDownload(file.filename)}
+                        disabled={downloadingFile === file.filename}
                         style={{
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.4rem",
-                          textDecoration: "none",
                         }}
                       >
                         <DownloadIcon />
-                        <span>Download</span>
-                      </a>
+                        <span>
+                          {downloadingFile === file.filename
+                            ? "Downloading..."
+                            : "Download"}
+                        </span>
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -300,6 +340,60 @@ function SystemLogFiles() {
           </div>
         )}
       </div>
+
+      {confirmClear && (
+        <div className="modal-overlay" onClick={() => setConfirmClear(false)}>
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 460,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid var(--border-light)",
+            }}
+          >
+            <h2 style={{ margin: "0 0 0.75rem", fontSize: "1.2rem" }}>
+              Clear Log Files
+            </h2>
+            <p
+              style={{
+                margin: "0 0 1.25rem",
+                color: "var(--text-secondary)",
+                fontSize: "0.9rem",
+                lineHeight: 1.4,
+              }}
+            >
+              Are you sure you want to clear log files? All non-active log files
+              will be permanently deleted from disk.
+            </p>
+            <div
+              style={{
+                display: "flex",
+                gap: "0.5rem",
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-outline btn-small"
+                onClick={() => setConfirmClear(false)}
+                disabled={clearLogFiles.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-small"
+                onClick={handleConfirmClear}
+                disabled={clearLogFiles.isPending}
+              >
+                {clearLogFiles.isPending ? "Clearing..." : "Clear Logs"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

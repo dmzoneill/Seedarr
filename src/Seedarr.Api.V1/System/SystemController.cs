@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting;
 using NzbDrone.Common.EnvironmentInfo;
@@ -323,8 +324,14 @@ public class SystemController : ControllerBase
     }
 
     [HttpPost("restart")]
+    [Authorize(Roles = "Admin")]
     public ActionResult Restart()
     {
+        if (User?.Identity?.IsAuthenticated == true && !User.IsInRole("Admin"))
+        {
+            return Forbid();
+        }
+
         global::System.Threading.Tasks.Task.Run(async () =>
         {
             await global::System.Threading.Tasks.Task.Delay(500);
@@ -335,8 +342,14 @@ public class SystemController : ControllerBase
     }
 
     [HttpPost("shutdown")]
+    [Authorize(Roles = "Admin")]
     public ActionResult Shutdown()
     {
+        if (User?.Identity?.IsAuthenticated == true && !User.IsInRole("Admin"))
+        {
+            return Forbid();
+        }
+
         global::System.Threading.Tasks.Task.Run(async () =>
         {
             await global::System.Threading.Tasks.Task.Delay(500);
