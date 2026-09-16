@@ -81,10 +81,57 @@ function mapHubState(state: HubConnectionState): ConnectionStatus {
   }
 }
 
+export function getHubUrl(): string {
+  if (typeof window === "undefined" || !window.location) {
+    return "/signalr/messages";
+  }
+
+  const pathname = window.location.pathname;
+  if (!pathname || pathname === "/") {
+    return "/signalr/messages";
+  }
+
+  // Known client-side route segments to strip in order to determine reverse proxy base path
+  const knownRoutes = [
+    "login",
+    "torrents",
+    "add-torrent",
+    "activity",
+    "history",
+    "downloadplusplus",
+    "download++",
+    "trackerboost",
+    "tracker",
+    "trackermetrics",
+    "peermap",
+    "schedule",
+    "statistics",
+    "automation",
+    "settings",
+    "system",
+    "api-docs",
+  ];
+
+  const segments = pathname.split("/").filter(Boolean);
+  const routeIndex = segments.findIndex((seg) =>
+    knownRoutes.includes(seg.toLowerCase()),
+  );
+
+  let basePath = "";
+  if (routeIndex > 0) {
+    basePath = "/" + segments.slice(0, routeIndex).join("/");
+  } else if (routeIndex === -1 && segments.length > 0) {
+    basePath = "/" + segments.join("/");
+  }
+
+  const hubUrl = `${basePath}/signalr/messages`.replace(/\/+/g, "/");
+  return hubUrl;
+}
+
 export function getSignalRConnection(): HubConnection {
   if (!connection) {
     connection = new HubConnectionBuilder()
-      .withUrl("/signalr/messages")
+      .withUrl(getHubUrl())
       .withAutomaticReconnect(new ExponentialBackoffRetryPolicy())
       .configureLogging(LogLevel.Warning)
       .build();
