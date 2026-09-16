@@ -20,6 +20,7 @@ public interface IChokeManager
     void PeerInterestedChanged(PeerConnection connection);
     void UpdatePeerActivity(PeerConnection connection);
     bool CanUnchoke(PeerConnection connection);
+    bool CanUnchoke(string infoHash);
 }
 
 public class ChokeManager : BackgroundService, IChokeManager
@@ -279,6 +280,11 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     public void PeerInterestedChanged(PeerConnection connection)
     {
+        if (connection == null)
+        {
+            return;
+        }
+
         if (connection.PeerInterested)
         {
             if (CanUnchoke(connection))
@@ -288,7 +294,12 @@ public class ChokeManager : BackgroundService, IChokeManager
         }
         else
         {
-            Choke(connection);
+            if (!connection.AmChoking)
+            {
+                connection.IsOptimisticUnchoked = false;
+                Choke(connection);
+                PromoteNextEligibleChokedPeer(connection.InfoHash);
+            }
         }
     }
 
@@ -304,20 +315,68 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     public bool CanUnchoke(PeerConnection connection)
     {
+        if (connection == null)
+        {
+            return false;
+        }
+
+        return CanUnchoke(connection.InfoHash);
+    }
+
+    public bool CanUnchoke(string infoHash)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return false;
+        }
+
         var maxUploadSlots = _configService.MaxUploadSlots;
         if (maxUploadSlots <= 0)
         {
             return true;
         }
 
-        if (string.IsNullOrEmpty(connection.InfoHash))
+        var unchokedCount = _connectionManager.GetAllConnections()
+            .Count(c => !c.AmChoking && string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+        return unchokedCount < maxUploadSlots;
+    }
+
+    private void PromoteNextEligibleChokedPeer(string infoHash)
+    {
+        if (string.IsNullOrEmpty(infoHash))
         {
-            return false;
+            return;
         }
 
-        var unchokedCount = _connectionManager.GetAllConnections()
-            .Count(c => !c.AmChoking && string.Equals(c.InfoHash, connection.InfoHash, StringComparison.OrdinalIgnoreCase));
-        return unchokedCount < maxUploadSlots;
+        lock (_lock)
+        {
+            if (!CanUnchoke(infoHash))
+            {
+                return;
+            }
+
+            var torrentConnections = _connectionManager.GetConnections(infoHash);
+            if (torrentConnections == null || torrentConnections.Count == 0)
+            {
+                torrentConnections = _connectionManager.GetAllConnections()
+                    .Where(c => string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            var nextPeer = torrentConnections
+                .Where(c => c.PeerInterested && c.AmChoking && !c.IsSnubbed)
+                .OrderByDescending(c => c.DownloadRate)
+                .ThenByDescending(c => c.UploadRate)
+                .ThenByDescending(c => c.BytesUploaded)
+                .ThenBy(c => c.ConnectedAt)
+                .FirstOrDefault();
+
+            if (nextPeer != null)
+            {
+                _logger.Debug("Immediately promoting next eligible choked peer {0}:{1} for torrent {2}", nextPeer.RemoteIp, nextPeer.RemotePort, infoHash);
+                Unchoke(nextPeer);
+            }
+        }
     }
 
     private void Unchoke(PeerConnection connection)
