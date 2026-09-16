@@ -1,67 +1,44 @@
 import { useState, useCallback } from "react";
-import { Torrent, TorrentFileInfo } from "../../api/types";
+import { Torrent } from "../../api/types";
 import { useTorrentFiles } from "../../api/hooks";
 import { formatBytes } from "../../utils/formatters";
 import { SkeletonLine } from "../../components/Skeleton";
-
-interface FileTreeNode {
-  name: string;
-  path: string;
-  size: number;
-  isDir: boolean;
-  children: FileTreeNode[];
-  fileId?: number;
-}
-
-function buildFileTree(files: TorrentFileInfo[]): FileTreeNode[] {
-  const root: FileTreeNode[] = [];
-
-  for (const file of files) {
-    const parts = file.path.split("/");
-    let current = root;
-
-    for (let i = 0; i < parts.length; i++) {
-      const part = parts[i];
-      const isLast = i === parts.length - 1;
-      let existing = current.find(
-        (n) => n.name === part && n.isDir === !isLast,
-      );
-
-      if (!existing) {
-        existing = {
-          name: part,
-          path: parts.slice(0, i + 1).join("/"),
-          size: isLast ? file.size : 0,
-          isDir: !isLast,
-          children: [],
-          fileId: isLast ? file.id : undefined,
-        };
-        current.push(existing);
-      }
-
-      if (!isLast) {
-        existing.size += file.size;
-        current = existing.children;
-      }
-    }
-  }
-
-  return root;
-}
+import {
+  FileTreeNode,
+  FilePriority,
+  buildFileTree,
+  getDescendantFileIds,
+  getDirectoryPriority,
+  formatPriority,
+} from "../../utils/fileTree";
 
 function FileTreeRow({
   node,
   depth,
   expanded,
   onToggle,
+  onDirectoryPriority,
+  onFilePriority,
+  filePriorities,
 }: {
   node: FileTreeNode;
   depth: number;
   expanded: Set<string>;
   onToggle: (path: string) => void;
+  onDirectoryPriority: (node: FileTreeNode, priority: FilePriority) => void;
+  onFilePriority: (fileId: number, priority: FilePriority) => void;
+  filePriorities: Record<number, FilePriority>;
 }) {
   const isOpen = expanded.has(node.path);
   const indent = depth * 20;
+  const dirPriority = node.isDir
+    ? getDirectoryPriority(node, filePriorities)
+    : "Normal";
+  const filePrio =
+    !node.isDir && node.fileId !== undefined
+      ? filePriorities[node.fileId] ?? node.priority ?? "Normal"
+      : "Normal";
+  const progressValue = node.progress ?? 100;
 
   return (
     <>
@@ -90,6 +67,92 @@ function FileTreeRow({
           )}
         </td>
         <td>{formatBytes(node.size)}</td>
+        <td>
+          {!node.isDir ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <div
+                style={{
+                  flex: 1,
+                  minWidth: 40,
+                  maxWidth: 70,
+                  height: 6,
+                  backgroundColor: "rgba(255, 255, 255, 0.1)",
+                  borderRadius: 3,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${progressValue}%`,
+                    height: "100%",
+                    backgroundColor: progressValue >= 100 ? "#2ecc71" : "#3498db",
+                  }}
+                />
+              </div>
+              <span style={{ fontSize: "0.75rem", minWidth: 38 }}>
+                {progressValue.toFixed(1)}%
+              </span>
+            </div>
+          ) : (
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #888)" }}>
+              —
+            </span>
+          )}
+        </td>
+        <td>
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+          >
+            {node.isDir ? (
+              <select
+                aria-label={`Priority for folder ${node.name}`}
+                className="form-control"
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "0.15rem 0.35rem",
+                  height: "auto",
+                  width: "auto",
+                  cursor: "pointer",
+                }}
+                value={dirPriority}
+                onChange={(e) =>
+                  onDirectoryPriority(node, e.target.value as FilePriority)
+                }
+              >
+                <option value="Normal">Normal</option>
+                <option value="High">High</option>
+                <option value="Do Not Download">Skip All</option>
+                {dirPriority === "Mixed" && (
+                  <option value="Mixed" disabled>
+                    Mixed
+                  </option>
+                )}
+              </select>
+            ) : (
+              <select
+                aria-label={`Priority for file ${node.name}`}
+                className="form-control"
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "0.15rem 0.35rem",
+                  height: "auto",
+                  width: "auto",
+                  cursor: "pointer",
+                }}
+                value={formatPriority(filePrio)}
+                onChange={(e) =>
+                  node.fileId !== undefined &&
+                  onFilePriority(node.fileId, e.target.value as FilePriority)
+                }
+              >
+                <option value="Normal">Normal</option>
+                <option value="High">High</option>
+                <option value="Do Not Download">Do Not Download</option>
+              </select>
+            )}
+          </div>
+        </td>
       </tr>
       {node.isDir &&
         isOpen &&
@@ -108,6 +171,9 @@ function FileTreeRow({
               depth={depth + 1}
               expanded={expanded}
               onToggle={onToggle}
+              onDirectoryPriority={onDirectoryPriority}
+              onFilePriority={onFilePriority}
+              filePriorities={filePriorities}
             />
           ))}
     </>
@@ -117,6 +183,9 @@ function FileTreeRow({
 export function FilesTab({ torrent }: { torrent: Torrent }) {
   const { data: files, isLoading, error } = useTorrentFiles(torrent.id);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [filePriorities, setFilePriorities] = useState<
+    Record<number, FilePriority>
+  >({});
 
   const toggleDir = useCallback((path: string) => {
     setExpanded((prev) => {
@@ -127,11 +196,36 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
     });
   }, []);
 
+  const handleDirectoryPriority = useCallback(
+    (dirNode: FileTreeNode, priority: FilePriority) => {
+      const ids = getDescendantFileIds(dirNode);
+      setFilePriorities((prev) => {
+        const next = { ...prev };
+        for (const id of ids) {
+          next[id] = priority;
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleFilePriority = useCallback(
+    (fileId: number, priority: FilePriority) => {
+      setFilePriorities((prev) => ({
+        ...prev,
+        [fileId]: priority,
+      }));
+    },
+    [],
+  );
+
   function expandAll() {
     if (!files) return;
     const dirs = new Set<string>();
     for (const f of files) {
-      const parts = f.path.split("/");
+      const normalized = f.path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
+      const parts = normalized.split("/").filter(Boolean);
       for (let i = 1; i < parts.length; i++) {
         dirs.add(parts.slice(0, i).join("/"));
       }
@@ -139,7 +233,17 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
     setExpanded(dirs);
   }
 
-  const tree = files ? buildFileTree(files) : [];
+  const torrentProgress =
+    torrent.status === "Seeding" || (torrent.progress ?? 0) >= 1.0
+      ? 100
+      : (torrent.progress ?? 0) * 100;
+
+  const tree = files
+    ? buildFileTree(files, {
+        priorities: filePriorities,
+        progress: torrentProgress,
+      })
+    : [];
   const hasDirectories = tree.some((n) => n.isDir);
 
   return (
@@ -183,7 +287,15 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
             <thead>
               <tr>
                 <th className="torrent-table-th">Path</th>
-                <th className="torrent-table-th">Size</th>
+                <th className="torrent-table-th" style={{ width: 100 }}>
+                  Size
+                </th>
+                <th className="torrent-table-th" style={{ width: 130 }}>
+                  Progress
+                </th>
+                <th className="torrent-table-th" style={{ width: 150 }}>
+                  Priority
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -202,6 +314,9 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
                     depth={0}
                     expanded={expanded}
                     onToggle={toggleDir}
+                    onDirectoryPriority={handleDirectoryPriority}
+                    onFilePriority={handleFilePriority}
+                    filePriorities={filePriorities}
                   />
                 ))}
             </tbody>
