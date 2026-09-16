@@ -139,6 +139,8 @@ public class TorrentFileParser : ITorrentFileParser
 
             if (info.ContainsKey("files") && info["files"] is BList files)
             {
+                var rootDirName = result.Name?.Replace('\\', '/').Trim('/', '\\');
+
                 foreach (var fileObj in files)
                 {
                     if (fileObj is not BDictionary file)
@@ -156,11 +158,20 @@ public class TorrentFileParser : ITorrentFileParser
                         throw new InvalidTorrentFileException("Malformed torrent file: file entry missing or invalid 'path'.");
                     }
 
-                    var pathParts = pathList.OfType<BString>().Select(p => p.ToString());
+                    var pathParts = pathList.OfType<BString>()
+                        .Select(p => p.ToString().Replace('\\', '/').Trim('/', '\\'))
+                        .Where(p => !string.IsNullOrWhiteSpace(p));
+
+                    var relativePath = string.Join("/", pathParts);
+                    var fullRelativePath = string.IsNullOrEmpty(rootDirName)
+                        ? relativePath
+                        : string.IsNullOrEmpty(relativePath)
+                            ? rootDirName
+                            : $"{rootDirName}/{relativePath}";
 
                     result.Files.Add(new ParsedTorrentFile
                     {
-                        Path = string.Join("/", pathParts),
+                        Path = fullRelativePath,
                         Size = fileLengthNum.Value
                     });
                 }
