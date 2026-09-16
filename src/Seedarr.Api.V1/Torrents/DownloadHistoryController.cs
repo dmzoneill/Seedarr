@@ -179,6 +179,43 @@ public class DownloadHistoryController : Controller
             }
         }
 
+        var savePath = model.SavePath;
+        var category = model.Category;
+        var downloadClientId = model.DownloadClientId;
+        var sourcePath = model.SourcePath;
+
+        if (!string.IsNullOrEmpty(model.DataJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(model.DataJson);
+                var root = doc.RootElement;
+                if (string.IsNullOrEmpty(savePath) && root.TryGetProperty("savePath", out var spProp))
+                {
+                    savePath = spProp.GetString();
+                }
+
+                if (string.IsNullOrEmpty(category) && root.TryGetProperty("category", out var catProp))
+                {
+                    category = catProp.GetString();
+                }
+
+                if (!downloadClientId.HasValue && root.TryGetProperty("downloadClientId", out var dcProp) && dcProp.TryGetInt32(out var dcId))
+                {
+                    downloadClientId = dcId;
+                }
+
+                if (string.IsNullOrEmpty(sourcePath) && root.TryGetProperty("sourcePath", out var srcProp))
+                {
+                    sourcePath = srcProp.GetString();
+                }
+            }
+            catch
+            {
+                // Ignore parse errors
+            }
+        }
+
         return new DownloadHistoryResource
         {
             Id = model.Id,
@@ -201,7 +238,11 @@ public class DownloadHistoryController : Controller
             Status = model.Status,
             RemovalReason = model.RemovalReason,
             DataJson = model.DataJson,
-            Metadata = metadata
+            Metadata = metadata,
+            SavePath = savePath,
+            Category = category,
+            DownloadClientId = downloadClientId,
+            SourcePath = sourcePath
         };
     }
 

@@ -51,6 +51,15 @@ public class Torrent : ModelBase
     public bool ForceCompleted { get; set; }
     public long SeedingTime { get; set; }
 
+    [Ignore]
+    public string MagnetUrl { get; set; }
+
+    [Ignore]
+    public string DownloadUrl { get; set; }
+
+    [Ignore]
+    public int? DownloadClientId { get; set; }
+
     /// <summary>
     /// Applies user-controllable updates while preserving engine-managed state invariants
     /// (such as Uploaded, Downloaded, Ratio, Speeds, Peer counts, and Session stats).

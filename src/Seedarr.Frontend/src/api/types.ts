@@ -887,6 +887,10 @@ export interface DownloadHistoryEntry {
   removalReason: string | null;
   dataJson: string | null;
   metadata?: MediaMetadata | null;
+  savePath?: string | null;
+  category?: string | null;
+  downloadClientId?: number | null;
+  sourcePath?: string | null;
 }
 
 export interface ReleaseInfo {
