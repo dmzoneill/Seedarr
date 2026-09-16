@@ -1,16 +1,18 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import {
   useTags,
   useCreateTag,
   useUpdateTag,
   useDeleteTag,
   useTorrents,
+  useCategories,
 } from "../api/hooks";
 import type { Tag } from "../api/types";
 
 function Tags() {
   const { data: tags, isLoading, isError } = useTags();
   const { data: torrents } = useTorrents();
+  const { data: categories } = useCategories();
   const createTag = useCreateTag();
   const updateTag = useUpdateTag();
   const deleteTag = useDeleteTag();
@@ -19,16 +21,29 @@ function Tags() {
   const [newLabel, setNewLabel] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [deletingTag, setDeletingTag] = useState<Tag | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
-  const tagUsageCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    if (torrents) {
-      for (const t of torrents) {
-        if (t.label) counts[t.label] = (counts[t.label] ?? 0) + 1;
+  const getTagUsageCount = (tag: Tag) => {
+    if (!torrents) return 0;
+    let count = 0;
+    for (const t of torrents) {
+      if (selectedCategory !== "All") {
+        const cat = t.category?.trim() || "Uncategorized";
+        if (cat !== selectedCategory) continue;
+      }
+      const hasTagId = t.tagIds?.includes(tag.id);
+      const hasLabel = t.label
+        ? t.label
+            .split(",")
+            .map((s) => s.trim().toLowerCase())
+            .includes(tag.label.toLowerCase())
+        : false;
+      if (hasTagId || hasLabel) {
+        count++;
       }
     }
-    return counts;
-  }, [torrents]);
+    return count;
+  };
 
   function handleCreate() {
     if (!newLabel.trim()) return;
@@ -103,6 +118,28 @@ function Tags() {
         </div>
 
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          {categories && categories.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <label htmlFor="category-filter" style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                Category:
+              </label>
+              <select
+                id="category-filter"
+                className="form-input"
+                style={{ padding: "0.35rem 0.6rem", fontSize: "0.85rem", height: "auto" }}
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+              >
+                <option value="All">All Categories</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.name}>
+                    {c.name}
+                  </option>
+                ))}
+                <option value="Uncategorized">Uncategorized</option>
+              </select>
+            </div>
+          )}
           <button
             className="btn btn-primary"
             onClick={() => setShowAdd(true)}
@@ -235,7 +272,7 @@ function Tags() {
                       </td>
                       <td>
                         <span style={{ fontWeight: 600 }}>
-                          {tagUsageCounts[tag.label] ?? 0}
+                          {getTagUsageCount(tag)}
                         </span>{" "}
                         <span
                           style={{
@@ -243,7 +280,9 @@ function Tags() {
                             fontSize: "0.8rem",
                           }}
                         >
-                          torrents
+                          {selectedCategory !== "All"
+                            ? `torrents (${selectedCategory})`
+                            : "torrents"}
                         </span>
                       </td>
                       <td style={{ textAlign: "right" }}>
@@ -340,10 +379,10 @@ function Tags() {
               }}
             >
               Are you sure you want to delete tag <strong>{deletingTag.label}</strong>?
-              {tagUsageCounts[deletingTag.label] ? (
+              {getTagUsageCount(deletingTag) ? (
                 <>
                   <br />
-                  Currently assigned to <strong>{tagUsageCounts[deletingTag.label]}</strong> {tagUsageCounts[deletingTag.label] === 1 ? "torrent" : "torrents"}.
+                  Currently assigned to <strong>{getTagUsageCount(deletingTag)}</strong> {getTagUsageCount(deletingTag) === 1 ? "torrent" : "torrents"}.
                 </>
               ) : (
                 <>

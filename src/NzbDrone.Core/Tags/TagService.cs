@@ -19,15 +19,6 @@ using Polly.Retry;
 
 namespace NzbDrone.Core.Tags;
 
-public interface ITagService
-{
-    List<Tag> GetAll();
-    Tag Get(int id);
-    Tag Add(Tag tag);
-    Tag Update(Tag tag);
-    void Delete(int id);
-}
-
 public class TagService : ITagService
 {
     private static readonly RetryPolicy RetryPolicy = Policy
@@ -123,6 +114,92 @@ public class TagService : ITagService
         {
             _eventAggregator.PublishEvent(new ModelEvent<Tag>(tag, ModelAction.Deleted));
         }
+    }
+
+    public List<int> SyncTagsFromLabels(IEnumerable<string> labels)
+    {
+        if (labels == null)
+        {
+            return new List<int>();
+        }
+
+        var candidateLabels = new List<string>();
+        foreach (var raw in labels)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                continue;
+            }
+
+            var parts = raw.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                var trimmed = part.Trim();
+                if (!string.IsNullOrWhiteSpace(trimmed))
+                {
+                    candidateLabels.Add(trimmed);
+                }
+            }
+        }
+
+        if (candidateLabels.Count == 0)
+        {
+            return new List<int>();
+        }
+
+        var allTags = GetAll();
+        var tagMap = new Dictionary<string, Tag>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tag in allTags)
+        {
+            if (!string.IsNullOrWhiteSpace(tag.Label) && !tagMap.ContainsKey(tag.Label))
+            {
+                tagMap[tag.Label] = tag;
+            }
+        }
+
+        var resultIds = new List<int>();
+        foreach (var label in candidateLabels)
+        {
+            if (!tagMap.TryGetValue(label, out var tag))
+            {
+                tag = Add(new Tag { Label = label });
+                tagMap[label] = tag;
+            }
+
+            if (!resultIds.Contains(tag.Id))
+            {
+                resultIds.Add(tag.Id);
+            }
+        }
+
+        return resultIds;
+    }
+
+    public List<string> GetLabelsForTagIds(IEnumerable<int> tagIds)
+    {
+        if (tagIds == null)
+        {
+            return new List<string>();
+        }
+
+        var idList = tagIds.Distinct().ToList();
+        if (idList.Count == 0)
+        {
+            return new List<string>();
+        }
+
+        var allTags = GetAll().ToDictionary(t => t.Id);
+        var labels = new List<string>();
+
+        foreach (var id in idList)
+        {
+            if (allTags.TryGetValue(id, out var tag) && !string.IsNullOrWhiteSpace(tag.Label))
+            {
+                labels.Add(tag.Label);
+            }
+        }
+
+        return labels;
     }
 
     private void DeleteCascadingTransactional(int id)

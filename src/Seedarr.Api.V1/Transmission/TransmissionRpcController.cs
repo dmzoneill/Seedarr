@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http.Security;
 
@@ -56,6 +57,7 @@ public class TransmissionRpcController : ControllerBase
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly IConfigService _configService;
     private readonly IConfigFileProvider _configFileProvider;
+    private readonly ITagService _tagService;
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
 
@@ -114,6 +116,7 @@ public class TransmissionRpcController : ControllerBase
         ITrackerEntryService trackerEntryService,
         IConfigService configService,
         IConfigFileProvider configFileProvider = null,
+        ITagService tagService = null,
         HttpClient httpClient = null)
     {
         _torrentService = torrentService;
@@ -123,6 +126,7 @@ public class TransmissionRpcController : ControllerBase
         _trackerEntryService = trackerEntryService;
         _configService = configService;
         _configFileProvider = configFileProvider;
+        _tagService = tagService;
         _httpClient = httpClient ?? new HttpClient();
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -430,6 +434,15 @@ public class TransmissionRpcController : ControllerBase
                     if (lbls.Count > 0)
                     {
                         t.Label = string.Join(",", lbls);
+                        if (_tagService != null)
+                        {
+                            t.TagIds = _tagService.SyncTagsFromLabels(lbls);
+                        }
+                    }
+                    else
+                    {
+                        t.Label = string.Empty;
+                        t.TagIds = new List<int>();
                     }
                 }
 
@@ -618,6 +631,11 @@ public class TransmissionRpcController : ControllerBase
                 if (labels != null && labels.Count > 0)
                 {
                     added.Label = string.Join(",", labels);
+                    if (_tagService != null)
+                    {
+                        added.TagIds = _tagService.SyncTagsFromLabels(labels);
+                    }
+
                     needsUpdate = true;
                 }
 

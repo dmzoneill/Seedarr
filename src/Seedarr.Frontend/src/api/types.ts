@@ -53,6 +53,7 @@ export interface Torrent {
   rating?: number | null;
   genres?: string[];
   trackers?: string[];
+  tagIds?: number[];
   source?: string | null;
 }
 

@@ -591,6 +591,16 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         if (!string.IsNullOrWhiteSpace(request.Tags))
         {
             added.Label = request.Tags;
+            if (_tagService != null)
+            {
+                added.TagIds = _tagService.SyncTagsFromLabels(new[] { request.Tags });
+                var labels = _tagService.GetLabelsForTagIds(added.TagIds);
+                if (labels.Count > 0)
+                {
+                    added.Label = string.Join(", ", labels);
+                }
+            }
+
             needsUpdate = true;
         }
 
@@ -1020,16 +1030,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         if (!string.IsNullOrWhiteSpace(tags) && _tagService != null)
         {
             var tagList = tags.Split(',', StringSplitOptions.RemoveEmptyEntries);
-            var existingTags = _tagService.GetAll().Select(x => x.Label).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            foreach (var t in tagList)
-            {
-                var trimmed = t.Trim();
-                if (!string.IsNullOrWhiteSpace(trimmed) && !existingTags.Contains(trimmed))
-                {
-                    _tagService.Add(new Tag { Label = trimmed });
-                    existingTags.Add(trimmed);
-                }
-            }
+            _tagService.SyncTagsFromLabels(tagList);
         }
 
         return Content("Ok.", "text/plain");
@@ -1070,6 +1071,11 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             }
 
             torrent.Label = string.Join(", ", currentTags);
+            if (_tagService != null)
+            {
+                torrent.TagIds = _tagService.SyncTagsFromLabels(currentTags);
+            }
+
             _torrentService.Update(torrent);
         }
 
@@ -1087,18 +1093,24 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
             foreach (var torrent in ResolveTorrents(hashes))
             {
-                if (!string.IsNullOrEmpty(torrent.Label))
+                if (!string.IsNullOrEmpty(torrent.Label) || (torrent.TagIds != null && torrent.TagIds.Count > 0))
                 {
                     if (tagsToRemove.Count == 0)
                     {
                         torrent.Label = string.Empty;
+                        torrent.TagIds = new List<int>();
                     }
                     else
                     {
-                        var remaining = torrent.Label.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                        var remaining = (torrent.Label ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries)
                             .Select(t => t.Trim())
-                            .Where(t => !tagsToRemove.Contains(t));
+                            .Where(t => !tagsToRemove.Contains(t))
+                            .ToList();
                         torrent.Label = string.Join(", ", remaining);
+                        if (_tagService != null)
+                        {
+                            torrent.TagIds = _tagService.SyncTagsFromLabels(remaining);
+                        }
                     }
 
                     _torrentService.Update(torrent);
@@ -1121,12 +1133,18 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             var all = _torrentService.GetAll();
             foreach (var torrent in all)
             {
-                if (!string.IsNullOrEmpty(torrent.Label))
+                if (!string.IsNullOrEmpty(torrent.Label) || (torrent.TagIds != null && torrent.TagIds.Count > 0))
                 {
-                    var remaining = torrent.Label.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    var remaining = (torrent.Label ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries)
                         .Select(t => t.Trim())
-                        .Where(t => !tagsToDelete.Contains(t));
+                        .Where(t => !tagsToDelete.Contains(t))
+                        .ToList();
                     torrent.Label = string.Join(", ", remaining);
+                    if (_tagService != null)
+                    {
+                        torrent.TagIds = _tagService.SyncTagsFromLabels(remaining);
+                    }
+
                     _torrentService.Update(torrent);
                 }
             }

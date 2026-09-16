@@ -214,4 +214,27 @@ public class QBittorrentApiControllerTest
         Assert.That(dict.ContainsKey("torrents"), Is.True);
         Assert.That(dict.ContainsKey("server_state"), Is.True);
     }
+
+    [Test]
+    public void AddTags_sets_both_TagIds_and_Label()
+    {
+        var torrent = new Torrent
+        {
+            Id = 10,
+            InfoHash = "testhash",
+            Label = "Existing",
+            TagIds = new List<int> { 1 }
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _tagService.SyncTagsFromLabels(Arg.Any<IEnumerable<string>>())
+            .Returns(new List<int> { 1, 2 });
+
+        var result = _controller.AddTags("testhash", "NewTag");
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        Assert.That(torrent.Label, Is.EqualTo("Existing, NewTag"));
+        Assert.That(torrent.TagIds, Is.EqualTo(new List<int> { 1, 2 }));
+        _torrentService.Received(1).Update(torrent);
+    }
 }

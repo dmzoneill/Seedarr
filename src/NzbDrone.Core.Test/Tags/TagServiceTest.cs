@@ -402,4 +402,64 @@ public class TagServiceTest
 
         _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<ModelEvent<Tag>>());
     }
+
+    [Test]
+    public void SyncTagsFromLabels_should_resolve_existing_tags_and_insert_missing_tags()
+    {
+        var existingTags = new List<Tag>
+        {
+            new() { Id = 1, Label = "Action" },
+            new() { Id = 2, Label = "comedy" }
+        };
+        _repo.All().Returns(existingTags);
+
+        var nextId = 10;
+        _repo.Insert(Arg.Any<Tag>()).Returns(ci =>
+        {
+            var t = ci.Arg<Tag>();
+            var newTag = new Tag { Id = nextId++, Label = t.Label };
+            existingTags.Add(newTag);
+            return newTag;
+        });
+
+        var result = _subject.SyncTagsFromLabels(new[] { "action", "COMEDY", "Drama", "Sci-Fi, Horror", "", null, "   " });
+
+        Assert.That(result, Is.EqualTo(new List<int> { 1, 2, 10, 11, 12 }));
+        _repo.Received(3).Insert(Arg.Any<Tag>());
+    }
+
+    [Test]
+    public void SyncTagsFromLabels_should_return_empty_for_null_or_empty_input()
+    {
+        Assert.That(_subject.SyncTagsFromLabels(null), Is.Empty);
+        Assert.That(_subject.SyncTagsFromLabels(new List<string>()), Is.Empty);
+        Assert.That(_subject.SyncTagsFromLabels(new[] { "", "   ", null }), Is.Empty);
+    }
+
+    [Test]
+    public void GetLabelsForTagIds_should_return_corresponding_labels_in_order()
+    {
+        _repo.All().Returns(new List<Tag>
+        {
+            new() { Id = 1, Label = "4K" },
+            new() { Id = 2, Label = "Anime" },
+            new() { Id = 3, Label = "HDR" }
+        });
+
+        var result = _subject.GetLabelsForTagIds(new[] { 3, 1 });
+
+        Assert.That(result, Is.EqualTo(new List<string> { "HDR", "4K" }));
+    }
+
+    [Test]
+    public void GetLabelsForTagIds_should_ignore_unknown_ids_and_return_empty_for_null()
+    {
+        _repo.All().Returns(new List<Tag>
+        {
+            new() { Id = 1, Label = "4K" }
+        });
+
+        Assert.That(_subject.GetLabelsForTagIds(null), Is.Empty);
+        Assert.That(_subject.GetLabelsForTagIds(new[] { 999 }), Is.Empty);
+    }
 }
