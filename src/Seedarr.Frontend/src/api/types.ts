@@ -232,6 +232,15 @@ export interface NetworkStatus {
   portMappings: PortMapping[];
 }
 
+export interface NetworkInterfaceResource {
+  name: string;
+  description: string;
+  type: string; // Physical, Wireless, Tunnel, Virtual
+  status: string; // Up, Down, Testing
+  addresses: string[];
+  isVpn: boolean;
+}
+
 export interface PortMapping {
   internalPort: number;
   externalPort: number;
