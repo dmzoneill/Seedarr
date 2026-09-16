@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
@@ -42,6 +43,7 @@ public class MediaEnrichmentServiceTest
 
         _appFolderInfo.AppDataFolder.Returns(_tempDirectory);
         _configService.AutoPruneRemovedArtwork.Returns(true);
+        _repository.Upsert(Arg.Any<TorrentMediaMetadata>()).Returns(x => x.Arg<TorrentMediaMetadata>());
 
         _service = new MediaEnrichmentService(
             _repository,
@@ -107,7 +109,9 @@ public class MediaEnrichmentServiceTest
         Assert.That(result.TorrentId, Is.EqualTo(42));
         Assert.That(result.Title, Is.EqualTo(name));
         Assert.That(result.ArrType, Is.EqualTo(expectedArrType));
-        _repository.Received(1).Insert(result);
+        _repository.Received(1).Upsert(result);
+        _repository.DidNotReceive().Insert(Arg.Any<TorrentMediaMetadata>());
+        _repository.DidNotReceive().Update(Arg.Any<TorrentMediaMetadata>());
         _eventAggregator.Received(1).PublishEvent(Arg.Is<MediaEnrichedEvent>(e => e.TorrentId == 42));
     }
 
@@ -133,9 +137,33 @@ public class MediaEnrichmentServiceTest
         var result = await _service.EnrichTorrentAsync(torrent);
 
         Assert.That(result, Is.SameAs(existing));
-        _repository.Received(1).Update(existing);
+        _repository.Received(1).Upsert(existing);
         _repository.DidNotReceive().Insert(Arg.Any<TorrentMediaMetadata>());
+        _repository.DidNotReceive().Update(Arg.Any<TorrentMediaMetadata>());
         _eventAggregator.Received(1).PublishEvent(Arg.Is<MediaEnrichedEvent>(e => e.TorrentId == 10));
+    }
+
+    [Test]
+    public async Task EnrichTorrentAsync_ConcurrentCallsForSameTorrent_CompleteSuccessfullyAndUpsertMetadata()
+    {
+        var torrent = new Torrent
+        {
+            Id = 55,
+            Name = "Concurrent.Movie.2024.1080p",
+            Label = "movies",
+        };
+
+        var tasks = System.Linq.Enumerable.Range(0, 10).Select(_ => _service.EnrichTorrentAsync(torrent));
+        var results = await Task.WhenAll(tasks);
+
+        Assert.That(results, Has.Length.EqualTo(10));
+        foreach (var r in results)
+        {
+            Assert.That(r, Is.Not.Null);
+            Assert.That(r.TorrentId, Is.EqualTo(55));
+        }
+
+        _repository.Received().Upsert(Arg.Is<TorrentMediaMetadata>(m => m.TorrentId == 55));
     }
 
     [Test]
