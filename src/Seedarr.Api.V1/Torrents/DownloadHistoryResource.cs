@@ -30,4 +30,5 @@ public class DownloadHistoryResource : RestResource
     public string Category { get; set; }
     public int? DownloadClientId { get; set; }
     public string SourcePath { get; set; }
+    public bool? IsPrivate { get; set; }
 }

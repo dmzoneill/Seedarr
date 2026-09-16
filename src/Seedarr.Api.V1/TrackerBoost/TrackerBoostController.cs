@@ -125,9 +125,9 @@ public class TrackerBoostController : Controller
     }
 
     [HttpPost("boost-hash/{infoHash}")]
-    public async Task<IActionResult> BoostHash(string infoHash, [FromQuery] string name = "", [FromQuery] bool onlyVerified = true)
+    public async Task<IActionResult> BoostHash(string infoHash, [FromQuery] string name = "", [FromQuery] bool onlyVerified = true, [FromQuery] bool force = false)
     {
-        var result = await _trackerBoostService.BoostHashAsync(infoHash, name, onlyVerified);
+        var result = await _trackerBoostService.BoostHashAsync(infoHash, name, onlyVerified, force);
         return Ok(result);
     }
 
@@ -190,5 +190,5 @@ public class InjectTrackerResource
     public int TorrentId { get; set; }
     public string InfoHash { get; set; } = string.Empty;
     public string TrackerUrl { get; set; } = string.Empty;
-    public bool Force { get; set; } = true;
+    public bool Force { get; set; }
 }

@@ -36,4 +36,7 @@ public class DownloadHistory : ModelBase
 
     [Ignore]
     public string SourcePath { get; set; }
+
+    [Ignore]
+    public bool? IsPrivate { get; set; }
 }

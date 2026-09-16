@@ -38,7 +38,8 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
         if (string.IsNullOrEmpty(entry.SavePath) &&
             string.IsNullOrEmpty(entry.Category) &&
             !entry.DownloadClientId.HasValue &&
-            string.IsNullOrEmpty(entry.SourcePath))
+            string.IsNullOrEmpty(entry.SourcePath) &&
+            !entry.IsPrivate.HasValue)
         {
             return;
         }
@@ -73,6 +74,11 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
             if (entry.DownloadClientId.HasValue && !dict.ContainsKey("downloadClientId"))
             {
                 dict["downloadClientId"] = entry.DownloadClientId.Value;
+            }
+
+            if (entry.IsPrivate.HasValue && !dict.ContainsKey("isPrivate"))
+            {
+                dict["isPrivate"] = entry.IsPrivate.Value;
             }
 
             entry.DataJson = JsonSerializer.Serialize(dict);
@@ -112,6 +118,12 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
             if (!entry.DownloadClientId.HasValue && root.TryGetProperty("downloadClientId", out var dcProp) && dcProp.TryGetInt32(out var dcId))
             {
                 entry.DownloadClientId = dcId;
+            }
+
+            if (!entry.IsPrivate.HasValue && root.TryGetProperty("isPrivate", out var privProp) &&
+                (privProp.ValueKind == JsonValueKind.True || privProp.ValueKind == JsonValueKind.False))
+            {
+                entry.IsPrivate = privProp.GetBoolean();
             }
         }
         catch
@@ -242,6 +254,7 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
             Category = torrent.Category,
             DownloadClientId = torrent.DownloadClientId,
             SourcePath = torrent.SourcePath,
+            IsPrivate = torrent.IsPrivate,
             Status = "Active"
         };
 
@@ -342,7 +355,8 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
                 DownloadClientId = torrent.DownloadClientId,
                 SourcePath = torrent.SourcePath,
                 MagnetUrl = torrent.MagnetUrl,
-                DownloadUrl = torrent.DownloadUrl
+                DownloadUrl = torrent.DownloadUrl,
+                IsPrivate = torrent.IsPrivate
             };
 
             EnrichDataJson(entry);
@@ -352,6 +366,7 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
 
         entry.TorrentId = null;
         entry.DateRemoved = DateTime.UtcNow;
+        entry.IsPrivate ??= torrent.IsPrivate;
         entry.Uploaded = torrent.Uploaded;
         entry.Downloaded = torrent.Downloaded;
         entry.Ratio = torrent.Ratio;
@@ -582,7 +597,8 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
                     DownloadClientId = torrent.DownloadClientId,
                     SourcePath = torrent.SourcePath,
                     MagnetUrl = torrent.MagnetUrl,
-                    DownloadUrl = torrent.DownloadUrl
+                    DownloadUrl = torrent.DownloadUrl,
+                    IsPrivate = torrent.IsPrivate
                 };
 
                 EnrichDataJson(entry);

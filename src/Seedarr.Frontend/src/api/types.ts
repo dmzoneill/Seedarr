@@ -905,6 +905,7 @@ export interface DownloadHistoryEntry {
   category?: string | null;
   downloadClientId?: number | null;
   sourcePath?: string | null;
+  isPrivate?: boolean;
 }
 
 export interface ReleaseInfo {
