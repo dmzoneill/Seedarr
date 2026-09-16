@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Net;
 using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Automation;
@@ -45,18 +46,50 @@ public class ScriptApiContext
         return _http.delete(url, opts);
     }
 
-    private string BuildApiUrl(string path)
+    public string BuildApiUrl(string path)
     {
-        var port = _configFileProvider?.Port ?? 7070;
-        var urlBase = _configFileProvider?.UrlBase?.TrimEnd('/') ?? string.Empty;
-        var cleanPath = path?.TrimStart('/') ?? string.Empty;
+        var isSsl = _configFileProvider?.EnableSsl == true && (_configFileProvider?.SslPort ?? 0) > 0;
+        var scheme = isSsl ? "https" : "http";
+        var port = isSsl
+            ? _configFileProvider!.SslPort
+            : (_configFileProvider?.Port > 0 ? _configFileProvider.Port : 8096);
 
+        var host = "127.0.0.1";
+        var bindAddress = _configFileProvider?.BindAddress?.Trim();
+        if (!string.IsNullOrEmpty(bindAddress) &&
+            bindAddress != "*" &&
+            bindAddress != "0.0.0.0" &&
+            bindAddress != "::")
+        {
+            if (bindAddress.StartsWith('[') && bindAddress.EndsWith(']'))
+            {
+                host = bindAddress;
+            }
+            else if (IPAddress.TryParse(bindAddress, out var parsedIp))
+            {
+                host = parsedIp.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6
+                    ? $"[{parsedIp}]"
+                    : parsedIp.ToString();
+            }
+            else
+            {
+                host = bindAddress;
+            }
+        }
+
+        var urlBase = _configFileProvider?.UrlBase?.TrimEnd('/') ?? string.Empty;
+        if (!string.IsNullOrEmpty(urlBase) && !urlBase.StartsWith('/'))
+        {
+            urlBase = "/" + urlBase;
+        }
+
+        var cleanPath = path?.TrimStart('/') ?? string.Empty;
         if (cleanPath.StartsWith("api/v1/", StringComparison.OrdinalIgnoreCase))
         {
             cleanPath = cleanPath.Substring(7);
         }
 
-        return $"http://127.0.0.1:{port}{urlBase}/api/v1/{cleanPath}";
+        return $"{scheme}://{host}:{port}{urlBase}/api/v1/{cleanPath}";
     }
 
     private IDictionary<string, object> AttachAuthHeaders(object? options)
