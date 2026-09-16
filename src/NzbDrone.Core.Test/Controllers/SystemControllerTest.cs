@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
@@ -9,6 +11,8 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Datastore.Migration;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
 using Seedarr.Api.V1.System;
@@ -147,5 +151,119 @@ public class SystemControllerTest
         var result = _controller.Shutdown();
 
         Assert.That(result, Is.InstanceOf<OkObjectResult>());
+    }
+
+    [Test]
+    public void GetStatus_reports_PostgreSQL_when_mainDatabase_is_PostgreSQL()
+    {
+        var mainDatabase = Substitute.For<IMainDatabase>();
+        mainDatabase.DatabaseType.Returns(DatabaseType.PostgreSQL);
+
+        var controller = new SystemController(
+            _taskManager,
+            new List<IScheduledTask>(),
+            _commandQueueManager,
+            _appFolderInfo,
+            _lifetime,
+            _configService,
+            mainDatabase);
+
+        var actionResult = controller.GetStatus();
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SystemResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.DatabaseVersion, Is.EqualTo("PostgreSQL"));
+    }
+
+    [Test]
+    public void GetStatus_reports_SQLite_when_mainDatabase_is_SQLite()
+    {
+        var mainDatabase = Substitute.For<IMainDatabase>();
+        mainDatabase.DatabaseType.Returns(DatabaseType.SQLite);
+
+        var controller = new SystemController(
+            _taskManager,
+            new List<IScheduledTask>(),
+            _commandQueueManager,
+            _appFolderInfo,
+            _lifetime,
+            _configService,
+            mainDatabase);
+
+        var actionResult = controller.GetStatus();
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SystemResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.DatabaseVersion, Is.EqualTo("SQLite"));
+    }
+
+    [Test]
+    public void GetStatus_reports_SQLite_when_mainDatabase_is_null()
+    {
+        var actionResult = _controller.GetStatus();
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SystemResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.DatabaseVersion, Is.EqualTo("SQLite"));
+    }
+
+    [Test]
+    public void GetStatus_queries_applied_migration_version_dynamically()
+    {
+        var mainDatabase = Substitute.For<IMainDatabase>();
+        var connection = Substitute.For<IDbConnection>();
+        var command = Substitute.For<IDbCommand>();
+
+        mainDatabase.OpenConnection().Returns(connection);
+        connection.CreateCommand().Returns(command);
+        command.ExecuteScalar().Returns(42L);
+
+        var controller = new SystemController(
+            _taskManager,
+            new List<IScheduledTask>(),
+            _commandQueueManager,
+            _appFolderInfo,
+            _lifetime,
+            _configService,
+            mainDatabase);
+
+        var actionResult = controller.GetStatus();
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SystemResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.DatabaseMigration, Is.EqualTo("42"));
+        Assert.That(command.CommandText, Does.Contain("VersionInfo"));
+    }
+
+    [Test]
+    public void GetStatus_falls_back_to_latest_migration_when_query_fails()
+    {
+        var mainDatabase = Substitute.For<IMainDatabase>();
+        mainDatabase.OpenConnection().Returns(_ => throw new InvalidOperationException("Connection failed"));
+
+        var controller = new SystemController(
+            _taskManager,
+            new List<IScheduledTask>(),
+            _commandQueueManager,
+            _appFolderInfo,
+            _lifetime,
+            _configService,
+            mainDatabase);
+
+        var actionResult = controller.GetStatus();
+
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var status = okResult.Value as SystemResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.DatabaseMigration, Is.EqualTo(NzbDroneMigrationBase.LatestMigration.ToString()));
     }
 }
