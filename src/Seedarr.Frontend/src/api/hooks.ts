@@ -172,6 +172,29 @@ export function useAddTorrentTracker() {
   });
 }
 
+export function useUpdateTorrentTracker() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    TrackerEntry,
+    Error,
+    { torrentId: number; trackerId: number; tier?: number; enabled?: boolean }
+  >({
+    mutationFn: ({ torrentId, trackerId, tier, enabled }) =>
+      apiClient.put(`/torrent/${torrentId}/trackers/${trackerId}`, {
+        tier,
+        enabled,
+      }),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ["torrents", vars.torrentId, "trackers"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
+    },
+  });
+}
+
+
 export function useTorrentLogs(
   torrentId: number,
   options?: { polling?: boolean },
