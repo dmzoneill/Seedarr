@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Indexers;
@@ -16,7 +17,7 @@ public interface IDownloadClientSyncService
     SyncResult ImportTorrents(int clientId, List<string> infoHashes);
 }
 
-public class DownloadClientSyncService : IDownloadClientSyncService
+public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 {
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly IIndexerFactory _indexerFactory;
@@ -24,6 +25,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService
     private readonly ITorrentFileParser _torrentFileParser;
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly ITorrentFileService _torrentFileService;
+    private readonly SemaphoreSlim _syncLock = new(1, 1);
     private readonly Logger _logger;
 
     public DownloadClientSyncService(
@@ -45,118 +47,203 @@ public class DownloadClientSyncService : IDownloadClientSyncService
 
     public SyncResult Sync()
     {
-        var result = new SyncResult();
-        var existingHashes = new HashSet<string>(
-            _torrentService.GetAll()
-                .Where(t => !string.IsNullOrEmpty(t.InfoHash))
-                .Select(t => t.InfoHash.ToLowerInvariant()),
-            StringComparer.OrdinalIgnoreCase);
-
-        var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
-
-        foreach (var definition in clients)
+        _syncLock.Wait();
+        try
         {
-            var provider = CreateClient(definition);
-            if (provider == null)
-            {
-                continue;
-            }
+            var result = new SyncResult();
+            var existingTorrents = _torrentService.GetAll()
+                .Where(t => !string.IsNullOrEmpty(t.InfoHash))
+                .GroupBy(t => t.InfoHash.ToLowerInvariant())
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
-            try
+            var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+
+            foreach (var definition in clients)
             {
-                var items = provider.GetItems();
-                foreach (var item in items)
+                var provider = CreateClient(definition);
+                if (provider == null)
                 {
-                    if (string.IsNullOrEmpty(item.InfoHash))
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    var hash = item.InfoHash.ToLowerInvariant();
-                    if (existingHashes.Contains(hash))
+                try
+                {
+                    var items = provider.GetItems();
+                    foreach (var item in items)
                     {
-                        result.Skipped++;
-                        continue;
-                    }
-
-                    // Query indexers or get from client
-                    byte[] torrentBytes = null;
-
-                    try
-                    {
-                        torrentBytes = provider.GetTorrentFile(hash);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Debug(ex, "Failed to get torrent file from client for {0}", hash);
-                    }
-
-                    if (torrentBytes == null || torrentBytes.Length == 0)
-                    {
-                        torrentBytes = SearchIndexersForTorrent(hash);
-                    }
-
-                    if (torrentBytes != null && torrentBytes.Length > 0)
-                    {
-                        using var ms = new System.IO.MemoryStream(torrentBytes);
-                        var parsed = _torrentFileParser.Parse(ms);
-
-                        var torrent = new Torrent
+                        if (string.IsNullOrEmpty(item.InfoHash))
                         {
-                            Name = parsed.Name ?? item.Title,
-                            InfoHash = hash,
-                            TotalSize = parsed.TotalSize,
-                            PieceCount = parsed.PieceCount,
-                            PieceLength = parsed.PieceLength,
-                            Comment = parsed.Comment,
-                            IsPrivate = parsed.IsPrivate,
-                            TrackerUrl = parsed.AnnounceUrl,
-                            DateAdded = DateTime.UtcNow,
-                            Status = TorrentStatus.Stopped
-                        };
+                            continue;
+                        }
 
-                        _torrentService.Add(torrent);
-                        SaveParsedTrackersAndFiles(torrent.Id, parsed);
-
-                        existingHashes.Add(hash);
-                        result.Added++;
-                        _logger.Info("Synced torrent {0} from download client {1}", torrent.Name, definition.Name);
-                    }
-                    else if (item != null)
-                    {
-                        var clientTrackers = provider.GetTrackers(hash);
-                        var torrent = new Torrent
+                        var hash = item.InfoHash.ToLowerInvariant();
+                        if (existingTorrents.TryGetValue(hash, out var torrent))
                         {
-                            Name = !string.IsNullOrEmpty(item.Title) ? item.Title : hash,
-                            InfoHash = hash,
-                            TotalSize = item.TotalSize,
-                            TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
-                            DateAdded = DateTime.UtcNow,
-                            Status = TorrentStatus.Stopped
-                        };
+                            var total = item.TotalSize > 0 ? item.TotalSize : torrent.TotalSize;
+                            var remaining = item.RemainingSize;
+                            var downloaded = Math.Max(0, total - remaining);
 
-                        _torrentService.Add(torrent);
-                        SaveClientTrackers(torrent.Id, clientTrackers);
+                            torrent.TotalSize = total;
+                            torrent.Downloaded = downloaded;
+                            if (total > 0)
+                            {
+                                torrent.Progress = Math.Round((double)downloaded / total, 6);
+                            }
+                            else if (remaining == 0)
+                            {
+                                torrent.Progress = 1.0;
+                            }
 
-                        existingHashes.Add(hash);
-                        result.Added++;
-                        _logger.Info("Synced torrent {0} (client metadata) from download client {1}", torrent.Name, definition.Name);
-                    }
-                    else
-                    {
-                        _logger.Warn("Could not fetch torrent data for {0} ({1}). Seedarr cannot sync it.", item.Title, hash);
-                        result.Failed++;
+                            if (remaining == 0)
+                            {
+                                torrent.MarkForceCompleted();
+                            }
+
+                            torrent.Status = MapClientStatus(item.Status, remaining, total);
+
+                            if (!string.IsNullOrWhiteSpace(item.Category))
+                            {
+                                torrent.Category = item.Category;
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(item.OutputPath))
+                            {
+                                if (string.IsNullOrEmpty(torrent.SavePath))
+                                {
+                                    torrent.SavePath = item.OutputPath;
+                                }
+
+                                if (string.IsNullOrEmpty(torrent.SourcePath))
+                                {
+                                    torrent.SourcePath = item.OutputPath;
+                                }
+                            }
+
+                            torrent.UpdateRatio();
+                            _torrentService.Update(torrent);
+                            result.Skipped++;
+                            continue;
+                        }
+
+                        // Query indexers or get from client
+                        byte[] torrentBytes = null;
+
+                        try
+                        {
+                            torrentBytes = provider.GetTorrentFile(hash);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Debug(ex, "Failed to get torrent file from client for {0}", hash);
+                        }
+
+                        if (torrentBytes == null || torrentBytes.Length == 0)
+                        {
+                            torrentBytes = SearchIndexersForTorrent(hash);
+                        }
+
+                        if (torrentBytes != null && torrentBytes.Length > 0)
+                        {
+                            using var ms = new System.IO.MemoryStream(torrentBytes);
+                            var parsed = _torrentFileParser.Parse(ms);
+
+                            var total = parsed.TotalSize > 0 ? parsed.TotalSize : item.TotalSize;
+                            var remaining = item.RemainingSize;
+                            var downloaded = Math.Max(0, total - remaining);
+
+                            torrent = new Torrent
+                            {
+                                Name = parsed.Name ?? item.Title,
+                                InfoHash = hash,
+                                TotalSize = total,
+                                Downloaded = downloaded,
+                                PieceCount = parsed.PieceCount,
+                                PieceLength = parsed.PieceLength,
+                                Comment = parsed.Comment,
+                                IsPrivate = parsed.IsPrivate,
+                                TrackerUrl = parsed.AnnounceUrl,
+                                DateAdded = DateTime.UtcNow,
+                                Status = MapClientStatus(item.Status, remaining, total),
+                                Category = item.Category,
+                                SavePath = item.OutputPath,
+                                SourcePath = item.OutputPath,
+                            };
+
+                            if (remaining == 0)
+                            {
+                                torrent.MarkForceCompleted();
+                            }
+                            else if (total > 0)
+                            {
+                                torrent.Progress = Math.Round((double)downloaded / total, 6);
+                            }
+
+                            torrent.UpdateRatio();
+                            _torrentService.Add(torrent);
+                            SaveParsedTrackersAndFiles(torrent.Id, parsed);
+
+                            existingTorrents[hash] = torrent;
+                            result.Added++;
+                            _logger.Info("Synced torrent {0} from download client {1}", torrent.Name, definition.Name);
+                        }
+                        else if (item != null)
+                        {
+                            var clientTrackers = provider.GetTrackers(hash);
+                            var total = item.TotalSize;
+                            var remaining = item.RemainingSize;
+                            var downloaded = Math.Max(0, total - remaining);
+
+                            torrent = new Torrent
+                            {
+                                Name = !string.IsNullOrEmpty(item.Title) ? item.Title : hash,
+                                InfoHash = hash,
+                                TotalSize = total,
+                                Downloaded = downloaded,
+                                TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
+                                DateAdded = DateTime.UtcNow,
+                                Status = MapClientStatus(item.Status, remaining, total),
+                                Category = item.Category,
+                                SavePath = item.OutputPath,
+                                SourcePath = item.OutputPath,
+                            };
+
+                            if (remaining == 0)
+                            {
+                                torrent.MarkForceCompleted();
+                            }
+                            else if (total > 0)
+                            {
+                                torrent.Progress = Math.Round((double)downloaded / total, 6);
+                            }
+
+                            torrent.UpdateRatio();
+                            _torrentService.Add(torrent);
+                            SaveClientTrackers(torrent.Id, clientTrackers);
+
+                            existingTorrents[hash] = torrent;
+                            result.Added++;
+                            _logger.Info("Synced torrent {0} (client metadata) from download client {1}", torrent.Name, definition.Name);
+                        }
+                        else
+                        {
+                            _logger.Warn("Could not fetch torrent data for {0} ({1}). Seedarr cannot sync it.", item.Title, hash);
+                            result.Failed++;
+                        }
                     }
                 }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Failed to sync download client {0}", definition.Name);
+                    result.Failed++;
+                }
             }
-            catch (Exception ex)
-            {
-                _logger.Error(ex, "Failed to sync download client {0}", definition.Name);
-                result.Failed++;
-            }
-        }
 
-        return result;
+            return result;
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
     }
 
     public List<DownloadClientRemoteItem> GetClientItems(int clientId)
@@ -237,26 +324,34 @@ public class DownloadClientSyncService : IDownloadClientSyncService
             throw new ArgumentException($"Could not create provider for client type {definition.ClientType}.");
         }
 
-        var normalizedHash = infoHash.ToLowerInvariant();
-        var existing = _torrentService.GetAll()
-            .FirstOrDefault(t => string.Equals(t.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
-        if (existing != null)
-        {
-            return existing;
-        }
-
-        DownloadClientItem matchingItem = null;
+        _syncLock.Wait();
         try
         {
-            var items = provider.GetItems();
-            matchingItem = items?.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
-        }
-        catch (Exception ex)
-        {
-            _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
-        }
+            var normalizedHash = infoHash.ToLowerInvariant();
+            var existing = _torrentService.GetAll()
+                .FirstOrDefault(t => string.Equals(t.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                return existing;
+            }
 
-        return ImportTorrentInternal(definition, provider, normalizedHash, matchingItem);
+            DownloadClientItem matchingItem = null;
+            try
+            {
+                var items = provider.GetItems();
+                matchingItem = items?.FirstOrDefault(i => string.Equals(i.InfoHash, normalizedHash, StringComparison.OrdinalIgnoreCase));
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
+            }
+
+            return ImportTorrentInternal(definition, provider, normalizedHash, matchingItem);
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
     }
 
     protected virtual Torrent ImportTorrentInternal(
@@ -302,19 +397,23 @@ public class DownloadClientSyncService : IDownloadClientSyncService
                 IsPrivate = parsed.IsPrivate,
                 TrackerUrl = parsed.AnnounceUrl,
                 DateAdded = DateTime.UtcNow,
-                Status = TorrentStatus.Stopped
+                Status = MapClientStatus(matchingItem?.Status, remaining, total),
+                Category = matchingItem?.Category,
+                SavePath = matchingItem?.OutputPath,
+                SourcePath = matchingItem?.OutputPath,
             };
 
             if (remaining == 0)
             {
                 torrent.MarkForceCompleted();
-                torrent.Status = TorrentStatus.Stopped;
+                torrent.Status = MapClientStatus(matchingItem?.Status, remaining, total);
             }
             else if (total > 0)
             {
                 torrent.Progress = Math.Round((double)downloaded / total, 6);
             }
 
+            torrent.UpdateRatio();
             _torrentService.Add(torrent);
             SaveParsedTrackersAndFiles(torrent.Id, parsed);
         }
@@ -334,19 +433,23 @@ public class DownloadClientSyncService : IDownloadClientSyncService
                 IsPrivate = matchingItem.IsPrivate,
                 TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
                 DateAdded = DateTime.UtcNow,
-                Status = TorrentStatus.Stopped
+                Status = MapClientStatus(matchingItem.Status, remaining, total),
+                Category = matchingItem.Category,
+                SavePath = matchingItem.OutputPath,
+                SourcePath = matchingItem.OutputPath,
             };
 
             if (remaining == 0)
             {
                 torrent.MarkForceCompleted();
-                torrent.Status = TorrentStatus.Stopped;
+                torrent.Status = MapClientStatus(matchingItem.Status, remaining, total);
             }
             else if (total > 0)
             {
                 torrent.Progress = Math.Round((double)downloaded / total, 6);
             }
 
+            torrent.UpdateRatio();
             _torrentService.Add(torrent);
             SaveClientTrackers(torrent.Id, clientTrackers);
         }
@@ -474,61 +577,69 @@ public class DownloadClientSyncService : IDownloadClientSyncService
             throw new ArgumentException($"Could not create provider for client type {definition.ClientType}.");
         }
 
-        var existingHashes = _torrentService.GetAll()
-            .Where(t => !string.IsNullOrEmpty(t.InfoHash))
-            .Select(t => t.InfoHash.ToLowerInvariant())
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        var clientItems = new Dictionary<string, DownloadClientItem>(StringComparer.OrdinalIgnoreCase);
+        _syncLock.Wait();
         try
         {
-            var items = provider.GetItems();
-            if (items != null)
+            var existingHashes = _torrentService.GetAll()
+                .Where(t => !string.IsNullOrEmpty(t.InfoHash))
+                .Select(t => t.InfoHash.ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var clientItems = new Dictionary<string, DownloadClientItem>(StringComparer.OrdinalIgnoreCase);
+            try
             {
-                foreach (var item in items)
+                var items = provider.GetItems();
+                if (items != null)
                 {
-                    if (!string.IsNullOrEmpty(item.InfoHash))
+                    foreach (var item in items)
                     {
-                        clientItems.TryAdd(item.InfoHash.ToLowerInvariant(), item);
+                        if (!string.IsNullOrEmpty(item.InfoHash))
+                        {
+                            clientItems.TryAdd(item.InfoHash.ToLowerInvariant(), item);
+                        }
                     }
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
-        }
-
-        foreach (var rawHash in infoHashes)
-        {
-            if (string.IsNullOrWhiteSpace(rawHash))
-            {
-                result.Failed++;
-                continue;
-            }
-
-            var hash = rawHash.Trim().ToLowerInvariant();
-            if (existingHashes.Contains(hash))
-            {
-                result.Skipped++;
-                continue;
-            }
-
-            try
-            {
-                clientItems.TryGetValue(hash, out var matchingItem);
-                ImportTorrentInternal(definition, provider, hash, matchingItem);
-                existingHashes.Add(hash);
-                result.Added++;
-            }
             catch (Exception ex)
             {
-                _logger.Warn(ex, "Failed to import torrent {0} from client {1}", hash, clientId);
-                result.Failed++;
+                _logger.Debug(ex, "Failed to query items from client {0}", definition.Name);
             }
-        }
 
-        return result;
+            foreach (var rawHash in infoHashes)
+            {
+                if (string.IsNullOrWhiteSpace(rawHash))
+                {
+                    result.Failed++;
+                    continue;
+                }
+
+                var hash = rawHash.Trim().ToLowerInvariant();
+                if (existingHashes.Contains(hash))
+                {
+                    result.Skipped++;
+                    continue;
+                }
+
+                try
+                {
+                    clientItems.TryGetValue(hash, out var matchingItem);
+                    ImportTorrentInternal(definition, provider, hash, matchingItem);
+                    existingHashes.Add(hash);
+                    result.Added++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to import torrent {0} from client {1}", hash, clientId);
+                    result.Failed++;
+                }
+            }
+
+            return result;
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
     }
 
     private byte[] SearchIndexersForTorrent(string infoHash)
@@ -603,5 +714,37 @@ public class DownloadClientSyncService : IDownloadClientSyncService
             },
             _ => null
         };
+    }
+
+    public static TorrentStatus MapClientStatus(string status, long remainingSize, long totalSize)
+    {
+        if (!string.IsNullOrWhiteSpace(status))
+        {
+            var s = status.Trim().ToLowerInvariant();
+            switch (s)
+            {
+                case "seeding" or "forcedup" or "stalledup" or "queuedup" or "uploading":
+                    return TorrentStatus.Seeding;
+                case "downloading" or "forceddl" or "stalleddl" or "queueddl":
+                    return TorrentStatus.Downloading;
+                case "paused" or "pausedup" or "pauseddl":
+                    return TorrentStatus.Paused;
+                case "checking" or "checkingup" or "checkingdl" or "checkingresumedata":
+                    return TorrentStatus.Checking;
+                case "error":
+                    return TorrentStatus.Error;
+                case "queued":
+                    return TorrentStatus.Queued;
+                case "stopped":
+                    return TorrentStatus.Stopped;
+            }
+        }
+
+        return TorrentStatus.Stopped;
+    }
+
+    public void Dispose()
+    {
+        _syncLock.Dispose();
     }
 }

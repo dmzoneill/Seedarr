@@ -588,7 +588,7 @@ public class DownloadClientSyncServiceTest
         Assert.That(torrent, Is.Not.Null);
         Assert.That(torrent.Downloaded, Is.EqualTo(8000));
         Assert.That(torrent.TotalSize, Is.EqualTo(8000));
-        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
         Assert.That(torrent.ForceCompleted, Is.True);
         Assert.That(torrent.Progress, Is.EqualTo(1.0));
 
@@ -596,7 +596,7 @@ public class DownloadClientSyncServiceTest
             t.InfoHash == hash &&
             t.Downloaded == 8000 &&
             t.TotalSize == 8000 &&
-            t.Status == TorrentStatus.Stopped &&
+            t.Status == TorrentStatus.Seeding &&
             t.ForceCompleted &&
             t.Progress == 1.0));
     }
@@ -644,7 +644,7 @@ public class DownloadClientSyncServiceTest
         Assert.That(torrent, Is.Not.Null);
         Assert.That(torrent.Downloaded, Is.EqualTo(6000));
         Assert.That(torrent.TotalSize, Is.EqualTo(10000));
-        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
         Assert.That(torrent.ForceCompleted, Is.False);
         Assert.That(torrent.Progress, Is.EqualTo(0.6));
 
@@ -652,7 +652,7 @@ public class DownloadClientSyncServiceTest
             t.InfoHash == hash &&
             t.Downloaded == 6000 &&
             t.TotalSize == 10000 &&
-            t.Status == TorrentStatus.Stopped &&
+            t.Status == TorrentStatus.Downloading &&
             !t.ForceCompleted &&
             t.Progress == 0.6));
     }
@@ -695,7 +695,7 @@ public class DownloadClientSyncServiceTest
         Assert.That(torrent.Downloaded, Is.EqualTo(5000));
         Assert.That(torrent.TotalSize, Is.EqualTo(5000));
         Assert.That(torrent.IsPrivate, Is.True);
-        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
         Assert.That(torrent.ForceCompleted, Is.True);
         Assert.That(torrent.Progress, Is.EqualTo(1.0));
 
@@ -704,8 +704,156 @@ public class DownloadClientSyncServiceTest
             t.Downloaded == 5000 &&
             t.TotalSize == 5000 &&
             t.IsPrivate &&
-            t.Status == TorrentStatus.Stopped &&
+            t.Status == TorrentStatus.Seeding &&
             t.ForceCompleted &&
             t.Progress == 1.0));
+    }
+
+    [Test]
+    public void Sync_should_update_existing_torrent_status_progress_ratio_and_category()
+    {
+        var hash = "dddd111122223333444455556666777788889999";
+        var existingTorrent = new Torrent
+        {
+            Id = 42,
+            InfoHash = hash,
+            Name = "Existing Torrent",
+            TotalSize = 10000,
+            Downloaded = 2000,
+            Uploaded = 5000,
+            Progress = 0.2,
+            Status = TorrentStatus.Downloading,
+            Category = "old-category"
+        };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Existing Torrent",
+                InfoHash = hash,
+                TotalSize = 10000,
+                RemainingSize = 0,
+                Status = "seeding",
+                Category = "radarr",
+                OutputPath = "/downloads/radarr"
+            }
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true }
+        });
+
+        var result = _service.Sync();
+
+        Assert.That(result.Added, Is.EqualTo(0));
+        Assert.That(result.Skipped, Is.EqualTo(1));
+        Assert.That(result.Failed, Is.EqualTo(0));
+
+        Assert.That(existingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(existingTorrent.Progress, Is.EqualTo(1.0));
+        Assert.That(existingTorrent.Downloaded, Is.EqualTo(10000));
+        Assert.That(existingTorrent.Category, Is.EqualTo("radarr"));
+        Assert.That(existingTorrent.SavePath, Is.EqualTo("/downloads/radarr"));
+        Assert.That(existingTorrent.SourcePath, Is.EqualTo("/downloads/radarr"));
+        Assert.That(existingTorrent.ForceCompleted, Is.True);
+        Assert.That(existingTorrent.Ratio, Is.EqualTo(0.5));
+
+        _torrentService.Received(1).Update(existingTorrent);
+    }
+
+    [Test]
+    public void ImportTorrent_should_map_status_from_client_status()
+    {
+        var hash = "eeee111122223333444455556666777788889999";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Paused Torrent",
+                InfoHash = hash,
+                TotalSize = 8000,
+                RemainingSize = 4000,
+                Status = "paused"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Paused Torrent",
+            TotalSize = 8000,
+            PieceCount = 40,
+            PieceLength = 200
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var torrent = _service.ImportTorrent(1, hash);
+
+        Assert.That(torrent, Is.Not.Null);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+    }
+
+    [Test]
+    public void Sync_should_serialize_concurrent_calls_using_syncLock()
+    {
+        var mockClient = Substitute.For<IDownloadClient>();
+        var syncCount = 0;
+        var maxConcurrent = 0;
+        var runningCount = 0;
+        var lockObj = new object();
+
+        mockClient.GetItems().Returns(_ =>
+        {
+            lock (lockObj)
+            {
+                runningCount++;
+                if (runningCount > maxConcurrent)
+                {
+                    maxConcurrent = runningCount;
+                }
+            }
+
+            System.Threading.Thread.Sleep(50);
+
+            lock (lockObj)
+            {
+                runningCount--;
+                syncCount++;
+            }
+
+            return new List<DownloadClientItem>();
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true }
+        });
+
+        var task1 = System.Threading.Tasks.Task.Run(() => _service.Sync());
+        var task2 = System.Threading.Tasks.Task.Run(() => _service.Sync());
+
+        System.Threading.Tasks.Task.WaitAll(task1, task2);
+
+        Assert.That(maxConcurrent, Is.EqualTo(1));
+        Assert.That(syncCount, Is.EqualTo(2));
     }
 }
