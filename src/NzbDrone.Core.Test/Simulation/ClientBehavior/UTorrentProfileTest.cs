@@ -97,12 +97,21 @@ public class UTorrentProfileTest
     }
 
     [Test]
-    public void GeneratePeerId_suffix_should_be_numeric_digits()
+    public void GeneratePeerId_suffix_should_be_alphanumeric()
     {
         var peerId = _profile.GeneratePeerId();
         var suffix = peerId.Substring(_profile.PeerIdPrefix.Length);
 
-        Assert.That(suffix, Does.Match("^[0-9]+$"));
+        Assert.That(suffix, Does.Match("^[0-9a-zA-Z]+$"));
+    }
+
+    [Test]
+    public void GeneratePeerId_suffix_should_contain_entropy_beyond_decimal_digits()
+    {
+        var ids = Enumerable.Range(0, 50).Select(_ => _profile.GeneratePeerId()).ToList();
+        var anyNonDigits = ids.Any(id => id.Substring(_profile.PeerIdPrefix.Length).Any(c => !char.IsDigit(c)));
+
+        Assert.That(anyNonDigits, Is.True, "Generated peer IDs should contain alphanumeric entropy and not solely decimal digits.");
     }
 
     [Test]

@@ -253,7 +253,7 @@ sequenceDiagram
 
 ## Client Behavior Profiles
 
-All profiles in `NzbDrone.Core/Simulation/ClientBehavior/Profiles/`. Each uses Azureus-style peer ID: 8-char prefix + 12 random decimal digits = 20 bytes.
+All profiles in `NzbDrone.Core/Simulation/ClientBehavior/Profiles/`. Each uses Azureus-style peer ID: 8-char prefix + 12 random client-specific alphanumeric characters = 20 bytes.
 
 | Profile      | Peer ID Prefix | User Agent          | Version | Default Port |
 | ------------ | -------------- | ------------------- | ------- | ------------ |
@@ -261,7 +261,7 @@ All profiles in `NzbDrone.Core/Simulation/ClientBehavior/Profiles/`. Each uses A
 | Deluge       | `-DE2030-`     | `Deluge/2.0.3`      | 2.0.3   | 6881         |
 | Transmission | `-TR3000-`     | `Transmission/3.00` | 3.00    | 51413        |
 | uTorrent     | `-UT3550-`     | `uTorrent/3.5.5`    | 3.5.5   | 6881         |
-| BiglyBT      | `-BG2700-`     | `BiglyBT/2.7.0.0`   | 2.7.0.0 | 6881         |
+| BiglyBT      | `-BI2700-`     | `BiglyBT/2.7.0.0`   | 2.7.0.0 | 6881         |
 
 All profiles support encryption, DHT, and PEX.
 
