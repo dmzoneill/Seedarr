@@ -17,10 +17,18 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
 
     public bool ExistsByInfoHash(string infoHash)
     {
-        using var connection = _database.OpenConnection();
-        return connection.QueryFirstOrDefault<int>(
-            $"SELECT COUNT(1) FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash",
-            new { InfoHash = infoHash }) > 0;
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        return RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            return connection.QueryFirstOrDefault<int>(
+                $"SELECT COUNT(1) FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash",
+                new { InfoHash = infoHash }) > 0;
+        });
     }
 
     public Torrent GetByInfoHash(string infoHash)
@@ -62,6 +70,16 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
         }
 
         return result;
+    }
+
+    public int GetNextSortOrder()
+    {
+        return RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            return connection.QueryFirstOrDefault<int>(
+                $"SELECT COALESCE(MAX(\"SortOrder\"), -1) + 1 FROM \"{_table}\"");
+        });
     }
 
     public void UpdateCategoryName(string oldCategoryName, string newCategoryName)

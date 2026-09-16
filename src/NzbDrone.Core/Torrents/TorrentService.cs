@@ -5,6 +5,7 @@ using System.Linq;
 using NLog;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Torrents;
@@ -31,6 +32,7 @@ public class TorrentService : ITorrentService
     private readonly ITorrentFileService _torrentFileService;
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly IEventAggregator _eventAggregator;
+    private readonly object _sortOrderLock = new();
     private readonly Logger _logger;
 
     public TorrentService(ITorrentRepository repository, ITorrentFileService torrentFileService, ITrackerEntryService trackerEntryService, IEventAggregator eventAggregator)
@@ -79,12 +81,27 @@ public class TorrentService : ITorrentService
 
     public Torrent Add(Torrent torrent)
     {
+        ArgumentNullException.ThrowIfNull(torrent);
+
         _logger.Info("Adding torrent: {0}", torrent.Name);
 
-        var all = _repository.All().ToList();
-        torrent.SortOrder = all.Count > 0 ? all.Max(t => t.SortOrder) + 1 : 0;
+        if (!string.IsNullOrWhiteSpace(torrent.InfoHash) && _repository.ExistsByInfoHash(torrent.InfoHash))
+        {
+            throw new DuplicateTorrentException(torrent.InfoHash);
+        }
 
-        var added = _repository.Insert(torrent);
+        Torrent added;
+        lock (_sortOrderLock)
+        {
+            if (!string.IsNullOrWhiteSpace(torrent.InfoHash) && _repository.ExistsByInfoHash(torrent.InfoHash))
+            {
+                throw new DuplicateTorrentException(torrent.InfoHash);
+            }
+
+            torrent.SortOrder = _repository.GetNextSortOrder();
+            added = _repository.Insert(torrent);
+        }
+
         _eventAggregator.PublishEvent(new TorrentAddedEvent(added));
         _eventAggregator.PublishEvent(new ModelEvent<Torrent>(added, ModelAction.Created));
         return added;

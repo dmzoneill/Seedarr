@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 
@@ -89,37 +92,132 @@ namespace NzbDrone.Core.Test.Torrents
         public void Add_should_set_SortOrder_to_0_when_no_existing_torrents()
         {
             var torrent = new Torrent { Name = "New Torrent" };
-            _repository.All().Returns(new List<Torrent>().AsQueryable());
+            _repository.GetNextSortOrder().Returns(0);
             _repository.Insert(Arg.Any<Torrent>()).Returns(torrent);
 
             _subject.Add(torrent);
 
             Assert.That(torrent.SortOrder, Is.EqualTo(0));
+            _repository.DidNotReceive().All();
         }
 
         [Test]
         public void Add_should_set_SortOrder_to_max_plus_one_when_existing_torrents()
         {
             var torrent = new Torrent { Name = "New Torrent" };
-            var existing = new List<Torrent>
-            {
-                new Torrent { SortOrder = 0 },
-                new Torrent { SortOrder = 1 },
-                new Torrent { SortOrder = 2 }
-            };
-            _repository.All().Returns(existing.AsQueryable());
+            _repository.GetNextSortOrder().Returns(3);
             _repository.Insert(Arg.Any<Torrent>()).Returns(torrent);
 
             _subject.Add(torrent);
 
             Assert.That(torrent.SortOrder, Is.EqualTo(3));
+            _repository.Received(1).GetNextSortOrder();
+            _repository.DidNotReceive().All();
+        }
+
+        [Test]
+        public void Add_should_calculate_next_SortOrder_using_repository_query_without_calling_All()
+        {
+            var torrent = new Torrent { Name = "New Torrent", InfoHash = "abcd1234efgh" };
+            _repository.ExistsByInfoHash("abcd1234efgh").Returns(false);
+            _repository.GetNextSortOrder().Returns(42);
+            _repository.Insert(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
+
+            var result = _subject.Add(torrent);
+
+            Assert.That(result.SortOrder, Is.EqualTo(42));
+            _repository.Received(1).GetNextSortOrder();
+            _repository.DidNotReceive().All();
+        }
+
+        [Test]
+        public void Add_should_throw_DuplicateTorrentException_when_InfoHash_already_exists()
+        {
+            var infoHash = "0123456789abcdef0123456789abcdef01234567";
+            var torrent = new Torrent { Name = "Duplicate Torrent", InfoHash = infoHash };
+            _repository.ExistsByInfoHash(infoHash).Returns(true);
+
+            var ex = Assert.Throws<DuplicateTorrentException>(() => _subject.Add(torrent));
+
+            Assert.That(ex.InfoHash, Is.EqualTo(infoHash));
+            _repository.DidNotReceive().Insert(Arg.Any<Torrent>());
+            _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentAddedEvent>());
+        }
+
+        [Test]
+        public async Task Add_concurrent_additions_should_assign_monotonically_increasing_SortOrder_without_collisions()
+        {
+            var currentSortOrder = 0;
+            var assignedSortOrders = new System.Collections.Concurrent.ConcurrentBag<int>();
+
+            _repository.GetNextSortOrder().Returns(_ =>
+            {
+                Thread.Sleep(5);
+                return currentSortOrder++;
+            });
+
+            _repository.Insert(Arg.Any<Torrent>()).Returns(callInfo =>
+            {
+                var t = callInfo.Arg<Torrent>();
+                assignedSortOrders.Add(t.SortOrder);
+                return t;
+            });
+
+            const int count = 20;
+            var tasks = Enumerable.Range(0, count).Select(i => Task.Run(() =>
+            {
+                var torrent = new Torrent { Name = $"Torrent {i}", InfoHash = $"hash_{i}" };
+                _subject.Add(torrent);
+            })).ToArray();
+
+            await Task.WhenAll(tasks);
+
+            Assert.That(assignedSortOrders.Count, Is.EqualTo(count));
+            var sorted = assignedSortOrders.OrderBy(x => x).ToList();
+            Assert.That(sorted, Is.EqualTo(Enumerable.Range(0, count).ToList()), "SortOrders should be unique and monotonically increasing without collisions");
+        }
+
+        [Test]
+        public async Task Add_concurrent_duplicate_additions_should_throw_DuplicateTorrentException_for_second_caller()
+        {
+            const string infoHash = "shared_hash_123";
+            var exists = false;
+
+            _repository.ExistsByInfoHash(infoHash).Returns(_ => exists);
+            _repository.Insert(Arg.Any<Torrent>()).Returns(callInfo =>
+            {
+                exists = true;
+                return callInfo.Arg<Torrent>();
+            });
+
+            var exceptions = new System.Collections.Concurrent.ConcurrentBag<Exception>();
+            var successCount = 0;
+
+            var tasks = Enumerable.Range(0, 5).Select(_ => Task.Run(() =>
+            {
+                try
+                {
+                    var torrent = new Torrent { Name = "Concurrent Dup", InfoHash = infoHash };
+                    _subject.Add(torrent);
+                    Interlocked.Increment(ref successCount);
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add(ex);
+                }
+            })).ToArray();
+
+            await Task.WhenAll(tasks);
+
+            Assert.That(successCount, Is.EqualTo(1));
+            Assert.That(exceptions.Count, Is.EqualTo(4));
+            Assert.That(exceptions.All(e => e is DuplicateTorrentException), Is.True);
         }
 
         [Test]
         public void Add_should_call_repository_Insert()
         {
             var torrent = new Torrent { Name = "New Torrent" };
-            _repository.All().Returns(new List<Torrent>().AsQueryable());
             _repository.Insert(torrent).Returns(torrent);
 
             _subject.Add(torrent);
@@ -131,7 +229,6 @@ namespace NzbDrone.Core.Test.Torrents
         public void Add_should_publish_TorrentAddedEvent()
         {
             var torrent = new Torrent { Name = "New Torrent" };
-            _repository.All().Returns(new List<Torrent>().AsQueryable());
             _repository.Insert(torrent).Returns(torrent);
 
             _subject.Add(torrent);
