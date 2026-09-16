@@ -77,12 +77,12 @@ public class ExternalIpServiceTest
     public async Task GetExternalIpAsync_should_trim_whitespace_from_response()
     {
         var handler = new MockHttpMessageHandler();
-        handler.Enqueue(HttpStatusCode.OK, "  192.168.0.1\n");
+        handler.Enqueue(HttpStatusCode.OK, "  8.8.8.8\n");
         var subject = new ExternalIpService(new HttpClient(handler));
 
         var result = await subject.GetExternalIpAsync();
 
-        Assert.That(result, Is.EqualTo("192.168.0.1"));
+        Assert.That(result, Is.EqualTo("8.8.8.8"));
     }
 
     [Test]
@@ -193,12 +193,12 @@ public class ExternalIpServiceTest
     public async Task GetExternalIpAsync_should_accept_ipv6_address()
     {
         var handler = new MockHttpMessageHandler();
-        handler.Enqueue(HttpStatusCode.OK, "2001:db8::1");
+        handler.Enqueue(HttpStatusCode.OK, "2606:4700:4700::1111");
         var subject = new ExternalIpService(new HttpClient(handler));
 
         var result = await subject.GetExternalIpAsync();
 
-        Assert.That(result, Is.EqualTo("2001:db8::1"));
+        Assert.That(result, Is.EqualTo("2606:4700:4700::1111"));
     }
 
     [Test]
@@ -257,7 +257,7 @@ public class ExternalIpServiceTest
   ""message"": ""Client entry inserted successfully."",
   ""data"": {
     ""uuid"": ""f47ac10b-58cc-4372-a567-0e02b2c3d479"",
-    ""ip"": ""127.0.0.1"",
+    ""ip"": ""93.184.216.34"",
     ""timestamp"": 1756585406
   }
 }";
@@ -271,8 +271,8 @@ public class ExternalIpServiceTest
 
         var result = await subject.GetExternalIpAsync();
 
-        Assert.That(result, Is.EqualTo("127.0.0.1"));
-        Assert.That(subject.CachedIp, Is.EqualTo("127.0.0.1"));
+        Assert.That(result, Is.EqualTo("93.184.216.34"));
+        Assert.That(subject.CachedIp, Is.EqualTo("93.184.216.34"));
     }
 
     [Test]
@@ -285,28 +285,115 @@ public class ExternalIpServiceTest
   ""message"": ""Client entry inserted successfully."",
   ""data"": {
     ""uuid"": ""f47ac10b-58cc-4372-a567-0e02b2c3d479"",
-    ""ip"": ""198.51.100.42"",
+    ""ip"": ""142.250.190.46"",
     ""timestamp"": 1756585406
   }
 }";
         var success = ExternalIpService.TryExtractIpFromResponse(jsonResponse, out var ip);
 
         Assert.That(success, Is.True);
-        Assert.That(ip, Is.EqualTo("198.51.100.42"));
+        Assert.That(ip, Is.EqualTo("142.250.190.46"));
     }
 
     [Test]
     public async Task GetExternalIpAsync_should_fallback_to_secondary_source_if_primary_fails()
     {
         var handler = new MockHttpMessageHandler();
-        handler.Enqueue(HttpStatusCode.InternalServerError, "error"); // primary https://seedarr.net/my/?uuid=... fails
-        handler.Enqueue(HttpStatusCode.InternalServerError, "error"); // primary http://seedarr.net/my/?uuid=... fails
-        handler.Enqueue(HttpStatusCode.OK, "203.0.113.19");          // fallback succeeds
+        handler.Enqueue(HttpStatusCode.InternalServerError, "error"); // primary https://seedarr.net/ip/?uuid=... fails
+        handler.Enqueue(HttpStatusCode.OK, "142.250.190.46");          // fallback succeeds
 
         var subject = new ExternalIpService(new HttpClient(handler));
 
         var result = await subject.GetExternalIpAsync();
 
-        Assert.That(result, Is.EqualTo("203.0.113.19"));
+        Assert.That(result, Is.EqualTo("142.250.190.46"));
+    }
+
+    [TestCase("127.0.0.1")]
+    [TestCase("127.0.0.2")]
+    [TestCase("::1")]
+    [TestCase("0.0.0.0")]
+    [TestCase("::")]
+    [TestCase("10.0.0.1")]
+    [TestCase("10.254.254.254")]
+    [TestCase("172.16.0.1")]
+    [TestCase("172.24.0.1")]
+    [TestCase("172.31.255.255")]
+    [TestCase("192.168.0.1")]
+    [TestCase("192.168.1.1")]
+    [TestCase("100.64.0.1")]
+    [TestCase("100.127.255.254")]
+    [TestCase("169.254.1.1")]
+    [TestCase("fe80::1")]
+    [TestCase("fe80::200:5aee:feaa:20a2")]
+    [TestCase("192.0.2.1")]
+    [TestCase("198.51.100.1")]
+    [TestCase("203.0.113.1")]
+    [TestCase("2001:db8::1")]
+    [TestCase("224.0.0.1")]
+    [TestCase("239.255.255.250")]
+    [TestCase("240.0.0.1")]
+    [TestCase("255.255.255.255")]
+    [TestCase("ff02::1")]
+    [TestCase("fc00::1")]
+    [TestCase("fd00::1")]
+    [TestCase("fec0::1")]
+    public void IsPublicRoutableIpAddress_should_reject_non_public_ips(string ipString)
+    {
+        var parsed = IPAddress.Parse(ipString);
+        var isPublic = ExternalIpService.IsPublicRoutableIpAddress(parsed);
+
+        Assert.That(isPublic, Is.False, $"Expected {ipString} to be rejected as non-public/bogon");
+    }
+
+    [TestCase("1.1.1.1")]
+    [TestCase("8.8.8.8")]
+    [TestCase("93.184.216.34")]
+    [TestCase("142.250.190.46")]
+    [TestCase("2606:4700:4700::1111")]
+    [TestCase("2001:4860:4860::8888")]
+    public void IsPublicRoutableIpAddress_should_accept_public_ips(string ipString)
+    {
+        var parsed = IPAddress.Parse(ipString);
+        var isPublic = ExternalIpService.IsPublicRoutableIpAddress(parsed);
+
+        Assert.That(isPublic, Is.True, $"Expected {ipString} to be accepted as public routable");
+    }
+
+    [Test]
+    public void TryExtractIpFromResponse_should_reject_private_ip_in_plaintext()
+    {
+        Assert.That(ExternalIpService.TryExtractIpFromResponse("192.168.1.1", out _), Is.False);
+        Assert.That(ExternalIpService.TryExtractIpFromResponse("10.0.0.1", out _), Is.False);
+        Assert.That(ExternalIpService.TryExtractIpFromResponse("127.0.0.1", out _), Is.False);
+        Assert.That(ExternalIpService.TryExtractIpFromResponse("100.64.0.1", out _), Is.False);
+        Assert.That(ExternalIpService.TryExtractIpFromResponse("169.254.1.1", out _), Is.False);
+        Assert.That(ExternalIpService.TryExtractIpFromResponse("::1", out _), Is.False);
+    }
+
+    [Test]
+    public void TryExtractIpFromResponse_should_reject_private_ip_in_json()
+    {
+        var json = @"{ ""data"": { ""ip"": ""192.168.1.1"" } }";
+        Assert.That(ExternalIpService.TryExtractIpFromResponse(json, out _), Is.False);
+
+        var loopbackJson = @"{ ""ip"": ""127.0.0.1"" }";
+        Assert.That(ExternalIpService.TryExtractIpFromResponse(loopbackJson, out _), Is.False);
+    }
+
+    [Test]
+    public async Task GetExternalIpAsync_should_allow_concurrent_callers_to_both_obtain_fetched_ip()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "93.184.216.34");
+        var subject = new ExternalIpService(new HttpClient(handler));
+
+        var task1 = subject.GetExternalIpAsync();
+        var task2 = subject.GetExternalIpAsync();
+
+        var results = await Task.WhenAll(task1, task2);
+
+        Assert.That(results[0], Is.EqualTo("93.184.216.34"));
+        Assert.That(results[1], Is.EqualTo("93.184.216.34"));
     }
 }
