@@ -81,9 +81,11 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<ApiKeyAuthentic
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        if (!CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(apiKey),
-            Encoding.UTF8.GetBytes(_configFileProvider.ApiKey)))
+        var configuredApiKey = _configFileProvider.ApiKey;
+        if (string.IsNullOrWhiteSpace(configuredApiKey) ||
+            !CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(apiKey),
+                Encoding.UTF8.GetBytes(configuredApiKey)))
         {
             return Task.FromResult(AuthenticateResult.Fail("Invalid API Key"));
         }

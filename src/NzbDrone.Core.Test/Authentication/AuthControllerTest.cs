@@ -1,5 +1,10 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
@@ -75,6 +80,109 @@ public class AuthControllerTest
         var unauthorized = (UnauthorizedObjectResult)result.Result;
         var error = unauthorized.Value.GetType().GetProperty("error")?.GetValue(unauthorized.Value) as string;
         Assert.That(error, Is.EqualTo("Invalid credentials. Please verify your username and password or API key."));
+    }
+
+    [Test]
+    public async Task Login_WhenApiKeyInUsernameAndInvalidPassword_ReturnsUnauthorized()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("master-api-key");
+
+        var request = new LoginRequestResource { Username = "master-api-key", Password = "wrong-password" };
+
+        var result = await _controller.Login(request);
+
+        Assert.That(result.Result, Is.TypeOf<UnauthorizedObjectResult>());
+        var unauthorized = (UnauthorizedObjectResult)result.Result;
+        var error = unauthorized.Value.GetType().GetProperty("error")?.GetValue(unauthorized.Value) as string;
+        Assert.That(error, Is.EqualTo("Invalid credentials. Please verify your username and password or API key."));
+    }
+
+    [Test]
+    public async Task Login_WhenValidLoginWithApiKeyInUsername_SanitizesUsernameClaimsAndDoesNotExposeApiKey()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("super-secret-api-key-999");
+
+        var httpContext = new DefaultHttpContext();
+        var authService = Substitute.For<IAuthenticationService>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IAuthenticationService)).Returns(authService);
+        httpContext.RequestServices = serviceProvider;
+
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        ClaimsPrincipal capturedPrincipal = null;
+        await authService.SignInAsync(
+            httpContext,
+            "Cookies",
+            Arg.Do<ClaimsPrincipal>(p => capturedPrincipal = p),
+            Arg.Any<AuthenticationProperties>());
+
+        var request = new LoginRequestResource
+        {
+            Username = "super-secret-api-key-999",
+            Password = "super-secret-api-key-999",
+        };
+
+        var result = await _controller.Login(request);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var user = okResult.Value as CurrentUserResource;
+
+        Assert.That(user, Is.Not.Null);
+        Assert.That(user.Username, Is.EqualTo("admin"));
+        Assert.That(user.DisplayName, Is.EqualTo("Administrator"));
+        Assert.That(user.Identifier, Is.EqualTo("admin"));
+
+        Assert.That(capturedPrincipal, Is.Not.Null);
+        Assert.That(capturedPrincipal.FindFirst(ClaimTypes.Name)?.Value, Is.EqualTo("admin"));
+        Assert.That(capturedPrincipal.FindFirst("DisplayName")?.Value, Is.EqualTo("Administrator"));
+        Assert.That(capturedPrincipal.Claims.Any(c => c.Value.Contains("super-secret-api-key-999")), Is.False);
+    }
+
+    [Test]
+    public async Task Login_WhenValidLoginWithLegitimateUsername_PreservesUsernameInClaims()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("super-secret-api-key-999");
+
+        var httpContext = new DefaultHttpContext();
+        var authService = Substitute.For<IAuthenticationService>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IAuthenticationService)).Returns(authService);
+        httpContext.RequestServices = serviceProvider;
+
+        _controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        ClaimsPrincipal capturedPrincipal = null;
+        await authService.SignInAsync(
+            httpContext,
+            "Cookies",
+            Arg.Do<ClaimsPrincipal>(p => capturedPrincipal = p),
+            Arg.Any<AuthenticationProperties>());
+
+        var request = new LoginRequestResource
+        {
+            Username = "custom_operator",
+            Password = "super-secret-api-key-999",
+        };
+
+        var result = await _controller.Login(request);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var user = okResult.Value as CurrentUserResource;
+
+        Assert.That(user, Is.Not.Null);
+        Assert.That(user.Username, Is.EqualTo("custom_operator"));
+        Assert.That(user.DisplayName, Is.EqualTo("custom_operator"));
+
+        Assert.That(capturedPrincipal, Is.Not.Null);
+        Assert.That(capturedPrincipal.FindFirst(ClaimTypes.Name)?.Value, Is.EqualTo("custom_operator"));
+        Assert.That(capturedPrincipal.FindFirst("DisplayName")?.Value, Is.EqualTo("custom_operator"));
+        Assert.That(capturedPrincipal.Claims.Any(c => c.Value.Contains("super-secret-api-key-999")), Is.False);
     }
 
     [Test]
