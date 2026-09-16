@@ -41,7 +41,8 @@ public class UpdateController : Controller
             foreach (var release in releases.OrderByDescending(r => SemVersion.TryParse(r.Version, out var v) ? v : new SemVersion(new Version(0, 0, 0))))
             {
                 var isInstalled = string.Equals(release.Version, currentVersion, StringComparison.OrdinalIgnoreCase) ||
-                    (SemVersion.TryParse(release.Version, out var rv) && SemVersion.TryParse(currentVersion, out var cv) && rv == cv);
+                    (Version.TryParse(release.Version?.TrimStart('v', 'V'), out var rv) && (AreVersionsEqual(rv, BuildInfo.Version) || (Version.TryParse(currentVersion?.TrimStart('v', 'V'), out var cv) && AreVersionsEqual(rv, cv)))) ||
+                    (SemVersion.TryParse(release.Version, out var srv) && SemVersion.TryParse(currentVersion, out var scv) && srv == scv);
 
                 if (isInstalled)
                 {
@@ -88,7 +89,8 @@ public class UpdateController : Controller
             else
             {
                 var matching = results.FirstOrDefault(r => string.Equals(r.Version, currentVersion, StringComparison.OrdinalIgnoreCase) ||
-                    (SemVersion.TryParse(r.Version, out var rv) && SemVersion.TryParse(currentVersion, out var cv) && rv == cv));
+                    (Version.TryParse(r.Version?.TrimStart('v', 'V'), out var rv) && (AreVersionsEqual(rv, BuildInfo.Version) || (Version.TryParse(currentVersion?.TrimStart('v', 'V'), out var cv) && AreVersionsEqual(rv, cv)))) ||
+                    (SemVersion.TryParse(r.Version, out var srv) && SemVersion.TryParse(currentVersion, out var scv) && srv == scv));
                 if (matching != null)
                 {
                     matching.Installed = true;
@@ -97,6 +99,19 @@ public class UpdateController : Controller
         }
 
         return Ok(results);
+    }
+
+    private static bool AreVersionsEqual(Version a, Version b)
+    {
+        if (a == null || b == null)
+        {
+            return false;
+        }
+
+        return a.Major == b.Major &&
+               a.Minor == b.Minor &&
+               Math.Max(0, a.Build) == Math.Max(0, b.Build) &&
+               Math.Max(0, a.Revision) == Math.Max(0, b.Revision);
     }
 
     private static UpdateChanges ParseReleaseNotes(string body)
