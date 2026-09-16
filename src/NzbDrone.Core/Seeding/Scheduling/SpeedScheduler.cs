@@ -20,6 +20,7 @@ public class SpeedLimits
 public interface ISpeedScheduler
 {
     SpeedLimits GetCurrentLimits();
+    SpeedLimits GetEffectiveLimits() => GetCurrentLimits();
     SpeedLimits GetLimitsAt(DateTime utcTime);
     List<SpeedSchedule> GetAll();
     SpeedSchedule Get(int id);
@@ -61,6 +62,11 @@ public class SpeedScheduler : ISpeedScheduler
     public SpeedLimits GetCurrentLimits()
     {
         return GetLimitsAt(_clock.UtcNow);
+    }
+
+    public SpeedLimits GetEffectiveLimits()
+    {
+        return GetCurrentLimits();
     }
 
     public SpeedLimits GetLimitsAt(DateTime utcTime)
@@ -127,14 +133,18 @@ public class SpeedScheduler : ISpeedScheduler
         var prevDay = (DayOfWeek)(((int)localTime.DayOfWeek + 6) % 7);
 
         bool isActive;
-        if (startTime <= endTime)
+        if (startTime == endTime)
         {
-            isActive = IsDayEnabledInGlobalConfig(today) && currentTime >= startTime && currentTime < endTime;
+            isActive = IsDayEnabledInGlobalConfig(today);
+        }
+        else if (startTime < endTime)
+        {
+            isActive = IsDayEnabledInGlobalConfig(today) && currentTime >= startTime && IsCurrentTimeBeforeEnd(currentTime, endTime);
         }
         else
         {
             isActive = (currentTime >= startTime && IsDayEnabledInGlobalConfig(today)) ||
-                (currentTime < endTime && IsDayEnabledInGlobalConfig(prevDay));
+                (IsCurrentTimeBeforeEnd(currentTime, endTime) && IsDayEnabledInGlobalConfig(prevDay));
         }
 
         if (isActive)
@@ -237,9 +247,17 @@ public class SpeedScheduler : ISpeedScheduler
 
         foreach (var schedule in schedules)
         {
-            if (schedule.StartTime <= schedule.EndTime)
+            if (schedule.StartTime == schedule.EndTime)
             {
-                if (schedule.Days.HasFlag(todayFlag) && currentTime >= schedule.StartTime && currentTime < schedule.EndTime)
+                // When StartTime == EndTime (e.g. 00:00 to 00:00), treat as active for all 24 hours of matching days
+                if (schedule.Days.HasFlag(todayFlag))
+                {
+                    active.Add(schedule);
+                }
+            }
+            else if (schedule.StartTime < schedule.EndTime)
+            {
+                if (schedule.Days.HasFlag(todayFlag) && currentTime >= schedule.StartTime && IsCurrentTimeBeforeEnd(currentTime, schedule.EndTime))
                 {
                     active.Add(schedule);
                 }
@@ -247,11 +265,11 @@ public class SpeedScheduler : ISpeedScheduler
             else
             {
                 // Overnight schedule (e.g. 22:00 - 06:00)
-                if (schedule.Days.HasFlag(todayFlag) && (currentTime >= schedule.StartTime || currentTime < schedule.EndTime))
+                if (schedule.Days.HasFlag(todayFlag) && (currentTime >= schedule.StartTime || IsCurrentTimeBeforeEnd(currentTime, schedule.EndTime)))
                 {
                     active.Add(schedule);
                 }
-                else if (schedule.Days.HasFlag(prevDayFlag) && currentTime < schedule.EndTime)
+                else if (schedule.Days.HasFlag(prevDayFlag) && IsCurrentTimeBeforeEnd(currentTime, schedule.EndTime))
                 {
                     active.Add(schedule);
                 }
@@ -261,15 +279,30 @@ public class SpeedScheduler : ISpeedScheduler
         return active;
     }
 
+    private static bool IsCurrentTimeBeforeEnd(TimeOnly currentTime, TimeOnly endTime)
+    {
+        if (endTime.Hour == 23 && endTime.Minute == 59)
+        {
+            return true;
+        }
+
+        return currentTime < endTime;
+    }
+
     private static bool IsTimeInRange(TimeOnly current, TimeOnly start, TimeOnly end)
     {
-        if (start <= end)
+        if (start == end)
         {
-            return current >= start && current < end;
+            return true;
+        }
+
+        if (start < end)
+        {
+            return current >= start && IsCurrentTimeBeforeEnd(current, end);
         }
 
         // Handles overnight ranges (e.g., 22:00 - 06:00)
-        return current >= start || current < end;
+        return current >= start || IsCurrentTimeBeforeEnd(current, end);
     }
 
     private static ScheduleDays MapDayOfWeek(DayOfWeek dayOfWeek)
@@ -290,14 +323,14 @@ public class SpeedScheduler : ISpeedScheduler
     private static SpeedLimits ResolveLimits(List<SpeedSchedule> activeSchedules)
     {
         // Most restrictive wins: take the lowest speed from all active schedules.
-        // In SpeedSchedule entities, 0 indicates Unlimited (-1L).
+        // -1 indicates Unlimited (-1L), whereas 0 indicates an explicit 0 B/s throttle (paused).
         var uploadSpeeds = activeSchedules
-            .Where(s => s.MaxUploadSpeed > 0)
+            .Where(s => s.MaxUploadSpeed >= 0)
             .Select(s => s.MaxUploadSpeed)
             .ToList();
 
         var downloadSpeeds = activeSchedules
-            .Where(s => s.MaxDownloadSpeed > 0)
+            .Where(s => s.MaxDownloadSpeed >= 0)
             .Select(s => s.MaxDownloadSpeed)
             .ToList();
 

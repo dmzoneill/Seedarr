@@ -49,8 +49,8 @@ const EMPTY_SCHEDULE: Omit<SpeedScheduleEntry, "id"> = {
   days: 127,
   startTime: "00:00",
   endTime: "23:59",
-  maxUploadSpeed: 0,
-  maxDownloadSpeed: 0,
+  maxUploadSpeed: -1,
+  maxDownloadSpeed: -1,
   isEnabled: true,
   priority: 0,
 };
@@ -193,19 +193,20 @@ function ScheduleModal({
                   fontSize: "0.82rem",
                 }}
               >
-                Max Upload (KB/s, 0 = unlimited)
+                Max Upload (KB/s, -1 = unlimited, 0 = pause)
               </span>
               <input
                 className="form-input"
                 type="number"
-                min={0}
-                value={form.maxUploadSpeed / 1024}
-                onChange={(e) =>
+                min={-1}
+                value={form.maxUploadSpeed < 0 ? -1 : form.maxUploadSpeed / 1024}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
                   setForm({
                     ...form,
-                    maxUploadSpeed: Math.round(Number(e.target.value) * 1024),
-                  })
-                }
+                    maxUploadSpeed: val < 0 ? -1 : Math.round(val * 1024),
+                  });
+                }}
                 style={{ width: "100%", borderRadius: "6px" }}
               />
             </label>
@@ -219,19 +220,20 @@ function ScheduleModal({
                   fontSize: "0.82rem",
                 }}
               >
-                Max Download (KB/s, 0 = unlimited)
+                Max Download (KB/s, -1 = unlimited, 0 = pause)
               </span>
               <input
                 className="form-input"
                 type="number"
-                min={0}
-                value={form.maxDownloadSpeed / 1024}
-                onChange={(e) =>
+                min={-1}
+                value={form.maxDownloadSpeed < 0 ? -1 : form.maxDownloadSpeed / 1024}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
                   setForm({
                     ...form,
-                    maxDownloadSpeed: Math.round(Number(e.target.value) * 1024),
-                  })
-                }
+                    maxDownloadSpeed: val < 0 ? -1 : Math.round(val * 1024),
+                  });
+                }}
                 style={{ width: "100%", borderRadius: "6px" }}
               />
             </label>
@@ -396,7 +398,10 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
                 if (!s.isEnabled) return false;
                 const start = timeToHour(s.startTime);
                 const end = timeToHour(s.endTime);
-                if (start <= end) {
+                if (start === end) {
+                  return Boolean(s.days & day.value);
+                }
+                if (start < end) {
                   return Boolean(s.days & day.value) && hour >= start && hour < end;
                 } else {
                   const isTodayEvening = Boolean(s.days & day.value) && hour >= start;
@@ -423,7 +428,7 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
                   }}
                   title={
                     top
-                      ? `${top.name}: ${formatSpeed(top.maxUploadSpeed)} up / ${formatSpeed(top.maxDownloadSpeed)} down`
+                      ? `${top.name}: ${top.maxUploadSpeed >= 0 ? (top.maxUploadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(top.maxUploadSpeed)) : "Unlimited"} up / ${top.maxDownloadSpeed >= 0 ? (top.maxDownloadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(top.maxDownloadSpeed)) : "Unlimited"} down`
                       : "Unthrottled"
                   }
                 />
@@ -628,12 +633,12 @@ function SpeedSchedule() {
               margin: "0.35rem 0",
             }}
           >
-            {activeLimits && activeLimits.maxUploadSpeed > 0
-              ? formatSpeed(activeLimits.maxUploadSpeed)
+            {activeLimits && activeLimits.maxUploadSpeed >= 0
+              ? (activeLimits.maxUploadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(activeLimits.maxUploadSpeed))
               : "Unlimited"}
           </div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-            {activeLimits && activeLimits.maxUploadSpeed > 0
+            {activeLimits && activeLimits.maxUploadSpeed >= 0
               ? "Enforced rate throttle across active torrents"
               : "No upload bandwidth restriction"}
           </div>
@@ -671,12 +676,12 @@ function SpeedSchedule() {
               margin: "0.35rem 0",
             }}
           >
-            {activeLimits && activeLimits.maxDownloadSpeed > 0
-              ? formatSpeed(activeLimits.maxDownloadSpeed)
+            {activeLimits && activeLimits.maxDownloadSpeed >= 0
+              ? (activeLimits.maxDownloadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(activeLimits.maxDownloadSpeed))
               : "Unlimited"}
           </div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-            {activeLimits && activeLimits.maxDownloadSpeed > 0
+            {activeLimits && activeLimits.maxDownloadSpeed >= 0
               ? "Enforced rate throttle across downloads"
               : "No download bandwidth restriction"}
           </div>
@@ -808,8 +813,8 @@ function SpeedSchedule() {
                           fontWeight: 600,
                         }}
                       >
-                        {s.maxUploadSpeed > 0
-                          ? formatSpeed(s.maxUploadSpeed)
+                        {s.maxUploadSpeed >= 0
+                          ? (s.maxUploadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(s.maxUploadSpeed))
                           : "Unlimited"}
                       </td>
                       <td
@@ -818,8 +823,8 @@ function SpeedSchedule() {
                           fontWeight: 600,
                         }}
                       >
-                        {s.maxDownloadSpeed > 0
-                          ? formatSpeed(s.maxDownloadSpeed)
+                        {s.maxDownloadSpeed >= 0
+                          ? (s.maxDownloadSpeed === 0 ? "0 B/s (Paused)" : formatSpeed(s.maxDownloadSpeed))
                           : "Unlimited"}
                       </td>
                       <td>
