@@ -14,6 +14,7 @@ public interface ITorrentService
     List<Torrent> GetAll();
     List<Torrent> GetByInfoHashes(IEnumerable<string> infoHashes);
     Torrent Get(int id);
+    Torrent GetByInfoHash(string infoHash);
     bool ExistsByInfoHash(string infoHash);
     Torrent Add(Torrent torrent);
     Torrent Update(Torrent torrent);
@@ -59,6 +60,16 @@ public class TorrentService : ITorrentService
     public Torrent Get(int id)
     {
         return _repository.Get(id);
+    }
+
+    public Torrent GetByInfoHash(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return null;
+        }
+
+        return _repository.GetByInfoHash(infoHash);
     }
 
     public bool ExistsByInfoHash(string infoHash)

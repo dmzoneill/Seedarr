@@ -67,7 +67,7 @@ public class TorrentControllerTests : IntegrationTestBase
     }
 
     [Test]
-    public async Task UploadTorrent_multiple_files_reports_duplicates_as_failed()
+    public async Task UploadTorrent_multiple_files_merges_duplicates_in_added()
     {
         var fixturePath = Path.Combine(AppContext.BaseDirectory, "fixtures", "test.torrent");
         Assume.That(File.Exists(fixturePath), "test.torrent fixture not found");
@@ -88,11 +88,8 @@ public class TorrentControllerTests : IntegrationTestBase
         var json = await response.Content.ReadAsStringAsync();
         using var doc = Deserialize<JsonDocument>(json);
 
-        Assert.That(doc.RootElement.GetProperty("added").GetArrayLength(), Is.EqualTo(1));
-        Assert.That(doc.RootElement.GetProperty("failed").GetArrayLength(), Is.EqualTo(1));
-        Assert.That(
-            doc.RootElement.GetProperty("failed")[0].GetProperty("reason").GetString(),
-            Does.Contain("already exists"));
+        Assert.That(doc.RootElement.GetProperty("added").GetArrayLength(), Is.EqualTo(2));
+        Assert.That(doc.RootElement.GetProperty("failed").GetArrayLength(), Is.EqualTo(0));
     }
 
     [Test]

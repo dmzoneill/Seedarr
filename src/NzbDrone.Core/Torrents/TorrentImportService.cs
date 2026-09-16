@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using NLog;
 
 namespace NzbDrone.Core.Torrents;
@@ -42,6 +44,46 @@ public class TorrentImportService : ITorrentImportService
         }
 
         ValidateInfoHash(parsed.InfoHash);
+
+        var existing = _torrentService.GetByInfoHash(parsed.InfoHash);
+        if (existing != null)
+        {
+            var existingTrackers = _trackerEntryService.GetByTorrentId(existing.Id);
+            var existingUrls = new HashSet<string>(existingTrackers.Select(t => t.Url), StringComparer.OrdinalIgnoreCase);
+
+            if (parsed.AnnounceList != null && parsed.AnnounceList.Count > 0)
+            {
+                for (var tier = 0; tier < parsed.AnnounceList.Count; tier++)
+                {
+                    foreach (var url in parsed.AnnounceList[tier])
+                    {
+                        if (!string.IsNullOrWhiteSpace(url) && existingUrls.Add(url))
+                        {
+                            _trackerEntryService.Add(new TrackerEntry
+                            {
+                                TorrentId = existing.Id,
+                                Url = url,
+                                Tier = tier,
+                                Enabled = true,
+                            });
+                        }
+                    }
+                }
+            }
+            else if (!string.IsNullOrWhiteSpace(parsed.AnnounceUrl) && existingUrls.Add(parsed.AnnounceUrl))
+            {
+                _trackerEntryService.Add(new TrackerEntry
+                {
+                    TorrentId = existing.Id,
+                    Url = parsed.AnnounceUrl,
+                    Tier = 0,
+                    Enabled = true,
+                });
+            }
+
+            _eventLogService.Info(existing.Id, "Update", $"Torrent '{existing.Name}' updated with new trackers from file '{fileName}'");
+            return existing;
+        }
 
         var torrent = new Torrent
         {
@@ -92,17 +134,21 @@ public class TorrentImportService : ITorrentImportService
         if (parsed.AnnounceList != null)
         {
             var tier = 0;
+            var addedUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var tierUrls in parsed.AnnounceList)
             {
                 foreach (var url in tierUrls)
                 {
-                    _trackerEntryService.Add(new TrackerEntry
+                    if (!string.IsNullOrWhiteSpace(url) && addedUrls.Add(url))
                     {
-                        TorrentId = addedTorrent.Id,
-                        Url = url,
-                        Tier = tier,
-                        Enabled = true
-                    });
+                        _trackerEntryService.Add(new TrackerEntry
+                        {
+                            TorrentId = addedTorrent.Id,
+                            Url = url,
+                            Tier = tier,
+                            Enabled = true
+                        });
+                    }
                 }
 
                 tier++;
@@ -133,6 +179,36 @@ public class TorrentImportService : ITorrentImportService
 
         ValidateInfoHash(parsed.InfoHash);
 
+        var existing = _torrentService.GetByInfoHash(parsed.InfoHash);
+        if (existing != null)
+        {
+            var existingTrackers = _trackerEntryService.GetByTorrentId(existing.Id);
+            var existingUrls = new HashSet<string>(existingTrackers.Select(t => t.Url), StringComparer.OrdinalIgnoreCase);
+
+            if (parsed.Trackers != null && parsed.Trackers.Length > 0)
+            {
+                var tier = 0;
+                foreach (var url in parsed.Trackers)
+                {
+                    if (!string.IsNullOrWhiteSpace(url) && existingUrls.Add(url))
+                    {
+                        _trackerEntryService.Add(new TrackerEntry
+                        {
+                            TorrentId = existing.Id,
+                            Url = url,
+                            Tier = tier,
+                            Enabled = true
+                        });
+                    }
+
+                    tier++;
+                }
+            }
+
+            _eventLogService.Info(existing.Id, "Update", $"Torrent '{existing.Name}' updated with new trackers from magnet link");
+            return existing;
+        }
+
         var torrent = new Torrent
         {
             Name = parsed.Name,
@@ -148,15 +224,21 @@ public class TorrentImportService : ITorrentImportService
         if (parsed.Trackers != null)
         {
             var tier = 0;
+            var addedUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var url in parsed.Trackers)
             {
-                _trackerEntryService.Add(new TrackerEntry
+                if (!string.IsNullOrWhiteSpace(url) && addedUrls.Add(url))
                 {
-                    TorrentId = added.Id,
-                    Url = url,
-                    Tier = tier++,
-                    Enabled = true
-                });
+                    _trackerEntryService.Add(new TrackerEntry
+                    {
+                        TorrentId = added.Id,
+                        Url = url,
+                        Tier = tier,
+                        Enabled = true
+                    });
+                }
+
+                tier++;
             }
         }
 
@@ -168,11 +250,6 @@ public class TorrentImportService : ITorrentImportService
         if (string.IsNullOrWhiteSpace(infoHash))
         {
             throw new ArgumentException("Info hash is required", nameof(infoHash));
-        }
-
-        if (_torrentService.ExistsByInfoHash(infoHash))
-        {
-            throw new InvalidOperationException("Torrent with this info hash already exists");
         }
     }
 }

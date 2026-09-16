@@ -49,7 +49,7 @@ public class AddTorrentCommandExecutorTest
     }
 
     [Test]
-    public void Execute_should_skip_when_torrent_already_exists_by_info_hash()
+    public void Execute_should_merge_trackers_when_torrent_already_exists()
     {
         var command = new AddTorrentCommand { FilePath = "/path/to/existing.torrent" };
         var parsed = new ParsedTorrent
@@ -57,17 +57,28 @@ public class AddTorrentCommandExecutorTest
             Name = "Existing",
             InfoHash = "abc123hash",
             TotalSize = 1000,
+            AnnounceList = new List<List<string>>
+            {
+                new() { "http://tracker1.example.com/announce", "http://tracker2.example.com/announce" }
+            },
             Files = new List<ParsedTorrentFile> { new() { Path = "file.iso", Size = 1000 } }
         };
 
+        var existing = new Torrent { Id = 10, InfoHash = "abc123hash" };
+
         _parser.Parse("/path/to/existing.torrent").Returns(parsed);
-        _torrentService.ExistsByInfoHash("abc123hash").Returns(true);
+        _torrentService.GetByInfoHash("abc123hash").Returns(existing);
+        _trackerEntryService.GetByTorrentId(10).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 10, Url = "http://tracker1.example.com/announce", Tier = 0 }
+        });
 
         _subject.Execute(command);
 
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
         _torrentFileService.DidNotReceive().Add(Arg.Any<TorrentFile>());
-        _trackerEntryService.DidNotReceive().Add(Arg.Any<TrackerEntry>());
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 10 && t.Url == "http://tracker2.example.com/announce" && t.Tier == 0));
+        _trackerEntryService.DidNotReceive().Add(Arg.Is<TrackerEntry>(t => t.Url == "http://tracker1.example.com/announce"));
     }
 
     [Test]

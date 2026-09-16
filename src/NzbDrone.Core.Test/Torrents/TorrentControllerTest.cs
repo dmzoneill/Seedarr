@@ -182,4 +182,35 @@ public class TorrentControllerTest
         Assert.That(torrent.TrackerUrl, Is.EqualTo("http://tracker2.com/announce"));
         _torrentService.Received(1).Update(torrent);
     }
+
+    [Test]
+    public void Create_with_existing_torrent_merges_trackers_and_returns_Ok()
+    {
+        const string infoHash = "0123456789abcdef0123456789abcdef01234567";
+        var existing = new Torrent
+        {
+            Id = 50,
+            Name = "Existing",
+            InfoHash = infoHash,
+        };
+
+        _torrentService.GetByInfoHash(infoHash).Returns(existing);
+        _trackerEntryService.GetByTorrentId(50).Returns(new List<TrackerEntry>
+        {
+            new() { Id = 1, TorrentId = 50, Url = "http://existing-tracker.com/announce", Tier = 0 }
+        });
+
+        var resource = new TorrentResource
+        {
+            Name = "Existing",
+            InfoHash = infoHash,
+            Trackers = new List<string> { "http://existing-tracker.com/announce", "http://new-tracker.com/announce" }
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == 50 && t.Url == "http://new-tracker.com/announce"));
+    }
 }
