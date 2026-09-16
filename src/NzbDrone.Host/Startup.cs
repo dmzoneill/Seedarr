@@ -6,9 +6,11 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using DryIoc;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -300,13 +302,55 @@ public class Startup
         app.UseAuthentication();
         app.UseAuthorization();
 
-        app.UseSwagger();
-        app.UseSwaggerUI(c =>
+        app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/swagger"), swaggerApp =>
         {
-            c.SwaggerEndpoint("/swagger/v1/swagger.json", "Seedarr REST API v1");
-            c.RoutePrefix = "swagger";
-            c.InjectStylesheet("/swagger-custom.css");
-            c.ConfigObject.PersistAuthorization = true;
+            swaggerApp.Use(async (context, next) =>
+            {
+                context.Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
+                context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self'";
+
+                var config = context.RequestServices.GetRequiredService<IConfigFileProvider>();
+                if (config.AuthenticationEnabled)
+                {
+                    var isAuth = context.User?.Identity?.IsAuthenticated == true;
+                    if (!isAuth)
+                    {
+                        var authResult = await context.AuthenticateAsync("Cookies");
+                        if (authResult.Succeeded)
+                        {
+                            isAuth = true;
+                            context.User = authResult.Principal;
+                        }
+                        else
+                        {
+                            var apiKeyResult = await context.AuthenticateAsync(ApiKeyAuthenticationOptions.DefaultScheme);
+                            if (apiKeyResult.Succeeded)
+                            {
+                                isAuth = true;
+                                context.User = apiKeyResult.Principal;
+                            }
+                        }
+                    }
+
+                    if (!isAuth)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        await context.Response.WriteAsync("Authentication required to access API documentation.");
+                        return;
+                    }
+                }
+
+                await next();
+            });
+
+            swaggerApp.UseSwagger();
+            swaggerApp.UseSwaggerUI(c =>
+            {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "Seedarr REST API v1");
+                c.RoutePrefix = "swagger";
+                c.InjectStylesheet("/swagger-custom.css");
+                c.ConfigObject.PersistAuthorization = true;
+            });
         });
 
         app.MapControllers();
