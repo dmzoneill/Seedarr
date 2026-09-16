@@ -17,6 +17,7 @@ public interface IArrConnection : IProvider
     string ArrType { get; }
     string Url { get; set; }
     string ApiKey { get; set; }
+    bool AcceptInvalidCertificates { get; set; }
     List<ArrDownloadRecord> GetDownloadHistory();
     MediaMetadata GetMediaDetails(int mediaId);
     MediaMetadata LookupMedia(string title);

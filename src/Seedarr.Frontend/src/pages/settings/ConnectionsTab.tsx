@@ -11,6 +11,14 @@ import {
 import type { ArrConnection, ArrTestResult } from "../../api/types";
 import { TextInput, SelectInput, Toggle, NumberInput, SectionCard } from "./shared";
 
+const normalizeExternalUrl = (url?: string) => {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  return `http://${url}`;
+};
+
 export function ConnectionsTab() {
   const { data: connections, isLoading } = useArrConnections();
   const createMutation = useCreateArrConnection();
@@ -37,6 +45,8 @@ export function ConnectionsTab() {
     syncEnabled: true,
     enableAutomaticAdd: true,
     webhookEnabled: true,
+    syncIntervalMinutes: 60,
+    acceptInvalidCertificates: false,
     implementation: "SonarrConnection",
     configContract: "ArrConnectionDefinition",
   };
@@ -150,7 +160,7 @@ export function ConnectionsTab() {
               <div className="provider-card-actions">
                 {conn.url && (
                   <a
-                    href={conn.url}
+                    href={normalizeExternalUrl(conn.url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="provider-card-action"
@@ -344,6 +354,28 @@ export function ConnectionsTab() {
                 hint="Hostname or IP for *arr to reach Seedarr (leave empty to use default)"
               />
             )}
+            <Toggle
+              label="Accept Invalid SSL / Self-Signed Certificates"
+              checked={editing.acceptInvalidCertificates ?? false}
+              onChange={(v) =>
+                setEditing({ ...editing, acceptInvalidCertificates: v })
+              }
+              hint="Allow self-signed or invalid SSL/TLS certificates when connecting to this service over HTTPS"
+            />
+            <TextInput
+              label="Sync Interval (Minutes)"
+              value={String(editing.syncIntervalMinutes ?? 60)}
+              onChange={(v) => {
+                const num = parseInt(v, 10);
+                setEditing({
+                  ...editing,
+                  syncIntervalMinutes: isNaN(num) ? 60 : Math.max(1, num),
+                });
+              }}
+              type="number"
+              placeholder="60"
+              hint="Interval in minutes between periodic syncs (minimum 1)"
+            />
 
             {testDirectMutation.isPending && (
               <div

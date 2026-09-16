@@ -11,22 +11,31 @@ namespace NzbDrone.Core.ArrIntegration;
 
 public class SonarrConnection : IArrConnection
 {
-    private readonly HttpClient _client;
+    private readonly HttpClient _explicitClient;
     private readonly ResiliencePipeline _policy;
     private readonly Logger _logger;
-
-    public string Name => "Sonarr";
-    public string ArrType => "Sonarr";
-
-    public string Url { get; set; } = "http://localhost:8989";
-    public string ApiKey { get; set; } = "";
+    private string _url = "http://localhost:8989";
 
     public SonarrConnection(HttpClient client = null, ResiliencePipeline policy = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
-        _client = client ?? ArrConnectionResources.SharedClient;
+        _explicitClient = client;
         _policy = policy ?? ArrConnectionResources.SharedPolicy;
     }
+
+    public string Name => "Sonarr";
+    public string ArrType => "Sonarr";
+
+    public string Url
+    {
+        get => _url;
+        set => _url = ArrConnectionResources.NormalizeUrl(value);
+    }
+
+    public string ApiKey { get; set; } = "";
+    public bool AcceptInvalidCertificates { get; set; }
+
+    private HttpClient Client => _explicitClient ?? ArrConnectionResources.GetClient(AcceptInvalidCertificates);
 
     public List<ArrDownloadRecord> GetDownloadHistory()
     {
@@ -37,7 +46,7 @@ public class SonarrConnection : IArrConnection
                 using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v3/history?pageSize=50&sortKey=date&sortDirection=descending");
                 request.Headers.Add("X-Api-Key", ApiKey);
 
-                using var response = _client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.Warn("Sonarr API returned {0}", response.StatusCode);
@@ -119,7 +128,7 @@ public class SonarrConnection : IArrConnection
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v3/series/{mediaId}");
                 request.Headers.Add("X-Api-Key", ApiKey ?? "");
-                using var response = _client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     return (string)null;
@@ -238,7 +247,7 @@ public class SonarrConnection : IArrConnection
                 var searchUrl = $"{Url.TrimEnd('/')}/api/v3/series/lookup?term={Uri.EscapeDataString(title.Trim())}";
                 using var request = new HttpRequestMessage(HttpMethod.Get, searchUrl);
                 request.Headers.Add("X-Api-Key", ApiKey ?? "");
-                using var response = _client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     return (string)null;
@@ -333,20 +342,20 @@ public class SonarrConnection : IArrConnection
 
     public ArrTestResult TestConnectionDetailed()
     {
-        if (string.IsNullOrWhiteSpace(Url))
+        if (!ArrConnectionResources.TryNormalizeUrl(Url, out var normalizedUrl, out var urlError))
         {
-            return ArrTestResult.Fail("URL cannot be empty");
+            return ArrTestResult.Fail(urlError);
         }
 
         try
         {
             using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v3/system/status");
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{normalizedUrl}/api/v3/system/status");
             request.Headers.Add("X-Api-Key", ApiKey ?? "");
-            using var response = _client.Send(request, cts.Token);
+            using var response = Client.Send(request, cts.Token);
             if (response.IsSuccessStatusCode)
             {
-                return ArrTestResult.Ok($"Successfully connected to Sonarr at {Url}");
+                return ArrTestResult.Ok($"Successfully connected to Sonarr at {normalizedUrl}");
             }
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
@@ -356,7 +365,7 @@ public class SonarrConnection : IArrConnection
 
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                return ArrTestResult.Fail($"Endpoint not found (HTTP 404 Not Found) at {Url}. Verify the URL and port.");
+                return ArrTestResult.Fail($"Endpoint not found (HTTP 404 Not Found) at {normalizedUrl}. Verify the URL and port.");
             }
 
             return ArrTestResult.Fail($"Sonarr returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
@@ -369,7 +378,7 @@ public class SonarrConnection : IArrConnection
         catch (TaskCanceledException)
         {
             _logger.Error("Sonarr connection test timed out");
-            return ArrTestResult.Fail($"Connection timed out connecting to {Url} (exceeded 10s)");
+            return ArrTestResult.Fail($"Connection timed out connecting to {normalizedUrl} (exceeded 10s)");
         }
         catch (Exception ex)
         {
