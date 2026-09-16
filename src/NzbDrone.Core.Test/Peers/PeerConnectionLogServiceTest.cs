@@ -253,4 +253,18 @@ public class PeerConnectionLogServiceTest
 
         Assert.That(capturedLog.TorrentName, Is.EqualTo("another.torrent"));
     }
+
+    [Test]
+    public void GetConnectionCounts_should_delegate_to_repository()
+    {
+        var start = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc);
+        _repository.GetConnectionCounts(start, end).Returns((42, 10));
+
+        var result = _service.GetConnectionCounts(start, end);
+
+        Assert.That(result.EncryptedCount, Is.EqualTo(42));
+        Assert.That(result.PlaintextCount, Is.EqualTo(10));
+        _repository.Received(1).GetConnectionCounts(start, end);
+    }
 }
