@@ -211,4 +211,130 @@ public class ConfigFileProviderTest
 
         Assert.That(exceptions, Is.Empty);
     }
+
+    [Test]
+    public void SaveConfigDictionary_writes_atomically_and_creates_backup()
+    {
+        var configFile = Path.Combine(_tempDir, "config.xml");
+        var backupFile = Path.Combine(_tempDir, "config.xml.bak");
+        var tempFile = Path.Combine(_tempDir, "config.xml.tmp");
+
+        _subject.SaveConfigDictionary(new System.Collections.Generic.Dictionary<string, object>
+        {
+            { "Port", 9100 }
+        });
+
+        Assert.That(File.Exists(configFile), Is.True);
+        Assert.That(File.Exists(tempFile), Is.False);
+        var firstContent = File.ReadAllText(configFile);
+        Assert.That(firstContent, Does.Contain("<Port>9100</Port>"));
+
+        _subject.SaveConfigDictionary(new System.Collections.Generic.Dictionary<string, object>
+        {
+            { "Port", 9200 }
+        });
+
+        Assert.That(File.Exists(configFile), Is.True);
+        Assert.That(File.Exists(backupFile), Is.True);
+        Assert.That(File.Exists(tempFile), Is.False);
+
+        var updatedContent = File.ReadAllText(configFile);
+        var backupContent = File.ReadAllText(backupFile);
+
+        Assert.That(updatedContent, Does.Contain("<Port>9200</Port>"));
+        Assert.That(backupContent, Does.Contain("<Port>9100</Port>"));
+    }
+
+    [Test]
+    public void LoadFromFile_with_empty_config_recovers_from_backup()
+    {
+        var configFile = Path.Combine(_tempDir, "config.xml");
+        var backupFile = Path.Combine(_tempDir, "config.xml.bak");
+
+        const string backupXml = "<Config><Port>7777</Port><ApiKey>mybackupkey12345678901234567890</ApiKey></Config>";
+        File.WriteAllText(backupFile, backupXml);
+        File.WriteAllText(configFile, string.Empty);
+
+        var provider = new ConfigFileProvider(new TestAppFolderInfo(_tempDir));
+
+        Assert.That(provider.Port, Is.EqualTo(7777));
+        Assert.That(provider.ApiKey, Is.EqualTo("mybackupkey12345678901234567890"));
+        Assert.That(File.ReadAllText(configFile), Does.Contain("<Port>7777</Port>"));
+    }
+
+    [Test]
+    public void LoadFromFile_with_corrupted_xml_recovers_from_backup()
+    {
+        var configFile = Path.Combine(_tempDir, "config.xml");
+        var backupFile = Path.Combine(_tempDir, "config.xml.bak");
+
+        const string backupXml = "<Config><Port>8888</Port><ApiKey>validbackuplongkey1234567890123</ApiKey></Config>";
+        File.WriteAllText(backupFile, backupXml);
+        File.WriteAllText(configFile, "<Config><Port>1234</incomplete");
+
+        var provider = new ConfigFileProvider(new TestAppFolderInfo(_tempDir));
+
+        Assert.That(provider.Port, Is.EqualTo(8888));
+        Assert.That(provider.ApiKey, Is.EqualTo("validbackuplongkey1234567890123"));
+        Assert.That(File.ReadAllText(configFile), Does.Contain("<Port>8888</Port>"));
+    }
+
+    [Test]
+    public void LoadFromFile_with_missing_root_element_recovers_from_backup()
+    {
+        var configFile = Path.Combine(_tempDir, "config.xml");
+        var backupFile = Path.Combine(_tempDir, "config.xml.bak");
+
+        const string backupXml = "<Config><Port>6666</Port><ApiKey>validbackuplongkey1234567890123</ApiKey></Config>";
+        File.WriteAllText(backupFile, backupXml);
+        File.WriteAllText(configFile, "<WrongRoot><Port>1234</Port></WrongRoot>");
+
+        var provider = new ConfigFileProvider(new TestAppFolderInfo(_tempDir));
+
+        Assert.That(provider.Port, Is.EqualTo(6666));
+        Assert.That(provider.ApiKey, Is.EqualTo("validbackuplongkey1234567890123"));
+    }
+
+    [Test]
+    public void LoadFromFile_when_both_config_and_backup_are_corrupted_falls_back_to_defaults()
+    {
+        var configFile = Path.Combine(_tempDir, "config.xml");
+        var backupFile = Path.Combine(_tempDir, "config.xml.bak");
+
+        File.WriteAllText(configFile, "<invalid xml><><");
+        File.WriteAllText(backupFile, "<also invalid xml");
+
+        ConfigFileProvider provider = null;
+        Assert.DoesNotThrow(() =>
+        {
+            provider = new ConfigFileProvider(new TestAppFolderInfo(_tempDir));
+        });
+
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider.Port, Is.EqualTo(9898));
+        Assert.That(provider.ApiKey, Is.Not.Empty);
+        Assert.That(File.Exists(configFile), Is.True);
+        Assert.That(File.ReadAllText(configFile), Does.Contain("<Port>9898</Port>"));
+    }
+
+    [Test]
+    public void LoadFromFile_when_both_missing_falls_back_to_defaults()
+    {
+        var configFile = Path.Combine(_tempDir, "config.xml");
+        var backupFile = Path.Combine(_tempDir, "config.xml.bak");
+
+        Assert.That(File.Exists(configFile), Is.False);
+        Assert.That(File.Exists(backupFile), Is.False);
+
+        ConfigFileProvider provider = null;
+        Assert.DoesNotThrow(() =>
+        {
+            provider = new ConfigFileProvider(new TestAppFolderInfo(_tempDir));
+        });
+
+        Assert.That(provider, Is.Not.Null);
+        Assert.That(provider.Port, Is.EqualTo(9898));
+        Assert.That(provider.ApiKey, Is.Not.Empty);
+        Assert.That(File.Exists(configFile), Is.True);
+    }
 }
