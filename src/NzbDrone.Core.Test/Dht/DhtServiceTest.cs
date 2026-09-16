@@ -1417,6 +1417,78 @@ public class DhtServiceTest
         Assert.That(task.Wait(TimeSpan.FromSeconds(3)), Is.True);
     }
 
+    // ── ConfigSavedEvent & Dynamic Start/Stop ─────────────────────────
+
+    [Test]
+    public void Handle_ConfigSavedEvent_should_start_dht_when_toggled_to_enabled()
+    {
+        _configService.EnableDht.Returns(false);
+        using var service = new DhtService(_configService);
+
+        Assert.That(service.IsRunning, Is.False);
+        Assert.That(service.BoundPort, Is.EqualTo(0));
+
+        _configService.EnableDht.Returns(true);
+        Assert.DoesNotThrow(() => service.Handle(new ConfigSavedEvent()));
+    }
+
+    [Test]
+    public void Handle_ConfigSavedEvent_should_stop_dht_when_toggled_to_disabled()
+    {
+        _configService.EnableDht.Returns(true);
+        using var service = new DhtService(_configService);
+
+        service.Handle(new ConfigSavedEvent());
+
+        _configService.EnableDht.Returns(false);
+        service.Handle(new ConfigSavedEvent());
+
+        Assert.That(service.IsRunning, Is.False);
+        Assert.That(service.BoundPort, Is.EqualTo(0));
+        Assert.That(service.LocalEndPoint, Is.Null);
+    }
+
+    [Test]
+    public void Handle_ConfigSavedEvent_should_be_noop_when_state_is_unchanged()
+    {
+        _configService.EnableDht.Returns(false);
+        using var service = new DhtService(_configService);
+
+        service.Handle(new ConfigSavedEvent());
+        Assert.That(service.IsRunning, Is.False);
+
+        service.Handle(new ConfigSavedEvent());
+        Assert.That(service.IsRunning, Is.False);
+    }
+
+    [Test]
+    public async Task ExecuteAsync_when_disabled_stays_alive_and_toggles_via_ConfigSavedEvent()
+    {
+        _configService.EnableDht.Returns(false);
+        using var service = new DhtService(_configService);
+
+        var executeMethod = typeof(DhtService).GetMethod("ExecuteAsync", BindingFlags.NonPublic | BindingFlags.Instance);
+        using var cts = new CancellationTokenSource();
+        var task = (Task)executeMethod.Invoke(service, new object[] { cts.Token });
+
+        Assert.That(service.IsRunning, Is.False);
+        Assert.That(service.BoundPort, Is.EqualTo(0));
+        Assert.That(task.IsCompleted, Is.False, "ExecuteAsync should stay alive when disabled");
+
+        _configService.EnableDht.Returns(true);
+        service.Handle(new ConfigSavedEvent());
+
+        _configService.EnableDht.Returns(false);
+        service.Handle(new ConfigSavedEvent());
+
+        Assert.That(service.IsRunning, Is.False);
+        Assert.That(service.BoundPort, Is.EqualTo(0));
+
+        await cts.CancelAsync();
+        var finished = await Task.WhenAny(task, Task.Delay(2000));
+        Assert.That(finished, Is.EqualTo(task), "ExecuteAsync should complete after cancellation");
+    }
+
     // ── ExecuteAsync: port unavailable ──────────────────────────────
 
     [Test]
