@@ -74,8 +74,7 @@ public class AuthController : ControllerBase
 
         var isValid = !_configFileProvider.AuthenticationEnabled ||
                       (!string.IsNullOrWhiteSpace(masterApiKey) &&
-                       (FixedTimeEquals(enteredPass, masterApiKey) ||
-                        (!string.IsNullOrWhiteSpace(enteredUser) && FixedTimeEquals(enteredUser, masterApiKey))));
+                       FixedTimeEquals(enteredPass, masterApiKey));
 
         if (!isValid)
         {
@@ -83,7 +82,10 @@ public class AuthController : ControllerBase
             return Unauthorized(new { error = "Invalid credentials. Please verify your username and password or API key." });
         }
 
-        var username = !string.IsNullOrWhiteSpace(enteredUser) ? enteredUser : "admin";
+        var username = string.IsNullOrWhiteSpace(enteredUser) ||
+                       (!string.IsNullOrWhiteSpace(masterApiKey) && FixedTimeEquals(enteredUser, masterApiKey))
+                       ? "admin"
+                       : enteredUser;
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, "1"),

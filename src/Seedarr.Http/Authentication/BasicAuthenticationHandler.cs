@@ -57,12 +57,17 @@ public class BasicAuthenticationHandler : AuthenticationHandler<BasicAuthenticat
 
             if (!_configFileProvider.AuthenticationEnabled ||
                 (!string.IsNullOrWhiteSpace(configuredApiKey) &&
-                 (FixedTimeEquals(password, configuredApiKey) || FixedTimeEquals(username, configuredApiKey))))
+                 FixedTimeEquals(password, configuredApiKey)))
             {
+                var safeUsername = string.IsNullOrWhiteSpace(username) ||
+                                   (!string.IsNullOrWhiteSpace(configuredApiKey) && FixedTimeEquals(username, configuredApiKey))
+                                   ? "Admin"
+                                   : username;
+
                 var claims = new[]
                 {
                     new Claim(ClaimTypes.NameIdentifier, "1"),
-                    new Claim(ClaimTypes.Name, string.IsNullOrWhiteSpace(username) ? "Admin" : username),
+                    new Claim(ClaimTypes.Name, safeUsername),
                     new Claim(ClaimTypes.Role, "Admin"),
                 };
                 var identity = new ClaimsIdentity(claims, BasicAuthenticationOptions.DefaultScheme);
