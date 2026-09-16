@@ -434,4 +434,66 @@ public class ConfigControllerTests
             request.SslPort,
             true);
     }
+
+    [Test]
+    public void SaveConfig_saves_xml_properties_to_file_provider_and_only_non_xml_properties_to_config_service()
+    {
+        var resource = new GeneralConfigResource
+        {
+            Port = 8080,
+            SslPort = 8443,
+            BindAddress = "0.0.0.0",
+            UrlBase = "/seedarr",
+            ApiKey = "myapikey12345678901234567890",
+            EnableSsl = true,
+            AuthenticationEnabled = true,
+            TerminalAccessEnabled = false,
+            SslCertPath = "/cert.pfx",
+            SslKeyPath = "/key.pem",
+            SslCertPassword = "password123",
+            RedirectHttpToHttps = true,
+            AutoStart = true,
+            WatchFolderEnabled = true,
+            WatchFolderPath = "/watch",
+            WatchFolderScanIntervalSeconds = 15,
+            ThemeStyle = "dark",
+            ColorScheme = "blue"
+        };
+
+        var result = _controller.SaveConfig(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<AcceptedResult>());
+
+        _configFileProvider.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            (int)d["Port"] == 8080 &&
+            (int)d["SslPort"] == 8443 &&
+            (string)d["BindAddress"] == "0.0.0.0" &&
+            (string)d["UrlBase"] == "/seedarr" &&
+            (string)d["ApiKey"] == "myapikey12345678901234567890" &&
+            (bool)d["EnableSsl"] == true &&
+            (bool)d["AuthenticationEnabled"] == true &&
+            (bool)d["TerminalAccessEnabled"] == false &&
+            (string)d["SslCertPath"] == "/cert.pfx" &&
+            (string)d["SslKeyPath"] == "/key.pem" &&
+            (string)d["SslCertPassword"] == "password123" &&
+            (bool)d["RedirectHttpToHttps"] == true));
+
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            !d.ContainsKey("Port") &&
+            !d.ContainsKey("SslPort") &&
+            !d.ContainsKey("BindAddress") &&
+            !d.ContainsKey("UrlBase") &&
+            !d.ContainsKey("ApiKey") &&
+            !d.ContainsKey("EnableSsl") &&
+            !d.ContainsKey("AuthenticationEnabled") &&
+            !d.ContainsKey("TerminalAccessEnabled") &&
+            !d.ContainsKey("SslCertPath") &&
+            !d.ContainsKey("SslKeyPath") &&
+            !d.ContainsKey("SslCertPassword") &&
+            !d.ContainsKey("RedirectHttpToHttps") &&
+            (bool)d["AutoStart"] == true &&
+            (bool)d["WatchFolderEnabled"] == true &&
+            (string)d["WatchFolderPath"] == "/watch" &&
+            (int)d["WatchFolderScanIntervalSeconds"] == 15));
+    }
 }

@@ -3,7 +3,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Xml;
 using System.Xml.Linq;
+using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 
 namespace NzbDrone.Core.Configuration;
@@ -13,9 +15,11 @@ public class ConfigFileProvider : IConfigFileProvider
     private const string ConfigFileName = "config.xml";
     private const string ConfigElementName = "Config";
 
+    private static readonly object Mutex = new();
+
+    private readonly Logger _logger;
     private readonly string _configFile;
     private readonly Dictionary<string, string> _config;
-    private static readonly object Mutex = new();
 
     public ConfigFileProvider(IAppFolderInfo appFolderInfo)
     {
@@ -24,6 +28,7 @@ public class ConfigFileProvider : IConfigFileProvider
             throw new ArgumentNullException(nameof(appFolderInfo));
         }
 
+        _logger = LogManager.GetCurrentClassLogger();
         _configFile = Path.Combine(appFolderInfo.AppDataFolder, ConfigFileName);
         _config = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
@@ -93,22 +98,100 @@ public class ConfigFileProvider : IConfigFileProvider
     {
         lock (Mutex)
         {
-            if (!File.Exists(_configFile))
+            var backupFile = _configFile + ".bak";
+
+            if (File.Exists(_configFile))
             {
-                return;
+                if (TryLoadConfig(_configFile, out var loadedConfig))
+                {
+                    _config.Clear();
+                    foreach (var kvp in loadedConfig)
+                    {
+                        _config[kvp.Key] = kvp.Value;
+                    }
+
+                    return;
+                }
+
+                _logger.Warn("Failed to load config file at {0}. File is empty, corrupted, or missing root element. Attempting recovery from backup...", _configFile);
             }
 
-            var xDoc = XDocument.Load(_configFile);
-            var config = xDoc.Element(ConfigElementName);
-            if (config == null)
+            if (File.Exists(backupFile))
             {
-                return;
+                if (TryLoadConfig(backupFile, out var backupConfig))
+                {
+                    _logger.Info("Successfully recovered configuration from backup at {0}", backupFile);
+                    _config.Clear();
+                    foreach (var kvp in backupConfig)
+                    {
+                        _config[kvp.Key] = kvp.Value;
+                    }
+
+                    try
+                    {
+                        var tempFile = _configFile + ".tmp";
+                        File.Copy(backupFile, tempFile, overwrite: true);
+                        File.Move(tempFile, _configFile, overwrite: true);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to restore primary config file from backup {0}", backupFile);
+                    }
+
+                    return;
+                }
+
+                _logger.Warn("Backup config file at {0} is also corrupted or invalid.", backupFile);
             }
 
-            foreach (var element in config.Elements())
+            if (File.Exists(_configFile) || File.Exists(backupFile))
             {
-                _config[element.Name.LocalName] = element.Value.Trim();
+                _logger.Warn("Both primary config file and backup at {0} are invalid. Initializing new default configuration.", _configFile);
             }
+
+            _config.Clear();
+        }
+    }
+
+    private bool TryLoadConfig(string path, out Dictionary<string, string> configValues)
+    {
+        configValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return false;
+            }
+
+            var fileInfo = new FileInfo(path);
+            if (fileInfo.Length == 0)
+            {
+                return false;
+            }
+
+            var xDoc = XDocument.Load(path);
+            var root = xDoc.Element(ConfigElementName);
+            if (root == null)
+            {
+                return false;
+            }
+
+            foreach (var element in root.Elements())
+            {
+                configValues[element.Name.LocalName] = element.Value.Trim();
+            }
+
+            return true;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Unexpected error loading config file at {0}", path);
+            return false;
         }
     }
 
@@ -125,6 +208,15 @@ public class ConfigFileProvider : IConfigFileProvider
     {
         lock (Mutex)
         {
+            var directory = Path.GetDirectoryName(_configFile);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var tempPath = _configFile + ".tmp";
+            var backupPath = _configFile + ".bak";
+
             var configElement = new XElement(ConfigElementName);
             foreach (var kvp in _config)
             {
@@ -132,7 +224,45 @@ public class ConfigFileProvider : IConfigFileProvider
             }
 
             var xDoc = new XDocument(new XDeclaration("1.0", "utf-8", "yes"), configElement);
-            xDoc.Save(_configFile);
+
+            using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                xDoc.Save(fileStream);
+                fileStream.Flush(true);
+            }
+
+            if (File.Exists(_configFile) && TryLoadConfig(_configFile, out _))
+            {
+                try
+                {
+                    File.Copy(_configFile, backupPath, overwrite: true);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to create backup config file at {0}", backupPath);
+                }
+            }
+
+            try
+            {
+                File.Move(tempPath, _configFile, overwrite: true);
+            }
+            catch
+            {
+                if (File.Exists(tempPath))
+                {
+                    try
+                    {
+                        File.Delete(tempPath);
+                    }
+                    catch
+                    {
+                        // Ignore cleanup error
+                    }
+                }
+
+                throw;
+            }
         }
     }
 

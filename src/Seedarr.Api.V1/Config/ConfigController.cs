@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Reflection;
 using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
@@ -16,6 +17,22 @@ namespace Seedarr.Api.V1.Config;
 [V1ApiController("config/general")]
 public class GeneralConfigController : ConfigController<GeneralConfigResource>
 {
+    private static readonly HashSet<string> XmlBoundProperties = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "BindAddress",
+        "Port",
+        "ApiKey",
+        "AuthenticationEnabled",
+        "TerminalAccessEnabled",
+        "UrlBase",
+        "EnableSsl",
+        "SslPort",
+        "SslCertPath",
+        "SslKeyPath",
+        "SslCertPassword",
+        "RedirectHttpToHttps"
+    };
+
     private readonly IConfigFileProvider _configFileProvider;
     private readonly ICertificateManager _certificateManager;
 
@@ -174,7 +191,14 @@ public class GeneralConfigController : ConfigController<GeneralConfigResource>
 
         _configFileProvider.SaveConfigDictionary(xmlValues);
 
-        return base.SaveConfig(resource);
+        var dbDictionary = resource.GetType()
+            .GetProperties(BindingFlags.Instance | BindingFlags.Public)
+            .Where(prop => prop.Name != "Id" && prop.Name != "ResourceName" && !XmlBoundProperties.Contains(prop.Name))
+            .ToDictionary(prop => prop.Name, prop => prop.GetValue(resource, null));
+
+        _configService.SaveConfigDictionary(dbDictionary);
+
+        return Accepted(resource);
     }
 
     [HttpGet("api-key")]
