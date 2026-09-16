@@ -322,6 +322,80 @@ public class TorrentControllerTest
     }
 
     [Test]
+    public void BulkAction_setCategory_propagates_category_bandwidth_limits_when_torrent_has_no_limits()
+    {
+        var category = new Category
+        {
+            Id = 5,
+            Name = "LimitedCategory",
+            DefaultDownloadLimit = 5000,
+            DefaultUploadLimit = 2000,
+        };
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Torrent 1",
+            DownloadLimit = 0,
+            UploadLimit = -1,
+        };
+
+        _categoryService.Get(5).Returns(category);
+        _torrentService.Get(1).Returns(torrent);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "setCategory",
+            CategoryId = 5,
+            TorrentIds = new List<int> { 1 },
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(torrent.Category, Is.EqualTo("LimitedCategory"));
+        Assert.That(torrent.DownloadLimit, Is.EqualTo(5000));
+        Assert.That(torrent.UploadLimit, Is.EqualTo(2000));
+        _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public void BulkAction_setCategory_preserves_custom_limits_when_torrent_already_has_limits()
+    {
+        var category = new Category
+        {
+            Id = 5,
+            Name = "LimitedCategory",
+            DefaultDownloadLimit = 5000,
+            DefaultUploadLimit = 2000,
+        };
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Torrent 1",
+            DownloadLimit = 8000,
+            UploadLimit = 4000,
+        };
+
+        _categoryService.Get(5).Returns(category);
+        _torrentService.Get(1).Returns(torrent);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "setCategory",
+            CategoryId = 5,
+            TorrentIds = new List<int> { 1 },
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(torrent.Category, Is.EqualTo("LimitedCategory"));
+        Assert.That(torrent.DownloadLimit, Is.EqualTo(8000));
+        Assert.That(torrent.UploadLimit, Is.EqualTo(4000));
+        _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
     public void Handle_rapid_consecutive_torrent_updates_coalesce_into_throttled_broadcasts()
     {
         _signalRBroadcaster.IsConnected.Returns(true);

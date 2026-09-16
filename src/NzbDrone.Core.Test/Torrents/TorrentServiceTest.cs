@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
@@ -282,7 +284,7 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
-        public void Update_should_return_updated_torrent()
+        public void Update_should_return_updated_torrent_and_publish_events()
         {
             var torrent = new Torrent { Id = 1, Name = "Updated" };
             _repository.Update(torrent).Returns(torrent);
@@ -290,6 +292,8 @@ namespace NzbDrone.Core.Test.Torrents
             var result = _subject.Update(torrent);
 
             Assert.That(result, Is.EqualTo(torrent));
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent == torrent));
+            _eventAggregator.Received(1).PublishEvent(Arg.Is<ModelEvent<Torrent>>(e => e.Model == torrent && e.Action == ModelAction.Updated));
         }
 
         [Test]
