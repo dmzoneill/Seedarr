@@ -21,6 +21,8 @@ public interface IConfigService
     // General
     bool AutoStart { get; }
     bool AutoPruneRemovedArtwork { get; }
+    int MediaCoverMaxCacheSizeMb { get; set; }
+    int MediaCoverCacheTtlDays { get; set; }
     string ThemeStyle { get; }
     string ColorScheme { get; }
     string UiLanguage { get; }
@@ -338,6 +340,19 @@ public class ConfigService : IConfigService
     // General
     public bool AutoStart => GetValueBoolean("AutoStart", true);
     public bool AutoPruneRemovedArtwork => GetValueBoolean("AutoPruneRemovedArtwork", true);
+
+    public int MediaCoverMaxCacheSizeMb
+    {
+        get => GetValueInt("MediaCoverMaxCacheSizeMb", 1024);
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "MediaCoverMaxCacheSizeMb", value } });
+    }
+
+    public int MediaCoverCacheTtlDays
+    {
+        get => GetValueInt("MediaCoverCacheTtlDays", 60);
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "MediaCoverCacheTtlDays", value } });
+    }
+
     public string ThemeStyle => GetValue("ThemeStyle", GetValue("UiTheme", "system"));
     public string ColorScheme => GetValue("ColorScheme", GetValue("UiAccent", "auto"));
     public string UiLanguage => GetValue("UiLanguage", "en");

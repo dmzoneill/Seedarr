@@ -1805,5 +1805,41 @@ namespace NzbDrone.Core.Test.Configuration
             Assert.That(uuid, Is.EqualTo(expectedUuid));
             _repository.DidNotReceive().Insert(Arg.Any<ConfigModel>());
         }
+
+        [Test]
+        public void MediaCoverMaxCacheSizeMb_should_return_default_1024_when_not_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.MediaCoverMaxCacheSizeMb, Is.EqualTo(1024));
+        }
+
+        [Test]
+        public void MediaCoverMaxCacheSizeMb_should_persist_value_when_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            _subject.MediaCoverMaxCacheSizeMb = 2048;
+
+            _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "MediaCoverMaxCacheSizeMb" && c.Value == "2048"));
+        }
+
+        [Test]
+        public void MediaCoverCacheTtlDays_should_return_default_60_when_not_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.MediaCoverCacheTtlDays, Is.EqualTo(60));
+        }
+
+        [Test]
+        public void MediaCoverCacheTtlDays_should_persist_value_when_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            _subject.MediaCoverCacheTtlDays = 90;
+
+            _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "MediaCoverCacheTtlDays" && c.Value == "90"));
+        }
     }
 }

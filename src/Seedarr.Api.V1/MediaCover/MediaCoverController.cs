@@ -175,6 +175,15 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             _ => "application/octet-stream",
         };
 
+        try
+        {
+            global::System.IO.File.SetLastAccessTimeUtc(fullPath, DateTime.UtcNow);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to update last access time for {0}", fullPath);
+        }
+
         return PhysicalFile(fullPath, contentType);
     }
 
