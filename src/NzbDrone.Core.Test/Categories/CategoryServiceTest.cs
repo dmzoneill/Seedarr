@@ -154,18 +154,26 @@ public class CategoryServiceTest
         var oldCat = new Category { Id = 1, Name = "OldName", IsDefault = false };
         var newCat = new Category { Id = 1, Name = "NewName", IsDefault = false };
 
-        var torrent1 = new Torrent { Id = 101, Name = "T1", Category = "OldName" };
-        var torrent2 = new Torrent { Id = 102, Name = "T2", Category = "Other" };
-
         _repository.Get(1).Returns(oldCat);
         _repository.Update(newCat).Returns(newCat);
-        _torrentRepository.All().Returns(new[] { torrent1, torrent2 });
 
         _subject.Update(newCat);
 
-        Assert.That(torrent1.Category, Is.EqualTo("NewName"));
-        _torrentRepository.Received(1).Update(torrent1);
-        _torrentRepository.DidNotReceive().Update(torrent2);
+        _torrentRepository.Received(1).UpdateCategoryName("OldName", "NewName");
+    }
+
+    [Test]
+    public void Update_when_category_name_unchanged_does_not_update_torrents()
+    {
+        var oldCat = new Category { Id = 1, Name = "SameName", IsDefault = false };
+        var newCat = new Category { Id = 1, Name = "SameName", IsDefault = false };
+
+        _repository.Get(1).Returns(oldCat);
+        _repository.Update(newCat).Returns(newCat);
+
+        _subject.Update(newCat);
+
+        _torrentRepository.DidNotReceive().UpdateCategoryName(Arg.Any<string>(), Arg.Any<string>());
     }
 
     [Test]
@@ -196,22 +204,15 @@ public class CategoryServiceTest
     public void Delete_when_category_is_not_default_deletes_and_clears_torrent_categories()
     {
         var cat = new Category { Id = 5, Name = "Anime", IsDefault = false };
-        var torrent1 = new Torrent { Id = 201, Name = "Show", Category = "Anime" };
-        var torrent2 = new Torrent { Id = 202, Name = "Movie", Category = "Movies" };
 
         _repository.Get(5).Returns(cat);
-        _torrentRepository.All().Returns(new[] { torrent1, torrent2 });
 
         _subject.Delete(5);
 
-        Assert.That(torrent1.Category, Is.EqualTo(string.Empty));
-        _torrentRepository.Received(1).Update(torrent1);
-        _torrentRepository.DidNotReceive().Update(torrent2);
-
+        _torrentRepository.Received(1).ClearCategory("Anime");
         _repository.Received(1).Delete(5);
         _eventAggregator.Received(1).PublishEvent(Arg.Is<CategoryDeletedEvent>(e =>
             e.CategoryId == 5 &&
-            e.CategoryName == "Anime" &&
-            e.AffectedTorrentIds.Contains(201)));
+            e.CategoryName == "Anime"));
     }
 }

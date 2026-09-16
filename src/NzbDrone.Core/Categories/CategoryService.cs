@@ -115,14 +115,7 @@ public class CategoryService : ICategoryService
             !string.IsNullOrWhiteSpace(existing.Name) &&
             !string.Equals(existing.Name, updated.Name, StringComparison.OrdinalIgnoreCase))
         {
-            var torrents = _torrentRepository.All()
-                .Where(t => string.Equals(t.Category, existing.Name, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            foreach (var torrent in torrents)
-            {
-                torrent.Category = updated.Name;
-                _torrentRepository.Update(torrent);
-            }
+            _torrentRepository.UpdateCategoryName(existing.Name, updated.Name);
         }
 
         _eventAggregator?.PublishEvent(new CategoryUpdatedEvent { Category = updated });
@@ -149,18 +142,9 @@ public class CategoryService : ICategoryService
 
         _logger.Info("Deleting category id: {0} ({1})", id, cat.Name);
 
-        var affectedTorrentIds = new List<int>();
         if (_torrentRepository != null && !string.IsNullOrWhiteSpace(cat.Name))
         {
-            var torrents = _torrentRepository.All()
-                .Where(t => string.Equals(t.Category, cat.Name, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            foreach (var torrent in torrents)
-            {
-                affectedTorrentIds.Add(torrent.Id);
-                torrent.Category = string.Empty;
-                _torrentRepository.Update(torrent);
-            }
+            _torrentRepository.ClearCategory(cat.Name);
         }
 
         _repository.Delete(id);
@@ -168,7 +152,6 @@ public class CategoryService : ICategoryService
         {
             CategoryId = id,
             CategoryName = cat.Name,
-            AffectedTorrentIds = affectedTorrentIds,
         });
     }
 
