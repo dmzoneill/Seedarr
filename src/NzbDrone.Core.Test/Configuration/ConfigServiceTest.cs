@@ -1499,11 +1499,11 @@ namespace NzbDrone.Core.Test.Configuration
         }
 
         [Test]
-        public void TrackerHttpPort_should_default_to_9696()
+        public void TrackerHttpPort_should_default_to_6969()
         {
             _repository.All().Returns(new List<ConfigModel>().AsQueryable());
 
-            Assert.That(_subject.TrackerHttpPort, Is.EqualTo(9696));
+            Assert.That(_subject.TrackerHttpPort, Is.EqualTo(6969));
         }
 
         [Test]
