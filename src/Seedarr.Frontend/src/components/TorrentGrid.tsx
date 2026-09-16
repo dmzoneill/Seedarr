@@ -1,9 +1,14 @@
+import { useState, useCallback } from "react";
 import { useTranslation } from "../i18n";
 import {
   useTorrents,
   useStartSeeding,
   useStopSeeding,
   useDeleteTorrent,
+  useUpdateTorrent,
+  useAnnounceTorrent,
+  useRecheckTorrent,
+  useMoveTorrentQueue,
   useArrConnections,
 } from "../api/hooks";
 import {
@@ -14,13 +19,20 @@ import {
   extractTrackerDomain,
 } from "../utils/formatters";
 import { getMediaDeepLink } from "../utils/arrLinks";
+import { filterTorrents } from "../utils/filterUtils";
+import TorrentContextMenu from "./TorrentContextMenu";
+import AddTorrentModal from "./AddTorrentModal";
+import type { Torrent } from "../api/types";
 
-interface TorrentGridProps {
+export interface TorrentGridProps {
   filter?: string;
   stateFilter?: string;
   trackerFilter?: string;
   categoryFilter?: string;
   tagFilter?: string;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number) => void;
+  onSelectAll?: () => void;
   selectedTorrentId?: number | null;
   onSelectTorrent?: (id: number | null) => void;
 }
@@ -31,6 +43,9 @@ function TorrentGrid({
   trackerFilter,
   categoryFilter,
   tagFilter,
+  selectedIds,
+  onToggleSelect,
+  onSelectAll,
   selectedTorrentId,
   onSelectTorrent,
 }: TorrentGridProps) {
@@ -40,6 +55,24 @@ function TorrentGrid({
   const startSeeding = useStartSeeding();
   const stopSeeding = useStopSeeding();
   const deleteTorrent = useDeleteTorrent();
+  const updateTorrent = useUpdateTorrent();
+  const announceTorrent = useAnnounceTorrent();
+  const recheckTorrent = useRecheckTorrent();
+  const moveTorrentQueue = useMoveTorrentQueue();
+
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    torrent: Torrent;
+  } | null>(null);
+  const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent, t: Torrent) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, torrent: t });
+  }, []);
+
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
 
   if (isLoading) {
     return (
@@ -103,32 +136,12 @@ function TorrentGrid({
     );
   }
 
-  const filtered = (torrents ?? []).filter((t) => {
-    if (filter && !t.name.toLowerCase().includes(filter.toLowerCase()))
-      return false;
-    if (stateFilter && stateFilter !== "All" && t.status !== stateFilter)
-      return false;
-    if (trackerFilter && trackerFilter !== "All") {
-      const urls =
-        t.trackers && t.trackers.length > 0
-          ? t.trackers
-          : t.trackerUrl
-            ? [t.trackerUrl]
-            : [];
-      const hasTracker = urls.some(
-        (u) => extractTrackerDomain(u) === trackerFilter,
-      );
-      if (!hasTracker) return false;
-    }
-    if (categoryFilter && categoryFilter !== "All") {
-      const cat = t.category?.trim() || "Uncategorized";
-      if (cat !== categoryFilter) return false;
-    }
-    if (tagFilter && tagFilter !== "All") {
-      const tag = t.label?.trim() || "Untagged";
-      if (tag !== tagFilter) return false;
-    }
-    return true;
+  const filtered = filterTorrents(torrents, {
+    filter,
+    stateFilter,
+    trackerFilter,
+    categoryFilter,
+    tagFilter,
   });
 
   if (filtered.length === 0) {
@@ -155,7 +168,9 @@ function TorrentGrid({
       {filtered.map((torrent) => {
         const displayTitle = torrent.mediaTitle || torrent.name;
         const hasPoster = Boolean(torrent.posterUrl);
-        const isSelected = selectedTorrentId === torrent.id;
+        const isSelected =
+          selectedTorrentId === torrent.id ||
+          (selectedIds?.has(torrent.id) ?? false);
         const isSeeding = torrent.status === "Seeding";
         const arrLink = getMediaDeepLink(
           {
@@ -169,7 +184,7 @@ function TorrentGrid({
         return (
           <div
             key={torrent.id}
-            className="card"
+            className={`card${isSelected ? " torrent-card-selected" : ""}`}
             style={{
               padding: 0,
               overflow: "hidden",
@@ -192,7 +207,18 @@ function TorrentGrid({
                 "transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease",
               cursor: "pointer",
             }}
-            onClick={() => onSelectTorrent?.(isSelected ? null : torrent.id)}
+            onClick={(e) => {
+              if (e.ctrlKey || e.metaKey) {
+                onToggleSelect?.(torrent.id);
+              } else {
+                onSelectTorrent?.(
+                  isSelected && selectedTorrentId === torrent.id
+                    ? null
+                    : torrent.id,
+                );
+              }
+            }}
+            onContextMenu={(e) => handleContextMenu(e, torrent)}
           >
             {/* Poster Artwork Box */}
             <div
@@ -260,45 +286,71 @@ function TorrentGrid({
                 </div>
               )}
 
-              {/* Source Badge (Top Left) */}
-              {torrent.source && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "8px",
-                    left: "8px",
-                    zIndex: 2,
-                  }}
+              {/* Selection Checkbox & Source Badge (Top Left) */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: "8px",
+                  left: "8px",
+                  zIndex: 3,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  className="torrent-checkbox"
+                  checked={selectedIds?.has(torrent.id) ?? false}
+                  onChange={() => {}}
                   onClick={(e) => {
-                    if (arrLink) {
-                      e.stopPropagation();
-                      window.open(arrLink.url, "_blank", "noopener,noreferrer");
-                    }
+                    e.stopPropagation();
+                    onToggleSelect?.(torrent.id);
                   }}
-                >
-                  <span
-                    className="badge"
-                    style={{
-                      backgroundColor: "rgba(0, 0, 0, 0.78)",
-                      backdropFilter: "blur(4px)",
-                      color: "#fff",
-                      fontSize: "0.68rem",
-                      padding: "0.2rem 0.5rem",
-                      border: "1px solid var(--border)",
-                      cursor: arrLink ? "pointer" : "default",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.25rem",
-                      borderRadius: "4px",
+                  style={{
+                    cursor: "pointer",
+                    width: 16,
+                    height: 16,
+                    margin: 0,
+                  }}
+                  aria-label={`Select ${torrent.name}`}
+                />
+                {torrent.source && (
+                  <div
+                    onClick={(e) => {
+                      if (arrLink) {
+                        e.stopPropagation();
+                        window.open(arrLink.url, "_blank", "noopener,noreferrer");
+                      }
                     }}
-                    title={
-                      arrLink ? `${arrLink.label} (${arrLink.url})` : torrent.source
-                    }
                   >
-                    {torrent.source} {arrLink ? "↗" : ""}
-                  </span>
-                </div>
-              )}
+                    <span
+                      className="badge"
+                      style={{
+                        backgroundColor: "rgba(0, 0, 0, 0.78)",
+                        backdropFilter: "blur(4px)",
+                        color: "#fff",
+                        fontSize: "0.68rem",
+                        padding: "0.2rem 0.5rem",
+                        border: "1px solid var(--border)",
+                        cursor: arrLink ? "pointer" : "default",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                        borderRadius: "4px",
+                      }}
+                      title={
+                        arrLink
+                          ? `${arrLink.label} (${arrLink.url})`
+                          : torrent.source
+                      }
+                    >
+                      {torrent.source} {arrLink ? "↗" : ""}
+                    </span>
+                  </div>
+                )}
+              </div>
 
               {/* Top-right Ratio Badge */}
               <div
@@ -501,7 +553,10 @@ function TorrentGrid({
                       justifyContent: "center",
                       gap: "0.35rem",
                     }}
-                    onClick={() => stopSeeding.mutate(torrent.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      stopSeeding.mutate(torrent.id);
+                    }}
                     title="Stop seeding"
                   >
                     <span>⏹</span> <span>{t("torrents.stop", undefined, "Stop")}</span>
@@ -518,7 +573,10 @@ function TorrentGrid({
                       justifyContent: "center",
                       gap: "0.35rem",
                     }}
-                    onClick={() => startSeeding.mutate(torrent.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startSeeding.mutate(torrent.id);
+                    }}
                     title="Start seeding"
                   >
                     <span>▶</span> <span>{t("torrents.start", undefined, "Start")}</span>
@@ -533,7 +591,8 @@ function TorrentGrid({
                     alignItems: "center",
                     justifyContent: "center",
                   }}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     if (confirm(`Delete "${torrent.name}"?`)) {
                       deleteTorrent.mutate({ id: torrent.id });
                     }
@@ -551,7 +610,10 @@ function TorrentGrid({
                     alignItems: "center",
                     justifyContent: "center",
                   }}
-                  onClick={() => onSelectTorrent?.(isSelected ? null : torrent.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectTorrent?.(isSelected ? null : torrent.id);
+                  }}
                   title="View full torrent details"
                 >
                   ℹ️
@@ -561,6 +623,34 @@ function TorrentGrid({
           </div>
         );
       })}
+
+      {contextMenu && (
+        <TorrentContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          torrent={contextMenu.torrent}
+          visibleColumns={new Set()}
+          allColumns={[]}
+          onClose={closeContextMenu}
+          onToggleColumn={() => {}}
+          onStart={(id) => startSeeding.mutate(id)}
+          onStop={(id) => stopSeeding.mutate(id)}
+          onUpdate={(t) => updateTorrent.mutate(t)}
+          onAnnounce={(id) => announceTorrent.mutate(id)}
+          onRecheck={(id) => recheckTorrent.mutate(id)}
+          onDelete={(payload) => deleteTorrent.mutate(payload)}
+          onMoveQueue={(payload) => moveTorrentQueue.mutate(payload)}
+          onSearchIndexers={(q) => setSearchModalQuery(q)}
+        />
+      )}
+
+      {searchModalQuery && (
+        <AddTorrentModal
+          initialMode="search"
+          initialQuery={searchModalQuery}
+          onClose={() => setSearchModalQuery(null)}
+        />
+      )}
     </div>
   );
 }
