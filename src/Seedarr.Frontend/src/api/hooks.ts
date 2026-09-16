@@ -1399,11 +1399,11 @@ export function useTrackerMetric(id: number) {
   });
 }
 
-export function useTrackerMetricHistory(id: number, hours = 24) {
+export function useTrackerMetricHistory(id: number, hours = 24, limit = 500) {
   return useQuery<TrackerMetricSnapshot[]>({
-    queryKey: ["trackermetrics", id, "history", hours],
+    queryKey: ["trackermetrics", id, "history", hours, limit],
     queryFn: () =>
-      apiClient.get(`/trackermetrics/${id}/history?hours=${hours}`),
+      apiClient.get(`/trackermetrics/${id}/history?hours=${hours}&limit=${limit}`),
     enabled: id > 0,
   });
 }

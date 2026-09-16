@@ -8,7 +8,7 @@ namespace NzbDrone.Core.Trackers.Metrics;
 
 public interface ITrackerMetricSnapshotRepository : IBasicRepository<TrackerMetricSnapshot>
 {
-    List<TrackerMetricSnapshot> GetHistory(int trackerMetricId, DateTime since);
+    List<TrackerMetricSnapshot> GetHistory(int trackerMetricId, DateTime since, int limit = 500);
     List<TrackerMetricSnapshot> GetRecentSnapshots(DateTime since);
     void PruneOlderThan(DateTime cutoff);
     void DeleteByMetricId(int trackerMetricId);
@@ -24,12 +24,12 @@ public class TrackerMetricSnapshotRepository : BasicRepository<TrackerMetricSnap
         _database = database;
     }
 
-    public List<TrackerMetricSnapshot> GetHistory(int trackerMetricId, DateTime since)
+    public List<TrackerMetricSnapshot> GetHistory(int trackerMetricId, DateTime since, int limit = 500)
     {
         using var connection = _database.OpenConnection();
         return connection.Query<TrackerMetricSnapshot>(
-            $"SELECT * FROM \"{_table}\" WHERE \"TrackerMetricId\" = @MetricId AND \"Timestamp\" >= @Since ORDER BY \"Timestamp\" ASC",
-            new { MetricId = trackerMetricId, Since = since })
+            $"SELECT * FROM \"{_table}\" WHERE \"TrackerMetricId\" = @MetricId AND \"Timestamp\" >= @Since ORDER BY \"Timestamp\" ASC LIMIT @Limit",
+            new { MetricId = trackerMetricId, Since = since, Limit = limit })
             .ToList();
     }
 

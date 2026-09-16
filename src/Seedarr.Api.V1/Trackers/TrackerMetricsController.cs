@@ -43,9 +43,24 @@ public class TrackerMetricsController : Controller
     }
 
     [HttpGet("{id:int}/history")]
-    public ActionResult<List<TrackerMetricSnapshot>> GetHistory(int id, [FromQuery] int hours = 24)
+    public ActionResult<List<TrackerMetricSnapshot>> GetHistory(int id, [FromQuery] int hours = 24, [FromQuery] int limit = 500)
     {
-        var history = _trackerMetricService.GetHistory(id, hours);
+        if (hours <= 0)
+        {
+            return BadRequest("Hours must be greater than 0.");
+        }
+
+        if (hours > 168)
+        {
+            return BadRequest("Hours cannot exceed 168 (7 days).");
+        }
+
+        if (limit <= 0 || limit > 2000)
+        {
+            return BadRequest("Limit must be between 1 and 2000.");
+        }
+
+        var history = _trackerMetricService.GetHistory(id, hours, limit);
         return Ok(history);
     }
 
