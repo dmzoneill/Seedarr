@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
@@ -242,10 +243,131 @@ public class SpeedHistoryServiceTest
         Assert.That(torrentHistory[0].DownloadSpeed, Is.EqualTo(0));
     }
 
-    private void CallRecordSnapshot()
+    [Test]
+    public void RecordSnapshot_should_not_spike_aggregate_speed_when_adding_torrent_with_large_uploaded_bytes()
     {
-        var method = typeof(SpeedHistoryService).GetMethod("RecordSnapshot",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        method.Invoke(_service, null);
+        var baseTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Status = TorrentStatus.Seeding, Uploaded = 100_000_000, Downloaded = 0 }
+        };
+        _torrentService.GetAll().Returns(torrents);
+
+        CallRecordSnapshot(baseTime);
+
+        // Tick 1: Torrent 1 uploads 5 MB over 5 seconds (1 MB/s)
+        baseTime = baseTime.AddSeconds(5);
+        torrents[0].Uploaded = 105_000_000;
+        CallRecordSnapshot(baseTime);
+
+        var history = _service.GetHistory();
+        Assert.That(history[1].UploadSpeed, Is.EqualTo(1_000_000));
+
+        // Now user adds/imports Torrent 2 with 50 GB pre-existing uploaded bytes
+        // Torrent 1 uploads another 5 MB
+        baseTime = baseTime.AddSeconds(5);
+        torrents[0].Uploaded = 110_000_000;
+        torrents.Add(new Torrent { Id = 2, Status = TorrentStatus.Seeding, Uploaded = 50_000_000_000L, Downloaded = 0 });
+        CallRecordSnapshot(baseTime);
+
+        history = _service.GetHistory();
+        Assert.That(history, Has.Count.EqualTo(3));
+        // Aggregate speed should only be the 5 MB from Torrent 1 (1 MB/s), NOT 10+ GB/s
+        Assert.That(history[2].UploadSpeed, Is.EqualTo(1_000_000));
+
+        // And Torrent 2's own per-torrent speed should be 0 on its first tick
+        var torrent2History = _service.GetTorrentHistory(2);
+        Assert.That(torrent2History, Has.Count.EqualTo(1));
+        Assert.That(torrent2History[0].UploadSpeed, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void RecordSnapshot_should_retain_snapshot_history_when_torrent_is_paused()
+    {
+        var baseTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Status = TorrentStatus.Seeding, Uploaded = 1000, Downloaded = 500 }
+        };
+        _torrentService.GetAll().Returns(torrents);
+
+        CallRecordSnapshot(baseTime);
+
+        baseTime = baseTime.AddSeconds(5);
+        torrents[0].Uploaded = 6000;
+        CallRecordSnapshot(baseTime);
+
+        var historyBeforePause = _service.GetTorrentHistory(1);
+        Assert.That(historyBeforePause, Has.Count.EqualTo(2));
+
+        // Pause the torrent
+        baseTime = baseTime.AddSeconds(5);
+        torrents[0].Status = TorrentStatus.Paused;
+        CallRecordSnapshot(baseTime);
+
+        // History must NOT be wiped
+        var historyAfterPause = _service.GetTorrentHistory(1);
+        Assert.That(historyAfterPause, Has.Count.EqualTo(3));
+        Assert.That(historyAfterPause[2].UploadSpeed, Is.EqualTo(0));
+        Assert.That(historyAfterPause[2].DownloadSpeed, Is.EqualTo(0));
+
+        // Resume the torrent and upload 5000 bytes over 5s
+        baseTime = baseTime.AddSeconds(5);
+        torrents[0].Status = TorrentStatus.Seeding;
+        torrents[0].Uploaded = 11000;
+        CallRecordSnapshot(baseTime);
+
+        var historyAfterResume = _service.GetTorrentHistory(1);
+        Assert.That(historyAfterResume, Has.Count.EqualTo(4));
+        Assert.That(historyAfterResume[3].UploadSpeed, Is.EqualTo(1000));
+    }
+
+    [Test]
+    public void RecordSnapshot_should_normalize_speed_accurately_with_variable_time_deltas()
+    {
+        var baseTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Status = TorrentStatus.Seeding, Uploaded = 0, Downloaded = 0 }
+        };
+        _torrentService.GetAll().Returns(torrents);
+
+        CallRecordSnapshot(baseTime);
+
+        // 10 second delay, 100,000 bytes uploaded -> 10,000 B/s
+        baseTime = baseTime.AddSeconds(10);
+        torrents[0].Uploaded = 100_000;
+        CallRecordSnapshot(baseTime);
+
+        var history = _service.GetHistory();
+        Assert.That(history[1].UploadSpeed, Is.EqualTo(10_000));
+        var torrentHistory = _service.GetTorrentHistory(1);
+        Assert.That(torrentHistory[1].UploadSpeed, Is.EqualTo(10_000));
+
+        // 2 second delay, 50,000 bytes uploaded -> 25,000 B/s
+        baseTime = baseTime.AddSeconds(2);
+        torrents[0].Uploaded = 150_000;
+        CallRecordSnapshot(baseTime);
+
+        history = _service.GetHistory();
+        Assert.That(history[2].UploadSpeed, Is.EqualTo(25_000));
+        torrentHistory = _service.GetTorrentHistory(1);
+        Assert.That(torrentHistory[2].UploadSpeed, Is.EqualTo(25_000));
+    }
+
+    private void CallRecordSnapshot(DateTime? timestamp = null)
+    {
+        if (timestamp.HasValue)
+        {
+            var method = typeof(SpeedHistoryService).GetMethod("RecordSnapshotAt",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            method.Invoke(_service, new object[] { timestamp.Value });
+        }
+        else
+        {
+            var method = typeof(SpeedHistoryService).GetMethod("RecordSnapshot",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            method.Invoke(_service, null);
+        }
     }
 }

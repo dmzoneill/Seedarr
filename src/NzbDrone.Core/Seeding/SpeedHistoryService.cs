@@ -80,9 +80,13 @@ public class SpeedHistoryService : BackgroundService, ISpeedHistoryService
 
     private void RecordSnapshot()
     {
+        RecordSnapshotAt(DateTime.UtcNow);
+    }
+
+    private void RecordSnapshotAt(DateTime now)
+    {
         var all = _torrentService.GetAll();
         var active = all.Where(t => t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading).ToList();
-        var now = DateTime.UtcNow;
 
         var totalUploaded = all.Sum(t => t.Uploaded);
         var totalDownloaded = all.Sum(t => t.Downloaded);
@@ -90,45 +94,70 @@ public class SpeedHistoryService : BackgroundService, ISpeedHistoryService
         long uploadSpeed = 0;
         long downloadSpeed = 0;
 
-        if (_hasPrev)
-        {
-            var timeDelta = (now - _prevTime).TotalSeconds;
-            if (timeDelta > 0)
-            {
-                uploadSpeed = (long)Math.Max(0, (totalUploaded - _prevUploaded) / timeDelta);
-                downloadSpeed = (long)Math.Max(0, (totalDownloaded - _prevDownloaded) / timeDelta);
-            }
-        }
-
-        _prevUploaded = totalUploaded;
-        _prevDownloaded = totalDownloaded;
-        _prevTime = now;
-        _hasPrev = true;
-
-        var totalPeers = all.Sum(t => t.Seeders + t.Leechers);
-        var avgRatio = active.Count > 0 ? active.Average(t => t.Ratio) : 0;
-
-        var snapshot = new SpeedSnapshot
-        {
-            Timestamp = now,
-            UploadSpeed = uploadSpeed,
-            DownloadSpeed = downloadSpeed,
-            ActiveTorrents = active.Count,
-            TotalPeers = totalPeers,
-            AverageRatio = Math.Round(avgRatio, 3),
-            TotalUploaded = totalUploaded,
-            TotalDownloaded = totalDownloaded
-        };
-
         lock (_lock)
         {
+            var timeDelta = _hasPrev ? (now - _prevTime).TotalSeconds : 0;
+            if (timeDelta <= 0)
+            {
+                timeDelta = 0.001;
+            }
+
+            if (_hasPrev)
+            {
+                long uploadBytesDelta = 0;
+                long downloadBytesDelta = 0;
+
+                foreach (var torrent in all)
+                {
+                    if (_prevTorrentUploaded.TryGetValue(torrent.Id, out var prevUp))
+                    {
+                        if (torrent.Uploaded >= prevUp)
+                        {
+                            uploadBytesDelta += torrent.Uploaded - prevUp;
+                        }
+                    }
+
+                    if (_prevTorrentDownloaded.TryGetValue(torrent.Id, out var prevDown))
+                    {
+                        if (torrent.Downloaded >= prevDown)
+                        {
+                            downloadBytesDelta += torrent.Downloaded - prevDown;
+                        }
+                    }
+                }
+
+                uploadSpeed = (long)Math.Max(0, uploadBytesDelta / timeDelta);
+                downloadSpeed = (long)Math.Max(0, downloadBytesDelta / timeDelta);
+            }
+
+            _prevUploaded = totalUploaded;
+            _prevDownloaded = totalDownloaded;
+            _prevTime = now;
+            var wasPrev = _hasPrev;
+            _hasPrev = true;
+
+            var totalPeers = all.Sum(t => t.Seeders + t.Leechers);
+            var avgRatio = active.Count > 0 ? active.Average(t => t.Ratio) : 0;
+
+            var snapshot = new SpeedSnapshot
+            {
+                Timestamp = now,
+                UploadSpeed = uploadSpeed,
+                DownloadSpeed = downloadSpeed,
+                ActiveTorrents = active.Count,
+                TotalPeers = totalPeers,
+                AverageRatio = Math.Round(avgRatio, 3),
+                TotalUploaded = totalUploaded,
+                TotalDownloaded = totalDownloaded
+            };
+
             _snapshots.AddLast(snapshot);
             while (_snapshots.Count > MaxSnapshots)
             {
                 _snapshots.RemoveFirst();
             }
 
-            foreach (var torrent in active)
+            foreach (var torrent in all)
             {
                 if (!_torrentSnapshots.TryGetValue(torrent.Id, out var list))
                 {
@@ -136,19 +165,21 @@ public class SpeedHistoryService : BackgroundService, ISpeedHistoryService
                     _torrentSnapshots[torrent.Id] = list;
                 }
 
+                var isActive = torrent.Status == TorrentStatus.Seeding || torrent.Status == TorrentStatus.Downloading;
                 long torrentUpSpeed = 0;
                 long torrentDlSpeed = 0;
 
-                if (_prevTorrentUploaded.TryGetValue(torrent.Id, out var prevUp))
+                if (isActive && wasPrev && timeDelta > 0)
                 {
-                    var timeDelta = SnapshotInterval.TotalSeconds;
-                    torrentUpSpeed = Math.Max(0, (long)((torrent.Uploaded - prevUp) / timeDelta));
-                }
+                    if (_prevTorrentUploaded.TryGetValue(torrent.Id, out var prevUp) && torrent.Uploaded >= prevUp)
+                    {
+                        torrentUpSpeed = Math.Max(0, (long)((torrent.Uploaded - prevUp) / timeDelta));
+                    }
 
-                if (_prevTorrentDownloaded.TryGetValue(torrent.Id, out var prevDl))
-                {
-                    var timeDelta = SnapshotInterval.TotalSeconds;
-                    torrentDlSpeed = Math.Max(0, (long)((torrent.Downloaded - prevDl) / timeDelta));
+                    if (_prevTorrentDownloaded.TryGetValue(torrent.Id, out var prevDl) && torrent.Downloaded >= prevDl)
+                    {
+                        torrentDlSpeed = Math.Max(0, (long)((torrent.Downloaded - prevDl) / timeDelta));
+                    }
                 }
 
                 _prevTorrentUploaded[torrent.Id] = torrent.Uploaded;
@@ -167,11 +198,18 @@ public class SpeedHistoryService : BackgroundService, ISpeedHistoryService
                 }
             }
 
-            var activeIds = new HashSet<int>(active.Select(t => t.Id));
-            var staleIds = _torrentSnapshots.Keys.Where(id => !activeIds.Contains(id)).ToList();
-            foreach (var id in staleIds)
+            var existingIds = new HashSet<int>(all.Select(t => t.Id));
+            var deletedIds = _torrentSnapshots.Keys.Where(id => !existingIds.Contains(id)).ToList();
+            foreach (var id in deletedIds)
             {
                 _torrentSnapshots.Remove(id);
+                _prevTorrentUploaded.Remove(id);
+                _prevTorrentDownloaded.Remove(id);
+            }
+
+            var orphanPrevIds = _prevTorrentUploaded.Keys.Where(id => !existingIds.Contains(id)).ToList();
+            foreach (var id in orphanPrevIds)
+            {
                 _prevTorrentUploaded.Remove(id);
                 _prevTorrentDownloaded.Remove(id);
             }
