@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
-using global::System.IO;
+using System.Security;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.EnvironmentInfo;
 using Seedarr.Http;
@@ -12,11 +13,44 @@ namespace Seedarr.Api.V1.System;
 [V1ApiController("logfile")]
 public class LogFileController : ControllerBase
 {
+    private static readonly HashSet<string> ActiveLogFileNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "seedarr.txt",
+        "seedarr.trace.txt",
+        "seedarr.debug.txt",
+        "seedarr.update.txt",
+    };
+
     private readonly IAppFolderInfo _appFolderInfo;
 
     public LogFileController(IAppFolderInfo appFolderInfo)
     {
         _appFolderInfo = appFolderInfo;
+    }
+
+    public static bool IsActiveLogFile(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            return false;
+        }
+
+        if (ActiveLogFileNames.Contains(fileName))
+        {
+            return true;
+        }
+
+        if (fileName.StartsWith("seedarr.", StringComparison.OrdinalIgnoreCase) &&
+            fileName.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+        {
+            var middle = fileName.Substring("seedarr.".Length, fileName.Length - "seedarr.".Length - ".txt".Length);
+            if (middle.Length > 0 && middle.All(char.IsLetter))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     [HttpGet]
@@ -36,7 +70,7 @@ public class LogFileController : ControllerBase
             {
                 Filename = f.Name,
                 LastWriteTime = f.LastWriteTimeUtc,
-                Size = f.Length
+                Size = f.Length,
             })
             .ToList();
 
@@ -46,7 +80,7 @@ public class LogFileController : ControllerBase
     [HttpGet("{filename}")]
     [HttpGet("/api/v1/log/file/{filename}")]
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Filename is sanitized via Path.GetFileName and validated against the log directory")]
-    public ActionResult GetLogFile(string filename)
+    public ActionResult GetLogFile(string filename, [FromQuery] bool download = false)
     {
         var sanitized = Path.GetFileName(filename);
 
@@ -73,7 +107,7 @@ public class LogFileController : ControllerBase
         }
 
         var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        return File(stream, "text/plain", sanitized);
+        return File(stream, "text/plain", fileDownloadName: download ? sanitized : null, enableRangeProcessing: true);
     }
 
     [HttpDelete]
@@ -94,17 +128,16 @@ public class LogFileController : ControllerBase
             {
                 var info = new FileInfo(file);
 
-                // Skip files that are currently active (less than 1 second old)
-                if (info.Name == "seedarr.txt")
+                if (IsActiveLogFile(info.Name))
                 {
                     continue;
                 }
 
                 global::System.IO.File.Delete(file);
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException)
             {
-                // File is in use, skip it
+                // File is in use or inaccessible, skip it
             }
         }
 
