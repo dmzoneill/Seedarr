@@ -10,6 +10,7 @@ using NzbDrone.Core.Automation;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.DownloadClients;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
@@ -50,6 +51,7 @@ public class TagService : ITagService
     private readonly IDownloadClientRepository _downloadClientRepository;
     private readonly IArrConnectionRepository _arrConnectionRepository;
     private readonly IAutomationScriptRepository _automationScriptRepository;
+    private readonly ITorrentService _torrentService;
     private readonly IDatabase _database;
     private readonly Logger _logger;
 
@@ -62,7 +64,9 @@ public class TagService : ITagService
         IDownloadClientRepository downloadClientRepository = null,
         IArrConnectionRepository arrConnectionRepository = null,
         IAutomationScriptRepository automationScriptRepository = null,
-        IDatabase database = null)
+        IDatabase database = null,
+        ITorrentService torrentService = null,
+        IMainDatabase mainDatabase = null)
     {
         _repo = repo;
         _eventAggregator = eventAggregator;
@@ -72,15 +76,39 @@ public class TagService : ITagService
         _downloadClientRepository = downloadClientRepository;
         _arrConnectionRepository = arrConnectionRepository;
         _automationScriptRepository = automationScriptRepository;
-        _database = database ?? (repo as BasicRepository<Tag>)?.Database;
+        _torrentService = torrentService;
+        _database = mainDatabase
+            ?? database
+            ?? (repo as BasicRepository<Tag>)?.Database
+            ?? (torrentRepository as BasicRepository<Torrent>)?.Database
+            ?? (notificationRepository as BasicRepository<NotificationDefinition>)?.Database
+            ?? (indexerRepository as BasicRepository<IndexerDefinition>)?.Database
+            ?? (downloadClientRepository as BasicRepository<DownloadClientDefinition>)?.Database
+            ?? (arrConnectionRepository as BasicRepository<ArrConnectionDefinition>)?.Database
+            ?? (automationScriptRepository as BasicRepository<AutomationScript>)?.Database;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public List<Tag> GetAll() => _repo.All().ToList();
+    public List<Tag> GetAll() => _repo.All()?.ToList() ?? new List<Tag>();
     public Tag Get(int id) => _repo.Get(id);
 
     public Tag Add(Tag tag)
     {
+        ArgumentNullException.ThrowIfNull(tag);
+
+        if (string.IsNullOrWhiteSpace(tag.Label))
+        {
+            throw new ArgumentException("Tag label cannot be empty.", nameof(tag));
+        }
+
+        var trimmedLabel = tag.Label.Trim();
+        var existingTags = GetAll();
+        if (existingTags.Any(t => string.Equals(t.Label?.Trim(), trimmedLabel, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new DuplicateTagException(trimmedLabel);
+        }
+
+        tag.Label = trimmedLabel;
         _logger.Info("Adding tag: {0}", tag.Label);
         var result = _repo.Insert(tag);
         _eventAggregator.PublishEvent(new ModelEvent<Tag>(result, ModelAction.Created));
@@ -89,6 +117,21 @@ public class TagService : ITagService
 
     public Tag Update(Tag tag)
     {
+        ArgumentNullException.ThrowIfNull(tag);
+
+        if (string.IsNullOrWhiteSpace(tag.Label))
+        {
+            throw new ArgumentException("Tag label cannot be empty.", nameof(tag));
+        }
+
+        var trimmedLabel = tag.Label.Trim();
+        var existingTags = GetAll();
+        if (existingTags.Any(t => t.Id != tag.Id && string.Equals(t.Label?.Trim(), trimmedLabel, StringComparison.OrdinalIgnoreCase)))
+        {
+            throw new DuplicateTagException(trimmedLabel);
+        }
+
+        tag.Label = trimmedLabel;
         _logger.Info("Updating tag: {0}", tag.Label);
         var result = _repo.Update(tag);
         _eventAggregator.PublishEvent(new ModelEvent<Tag>(result, ModelAction.Updated));
@@ -100,13 +143,17 @@ public class TagService : ITagService
         var tag = _repo.Get(id);
         _logger.Info("Deleting tag: {0}", id);
 
+        var tagLabel = tag?.Label;
+
+        LogNullRepositoryWarnings();
+
         if (_database != null)
         {
-            DeleteCascadingTransactional(id);
+            DeleteCascadingTransactional(id, tagLabel);
         }
         else
         {
-            DeleteCascadingRepositories(id);
+            DeleteCascadingRepositories(id, tagLabel);
             _repo.Delete(id);
         }
 
@@ -202,7 +249,40 @@ public class TagService : ITagService
         return labels;
     }
 
-    private void DeleteCascadingTransactional(int id)
+    private void LogNullRepositoryWarnings()
+    {
+        if (_torrentRepository == null && _torrentService == null)
+        {
+            _logger.Warn("Torrent repository and torrent service are null; cascading tag deletion for torrents cannot be executed via repository.");
+        }
+
+        if (_notificationRepository == null)
+        {
+            _logger.Warn("Notification repository is null; cascading tag deletion for notifications cannot be executed via repository.");
+        }
+
+        if (_indexerRepository == null)
+        {
+            _logger.Warn("Indexer repository is null; cascading tag deletion for indexers cannot be executed via repository.");
+        }
+
+        if (_downloadClientRepository == null)
+        {
+            _logger.Warn("Download client repository is null; cascading tag deletion for download clients cannot be executed via repository.");
+        }
+
+        if (_arrConnectionRepository == null)
+        {
+            _logger.Warn("Arr connection repository is null; cascading tag deletion for arr connections cannot be executed via repository.");
+        }
+
+        if (_automationScriptRepository == null)
+        {
+            _logger.Warn("Automation script repository is null; cascading tag deletion for automation scripts cannot be executed via repository.");
+        }
+    }
+
+    private void DeleteCascadingTransactional(int id, string tagLabel)
     {
         RetryPolicy.Execute(() =>
         {
@@ -262,6 +342,13 @@ public class TagService : ITagService
                     }
                 }
 
+                if (!string.IsNullOrWhiteSpace(tagLabel) &&
+                    TableExists(connection, transaction, "Torrents", dbType) &&
+                    ColumnExists(connection, transaction, "Torrents", "Label", dbType))
+                {
+                    ScrubTorrentLabelsTransactional(connection, transaction, tagLabel);
+                }
+
                 connection.Execute(
                     "DELETE FROM \"Tags\" WHERE \"Id\" = @TagId",
                     new { TagId = id },
@@ -285,6 +372,43 @@ public class TagService : ITagService
         });
     }
 
+    private static void ScrubTorrentLabelsTransactional(IDbConnection connection, IDbTransaction transaction, string tagLabel)
+    {
+        var torrents = connection.Query<(int Id, string Label)>(
+            "SELECT \"Id\", \"Label\" FROM \"Torrents\" WHERE \"Label\" IS NOT NULL AND \"Label\" != ''",
+            transaction: transaction).ToList();
+
+        foreach (var (torrentId, label) in torrents)
+        {
+            if (ContainsTagLabel(label, tagLabel))
+            {
+                var newLabel = ScrubLabel(label, tagLabel);
+                connection.Execute(
+                    "UPDATE \"Torrents\" SET \"Label\" = @NewLabel WHERE \"Id\" = @Id",
+                    new { NewLabel = newLabel, Id = torrentId },
+                    transaction);
+            }
+        }
+    }
+
+    private static bool ColumnExists(IDbConnection connection, IDbTransaction transaction, string table, string column, DatabaseType dbType)
+    {
+        if (dbType == DatabaseType.SQLite)
+        {
+            return connection.ExecuteScalar<int>(
+                $"SELECT COUNT(1) FROM pragma_table_info('{table}') WHERE name=@column",
+                new { column },
+                transaction) > 0;
+        }
+        else
+        {
+            return connection.ExecuteScalar<int>(
+                "SELECT COUNT(1) FROM information_schema.columns WHERE (table_name=@table OR table_name=LOWER(@table)) AND (column_name=@column OR column_name=LOWER(@column))",
+                new { table, column },
+                transaction) > 0;
+        }
+    }
+
     private static bool TableExists(IDbConnection connection, IDbTransaction transaction, string table, DatabaseType dbType)
     {
         if (dbType == DatabaseType.SQLite)
@@ -303,25 +427,79 @@ public class TagService : ITagService
         }
     }
 
-    private void DeleteCascadingRepositories(int id)
+    private static string ScrubLabel(string currentLabel, string tagLabel)
     {
-        if (_torrentRepository != null)
+        if (string.IsNullOrWhiteSpace(currentLabel) || string.IsNullOrWhiteSpace(tagLabel))
         {
-            var torrents = _torrentRepository.All().Where(t => t.TagIds != null && t.TagIds.Contains(id)).ToList();
+            return currentLabel ?? string.Empty;
+        }
+
+        var parts = currentLabel.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim())
+            .Where(p => !string.IsNullOrWhiteSpace(p) && !string.Equals(p, tagLabel.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return parts.Count > 0 ? string.Join(", ", parts) : string.Empty;
+    }
+
+    private static bool ContainsTagLabel(string currentLabel, string tagLabel)
+    {
+        if (string.IsNullOrWhiteSpace(currentLabel) || string.IsNullOrWhiteSpace(tagLabel))
+        {
+            return false;
+        }
+
+        var parts = currentLabel.Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim());
+
+        return parts.Any(p => string.Equals(p, tagLabel.Trim(), StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void DeleteCascadingRepositories(int id, string tagLabel)
+    {
+        if (_torrentService != null)
+        {
+            var torrents = _torrentService.GetAll()?
+                .Where(t => (t.TagIds != null && t.TagIds.Contains(id)) ||
+                            (!string.IsNullOrWhiteSpace(tagLabel) && ContainsTagLabel(t.Label, tagLabel)))
+                .ToList() ?? new List<Torrent>();
+
+            foreach (var torrent in torrents)
+            {
+                torrent.TagIds?.RemoveAll(t => t == id);
+                if (!string.IsNullOrWhiteSpace(tagLabel))
+                {
+                    torrent.Label = ScrubLabel(torrent.Label, tagLabel);
+                }
+
+                _torrentService.UpdateUserFields(torrent);
+            }
+        }
+        else if (_torrentRepository != null)
+        {
+            var torrents = _torrentRepository.All()?
+                .Where(t => (t.TagIds != null && t.TagIds.Contains(id)) ||
+                            (!string.IsNullOrWhiteSpace(tagLabel) && ContainsTagLabel(t.Label, tagLabel)))
+                .ToList() ?? new List<Torrent>();
+
             if (torrents.Count > 0)
             {
                 foreach (var torrent in torrents)
                 {
-                    torrent.TagIds.RemoveAll(t => t == id);
+                    torrent.TagIds?.RemoveAll(t => t == id);
+                    if (!string.IsNullOrWhiteSpace(tagLabel))
+                    {
+                        torrent.Label = ScrubLabel(torrent.Label, tagLabel);
+                    }
                 }
 
-                _torrentRepository.UpdateMany(torrents);
+                _torrentRepository.UpdateTagsAndLabels(torrents);
             }
         }
 
         if (_notificationRepository != null)
         {
-            var notifications = _notificationRepository.All().Where(n => n.Tags != null && n.Tags.Contains(id)).ToList();
+            var notifications = _notificationRepository.All()?.Where(n => n.Tags != null && n.Tags.Contains(id)).ToList() ?? new List<NotificationDefinition>();
             if (notifications.Count > 0)
             {
                 foreach (var notif in notifications)
@@ -335,7 +513,7 @@ public class TagService : ITagService
 
         if (_indexerRepository != null)
         {
-            var indexers = _indexerRepository.All().Where(i => i.Tags != null && i.Tags.Contains(id)).ToList();
+            var indexers = _indexerRepository.All()?.Where(i => i.Tags != null && i.Tags.Contains(id)).ToList() ?? new List<IndexerDefinition>();
             if (indexers.Count > 0)
             {
                 foreach (var indexer in indexers)
@@ -349,7 +527,7 @@ public class TagService : ITagService
 
         if (_downloadClientRepository != null)
         {
-            var clients = _downloadClientRepository.All().Where(c => c.Tags != null && c.Tags.Contains(id)).ToList();
+            var clients = _downloadClientRepository.All()?.Where(c => c.Tags != null && c.Tags.Contains(id)).ToList() ?? new List<DownloadClientDefinition>();
             if (clients.Count > 0)
             {
                 foreach (var client in clients)
@@ -363,7 +541,7 @@ public class TagService : ITagService
 
         if (_arrConnectionRepository != null)
         {
-            var arrs = _arrConnectionRepository.All().Where(a => a.Tags != null && a.Tags.Contains(id)).ToList();
+            var arrs = _arrConnectionRepository.All()?.Where(a => a.Tags != null && a.Tags.Contains(id)).ToList() ?? new List<ArrConnectionDefinition>();
             if (arrs.Count > 0)
             {
                 foreach (var arr in arrs)
@@ -377,7 +555,7 @@ public class TagService : ITagService
 
         if (_automationScriptRepository != null)
         {
-            var scripts = _automationScriptRepository.All().Where(s => s.TargetTagIds != null && s.TargetTagIds.Contains(id)).ToList();
+            var scripts = _automationScriptRepository.All()?.Where(s => s.TargetTagIds != null && s.TargetTagIds.Contains(id)).ToList() ?? new List<AutomationScript>();
             if (scripts.Count > 0)
             {
                 foreach (var script in scripts)

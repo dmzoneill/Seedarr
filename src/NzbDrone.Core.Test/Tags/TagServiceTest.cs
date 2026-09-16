@@ -10,6 +10,7 @@ using NzbDrone.Core.Automation;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.DownloadClients;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
@@ -92,6 +93,29 @@ public class TagServiceTest
     }
 
     [Test]
+    public void Add_should_reject_duplicate_tag_labels_case_insensitively()
+    {
+        _repo.All().Returns(new List<Tag>
+        {
+            new() { Id = 1, Label = "Action" }
+        });
+
+        Assert.Throws<DuplicateTagException>(() => _subject.Add(new Tag { Label = "action" }));
+        Assert.Throws<DuplicateTagException>(() => _subject.Add(new Tag { Label = "ACTION" }));
+        Assert.Throws<DuplicateTagException>(() => _subject.Add(new Tag { Label = "  Action  " }));
+        _repo.DidNotReceive().Insert(Arg.Any<Tag>());
+    }
+
+    [Test]
+    public void Add_should_throw_when_tag_label_is_empty_or_whitespace()
+    {
+        Assert.Throws<ArgumentException>(() => _subject.Add(new Tag { Label = "" }));
+        Assert.Throws<ArgumentException>(() => _subject.Add(new Tag { Label = "   " }));
+        Assert.Throws<ArgumentNullException>(() => _subject.Add(null));
+        _repo.DidNotReceive().Insert(Arg.Any<Tag>());
+    }
+
+    [Test]
     public void Update_should_call_repo_update()
     {
         var tag = new Tag { Id = 1, Label = "Updated" };
@@ -142,7 +166,7 @@ public class TagServiceTest
     }
 
     [Test]
-    public void Delete_should_clean_tags_from_all_repositories_using_UpdateMany()
+    public void Delete_should_clean_tags_from_all_repositories_using_targeted_update_and_scrub_label()
     {
         var torrentRepo = Substitute.For<ITorrentRepository>();
         var notifRepo = Substitute.For<INotificationRepository>();
@@ -151,10 +175,12 @@ public class TagServiceTest
         var arrRepo = Substitute.For<IArrConnectionRepository>();
         var scriptRepo = Substitute.For<IAutomationScriptRepository>();
 
+        _repo.Get(5).Returns(new Tag { Id = 5, Label = "VPN" });
+
         torrentRepo.All().Returns(new List<Torrent>
         {
-            new() { Id = 1, TagIds = new List<int> { 5, 10 } },
-            new() { Id = 2, TagIds = new List<int> { 10 } }
+            new() { Id = 1, TagIds = new List<int> { 5, 10 }, Label = "VPN, Anime" },
+            new() { Id = 2, TagIds = new List<int> { 10 }, Label = "Anime" }
         });
 
         notifRepo.All().Returns(new List<NotificationDefinition>
@@ -195,11 +221,12 @@ public class TagServiceTest
 
         subject.Delete(5);
 
-        torrentRepo.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+        torrentRepo.Received(1).UpdateTagsAndLabels(Arg.Is<IEnumerable<Torrent>>(items =>
             items.Count() == 1 &&
             items.First().Id == 1 &&
             !items.First().TagIds.Contains(5) &&
-            items.First().TagIds.Contains(10)));
+            items.First().TagIds.Contains(10) &&
+            items.First().Label == "Anime"));
 
         notifRepo.Received(1).UpdateMany(Arg.Is<IEnumerable<NotificationDefinition>>(items =>
             items.Count() == 1 &&
@@ -233,7 +260,34 @@ public class TagServiceTest
     }
 
     [Test]
-    public void Delete_should_not_call_UpdateMany_when_no_entities_contain_tag()
+    public void Delete_should_remove_tag_id_and_scrub_label_using_torrent_service()
+    {
+        var torrentService = Substitute.For<ITorrentService>();
+        _repo.Get(5).Returns(new Tag { Id = 5, Label = "VPN" });
+
+        torrentService.GetAll().Returns(new List<Torrent>
+        {
+            new() { Id = 1, TagIds = new List<int> { 5, 10 }, Label = "Movies, VPN, Anime" }
+        });
+
+        var subject = new TagService(
+            _repo,
+            _eventAggregator,
+            torrentService: torrentService,
+            database: null);
+
+        subject.Delete(5);
+
+        torrentService.Received(1).UpdateUserFields(Arg.Is<Torrent>(t =>
+            t.Id == 1 &&
+            !t.TagIds.Contains(5) &&
+            t.TagIds.Contains(10) &&
+            t.Label == "Movies, Anime"));
+        _repo.Received(1).Delete(5);
+    }
+
+    [Test]
+    public void Delete_should_not_call_Update_when_no_entities_contain_tag()
     {
         var torrentRepo = Substitute.For<ITorrentRepository>();
         var notifRepo = Substitute.For<INotificationRepository>();
@@ -242,7 +296,7 @@ public class TagServiceTest
         var arrRepo = Substitute.For<IArrConnectionRepository>();
         var scriptRepo = Substitute.For<IAutomationScriptRepository>();
 
-        torrentRepo.All().Returns(new List<Torrent> { new() { Id = 1, TagIds = new List<int> { 10 } } });
+        torrentRepo.All().Returns(new List<Torrent> { new() { Id = 1, TagIds = new List<int> { 10 }, Label = "Anime" } });
         notifRepo.All().Returns(new List<NotificationDefinition> { new() { Id = 1, Tags = new List<int> { 20 } } });
         indexerRepo.All().Returns(new List<IndexerDefinition> { new() { Id = 1, Tags = new List<int> { 30 } } });
         dlClientRepo.All().Returns(new List<DownloadClientDefinition> { new() { Id = 1, Tags = new List<int> { 40 } } });
@@ -262,12 +316,26 @@ public class TagServiceTest
 
         subject.Delete(5);
 
-        torrentRepo.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+        torrentRepo.DidNotReceive().UpdateTagsAndLabels(Arg.Any<IEnumerable<Torrent>>());
         notifRepo.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<NotificationDefinition>>());
         indexerRepo.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<IndexerDefinition>>());
         dlClientRepo.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<DownloadClientDefinition>>());
         arrRepo.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<ArrConnectionDefinition>>());
         scriptRepo.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<AutomationScript>>());
+        _repo.Received(1).Delete(5);
+    }
+
+    [Test]
+    public void Delete_with_null_repositories_should_log_warnings_and_not_throw()
+    {
+        _repo.Get(5).Returns(new Tag { Id = 5, Label = "VPN" });
+
+        var subject = new TagService(
+            _repo,
+            _eventAggregator,
+            database: null);
+
+        Assert.DoesNotThrow(() => subject.Delete(5));
         _repo.Received(1).Delete(5);
     }
 
@@ -283,7 +351,7 @@ public class TagServiceTest
         {
             cmd.CommandText = @"
                 CREATE TABLE ""Tags"" (""Id"" INTEGER PRIMARY KEY AUTOINCREMENT, ""Label"" TEXT NOT NULL);
-                CREATE TABLE ""Torrents"" (""Id"" INTEGER PRIMARY KEY, ""TagIds"" TEXT);
+                CREATE TABLE ""Torrents"" (""Id"" INTEGER PRIMARY KEY, ""TagIds"" TEXT, ""Label"" TEXT);
                 CREATE TABLE ""NotificationDefinitions"" (""Id"" INTEGER PRIMARY KEY, ""Tags"" TEXT);
                 CREATE TABLE ""IndexerDefinitions"" (""Id"" INTEGER PRIMARY KEY, ""Tags"" TEXT);
                 CREATE TABLE ""DownloadClientDefinitions"" (""Id"" INTEGER PRIMARY KEY, ""Tags"" TEXT);
@@ -293,9 +361,9 @@ public class TagServiceTest
                 INSERT INTO ""Tags"" (""Id"", ""Label"") VALUES (42, 'VPN');
                 INSERT INTO ""Tags"" (""Id"", ""Label"") VALUES (99, 'Keep');
 
-                INSERT INTO ""Torrents"" (""Id"", ""TagIds"") VALUES (1, '[42,99]');
-                INSERT INTO ""Torrents"" (""Id"", ""TagIds"") VALUES (2, '[42]');
-                INSERT INTO ""Torrents"" (""Id"", ""TagIds"") VALUES (3, '[99]');
+                INSERT INTO ""Torrents"" (""Id"", ""TagIds"", ""Label"") VALUES (1, '[42,99]', 'VPN, Anime');
+                INSERT INTO ""Torrents"" (""Id"", ""TagIds"", ""Label"") VALUES (2, '[42]', 'VPN');
+                INSERT INTO ""Torrents"" (""Id"", ""TagIds"", ""Label"") VALUES (3, '[99]', 'Keep');
 
                 INSERT INTO ""NotificationDefinitions"" (""Id"", ""Tags"") VALUES (1, '[42,10]');
                 INSERT INTO ""IndexerDefinitions"" (""Id"", ""Tags"") VALUES (1, '[42]');
@@ -329,11 +397,20 @@ public class TagServiceTest
             var torrent1Tags = verifyConn.ExecuteScalar<string>("SELECT \"TagIds\" FROM \"Torrents\" WHERE \"Id\" = 1");
             Assert.That(torrent1Tags, Is.EqualTo("[99]"));
 
+            var torrent1Label = verifyConn.ExecuteScalar<string>("SELECT \"Label\" FROM \"Torrents\" WHERE \"Id\" = 1");
+            Assert.That(torrent1Label, Is.EqualTo("Anime"));
+
             var torrent2Tags = verifyConn.ExecuteScalar<string>("SELECT \"TagIds\" FROM \"Torrents\" WHERE \"Id\" = 2");
             Assert.That(torrent2Tags, Is.EqualTo("[]"));
 
+            var torrent2Label = verifyConn.ExecuteScalar<string>("SELECT \"Label\" FROM \"Torrents\" WHERE \"Id\" = 2");
+            Assert.That(torrent2Label, Is.EqualTo(string.Empty));
+
             var torrent3Tags = verifyConn.ExecuteScalar<string>("SELECT \"TagIds\" FROM \"Torrents\" WHERE \"Id\" = 3");
             Assert.That(torrent3Tags, Is.EqualTo("[99]"));
+
+            var torrent3Label = verifyConn.ExecuteScalar<string>("SELECT \"Label\" FROM \"Torrents\" WHERE \"Id\" = 3");
+            Assert.That(torrent3Label, Is.EqualTo("Keep"));
 
             var notifTags = verifyConn.ExecuteScalar<string>("SELECT \"Tags\" FROM \"NotificationDefinitions\" WHERE \"Id\" = 1");
             Assert.That(notifTags, Is.EqualTo("[10]"));
@@ -366,10 +443,10 @@ public class TagServiceTest
         {
             cmd.CommandText = @"
                 CREATE TABLE ""Tags"" (""Id"" INTEGER PRIMARY KEY AUTOINCREMENT, ""Label"" TEXT NOT NULL);
-                CREATE TABLE ""Torrents"" (""Id"" INTEGER PRIMARY KEY, ""TagIds"" TEXT);
+                CREATE TABLE ""Torrents"" (""Id"" INTEGER PRIMARY KEY, ""TagIds"" TEXT, ""Label"" TEXT);
 
                 INSERT INTO ""Tags"" (""Id"", ""Label"") VALUES (42, 'VPN');
-                INSERT INTO ""Torrents"" (""Id"", ""TagIds"") VALUES (1, '[42,99]');
+                INSERT INTO ""Torrents"" (""Id"", ""TagIds"", ""Label"") VALUES (1, '[42,99]', 'VPN, Anime');
 
                 CREATE TRIGGER fail_delete BEFORE DELETE ON ""Tags""
                 BEGIN
@@ -398,6 +475,9 @@ public class TagServiceTest
 
             var torrentTags = verifyConn.ExecuteScalar<string>("SELECT \"TagIds\" FROM \"Torrents\" WHERE \"Id\" = 1");
             Assert.That(torrentTags, Is.EqualTo("[42,99]"));
+
+            var torrentLabel = verifyConn.ExecuteScalar<string>("SELECT \"Label\" FROM \"Torrents\" WHERE \"Id\" = 1");
+            Assert.That(torrentLabel, Is.EqualTo("VPN, Anime"));
         }
 
         _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<ModelEvent<Tag>>());

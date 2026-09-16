@@ -22,6 +22,7 @@ public interface ITorrentService
     Torrent Update(Torrent torrent);
     void UpdateMany(IEnumerable<Torrent> torrents);
     Torrent UpdateUserFields(int id, Torrent updates);
+    Torrent UpdateUserFields(Torrent torrent);
     void Delete(int id, bool deleteFiles = false);
     Torrent Recheck(int id);
     void MoveQueue(int id, string position);
@@ -160,6 +161,12 @@ public class TorrentService : ITorrentService
 
         existing.ApplyUserFields(updates);
         return Update(existing);
+    }
+
+    public Torrent UpdateUserFields(Torrent torrent)
+    {
+        ArgumentNullException.ThrowIfNull(torrent);
+        return UpdateUserFields(torrent.Id, torrent);
     }
 
     public void Delete(int id, bool deleteFiles = false)

@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Tags;
 using NzbDrone.SignalR;
 using Seedarr.Http;
@@ -58,9 +60,24 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
             return BadRequest(result.Errors);
         }
 
-        var tag = ToModel(resource);
-        var added = _tagService.Add(tag);
-        return ToResource(added);
+        try
+        {
+            var tag = ToModel(resource);
+            var added = _tagService.Add(tag);
+            return ToResource(added);
+        }
+        catch (DuplicateTagException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPut]
@@ -77,9 +94,24 @@ public class TagController : RestControllerWithSignalR<TagResource, Tag>
             return BadRequest(result.Errors);
         }
 
-        var tag = ToModel(resource);
-        var updated = _tagService.Update(tag);
-        return ToResource(updated);
+        try
+        {
+            var tag = ToModel(resource);
+            var updated = _tagService.Update(tag);
+            return ToResource(updated);
+        }
+        catch (DuplicateTagException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpDelete("{id:int}")]
