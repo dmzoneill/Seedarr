@@ -25,6 +25,13 @@ public class UtpManager : BackgroundService, IUtpManager
     private readonly IConfigService _configService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, IUtpConnection> _activeConnections = new();
+    private UdpClient _listener;
+
+    public UdpClient Listener
+    {
+        get => _listener;
+        set => _listener = value;
+    }
 
     public int ActiveConnections => _activeConnections.Values.Count(c => c.IsConnected);
     public bool IsEnabled => _configService.UtpEnabled;
@@ -81,23 +88,31 @@ public class UtpManager : BackgroundService, IUtpManager
 
         using (listener)
         {
+            _listener = listener;
             _logger.Info("uTP manager listening on port {0}", listenPort);
 
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                try
+                while (!stoppingToken.IsCancellationRequested)
                 {
-                    var result = await listener.ReceiveAsync(stoppingToken);
-                    HandleIncoming(result.Buffer, result.RemoteEndPoint);
+                    try
+                    {
+                        var result = await listener.ReceiveAsync(stoppingToken);
+                        HandleIncoming(result.Buffer, result.RemoteEndPoint);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(ex, "uTP receive error");
+                    }
                 }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug(ex, "uTP receive error");
-                }
+            }
+            finally
+            {
+                _listener = null;
             }
         }
     }
@@ -123,7 +138,7 @@ public class UtpManager : BackgroundService, IUtpManager
         {
             _logger.Debug("uTP SYN from {0}, connection {1}", sender, connectionId);
             var key = $"{sender}_{connectionId}";
-            var conn = new UtpConnection(null, (ushort)(connectionId + 1), sender, _configService.TransportConnectionTimeoutSeconds);
+            var conn = new UtpConnection(_listener, (ushort)(connectionId + 1), sender, _configService.TransportConnectionTimeoutSeconds);
             _activeConnections[key] = conn;
             conn.OnClosed = _ => _activeConnections.TryRemove(key, out _);
             conn.HandleIncomingPacket(data, sender);

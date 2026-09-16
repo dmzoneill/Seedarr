@@ -1,5 +1,7 @@
 using System;
+using System.Linq;
 using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -369,5 +371,36 @@ public class UtpManagerTest
         InvokeHandleIncoming(data, sender);
 
         Assert.That(_subject.ActiveConnections, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void HandleIncoming_syn_with_configured_listener_shares_socket_and_disposing_connection_does_not_dispose_listener()
+    {
+        using var listener = new UdpClient();
+        listener.Client.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        _subject.Listener = listener;
+
+        var data = new byte[20];
+        data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        data[2] = 0x12;
+        data[3] = 0x34;
+
+        var sender = new IPEndPoint(IPAddress.Loopback, 54322);
+        InvokeHandleIncoming(data, sender);
+
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(1));
+
+        var activeConnectionsField = typeof(UtpManager).GetField(
+            "_activeConnections",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var dict = (System.Collections.Concurrent.ConcurrentDictionary<string, IUtpConnection>)activeConnectionsField.GetValue(_subject)!;
+        var conn = dict.Values.First() as UtpConnection;
+
+        Assert.That(conn, Is.Not.Null);
+        Assert.That(conn!.OwnsUdpClient, Is.False);
+
+        conn.Dispose();
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+        Assert.That(listener.Client.IsBound, Is.True);
     }
 }
