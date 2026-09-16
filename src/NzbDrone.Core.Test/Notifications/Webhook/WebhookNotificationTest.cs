@@ -1,9 +1,12 @@
+using System;
 using System.Net;
 using System.Net.Http;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.Notifications.Webhook;
 using NzbDrone.Core.Test.TestHelpers;
 using Polly;
+using Polly.Retry;
 
 namespace NzbDrone.Core.Test.Notifications.Webhook;
 
@@ -256,5 +259,36 @@ public class WebhookNotificationTest
         _subject.WebhookUrl = "http://192.168.1.1/webhook";
 
         Assert.DoesNotThrow(() => _subject.OnHealthIssue("Disk", "Low space"));
+    }
+
+    [Test]
+    public void SendPayload_triggers_retry_on_server_error()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.InternalServerError, "Error");
+        handler.Enqueue(HttpStatusCode.OK, "OK");
+
+        var retryCount = 0;
+        var policy = new ResiliencePipelineBuilder()
+            .AddRetry(new RetryStrategyOptions
+            {
+                MaxRetryAttempts = 2,
+                Delay = TimeSpan.Zero,
+                ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>(),
+                OnRetry = _ =>
+                {
+                    retryCount++;
+                    return ValueTask.CompletedTask;
+                },
+            })
+            .Build();
+
+        var subject = new WebhookNotification(new HttpClient(handler), policy)
+        {
+            WebhookUrl = "http://8.8.8.8/webhook",
+        };
+
+        Assert.DoesNotThrow(() => subject.OnTorrentAdded("test.torrent"));
+        Assert.That(retryCount, Is.EqualTo(1), "Retry should be triggered when 500 error is returned");
     }
 }

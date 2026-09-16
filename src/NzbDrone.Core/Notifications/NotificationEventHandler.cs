@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Configuration;
@@ -21,7 +23,8 @@ public class NotificationEventHandler :
     IHandle<VpnKillSwitchTriggeredEvent>,
     IHandle<ApplicationUpdatedEvent>,
     IHandle<HealthIssueEvent>,
-    IHandle<TorrentSeedGoalReachedEvent>
+    IHandle<TorrentSeedGoalReachedEvent>,
+    IDisposable
 {
     private readonly INotificationRepository _notificationRepository;
     private readonly IWebhookDispatcher _webhookDispatcher;
@@ -31,7 +34,10 @@ public class NotificationEventHandler :
     private readonly ITorrentRepository _torrentRepository;
     private readonly ITorrentFileRepository _torrentFileRepository;
     private readonly IEpisodicParser _episodicParser;
+    private readonly SemaphoreSlim _dispatchSemaphore;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
+    public SemaphoreSlim DispatchSemaphore => _dispatchSemaphore;
 
     public NotificationEventHandler(
         INotificationRepository notificationRepository,
@@ -41,7 +47,8 @@ public class NotificationEventHandler :
         IMediaEnrichmentService mediaEnrichmentService = null,
         ITorrentRepository torrentRepository = null,
         ITorrentFileRepository torrentFileRepository = null,
-        IEpisodicParser episodicParser = null)
+        IEpisodicParser episodicParser = null,
+        int maxConcurrentDispatches = 10)
     {
         _notificationRepository = notificationRepository;
         _webhookDispatcher = webhookDispatcher;
@@ -51,6 +58,7 @@ public class NotificationEventHandler :
         _torrentRepository = torrentRepository;
         _torrentFileRepository = torrentFileRepository;
         _episodicParser = episodicParser ?? new EpisodicParser();
+        _dispatchSemaphore = new SemaphoreSlim(maxConcurrentDispatches, maxConcurrentDispatches);
     }
 
     public void Handle(TorrentAddedEvent message)
@@ -114,8 +122,7 @@ public class NotificationEventHandler :
             return;
         }
 
-        Dispatch(n => n.OnHealthIssue, "OnHealthIssue", message.Torrent);
-        Dispatch(n => n.OnManualInteractionRequired, "OnManualInteractionRequired", message.Torrent);
+        Dispatch(n => n.OnHealthIssue || n.OnManualInteractionRequired, "OnHealthIssue", message.Torrent, message.ErrorMessage);
     }
 
     public void Handle(TorrentStatusChangedEvent message)
@@ -127,8 +134,7 @@ public class NotificationEventHandler :
 
         if (message.NewStatus == TorrentStatus.Error)
         {
-            Dispatch(n => n.OnHealthIssue, "OnHealthIssue", message.Torrent);
-            Dispatch(n => n.OnManualInteractionRequired, "OnManualInteractionRequired", message.Torrent);
+            Dispatch(n => n.OnHealthIssue || n.OnManualInteractionRequired, "OnHealthIssue", message.Torrent);
         }
         else if (message.OldStatus == TorrentStatus.Error && message.NewStatus != TorrentStatus.Error)
         {
@@ -162,7 +168,7 @@ public class NotificationEventHandler :
             }
             else
             {
-                Dispatch(n => n.OnHealthIssue, "OnHealthIssue", torrent);
+                Dispatch(n => n.OnHealthIssue, "OnHealthIssue", torrent, message.Message);
             }
 
             return;
@@ -174,6 +180,8 @@ public class NotificationEventHandler :
             EventType = eventType,
             Source = message.Source,
             Message = message.Message,
+            ErrorMessage = message.Message,
+            errorMessage = message.Message,
             IsResolved = message.IsResolved,
             Timestamp = DateTime.UtcNow,
         };
@@ -248,7 +256,32 @@ public class NotificationEventHandler :
         return NotificationPayloadBuilder.BuildProviderPayload(implementation, eventType, torrent, (object)meta, genericPayload, settings);
     }
 
-    private void DispatchGeneric(Func<NotificationDefinition, bool> predicate, string eventType, object payload)
+    public void Dispose()
+    {
+        _dispatchSemaphore?.Dispose();
+    }
+
+    internal Task EnqueueDispatch(Func<Task> action, string eventType, string implementation)
+    {
+        return Task.Run(async () =>
+        {
+            await _dispatchSemaphore.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                await action().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error dispatching {0} notification for {1}", implementation, eventType);
+            }
+            finally
+            {
+                _dispatchSemaphore.Release();
+            }
+        });
+    }
+
+    private void DispatchGeneric(Func<NotificationDefinition, bool> predicate, string eventType, object payload, IEnumerable<int> eventTags = null)
     {
         var activeNotifications = _notificationRepository.GetEnabled().Where(predicate).ToList();
         if (activeNotifications.Count == 0)
@@ -256,63 +289,59 @@ public class NotificationEventHandler :
             return;
         }
 
+        if (eventTags == null && payload != null)
+        {
+            var prop = payload.GetType().GetProperty("Tags", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                       ?? payload.GetType().GetProperty("TagIds", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            if (prop != null && prop.GetValue(payload) is IEnumerable<int> extracted)
+            {
+                eventTags = extracted;
+            }
+        }
+
         foreach (var notif in activeNotifications)
         {
             if (notif.Tags != null && notif.Tags.Count > 0)
             {
-                continue;
+                if (eventTags == null || !notif.Tags.Any(t => eventTags.Contains(t)))
+                {
+                    continue;
+                }
             }
 
             if (string.Equals(notif.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
             {
                 var (scriptPath, scriptArgs) = CustomScriptService.ParseSettings(notif.Settings);
-                Task.Run(async () =>
-                {
-                    try
-                    {
-                        await _customScriptService.ExecuteScriptAsync(scriptPath, null, eventType, scriptArgs).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error executing custom script for {0}", eventType);
-                    }
-                });
+                EnqueueDispatch(
+                    async () => await _customScriptService.ExecuteScriptAsync(scriptPath, null, eventType, scriptArgs).ConfigureAwait(false),
+                    eventType,
+                    "CustomScript");
             }
             else if (string.Equals(notif.Implementation, "Email", StringComparison.OrdinalIgnoreCase))
             {
-                Task.Run(() =>
-                {
-                    try
+                EnqueueDispatch(
+                    () =>
                     {
                         EmailNotificationSender.SendEmailNotification(notif.Settings, eventType, null, null, payload);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error sending email notification for {0}", eventType);
-                    }
-                });
+                        return Task.CompletedTask;
+                    },
+                    eventType,
+                    "Email");
             }
             else
             {
                 var providerPayload = NotificationPayloadBuilder.BuildProviderPayload(notif.Implementation, eventType, null, null, payload, notif.Settings);
                 var targetUrl = NotificationPayloadBuilder.ResolveTargetUrl(notif.Implementation, notif.Settings);
                 var customHeaders = NotificationPayloadBuilder.ResolveCustomHeaders(notif.Implementation, notif.Settings);
-                Task.Run(async () =>
-                {
-                    try
-                    {
-                        await _webhookDispatcher.DispatchAsync(targetUrl, providerPayload, customHeaders).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error dispatching webhook notification for {0}", eventType);
-                    }
-                });
+                EnqueueDispatch(
+                    async () => await _webhookDispatcher.DispatchAsync(targetUrl, providerPayload, customHeaders).ConfigureAwait(false),
+                    eventType,
+                    notif.Implementation ?? "Webhook");
             }
         }
     }
 
-    private void Dispatch(Func<NotificationDefinition, bool> predicate, string eventType, Torrent torrent)
+    private void Dispatch(Func<NotificationDefinition, bool> predicate, string eventType, Torrent torrent, string errorMessage = null)
     {
         var activeNotifications = _notificationRepository.GetEnabled().Where(predicate).ToList();
         if (activeNotifications.Count == 0)
@@ -339,6 +368,8 @@ public class NotificationEventHandler :
             instanceName = "Seedarr",
             applicationVersion = "1.0.0",
             timestamp = DateTime.UtcNow.ToString("o"),
+            errorMessage,
+            message = errorMessage,
             torrent = new
             {
                 id = torrent.Id,
@@ -365,6 +396,7 @@ public class NotificationEventHandler :
                 downloadTimeSeconds,
                 seedingTimeSeconds = torrent.SeedingTime,
                 tags = torrent.TagIds ?? new List<int>(),
+                errorMessage,
             },
             media = new
             {
@@ -422,48 +454,31 @@ public class NotificationEventHandler :
             if (string.Equals(notif.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
             {
                 var (scriptPath, scriptArgs) = CustomScriptService.ParseSettings(notif.Settings);
-                Task.Run(async () =>
-                {
-                    try
-                    {
-                        await _customScriptService.ExecuteScriptAsync(scriptPath, torrent, eventType, scriptArgs).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error executing custom script for {0}", eventType);
-                    }
-                });
+                EnqueueDispatch(
+                    async () => await _customScriptService.ExecuteScriptAsync(scriptPath, torrent, eventType, scriptArgs).ConfigureAwait(false),
+                    eventType,
+                    "CustomScript");
             }
             else if (string.Equals(notif.Implementation, "Email", StringComparison.OrdinalIgnoreCase))
             {
-                Task.Run(() =>
-                {
-                    try
+                EnqueueDispatch(
+                    () =>
                     {
                         EmailNotificationSender.SendEmailNotification(notif.Settings, eventType, torrent, meta, payload);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error sending email notification for {0}", eventType);
-                    }
-                });
+                        return Task.CompletedTask;
+                    },
+                    eventType,
+                    "Email");
             }
             else
             {
                 var providerPayload = NotificationPayloadBuilder.BuildProviderPayload(notif.Implementation, eventType, torrent, meta, payload, notif.Settings);
                 var targetUrl = NotificationPayloadBuilder.ResolveTargetUrl(notif.Implementation, notif.Settings);
                 var customHeaders = NotificationPayloadBuilder.ResolveCustomHeaders(notif.Implementation, notif.Settings);
-                Task.Run(async () =>
-                {
-                    try
-                    {
-                        await _webhookDispatcher.DispatchAsync(targetUrl, providerPayload, customHeaders).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Error dispatching webhook notification for {0}", eventType);
-                    }
-                });
+                EnqueueDispatch(
+                    async () => await _webhookDispatcher.DispatchAsync(targetUrl, providerPayload, customHeaders).ConfigureAwait(false),
+                    eventType,
+                    notif.Implementation ?? "Webhook");
             }
         }
     }

@@ -73,6 +73,11 @@ public class DiscordNotification : INotificationService
             using var content = new StringContent(json, Encoding.UTF8, "application/json");
             using var request = new HttpRequestMessage(HttpMethod.Post, WebhookUrl) { Content = content };
             using var response = _httpClient.Send(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"Discord notification failed with HTTP {(int)response.StatusCode} {response.StatusCode}", null, response.StatusCode);
+            }
+
             _logger.Debug("Discord notification sent, status: {0}", response.StatusCode);
         }
         catch (Exception ex)

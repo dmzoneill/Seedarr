@@ -264,6 +264,12 @@ public static class NotificationPayloadBuilder
             var torrentDetails = torrent != null
                 ? $"Category: {torrent.Category ?? torrent.Label ?? "None"} | Status: {torrent.Status} | Progress: {torrent.Progress * 100:F1}% | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
                 : ExtractMessage(genericPayload, $"Event: {eventType}");
+            var err = ExtractErrorMessage(genericPayload);
+            if (!string.IsNullOrWhiteSpace(err))
+            {
+                torrentDetails += $"\nError: {err}";
+            }
+
             var overview = ExtractOverview(meta);
             var rawDesc = !string.IsNullOrWhiteSpace(overview)
                 ? $"{torrentDetails}\n\n{overview}"
@@ -288,8 +294,10 @@ public static class NotificationPayloadBuilder
 
         if (string.Equals(implementation, "Slack", StringComparison.OrdinalIgnoreCase))
         {
+            var err = ExtractErrorMessage(genericPayload);
+            var errSuffix = !string.IsNullOrWhiteSpace(err) ? $"\nError: {err}" : string.Empty;
             var text = torrent != null
-                ? $"*Seedarr [{eventType}]* - *{torrent.Name}*\nCategory: {torrent.Category ?? torrent.Label ?? "None"} | Status: {torrent.Status} | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
+                ? $"*Seedarr [{eventType}]* - *{torrent.Name}*\nCategory: {torrent.Category ?? torrent.Label ?? "None"} | Status: {torrent.Status} | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB{errSuffix}"
                 : $"*Seedarr [{eventType}]*\n{ExtractMessage(genericPayload, eventType)}";
 
             return new
@@ -301,8 +309,10 @@ public static class NotificationPayloadBuilder
 
         if (string.Equals(implementation, "Telegram", StringComparison.OrdinalIgnoreCase))
         {
+            var err = ExtractErrorMessage(genericPayload);
+            var errSuffix = !string.IsNullOrWhiteSpace(err) ? $"\nError: {EpisodicParser.EscapeMarkdownStatic(err)}" : string.Empty;
             var text = torrent != null
-                ? $"*Seedarr [{EpisodicParser.EscapeMarkdownStatic(eventType)}]*\n*{EpisodicParser.EscapeMarkdownStatic(torrent.Name)}*\nCategory: {EpisodicParser.EscapeMarkdownStatic(torrent.Category ?? torrent.Label ?? "None")}\nProgress: {torrent.Progress * 100:F1}%\nStatus: {torrent.Status}"
+                ? $"*Seedarr [{EpisodicParser.EscapeMarkdownStatic(eventType)}]*\n*{EpisodicParser.EscapeMarkdownStatic(torrent.Name)}*\nCategory: {EpisodicParser.EscapeMarkdownStatic(torrent.Category ?? torrent.Label ?? "None")}\nProgress: {torrent.Progress * 100:F1}%\nStatus: {torrent.Status}{errSuffix}"
                 : $"*Seedarr [{EpisodicParser.EscapeMarkdownStatic(eventType)}]*\n{EpisodicParser.EscapeMarkdownStatic(ExtractMessage(genericPayload, eventType))}";
 
             var payloadDict = new Dictionary<string, object>
@@ -321,20 +331,24 @@ public static class NotificationPayloadBuilder
 
         if (string.Equals(implementation, "Gotify", StringComparison.OrdinalIgnoreCase))
         {
+            var err = ExtractErrorMessage(genericPayload);
+            var errSuffix = !string.IsNullOrWhiteSpace(err) ? $" - Error: {err}" : string.Empty;
             return new
             {
                 title = $"Seedarr: {eventType}",
-                message = torrent != null ? $"{torrent.Name} ({torrent.Category ?? torrent.Label ?? "Default"}) - {torrent.Status}" : ExtractMessage(genericPayload, eventType),
+                message = torrent != null ? $"{torrent.Name} ({torrent.Category ?? torrent.Label ?? "Default"}) - {torrent.Status}{errSuffix}" : ExtractMessage(genericPayload, eventType),
                 priority = 5,
             };
         }
 
         if (string.Equals(implementation, "Pushover", StringComparison.OrdinalIgnoreCase))
         {
+            var err = ExtractErrorMessage(genericPayload);
+            var errSuffix = !string.IsNullOrWhiteSpace(err) ? $" - Error: {err}" : string.Empty;
             var payloadDict = new Dictionary<string, object>
             {
                 ["title"] = $"Seedarr: {eventType}",
-                ["message"] = torrent != null ? $"{torrent.Name} ({torrent.Category ?? torrent.Label ?? "Default"}) - {torrent.Status}" : ExtractMessage(genericPayload, eventType),
+                ["message"] = torrent != null ? $"{torrent.Name} ({torrent.Category ?? torrent.Label ?? "Default"}) - {torrent.Status}{errSuffix}" : ExtractMessage(genericPayload, eventType),
             };
 
             if (!string.IsNullOrEmpty(token))
@@ -352,9 +366,11 @@ public static class NotificationPayloadBuilder
 
         if (string.Equals(implementation, "Apprise", StringComparison.OrdinalIgnoreCase))
         {
+            var err = ExtractErrorMessage(genericPayload);
+            var errSuffix = !string.IsNullOrWhiteSpace(err) ? $"\nError: {err}" : string.Empty;
             var title = $"Seedarr: {eventType}";
             var body = torrent != null
-                ? $"Torrent: {torrent.Name}\nCategory: {torrent.Category ?? torrent.Label ?? "None"}\nStatus: {torrent.Status}\nProgress: {torrent.Progress * 100:F1}%\nSize: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
+                ? $"Torrent: {torrent.Name}\nCategory: {torrent.Category ?? torrent.Label ?? "None"}\nStatus: {torrent.Status}\nProgress: {torrent.Progress * 100:F1}%\nSize: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB{errSuffix}"
                 : ExtractMessage(genericPayload, $"Event: {eventType}");
 
             var isWarning = eventType.Contains("HealthIssue", StringComparison.OrdinalIgnoreCase) ||
@@ -372,6 +388,69 @@ public static class NotificationPayloadBuilder
         return genericPayload;
     }
 
+    public static string ExtractErrorMessage(object payload)
+    {
+        if (payload == null)
+        {
+            return null;
+        }
+
+        if (payload is string s && !string.IsNullOrWhiteSpace(s))
+        {
+            return s;
+        }
+
+        if (payload is Dictionary<string, object> dict)
+        {
+            if (dict.TryGetValue("ErrorMessage", out var em1) && em1 != null && !string.IsNullOrWhiteSpace(em1.ToString()))
+            {
+                return em1.ToString();
+            }
+
+            if (dict.TryGetValue("errorMessage", out var em2) && em2 != null && !string.IsNullOrWhiteSpace(em2.ToString()))
+            {
+                return em2.ToString();
+            }
+
+            if (dict.TryGetValue("Message", out var m1) && m1 != null && !string.IsNullOrWhiteSpace(m1.ToString()))
+            {
+                return m1.ToString();
+            }
+
+            if (dict.TryGetValue("message", out var m2) && m2 != null && !string.IsNullOrWhiteSpace(m2.ToString()))
+            {
+                return m2.ToString();
+            }
+        }
+
+        var prop = payload.GetType().GetProperty("ErrorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                   ?? payload.GetType().GetProperty("errorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        var value = prop?.GetValue(payload)?.ToString();
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        var torrentProp = payload.GetType().GetProperty("Torrent", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                          ?? payload.GetType().GetProperty("torrent", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        if (torrentProp != null)
+        {
+            var torrentObj = torrentProp.GetValue(payload);
+            if (torrentObj != null)
+            {
+                var tErrProp = torrentObj.GetType().GetProperty("ErrorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                               ?? torrentObj.GetType().GetProperty("errorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                var tErrVal = tErrProp?.GetValue(torrentObj)?.ToString();
+                if (!string.IsNullOrWhiteSpace(tErrVal))
+                {
+                    return tErrVal;
+                }
+            }
+        }
+
+        return null;
+    }
+
     internal static string ExtractMessage(object payload, string fallback)
     {
         if (payload == null)
@@ -386,26 +465,31 @@ public static class NotificationPayloadBuilder
 
         if (payload is Dictionary<string, object> dict)
         {
-            if (dict.TryGetValue("Message", out var m1) && m1 != null)
+            if (dict.TryGetValue("ErrorMessage", out var em1) && em1 != null && !string.IsNullOrWhiteSpace(em1.ToString()))
             {
-                var str1 = m1.ToString();
-                if (!string.IsNullOrWhiteSpace(str1))
-                {
-                    return str1;
-                }
+                return em1.ToString();
             }
 
-            if (dict.TryGetValue("message", out var m2) && m2 != null)
+            if (dict.TryGetValue("errorMessage", out var em2) && em2 != null && !string.IsNullOrWhiteSpace(em2.ToString()))
             {
-                var str2 = m2.ToString();
-                if (!string.IsNullOrWhiteSpace(str2))
-                {
-                    return str2;
-                }
+                return em2.ToString();
+            }
+
+            if (dict.TryGetValue("Message", out var m1) && m1 != null && !string.IsNullOrWhiteSpace(m1.ToString()))
+            {
+                return m1.ToString();
+            }
+
+            if (dict.TryGetValue("message", out var m2) && m2 != null && !string.IsNullOrWhiteSpace(m2.ToString()))
+            {
+                return m2.ToString();
             }
         }
 
-        var prop = payload.GetType().GetProperty("Message", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        var prop = payload.GetType().GetProperty("ErrorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                   ?? payload.GetType().GetProperty("errorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                   ?? payload.GetType().GetProperty("Message", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
+                   ?? payload.GetType().GetProperty("message", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
         var value = prop?.GetValue(payload)?.ToString();
 
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
