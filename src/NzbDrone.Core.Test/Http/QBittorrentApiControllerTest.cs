@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.QBittorrent;
@@ -146,7 +147,7 @@ public class QBittorrentApiControllerTest
         Assert.That(content.Content, Is.EqualTo("Ok."));
 
         _torrentImportService.Received(1).ImportFromMagnet(magnet);
-        _torrentService.Received().Update(Arg.Is<Torrent>(t => t.Label == "movies" && t.Status == TorrentStatus.Paused));
+        _torrentService.Received().Update(Arg.Is<Torrent>(t => t.Category == "movies" && t.Status == TorrentStatus.Paused));
     }
 
     [Test]
@@ -288,5 +289,149 @@ public class QBittorrentApiControllerTest
         Assert.That(torrent.Label, Is.EqualTo("tag2"));
         Assert.That(torrent.TagIds, Is.EqualTo(new List<int> { 20 }));
         _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public async Task AddTorrents_With_Both_Category_And_Tags_Preserves_Category_And_Label_Distinctly()
+    {
+        var magnet = "magnet:?xt=urn:btih:4a5e1234567890abcdef1234567890abcdef1234&dn=Test";
+        var request = new QBitAddTorrentsRequest
+        {
+            Urls = magnet,
+            Category = "SciFi",
+            Tags = "tag1, tag2",
+        };
+
+        var createdTorrent = new Torrent
+        {
+            Id = 1,
+            Name = "Test",
+            InfoHash = "4a5e1234567890abcdef1234567890abcdef1234",
+            Status = TorrentStatus.Downloading,
+        };
+
+        _torrentImportService.ImportFromMagnet(magnet).Returns(createdTorrent);
+
+        var result = await _controller.AddTorrents(request);
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+
+        _torrentService.Received().Update(Arg.Is<Torrent>(t =>
+            t.Category == "SciFi" &&
+            t.Label == "tag1, tag2"));
+    }
+
+    [Test]
+    public void QBitTorrentSnapshot_Maps_Category_And_Tags_Accurately()
+    {
+        var torrent = new Torrent
+        {
+            Name = "Snapshot Test",
+            Category = "Movies",
+            Label = "Action, 1080p",
+            TotalSize = 1000,
+            Downloaded = 500,
+            Progress = 0.5,
+            RatioLimit = 1.5,
+            SeedingTimeLimit = 120,
+        };
+
+        var snapshot = QBitTorrentSnapshot.FromTorrent(torrent, "/downloads", "/downloads/Snapshot Test");
+
+        Assert.That(snapshot.Category, Is.EqualTo("Movies"));
+        Assert.That(snapshot.Tags, Is.EqualTo("Action, 1080p"));
+        Assert.That(snapshot.RatioLimit, Is.EqualTo(1.5));
+        Assert.That(snapshot.SeedingTimeLimit, Is.EqualTo(120));
+    }
+
+    [Test]
+    public void SetShareLimits_Updates_Ratio_And_Seeding_Time_Limits_On_Torrents()
+    {
+        var torrent = new Torrent
+        {
+            Id = 10,
+            InfoHash = "testhash",
+            RatioLimit = null,
+            SeedingTimeLimit = null,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.SetShareLimits("testhash", ratioLimit: 2.5, seedingTimeLimit: 180);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        Assert.That(torrent.RatioLimit, Is.EqualTo(2.5));
+        Assert.That(torrent.SeedingTimeLimit, Is.EqualTo(180));
+        _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public async Task AddTorrents_ReAdding_Existing_Torrent_Applies_And_Persists_Updated_Options()
+    {
+        var magnet = "magnet:?xt=urn:btih:4a5e1234567890abcdef1234567890abcdef1234&dn=Existing";
+        var request = new QBitAddTorrentsRequest
+        {
+            Urls = magnet,
+            Category = "Documentaries",
+            Tags = "HD, Nature",
+            RatioLimit = 3.0,
+            SeedingTimeLimit = 240,
+        };
+
+        var existingTorrent = new Torrent
+        {
+            Id = 5,
+            Name = "Existing",
+            InfoHash = "4a5e1234567890abcdef1234567890abcdef1234",
+            Category = "OldCategory",
+            Label = "OldLabel",
+            RatioLimit = 1.0,
+            SeedingTimeLimit = 60,
+        };
+
+        _torrentImportService.ImportFromMagnet(magnet).Returns(existingTorrent);
+
+        var result = await _controller.AddTorrents(request);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        Assert.That(existingTorrent.Category, Is.EqualTo("Documentaries"));
+        Assert.That(existingTorrent.Label, Is.EqualTo("HD, Nature"));
+        Assert.That(existingTorrent.RatioLimit, Is.EqualTo(3.0));
+        Assert.That(existingTorrent.SeedingTimeLimit, Is.EqualTo(240));
+        _torrentService.Received().Update(existingTorrent);
+    }
+
+    [Test]
+    public async Task AddTorrents_When_Import_Throws_Duplicate_Applies_And_Persists_Options_On_Existing_Torrent()
+    {
+        var hash = "4a5e1234567890abcdef1234567890abcdef1234";
+        var magnet = $"magnet:?xt=urn:btih:{hash}&dn=Existing";
+        var request = new QBitAddTorrentsRequest
+        {
+            Urls = magnet,
+            Category = "NewCategory",
+            Tags = "NewTags",
+            RatioLimit = 2.0,
+        };
+
+        var existingTorrent = new Torrent
+        {
+            Id = 7,
+            Name = "Existing",
+            InfoHash = hash,
+            Category = "OldCategory",
+            Label = "OldLabel",
+        };
+
+        _torrentImportService.ImportFromMagnet(magnet)
+            .Returns(_ => throw new DuplicateTorrentException(hash));
+        _torrentService.GetByInfoHash(hash).Returns(existingTorrent);
+
+        var result = await _controller.AddTorrents(request);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        Assert.That(existingTorrent.Category, Is.EqualTo("NewCategory"));
+        Assert.That(existingTorrent.Label, Is.EqualTo("NewTags"));
+        Assert.That(existingTorrent.RatioLimit, Is.EqualTo(2.0));
+        _torrentService.Received().Update(existingTorrent);
     }
 }

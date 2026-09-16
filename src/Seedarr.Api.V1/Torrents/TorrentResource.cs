@@ -54,6 +54,8 @@ public class TorrentResource : RestResource
     public int SortOrder { get; set; }
     public bool ForceCompleted { get; set; }
     public long SeedingTime { get; set; }
+    public double? RatioLimit { get; set; }
+    public int? SeedingTimeLimit { get; set; }
     public string MagnetLink { get; set; }
     public string PosterUrl { get; set; }
     public string FanartUrl { get; set; }

@@ -50,6 +50,8 @@ public class Torrent : ModelBase
     public int SortOrder { get; set; }
     public bool ForceCompleted { get; set; }
     public long SeedingTime { get; set; }
+    public double? RatioLimit { get; set; }
+    public int? SeedingTimeLimit { get; set; }
 
     [Ignore]
     public string MagnetUrl { get; set; }
@@ -104,6 +106,16 @@ public class Torrent : ModelBase
         SequentialDownload = updates.SequentialDownload;
         SmallTorrentLimit = updates.SmallTorrentLimit;
         Threshold = updates.Threshold;
+
+        if (updates.RatioLimit.HasValue)
+        {
+            RatioLimit = updates.RatioLimit;
+        }
+
+        if (updates.SeedingTimeLimit.HasValue)
+        {
+            SeedingTimeLimit = updates.SeedingTimeLimit;
+        }
 
         if (!string.IsNullOrWhiteSpace(updates.TrackerUrl))
         {
