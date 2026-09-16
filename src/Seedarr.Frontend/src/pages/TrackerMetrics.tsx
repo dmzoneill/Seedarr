@@ -9,7 +9,11 @@ import {
 import { formatBytes, formatDate } from "../utils/formatters";
 import TrackerFavicon from "../components/TrackerFavicon";
 import { useToast } from "../context/ToastContext";
-import type { TrackerMetric, TrackerMetricSnapshot } from "../api/types";
+import type {
+  TrackerMetric,
+  TrackerMetricSnapshot,
+  HourlyTrafficPoint,
+} from "../api/types";
 
 type ProtocolFilter = "ALL" | "UDP" | "HTTP" | "HTTPS";
 type StatusFilter = "ALL" | "Working" | "Degraded" | "Offline";
@@ -152,9 +156,12 @@ export function TrackerMetrics() {
       });
   }, [metrics, protocolFilter, statusFilter, searchTerm, sortField, sortAsc]);
 
-  const maxUpload = useMemo(() => {
-    return Math.max(...metrics.map((m) => m.totalUploaded), 1);
-  }, [metrics]);
+  const summaryMaxUpload = useMemo(() => {
+    return Math.max(
+      ...(summary?.topUploadTrackers ?? []).map((t) => t.totalUploaded || 0),
+      1,
+    );
+  }, [summary?.topUploadTrackers]);
 
   return (
     <div
@@ -556,6 +563,7 @@ export function TrackerMetrics() {
           >
             <span
               style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+              title="Upload volume across 24 hours (traffic scale)"
             >
               <span
                 style={{
@@ -569,6 +577,7 @@ export function TrackerMetrics() {
             </span>
             <span
               style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+              title="Download volume across 24 hours (traffic scale)"
             >
               <span
                 style={{
@@ -582,6 +591,7 @@ export function TrackerMetrics() {
             </span>
             <span
               style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}
+              title="Announce count scaled independently on secondary scale"
             >
               <span
                 style={{
@@ -591,7 +601,7 @@ export function TrackerMetrics() {
                   borderRadius: "2px",
                 }}
               />
-              Announce Count
+              Announce Count (Secondary Scale)
             </span>
           </div>
         </div>
@@ -642,7 +652,9 @@ export function TrackerMetrics() {
             ) : (
               (summary?.topUploadTrackers ?? []).map((t, idx) => {
                 const pct =
-                  maxUpload > 0 ? (t.totalUploaded / maxUpload) * 100 : 0;
+                  summaryMaxUpload > 0
+                    ? (t.totalUploaded / summaryMaxUpload) * 100
+                    : 0;
                 return (
                   <div
                     key={t.id || idx}
@@ -1320,8 +1332,98 @@ export function TrackerMetrics() {
   );
 }
 
+export interface ChartPointsResult {
+  maxTraffic: number;
+  maxAnnounce: number;
+  pointsUpload: string;
+  pointsDownload: string;
+  pointsAnnounce: string;
+}
+
+export function calculateHourlyActivityPoints(
+  data: HourlyTrafficPoint[],
+  width = 600,
+  height = 160,
+  padding = 20,
+): ChartPointsResult {
+  const safeData = data ?? [];
+  const maxTraffic = Math.max(
+    ...safeData.map((d) => {
+      const up = Number.isFinite(d?.uploaded) ? Math.max(0, d.uploaded) : 0;
+      const down =
+        Number.isFinite(d?.downloaded) ? Math.max(0, d.downloaded) : 0;
+      return Math.max(up, down);
+    }),
+    1,
+  );
+  const maxAnnounce = Math.max(
+    ...safeData.map((d) => {
+      return Number.isFinite(d?.announces) ? Math.max(0, d.announces) : 0;
+    }),
+    1,
+  );
+
+  const safeMaxTraffic =
+    Number.isFinite(maxTraffic) && maxTraffic > 0 ? maxTraffic : 1;
+  const safeMaxAnnounce =
+    Number.isFinite(maxAnnounce) && maxAnnounce > 0 ? maxAnnounce : 1;
+
+  const count = safeData.length;
+  const divisor = count > 1 ? count - 1 : 1;
+  const innerWidth = width - 2 * padding;
+  const innerHeight = height - 2 * padding;
+  const fallbackY = height - padding;
+
+  const pointsUpload = safeData
+    .map((d, i) => {
+      const rawX = padding + (i / divisor) * innerWidth;
+      const x = Number.isFinite(rawX) ? rawX : padding;
+      const val = Number.isFinite(d?.uploaded) ? Math.max(0, d.uploaded) : 0;
+      const rawY = height - padding - (val / safeMaxTraffic) * innerHeight;
+      const y = Number.isFinite(rawY) ? rawY : fallbackY;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  const pointsDownload = safeData
+    .map((d, i) => {
+      const rawX = padding + (i / divisor) * innerWidth;
+      const x = Number.isFinite(rawX) ? rawX : padding;
+      const val =
+        Number.isFinite(d?.downloaded) ? Math.max(0, d.downloaded) : 0;
+      const rawY = height - padding - (val / safeMaxTraffic) * innerHeight;
+      const y = Number.isFinite(rawY) ? rawY : fallbackY;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  const pointsAnnounce = safeData
+    .map((d, i) => {
+      const rawX = padding + (i / divisor) * innerWidth;
+      const x = Number.isFinite(rawX) ? rawX : padding;
+      const val =
+        Number.isFinite(d?.announces) ? Math.max(0, d.announces) : 0;
+      const rawY = height - padding - (val / safeMaxAnnounce) * innerHeight;
+      const y = Number.isFinite(rawY) ? rawY : fallbackY;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return {
+    maxTraffic: safeMaxTraffic,
+    maxAnnounce: safeMaxAnnounce,
+    pointsUpload,
+    pointsDownload,
+    pointsAnnounce,
+  };
+}
+
 // 24h Hourly Svg Line Chart component
-function HourlyActivitySvgChart({ data }: { data: any[] }) {
+export function HourlyActivitySvgChart({
+  data,
+}: {
+  data: HourlyTrafficPoint[];
+}) {
   if (!data || data.length === 0) {
     return (
       <div
@@ -1339,33 +1441,17 @@ function HourlyActivitySvgChart({ data }: { data: any[] }) {
     );
   }
 
-  const maxUpload = Math.max(...data.map((d) => d.uploaded || 0), 1);
-  const maxAnnounce = Math.max(...data.map((d) => d.announces || 0), 1);
   const width = 600;
   const height = 160;
   const padding = 20;
 
-  const pointsUpload = data
-    .map((d, i) => {
-      const x = padding + (i / (data.length - 1 || 1)) * (width - 2 * padding);
-      const y =
-        height -
-        padding -
-        ((d.uploaded || 0) / maxUpload) * (height - 2 * padding);
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  const pointsAnnounce = data
-    .map((d, i) => {
-      const x = padding + (i / (data.length - 1 || 1)) * (width - 2 * padding);
-      const y =
-        height -
-        padding -
-        ((d.announces || 0) / maxAnnounce) * (height - 2 * padding);
-      return `${x},${y}`;
-    })
-    .join(" ");
+  const {
+    maxTraffic,
+    maxAnnounce,
+    pointsUpload,
+    pointsDownload,
+    pointsAnnounce,
+  } = calculateHourlyActivityPoints(data, width, height, padding);
 
   return (
     <svg
@@ -1397,6 +1483,28 @@ function HourlyActivitySvgChart({ data }: { data: any[] }) {
         stroke="rgba(255,255,255,0.12)"
       />
 
+      {/* Scale indicators / axis labels */}
+      <text
+        x={padding}
+        y={padding - 6}
+        fill="#4ade80"
+        fontSize="9"
+        fontWeight="500"
+        textAnchor="start"
+      >
+        Traffic Max: {formatBytes(maxTraffic)}
+      </text>
+      <text
+        x={width - padding}
+        y={padding - 6}
+        fill="#f59e0b"
+        fontSize="9"
+        fontWeight="500"
+        textAnchor="end"
+      >
+        Announces Max: {maxAnnounce}
+      </text>
+
       {/* Upload Line */}
       <polyline
         fill="none"
@@ -1405,7 +1513,21 @@ function HourlyActivitySvgChart({ data }: { data: any[] }) {
         points={pointsUpload}
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
+      >
+        <title>{`Upload Volume (Peak: ${formatBytes(maxTraffic)})`}</title>
+      </polyline>
+
+      {/* Download Line */}
+      <polyline
+        stroke="#60a5fa"
+        points={pointsDownload}
+        fill="none"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <title>{`Download Volume (Peak: ${formatBytes(maxTraffic)})`}</title>
+      </polyline>
 
       {/* Announce Line */}
       <polyline
@@ -1416,20 +1538,44 @@ function HourlyActivitySvgChart({ data }: { data: any[] }) {
         points={pointsAnnounce}
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
+      >
+        <title>{`Announce Count (Peak: ${maxAnnounce} announces - scaled independently)`}</title>
+      </polyline>
 
       {/* Data Points */}
       {data.map((d, i) => {
-        const x =
+        const rawX =
           padding + (i / (data.length - 1 || 1)) * (width - 2 * padding);
-        const yUp =
+        const x = Number.isFinite(rawX) ? rawX : padding;
+
+        const upVal =
+          Number.isFinite(d?.uploaded) ? Math.max(0, d.uploaded) : 0;
+        const downVal =
+          Number.isFinite(d?.downloaded) ? Math.max(0, d.downloaded) : 0;
+        const annVal =
+          Number.isFinite(d?.announces) ? Math.max(0, d.announces) : 0;
+
+        const rawYUp =
           height -
           padding -
-          ((d.uploaded || 0) / maxUpload) * (height - 2 * padding);
+          (upVal / maxTraffic) * (height - 2 * padding);
+        const yUp = Number.isFinite(rawYUp) ? rawYUp : height - padding;
+
+        const rawYDown =
+          height -
+          padding -
+          (downVal / maxTraffic) * (height - 2 * padding);
+        const yDown = Number.isFinite(rawYDown) ? rawYDown : height - padding;
+
         return (
-          <circle key={i} cx={x} cy={yUp} r="3" fill="#22c55e">
-            <title>{`${d.timeLabel}: ${formatBytes(d.uploaded)} uploaded, ${d.announces} announces`}</title>
-          </circle>
+          <g key={i}>
+            <circle cx={x} cy={yUp} r="3" fill="#22c55e">
+              <title>{`${d?.timeLabel || ""}: ${formatBytes(upVal)} uploaded, ${formatBytes(downVal)} downloaded, ${annVal} announces`}</title>
+            </circle>
+            <circle cx={x} cy={yDown} r="2.5" fill="#60a5fa">
+              <title>{`${d?.timeLabel || ""}: ${formatBytes(downVal)} downloaded`}</title>
+            </circle>
+          </g>
         );
       })}
     </svg>
