@@ -306,6 +306,7 @@ public class Startup
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "Seedarr REST API v1");
             c.RoutePrefix = "swagger";
             c.InjectStylesheet("/swagger-custom.css");
+            c.ConfigObject.PersistAuthorization = true;
         });
 
         app.MapControllers();
