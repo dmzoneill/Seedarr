@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
@@ -44,6 +46,16 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
     private const string MaskedSecret = "********";
     private const string AlternateMaskedSecret = "******";
 
+    private static readonly HashSet<string> ReservedProviderIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Cookies",
+        "SeedarrApiKey",
+        "Bearer",
+        "Basic",
+    };
+
+    private static readonly Regex ProviderIdRegex = new(@"^[a-zA-Z0-9_-]{2,32}$", RegexOptions.Compiled);
+
     private readonly IIdentityProviderService _providerService;
     private readonly IDynamicAuthSchemeManager _dynamicAuthManager;
 
@@ -55,8 +67,27 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
         _dynamicAuthManager = dynamicAuthManager;
 
         SharedValidator = new ResourceValidator<IdentityProviderResource>();
-        SharedValidator.RuleFor(c => c.ProviderId).NotEmpty();
-        SharedValidator.RuleFor(c => c.Name).NotEmpty();
+        SharedValidator.RuleFor(c => c.ProviderId)
+            .NotEmpty()
+            .WithMessage("'ProviderId' must not be empty.")
+            .Matches(ProviderIdRegex)
+            .WithMessage("'ProviderId' must be between 2 and 32 characters and contain only alphanumeric characters, underscores, or hyphens.")
+            .Must(id => id == null || !ReservedProviderIds.Contains(id))
+            .WithMessage("'ProviderId' cannot use a reserved scheme name.");
+
+        SharedValidator.RuleFor(c => c.Name)
+            .NotEmpty()
+            .WithMessage("'Name' must not be empty.");
+
+        SharedValidator.RuleFor(c => c.IssuerUrl)
+            .Must(IsValidAbsoluteUri)
+            .When(c => !string.IsNullOrEmpty(c.IssuerUrl))
+            .WithMessage("'IssuerUrl' must be a valid absolute URI.");
+
+        SharedValidator.RuleFor(c => c.MetadataUrl)
+            .Must(IsValidAbsoluteUri)
+            .When(c => !string.IsNullOrEmpty(c.MetadataUrl))
+            .WithMessage("'MetadataUrl' must be a valid absolute URI.");
     }
 
     [HttpGet]
@@ -236,5 +267,11 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
             IconUrl = resource.IconUrl,
             ButtonText = resource.ButtonText,
         };
+    }
+
+    private static bool IsValidAbsoluteUri(string url)
+    {
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+               (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 }
