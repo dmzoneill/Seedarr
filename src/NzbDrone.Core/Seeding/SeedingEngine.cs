@@ -167,11 +167,13 @@ public class SeedingEngine : BackgroundService
             }
         }
 
+        var isAnyPrivate = allTorrents.Any(t => t.IsPrivate && (t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading));
+
         if (string.IsNullOrEmpty(_localPeerId))
         {
             if (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled)
             {
-                var activeProfile = _clientBehaviorSimulator.GetActiveProfile();
+                var activeProfile = _clientBehaviorSimulator.GetActiveProfile(isAnyPrivate);
                 _localPeerId = activeProfile?.GeneratePeerId();
             }
 
@@ -190,7 +192,7 @@ public class SeedingEngine : BackgroundService
         }
         else if (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled)
         {
-            var activeProfile = _clientBehaviorSimulator.GetActiveProfile();
+            var activeProfile = _clientBehaviorSimulator.GetActiveProfile(isAnyPrivate);
             if (activeProfile != null)
             {
                 _localPeerId = activeProfile.GeneratePeerId();

@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
@@ -336,6 +338,9 @@ public class ProtocolsConfigController : ConfigController<ProtocolsConfigResourc
 [V1ApiController("config/simulation")]
 public class SimulationConfigController : ConfigController<SimulationConfigResource>
 {
+    private static readonly string[] AllowedTrafficProfiles = { "conservative", "balanced", "aggressive", "off" };
+    private static readonly string[] AllowedPrimaryClients = { "qbittorrent", "deluge", "transmission", "utorrent", "biglybt" };
+
     public SimulationConfigController(IConfigService configService)
         : base(configService)
     {
@@ -349,7 +354,15 @@ public class SimulationConfigController : ConfigController<SimulationConfigResou
             .InclusiveBetween(0.0, 1.0);
 
         SharedValidator.RuleFor(c => c.SwarmPeerAnalysisDepth)
-            .GreaterThanOrEqualTo(1);
+            .InclusiveBetween(1, 500);
+
+        SharedValidator.RuleFor(c => c.TrafficPatternProfile)
+            .Must(p => string.IsNullOrWhiteSpace(p) || AllowedTrafficProfiles.Contains(p.Trim(), StringComparer.OrdinalIgnoreCase))
+            .WithMessage("TrafficPatternProfile must be one of: conservative, balanced, aggressive, off.");
+
+        SharedValidator.RuleFor(c => c.PrimaryClient)
+            .Must(c => string.IsNullOrWhiteSpace(c) || AllowedPrimaryClients.Contains(c.Trim(), StringComparer.OrdinalIgnoreCase))
+            .WithMessage("PrimaryClient must be one of: qbittorrent, deluge, transmission, utorrent, biglybt.");
     }
 
     protected override SimulationConfigResource ToResource(IConfigService model)

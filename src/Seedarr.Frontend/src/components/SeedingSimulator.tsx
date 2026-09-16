@@ -23,14 +23,16 @@ export function SeedingSimulator({
   const [targetRatio, setTargetRatio] = useState<number>(2.0);
 
   // Target calculations
-  const targetUploadBytes = totalSize * targetRatio;
-  const remainingUploadBytes = Math.max(0, targetUploadBytes - currentUploaded);
+  const targetUploadBytes = totalSize > 0 ? totalSize * targetRatio : 0;
+  const remainingUploadBytes =
+    totalSize > 0 ? Math.max(0, targetUploadBytes - currentUploaded) : 0;
 
   const etaSeconds = useMemo(() => {
+    if (totalSize <= 0) return null;
     if (remainingUploadBytes <= 0) return 0;
     if (currentUploadSpeed <= 0) return null;
     return remainingUploadBytes / currentUploadSpeed;
-  }, [remainingUploadBytes, currentUploadSpeed]);
+  }, [totalSize, remainingUploadBytes, currentUploadSpeed]);
 
   const formatDuration = (sec: number | null): string => {
     if (sec === null) return "Unknown (speed is 0 B/s)";
@@ -45,18 +47,17 @@ export function SeedingSimulator({
   };
 
   // HnR Safety check
-  const requiredSeedingSeconds = minSeedingHours * 3600;
-  const hnrProgress = Math.min(
-    1.0,
-    requiredSeedingSeconds > 0
-      ? seedingTimeSeconds / requiredSeedingSeconds
-      : 1.0,
-  );
-  const hnrRemainingSeconds = Math.max(
-    0,
-    requiredSeedingSeconds - seedingTimeSeconds,
-  );
-  const isHnrCleared = hnrRemainingSeconds <= 0 || currentRatio >= 1.0;
+  const hasHnrRequirement = typeof minSeedingHours === "number" && minSeedingHours > 0;
+  const requiredSeedingSeconds = hasHnrRequirement ? minSeedingHours * 3600 : 0;
+  const hnrRemainingSeconds = hasHnrRequirement
+    ? Math.max(0, requiredSeedingSeconds - seedingTimeSeconds)
+    : 0;
+  const hnrProgress = hasHnrRequirement && requiredSeedingSeconds > 0
+    ? Math.min(1.0, seedingTimeSeconds / requiredSeedingSeconds)
+    : 0;
+  const isHnrCleared = hasHnrRequirement
+    ? hnrRemainingSeconds <= 0 || currentRatio >= 1.0
+    : false;
 
   return (
     <div
@@ -160,7 +161,7 @@ export function SeedingSimulator({
             className="stat-value"
             style={{ fontSize: "1.1rem", color: "var(--accent)" }}
           >
-            {formatBytes(targetUploadBytes)}
+            {totalSize > 0 ? formatBytes(targetUploadBytes) : "Pending metadata..."}
           </div>
           <div className="stat-label" style={{ fontSize: "0.72rem" }}>
             Target Upload
@@ -169,7 +170,7 @@ export function SeedingSimulator({
 
         <div className="stat-card" style={{ padding: "0.6rem" }}>
           <div className="stat-value" style={{ fontSize: "1.1rem" }}>
-            {formatBytes(remainingUploadBytes)}
+            {totalSize > 0 ? formatBytes(remainingUploadBytes) : "Pending metadata..."}
           </div>
           <div className="stat-label" style={{ fontSize: "0.72rem" }}>
             Upload Needed
@@ -181,10 +182,13 @@ export function SeedingSimulator({
             className="stat-value"
             style={{
               fontSize: "1.1rem",
-              color: etaSeconds === 0 ? "var(--success)" : "inherit",
+              color:
+                totalSize > 0 && etaSeconds === 0
+                  ? "var(--success)"
+                  : "inherit",
             }}
           >
-            {formatDuration(etaSeconds)}
+            {totalSize <= 0 ? "Pending metadata..." : formatDuration(etaSeconds)}
           </div>
           <div className="stat-label" style={{ fontSize: "0.72rem" }}>
             Estimated Time
@@ -197,12 +201,16 @@ export function SeedingSimulator({
         style={{
           padding: "0.65rem 0.85rem",
           borderRadius: "6px",
-          backgroundColor: isHnrCleared
-            ? "rgba(39, 174, 96, 0.1)"
-            : "rgba(230, 126, 34, 0.12)",
-          border: isHnrCleared
-            ? "1px solid rgba(39, 174, 96, 0.3)"
-            : "1px solid rgba(230, 126, 34, 0.35)",
+          backgroundColor: !hasHnrRequirement
+            ? "rgba(255, 255, 255, 0.05)"
+            : isHnrCleared
+              ? "rgba(39, 174, 96, 0.1)"
+              : "rgba(230, 126, 34, 0.12)",
+          border: !hasHnrRequirement
+            ? "1px solid var(--border-light)"
+            : isHnrCleared
+              ? "1px solid rgba(39, 174, 96, 0.3)"
+              : "1px solid rgba(230, 126, 34, 0.35)",
           display: "flex",
           flexDirection: "column",
           gap: "0.35rem",
@@ -224,19 +232,25 @@ export function SeedingSimulator({
               gap: "0.35rem",
             }}
           >
-            {isHnrCleared ? "🛡️ HnR Cleared" : "⚠️ Hit & Run Risk Guard"}
+            {!hasHnrRequirement
+              ? "ℹ️ No HnR Rule Set"
+              : isHnrCleared
+                ? "🛡️ HnR Cleared"
+                : "⚠️ Hit & Run Risk Guard"}
           </span>
           <span
-            className={`badge ${isHnrCleared ? "badge-success" : "badge-warning"}`}
+            className={`badge ${!hasHnrRequirement ? "badge-secondary" : isHnrCleared ? "badge-success" : "badge-warning"}`}
             style={{ fontSize: "0.68rem" }}
           >
-            {isHnrCleared
-              ? "Safe to stop"
-              : `${(hnrProgress * 100).toFixed(0)}% Seeding Time`}
+            {!hasHnrRequirement
+              ? "No requirement"
+              : isHnrCleared
+                ? "Safe to stop"
+                : `${(hnrProgress * 100).toFixed(0)}% Seeding Time`}
           </span>
         </div>
 
-        {!isHnrCleared && (
+        {hasHnrRequirement && !isHnrCleared && (
           <div style={{ fontSize: "0.74rem", color: "var(--text-muted)" }}>
             Requires {minSeedingHours}h seeding time or 1.0x ratio. Seed for{" "}
             <strong>{formatDuration(hnrRemainingSeconds)}</strong> more to avoid
