@@ -42,12 +42,13 @@ public class UdpTrackerServerTest
         _udpTrackerServer = new UdpTrackerServer(_peerDatabase, _configService);
     }
 
-    private byte[] InvokeHandleConnect(long connectionId, int transactionId)
+    private byte[] InvokeHandleConnect(long connectionId, int transactionId, IPEndPoint remote = null)
     {
         var method = typeof(UdpTrackerServer).GetMethod(
             "HandleConnect",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        return (byte[])method.Invoke(_udpTrackerServer, new object[] { connectionId, transactionId });
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(long), typeof(int), typeof(IPEndPoint) });
+        return (byte[])method.Invoke(_udpTrackerServer, new object[] { connectionId, transactionId, remote ?? new IPEndPoint(IPAddress.Loopback, 6881) });
     }
 
     private byte[] InvokeHandleAnnounce(long connectionId, int transactionId, byte[] data, IPEndPoint remote)
@@ -58,12 +59,13 @@ public class UdpTrackerServerTest
         return (byte[])method.Invoke(_udpTrackerServer, new object[] { connectionId, transactionId, data, remote });
     }
 
-    private byte[] InvokeHandleScrape(long connectionId, int transactionId, byte[] data)
+    private byte[] InvokeHandleScrape(long connectionId, int transactionId, byte[] data, IPEndPoint remote = null)
     {
         var method = typeof(UdpTrackerServer).GetMethod(
             "HandleScrape",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        return (byte[])method.Invoke(_udpTrackerServer, new object[] { connectionId, transactionId, data });
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(long), typeof(int), typeof(byte[]), typeof(IPEndPoint) });
+        return (byte[])method.Invoke(_udpTrackerServer, new object[] { connectionId, transactionId, data, remote ?? new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881) });
     }
 
     private static byte[] InvokeBuildErrorResponse(int transactionId, string message)
@@ -90,12 +92,13 @@ public class UdpTrackerServerTest
         return (string)method.Invoke(null, new object[] { data, offset });
     }
 
-    private bool InvokeValidateConnectionId(long connectionId)
+    private bool InvokeValidateConnectionId(long connectionId, IPAddress remoteAddress = null)
     {
         var method = typeof(UdpTrackerServer).GetMethod(
             "ValidateConnectionId",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        return (bool)method.Invoke(_udpTrackerServer, new object[] { connectionId });
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(long), typeof(IPAddress) });
+        return (bool)method.Invoke(_udpTrackerServer, new object[] { connectionId, remoteAddress ?? IPAddress.Loopback });
     }
 
     private long InvokeGenerateConnectionId()
@@ -140,9 +143,10 @@ public class UdpTrackerServerTest
         method.Invoke(_udpTrackerServer, null);
     }
 
-    private long RegisterValidConnectionId()
+    private long RegisterValidConnectionId(IPAddress remoteAddress = null)
     {
-        var response = InvokeHandleConnect(ProtocolMagic, 1234);
+        var remote = new IPEndPoint(remoteAddress ?? IPAddress.Parse("10.0.0.1"), 6881);
+        var response = InvokeHandleConnect(ProtocolMagic, 1234, remote);
         return BinaryPrimitives.ReadInt64BigEndian(response.AsSpan(8, 8));
     }
 
@@ -160,13 +164,14 @@ public class UdpTrackerServerTest
         return data;
     }
 
-    private void AddConnectionEntry(long connId, DateTime created)
+    private void AddConnectionEntry(long connId, DateTime created, IPAddress remoteAddress = null)
     {
         var field = typeof(UdpTrackerServer).GetField("_connectionIds", BindingFlags.NonPublic | BindingFlags.Instance);
         var dict = (IDictionary)field.GetValue(_udpTrackerServer);
         var entryType = typeof(UdpTrackerServer).GetNestedType("ConnectionEntry", BindingFlags.NonPublic);
         var entry = Activator.CreateInstance(entryType);
         entryType.GetProperty("Created").SetValue(entry, created);
+        entryType.GetProperty("RemoteAddress")?.SetValue(entry, remoteAddress ?? IPAddress.Loopback);
         dict[connId] = entry;
     }
 
@@ -285,11 +290,21 @@ public class UdpTrackerServerTest
     [Test]
     public void ValidateConnectionId_should_return_true_for_valid_id()
     {
-        var connId = RegisterValidConnectionId();
+        var connId = RegisterValidConnectionId(IPAddress.Loopback);
 
-        var result = InvokeValidateConnectionId(connId);
+        var result = InvokeValidateConnectionId(connId, IPAddress.Loopback);
 
         Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void ValidateConnectionId_should_return_false_when_ip_mismatches()
+    {
+        var connId = RegisterValidConnectionId(IPAddress.Parse("10.0.0.1"));
+
+        var result = InvokeValidateConnectionId(connId, IPAddress.Parse("192.168.1.1"));
+
+        Assert.That(result, Is.False);
     }
 
     [Test]
@@ -327,7 +342,7 @@ public class UdpTrackerServerTest
     [Test]
     public void HandleAnnounce_should_return_error_for_short_data()
     {
-        var connId = RegisterValidConnectionId();
+        var connId = RegisterValidConnectionId(IPAddress.Loopback);
 
         var data = new byte[50];
         var result = InvokeHandleAnnounce(connId, 42, data, new IPEndPoint(IPAddress.Loopback, 6881));
@@ -336,6 +351,24 @@ public class UdpTrackerServerTest
         Assert.That(action, Is.EqualTo(3));
         var message = Encoding.UTF8.GetString(result, 8, result.Length - 8);
         Assert.That(message, Does.Contain("Announce request too short"));
+    }
+
+    [Test]
+    public void HandleAnnounce_should_reject_connection_id_from_spoofed_ip()
+    {
+        var connId = RegisterValidConnectionId(IPAddress.Parse("10.0.0.1"));
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xAB);
+        var peerId = new byte[20];
+        Array.Fill(peerId, (byte)0x41);
+
+        var data = BuildAnnounceRequest(connId, 42, infoHash, peerId, 2, 50, 6881);
+        var result = InvokeHandleAnnounce(connId, 42, data, new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        var action = BinaryPrimitives.ReadInt32BigEndian(result.AsSpan(0, 4));
+        Assert.That(action, Is.EqualTo(3));
+        var message = Encoding.UTF8.GetString(result, 8, result.Length - 8);
+        Assert.That(message, Does.Contain("Invalid connection_id"));
     }
 
     [Test]
@@ -476,6 +509,20 @@ public class UdpTrackerServerTest
     {
         var data = new byte[36];
         var result = InvokeHandleScrape(999999, 42, data);
+
+        var action = BinaryPrimitives.ReadInt32BigEndian(result.AsSpan(0, 4));
+        Assert.That(action, Is.EqualTo(3));
+        var message = Encoding.UTF8.GetString(result, 8, result.Length - 8);
+        Assert.That(message, Does.Contain("Invalid connection_id"));
+    }
+
+    [Test]
+    public void HandleScrape_should_reject_connection_id_from_spoofed_ip()
+    {
+        var connId = RegisterValidConnectionId(IPAddress.Parse("10.0.0.1"));
+        var data = new byte[16 + 20];
+
+        var result = InvokeHandleScrape(connId, 42, data, new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         var action = BinaryPrimitives.ReadInt32BigEndian(result.AsSpan(0, 4));
         Assert.That(action, Is.EqualTo(3));
@@ -977,7 +1024,7 @@ public class UdpTrackerServerTest
     [Test]
     public void HandleDatagram_should_handle_unknown_action_without_error()
     {
-        var connId = RegisterValidConnectionId();
+        var connId = RegisterValidConnectionId(IPAddress.Loopback);
         using var client = new UdpClient(0, AddressFamily.InterNetwork);
         var datagram = BuildDatagram(connId, 99, 42);
         var remote = new IPEndPoint(IPAddress.Loopback, 12345);

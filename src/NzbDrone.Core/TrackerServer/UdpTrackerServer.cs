@@ -255,9 +255,9 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
             var response = action switch
             {
-                ConnectAction => HandleConnect(connectionId, transactionId),
+                ConnectAction => HandleConnect(connectionId, transactionId, remote),
                 AnnounceAction => HandleAnnounce(connectionId, transactionId, data, remote),
-                ScrapeAction => HandleScrape(connectionId, transactionId, data),
+                ScrapeAction => HandleScrape(connectionId, transactionId, data, remote),
                 _ => BuildErrorResponse(transactionId, "Invalid action")
             };
 
@@ -275,7 +275,10 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
     }
 
-    private byte[] HandleConnect(long connectionId, int transactionId)
+    private byte[] HandleConnect(long connectionId, int transactionId) =>
+        HandleConnect(connectionId, transactionId, new IPEndPoint(IPAddress.Loopback, 0));
+
+    private byte[] HandleConnect(long connectionId, int transactionId, IPEndPoint remote)
     {
         if (connectionId != ProtocolMagic)
         {
@@ -283,7 +286,11 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         var newConnectionId = GenerateConnectionId();
-        _connectionIds[newConnectionId] = new ConnectionEntry { Created = DateTime.UtcNow };
+        _connectionIds[newConnectionId] = new ConnectionEntry
+        {
+            Created = DateTime.UtcNow,
+            RemoteAddress = remote.Address
+        };
 
         var response = new byte[16];
         BinaryPrimitives.WriteInt32BigEndian(response.AsSpan(0, 4), ConnectAction);
@@ -297,7 +304,7 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private byte[] HandleAnnounce(long connectionId, int transactionId, byte[] data, IPEndPoint remote)
     {
-        if (!ValidateConnectionId(connectionId))
+        if (!ValidateConnectionId(connectionId, remote.Address))
         {
             return BuildErrorResponse(transactionId, "Invalid connection_id");
         }
@@ -374,9 +381,12 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         return response;
     }
 
-    private byte[] HandleScrape(long connectionId, int transactionId, byte[] data)
+    private byte[] HandleScrape(long connectionId, int transactionId, byte[] data) =>
+        HandleScrape(connectionId, transactionId, data, new IPEndPoint(IPAddress.Loopback, 0));
+
+    private byte[] HandleScrape(long connectionId, int transactionId, byte[] data, IPEndPoint remote)
     {
-        if (!ValidateConnectionId(connectionId))
+        if (!ValidateConnectionId(connectionId, remote.Address))
         {
             return BuildErrorResponse(transactionId, "Invalid connection_id");
         }
@@ -479,9 +489,17 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         return id;
     }
 
-    private bool ValidateConnectionId(long connectionId)
+    private bool ValidateConnectionId(long connectionId) =>
+        ValidateConnectionId(connectionId, IPAddress.Loopback);
+
+    private bool ValidateConnectionId(long connectionId, IPAddress remoteAddress)
     {
         if (!_connectionIds.TryGetValue(connectionId, out var entry))
+        {
+            return false;
+        }
+
+        if (remoteAddress == null || entry.RemoteAddress == null || !entry.RemoteAddress.Equals(remoteAddress))
         {
             return false;
         }
@@ -559,6 +577,7 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     private sealed class ConnectionEntry
     {
         public DateTime Created { get; init; }
+        public IPAddress RemoteAddress { get; init; }
     }
 
     private sealed class RateLimitEntry
