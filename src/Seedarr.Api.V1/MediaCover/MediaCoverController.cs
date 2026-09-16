@@ -258,6 +258,8 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             candidateNames.AddRange(new[] { "season-banner", "fanart", "backdrop" });
         }
 
+        var matchingFiles = new List<FileInfo>();
+
         foreach (var dir in candidateDirs)
         {
             if (!Directory.Exists(dir))
@@ -272,12 +274,14 @@ public class MediaCoverController : RestController<MediaMetadataResource>
                     var file = Path.Combine(dir, $"{name}{ext}");
                     if (global::System.IO.File.Exists(file))
                     {
-                        return file;
+                        matchingFiles.Add(new FileInfo(file));
                     }
                 }
             }
         }
 
-        return null;
+        return matchingFiles
+            .OrderByDescending(f => f.LastWriteTimeUtc)
+            .FirstOrDefault()?.FullName;
     }
 }
