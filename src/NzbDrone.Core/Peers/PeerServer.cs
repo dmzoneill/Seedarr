@@ -1277,6 +1277,10 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                             connection.PeerPieces[pieceIndex] = true;
                             var haveCount = connection.PeerPieces.Count(b => b);
                             connection.Progress = (double)haveCount / torrent.PieceCount;
+                            if (connection.IsSeed)
+                            {
+                                _chokeManager?.PeerBecameSeed(connection);
+                            }
                         }
                     }
                 }
@@ -1303,6 +1307,10 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
                     var haveCount = connection.PeerPieces.Count(b => b);
                     connection.Progress = (double)haveCount / torrent.PieceCount;
+                    if (connection.IsSeed)
+                    {
+                        _chokeManager?.PeerBecameSeed(connection);
+                    }
                 }
 
                 break;
@@ -1380,6 +1388,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                         connection.PeerPieces = new bool[torrent.PieceCount];
                         Array.Fill(connection.PeerPieces, true);
                         connection.Progress = 1.0;
+                        _chokeManager?.PeerBecameSeed(connection);
                     }
                     else if (message.Type == PeerMessageType.HaveNone && torrent != null && torrent.PieceCount > 0)
                     {

@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -55,6 +56,15 @@ public class PeerConnection : IDisposable
     public double Progress { get; set; }
     public bool[] PeerPieces { get; set; }
     public DateTime LastRequestReceived { get; set; } = DateTime.UtcNow;
+    public DateTime LastUnchokedAt { get; set; } = DateTime.MinValue;
+
+    private bool _isSeed;
+
+    public bool IsSeed
+    {
+        get => _isSeed || Progress >= 1.0 || (PeerPieces != null && PeerPieces.Length > 0 && PeerPieces.All(p => p));
+        set => _isSeed = value;
+    }
 
     public PeerConnection(TcpClient client)
     {

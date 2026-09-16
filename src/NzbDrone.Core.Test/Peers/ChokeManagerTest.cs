@@ -337,4 +337,104 @@ public class ChokeManagerTest
     {
         Assert.That(_subject.CanUnchoke((PeerConnection)null), Is.False);
     }
+
+    [Test]
+    public void CanUnchoke_should_return_false_when_peer_is_seed()
+    {
+        var conn = CreatePeer("hashA", 1001);
+        conn.IsSeed = true;
+        Assert.That(_subject.CanUnchoke(conn), Is.False);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_exclude_and_choke_seeds_in_seeding_mode()
+    {
+        _configService.MaxUploadSlots.Returns(3);
+        _subject.SetTorrentSeeding("hashA", true);
+
+        var seed1 = CreatePeer("hashA", 1001, rate: 500);
+        seed1.IsSeed = true;
+        seed1.AmChoking = false; // was previously unchoked
+
+        var leecher = CreatePeer("hashA", 1002, rate: 400);
+        leecher.AmChoking = true;
+
+        var seed2 = CreatePeer("hashA", 1003, rate: 300);
+        seed2.Progress = 1.0; // IsSeed via progress
+
+        _subject.ProcessRegularUnchoke();
+
+        // Seed peers must be choked
+        Assert.That(seed1.AmChoking, Is.True);
+        Assert.That(seed2.AmChoking, Is.True);
+
+        // Leecher must receive the unchoke slot
+        Assert.That(leecher.AmChoking, Is.False);
+    }
+
+    [Test]
+    public void PeerBecameSeed_should_immediately_choke_seed_and_promote_next_eligible_leecher()
+    {
+        _configService.MaxUploadSlots.Returns(2);
+        _subject.SetTorrentSeeding("hashA", true);
+
+        var peer1 = CreatePeer("hashA", 1001, rate: 100);
+        var peer2 = CreatePeer("hashA", 1002, rate: 200);
+
+        peer1.AmChoking = false;
+        peer2.AmChoking = true;
+
+        _subject.PeerBecameSeed(peer1);
+
+        // peer1 is now seed and immediately choked
+        Assert.That(peer1.IsSeed, Is.True);
+        Assert.That(peer1.AmChoking, Is.True);
+
+        // freed slot is immediately reallocated to peer2
+        Assert.That(peer2.AmChoking, Is.False);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_rank_by_upload_rate_in_seeding_mode()
+    {
+        _configService.MaxUploadSlots.Returns(3); // 2 regular slots
+        _subject.SetTorrentSeeding("hashA", true);
+
+        var slowOldPeer = CreatePeer("hashA", 1001, rate: 100);
+        slowOldPeer.BytesUploaded = 10000;
+
+        var fastNewPeer = CreatePeer("hashA", 1002, rate: 500);
+        fastNewPeer.BytesUploaded = 100;
+
+        var mediumPeer = CreatePeer("hashA", 1003, rate: 300);
+        mediumPeer.BytesUploaded = 500;
+
+        _subject.ProcessRegularUnchoke();
+
+        // Should unchoke the highest upload rate peers in seeding mode, ignoring BytesUploaded
+        Assert.That(fastNewPeer.AmChoking, Is.False);
+        Assert.That(mediumPeer.AmChoking, Is.False);
+        Assert.That(slowOldPeer.AmChoking, Is.True);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_rotate_slots_round_robin_by_least_recently_unchoked_in_seeding_mode()
+    {
+        _configService.MaxUploadSlots.Returns(2); // 1 regular slot
+        _subject.SetTorrentSeeding("hashA", true);
+
+        var recentlyUnchoked = CreatePeer("hashA", 1001, rate: 0);
+        recentlyUnchoked.LastUnchokedAt = DateTime.UtcNow.AddSeconds(-5);
+        recentlyUnchoked.BytesUploaded = 5000;
+
+        var neverUnchoked = CreatePeer("hashA", 1002, rate: 0);
+        neverUnchoked.LastUnchokedAt = DateTime.MinValue;
+        neverUnchoked.BytesUploaded = 0;
+
+        _subject.ProcessRegularUnchoke();
+
+        // Round-robin must pick the least recently unchoked peer rather than locking onto BytesUploaded
+        Assert.That(neverUnchoked.AmChoking, Is.False);
+        Assert.That(recentlyUnchoked.AmChoking, Is.True);
+    }
 }
