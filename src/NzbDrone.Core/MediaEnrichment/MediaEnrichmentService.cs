@@ -51,6 +51,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
     private readonly IEventAggregator _eventAggregator;
     private readonly IArrConnectionRepository _arrRepository;
     private readonly IArrConnectionFactory _connectionFactory;
+    private readonly HttpClient _explicitHttpClient;
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
 
@@ -77,6 +78,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         _eventAggregator = eventAggregator;
         _arrRepository = arrRepository;
         _connectionFactory = connectionFactory;
+        _explicitHttpClient = httpClient;
         _httpClient = httpClient ?? ArrConnectionResources.SharedClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -424,7 +426,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 request.Headers.TryAddWithoutValidation("X-Api-Key", apiKey);
             }
 
-            using var response = await _httpClient.SendAsync(request);
+            using var response = await GetImageHttpClient(url).SendAsync(request);
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Failed downloading artwork from {0}: {1}", url, response.StatusCode);
@@ -508,6 +510,29 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         return null;
     }
 
+    private HttpClient GetImageHttpClient(string url)
+    {
+        if (_explicitHttpClient != null)
+        {
+            return _explicitHttpClient;
+        }
+
+        var definitions = _arrRepository?.All() ?? _connectionFactory?.All();
+        if (definitions != null && !string.IsNullOrWhiteSpace(url))
+        {
+            var matched = definitions.FirstOrDefault(c =>
+                !string.IsNullOrWhiteSpace(c.Url) &&
+                url.StartsWith(c.Url.TrimEnd('/'), StringComparison.OrdinalIgnoreCase));
+
+            if (matched != null && matched.AcceptInvalidCertificates)
+            {
+                return ArrConnectionResources.SharedInsecureClient;
+            }
+        }
+
+        return _httpClient;
+    }
+
     private async Task<MediaMetadata> QueryServarrAsync(Torrent torrent, string cleanTitle)
     {
         var definitions = (_arrRepository?.All() ?? _connectionFactory?.All())?.Where(d => d.Enable).ToList();
@@ -569,20 +594,21 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         switch (definition.ArrType?.ToLowerInvariant())
         {
             case "sonarr":
-                provider = new SonarrConnection(_httpClient);
+                provider = new SonarrConnection(_explicitHttpClient);
                 break;
             case "radarr":
-                provider = new RadarrConnection(_httpClient);
+                provider = new RadarrConnection(_explicitHttpClient);
                 break;
             case "lidarr":
-                provider = new LidarrConnection(_httpClient);
+                provider = new LidarrConnection(_explicitHttpClient);
                 break;
             default:
                 return null;
         }
 
-        provider.Url = definition.Url;
+        provider.Url = ArrConnectionResources.NormalizeUrl(definition.Url);
         provider.ApiKey = definition.ApiKey;
+        provider.AcceptInvalidCertificates = definition.AcceptInvalidCertificates;
         return provider;
     }
 

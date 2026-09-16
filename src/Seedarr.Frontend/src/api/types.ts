@@ -594,6 +594,8 @@ export interface ArrConnection {
   webhookHost: string;
   implementation: string;
   configContract: string;
+  syncIntervalMinutes?: number;
+  acceptInvalidCertificates?: boolean;
 }
 
 export interface DownloadClientDefinition {

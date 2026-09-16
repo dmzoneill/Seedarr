@@ -6,6 +6,8 @@ namespace NzbDrone.Core.ArrIntegration;
 
 public class ArrConnectionDefinition : ProviderDefinition
 {
+    private int _syncIntervalMinutes = 60;
+
     public ArrConnectionDefinition()
     {
         Enable = true;
@@ -14,11 +16,18 @@ public class ArrConnectionDefinition : ProviderDefinition
     public string Url { get; set; }
     public string ApiKey { get; set; }
     public string ArrType { get; set; }
-    public int SyncIntervalMinutes { get; set; } = 60;
+
+    public int SyncIntervalMinutes
+    {
+        get => _syncIntervalMinutes;
+        set => _syncIntervalMinutes = Math.Max(1, value);
+    }
+
     public bool SyncEnabled { get; set; } = true;
     public bool EnableAutomaticAdd { get; set; } = true;
     public bool WebhookEnabled { get; set; } = true;
     public string WebhookHost { get; set; }
+    public bool AcceptInvalidCertificates { get; set; }
     public List<int> Tags { get; set; } = new();
 
     public ArrConnectionDefinition Clone() => (ArrConnectionDefinition)MemberwiseClone();

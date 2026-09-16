@@ -60,6 +60,14 @@ public class ArrConnectionController : Controller
             definition.Name = definition.ArrType ?? "ArrConnection";
         }
 
+        if (!ArrConnectionResources.TryNormalizeUrl(definition.Url, out var normalizedUrl, out var urlError))
+        {
+            return BadRequest(urlError);
+        }
+
+        definition.Url = normalizedUrl;
+        definition.SyncIntervalMinutes = Math.Max(1, definition.SyncIntervalMinutes);
+
         // Connectivity problems are not fatal on create: the arr instance may be
         // temporarily offline. Use the test-connection endpoint to validate.
         if (!_arrSyncService.TestConnectionDirect(definition))
@@ -97,6 +105,14 @@ public class ArrConnectionController : Controller
         {
             definition.Name = existing.Name ?? definition.ArrType ?? "ArrConnection";
         }
+
+        if (!ArrConnectionResources.TryNormalizeUrl(definition.Url, out var updateNormalizedUrl, out var updateUrlError))
+        {
+            return BadRequest(updateUrlError);
+        }
+
+        definition.Url = updateNormalizedUrl;
+        definition.SyncIntervalMinutes = Math.Max(1, definition.SyncIntervalMinutes);
 
         if (string.IsNullOrWhiteSpace(definition.ApiKey) || definition.ApiKey.Contains('*'))
         {
@@ -149,6 +165,11 @@ public class ArrConnectionController : Controller
     [HttpPost("test")]
     public ActionResult<ArrTestResult> TestDirect([FromBody] ArrConnectionDefinition definition)
     {
+        if (definition == null)
+        {
+            return Ok(ArrTestResult.Fail("Request body cannot be null"));
+        }
+
         if (definition.Id > 0 && definition.ApiKey != null && definition.ApiKey.Contains('*'))
         {
             var existing = _connectionFactory.Get(definition.Id);
@@ -157,6 +178,13 @@ public class ArrConnectionController : Controller
                 definition.ApiKey = existing.ApiKey;
             }
         }
+
+        if (!ArrConnectionResources.TryNormalizeUrl(definition.Url, out var testNormalizedUrl, out var testUrlError))
+        {
+            return Ok(ArrTestResult.Fail(testUrlError));
+        }
+
+        definition.Url = testNormalizedUrl;
 
         var result = _arrSyncService.TestConnectionDetailedDirect(definition);
         return Ok(result);

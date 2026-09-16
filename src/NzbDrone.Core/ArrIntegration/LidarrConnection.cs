@@ -11,22 +11,31 @@ namespace NzbDrone.Core.ArrIntegration;
 
 public class LidarrConnection : IArrConnection
 {
-    private readonly HttpClient _client;
+    private readonly HttpClient _explicitClient;
     private readonly ResiliencePipeline _policy;
     private readonly Logger _logger;
-
-    public string Name => "Lidarr";
-    public string ArrType => "Lidarr";
-
-    public string Url { get; set; } = "http://localhost:8686";
-    public string ApiKey { get; set; } = "";
+    private string _url = "http://localhost:8686";
 
     public LidarrConnection(HttpClient client = null, ResiliencePipeline policy = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
-        _client = client ?? ArrConnectionResources.SharedClient;
+        _explicitClient = client;
         _policy = policy ?? ArrConnectionResources.SharedPolicy;
     }
+
+    public string Name => "Lidarr";
+    public string ArrType => "Lidarr";
+
+    public string Url
+    {
+        get => _url;
+        set => _url = ArrConnectionResources.NormalizeUrl(value);
+    }
+
+    public string ApiKey { get; set; } = "";
+    public bool AcceptInvalidCertificates { get; set; }
+
+    private HttpClient Client => _explicitClient ?? ArrConnectionResources.GetClient(AcceptInvalidCertificates);
 
     public List<ArrDownloadRecord> GetDownloadHistory()
     {
@@ -37,7 +46,7 @@ public class LidarrConnection : IArrConnection
                 using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v1/history?pageSize=50&sortKey=date&sortDirection=descending");
                 request.Headers.Add("X-Api-Key", ApiKey);
 
-                using var response = _client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     _logger.Warn("Lidarr API returned {0}", response.StatusCode);
@@ -125,7 +134,7 @@ public class LidarrConnection : IArrConnection
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v1/album/{mediaId}");
                 request.Headers.Add("X-Api-Key", ApiKey ?? "");
-                using var response = _client.Send(request, ct);
+                using var response = Client.Send(request, ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     return (string)null;
@@ -219,7 +228,7 @@ public class LidarrConnection : IArrConnection
             var searchUrl = $"{Url.TrimEnd('/')}/api/v1/search?term={Uri.EscapeDataString(title.Trim())}";
             using var request = new HttpRequestMessage(HttpMethod.Get, searchUrl);
             request.Headers.Add("X-Api-Key", ApiKey ?? "");
-            using var response = _client.Send(request, cts.Token);
+            using var response = Client.Send(request, cts.Token);
             if (!response.IsSuccessStatusCode)
             {
                 return null;
@@ -295,20 +304,20 @@ public class LidarrConnection : IArrConnection
 
     public ArrTestResult TestConnectionDetailed()
     {
-        if (string.IsNullOrWhiteSpace(Url))
+        if (!ArrConnectionResources.TryNormalizeUrl(Url, out var normalizedUrl, out var urlError))
         {
-            return ArrTestResult.Fail("URL cannot be empty");
+            return ArrTestResult.Fail(urlError);
         }
 
         try
         {
             using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v1/system/status");
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{normalizedUrl}/api/v1/system/status");
             request.Headers.Add("X-Api-Key", ApiKey ?? "");
-            using var response = _client.Send(request, cts.Token);
+            using var response = Client.Send(request, cts.Token);
             if (response.IsSuccessStatusCode)
             {
-                return ArrTestResult.Ok($"Successfully connected to Lidarr at {Url}");
+                return ArrTestResult.Ok($"Successfully connected to Lidarr at {normalizedUrl}");
             }
 
             if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
@@ -318,7 +327,7 @@ public class LidarrConnection : IArrConnection
 
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                return ArrTestResult.Fail($"Endpoint not found (HTTP 404 Not Found) at {Url}. Verify the URL and port.");
+                return ArrTestResult.Fail($"Endpoint not found (HTTP 404 Not Found) at {normalizedUrl}. Verify the URL and port.");
             }
 
             return ArrTestResult.Fail($"Lidarr returned HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
@@ -331,7 +340,7 @@ public class LidarrConnection : IArrConnection
         catch (TaskCanceledException)
         {
             _logger.Error("Lidarr connection test timed out");
-            return ArrTestResult.Fail($"Connection timed out connecting to {Url} (exceeded 10s)");
+            return ArrTestResult.Fail($"Connection timed out connecting to {normalizedUrl} (exceeded 10s)");
         }
         catch (Exception ex)
         {

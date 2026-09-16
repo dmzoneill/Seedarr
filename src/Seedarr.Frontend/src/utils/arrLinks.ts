@@ -21,7 +21,11 @@ export function getArrInstanceUrl(
         cleanedSource.includes(c.name?.toLowerCase() ?? "")),
   );
 
-  return match?.url ? match.url.replace(/\/+$/, "") : null;
+  if (!match?.url) return null;
+  const trimmed = match.url.replace(/\/+$/, "");
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://")
+    ? trimmed
+    : `http://${trimmed}`;
 }
 
 export function getMediaDeepLink(

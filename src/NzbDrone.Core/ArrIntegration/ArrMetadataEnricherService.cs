@@ -284,8 +284,9 @@ namespace NzbDrone.Core.ArrIntegration
                     return null;
             }
 
-            provider.Url = definition.Url;
+            provider.Url = ArrConnectionResources.NormalizeUrl(definition.Url);
             provider.ApiKey = definition.ApiKey;
+            provider.AcceptInvalidCertificates = definition.AcceptInvalidCertificates;
             return provider;
         }
     }

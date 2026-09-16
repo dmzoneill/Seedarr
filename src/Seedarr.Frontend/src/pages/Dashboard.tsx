@@ -654,7 +654,7 @@ function Dashboard() {
                 </div>
                 {conn.url && (
                   <a
-                    href={conn.url}
+                    href={conn.url.startsWith("http://") || conn.url.startsWith("https://") ? conn.url : `http://${conn.url}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="btn btn-small btn-outline"
