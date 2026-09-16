@@ -21,7 +21,11 @@ public class HostHeaderValidationMiddleware
     {
         if (configService != null && configService.HostHeaderValidationEnabled)
         {
-            var hostHeader = context.Request.Host.Host;
+            var hostHeader = context.Request.Host.Value;
+            if (string.IsNullOrWhiteSpace(hostHeader))
+            {
+                hostHeader = context.Request.Host.Host;
+            }
 
             if (string.IsNullOrWhiteSpace(hostHeader) || !IsHostAllowed(hostHeader, configService.AllowedHosts))
             {
@@ -44,9 +48,27 @@ public class HostHeaderValidationMiddleware
         }
 
         var cleanHost = host.Trim();
-        if (cleanHost.StartsWith('[') && cleanHost.EndsWith(']') && cleanHost.Length >= 2)
+
+        // Strip port and extract inner host / IP
+        if (cleanHost.StartsWith('['))
         {
-            cleanHost = cleanHost.Substring(1, cleanHost.Length - 2).Trim();
+            var closeBracket = cleanHost.IndexOf(']');
+            if (closeBracket > 0)
+            {
+                cleanHost = cleanHost.Substring(1, closeBracket - 1).Trim();
+            }
+        }
+        else
+        {
+            var colonIndex = cleanHost.IndexOf(':');
+            if (colonIndex >= 0 && colonIndex == cleanHost.LastIndexOf(':'))
+            {
+                var portPart = cleanHost.Substring(colonIndex + 1);
+                if (int.TryParse(portPart, out var port) && port >= 0 && port <= 65535)
+                {
+                    cleanHost = cleanHost.Substring(0, colonIndex).Trim();
+                }
+            }
         }
 
         // Loopback and container network local domains are always allowed
@@ -71,25 +93,54 @@ public class HostHeaderValidationMiddleware
                     return true;
                 }
 
-                if (trimmedPattern.Equals(host, StringComparison.OrdinalIgnoreCase) ||
+                if (trimmedPattern.Equals(host.Trim(), StringComparison.OrdinalIgnoreCase) ||
                     trimmedPattern.Equals(cleanHost, StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
 
-                // Wildcard subdomain matching (e.g. *.example.com, *.local, *.lan or .example.com)
-                if (trimmedPattern.StartsWith("*.", StringComparison.OrdinalIgnoreCase))
+                var patternHost = trimmedPattern;
+                if (patternHost.StartsWith('['))
                 {
-                    var domain = trimmedPattern.Substring(2);
-                    if (cleanHost.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase))
+                    var closeBracket = patternHost.IndexOf(']');
+                    if (closeBracket > 0)
+                    {
+                        patternHost = patternHost.Substring(1, closeBracket - 1).Trim();
+                    }
+                }
+                else
+                {
+                    var colonIndex = patternHost.IndexOf(':');
+                    if (colonIndex >= 0 && colonIndex == patternHost.LastIndexOf(':'))
+                    {
+                        var portPart = patternHost.Substring(colonIndex + 1);
+                        if (int.TryParse(portPart, out var p) && p >= 0 && p <= 65535)
+                        {
+                            patternHost = patternHost.Substring(0, colonIndex).Trim();
+                        }
+                    }
+                }
+
+                if (patternHost.Equals(cleanHost, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                // Wildcard subdomain and apex domain matching (e.g. *.example.com, *.local, *.lan or .example.com)
+                if (patternHost.StartsWith("*.", StringComparison.OrdinalIgnoreCase))
+                {
+                    var domain = patternHost.Substring(2);
+                    if (cleanHost.Equals(domain, StringComparison.OrdinalIgnoreCase) ||
+                        cleanHost.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }
                 }
-                else if (trimmedPattern.StartsWith(".", StringComparison.OrdinalIgnoreCase))
+                else if (patternHost.StartsWith(".", StringComparison.OrdinalIgnoreCase))
                 {
-                    var domain = trimmedPattern.Substring(1);
-                    if (cleanHost.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase))
+                    var domain = patternHost.Substring(1);
+                    if (cleanHost.Equals(domain, StringComparison.OrdinalIgnoreCase) ||
+                        cleanHost.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }
