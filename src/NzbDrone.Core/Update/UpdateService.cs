@@ -404,7 +404,32 @@ public class UpdateService : IUpdateService
 
             if (!SemVersion.TryParse(versionString, out var parsedVer))
             {
-                continue;
+                var clean = versionString.Trim();
+                var plusIdx = clean.IndexOf('+');
+                if (plusIdx >= 0)
+                {
+                    clean = clean[..plusIdx];
+                }
+
+                var dashIdx = clean.IndexOf('-');
+                var pre = string.Empty;
+                if (dashIdx >= 0)
+                {
+                    pre = clean[(dashIdx + 1)..];
+                    clean = clean[..dashIdx];
+                }
+
+                if (!clean.Contains('.'))
+                {
+                    clean += ".0";
+                }
+
+                if (!Version.TryParse(clean, out var baseVer))
+                {
+                    continue;
+                }
+
+                parsedVer = new SemVersion(baseVer, pre, originalString: versionString);
             }
 
             var publishedAt = release.TryGetProperty("published_at", out var pub) && (pub.TryGetDateTime(out var dt) || (pub.ValueKind == JsonValueKind.String && DateTime.TryParse(pub.GetString(), out dt)))

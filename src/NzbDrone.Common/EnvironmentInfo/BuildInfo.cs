@@ -47,13 +47,13 @@ public static class BuildInfo
                     if (trimmed.StartsWith("version=", StringComparison.OrdinalIgnoreCase))
                     {
                         var versionString = trimmed.Substring("version=".Length).Trim();
-                        if (Version.TryParse(versionString, out var parsed))
+                        if (TryParseVersionString(versionString, out var parsed))
                         {
                             return parsed;
                         }
                     }
 
-                    if (Version.TryParse(trimmed, out var direct))
+                    if (TryParseVersionString(trimmed, out var direct))
                     {
                         return direct;
                     }
@@ -66,5 +66,45 @@ public static class BuildInfo
         }
 
         return null;
+    }
+
+    public static bool TryParseVersionString(string raw, out Version parsed)
+    {
+        parsed = null;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        var clean = raw.Trim().TrimStart('v', 'V');
+        if (Version.TryParse(clean, out parsed))
+        {
+            return true;
+        }
+
+        // If direct Version.TryParse fails, strip +build metadata and -prerelease suffix
+        var plusIndex = clean.IndexOf('+');
+        if (plusIndex >= 0)
+        {
+            clean = clean[..plusIndex];
+        }
+
+        var dashIndex = clean.IndexOf('-');
+        if (dashIndex >= 0)
+        {
+            clean = clean[..dashIndex];
+        }
+
+        if (string.IsNullOrWhiteSpace(clean))
+        {
+            return false;
+        }
+
+        if (!clean.Contains('.'))
+        {
+            clean += ".0";
+        }
+
+        return Version.TryParse(clean, out parsed);
     }
 }
