@@ -26,6 +26,20 @@ export const getNodeId = (
   return typeof endpoint === "string" ? endpoint : "";
 };
 
+export function filterValidLinks<
+  T extends {
+    source: string | number | SimNode | d3.SimulationNodeDatum | null | undefined;
+    target: string | number | SimNode | d3.SimulationNodeDatum | null | undefined;
+  },
+>(links: T[], nodes: { id: string }[]): T[] {
+  const validNodeIdSet = new Set(nodes.map((n) => n.id));
+  return links.filter((l) => {
+    const s = getNodeId(l.source);
+    const t = getNodeId(l.target);
+    return validNodeIdSet.has(s) && validNodeIdSet.has(t);
+  });
+}
+
 export function isTopologyChanged(
   prevTopology: TopologySnapshot | null,
   currentNodes: { id: string }[],
@@ -261,11 +275,14 @@ function PeerMap() {
       baseTorrentRadius,
     );
 
-    const links: SimLink[] = rawLinks.map((l) => ({
-      source: l.source,
-      target: l.target,
-      type: l.type,
-    }));
+    const links: SimLink[] = filterValidLinks(
+      rawLinks.map((l) => ({
+        source: l.source,
+        target: l.target,
+        type: l.type,
+      })),
+      nodes,
+    );
     linksRef.current = links;
 
     if (!simulationRef.current) {
