@@ -62,9 +62,17 @@ public class PeerConnection : IDisposable
         _networkStream = client.GetStream();
         _activeStream = _networkStream;
         _logger = LogManager.GetCurrentClassLogger();
-        var endpoint = (IPEndPoint)client.Client.RemoteEndPoint;
-        RemoteIp = endpoint.Address.ToString();
-        RemotePort = endpoint.Port;
+        if (client?.Client?.RemoteEndPoint is not IPEndPoint endpoint)
+        {
+            RemoteIp = "0.0.0.0";
+            RemotePort = 0;
+        }
+        else
+        {
+            RemoteIp = endpoint.Address.ToString();
+            RemotePort = endpoint.Port;
+        }
+
         ConnectedAt = DateTime.UtcNow;
         LastActivity = DateTime.UtcNow;
     }
@@ -154,6 +162,18 @@ public class PeerConnection : IDisposable
     {
         try
         {
+            if (HandshakeTimeoutMs > 0)
+            {
+                if (_client?.Client != null)
+                {
+                    _client.Client.ReceiveTimeout = HandshakeTimeoutMs;
+                }
+                else if (_networkStream.CanTimeout)
+                {
+                    _networkStream.ReadTimeout = HandshakeTimeoutMs;
+                }
+            }
+
             // Peek the first byte to detect whether this is an MSE or plain handshake.
             // A standard BT handshake starts with 0x13 (19); MSE starts with the DH public key.
             var peek = new byte[1];
