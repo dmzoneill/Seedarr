@@ -451,4 +451,165 @@ public class DownloadClientSyncServiceTest
         Assert.That(result.Added, Is.EqualTo(1));
         Assert.That(result.Failed, Is.EqualTo(1));
     }
+
+    [Test]
+    public void ImportTorrent_should_preserve_completed_downloaded_bytes_and_mark_completed_and_stopped()
+    {
+        var hash = "aaaa111122223333444455556666777788889999";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Completed Linux ISO",
+                InfoHash = hash,
+                TotalSize = 8000,
+                RemainingSize = 0,
+                Status = "seeding"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Completed Linux ISO",
+            TotalSize = 8000,
+            PieceCount = 40,
+            PieceLength = 200
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var torrent = _service.ImportTorrent(1, hash);
+
+        Assert.That(torrent, Is.Not.Null);
+        Assert.That(torrent.Downloaded, Is.EqualTo(8000));
+        Assert.That(torrent.TotalSize, Is.EqualTo(8000));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(torrent.ForceCompleted, Is.True);
+        Assert.That(torrent.Progress, Is.EqualTo(1.0));
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == hash &&
+            t.Downloaded == 8000 &&
+            t.TotalSize == 8000 &&
+            t.Status == TorrentStatus.Stopped &&
+            t.ForceCompleted &&
+            t.Progress == 1.0));
+    }
+
+    [Test]
+    public void ImportTorrent_should_preserve_partial_downloaded_bytes_when_remaining_is_positive()
+    {
+        var hash = "bbbb111122223333444455556666777788889999";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Partial Torrent",
+                InfoHash = hash,
+                TotalSize = 10000,
+                RemainingSize = 4000,
+                Status = "downloading"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Partial Torrent",
+            TotalSize = 10000,
+            PieceCount = 50,
+            PieceLength = 200
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var torrent = _service.ImportTorrent(1, hash);
+
+        Assert.That(torrent, Is.Not.Null);
+        Assert.That(torrent.Downloaded, Is.EqualTo(6000));
+        Assert.That(torrent.TotalSize, Is.EqualTo(10000));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(torrent.ForceCompleted, Is.False);
+        Assert.That(torrent.Progress, Is.EqualTo(0.6));
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == hash &&
+            t.Downloaded == 6000 &&
+            t.TotalSize == 10000 &&
+            t.Status == TorrentStatus.Stopped &&
+            !t.ForceCompleted &&
+            t.Progress == 0.6));
+    }
+
+    [Test]
+    public void ImportTorrent_should_preserve_downloaded_bytes_from_matching_item_when_raw_bytes_null()
+    {
+        var hash = "cccc222233334444555566667777888899990000";
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns((byte[])null);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Completed Client Metadata Torrent",
+                InfoHash = hash,
+                TotalSize = 5000,
+                RemainingSize = 0,
+                Status = "seeding"
+            }
+        });
+        mockClient.GetTrackers(hash).Returns(new List<string> { "http://tracker.example.com/announce" });
+
+        _indexerFactory.All().Returns(new List<IndexerDefinition>());
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var torrent = _service.ImportTorrent(1, hash);
+
+        Assert.That(torrent, Is.Not.Null);
+        Assert.That(torrent.Downloaded, Is.EqualTo(5000));
+        Assert.That(torrent.TotalSize, Is.EqualTo(5000));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(torrent.ForceCompleted, Is.True);
+        Assert.That(torrent.Progress, Is.EqualTo(1.0));
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == hash &&
+            t.Downloaded == 5000 &&
+            t.TotalSize == 5000 &&
+            t.Status == TorrentStatus.Stopped &&
+            t.ForceCompleted &&
+            t.Progress == 1.0));
+    }
 }
