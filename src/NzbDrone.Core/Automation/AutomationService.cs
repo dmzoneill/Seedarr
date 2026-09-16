@@ -17,6 +17,8 @@ namespace NzbDrone.Core.Automation;
 
 public class AutomationService : IAutomationService
 {
+    public const int MaxPersistedLogCharacters = 32768;
+
     private readonly IAutomationScriptRepository _scriptRepository;
     private readonly ITorrentRepository _torrentRepository;
     private readonly ITagService _tagService;
@@ -203,7 +205,7 @@ public class AutomationService : IAutomationService
         // Record execution stats on script
         script.LastExecutedAt = DateTime.UtcNow;
         script.LastExecutionStatus = result.Success ? "Success" : "Failed";
-        script.LastExecutionLog = result.OutputLog ?? result.Error;
+        script.LastExecutionLog = TruncateExecutionLog(result.OutputLog ?? result.Error);
 
         if (script.Id > 0)
         {
@@ -412,5 +414,28 @@ public class AutomationService : IAutomationService
             _torrentRepository.Update(torrent);
             _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
         }
+    }
+
+    public static string? TruncateExecutionLog(string? log, int maxChars = MaxPersistedLogCharacters)
+    {
+        if (string.IsNullOrEmpty(log) || log.Length <= maxChars)
+        {
+            return log;
+        }
+
+        const string notice = "\n\n... [OUTPUT TRUNCATED FOR DATABASE STORAGE] ...\n\n";
+        if (maxChars <= notice.Length)
+        {
+            return log.Substring(0, maxChars);
+        }
+
+        var available = maxChars - notice.Length;
+        var headLength = available / 2;
+        var tailLength = available - headLength;
+
+        return string.Concat(
+            log.AsSpan(0, headLength),
+            notice,
+            log.AsSpan(log.Length - tailLength, tailLength));
     }
 }

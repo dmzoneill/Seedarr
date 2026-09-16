@@ -28,10 +28,12 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
         _signalRBroadcaster = signalRBroadcaster;
     }
 
+    public const int MaxListLogPreviewCharacters = 500;
+
     [HttpGet]
     public ActionResult<List<AutomationScriptResource>> GetAll()
     {
-        return _automationService.GetAll().Select(ToResource).ToList();
+        return _automationService.GetAll().Select(s => ToResource(s, truncateLog: true)).ToList();
     }
 
     [HttpGet("{id:int}")]
@@ -173,11 +175,17 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
         return ToResource(model);
     }
 
-    private static AutomationScriptResource ToResource(AutomationScript model)
+    private static AutomationScriptResource ToResource(AutomationScript model, bool truncateLog = false)
     {
         if (model == null)
         {
             return null!;
+        }
+
+        var log = model.LastExecutionLog;
+        if (truncateLog && log != null && log.Length > MaxListLogPreviewCharacters)
+        {
+            log = string.Concat(log.AsSpan(0, MaxListLogPreviewCharacters), "...");
         }
 
         return new AutomationScriptResource
@@ -195,7 +203,7 @@ public class AutomationController : RestControllerWithSignalR<AutomationScriptRe
             CreatedAt = model.CreatedAt,
             LastExecutedAt = model.LastExecutedAt,
             LastExecutionStatus = model.LastExecutionStatus,
-            LastExecutionLog = model.LastExecutionLog,
+            LastExecutionLog = log,
         };
     }
 

@@ -203,7 +203,13 @@ public class JintScriptRunner : IScriptRunner
 #pragma warning disable SA1300 // Element should begin with upper-case letter (DSL wrapper)
 public class ScriptConsoleContext
 {
+    public const int MaxLogLines = 1000;
+    public const int MaxLogCharacters = 65536; // 64 KB
+    public const string TruncationWarning = "\n[WARN] Log truncated: maximum output limit reached.";
+
     private readonly StringBuilder _logBuilder;
+    private int _lineCount;
+    private bool _isTruncated;
 
     public ScriptConsoleContext(StringBuilder logBuilder)
     {
@@ -220,6 +226,18 @@ public class ScriptConsoleContext
 
     private void AppendLog(string level, object?[] args)
     {
+        if (_isTruncated)
+        {
+            return;
+        }
+
+        if (_lineCount >= MaxLogLines || _logBuilder.Length >= MaxLogCharacters)
+        {
+            _isTruncated = true;
+            _logBuilder.Append(TruncationWarning);
+            return;
+        }
+
         var line = new StringBuilder();
         line.Append($"[{DateTime.UtcNow:HH:mm:ss}] [{level}] ");
         for (var i = 0; i < args.Length; i++)
@@ -240,7 +258,33 @@ public class ScriptConsoleContext
             }
         }
 
+        if (_logBuilder.Length + line.Length + Environment.NewLine.Length > MaxLogCharacters)
+        {
+            var remaining = MaxLogCharacters - _logBuilder.Length;
+            if (remaining > 0)
+            {
+                var lineStr = line.ToString();
+                if (lineStr.Length > remaining)
+                {
+                    lineStr = lineStr.Substring(0, remaining);
+                }
+
+                _logBuilder.Append(lineStr);
+            }
+
+            _isTruncated = true;
+            _logBuilder.Append(TruncationWarning);
+            return;
+        }
+
+        _lineCount++;
         _logBuilder.AppendLine(line.ToString());
+
+        if (_lineCount >= MaxLogLines || _logBuilder.Length >= MaxLogCharacters)
+        {
+            _isTruncated = true;
+            _logBuilder.Append(TruncationWarning);
+        }
     }
 }
 #pragma warning restore SA1300

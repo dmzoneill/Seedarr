@@ -143,4 +143,46 @@ console.log('Command queued:', cmd);
         Assert.That(result.Success, Is.True);
         Assert.That(result.OutputLog, Does.Contain("Command queued: null"));
     }
+
+    [Test]
+    public void ShouldCapOutputLogWhenScriptGeneratesOver10000Lines()
+    {
+        var script = new AutomationScript
+        {
+            Name = "Infinite Logger",
+            Code = @"
+for (var i = 0; i < 10000; i++) {
+    console.log('Log entry ' + i);
+}
+",
+            Language = AutomationLanguage.JavaScript,
+        };
+
+        var result = _runner.Execute(script);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.OutputLog, Does.Contain("[WARN] Log truncated: maximum output limit reached."));
+        Assert.That(result.OutputLog.Length, Is.LessThanOrEqualTo(ScriptConsoleContext.MaxLogCharacters + 1000));
+    }
+
+    [Test]
+    public void ShouldCapOutputLogWhenScriptGeneratesLargeString()
+    {
+        var script = new AutomationScript
+        {
+            Name = "Large String Logger",
+            Code = @"
+var chunk = '0123456789'.repeat(10000);
+console.log(chunk);
+console.log('Extra line that should be dropped');
+",
+            Language = AutomationLanguage.JavaScript,
+        };
+
+        var result = _runner.Execute(script);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.OutputLog, Does.Contain("[WARN] Log truncated: maximum output limit reached."));
+        Assert.That(result.OutputLog, Does.Not.Contain("Extra line that should be dropped"));
+    }
 }
