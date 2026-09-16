@@ -93,6 +93,12 @@ export interface TrackerMetric {
   minResponseTimeMs: number;
   maxResponseTimeMs: number;
   consecutiveFailures: number;
+  latencyP50Ms?: number;
+  latencyP95Ms?: number;
+  latencyP99Ms?: number;
+  p50LatencyMs?: number;
+  p95LatencyMs?: number;
+  p99LatencyMs?: number;
 }
 
 export interface TrackerMetricSnapshot {
@@ -149,6 +155,12 @@ export interface TrackerMetricsSummary {
   successfulScrapes: number;
   totalPeersDiscovered: number;
   avgResponseTimeMs: number;
+  latencyP50Ms?: number;
+  latencyP95Ms?: number;
+  latencyP99Ms?: number;
+  p50LatencyMs?: number;
+  p95LatencyMs?: number;
+  p99LatencyMs?: number;
   protocolDistribution: Record<string, number>;
   healthDistribution: Record<string, number>;
   topUploadTrackers: TrackerMetricItemSummary[];

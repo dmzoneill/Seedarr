@@ -59,6 +59,15 @@ public class TrackerMetricsSummary
     public long SuccessfulScrapes { get; set; }
     public long TotalPeersDiscovered { get; set; }
     public double AvgResponseTimeMs { get; set; }
+    public double LatencyP50Ms { get; set; }
+    public double LatencyP95Ms { get; set; }
+    public double LatencyP99Ms { get; set; }
+    public double P50LatencyMs { get => LatencyP50Ms; set => LatencyP50Ms = value; }
+    public double P95LatencyMs { get => LatencyP95Ms; set => LatencyP95Ms = value; }
+    public double P99LatencyMs { get => LatencyP99Ms; set => LatencyP99Ms = value; }
+    public double P50ResponseTimeMs { get => LatencyP50Ms; set => LatencyP50Ms = value; }
+    public double P95ResponseTimeMs { get => LatencyP95Ms; set => LatencyP95Ms = value; }
+    public double P99ResponseTimeMs { get => LatencyP99Ms; set => LatencyP99Ms = value; }
     public Dictionary<string, int> ProtocolDistribution { get; set; } = new();
     public Dictionary<string, int> HealthDistribution { get; set; } = new();
     public List<TrackerMetricItemSummary> TopUploadTrackers { get; set; } = new();
@@ -188,30 +197,10 @@ public class TrackerMetricService : ITrackerMetricService
 
             metric.TotalAnnounces++;
             metric.LastAnnounce = now;
-            metric.LastResponseTimeMs = responseTimeMs;
-
-            if (metric.MinResponseTimeMs == 0 || responseTimeMs < metric.MinResponseTimeMs)
-            {
-                metric.MinResponseTimeMs = responseTimeMs;
-            }
-
-            if (responseTimeMs > metric.MaxResponseTimeMs)
-            {
-                metric.MaxResponseTimeMs = responseTimeMs;
-            }
-
-            // Running exponential moving average
-            if (metric.AvgResponseTimeMs <= 0)
-            {
-                metric.AvgResponseTimeMs = responseTimeMs;
-            }
-            else
-            {
-                metric.AvgResponseTimeMs = Math.Round((metric.AvgResponseTimeMs * 0.85) + (responseTimeMs * 0.15), 1);
-            }
 
             if (success)
             {
+                UpdateLatencyMetrics(metric, responseTimeMs);
                 metric.SuccessfulAnnounces++;
                 metric.ConsecutiveFailures = 0;
                 metric.LastSuccess = now;
@@ -310,10 +299,10 @@ public class TrackerMetricService : ITrackerMetricService
 
             metric.TotalScrapes++;
             metric.LastScrape = now;
-            metric.LastResponseTimeMs = responseTimeMs;
 
             if (success)
             {
+                UpdateLatencyMetrics(metric, responseTimeMs);
                 metric.SuccessfulScrapes++;
                 metric.ConsecutiveFailures = 0;
                 metric.LastSuccess = now;
@@ -367,17 +356,66 @@ public class TrackerMetricService : ITrackerMetricService
 
     public List<TrackerMetric> GetAllMetrics()
     {
-        return _metricRepository.All().OrderByDescending(m => m.TotalUploaded).ThenByDescending(m => m.TotalAnnounces).ToList();
+        var metrics = _metricRepository.All().OrderByDescending(m => m.TotalUploaded).ThenByDescending(m => m.TotalAnnounces).ToList();
+        if (metrics.Count > 0)
+        {
+            try
+            {
+                var since = DateTime.UtcNow.AddHours(-24);
+                var snapshots = _snapshotRepository.GetRecentSnapshots(since);
+                var snapshotsByTracker = snapshots.GroupBy(s => s.TrackerMetricId).ToDictionary(g => g.Key, g => g.ToList());
+
+                foreach (var metric in metrics)
+                {
+                    snapshotsByTracker.TryGetValue(metric.Id, out var trackerSnapshots);
+                    PopulatePercentiles(metric, trackerSnapshots);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed populating tracker metric percentiles");
+            }
+        }
+
+        return metrics;
     }
 
     public TrackerMetric GetMetric(int id)
     {
-        return _metricRepository.Get(id);
+        var metric = _metricRepository.Get(id);
+        if (metric != null)
+        {
+            try
+            {
+                var snapshots = _snapshotRepository.GetHistory(id, DateTime.UtcNow.AddHours(-24));
+                PopulatePercentiles(metric, snapshots);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed populating tracker metric percentiles for metric {Id}", id);
+            }
+        }
+
+        return metric;
     }
 
     public TrackerMetric GetMetricByUrl(string url)
     {
-        return _metricRepository.FindByUrl(url);
+        var metric = _metricRepository.FindByUrl(url);
+        if (metric != null)
+        {
+            try
+            {
+                var snapshots = _snapshotRepository.GetHistory(metric.Id, DateTime.UtcNow.AddHours(-24));
+                PopulatePercentiles(metric, snapshots);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed populating tracker metric percentiles for url {Url}", url);
+            }
+        }
+
+        return metric;
     }
 
     public List<TrackerMetricSnapshot> GetHistory(int id, int hours = 24)
@@ -465,17 +503,18 @@ public class TrackerMetricService : ITrackerMetricService
             })
             .ToList();
 
-        // Hourly history points for last 24h
+        // Hourly history points for last 24h aligned without gap loss
         try
         {
-            var since = DateTime.UtcNow.AddHours(-24);
-            var snapshots = _snapshotRepository.GetRecentSnapshots(since);
+            var now = DateTime.UtcNow;
+            var currentHour = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0, DateTimeKind.Utc);
+            var oldestBucketStart = currentHour.AddHours(-24);
+            var snapshots = _snapshotRepository.GetRecentSnapshots(oldestBucketStart);
 
-            var hourlyBuckets = new List<HourlyTrafficPoint>();
-            for (var i = 23; i >= 0; i--)
+            var hourlyBuckets = new List<HourlyTrafficPoint>(24);
+            for (var i = 0; i < 24; i++)
             {
-                var hourStart = DateTime.UtcNow.AddHours(-i);
-                var bucketStart = new DateTime(hourStart.Year, hourStart.Month, hourStart.Day, hourStart.Hour, 0, 0, DateTimeKind.Utc);
+                var bucketStart = oldestBucketStart.AddHours(i);
                 var bucketEnd = bucketStart.AddHours(1);
 
                 var inBucket = snapshots.Where(s => s.Timestamp >= bucketStart && s.Timestamp < bucketEnd).ToList();
@@ -492,10 +531,30 @@ public class TrackerMetricService : ITrackerMetricService
             }
 
             summary.HourlyHistory = hourlyBuckets;
+
+            // SLA Latency Percentiles (P50, P95, P99)
+            var validLatencies = snapshots
+                .Where(s => s.IsSuccess && s.ResponseTimeMs > 0)
+                .Select(s => (double)s.ResponseTimeMs)
+                .ToList();
+
+            if (validLatencies.Count > 0)
+            {
+                summary.LatencyP50Ms = CalculatePercentile(validLatencies, 50);
+                summary.LatencyP95Ms = CalculatePercentile(validLatencies, 95);
+                summary.LatencyP99Ms = CalculatePercentile(validLatencies, 99);
+            }
+            else
+            {
+                var trackerAverages = all.Where(m => m.AvgResponseTimeMs > 0).Select(m => m.AvgResponseTimeMs).ToList();
+                summary.LatencyP50Ms = CalculatePercentile(trackerAverages, 50);
+                summary.LatencyP95Ms = CalculatePercentile(trackerAverages, 95);
+                summary.LatencyP99Ms = CalculatePercentile(trackerAverages, 99);
+            }
         }
         catch (Exception ex)
         {
-            _logger.Debug(ex, "Failed generating hourly traffic history");
+            _logger.Debug(ex, "Failed generating hourly traffic history or SLA percentiles");
         }
 
         return summary;
@@ -565,5 +624,128 @@ public class TrackerMetricService : ITrackerMetricService
         }
 
         return host;
+    }
+
+    public static void UpdateLatencyMetrics(TrackerMetric metric, long responseTimeMs)
+    {
+        if (metric == null)
+        {
+            return;
+        }
+
+        metric.LastResponseTimeMs = responseTimeMs;
+
+        if (responseTimeMs > 0)
+        {
+            if (metric.MinResponseTimeMs == 0 || responseTimeMs < metric.MinResponseTimeMs)
+            {
+                metric.MinResponseTimeMs = responseTimeMs;
+            }
+
+            if (responseTimeMs > metric.MaxResponseTimeMs)
+            {
+                metric.MaxResponseTimeMs = responseTimeMs;
+            }
+
+            // Running exponential moving average
+            if (metric.AvgResponseTimeMs <= 0)
+            {
+                metric.AvgResponseTimeMs = responseTimeMs;
+            }
+            else
+            {
+                metric.AvgResponseTimeMs = Math.Round((metric.AvgResponseTimeMs * 0.85) + (responseTimeMs * 0.15), 1);
+            }
+        }
+    }
+
+    public static double CalculatePercentile(IReadOnlyList<double> values, double percentile)
+    {
+        if (values == null || values.Count == 0)
+        {
+            return 0.0;
+        }
+
+        var list = values.OrderBy(v => v).ToList();
+        if (list.Count == 1)
+        {
+            return Math.Round(list[0], 2);
+        }
+
+        if (percentile <= 0)
+        {
+            return Math.Round(list[0], 2);
+        }
+
+        if (percentile >= 100)
+        {
+            return Math.Round(list[^1], 2);
+        }
+
+        var rank = (percentile / 100.0) * (list.Count - 1);
+        var lowerIndex = (int)Math.Floor(rank);
+        var upperIndex = (int)Math.Ceiling(rank);
+
+        if (lowerIndex == upperIndex)
+        {
+            return Math.Round(list[lowerIndex], 2);
+        }
+
+        var fraction = rank - lowerIndex;
+        var value = list[lowerIndex] + (fraction * (list[upperIndex] - list[lowerIndex]));
+        return Math.Round(value, 2);
+    }
+
+    public static double CalculatePercentile(IEnumerable<double> values, double percentile)
+    {
+        if (values == null)
+        {
+            return 0.0;
+        }
+
+        var list = values.ToList();
+        return CalculatePercentile((IReadOnlyList<double>)list, percentile);
+    }
+
+    public static double CalculatePercentile(IEnumerable<long> values, double percentile)
+    {
+        if (values == null)
+        {
+            return 0.0;
+        }
+
+        return CalculatePercentile(values.Select(v => (double)v), percentile);
+    }
+
+    public static void PopulatePercentiles(TrackerMetric metric, IEnumerable<TrackerMetricSnapshot> snapshots)
+    {
+        if (metric == null)
+        {
+            return;
+        }
+
+        var validLatencies = snapshots?
+            .Where(s => s.IsSuccess && s.ResponseTimeMs > 0)
+            .Select(s => (double)s.ResponseTimeMs)
+            .ToList();
+
+        if (validLatencies != null && validLatencies.Count > 0)
+        {
+            metric.LatencyP50Ms = CalculatePercentile(validLatencies, 50);
+            metric.LatencyP95Ms = CalculatePercentile(validLatencies, 95);
+            metric.LatencyP99Ms = CalculatePercentile(validLatencies, 99);
+        }
+        else if (metric.AvgResponseTimeMs > 0)
+        {
+            metric.LatencyP50Ms = metric.AvgResponseTimeMs;
+            metric.LatencyP95Ms = metric.MaxResponseTimeMs > 0 ? metric.MaxResponseTimeMs : metric.AvgResponseTimeMs;
+            metric.LatencyP99Ms = metric.MaxResponseTimeMs > 0 ? metric.MaxResponseTimeMs : metric.AvgResponseTimeMs;
+        }
+        else
+        {
+            metric.LatencyP50Ms = 0;
+            metric.LatencyP95Ms = 0;
+            metric.LatencyP99Ms = 0;
+        }
     }
 }
