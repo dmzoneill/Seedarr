@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
@@ -102,11 +103,23 @@ public class ArrConnectionController : Controller
             definition.ApiKey = existing.ApiKey;
         }
 
+        var shouldUnregister = (existing.WebhookEnabled && !definition.WebhookEnabled) ||
+                               (existing.Enable && !definition.Enable) ||
+                               (!string.Equals(existing.Url?.TrimEnd('/'), definition.Url?.TrimEnd('/'), StringComparison.OrdinalIgnoreCase));
+
+        if (shouldUnregister)
+        {
+            _webhookRegistration.UnregisterWebhook(existing);
+        }
+
         _connectionFactory.Update(definition);
 
-        if (!_webhookRegistration.RegisterWebhook(definition))
+        if (definition.Enable && definition.WebhookEnabled)
         {
-            _logger.Warn("Failed to register webhook in {0} at {1} during connection update", definition.ArrType, definition.Url);
+            if (!_webhookRegistration.RegisterWebhook(definition))
+            {
+                _logger.Warn("Failed to register webhook in {0} at {1} during connection update", definition.ArrType, definition.Url);
+            }
         }
 
         return Ok(MaskApiKey(definition));
