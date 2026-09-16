@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text;
 using Microsoft.Data.Sqlite;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
@@ -185,8 +186,50 @@ public class BackupService : IBackupService
         var dbEntry = zip.GetEntry(DbFileName);
         if (dbEntry != null)
         {
-            dbEntry.ExtractToFile(dbRestorePath, overwrite: true);
-            _logger.Info("Database restore staged at {0}; swap will occur on next startup", dbRestorePath);
+            if (dbEntry.Length <= 100)
+            {
+                throw new InvalidDataException($"Database entry in backup archive '{fileName}' is corrupt or too small ({dbEntry.Length} bytes).");
+            }
+
+            var tempRestorePath = dbRestorePath + ".tmp";
+            try
+            {
+                dbEntry.ExtractToFile(tempRestorePath, overwrite: true);
+
+                var fileInfo = new FileInfo(tempRestorePath);
+                if (fileInfo.Length <= 100)
+                {
+                    throw new InvalidDataException($"Extracted database file from backup archive '{fileName}' is corrupt or too small ({fileInfo.Length} bytes).");
+                }
+
+                using (var fs = new FileStream(tempRestorePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    var headerBytes = new byte[16];
+                    var read = fs.Read(headerBytes, 0, headerBytes.Length);
+                    var headerStr = Encoding.ASCII.GetString(headerBytes, 0, read);
+
+                    if (!headerStr.StartsWith("SQLite format 3", StringComparison.Ordinal))
+                    {
+                        throw new InvalidDataException($"Database entry in backup archive '{fileName}' does not contain a valid SQLite database header.");
+                    }
+                }
+
+                File.Move(tempRestorePath, dbRestorePath, overwrite: true);
+                _logger.Info("Database restore staged at {0}; swap will occur on next startup", dbRestorePath);
+            }
+            finally
+            {
+                if (File.Exists(tempRestorePath))
+                {
+                    try
+                    {
+                        File.Delete(tempRestorePath);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
         }
 
         var configEntry = zip.GetEntry(ConfigFileName);

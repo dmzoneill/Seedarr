@@ -4,8 +4,8 @@ import {
   useCreateBackup,
   useDeleteBackup,
   useRestoreBackup,
-  useGeneralConfig,
 } from "../api/hooks";
+import { apiClient } from "../api/client";
 import { useToast } from "../context/ToastContext";
 import { formatBytes, formatDate } from "../utils/formatters";
 
@@ -85,7 +85,6 @@ function TrashIcon() {
 
 function SystemBackup() {
   const { data: backups, isLoading, isError } = useBackups();
-  const { data: generalConfig } = useGeneralConfig();
   const createBackup = useCreateBackup();
   const deleteBackup = useDeleteBackup();
   const restoreBackup = useRestoreBackup();
@@ -94,11 +93,20 @@ function SystemBackup() {
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [confirmRestore, setConfirmRestore] = useState<string | null>(null);
 
-  const getDownloadUrl = (backupId: number) => {
-    const urlBase = (generalConfig?.urlBase || "").replace(/\/$/, "");
-    const apiKey = generalConfig?.apiKey || "";
-    const base = `${urlBase}/api/v1/backup/${backupId}/download`;
-    return apiKey ? `${base}?apikey=${encodeURIComponent(apiKey)}` : base;
+  const handleDownload = async (backupId: number, fileName: string) => {
+    try {
+      const blob = await apiClient.get<Blob>(`/backup/${backupId}/download`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch {
+      showToast("Failed to download backup", "error");
+    }
   };
 
   const handleCreateBackup = () => {
@@ -256,19 +264,24 @@ function SystemBackup() {
                 {backups.map((backup) => (
                   <tr key={backup.id} className="torrent-table-row">
                     <td>
-                      <a
-                        href={getDownloadUrl(backup.id)}
+                      <button
+                        type="button"
+                        onClick={() => handleDownload(backup.id, backup.name)}
                         className="torrent-link"
-                        download
                         style={{
+                          background: "none",
+                          border: "none",
+                          padding: 0,
+                          cursor: "pointer",
                           display: "inline-flex",
                           alignItems: "center",
                           gap: "0.4rem",
                           fontWeight: 500,
+                          font: "inherit",
                         }}
                       >
                         <DownloadIcon /> {backup.name}
-                      </a>
+                      </button>
                     </td>
                     <td>{formatBytes(backup.size)}</td>
                     <td>{formatDate(backup.time)}</td>

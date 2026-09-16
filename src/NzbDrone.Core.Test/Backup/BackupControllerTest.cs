@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
@@ -119,5 +120,63 @@ public class BackupControllerTest
 
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         _backupService.DidNotReceive().DeleteBackup(Arg.Any<string>());
+    }
+
+    [Test]
+    public void RestoreBackup_with_valid_fileName_should_restore_backup_and_return_ok()
+    {
+        var request = new RestoreRequest { FileName = "seedarr_backup_1.0_2026-01-01.zip" };
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _backupService.Received(1).RestoreBackup("seedarr_backup_1.0_2026-01-01.zip");
+    }
+
+    [Test]
+    public void RestoreBackup_with_missing_fileName_should_return_bad_request()
+    {
+        var request = new RestoreRequest { FileName = "" };
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        _backupService.DidNotReceive().RestoreBackup(Arg.Any<string>());
+    }
+
+    [Test]
+    public void RestoreBackup_when_file_not_found_should_return_not_found()
+    {
+        var request = new RestoreRequest { FileName = "nonexistent.zip" };
+        _backupService.When(s => s.RestoreBackup("nonexistent.zip"))
+            .Do(_ => throw new FileNotFoundException("Backup file not found", "nonexistent.zip"));
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public void RestoreBackup_when_archive_is_corrupt_should_return_bad_request()
+    {
+        var request = new RestoreRequest { FileName = "corrupt.zip" };
+        _backupService.When(s => s.RestoreBackup("corrupt.zip"))
+            .Do(_ => throw new InvalidDataException("Corrupted zip archive"));
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void RestoreBackup_when_io_exception_should_return_bad_request()
+    {
+        var request = new RestoreRequest { FileName = "disk_full.zip" };
+        _backupService.When(s => s.RestoreBackup("disk_full.zip"))
+            .Do(_ => throw new IOException("Disk full"));
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
     }
 }
