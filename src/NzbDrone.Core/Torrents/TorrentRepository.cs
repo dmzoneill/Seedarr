@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Dapper;
 using NzbDrone.Core.Datastore;
 
@@ -19,6 +21,34 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
         return connection.QueryFirstOrDefault<int>(
             $"SELECT COUNT(1) FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash",
             new { InfoHash = infoHash }) > 0;
+    }
+
+    public List<Torrent> GetByInfoHashes(IEnumerable<string> infoHashes)
+    {
+        if (infoHashes == null)
+        {
+            return new List<Torrent>();
+        }
+
+        var hashes = infoHashes.Where(h => !string.IsNullOrWhiteSpace(h)).Distinct().ToList();
+        if (hashes.Count == 0)
+        {
+            return new List<Torrent>();
+        }
+
+        using var connection = _database.OpenConnection();
+        var result = new List<Torrent>();
+
+        foreach (var batch in hashes.Chunk(500))
+        {
+            var records = connection.Query<Torrent>(
+                $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" IN @Hashes",
+                new { Hashes = batch });
+
+            result.AddRange(records);
+        }
+
+        return result;
     }
 
     public void UpdateCategoryName(string oldCategoryName, string newCategoryName)

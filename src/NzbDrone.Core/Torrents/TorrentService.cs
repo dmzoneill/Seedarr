@@ -12,6 +12,7 @@ namespace NzbDrone.Core.Torrents;
 public interface ITorrentService
 {
     List<Torrent> GetAll();
+    List<Torrent> GetByInfoHashes(IEnumerable<string> infoHashes);
     Torrent Get(int id);
     bool ExistsByInfoHash(string infoHash);
     Torrent Add(Torrent torrent);
@@ -43,6 +44,16 @@ public class TorrentService : ITorrentService
     public List<Torrent> GetAll()
     {
         return _repository.All().ToList();
+    }
+
+    public List<Torrent> GetByInfoHashes(IEnumerable<string> infoHashes)
+    {
+        if (infoHashes == null)
+        {
+            return new List<Torrent>();
+        }
+
+        return _repository.GetByInfoHashes(infoHashes);
     }
 
     public Torrent Get(int id)

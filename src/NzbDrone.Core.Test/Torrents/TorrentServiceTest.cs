@@ -450,5 +450,27 @@ namespace NzbDrone.Core.Test.Torrents
 
             _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
         }
+
+        [Test]
+        public void GetByInfoHashes_should_call_repository_and_return_results()
+        {
+            var hashes = new[] { "hash1", "hash2" };
+            var expected = new List<Torrent> { new Torrent { Id = 1, InfoHash = "hash1" } };
+            _repository.GetByInfoHashes(hashes).Returns(expected);
+
+            var result = _subject.GetByInfoHashes(hashes);
+
+            Assert.That(result, Is.SameAs(expected));
+            _repository.Received(1).GetByInfoHashes(hashes);
+        }
+
+        [Test]
+        public void GetByInfoHashes_should_return_empty_when_hashes_null()
+        {
+            var result = _subject.GetByInfoHashes(null);
+
+            Assert.That(result, Is.Empty);
+            _repository.DidNotReceive().GetByInfoHashes(Arg.Any<IEnumerable<string>>());
+        }
     }
 }

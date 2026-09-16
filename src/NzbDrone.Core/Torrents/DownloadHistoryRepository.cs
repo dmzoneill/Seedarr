@@ -33,6 +33,40 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
             new { TorrentId = torrentId });
     }
 
+    public Dictionary<string, DownloadHistory> GetLatestByInfoHashes(IEnumerable<string> infoHashes)
+    {
+        if (infoHashes == null)
+        {
+            return new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var hashes = infoHashes.Where(h => !string.IsNullOrWhiteSpace(h)).Distinct().ToList();
+        if (hashes.Count == 0)
+        {
+            return new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        using var connection = _database.OpenConnection();
+        var dict = new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var batch in hashes.Chunk(500))
+        {
+            var records = connection.Query<DownloadHistory>(
+                $"SELECT * FROM \"{_table}\" WHERE \"Id\" IN (SELECT MAX(\"Id\") FROM \"{_table}\" WHERE \"InfoHash\" IN @Hashes GROUP BY \"InfoHash\")",
+                new { Hashes = batch });
+
+            foreach (var record in records)
+            {
+                if (!string.IsNullOrWhiteSpace(record.InfoHash))
+                {
+                    dict[record.InfoHash] = record;
+                }
+            }
+        }
+
+        return dict;
+    }
+
     public List<DownloadHistory> GetHistory(string query = null, string status = null, int limit = 500, int offset = 0)
     {
         using var connection = _database.OpenConnection();
