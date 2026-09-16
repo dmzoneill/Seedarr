@@ -173,6 +173,9 @@ public class SecurityMiddlewareTest
         var config = Substitute.For<IConfigService>();
         config.CsrfProtectionEnabled.Returns(true);
 
+        var configFileProvider = Substitute.For<IConfigFileProvider>();
+        configFileProvider.ApiKey.Returns("valid_api_key_123");
+
         var context = new DefaultHttpContext();
         context.Request.Method = "POST";
         context.Request.Headers["X-Api-Key"] = "valid_api_key_123";
@@ -185,7 +188,7 @@ public class SecurityMiddlewareTest
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(context, config);
+        await middleware.InvokeAsync(context, config, configFileProvider);
 
         Assert.That(nextCalled, Is.True);
     }
