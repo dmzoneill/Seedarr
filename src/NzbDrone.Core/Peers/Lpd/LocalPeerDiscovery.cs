@@ -8,12 +8,13 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Peers.Lpd;
 
-public class LocalPeerDiscovery : BackgroundService
+public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
 {
     private const string MulticastAddress = "239.192.152.143";
     private const int MulticastPort = 6771;
@@ -25,6 +26,15 @@ public class LocalPeerDiscovery : BackgroundService
     private readonly ITorrentService _torrentService;
     private readonly IPeerDiscoveryService _peerDiscovery;
     private readonly Logger _logger;
+    private readonly object _stateLock = new();
+
+    private UdpClient _client;
+    private CancellationTokenSource _workerCts;
+    private Task _workerTask;
+    private bool _wasEnabled;
+    private CancellationToken _stoppingToken;
+
+    public bool IsRunning => _client != null;
 
     public LocalPeerDiscovery(IConfigService configService, ITorrentService torrentService, IPeerDiscoveryService peerDiscovery)
     {
@@ -34,58 +44,169 @@ public class LocalPeerDiscovery : BackgroundService
         _logger = LogManager.GetCurrentClassLogger();
     }
 
+    public void Handle(ConfigSavedEvent message)
+    {
+        lock (_stateLock)
+        {
+            var isEnabled = _configService.EnableLpd;
+
+            if (isEnabled)
+            {
+                if (_workerTask == null || _workerTask.IsCompleted)
+                {
+                    _logger.Info("Local Peer Discovery enabled via configuration change, starting service");
+                    StartLpd();
+                }
+            }
+            else if (_wasEnabled || _workerTask != null)
+            {
+                _logger.Info("Local Peer Discovery disabled via configuration change, stopping service");
+                StopLpd();
+            }
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_configService.EnableLpd)
+        _stoppingToken = stoppingToken;
+
+        lock (_stateLock)
+        {
+            _wasEnabled = _configService.EnableLpd;
+        }
+
+        if (_configService.EnableLpd)
+        {
+            StartLpd();
+        }
+        else
         {
             _logger.Info("Local Peer Discovery disabled via configuration");
-            return;
-        }
-
-        UdpClient client;
-
-        try
-        {
-            client = new UdpClient(MulticastPort);
-            client.JoinMulticastGroup(IPAddress.Parse(MulticastAddress));
-        }
-        catch (SocketException ex)
-        {
-            _logger.Warn(ex, "Local Peer Discovery failed to join multicast group, skipping");
-            return;
         }
 
         try
         {
-            _logger.Info("Local Peer Discovery (BEP 14) started on {0}:{1}", MulticastAddress, MulticastPort);
-
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-            var listenTask = ListenForPeers(client, linkedCts.Token);
-            var announceTask = AnnounceLoop(linkedCts.Token);
-
-            await Task.WhenAny(listenTask, announceTask);
-            await linkedCts.CancelAsync();
-
-            try
-            {
-                await Task.WhenAll(listenTask, announceTask).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-            }
+            await Task.Delay(Timeout.Infinite, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
         }
         finally
         {
-            try
+            StopLpd();
+            if (_workerTask != null)
             {
-                client.DropMulticastGroup(IPAddress.Parse(MulticastAddress));
+                try
+                {
+                    await _workerTask.ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                }
             }
-            catch (Exception)
+        }
+    }
+
+    private void StartLpd()
+    {
+        lock (_stateLock)
+        {
+            if (_workerTask != null && !_workerTask.IsCompleted)
             {
+                return;
             }
 
-            client.Dispose();
+            UdpClient client;
+
+            try
+            {
+                client = new UdpClient(MulticastPort);
+                client.JoinMulticastGroup(IPAddress.Parse(MulticastAddress));
+            }
+            catch (SocketException ex)
+            {
+                _logger.Warn(ex, "Local Peer Discovery failed to join multicast group, skipping");
+                return;
+            }
+
+            _client = client;
+            _wasEnabled = true;
+            _logger.Info("Local Peer Discovery (BEP 14) started on {0}:{1}", MulticastAddress, MulticastPort);
+
+            _workerCts = _stoppingToken.CanBeCanceled
+                ? CancellationTokenSource.CreateLinkedTokenSource(_stoppingToken)
+                : new CancellationTokenSource();
+
+            var token = _workerCts.Token;
+            _workerTask = Task.Run(async () =>
+            {
+                var listenTask = ListenForPeers(client, token);
+                var announceTask = AnnounceLoop(token);
+
+                await Task.WhenAny(listenTask, announceTask);
+
+                try
+                {
+                    await Task.WhenAll(listenTask, announceTask).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+            });
         }
+    }
+
+    private void StopLpd()
+    {
+        lock (_stateLock)
+        {
+            _wasEnabled = false;
+
+            if (_workerCts != null)
+            {
+                try
+                {
+                    _workerCts.Cancel();
+                }
+                catch (Exception)
+                {
+                }
+
+                _workerCts.Dispose();
+                _workerCts = null;
+            }
+
+            if (_client != null)
+            {
+                try
+                {
+                    _client.DropMulticastGroup(IPAddress.Parse(MulticastAddress));
+                }
+                catch (Exception)
+                {
+                }
+
+                try
+                {
+                    _client.Close();
+                    _client.Dispose();
+                }
+                catch (Exception)
+                {
+                }
+
+                _client = null;
+                _logger.Info("Local Peer Discovery stopped");
+            }
+
+            _workerTask = null;
+        }
+    }
+
+    public override void Dispose()
+    {
+        StopLpd();
+        base.Dispose();
     }
 
     private async Task ListenForPeers(UdpClient client, CancellationToken stoppingToken)
@@ -104,8 +225,21 @@ public class LocalPeerDiscovery : BackgroundService
             {
                 break;
             }
+            catch (ObjectDisposedException)
+            {
+                break;
+            }
+            catch (SocketException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
             catch (Exception ex)
             {
+                if (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
                 _logger.Debug(ex, "LPD receive error");
                 await Task.Delay(5000, stoppingToken);
             }
