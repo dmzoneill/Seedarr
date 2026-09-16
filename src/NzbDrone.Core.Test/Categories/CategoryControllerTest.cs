@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Categories;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.SignalR;
 using Seedarr.Api.V1.Categories;
@@ -188,7 +189,7 @@ public class CategoryControllerTest
     public void Handle_with_null_model_does_not_throw_and_does_not_broadcast()
     {
         _signalRBroadcaster.IsConnected.Returns(true);
-        var modelEvent = new ModelEvent<Category>(ModelAction.Updated, null);
+        var modelEvent = new ModelEvent<Category>(null, ModelAction.Updated);
 
         Assert.DoesNotThrow(() => _controller.Handle(modelEvent));
         _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
@@ -199,7 +200,7 @@ public class CategoryControllerTest
     {
         _signalRBroadcaster.IsConnected.Returns(false);
         var category = new Category { Id = 1, Name = "Movies", SavePath = "/downloads" };
-        var modelEvent = new ModelEvent<Category>(ModelAction.Updated, category);
+        var modelEvent = new ModelEvent<Category>(category, ModelAction.Updated);
 
         _controller.Handle(modelEvent);
         _signalRBroadcaster.DidNotReceive().BroadcastMessage(Arg.Any<SignalRMessage>());
@@ -210,13 +211,12 @@ public class CategoryControllerTest
     {
         _signalRBroadcaster.IsConnected.Returns(true);
         var category = new Category { Id = 1, Name = "Movies", SavePath = "/downloads" };
-        var modelEvent = new ModelEvent<Category>(ModelAction.Updated, category);
+        var modelEvent = new ModelEvent<Category>(category, ModelAction.Updated);
 
         _controller.Handle(modelEvent);
         _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
             m.Action == ModelAction.Updated &&
             m.Name == "category" &&
-            m.Body is CategoryResource
-        ));
+            m.Body is CategoryResource));
     }
 }

@@ -19,6 +19,10 @@ public class RssRuleController : Controller
     private readonly IRssRuleRepository _rssRuleRepository;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
+    private static readonly object _syncLock = new();
+    private static readonly TimeSpan _syncCooldown = TimeSpan.FromSeconds(15);
+    private static DateTime _lastSyncTime = DateTime.MinValue;
+
     public RssRuleController(IRssRuleRepository rssRuleRepository)
     {
         _rssRuleRepository = rssRuleRepository;
@@ -57,7 +61,18 @@ public class RssRuleController : Controller
     {
         if (resource == null)
         {
-            return BadRequest();
+            return BadRequest(new { message = "Request body cannot be null." });
+        }
+
+        if (string.IsNullOrWhiteSpace(resource.Name))
+        {
+            return BadRequest(new { message = "Rule name cannot be empty." });
+        }
+
+        var allRules = _rssRuleRepository.All();
+        if (allRules.Any(r => string.Equals(r.Name?.Trim(), resource.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            return BadRequest(new { message = $"An RSS rule with the name '{resource.Name.Trim()}' already exists." });
         }
 
         if (!IsValidRegex(resource.MustContain, out var mustContainError))
@@ -83,7 +98,24 @@ public class RssRuleController : Controller
     {
         if (resource == null)
         {
-            return BadRequest();
+            return BadRequest(new { message = "Request body cannot be null." });
+        }
+
+        if (string.IsNullOrWhiteSpace(resource.Name))
+        {
+            return BadRequest(new { message = "Rule name cannot be empty." });
+        }
+
+        var existing = _rssRuleRepository.Get(id);
+        if (existing == null)
+        {
+            return NotFound();
+        }
+
+        var allRules = _rssRuleRepository.All();
+        if (allRules.Any(r => r.Id != id && string.Equals(r.Name?.Trim(), resource.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            return BadRequest(new { message = $"An RSS rule with the name '{resource.Name.Trim()}' already exists." });
         }
 
         if (!IsValidRegex(resource.MustContain, out var mustContainError))
@@ -94,12 +126,6 @@ public class RssRuleController : Controller
         if (!IsValidRegex(resource.MustNotContain, out var mustNotContainError))
         {
             return BadRequest(new { message = $"Invalid MustNotContain regex pattern: {mustNotContainError}" });
-        }
-
-        var existing = _rssRuleRepository.Get(id);
-        if (existing == null)
-        {
-            return NotFound();
         }
 
         var model = ToModel(resource);
@@ -139,6 +165,22 @@ public class RssRuleController : Controller
     [HttpPost("sync-rss")]
     public ActionResult<object> SyncRss()
     {
+        lock (_syncLock)
+        {
+            var elapsed = DateTime.UtcNow - _lastSyncTime;
+            if (elapsed < _syncCooldown)
+            {
+                var remaining = Math.Ceiling((_syncCooldown - elapsed).TotalSeconds);
+                return StatusCode(429, new
+                {
+                    message = $"RSS sync is rate limited. Please wait {remaining} second(s) before syncing again.",
+                    retryAfterSeconds = remaining
+                });
+            }
+
+            _lastSyncTime = DateTime.UtcNow;
+        }
+
         return Ok(new { success = true, grabbedCount = 0 });
     }
 
@@ -180,6 +222,7 @@ public class RssRuleController : Controller
             FreeleechOnly = model.FreeleechOnly,
             CategoryId = model.CategoryId,
             IndexerIds = model.IndexerIds ?? new List<int>(),
+            Tags = model.Tags ?? new List<int>(),
         };
     }
 
@@ -199,6 +242,7 @@ public class RssRuleController : Controller
             FreeleechOnly = resource.FreeleechOnly,
             CategoryId = resource.CategoryId,
             IndexerIds = resource.IndexerIds ?? new List<int>(),
+            Tags = resource.Tags ?? new List<int>(),
         };
     }
 }

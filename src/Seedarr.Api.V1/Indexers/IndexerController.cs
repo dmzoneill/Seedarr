@@ -27,6 +27,7 @@ public class IndexerController : Controller
     private readonly ITorrentFileParser _torrentFileParser;
     private readonly IDownloadHistoryService _downloadHistoryService;
     private readonly IIndexerStatusService _indexerStatusService;
+    private readonly IRssRuleRepository _rssRuleRepository;
 
     public IndexerController(
         IIndexerFactory indexerFactory,
@@ -36,7 +37,8 @@ public class IndexerController : Controller
         ITorrentFileParser torrentFileParser,
         IDownloadHistoryService downloadHistoryService,
         IIndexerStatusService indexerStatusService = null,
-        IProxySettingsProvider proxySettingsProvider = null)
+        IProxySettingsProvider proxySettingsProvider = null,
+        IRssRuleRepository rssRuleRepository = null)
     {
         _indexerFactory = indexerFactory;
         _torrentService = torrentService;
@@ -46,6 +48,7 @@ public class IndexerController : Controller
         _downloadHistoryService = downloadHistoryService;
         _indexerStatusService = indexerStatusService ?? new IndexerStatusService();
         _proxySettingsProvider = proxySettingsProvider;
+        _rssRuleRepository = rssRuleRepository;
         _httpClient = proxySettingsProvider != null && proxySettingsProvider.IsEnabled
             ? new HttpClient(proxySettingsProvider.CreateHandler())
             : new HttpClient();
@@ -132,6 +135,20 @@ public class IndexerController : Controller
     public ActionResult Delete(int id)
     {
         _indexerFactory.Delete(id);
+
+        if (_rssRuleRepository != null)
+        {
+            var rules = _rssRuleRepository.All();
+            foreach (var rule in rules)
+            {
+                if (rule.IndexerIds != null && rule.IndexerIds.Contains(id))
+                {
+                    rule.IndexerIds.RemoveAll(x => x == id);
+                    _rssRuleRepository.Update(rule);
+                }
+            }
+        }
+
         return Ok();
     }
 

@@ -258,6 +258,7 @@ public class DownloadClientController : Controller
         clone.Password = string.IsNullOrEmpty(clone.Password) ? "" : PasswordMask;
         return clone;
     }
+
     private static string ValidateDefinition(DownloadClientDefinition definition)
     {
         if (string.IsNullOrWhiteSpace(definition.Name))

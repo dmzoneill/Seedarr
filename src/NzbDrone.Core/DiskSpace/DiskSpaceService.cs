@@ -68,7 +68,7 @@ public class DiskSpaceService : IDiskSpaceService
     private readonly ConcurrentDictionary<string, DiskSpaceHealthState> _healthStates = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _stateLock = new();
 
-    internal TimeSpan DriveTimeout { get; set; } = TimeSpan.FromSeconds(3);
+    public TimeSpan DriveTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DiskSpaceService"/> class.
