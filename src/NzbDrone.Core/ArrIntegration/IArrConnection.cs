@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.ArrIntegration;
@@ -19,8 +21,11 @@ public interface IArrConnection : IProvider
     string ApiKey { get; set; }
     bool AcceptInvalidCertificates { get; set; }
     List<ArrDownloadRecord> GetDownloadHistory();
+    Task<List<ArrDownloadRecord>> GetDownloadHistoryAsync(CancellationToken cancellationToken = default);
     MediaMetadata GetMediaDetails(int mediaId);
+    Task<MediaMetadata> GetMediaDetailsAsync(int mediaId, CancellationToken cancellationToken = default);
     MediaMetadata LookupMedia(string title);
+    Task<MediaMetadata> LookupMediaAsync(string title, CancellationToken cancellationToken = default);
     bool TestConnection();
     ArrTestResult TestConnectionDetailed();
 }

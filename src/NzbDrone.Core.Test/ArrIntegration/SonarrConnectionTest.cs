@@ -2,6 +2,8 @@ using System;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.Test.TestHelpers;
@@ -622,5 +624,73 @@ public class SonarrConnectionTest
         var result = connection.TestConnection();
 
         Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task GetDownloadHistoryAsync_with_injected_client_parses_records()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""records"":[{""eventType"":""grabbed"",""sourceTitle"":""Show S01E01"",""downloadId"":""dl-async"",""date"":""2024-02-20T14:00:00Z"",""data"":{""torrentInfoHash"":""asynchash"",""indexer"":""AsyncIdx"",""downloadClient"":""AsyncClient"",""downloadUrl"":""https://async.example.com""}}]}");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8989";
+        connection.ApiKey = "test-key";
+
+        var result = await connection.GetDownloadHistoryAsync();
+
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Title, Is.EqualTo("Show S01E01"));
+        Assert.That(result[0].DownloadId, Is.EqualTo("dl-async"));
+        Assert.That(result[0].InfoHash, Is.EqualTo("asynchash"));
+    }
+
+    [Test]
+    public void GetDownloadHistoryAsync_with_cancelled_token_throws_OperationCanceledException()
+    {
+        var handler = new MockHttpMessageHandler();
+        var connection = CreateWithMockClient(handler);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+            await connection.GetDownloadHistoryAsync(cts.Token));
+    }
+
+    [Test]
+    public async Task GetMediaDetailsAsync_with_injected_client_parses_details()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""id"":42,""title"":""Async Show"",""year"":2024,""overview"":""Overview"",""genres"":[""Drama""]}");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8989";
+        connection.ApiKey = "test-key";
+
+        var result = await connection.GetMediaDetailsAsync(42);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Title, Is.EqualTo("Async Show"));
+        Assert.That(result.Year, Is.EqualTo(2024));
+        Assert.That(result.Overview, Is.EqualTo("Overview"));
+    }
+
+    [Test]
+    public async Task LookupMediaAsync_with_injected_client_parses_lookup()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"[{""id"":100,""title"":""Lookup Show"",""year"":2023}]");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8989";
+        connection.ApiKey = "test-key";
+
+        var result = await connection.LookupMediaAsync("Lookup Show");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Title, Is.EqualTo("Lookup Show"));
+        Assert.That(result.Year, Is.EqualTo(2023));
     }
 }
