@@ -88,15 +88,27 @@ public class ClientProfileTest
     }
 
     [TestCaseSource(nameof(AllProfiles))]
-    public void GeneratePeerId_suffix_should_be_numeric_digits(IClientProfile profile)
+    public void GeneratePeerId_suffix_should_be_alphanumeric_or_url_safe(IClientProfile profile)
     {
         var peerId = profile.GeneratePeerId();
         var suffix = peerId.Substring(profile.PeerIdPrefix.Length);
 
         Assert.That(
             suffix,
-            Does.Match("^[0-9]+$"),
-            $"Suffix for {profile.Name} should be numeric digits only");
+            Does.Match("^[0-9a-zA-Z-_]+$"),
+            $"Suffix for {profile.Name} should contain valid alphanumeric characters");
+    }
+
+    [TestCaseSource(nameof(AllProfiles))]
+    public void GeneratePeerId_suffix_should_contain_entropy_beyond_decimal_digits(IClientProfile profile)
+    {
+        var ids = Enumerable.Range(0, 50).Select(_ => profile.GeneratePeerId()).ToList();
+        var anyNonDigits = ids.Any(id => id.Substring(profile.PeerIdPrefix.Length).Any(c => !char.IsDigit(c)));
+
+        Assert.That(
+            anyNonDigits,
+            Is.True,
+            $"Generated peer IDs for {profile.Name} should contain alphanumeric entropy and not solely decimal digits.");
     }
 
     [TestCaseSource(nameof(AllProfiles))]
