@@ -25,6 +25,8 @@ public class ChokeManagerTest
         _connections = new List<PeerConnection>();
 
         _connectionManager.GetAllConnections().Returns(_connections);
+        _connectionManager.GetConnections(Arg.Any<string>()).Returns(x =>
+            _connections.Where(c => string.Equals(c.InfoHash, x.Arg<string>(), StringComparison.OrdinalIgnoreCase)).ToList());
         _configService.MaxUploadSlots.Returns(4);
 
         _subject = new ChokeManager(_connectionManager, _configService);
@@ -177,5 +179,115 @@ public class ChokeManagerTest
         var replacementOptimistic = optimisticPeers.Single();
         Assert.That(replacementOptimistic.AmChoking, Is.False);
         Assert.That(new[] { 1001, 1003 }, Does.Contain(replacementOptimistic.RemotePort));
+    }
+
+    [Test]
+    public void PeerInterestedChanged_should_choke_peer_and_immediately_promote_next_eligible_peer_when_not_interested()
+    {
+        _configService.MaxUploadSlots.Returns(2);
+
+        var peer1 = CreatePeer("hashA", 1001, rate: 100);
+        var peer2 = CreatePeer("hashA", 1002, rate: 200);
+        var peer3 = CreatePeer("hashA", 1003, rate: 300);
+        var peer4 = CreatePeer("hashA", 1004, rate: 150);
+
+        peer1.AmChoking = false;
+        peer2.AmChoking = false;
+        peer3.AmChoking = true;
+        peer4.AmChoking = true;
+
+        peer3.DownloadRate = 300;
+        peer4.DownloadRate = 150;
+
+        peer1.PeerInterested = false;
+        _subject.PeerInterestedChanged(peer1);
+
+        // peer1 should now be choked
+        Assert.That(peer1.AmChoking, Is.True);
+
+        // peer3 has the highest download rate among choked, interested peers and should be immediately promoted
+        Assert.That(peer3.AmChoking, Is.False);
+
+        // peer4 should remain choked
+        Assert.That(peer4.AmChoking, Is.True);
+
+        // Total unchoked count should remain at 2
+        var unchoked = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
+        Assert.That(unchoked.Count, Is.EqualTo(2));
+        Assert.That(unchoked, Does.Contain(peer2));
+        Assert.That(unchoked, Does.Contain(peer3));
+    }
+
+    [Test]
+    public void PeerInterestedChanged_should_choke_peer_without_errors_when_no_other_peers_are_interested()
+    {
+        _configService.MaxUploadSlots.Returns(2);
+
+        var peer1 = CreatePeer("hashA", 1001);
+        var peer2 = CreatePeer("hashA", 1002, interested: false);
+
+        peer1.AmChoking = false;
+        peer2.AmChoking = true;
+
+        peer1.PeerInterested = false;
+        Assert.DoesNotThrow(() => _subject.PeerInterestedChanged(peer1));
+
+        Assert.That(peer1.AmChoking, Is.True);
+        Assert.That(peer2.AmChoking, Is.True);
+
+        var unchoked = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
+        Assert.That(unchoked, Is.Empty);
+    }
+
+    [Test]
+    public void PeerInterestedChanged_should_not_promote_snubbed_peer_when_not_interested()
+    {
+        _configService.MaxUploadSlots.Returns(2);
+
+        var peer1 = CreatePeer("hashA", 1001, rate: 100);
+        var peer2 = CreatePeer("hashA", 1002, rate: 200);
+        var peer3 = CreatePeer("hashA", 1003, rate: 300);
+        var peer4 = CreatePeer("hashA", 1004, rate: 150);
+
+        peer1.AmChoking = false;
+        peer2.AmChoking = false;
+        peer3.AmChoking = true;
+        peer4.AmChoking = true;
+
+        peer3.DownloadRate = 300;
+        peer3.IsSnubbed = true;
+        peer4.DownloadRate = 150;
+
+        peer1.PeerInterested = false;
+        _subject.PeerInterestedChanged(peer1);
+
+        // peer1 choked, peer3 snubbed so skipped, peer4 promoted
+        Assert.That(peer1.AmChoking, Is.True);
+        Assert.That(peer3.AmChoking, Is.True);
+        Assert.That(peer4.AmChoking, Is.False);
+    }
+
+    [Test]
+    public void PeerInterestedChanged_should_not_promote_peer_when_already_choked_peer_sends_not_interested()
+    {
+        _configService.MaxUploadSlots.Returns(1);
+
+        var peer1 = CreatePeer("hashA", 1001);
+        var peer2 = CreatePeer("hashA", 1002);
+
+        peer1.AmChoking = true;
+        peer2.AmChoking = true;
+
+        peer1.PeerInterested = false;
+        _subject.PeerInterestedChanged(peer1);
+
+        Assert.That(peer1.AmChoking, Is.True);
+        Assert.That(peer2.AmChoking, Is.True);
+    }
+
+    [Test]
+    public void CanUnchoke_should_return_false_when_connection_is_null()
+    {
+        Assert.That(_subject.CanUnchoke((PeerConnection)null), Is.False);
     }
 }
