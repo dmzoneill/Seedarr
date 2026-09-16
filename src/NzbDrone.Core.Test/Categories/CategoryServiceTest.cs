@@ -390,4 +390,143 @@ public class CategoryServiceTest
         Assert.That(CategoryService.NormalizeSavePath(""), Is.EqualTo(string.Empty));
         Assert.That(CategoryService.NormalizeSavePath(null), Is.EqualTo(string.Empty));
     }
+
+    [Test]
+    public void GetByName_caches_result_and_does_not_hit_repository_again()
+    {
+        var cat = new Category { Id = 10, Name = "TV" };
+        _repository.GetByName("TV").Returns(cat);
+
+        var first = _subject.GetByName("TV");
+        var second = _subject.GetByName("TV");
+        var third = _subject.GetByName("tv");
+
+        Assert.That(first, Is.SameAs(cat));
+        Assert.That(second, Is.SameAs(cat));
+        Assert.That(third, Is.SameAs(cat));
+        _repository.Received(1).GetByName("TV");
+    }
+
+    [Test]
+    public void GetAll_caches_categories_and_does_not_query_repository_multiple_times()
+    {
+        var catA = new Category { Id = 1, Name = "Anime" };
+        var catB = new Category { Id = 2, Name = "Movies" };
+        _repository.All().Returns(new[] { catA, catB });
+
+        var first = _subject.GetAll();
+        var second = _subject.GetAll();
+
+        Assert.That(first.Count(), Is.EqualTo(2));
+        Assert.That(second.Count(), Is.EqualTo(2));
+        _repository.Received(1).All();
+    }
+
+    [Test]
+    public void Add_enforces_case_insensitive_name_uniqueness_and_throws_InvalidOperationException()
+    {
+        var existing = new Category { Id = 1, Name = "Movies" };
+        _repository.All().Returns(new[] { existing });
+
+        var duplicateCat = new Category { Name = "movies" };
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _subject.Add(duplicateCat));
+        Assert.That(ex.Message, Does.Contain("already exists"));
+        _repository.DidNotReceive().Insert(Arg.Any<Category>());
+    }
+
+    [Test]
+    public void Add_with_relative_save_path_throws_ArgumentException()
+    {
+        var cat = new Category { Name = "RelativeCat", SavePath = "relative/downloads/path" };
+
+        var ex = Assert.Throws<ArgumentException>(() => _subject.Add(cat));
+        Assert.That(ex.Message, Does.Contain("Save path must be an absolute path"));
+        _repository.DidNotReceive().Insert(Arg.Any<Category>());
+    }
+
+    [Test]
+    public void Add_with_traversal_save_path_throws_ArgumentException()
+    {
+        var cat = new Category { Name = "TraversalCat", SavePath = "/downloads/../etc" };
+
+        var ex = Assert.Throws<ArgumentException>(() => _subject.Add(cat));
+        Assert.That(ex.Message, Does.Contain("Save path cannot contain directory traversal sequences"));
+        _repository.DidNotReceive().Insert(Arg.Any<Category>());
+    }
+
+    [Test]
+    public void Add_updates_in_memory_cache()
+    {
+        var cat = new Category { Name = "Documentaries", IsDefault = false };
+        _repository.Insert(cat).Returns(callInfo =>
+        {
+            var c = callInfo.Arg<Category>();
+            c.Id = 99;
+            return c;
+        });
+
+        _subject.Add(cat);
+
+        var fetched = _subject.GetByName("documentaries");
+        Assert.That(fetched, Is.Not.Null);
+        Assert.That(fetched.Id, Is.EqualTo(99));
+        _repository.DidNotReceive().GetByName(Arg.Any<string>());
+    }
+
+    [Test]
+    public void Update_updates_in_memory_cache_and_removes_old_name()
+    {
+        var oldCat = new Category { Id = 5, Name = "OldName", IsDefault = false };
+        var updatedCat = new Category { Id = 5, Name = "NewName", IsDefault = false };
+
+        _repository.Get(5).Returns(oldCat);
+        _repository.Update(updatedCat).Returns(updatedCat);
+
+        _subject.Update(updatedCat);
+
+        var byNewName = _subject.GetByName("newname");
+        Assert.That(byNewName, Is.SameAs(updatedCat));
+
+        _repository.GetByName("OldName").Returns((Category)null);
+        var byOldName = _subject.GetByName("OldName");
+        Assert.That(byOldName, Is.Null);
+    }
+
+    [Test]
+    public void Delete_invalidates_in_memory_cache()
+    {
+        var cat = new Category { Id = 12, Name = "ToDelete", IsDefault = false };
+        _repository.Get(12).Returns(cat);
+        _repository.All().Returns(new[] { cat });
+
+        _subject.Get(12);
+        _subject.GetByName("ToDelete");
+
+        _subject.Delete(12);
+
+        _repository.Get(12).Returns((Category)null);
+        _repository.GetByName("ToDelete").Returns((Category)null);
+
+        Assert.That(_subject.Get(12), Is.Null);
+        Assert.That(_subject.GetByName("ToDelete"), Is.Null);
+    }
+
+    [Test]
+    public void ValidateSavePath_validates_rooted_and_sanitized_paths()
+    {
+        Assert.DoesNotThrow(() => CategoryService.ValidateSavePath("/data/downloads"));
+        Assert.DoesNotThrow(() => CategoryService.ValidateSavePath("C:\\Downloads"));
+        Assert.DoesNotThrow(() => CategoryService.ValidateSavePath(""));
+        Assert.DoesNotThrow(() => CategoryService.ValidateSavePath(null));
+
+        var relativeEx = Assert.Throws<ArgumentException>(() => CategoryService.ValidateSavePath("some/relative/path"));
+        Assert.That(relativeEx.Message, Does.Contain("absolute"));
+
+        var traversalEx = Assert.Throws<ArgumentException>(() => CategoryService.ValidateSavePath("/var/../etc"));
+        Assert.That(traversalEx.Message, Does.Contain("traversal"));
+
+        var nullByteEx = Assert.Throws<ArgumentException>(() => CategoryService.ValidateSavePath("/data/\0test"));
+        Assert.That(nullByteEx.Message, Does.Contain("null"));
+    }
 }
