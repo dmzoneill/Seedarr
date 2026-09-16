@@ -388,7 +388,7 @@ public class PeerServerTest
     }
 
     [Test]
-    public void HandleMessage_should_process_request_and_increment_pending_count()
+    public void HandleMessage_should_process_request_and_decrement_pending_count_on_fulfillment()
     {
         var (clientConn, serverConn) = CreateTestPair();
         serverConn.MaxPipelinedRequests = 200;
@@ -400,7 +400,7 @@ public class PeerServerTest
 
         InvokeHandleMessage(serverConn, message);
 
-        Assert.That(serverConn.PendingRequestCount, Is.EqualTo(1));
+        Assert.That(serverConn.PendingRequestCount, Is.EqualTo(0));
     }
 
     [Test]
@@ -1780,5 +1780,62 @@ public class PeerServerTest
         }
 
         Assert.That(halfOpen.CurrentCount, Is.EqualTo(maxHalfOpen));
+    }
+
+    [Test]
+    public void HandlePieceRequest_should_decrement_pending_request_count_when_fulfilled()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.PendingRequestCount = 3;
+
+        var payload = BuildRequestPayload(1, 0, 16384);
+        InvokeHandlePieceRequest(serverConn, payload);
+
+        Assert.That(serverConn.PendingRequestCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Processing_multiple_requests_sequentially_does_not_hit_pipeline_lockup()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.MaxPipelinedRequests = 200;
+        serverConn.PendingRequestCount = 0;
+        serverConn.IdleChance = 0.0;
+
+        // Send 250 requests sequentially - exceeding default limit of 200
+        for (var i = 0; i < 250; i++)
+        {
+            var payload = BuildRequestPayload(0, i * 16, 16);
+            var message = new PeerMessage { Type = PeerMessageType.Request, Payload = payload };
+            InvokeHandleMessage(serverConn, message);
+
+            var pieceMsg = clientConn.ReceiveMessage();
+            Assert.That(pieceMsg, Is.Not.Null);
+            Assert.That(pieceMsg.Type, Is.EqualTo(PeerMessageType.Piece));
+            Assert.That(serverConn.PendingRequestCount, Is.EqualTo(0));
+        }
+    }
+
+    [Test]
+    public void HandleMessage_choke_resets_pending_request_count()
+    {
+        var conn = CreateTestConnection();
+        conn.PendingRequestCount = 50;
+
+        var message = new PeerMessage { Type = PeerMessageType.Choke };
+        InvokeHandleMessage(conn, message);
+
+        Assert.That(conn.PendingRequestCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Disposing_connection_resets_pending_request_count()
+    {
+        var conn = CreateTestConnection();
+        conn.PendingRequestCount = 42;
+
+        conn.Dispose();
+
+        Assert.That(conn.PendingRequestCount, Is.EqualTo(0));
     }
 }
