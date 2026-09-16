@@ -37,6 +37,8 @@ public interface IUtpConnection : IDisposable
 {
     bool IsConnected { get; }
     IPEndPoint RemoteEndPoint { get; }
+    ushort ReceiveId { get; }
+    ushort SendId { get; }
     void Connect(IPEndPoint endpoint);
     int Send(byte[] data, int offset, int length);
     int Receive(byte[] buffer, int offset, int length);
@@ -75,10 +77,14 @@ public class UtpConnection : IUtpConnection
     public static Func<uint> MicrosecondProvider { get; set; }
     public Func<byte[], IPEndPoint, bool> PacketDropFilter { get; set; }
     public Action<IUtpConnection> OnClosed { get; set; }
+    public Action<IUtpConnection, IPEndPoint> OnConnecting { get; set; }
+    public Action<IUtpConnection> OnConnected { get; set; }
 
     public bool IsConnected { get; private set; }
     public IPEndPoint RemoteEndPoint => _remoteEndpoint;
     public bool OwnsUdpClient => _ownsUdpClient;
+    public ushort ReceiveId { get; private set; }
+    public ushort SendId => _connectionId;
 
     public UtpConnection(int connectionTimeoutSeconds = 30)
     {
@@ -86,6 +92,7 @@ public class UtpConnection : IUtpConnection
         _ownsUdpClient = true;
         _logger = LogManager.GetCurrentClassLogger();
         _connectionId = (ushort)RandomNumberGenerator.GetInt32(0, ushort.MaxValue + 1);
+        ReceiveId = _connectionId;
         _sequenceNumber = 1;
         _connectionTimeoutSeconds = connectionTimeoutSeconds;
     }
@@ -105,6 +112,7 @@ public class UtpConnection : IUtpConnection
 
         _logger = LogManager.GetCurrentClassLogger();
         _connectionId = connectionId;
+        ReceiveId = (ushort)(connectionId + 1);
         _remoteEndpoint = remoteEndpoint;
         _sequenceNumber = 1;
         _connectionTimeoutSeconds = connectionTimeoutSeconds;
@@ -131,6 +139,8 @@ public class UtpConnection : IUtpConnection
         }
 
         _remoteEndpoint = endpoint;
+        OnConnecting?.Invoke(this, endpoint);
+
         if (_ownsUdpClient)
         {
             try
@@ -188,6 +198,7 @@ public class UtpConnection : IUtpConnection
                         IsConnected = true;
                         _sequenceNumber = (ushort)(synSeq + 1);
                         _logger.Debug("uTP connected to {0}", endpoint);
+                        OnConnected?.Invoke(this);
                         return;
                     }
 

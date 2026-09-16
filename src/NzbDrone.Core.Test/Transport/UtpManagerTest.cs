@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -402,5 +403,120 @@ public class UtpManagerTest
         conn.Dispose();
         Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
         Assert.That(listener.Client.IsBound, Is.True);
+    }
+
+    [Test]
+    public void HandleIncoming_syn_packet_creates_connection_and_maps_both_sendId_and_receiveId()
+    {
+        var data = new byte[20];
+        data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        data[2] = 0x12;
+        data[3] = 0x34; // 0x1234 = 4660
+
+        var sender = new IPEndPoint(IPAddress.Loopback, 54321);
+        InvokeHandleIncoming(data, sender);
+
+        var activeConnectionsField = typeof(UtpManager).GetField(
+            "_activeConnections",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var dict = (ConcurrentDictionary<string, IUtpConnection>)activeConnectionsField.GetValue(_subject)!;
+
+        var synKey = $"{sender}_4660";
+        var dataKey = $"{sender}_4661";
+
+        Assert.That(dict.ContainsKey(synKey), Is.True);
+        Assert.That(dict.ContainsKey(dataKey), Is.True);
+        Assert.That(dict[synKey], Is.SameAs(dict[dataKey]));
+
+        var conn = (UtpConnection)dict[synKey];
+        Assert.That(conn.SendId, Is.EqualTo(4660));
+        Assert.That(conn.ReceiveId, Is.EqualTo(4661));
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void HandleIncoming_subsequent_data_packet_with_receiveId_delivers_to_connection()
+    {
+        var synData = new byte[20];
+        synData[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        synData[2] = 0x12;
+        synData[3] = 0x34;
+        synData[16] = 0x00;
+        synData[17] = 0x0A; // initial seq nr = 10
+
+        var sender = new IPEndPoint(IPAddress.Loopback, 54321);
+        InvokeHandleIncoming(synData, sender);
+
+        var activeConnectionsField = typeof(UtpManager).GetField(
+            "_activeConnections",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var dict = (ConcurrentDictionary<string, IUtpConnection>)activeConnectionsField.GetValue(_subject)!;
+        var conn = (UtpConnection)dict[$"{sender}_4661"];
+
+        var payload = new byte[] { 0xAA, 0xBB, 0xCC, 0xDD };
+        var dataPacket = new byte[20 + payload.Length];
+        dataPacket[0] = (byte)(((byte)UtpPacketType.Data) << 4 | 1);
+        dataPacket[2] = 0x12;
+        dataPacket[3] = 0x35; // X + 1 = 4661
+        dataPacket[16] = 0x00;
+        dataPacket[17] = 0x0B; // seq nr = 11 (next expected seq)
+        Array.Copy(payload, 0, dataPacket, 20, payload.Length);
+
+        InvokeHandleIncoming(dataPacket, sender);
+
+        var receivedBuffer = new byte[4];
+        var read = conn.Receive(receivedBuffer, 0, 4);
+
+        Assert.That(read, Is.EqualTo(4));
+        Assert.That(receivedBuffer, Is.EqualTo(payload));
+    }
+
+    [Test]
+    public void Closing_incoming_connection_cleans_up_both_keys()
+    {
+        var data = new byte[20];
+        data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        data[2] = 0x12;
+        data[3] = 0x34;
+
+        var sender = new IPEndPoint(IPAddress.Loopback, 54321);
+        InvokeHandleIncoming(data, sender);
+
+        var activeConnectionsField = typeof(UtpManager).GetField(
+            "_activeConnections",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var dict = (ConcurrentDictionary<string, IUtpConnection>)activeConnectionsField.GetValue(_subject)!;
+
+        var synKey = $"{sender}_4660";
+        var dataKey = $"{sender}_4661";
+
+        Assert.That(dict.ContainsKey(synKey), Is.True);
+        Assert.That(dict.ContainsKey(dataKey), Is.True);
+
+        var conn = dict[synKey];
+        conn.Dispose();
+
+        Assert.That(dict.ContainsKey(synKey), Is.False);
+        Assert.That(dict.ContainsKey(dataKey), Is.False);
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void CreateConnection_registers_outgoing_connection_receive_id_and_cleans_up_on_close()
+    {
+        using var conn = (UtpConnection)_subject.CreateConnection();
+        var receiveKey = conn.ReceiveId.ToString();
+
+        var activeConnectionsField = typeof(UtpManager).GetField(
+            "_activeConnections",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var dict = (ConcurrentDictionary<string, IUtpConnection>)activeConnectionsField.GetValue(_subject)!;
+
+        Assert.That(dict.ContainsKey(receiveKey), Is.True);
+        Assert.That(dict[receiveKey], Is.SameAs(conn));
+
+        conn.Dispose();
+
+        Assert.That(dict.ContainsKey(receiveKey), Is.False);
     }
 }
