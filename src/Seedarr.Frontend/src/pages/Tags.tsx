@@ -18,6 +18,7 @@ function Tags() {
   const [editing, setEditing] = useState<Tag | null>(null);
   const [newLabel, setNewLabel] = useState("");
   const [showAdd, setShowAdd] = useState(false);
+  const [deletingTag, setDeletingTag] = useState<Tag | null>(null);
 
   const tagUsageCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -44,13 +45,22 @@ function Tags() {
 
   function handleUpdate() {
     if (!editing || !editing.label.trim()) return;
-    updateTag.mutate(editing, {
-      onSuccess: () => setEditing(null),
-    });
+    updateTag.mutate(
+      {
+        ...editing,
+        label: editing.label.trim(),
+      },
+      {
+        onSuccess: () => setEditing(null),
+      },
+    );
   }
 
-  function handleDelete(id: number) {
-    deleteTag.mutate(id);
+  function confirmDeleteTag() {
+    if (!deletingTag) return;
+    deleteTag.mutate(deletingTag.id, {
+      onSuccess: () => setDeletingTag(null),
+    });
   }
 
   const tagList = tags ?? [];
@@ -267,7 +277,7 @@ function Tags() {
                             </button>
                             <button
                               className="btn btn-danger btn-small"
-                              onClick={() => handleDelete(tag.id)}
+                              onClick={() => setDeletingTag(tag)}
                             >
                               Delete
                             </button>
@@ -282,6 +292,93 @@ function Tags() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deletingTag && (
+        <div
+          className="modal-overlay"
+          onClick={() => setDeletingTag(null)}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 480,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid var(--border-light)",
+            }}
+          >
+            <h3
+              className="modal-title"
+              style={{ fontSize: "1.15rem", marginBottom: "0.75rem" }}
+            >
+              Delete Tag: &quot;{deletingTag.label}&quot;
+            </h3>
+
+            <div
+              style={{
+                padding: "0.75rem 1rem",
+                borderRadius: "6px",
+                backgroundColor: "rgba(220, 53, 69, 0.15)",
+                border: "1px solid rgba(220, 53, 69, 0.35)",
+                color: "var(--danger, #dc3545)",
+                fontSize: "0.85rem",
+                marginBottom: "1rem",
+                lineHeight: 1.4,
+              }}
+            >
+              ⚠️ Warning: Deleting this tag will remove it from all assigned torrents, indexers, and automated rules. This action cannot be undone.
+            </div>
+
+            <p
+              style={{
+                fontSize: "0.875rem",
+                color: "var(--text-secondary)",
+                marginBottom: "1.25rem",
+                lineHeight: 1.5,
+              }}
+            >
+              Are you sure you want to delete tag <strong>{deletingTag.label}</strong>?
+              {tagUsageCounts[deletingTag.label] ? (
+                <>
+                  <br />
+                  Currently assigned to <strong>{tagUsageCounts[deletingTag.label]}</strong> {tagUsageCounts[deletingTag.label] === 1 ? "torrent" : "torrents"}.
+                </>
+              ) : (
+                <>
+                  <br />
+                  This tag is not currently assigned to any torrents.
+                </>
+              )}
+            </p>
+
+            <div
+              className="modal-actions"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.5rem",
+              }}
+            >
+              <button
+                className="btn btn-outline btn-small"
+                onClick={() => setDeletingTag(null)}
+                disabled={deleteTag.isPending}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-danger btn-small"
+                onClick={confirmDeleteTag}
+                disabled={deleteTag.isPending}
+              >
+                {deleteTag.isPending ? "Deleting..." : "Delete Tag"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
