@@ -37,6 +37,8 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
     private readonly IDatabase _database;
     protected readonly string _table;
 
+    public IDatabase Database => _database;
+
     public BasicRepository(IDatabase database)
     {
         _database = database;

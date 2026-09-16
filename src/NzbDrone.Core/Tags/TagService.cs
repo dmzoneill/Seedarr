@@ -1,7 +1,12 @@
+using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
+using Dapper;
+using Microsoft.Data.Sqlite;
 using NLog;
 using NzbDrone.Core.ArrIntegration;
+using NzbDrone.Core.Automation;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.DownloadClients;
@@ -9,6 +14,8 @@ using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Torrents;
+using Polly;
+using Polly.Retry;
 
 namespace NzbDrone.Core.Tags;
 
@@ -23,6 +30,27 @@ public interface ITagService
 
 public class TagService : ITagService
 {
+    private static readonly RetryPolicy RetryPolicy = Policy
+        .Handle<SqliteException>(ex => ex.SqliteErrorCode is 5 or 6)
+        .WaitAndRetry(new[]
+        {
+            TimeSpan.FromMilliseconds(50),
+            TimeSpan.FromMilliseconds(100),
+            TimeSpan.FromMilliseconds(250),
+            TimeSpan.FromMilliseconds(500),
+            TimeSpan.FromMilliseconds(1000)
+        });
+
+    private static readonly (string Table, string Column)[] TagTargets =
+    {
+        ("Torrents", "TagIds"),
+        ("NotificationDefinitions", "Tags"),
+        ("IndexerDefinitions", "Tags"),
+        ("DownloadClientDefinitions", "Tags"),
+        ("ArrConnectionDefinitions", "Tags"),
+        ("AutomationScripts", "TargetTagIds")
+    };
+
     private readonly ITagRepository _repo;
     private readonly IEventAggregator _eventAggregator;
     private readonly ITorrentRepository _torrentRepository;
@@ -30,6 +58,8 @@ public class TagService : ITagService
     private readonly IIndexerRepository _indexerRepository;
     private readonly IDownloadClientRepository _downloadClientRepository;
     private readonly IArrConnectionRepository _arrConnectionRepository;
+    private readonly IAutomationScriptRepository _automationScriptRepository;
+    private readonly IDatabase _database;
     private readonly Logger _logger;
 
     public TagService(
@@ -39,7 +69,9 @@ public class TagService : ITagService
         INotificationRepository notificationRepository = null,
         IIndexerRepository indexerRepository = null,
         IDownloadClientRepository downloadClientRepository = null,
-        IArrConnectionRepository arrConnectionRepository = null)
+        IArrConnectionRepository arrConnectionRepository = null,
+        IAutomationScriptRepository automationScriptRepository = null,
+        IDatabase database = null)
     {
         _repo = repo;
         _eventAggregator = eventAggregator;
@@ -48,6 +80,8 @@ public class TagService : ITagService
         _indexerRepository = indexerRepository;
         _downloadClientRepository = downloadClientRepository;
         _arrConnectionRepository = arrConnectionRepository;
+        _automationScriptRepository = automationScriptRepository;
+        _database = database ?? (repo as BasicRepository<Tag>)?.Database;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -75,61 +109,207 @@ public class TagService : ITagService
         var tag = _repo.Get(id);
         _logger.Info("Deleting tag: {0}", id);
 
+        if (_database != null)
+        {
+            DeleteCascadingTransactional(id);
+        }
+        else
+        {
+            DeleteCascadingRepositories(id);
+            _repo.Delete(id);
+        }
+
+        if (tag != null)
+        {
+            _eventAggregator.PublishEvent(new ModelEvent<Tag>(tag, ModelAction.Deleted));
+        }
+    }
+
+    private void DeleteCascadingTransactional(int id)
+    {
+        RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                var dbType = _database.DatabaseType;
+
+                foreach (var (table, column) in TagTargets)
+                {
+                    if (!TableExists(connection, transaction, table, dbType))
+                    {
+                        continue;
+                    }
+
+                    if (dbType == DatabaseType.SQLite)
+                    {
+                        var sql = $@"
+                            UPDATE ""{table}""
+                            SET ""{column}"" = COALESCE((
+                                SELECT json_group_array(value)
+                                FROM json_each(""{table}"".""{column}"")
+                                WHERE value != @TagId
+                            ), '[]')
+                            WHERE ""{column}"" IS NOT NULL
+                              AND ""{column}"" != ''
+                              AND ""{column}"" != '[]'
+                              AND json_valid(""{column}"")
+                              AND EXISTS (
+                                  SELECT 1
+                                  FROM json_each(""{table}"".""{column}"")
+                                  WHERE value = @TagId
+                              )";
+
+                        connection.Execute(sql, new { TagId = id }, transaction);
+                    }
+                    else if (dbType == DatabaseType.PostgreSQL)
+                    {
+                        var sql = $@"
+                            UPDATE ""{table}""
+                            SET ""{column}"" = COALESCE((
+                                SELECT json_agg(elem::int)::text
+                                FROM json_array_elements_text(""{column}""::json) AS elem
+                                WHERE elem::int != @TagId
+                            ), '[]')
+                            WHERE ""{column}"" IS NOT NULL
+                              AND ""{column}"" != ''
+                              AND ""{column}"" != '[]'
+                              AND EXISTS (
+                                  SELECT 1
+                                  FROM json_array_elements_text(""{column}""::json) AS elem
+                                  WHERE elem::int = @TagId
+                              )";
+
+                        connection.Execute(sql, new { TagId = id }, transaction);
+                    }
+                }
+
+                connection.Execute(
+                    "DELETE FROM \"Tags\" WHERE \"Id\" = @TagId",
+                    new { TagId = id },
+                    transaction);
+
+                transaction.Commit();
+            }
+            catch
+            {
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch
+                {
+                    // best-effort rollback
+                }
+
+                throw;
+            }
+        });
+    }
+
+    private static bool TableExists(IDbConnection connection, IDbTransaction transaction, string table, DatabaseType dbType)
+    {
+        if (dbType == DatabaseType.SQLite)
+        {
+            return connection.ExecuteScalar<int>(
+                "SELECT COUNT(1) FROM sqlite_master WHERE type='table' AND name=@table",
+                new { table },
+                transaction) > 0;
+        }
+        else
+        {
+            return connection.ExecuteScalar<int>(
+                "SELECT COUNT(1) FROM information_schema.tables WHERE table_name=@table OR table_name=LOWER(@table)",
+                new { table },
+                transaction) > 0;
+        }
+    }
+
+    private void DeleteCascadingRepositories(int id)
+    {
         if (_torrentRepository != null)
         {
             var torrents = _torrentRepository.All().Where(t => t.TagIds != null && t.TagIds.Contains(id)).ToList();
-            foreach (var torrent in torrents)
+            if (torrents.Count > 0)
             {
-                torrent.TagIds.RemoveAll(t => t == id);
-                _torrentRepository.Update(torrent);
+                foreach (var torrent in torrents)
+                {
+                    torrent.TagIds.RemoveAll(t => t == id);
+                }
+
+                _torrentRepository.UpdateMany(torrents);
             }
         }
 
         if (_notificationRepository != null)
         {
             var notifications = _notificationRepository.All().Where(n => n.Tags != null && n.Tags.Contains(id)).ToList();
-            foreach (var notif in notifications)
+            if (notifications.Count > 0)
             {
-                notif.Tags.RemoveAll(t => t == id);
-                _notificationRepository.Update(notif);
+                foreach (var notif in notifications)
+                {
+                    notif.Tags.RemoveAll(t => t == id);
+                }
+
+                _notificationRepository.UpdateMany(notifications);
             }
         }
 
         if (_indexerRepository != null)
         {
             var indexers = _indexerRepository.All().Where(i => i.Tags != null && i.Tags.Contains(id)).ToList();
-            foreach (var indexer in indexers)
+            if (indexers.Count > 0)
             {
-                indexer.Tags.RemoveAll(t => t == id);
-                _indexerRepository.Update(indexer);
+                foreach (var indexer in indexers)
+                {
+                    indexer.Tags.RemoveAll(t => t == id);
+                }
+
+                _indexerRepository.UpdateMany(indexers);
             }
         }
 
         if (_downloadClientRepository != null)
         {
             var clients = _downloadClientRepository.All().Where(c => c.Tags != null && c.Tags.Contains(id)).ToList();
-            foreach (var client in clients)
+            if (clients.Count > 0)
             {
-                client.Tags.RemoveAll(t => t == id);
-                _downloadClientRepository.Update(client);
+                foreach (var client in clients)
+                {
+                    client.Tags.RemoveAll(t => t == id);
+                }
+
+                _downloadClientRepository.UpdateMany(clients);
             }
         }
 
         if (_arrConnectionRepository != null)
         {
             var arrs = _arrConnectionRepository.All().Where(a => a.Tags != null && a.Tags.Contains(id)).ToList();
-            foreach (var arr in arrs)
+            if (arrs.Count > 0)
             {
-                arr.Tags.RemoveAll(t => t == id);
-                _arrConnectionRepository.Update(arr);
+                foreach (var arr in arrs)
+                {
+                    arr.Tags.RemoveAll(t => t == id);
+                }
+
+                _arrConnectionRepository.UpdateMany(arrs);
             }
         }
 
-        _repo.Delete(id);
-
-        if (tag != null)
+        if (_automationScriptRepository != null)
         {
-            _eventAggregator.PublishEvent(new ModelEvent<Tag>(tag, ModelAction.Deleted));
+            var scripts = _automationScriptRepository.All().Where(s => s.TargetTagIds != null && s.TargetTagIds.Contains(id)).ToList();
+            if (scripts.Count > 0)
+            {
+                foreach (var script in scripts)
+                {
+                    script.TargetTagIds.RemoveAll(t => t == id);
+                }
+
+                _automationScriptRepository.UpdateMany(scripts);
+            }
         }
     }
 }
