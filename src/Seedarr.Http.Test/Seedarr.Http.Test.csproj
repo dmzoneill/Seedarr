@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);SA1501;SA1502;SA1503;SA1315;SA1316;SA1515;IDE0005</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NzbDrone.Core\Seedarr.Core.csproj" />
+    <ProjectReference Include="..\Seedarr.Http\Seedarr.Http.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NSubstitute" Version="6.2.0" />
+  </ItemGroup>
+</Project>
