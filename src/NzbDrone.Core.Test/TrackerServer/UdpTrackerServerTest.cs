@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.TrackerServer;
 
 namespace NzbDrone.Core.Test.TrackerServer;
@@ -1159,5 +1160,127 @@ public class UdpTrackerServerTest
         await _udpTrackerServer.StopAsync(stopCts.Token);
 
         Assert.That(stopCts.IsCancellationRequested, Is.False, "StopAsync should complete before timeout");
+    }
+
+    // ---- ConfigSavedEvent handling tests ----
+
+    [Test]
+    public void Handle_when_enabled_starts_listener()
+    {
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _configService.TrackerUdpPort.Returns(0);
+        _configService.TrackerBindAddress.Returns("127.0.0.1");
+
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var clientField = typeof(UdpTrackerServer).GetField("_client", BindingFlags.NonPublic | BindingFlags.Instance);
+        var client = (UdpClient)clientField.GetValue(_udpTrackerServer);
+        Assert.That(client, Is.Not.Null);
+
+        // Cleanup
+        _configService.TrackerUdpEnabled.Returns(false);
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+    }
+
+    [Test]
+    public void Handle_when_disabled_stops_listener()
+    {
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _configService.TrackerUdpPort.Returns(0);
+        _configService.TrackerBindAddress.Returns("127.0.0.1");
+
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var clientField = typeof(UdpTrackerServer).GetField("_client", BindingFlags.NonPublic | BindingFlags.Instance);
+        var client = (UdpClient)clientField.GetValue(_udpTrackerServer);
+        Assert.That(client, Is.Not.Null);
+
+        // Disable and handle
+        _configService.TrackerUdpEnabled.Returns(false);
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var clientAfterDisable = (UdpClient)clientField.GetValue(_udpTrackerServer);
+        Assert.That(clientAfterDisable, Is.Null);
+    }
+
+    [Test]
+    public void Handle_when_port_changes_rebinds_listener()
+    {
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _configService.TrackerUdpPort.Returns(0);
+        _configService.TrackerBindAddress.Returns("127.0.0.1");
+
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var clientField = typeof(UdpTrackerServer).GetField("_client", BindingFlags.NonPublic | BindingFlags.Instance);
+        var client1 = (UdpClient)clientField.GetValue(_udpTrackerServer);
+        Assert.That(client1, Is.Not.Null);
+
+        // Change port
+        _configService.TrackerUdpPort.Returns(18899);
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var client2 = (UdpClient)clientField.GetValue(_udpTrackerServer);
+        Assert.That(client2, Is.Not.Null);
+        Assert.That(client2, Is.Not.SameAs(client1));
+
+        // Cleanup
+        _configService.TrackerUdpEnabled.Returns(false);
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+    }
+
+    [Test]
+    public void Handle_when_bind_address_changes_rebinds_listener()
+    {
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _configService.TrackerUdpPort.Returns(0);
+        _configService.TrackerBindAddress.Returns("127.0.0.1");
+
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var clientField = typeof(UdpTrackerServer).GetField("_client", BindingFlags.NonPublic | BindingFlags.Instance);
+        var client1 = (UdpClient)clientField.GetValue(_udpTrackerServer);
+        Assert.That(client1, Is.Not.Null);
+
+        // Change address
+        _configService.TrackerBindAddress.Returns("0.0.0.0");
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var client2 = (UdpClient)clientField.GetValue(_udpTrackerServer);
+        Assert.That(client2, Is.Not.Null);
+        Assert.That(client2, Is.Not.SameAs(client1));
+
+        // Cleanup
+        _configService.TrackerUdpEnabled.Returns(false);
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+    }
+
+    [Test]
+    public void Handle_when_config_unchanged_keeps_existing_listener()
+    {
+        _configService.TrackerServerEnabled.Returns(true);
+        _configService.TrackerUdpEnabled.Returns(true);
+        _configService.TrackerUdpPort.Returns(0);
+        _configService.TrackerBindAddress.Returns("127.0.0.1");
+
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var clientField = typeof(UdpTrackerServer).GetField("_client", BindingFlags.NonPublic | BindingFlags.Instance);
+        var client1 = (UdpClient)clientField.GetValue(_udpTrackerServer);
+        Assert.That(client1, Is.Not.Null);
+
+        // Handle again without change
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
+
+        var client2 = (UdpClient)clientField.GetValue(_udpTrackerServer);
+        Assert.That(client2, Is.SameAs(client1));
+
+        // Cleanup
+        _configService.TrackerUdpEnabled.Returns(false);
+        _udpTrackerServer.Handle(new ConfigSavedEvent());
     }
 }

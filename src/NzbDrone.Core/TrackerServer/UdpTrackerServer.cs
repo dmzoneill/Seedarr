@@ -12,10 +12,11 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.TrackerServer;
 
-public class UdpTrackerServer : BackgroundService
+public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 {
     private const long ProtocolMagic = 0x41727101980;
     private const int ConnectAction = 0;
@@ -37,6 +38,14 @@ public class UdpTrackerServer : BackgroundService
     private readonly ConcurrentDictionary<long, ConnectionEntry> _connectionIds = new();
     private readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
     private readonly object _sendLock = new();
+    private readonly object _listenerLock = new();
+
+    private UdpClient _client;
+    private CancellationTokenSource _listenerCts;
+    private Timer _cleanupTimer;
+    private bool _wasEnabled;
+    private int _boundPort;
+    private string _boundAddress;
 
     public UdpTrackerServer(IPeerDatabase peerDatabase, IConfigService configService)
     {
@@ -45,61 +54,174 @@ public class UdpTrackerServer : BackgroundService
         _logger = LogManager.GetCurrentClassLogger();
     }
 
+    public void Handle(ConfigSavedEvent message)
+    {
+        var isEnabled = _configService.TrackerServerEnabled && _configService.TrackerUdpEnabled;
+
+        lock (_listenerLock)
+        {
+            if (isEnabled)
+            {
+                var currentPort = (_client?.Client?.LocalEndPoint as IPEndPoint)?.Port;
+                var portChanged = _client != null && (_boundPort != _configService.TrackerUdpPort || (currentPort.HasValue && currentPort != _configService.TrackerUdpPort && _configService.TrackerUdpPort != 0));
+                var addressChanged = _client != null && !string.Equals(_boundAddress ?? string.Empty, _configService.TrackerBindAddress ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+
+                if (portChanged || addressChanged)
+                {
+                    StopListener();
+                }
+
+                if (_client == null)
+                {
+                    _logger.Info("UDP tracker starting listener");
+                    StartListener();
+                }
+            }
+            else if (_wasEnabled || _client != null)
+            {
+                _logger.Info("UDP tracker disabled via config change, stopping listener");
+                StopListener();
+            }
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!_configService.TrackerServerEnabled)
+        var isEnabled = _configService.TrackerServerEnabled && _configService.TrackerUdpEnabled;
+
+        lock (_listenerLock)
         {
-            _logger.Debug("Built-in tracker is disabled, skipping UDP tracker");
-            return;
+            _wasEnabled = isEnabled;
         }
 
-        if (!_configService.TrackerUdpEnabled)
+        if (isEnabled)
         {
-            _logger.Debug("UDP tracker is disabled, skipping");
-            return;
+            StartListener();
         }
-
-        var port = _configService.TrackerUdpPort;
-        var bindAddress = IPAddress.Parse(_configService.TrackerBindAddress);
-        UdpClient client;
+        else
+        {
+            _logger.Debug("Built-in tracker is disabled, waiting for config change");
+        }
 
         try
         {
-            client = new UdpClient(new IPEndPoint(bindAddress, port));
-        }
-        catch (SocketException ex)
-        {
-            _logger.Warn(ex, "UDP tracker failed to bind {0}:{1}, skipping", bindAddress, port);
-            return;
-        }
-
-        _logger.Info("UDP tracker listening on {0}:{1}", bindAddress, port);
-
-        var cleanupTimer = new Timer(
-            _ =>
-            {
-                PurgeExpiredConnections();
-                PurgeExpiredRateLimits();
-            },
-            null,
-            TimeSpan.FromMinutes(1),
-            TimeSpan.FromMinutes(1));
-
-        try
-        {
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                var result = await client.ReceiveAsync(stoppingToken);
-                _ = Task.Run(() => HandleDatagram(client, result), stoppingToken);
-            }
+            await Task.Delay(Timeout.Infinite, stoppingToken);
         }
         catch (OperationCanceledException)
         {
         }
         finally
         {
-            await cleanupTimer.DisposeAsync();
-            client.Dispose();
+            StopListener();
+        }
+    }
+
+    private void StartListener()
+    {
+        lock (_listenerLock)
+        {
+            if (_client != null)
+            {
+                return;
+            }
+
+            var port = _configService.TrackerUdpPort;
+            var bindAddressStr = _configService.TrackerBindAddress;
+            var bindAddress = !string.IsNullOrWhiteSpace(bindAddressStr) && IPAddress.TryParse(bindAddressStr, out var addr) ? addr : IPAddress.Any;
+            UdpClient client;
+
+            try
+            {
+                client = new UdpClient(new IPEndPoint(bindAddress, port));
+            }
+            catch (SocketException ex)
+            {
+                _logger.Warn(ex, "UDP tracker failed to bind {0}:{1}, skipping", bindAddress, port);
+                return;
+            }
+
+            _client = client;
+            _boundPort = port;
+            _boundAddress = bindAddressStr;
+            _wasEnabled = true;
+            _listenerCts = new CancellationTokenSource();
+            _logger.Info("UDP tracker listening on {0}:{1}", bindAddress, port);
+
+            _cleanupTimer = new Timer(
+                _ =>
+                {
+                    PurgeExpiredConnections();
+                    PurgeExpiredRateLimits();
+                },
+                null,
+                TimeSpan.FromMinutes(1),
+                TimeSpan.FromMinutes(1));
+
+            _ = Task.Run(() => ReceiveLoop(_client, _listenerCts.Token));
+        }
+    }
+
+    private void StopListener()
+    {
+        lock (_listenerLock)
+        {
+            _wasEnabled = false;
+
+            if (_cleanupTimer != null)
+            {
+                _cleanupTimer.Dispose();
+                _cleanupTimer = null;
+            }
+
+            if (_listenerCts != null)
+            {
+                _listenerCts.Cancel();
+                _listenerCts.Dispose();
+                _listenerCts = null;
+            }
+
+            if (_client != null)
+            {
+                try
+                {
+                    _client.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Error disposing UDP client");
+                }
+
+                _client = null;
+                _logger.Info("UDP tracker stopped");
+            }
+        }
+    }
+
+    private async Task ReceiveLoop(UdpClient client, CancellationToken ct)
+    {
+        try
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                var result = await client.ReceiveAsync(ct);
+                _ = Task.Run(() => HandleDatagram(client, result), ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (SocketException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (!ct.IsCancellationRequested)
+            {
+                _logger.Debug(ex, "UDP tracker receive error");
+            }
         }
     }
 
