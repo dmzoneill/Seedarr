@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -37,10 +38,10 @@ public class UpdateController : Controller
         if (releases != null && releases.Count > 0)
         {
             var isFirst = true;
-            foreach (var release in releases.OrderByDescending(r => Version.TryParse(r.Version, out var v) ? v : new Version(0, 0, 0)))
+            foreach (var release in releases.OrderByDescending(r => SemVersion.TryParse(r.Version, out var v) ? v : new SemVersion(new Version(0, 0, 0))))
             {
                 var isInstalled = string.Equals(release.Version, currentVersion, StringComparison.OrdinalIgnoreCase) ||
-                    (Version.TryParse(release.Version, out var rv) && rv == BuildInfo.Version);
+                    (SemVersion.TryParse(release.Version, out var rv) && SemVersion.TryParse(currentVersion, out var cv) && rv == cv);
 
                 if (isInstalled)
                 {
@@ -60,6 +61,7 @@ public class UpdateController : Controller
                     Latest = isLatest,
                     Url = release.Url ?? $"https://github.com/dmzoneill/Seedarr/releases/tag/v{release.Version}",
                     Changes = changes,
+                    IsContainerized = info.IsContainerized,
                 });
             }
         }
@@ -80,11 +82,13 @@ public class UpdateController : Controller
                         New = new List<string> { "Currently running version" },
                         Fixed = new List<string>(),
                     },
+                    IsContainerized = info.IsContainerized,
                 });
             }
             else
             {
-                var matching = results.FirstOrDefault(r => string.Equals(r.Version, currentVersion, StringComparison.OrdinalIgnoreCase));
+                var matching = results.FirstOrDefault(r => string.Equals(r.Version, currentVersion, StringComparison.OrdinalIgnoreCase) ||
+                    (SemVersion.TryParse(r.Version, out var rv) && SemVersion.TryParse(currentVersion, out var cv) && rv == cv));
                 if (matching != null)
                 {
                     matching.Installed = true;
@@ -132,11 +136,49 @@ public class UpdateController : Controller
                 var item = line.TrimStart('*', '-', ' ').Trim();
                 if (!string.IsNullOrWhiteSpace(item) && !item.StartsWith("**Full Changelog", StringComparison.OrdinalIgnoreCase))
                 {
-                    currentSection.Add(item);
+                    var sanitized = SanitizeReleaseNote(item);
+                    if (!string.IsNullOrWhiteSpace(sanitized))
+                    {
+                        currentSection.Add(sanitized);
+                    }
                 }
             }
         }
 
         return new UpdateChanges { New = newItems, Fixed = fixedItems };
+    }
+
+    private static string SanitizeReleaseNote(string item)
+    {
+        if (string.IsNullOrWhiteSpace(item))
+        {
+            return string.Empty;
+        }
+
+        // 1. Strip raw HTML tags (e.g. <details>, <summary>, <br>, etc.)
+        item = Regex.Replace(item, @"<[^>]*>", string.Empty);
+
+        // 2. Unescape / extract text from markdown links: [text](url) -> text
+        item = Regex.Replace(item, @"\[([^\]]+)\]\([^)]+\)", "$1");
+
+        // 3. Strip GitHub contributor mentions and PR URLs at the end of lines:
+        // E.g., "by @octocat in https://github.com/owner/repo/pull/1" -> stripped
+        item = Regex.Replace(item, @"\s*by\s+@[\w-]+(?:\s+in\s+https?://\S+)?", string.Empty, RegexOptions.IgnoreCase);
+
+        // Strip standalone PR / commit links: "in https://github.com/..."
+        item = Regex.Replace(item, @"\s*in\s+https?://\S+", string.Empty, RegexOptions.IgnoreCase);
+
+        // Strip standalone bare links: "https://github.com/..."
+        item = Regex.Replace(item, @"https?://\S+", string.Empty, RegexOptions.IgnoreCase);
+
+        // Strip @mentions: (@user) or @user
+        item = Regex.Replace(item, @"\(@[\w-]+\)", string.Empty);
+        item = Regex.Replace(item, @"@[\w-]+", string.Empty);
+
+        // Clean up redundant whitespace or trailing punctuation like dangling dashes/colons/commas
+        item = Regex.Replace(item, @"\s+", " ").Trim();
+        item = item.TrimEnd(' ', '-', ':', ',');
+
+        return item;
     }
 }
