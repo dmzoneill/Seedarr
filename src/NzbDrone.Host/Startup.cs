@@ -37,6 +37,11 @@ public class Startup
     {
         services.AddProblemDetails();
 
+        services.AddResponseCompression(options =>
+        {
+            options.EnableForHttps = true;
+        });
+
         var apiAssembly = Assembly.Load("Seedarr.Api.V1");
         var httpAssembly = Assembly.Load("Seedarr.Http");
 
@@ -245,6 +250,8 @@ public class Startup
         forwardedHeadersOptions.KnownProxies.Clear();
         app.UseForwardedHeaders(forwardedHeadersOptions);
 
+        app.UseResponseCompression();
+
         var configFileProvider = app.Services.GetRequiredService<IConfigFileProvider>();
 
         app.UseCors();
@@ -384,6 +391,6 @@ public class Startup
         app.MapHub<MessageHub>("/signalr/messages");
         app.MapGet("/swagger-custom.css", () => Microsoft.AspNetCore.Http.Results.Content(SwaggerTheme.Css, "text/css")).AllowAnonymous();
 
-        app.MapFallbackToFile("index.html");
+        app.MapFallbackToFile("{*path:nonfile:regex(^(?!(api|signalr|swagger|fixtures)).*$)}", "index.html");
     }
 }
