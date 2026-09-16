@@ -7,4 +7,6 @@ public interface ICategoryRepository : IBasicRepository<Category>
     Category GetByName(string name);
 
     Category GetDefault();
+
+    void SetExclusiveDefault(int categoryId);
 }

@@ -33,4 +33,37 @@ public class CategoryRepository : BasicRepository<Category>, ICategoryRepository
             $"SELECT * FROM \"{_table}\" WHERE \"IsDefault\" = @IsDefault",
             new { IsDefault = true });
     }
+
+    public void SetExclusiveDefault(int categoryId)
+    {
+        RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            using var tx = connection.BeginTransaction();
+            try
+            {
+                connection.Execute(
+                    $"UPDATE \"{_table}\" SET \"IsDefault\" = @IsDefault WHERE \"Id\" != @Id",
+                    new { IsDefault = false, Id = categoryId },
+                    tx);
+                connection.Execute(
+                    $"UPDATE \"{_table}\" SET \"IsDefault\" = @IsDefault WHERE \"Id\" = @Id",
+                    new { IsDefault = true, Id = categoryId },
+                    tx);
+                tx.Commit();
+            }
+            catch
+            {
+                try
+                {
+                    tx.Rollback();
+                }
+                catch
+                {
+                }
+
+                throw;
+            }
+        });
+    }
 }
