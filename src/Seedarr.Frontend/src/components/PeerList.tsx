@@ -1,6 +1,13 @@
+import { useState } from "react";
 import { usePeers } from "../api/hooks";
 import { formatBytes, formatSpeed } from "../utils/formatters";
 import { useToast } from "../context/ToastContext";
+import {
+  parsePeerFlags,
+  maskIpAddress,
+  getFlagBadgeColor,
+} from "../utils/peerUtils";
+import { getCountryFlag } from "./CountryFlag";
 
 interface PeerListProps {
   torrentId: number;
@@ -24,6 +31,7 @@ function getClientBadge(client: string): { label: string; color: string } {
 function PeerList({ torrentId }: PeerListProps) {
   const { data: peers, isLoading, isError } = usePeers(torrentId);
   const { showToast } = useToast();
+  const [maskIps, setMaskIps] = useState<boolean>(false);
 
   const handleCopyIp = (ipPort: string) => {
     navigator.clipboard.writeText(ipPort);
@@ -41,12 +49,32 @@ function PeerList({ torrentId }: PeerListProps) {
           justifyContent: "space-between",
           alignItems: "center",
           marginBottom: "0.5rem",
+          gap: "0.5rem",
+          flexWrap: "wrap",
         }}
       >
         <h3 style={{ margin: 0 }}>Connected Swarm Peers</h3>
-        <span className="badge badge-secondary">
-          {peers?.length || 0} Peers
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <button
+            className={`btn btn-small ${maskIps ? "btn-primary" : "btn-outline"}`}
+            style={{
+              fontSize: "0.75rem",
+              padding: "0.2rem 0.5rem",
+              cursor: "pointer",
+            }}
+            onClick={() => setMaskIps((prev) => !prev)}
+            title={
+              maskIps
+                ? "Click to show raw IP addresses"
+                : "Click to mask IP addresses for privacy"
+            }
+          >
+            {maskIps ? "👁️ Show IPs" : "🔒 Mask IPs"}
+          </button>
+          <span className="badge badge-secondary">
+            {peers?.length || 0} Peers
+          </span>
+        </div>
       </div>
 
       {!peers || peers.length === 0 ? (
@@ -69,7 +97,9 @@ function PeerList({ torrentId }: PeerListProps) {
             <tbody>
               {peers.map((peer) => {
                 const clientBadge = getClientBadge(peer.client);
-                const ipPort = `${peer.ip}:${peer.port}`;
+                const displayIp = maskIps ? maskIpAddress(peer.ip) : peer.ip;
+                const ipPort = `${displayIp}:${peer.port}`;
+                const parsedFlags = parsePeerFlags(peer.flags);
 
                 return (
                   <tr key={peer.id} className="peer-table-row">
@@ -81,6 +111,32 @@ function PeerList({ torrentId }: PeerListProps) {
                           gap: "0.4rem",
                         }}
                       >
+                        {peer.countryCode && (
+                          <span
+                            className="badge"
+                            style={{
+                              fontSize: "0.7rem",
+                              padding: "0.1rem 0.35rem",
+                              cursor: "help",
+                              backgroundColor: "var(--bg-secondary, #2c3e50)",
+                              color: "var(--text-secondary, #bdc3c7)",
+                              border: "1px solid var(--border-color, #444)",
+                              borderRadius: "3px",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.25rem",
+                              whiteSpace: "nowrap",
+                            }}
+                            title={
+                              peer.countryName
+                                ? `${peer.countryName} (${peer.countryCode.toUpperCase()})`
+                                : `Country: ${peer.countryCode.toUpperCase()}`
+                            }
+                          >
+                            <span>{getCountryFlag(peer.countryCode)}</span>
+                            <span>[{peer.countryCode.toUpperCase()}]</span>
+                          </span>
+                        )}
                         <code className="mono" style={{ fontSize: "0.8rem" }}>
                           {ipPort}
                         </code>
@@ -152,8 +208,47 @@ function PeerList({ torrentId }: PeerListProps) {
                     </td>
                     <td>{formatBytes(peer.uploaded)}</td>
                     <td>{formatBytes(peer.downloaded)}</td>
-                    <td className="mono" style={{ fontSize: "0.75rem" }}>
-                      {peer.flags || "-"}
+                    <td>
+                      {parsedFlags.length === 0 ? (
+                        <span
+                          style={{
+                            color: "var(--text-muted, #7f8c8d)",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          -
+                        </span>
+                      ) : (
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: "0.25rem",
+                            flexWrap: "wrap",
+                            alignItems: "center",
+                          }}
+                        >
+                          {parsedFlags.map((flagInfo, idx) => (
+                            <span
+                              key={idx}
+                              className="badge"
+                              style={{
+                                fontSize: "0.7rem",
+                                padding: "0.1rem 0.35rem",
+                                cursor: "help",
+                                backgroundColor: getFlagBadgeColor(
+                                  flagInfo.flag,
+                                ),
+                                color: "#fff",
+                                borderRadius: "3px",
+                                fontWeight: 600,
+                              }}
+                              title={`${flagInfo.label}: ${flagInfo.description}`}
+                            >
+                              {flagInfo.label}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
