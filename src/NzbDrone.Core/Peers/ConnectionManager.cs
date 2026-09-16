@@ -4,7 +4,9 @@ using System.Linq;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers.Extensions;
+using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
 
@@ -20,11 +22,16 @@ public interface IConnectionManager
     int GetUploadSlotCount();
     List<PeerConnection> GetAllConnections();
     void DisconnectAll();
+    void DisconnectByInfoHash(string infoHash);
     void ProcessDropouts();
     void RotateConnections();
 }
 
-public class ConnectionManager : IConnectionManager
+public class ConnectionManager : IConnectionManager,
+    IHandle<SeedingStoppedEvent>,
+    IHandle<TorrentStatusChangedEvent>,
+    IHandle<TorrentPausedEvent>,
+    IHandle<TorrentDeletedEvent>
 {
     private readonly IConfigService _configService;
     private readonly IPeerConnectionLogService _connectionLogService;
@@ -149,6 +156,108 @@ public class ConnectionManager : IConnectionManager
         }
     }
 
+    public void DisconnectByInfoHash(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return;
+        }
+
+        List<PeerConnection> toDisconnect;
+        lock (_lock)
+        {
+            toDisconnect = _connections
+                .Where(c => string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            foreach (var conn in toDisconnect)
+            {
+                _connections.Remove(conn);
+            }
+        }
+
+        foreach (var conn in toDisconnect)
+        {
+            try
+            {
+                _fastExtensionHandler.UnregisterPeer(conn);
+                conn.Dispose();
+                LogDisconnect(conn);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error disconnecting peer {0} for infoHash {1}", conn.RemoteIp, infoHash);
+            }
+        }
+    }
+
+    public void Handle(SeedingStoppedEvent message)
+    {
+        if (message == null || message.TorrentId <= 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var torrent = _torrentService.Get(message.TorrentId);
+            if (torrent != null && !string.IsNullOrWhiteSpace(torrent.InfoHash))
+            {
+                DisconnectByInfoHash(torrent.InfoHash);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to disconnect peers on SeedingStoppedEvent for torrent {0}", message.TorrentId);
+        }
+    }
+
+    public void Handle(TorrentStatusChangedEvent message)
+    {
+        if (message?.Torrent == null)
+        {
+            return;
+        }
+
+        if (message.NewStatus == TorrentStatus.Stopped || message.NewStatus == TorrentStatus.Paused)
+        {
+            if (!string.IsNullOrWhiteSpace(message.Torrent.InfoHash))
+            {
+                DisconnectByInfoHash(message.Torrent.InfoHash);
+            }
+        }
+    }
+
+    public void Handle(TorrentPausedEvent message)
+    {
+        if (message?.Torrent != null && !string.IsNullOrWhiteSpace(message.Torrent.InfoHash))
+        {
+            DisconnectByInfoHash(message.Torrent.InfoHash);
+        }
+    }
+
+    public void Handle(TorrentDeletedEvent message)
+    {
+        var infoHash = message?.Torrent?.InfoHash;
+        if (string.IsNullOrWhiteSpace(infoHash) && message?.TorrentId > 0)
+        {
+            try
+            {
+                var torrent = _torrentService.Get(message.TorrentId);
+                infoHash = torrent?.InfoHash;
+            }
+            catch
+            {
+                // Best effort
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(infoHash))
+        {
+            DisconnectByInfoHash(infoHash);
+        }
+    }
+
     public bool CanAddConnectionForTorrent(string infoHash)
     {
         lock (_lock)
@@ -251,15 +360,14 @@ public class ConnectionManager : IConnectionManager
 
     private Torrent ResolveTorrent(string infoHash)
     {
-        if (string.IsNullOrEmpty(infoHash))
+        if (string.IsNullOrWhiteSpace(infoHash))
         {
             return null;
         }
 
         try
         {
-            var torrents = _torrentService.GetAll();
-            return torrents.FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+            return _torrentService.FindByInfoHash(infoHash) ?? _torrentService.GetByInfoHash(infoHash);
         }
         catch
         {

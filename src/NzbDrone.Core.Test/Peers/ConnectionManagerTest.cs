@@ -7,6 +7,7 @@ using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
+using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Peers;
@@ -462,19 +463,21 @@ public class ConnectionManagerTest
     public void Add_should_resolve_torrent_name_when_torrent_found()
     {
         var torrent = new Torrent { InfoHash = "abc123", Name = "MyTorrent" };
-        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentService.GetByInfoHash("abc123").Returns(torrent);
 
         var conn = CreateTestConnection();
         SetInfoHash(conn, "abc123");
         _manager.Add(conn);
 
+        _torrentService.DidNotReceive().GetAll();
         _connectionLogService.Received(1).LogConnected(conn, "MyTorrent");
     }
 
     [Test]
     public void Add_should_pass_null_name_when_torrent_service_throws()
     {
-        _torrentService.GetAll().Returns(x => throw new Exception("DB error"));
+        _torrentService.GetByInfoHash(Arg.Any<string>()).Returns(x => throw new Exception("DB error"));
+        _torrentService.FindByInfoHash(Arg.Any<string>()).Returns(x => throw new Exception("DB error"));
 
         var conn = CreateTestConnection();
         SetInfoHash(conn, "abc123");
@@ -504,5 +507,110 @@ public class ConnectionManagerTest
         _manager.ProcessDropouts();
 
         Assert.That(conn.IsConnected, Is.False);
+    }
+
+    [Test]
+    public void DisconnectByInfoHash_should_close_and_remove_connections_matching_info_hash()
+    {
+        var conn1 = CreateTestConnection();
+        var conn2 = CreateTestConnection();
+        var conn3 = CreateTestConnection();
+        SetInfoHash(conn1, "hashA");
+        SetInfoHash(conn2, "hashA");
+        SetInfoHash(conn3, "hashB");
+        _manager.Add(conn1);
+        _manager.Add(conn2);
+        _manager.Add(conn3);
+
+        _manager.DisconnectByInfoHash("hashA");
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+        Assert.That(_manager.GetConnections("hashA"), Is.Empty);
+        Assert.That(_manager.GetConnections("hashB").Count, Is.EqualTo(1));
+        Assert.That(conn1.IsConnected, Is.False);
+        Assert.That(conn2.IsConnected, Is.False);
+        Assert.That(conn3.IsConnected, Is.True);
+        _fastExtensionHandler.Received(1).UnregisterPeer(conn1);
+        _fastExtensionHandler.Received(1).UnregisterPeer(conn2);
+        _fastExtensionHandler.DidNotReceive().UnregisterPeer(conn3);
+        _connectionLogService.Received(1).LogDisconnected(conn1, Arg.Any<string>());
+        _connectionLogService.Received(1).LogDisconnected(conn2, Arg.Any<string>());
+    }
+
+    [Test]
+    public void DisconnectByInfoHash_should_be_case_insensitive()
+    {
+        var conn = CreateTestConnection();
+        SetInfoHash(conn, "ABCDEF1234");
+        _manager.Add(conn);
+
+        _manager.DisconnectByInfoHash("abcdef1234");
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(0));
+        Assert.That(conn.IsConnected, Is.False);
+    }
+
+    [Test]
+    public void DisconnectByInfoHash_should_do_nothing_when_info_hash_is_null_or_empty()
+    {
+        var conn = CreateTestConnection();
+        SetInfoHash(conn, "hashA");
+        _manager.Add(conn);
+
+        _manager.DisconnectByInfoHash(null);
+        _manager.DisconnectByInfoHash(string.Empty);
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+        Assert.That(conn.IsConnected, Is.True);
+    }
+
+    [Test]
+    public void Handle_SeedingStoppedEvent_should_disconnect_peers_for_stopped_torrent()
+    {
+        var torrent = new Torrent { Id = 10, InfoHash = "torrent10hash" };
+        _torrentService.Get(10).Returns(torrent);
+
+        var conn1 = CreateTestConnection();
+        var conn2 = CreateTestConnection();
+        SetInfoHash(conn1, "torrent10hash");
+        SetInfoHash(conn2, "otherhash");
+        _manager.Add(conn1);
+        _manager.Add(conn2);
+
+        _manager.Handle(new SeedingStoppedEvent(10));
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+        Assert.That(_manager.GetConnections("torrent10hash"), Is.Empty);
+        Assert.That(conn1.IsConnected, Is.False);
+        Assert.That(conn2.IsConnected, Is.True);
+    }
+
+    [Test]
+    public void Handle_TorrentStatusChangedEvent_should_disconnect_peers_when_status_is_stopped_or_paused()
+    {
+        var torrent = new Torrent { Id = 10, InfoHash = "torrent10hash", Status = TorrentStatus.Stopped };
+
+        var conn = CreateTestConnection();
+        SetInfoHash(conn, "torrent10hash");
+        _manager.Add(conn);
+
+        _manager.Handle(new TorrentStatusChangedEvent(torrent, TorrentStatus.Seeding, TorrentStatus.Stopped));
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(0));
+        Assert.That(conn.IsConnected, Is.False);
+    }
+
+    [Test]
+    public void ResolveTorrent_should_resolve_by_info_hash_without_calling_GetAll()
+    {
+        var torrent = new Torrent { InfoHash = "uniquehash", Name = "UniqueTorrent" };
+        _torrentService.GetByInfoHash("uniquehash").Returns(torrent);
+
+        var conn = CreateTestConnection();
+        SetInfoHash(conn, "uniquehash");
+        _manager.Add(conn);
+
+        _torrentService.DidNotReceive().GetAll();
+        _connectionLogService.Received(1).LogConnected(conn, "UniqueTorrent");
     }
 }

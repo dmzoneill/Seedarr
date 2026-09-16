@@ -66,7 +66,7 @@ public class SeedingService : ISeedingService
             return;
         }
 
-        torrent.Status = TorrentStatus.Stopped;
+        torrent.Stop();
         _torrentService.Update(torrent);
 
         _logger.Info("Stopped seeding: {0}", torrent.Name);
@@ -110,7 +110,7 @@ public class SeedingService : ISeedingService
 
         foreach (var torrent in torrents)
         {
-            torrent.Status = TorrentStatus.Stopped;
+            torrent.Stop();
             torrent.ForceStart = false;
             _torrentService.Update(torrent);
 

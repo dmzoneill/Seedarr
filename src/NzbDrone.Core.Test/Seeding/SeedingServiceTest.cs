@@ -64,12 +64,23 @@ public class SeedingServiceTest
     [Test]
     public void Stop_should_set_torrent_to_stopped_when_found()
     {
-        var torrent = new Torrent { Id = 1, Name = "Test", Status = TorrentStatus.Seeding };
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Test",
+            Status = TorrentStatus.Seeding,
+            Active = true,
+            UploadSpeed = 1024,
+            DownloadSpeed = 2048
+        };
         _torrentService.Get(1).Returns(torrent);
 
         _service.Stop(1);
 
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        Assert.That(torrent.Active, Is.False);
+        Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
+        Assert.That(torrent.DownloadSpeed, Is.EqualTo(0));
         _torrentService.Received(1).Update(torrent);
     }
 
@@ -177,7 +188,16 @@ public class SeedingServiceTest
     [Test]
     public void StopAll_should_stop_only_seeding_torrents()
     {
-        var seeding = new Torrent { Id = 1, Name = "Seeding", Status = TorrentStatus.Seeding, ForceStart = true };
+        var seeding = new Torrent
+        {
+            Id = 1,
+            Name = "Seeding",
+            Status = TorrentStatus.Seeding,
+            ForceStart = true,
+            Active = true,
+            UploadSpeed = 5000,
+            DownloadSpeed = 1000
+        };
         var stopped = new Torrent { Id = 2, Name = "Stopped", Status = TorrentStatus.Stopped };
         _configService.AutoStart.Returns(false);
         _torrentService.GetAll().Returns(new List<Torrent> { seeding, stopped });
@@ -186,6 +206,9 @@ public class SeedingServiceTest
 
         Assert.That(seeding.Status, Is.EqualTo(TorrentStatus.Stopped));
         Assert.That(seeding.ForceStart, Is.False);
+        Assert.That(seeding.Active, Is.False);
+        Assert.That(seeding.UploadSpeed, Is.EqualTo(0));
+        Assert.That(seeding.DownloadSpeed, Is.EqualTo(0));
         _torrentService.Received(1).Update(seeding);
         _torrentService.DidNotReceive().Update(stopped);
     }
