@@ -313,6 +313,47 @@ public class SpeedDistributionManagerTest
     }
 
     [Test]
+    public void ApplyPriorityWeights_negative_weights_are_sanitized_and_do_not_produce_negative_speeds()
+    {
+        _equalDistributor.Distribute(Arg.Any<long>(), 2)
+            .Returns(new long[] { 100_000, 100_000 });
+
+        var speeds = _manager.DistributeUploadSpeeds(2, 200_000L, new double[] { -5.0, 3.0 });
+
+        Assert.That(speeds[0], Is.GreaterThanOrEqualTo(0L));
+        Assert.That(speeds[1], Is.GreaterThanOrEqualTo(0L));
+        Assert.That(speeds[0], Is.EqualTo(50_000L));
+        Assert.That(speeds[1], Is.EqualTo(150_000L));
+        Assert.That(speeds[0] + speeds[1], Is.EqualTo(200_000L));
+    }
+
+    [Test]
+    public void ApplyPriorityWeights_nan_and_infinity_weights_are_sanitized_and_do_not_collapse_bandwidth()
+    {
+        _equalDistributor.Distribute(Arg.Any<long>(), 3)
+            .Returns(new long[] { 100_000, 100_000, 100_000 });
+
+        var speeds = _manager.DistributeUploadSpeeds(3, 300_000L, new double[] { double.NaN, double.PositiveInfinity, double.NegativeInfinity });
+
+        Assert.That(speeds[0], Is.GreaterThan(0L));
+        Assert.That(speeds[1], Is.GreaterThan(0L));
+        Assert.That(speeds[2], Is.GreaterThan(0L));
+        Assert.That(speeds.Sum(), Is.EqualTo(300_000L));
+    }
+
+    [Test]
+    public void ApplyPriorityWeights_zero_weights_are_safely_handled()
+    {
+        _equalDistributor.Distribute(Arg.Any<long>(), 2)
+            .Returns(new long[] { 200_000, 200_000 });
+
+        var speeds = _manager.DistributeUploadSpeeds(2, 400_000L, new double[] { 0.0, 0.0 });
+
+        Assert.That(speeds[0], Is.EqualTo(200_000L));
+        Assert.That(speeds[1], Is.EqualTo(200_000L));
+    }
+
+    [Test]
     public void GetAvailableDistributions_should_return_all_distributor_names()
     {
         var names = _manager.GetAvailableDistributions();

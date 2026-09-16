@@ -218,9 +218,19 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
     private static long[] ApplyPriorityWeights(long[] speeds, double[] weights)
     {
-        if (weights == null || weights.Length != speeds.Length || speeds.Length == 0)
+        if (speeds == null)
         {
-            return speeds;
+            return Array.Empty<long>();
+        }
+
+        if (speeds.Length == 0)
+        {
+            return (long[])speeds.Clone();
+        }
+
+        if (weights == null || weights.Length != speeds.Length)
+        {
+            return (long[])speeds.Clone();
         }
 
         var totalOriginal = 0L;
@@ -231,7 +241,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
         if (totalOriginal <= 0)
         {
-            return speeds;
+            return (long[])speeds.Clone();
         }
 
         var weightedSpeeds = new double[speeds.Length];
@@ -239,19 +249,30 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
         for (var i = 0; i < speeds.Length; i++)
         {
-            weightedSpeeds[i] = speeds[i] * weights[i];
+            var w = weights[i];
+            double sanitizedWeight;
+            if (double.IsNaN(w) || double.IsInfinity(w) || w <= 0.0)
+            {
+                sanitizedWeight = 1.0;
+            }
+            else
+            {
+                sanitizedWeight = Math.Clamp(w, 0.01, 100.0);
+            }
+
+            weightedSpeeds[i] = speeds[i] * sanitizedWeight;
             totalWeighted += weightedSpeeds[i];
         }
 
-        if (totalWeighted <= 0)
+        if (double.IsNaN(totalWeighted) || double.IsInfinity(totalWeighted) || totalWeighted <= 0.0)
         {
-            return speeds;
+            return (long[])speeds.Clone();
         }
 
         var result = new long[speeds.Length];
         for (var i = 0; i < speeds.Length; i++)
         {
-            result[i] = (long)(totalOriginal * (weightedSpeeds[i] / totalWeighted));
+            result[i] = Math.Max(0L, (long)(totalOriginal * (weightedSpeeds[i] / totalWeighted)));
         }
 
         return result;
