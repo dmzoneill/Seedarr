@@ -543,6 +543,183 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             Assert.That(dlRequest.Headers.GetValues("X-Api-Key").First(), Is.EqualTo("secret-key"));
         }
 
+        [Test]
+        public void ParseResponse_should_detect_freeleech_with_various_attribute_values()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <item>
+            <title>Test.Yes.Release</title>
+            <torznab:attr name=""freeleech"" value=""yes"" />
+        </item>
+        <item>
+            <title>Test.Free.Release</title>
+            <torznab:attr name=""freeleech"" value=""free"" />
+        </item>
+        <item>
+            <title>Test.One.Release</title>
+            <torznab:attr name=""freeleech"" value=""1"" />
+        </item>
+        <item>
+            <title>Test.True.Release</title>
+            <torznab:attr name=""freeleech"" value=""true"" />
+        </item>
+        <item>
+            <title>Test.Node.Yes.Release</title>
+            <torznab:freeleech>yes</torznab:freeleech>
+        </item>
+        <item>
+            <title>Test.Node.Free.Release</title>
+            <torznab:freeleech>free</torznab:freeleech>
+        </item>
+        <item>
+            <title>Test.Node.Attr.Release</title>
+            <torznab:freeleech value=""yes"" />
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(7));
+            foreach (var release in results)
+            {
+                Assert.That(release.DownloadVolumeFactor, Is.EqualTo(0.0));
+                Assert.That(release.IsFreeleech, Is.True);
+            }
+        }
+
+        [Test]
+        public void ParseResponse_should_detect_freeleech_from_title_tags()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <item>
+            <title>Test.Movie.2026.1080p [Freeleech]</title>
+        </item>
+        <item>
+            <title>Test.Movie.2026.1080p [FL]</title>
+        </item>
+        <item>
+            <title>Test.Movie.2026.1080p (Freeleech)</title>
+        </item>
+        <item>
+            <title>Test.Movie.2026.1080p (FL)</title>
+        </item>
+        <item>
+            <title>Test.Movie.2026.1080p Regular</title>
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(5));
+            Assert.That(results[0].IsFreeleech, Is.True);
+            Assert.That(results[0].DownloadVolumeFactor, Is.EqualTo(0.0));
+
+            Assert.That(results[1].IsFreeleech, Is.True);
+            Assert.That(results[1].DownloadVolumeFactor, Is.EqualTo(0.0));
+
+            Assert.That(results[2].IsFreeleech, Is.True);
+            Assert.That(results[2].DownloadVolumeFactor, Is.EqualTo(0.0));
+
+            Assert.That(results[3].IsFreeleech, Is.True);
+            Assert.That(results[3].DownloadVolumeFactor, Is.EqualTo(0.0));
+
+            Assert.That(results[4].IsFreeleech, Is.False);
+            Assert.That(results[4].DownloadVolumeFactor, Is.EqualTo(1.0));
+        }
+
+        [TestCase(0.0, true)]
+        [TestCase(0.0005, true)]
+        [TestCase(0.001, true)]
+        [TestCase(0.0011, false)]
+        [TestCase(0.5, false)]
+        [TestCase(1.0, false)]
+        public void IsFreeleech_should_evaluate_with_floating_point_tolerance(double factor, bool expected)
+        {
+            var release = new ReleaseInfo { DownloadVolumeFactor = factor };
+            Assert.That(release.IsFreeleech, Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void IsFreeleech_should_return_false_when_download_volume_factor_is_null()
+        {
+            var release = new ReleaseInfo { DownloadVolumeFactor = null };
+            Assert.That(release.IsFreeleech, Is.False);
+        }
+
+        [Test]
+        public void ParseResponse_should_parse_pubDate_with_timezone_offsets_to_utc()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <item>
+            <title>Positive.Offset.Release</title>
+            <pubDate>Mon, 15 Sep 2026 22:00:00 +0200</pubDate>
+        </item>
+        <item>
+            <title>Negative.Offset.Release</title>
+            <pubDate>Mon, 15 Sep 2026 12:00:00 -0500</pubDate>
+        </item>
+        <item>
+            <title>Utc.Offset.Release</title>
+            <pubDate>Mon, 15 Sep 2026 22:00:00 GMT</pubDate>
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(3));
+
+            Assert.That(results[0].PublishDate.HasValue, Is.True);
+            Assert.That(results[0].PublishDate.Value.Kind, Is.EqualTo(DateTimeKind.Utc));
+            Assert.That(results[0].PublishDate.Value, Is.EqualTo(new DateTime(2026, 9, 15, 20, 0, 0, DateTimeKind.Utc)));
+
+            Assert.That(results[1].PublishDate.HasValue, Is.True);
+            Assert.That(results[1].PublishDate.Value.Kind, Is.EqualTo(DateTimeKind.Utc));
+            Assert.That(results[1].PublishDate.Value, Is.EqualTo(new DateTime(2026, 9, 15, 17, 0, 0, DateTimeKind.Utc)));
+
+            Assert.That(results[2].PublishDate.HasValue, Is.True);
+            Assert.That(results[2].PublishDate.Value.Kind, Is.EqualTo(DateTimeKind.Utc));
+            Assert.That(results[2].PublishDate.Value, Is.EqualTo(new DateTime(2026, 9, 15, 22, 0, 0, DateTimeKind.Utc)));
+        }
+
+        [Test]
+        public void ParseResponse_should_handle_omitted_seeders_as_null_and_rule_matches()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:torznab=""http://torznab.com/schemas/2015/feed"">
+    <channel>
+        <item>
+            <title>No.Seeders.Release</title>
+            <link>http://indexer.local/torrent/1</link>
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].Seeders, Is.Null);
+
+            var rule = new RssRule
+            {
+                MinSeeders = 1,
+                AllowUnknownSeeders = true
+            };
+
+            Assert.That(rule.Matches(results[0]), Is.True);
+
+            rule.AllowUnknownSeeders = false;
+            Assert.That(rule.Matches(results[0]), Is.False);
+        }
+
         private class TorznabTestHttpMessageHandler : HttpMessageHandler
         {
             public List<HttpRequestMessage> SentRequests { get; } = new();

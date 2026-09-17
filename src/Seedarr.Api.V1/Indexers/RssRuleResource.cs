@@ -24,6 +24,8 @@ public class RssRuleResource : RestResource
     [Range(0, int.MaxValue)]
     public int MinSeeders { get; set; } = 1;
 
+    public bool AllowUnknownSeeders { get; set; } = true;
+
     [Range(0, long.MaxValue)]
     public long MinSizeBytes { get; set; }
 
