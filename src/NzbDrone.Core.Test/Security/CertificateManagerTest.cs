@@ -136,6 +136,8 @@ public class CertificateManagerTest
         Assert.That(result.HasPrivateKey, Is.True);
         Assert.That(result.Subject, Does.Contain("Seedarr"));
         Assert.That(result.SubjectAlternativeNames, Does.Contain("localhost"));
+        Assert.That(result.SubjectAlternativeNames, Does.Contain("seedarr"));
+        Assert.That(result.SubjectAlternativeNames, Does.Contain("host.docker.internal"));
         Assert.That(result.SubjectAlternativeNames, Does.Contain("127.0.0.1"));
     }
 
@@ -372,6 +374,58 @@ public class CertificateManagerTest
 
         var dnsNames = sanExt.EnumerateDnsNames().ToList();
         Assert.That(dnsNames, Does.Not.Contain("*"));
+    }
+
+    [Test]
+    public void GetOrCreateCertificate_SelfSignedCert_IncludesSeedarrAndDockerHostInSubjectAlternativeNames()
+    {
+        var cert = _certificateManager.GetOrCreateCertificate(_config);
+
+        Assert.That(cert, Is.Not.Null);
+        var sanExt = cert.Extensions.OfType<X509SubjectAlternativeNameExtension>().SingleOrDefault();
+        Assert.That(sanExt, Is.Not.Null);
+
+        var dnsNames = sanExt.EnumerateDnsNames().ToList();
+        Assert.That(dnsNames, Does.Contain("seedarr"));
+        Assert.That(dnsNames, Does.Contain("host.docker.internal"));
+        Assert.That(dnsNames, Does.Contain("localhost"));
+    }
+
+    [Test]
+    public void GetOrCreateCertificate_SelfSignedCert_IncludesActiveLocalNonLoopbackIpAddressesInSubjectAlternativeNames()
+    {
+        var expectedIps = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces()
+            .Where(i => i.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up)
+            .SelectMany(i =>
+            {
+                try
+                {
+                    return i.GetIPProperties().UnicastAddresses;
+                }
+                catch
+                {
+                    return Enumerable.Empty<System.Net.NetworkInformation.UnicastIPAddressInformation>();
+                }
+            })
+            .Select(u => u.Address)
+            .Where(ip => !System.Net.IPAddress.IsLoopback(ip) && !ip.IsIPv6LinkLocal && !ip.IsIPv6SiteLocal)
+            .Distinct()
+            .ToList();
+
+        var cert = _certificateManager.GetOrCreateCertificate(_config);
+
+        Assert.That(cert, Is.Not.Null);
+        var sanExt = cert.Extensions.OfType<X509SubjectAlternativeNameExtension>().SingleOrDefault();
+        Assert.That(sanExt, Is.Not.Null);
+
+        var certIps = sanExt.EnumerateIPAddresses().ToList();
+        Assert.That(certIps, Does.Contain(System.Net.IPAddress.Loopback));
+        Assert.That(certIps, Does.Contain(System.Net.IPAddress.IPv6Loopback));
+
+        foreach (var expectedIp in expectedIps)
+        {
+            Assert.That(certIps, Does.Contain(expectedIp));
+        }
     }
 
     [Test]
