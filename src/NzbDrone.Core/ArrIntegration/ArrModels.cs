@@ -48,3 +48,19 @@ public class ArrDownloadRecord
     public string MediaType { get; set; }
     public MediaMetadata Metadata { get; set; }
 }
+
+public class ArrHistoryRecord
+{
+    public ArrDownloadRecord Record { get; set; }
+    public ArrConnectionDefinition Definition { get; set; }
+
+    public ArrHistoryRecord()
+    {
+    }
+
+    public ArrHistoryRecord(ArrDownloadRecord record, ArrConnectionDefinition definition)
+    {
+        Record = record;
+        Definition = definition;
+    }
+}

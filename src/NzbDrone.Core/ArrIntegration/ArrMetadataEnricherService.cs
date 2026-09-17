@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -12,6 +14,8 @@ namespace NzbDrone.Core.ArrIntegration
         private readonly IArrConnectionFactory _connectionFactory;
         private readonly IDownloadHistoryRepository _downloadHistoryRepository;
         private readonly ITorrentRepository _torrentRepository;
+        private readonly Func<ArrConnectionDefinition, IArrConnection> _providerFactory;
+        private readonly ConcurrentDictionary<string, MediaMetadata> _mediaDetailsCache = new();
         private readonly Logger _logger;
 
         private static readonly Regex SceneTagsRegex = new(
@@ -23,20 +27,94 @@ namespace NzbDrone.Core.ArrIntegration
         public ArrMetadataEnricherService(
             IArrConnectionFactory connectionFactory,
             IDownloadHistoryRepository downloadHistoryRepository,
-            ITorrentRepository torrentRepository = null)
+            ITorrentRepository torrentRepository = null,
+            Func<ArrConnectionDefinition, IArrConnection> providerFactory = null)
         {
             _connectionFactory = connectionFactory;
             _downloadHistoryRepository = downloadHistoryRepository;
             _torrentRepository = torrentRepository;
+            _providerFactory = providerFactory;
             _logger = LogManager.GetCurrentClassLogger();
         }
 
-        public MediaMetadata EnrichHistoryEntry(int historyId)
+        public Dictionary<string, ArrHistoryRecord> PreFetchDownloadHistories()
+        {
+            var cache = new Dictionary<string, ArrHistoryRecord>(StringComparer.OrdinalIgnoreCase);
+            var definitions = _connectionFactory.All();
+
+            foreach (var def in definitions)
+            {
+                if (!def.Enable)
+                {
+                    continue;
+                }
+
+                var provider = CreateProvider(def);
+                if (provider == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var records = provider.GetDownloadHistory();
+                    if (records != null)
+                    {
+                        foreach (var rec in records)
+                        {
+                            if (!string.IsNullOrWhiteSpace(rec.InfoHash))
+                            {
+                                var normalized = rec.InfoHash.Trim().ToLowerInvariant();
+                                cache.TryAdd(normalized, new ArrHistoryRecord(rec, def));
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to query download history from {0} during batch pre-fetch", def.Name);
+                }
+            }
+
+            return cache;
+        }
+
+        public MediaMetadata EnrichHistoryEntry(int historyId) =>
+            EnrichHistoryEntry(historyId, null);
+
+        public MediaMetadata EnrichHistoryEntry(
+            int historyId,
+            IReadOnlyDictionary<string, ArrHistoryRecord> cachedHistories)
         {
             var history = _downloadHistoryRepository.Get(historyId);
             if (history == null)
             {
                 return null;
+            }
+
+            if (cachedHistories != null)
+            {
+                if (!string.IsNullOrWhiteSpace(history.InfoHash))
+                {
+                    var normalized = history.InfoHash.Trim().ToLowerInvariant();
+                    if (cachedHistories.TryGetValue(normalized, out var match) && match != null)
+                    {
+                        var metadata = FetchMetadataForRecord(match.Record, match.Definition);
+                        if (metadata != null)
+                        {
+                            history.DataJson = JsonSerializer.Serialize(metadata);
+                            if (string.IsNullOrEmpty(history.Source))
+                            {
+                                history.Source = match.Definition.ArrType;
+                            }
+
+                            _downloadHistoryRepository.Update(history);
+                            return metadata;
+                        }
+                    }
+                }
+
+                return LookupAndEnrichByTitle(history);
             }
 
             var definitions = _connectionFactory.All();
@@ -147,6 +225,12 @@ namespace NzbDrone.Core.ArrIntegration
                 return null;
             }
 
+            var cacheKey = $"{definition.Id}:{record.MediaId.Value}";
+            if (_mediaDetailsCache.TryGetValue(cacheKey, out var cached))
+            {
+                return cached;
+            }
+
             var provider = CreateProvider(definition);
             if (provider == null)
             {
@@ -156,9 +240,14 @@ namespace NzbDrone.Core.ArrIntegration
             try
             {
                 var metadata = provider.GetMediaDetails(record.MediaId.Value);
-                if (metadata != null && string.IsNullOrEmpty(metadata.Title))
+                if (metadata != null)
                 {
-                    metadata.Title = record.Title;
+                    if (string.IsNullOrEmpty(metadata.Title))
+                    {
+                        metadata.Title = record.Title;
+                    }
+
+                    _mediaDetailsCache[cacheKey] = metadata;
                 }
 
                 return metadata;
@@ -172,21 +261,29 @@ namespace NzbDrone.Core.ArrIntegration
 
         public void EnrichAll()
         {
+            _mediaDetailsCache.Clear();
             var all = _downloadHistoryRepository.All();
-            foreach (var item in all)
+            var toEnrich = all.Where(item => string.IsNullOrEmpty(item.DataJson)).ToList();
+            if (toEnrich.Count == 0)
             {
-                if (string.IsNullOrEmpty(item.DataJson))
-                {
-                    EnrichHistoryEntry(item.Id);
-                }
+                return;
+            }
+
+            var cachedHistories = PreFetchDownloadHistories();
+            foreach (var item in toEnrich)
+            {
+                EnrichHistoryEntry(item.Id, cachedHistories);
             }
         }
 
         public int ReconcileAndEnrichAll()
         {
+            _mediaDetailsCache.Clear();
             var allTorrents = _torrentRepository.All().ToList();
             var reconciledCount = 0;
             var enrichedCount = 0;
+
+            var toEnrich = new List<DownloadHistory>();
 
             foreach (var torrent in allTorrents)
             {
@@ -220,7 +317,16 @@ namespace NzbDrone.Core.ArrIntegration
 
                 if (string.IsNullOrEmpty(existing.DataJson))
                 {
-                    var meta = EnrichHistoryEntry(existing.Id);
+                    toEnrich.Add(existing);
+                }
+            }
+
+            if (toEnrich.Count > 0)
+            {
+                var cachedHistories = PreFetchDownloadHistories();
+                foreach (var history in toEnrich)
+                {
+                    var meta = EnrichHistoryEntry(history.Id, cachedHistories);
                     if (meta != null)
                     {
                         enrichedCount++;
@@ -268,6 +374,11 @@ namespace NzbDrone.Core.ArrIntegration
 
         protected virtual IArrConnection CreateProvider(ArrConnectionDefinition definition)
         {
+            if (_providerFactory != null)
+            {
+                return _providerFactory(definition);
+            }
+
             IArrConnection provider;
             switch (definition.ArrType?.ToLowerInvariant())
             {
