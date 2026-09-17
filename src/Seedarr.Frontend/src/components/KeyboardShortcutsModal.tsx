@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useRef } from "react";
+import { useModalRegistration } from "./ModalProvider";
 
 interface KeyboardShortcutsModalProps {
   isOpen: boolean;
@@ -14,19 +15,14 @@ export function KeyboardShortcutsModal({
   isOpen,
   onClose,
 }: KeyboardShortcutsModalProps) {
-  useEffect(() => {
-    if (!isOpen) return;
+  const modalRef = useRef<HTMLDivElement>(null);
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  useModalRegistration({
+    id: "keyboard-shortcuts-modal",
+    isOpen,
+    onClose,
+    modalRef,
+  });
 
   if (!isOpen) return null;
 
@@ -107,6 +103,7 @@ export function KeyboardShortcutsModal({
 
   return (
     <div
+      ref={modalRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="keyboard-shortcuts-title"

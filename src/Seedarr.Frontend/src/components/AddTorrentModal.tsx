@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useRef } from "react";
 import AddTorrentForm, { InputMode } from "./AddTorrentForm";
+import { useModalRegistration } from "./ModalProvider";
 
 interface AddTorrentModalProps {
   initialMode?: InputMode;
@@ -12,17 +13,14 @@ function AddTorrentModal({
   initialQuery = "",
   onClose,
 }: AddTorrentModalProps) {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
+  const modalRef = useRef<HTMLDivElement>(null);
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  useModalRegistration({
+    id: "add-torrent-modal",
+    isOpen: true,
+    onClose,
+    modalRef,
+  });
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
@@ -32,6 +30,7 @@ function AddTorrentModal({
 
   return (
     <div
+      ref={modalRef}
       className="modal-overlay"
       onClick={handleBackdropClick}
       role="dialog"

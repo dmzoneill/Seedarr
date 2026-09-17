@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { useModalRegistration } from "./ModalProvider";
 import {
   useTorrents,
   useDownloadHistory,
@@ -45,7 +46,15 @@ export function CommandPalette({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  useModalRegistration({
+    id: "command-palette",
+    isOpen,
+    onClose,
+    modalRef,
+  });
 
   const { data: torrents } = useTorrents();
   const { data: history } = useDownloadHistory();
@@ -63,18 +72,8 @@ export function CommandPalette({
       setQuery("");
       setSelectedIndex(0);
       setTimeout(() => inputRef.current?.focus(), 50);
-
-      const handleGlobalKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          onClose();
-        }
-      };
-
-      window.addEventListener("keydown", handleGlobalKeyDown);
-      return () => window.removeEventListener("keydown", handleGlobalKeyDown);
     }
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   const items = useMemo<CommandItem[]>(() => {
     const list: CommandItem[] = [];
@@ -505,6 +504,7 @@ export function CommandPalette({
 
   return (
     <div
+      ref={modalRef}
       role="dialog"
       aria-modal="true"
       aria-label="Command Palette"
