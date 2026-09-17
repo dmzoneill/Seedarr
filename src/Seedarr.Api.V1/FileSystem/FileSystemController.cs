@@ -18,7 +18,7 @@ namespace Seedarr.Api.V1.FileSystem;
 [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is validated and normalized for filesystem browsing")]
 public class FileSystemController : Controller
 {
-    private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     /// <summary>
     /// Browses directory contents at the specified path.
@@ -83,7 +83,13 @@ public class FileSystemController : Controller
 
             try
             {
-                var directories = dirInfo.EnumerateDirectories()
+                var enumOptions = new EnumerationOptions
+                {
+                    IgnoreInaccessible = true,
+                    RecurseSubdirectories = false,
+                };
+
+                var directories = dirInfo.EnumerateDirectories("*", enumOptions)
                     .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase);
 
                 foreach (var dir in directories)
@@ -114,7 +120,13 @@ public class FileSystemController : Controller
             {
                 try
                 {
-                    var files = dirInfo.EnumerateFiles()
+                    var fileEnumOptions = new EnumerationOptions
+                    {
+                        IgnoreInaccessible = true,
+                        RecurseSubdirectories = false,
+                    };
+
+                    var files = dirInfo.EnumerateFiles("*", fileEnumOptions)
                         .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
 
                     foreach (var file in files)
@@ -151,7 +163,12 @@ public class FileSystemController : Controller
         return Ok(result);
     }
 
-    private static FileSystemResource GetRootListing()
+    /// <summary>
+    /// Gets the root listing of available drives and root directories.
+    /// </summary>
+    /// <param name="drivesOverride">Optional drive list to override DriveInfo.GetDrives() for testing.</param>
+    /// <returns>A FileSystemResource containing root drives and directories.</returns>
+    public static FileSystemResource GetRootListing(DriveInfo[] drivesOverride = null)
     {
         var result = new FileSystemResource
         {
@@ -163,48 +180,172 @@ public class FileSystemController : Controller
 
         try
         {
-            var drives = DriveInfo.GetDrives()
-                .Where(d => d.IsReady)
-                .ToList();
+            var drives = drivesOverride ?? DriveInfo.GetDrives()
+                .Where(d =>
+                {
+                    try
+                    {
+                        return d.IsReady;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                })
+                .ToArray();
 
             if (OperatingSystem.IsWindows())
             {
                 foreach (var drive in drives)
                 {
-                    var name = !string.IsNullOrWhiteSpace(drive.VolumeLabel)
-                        ? $"{drive.Name} ({drive.VolumeLabel})"
-                        : drive.Name;
-
-                    result.Directories.Add(new FileSystemEntryResource
+                    try
                     {
-                        Name = name,
-                        Path = drive.RootDirectory.FullName,
-                        Type = "drive",
-                        Size = drive.TotalSize,
-                    });
+                        var name = !string.IsNullOrWhiteSpace(drive.VolumeLabel)
+                            ? $"{drive.Name} ({drive.VolumeLabel})"
+                            : drive.Name;
+
+                        result.Directories.Add(new FileSystemEntryResource
+                        {
+                            Name = name,
+                            Path = drive.RootDirectory.FullName,
+                            Type = "drive",
+                            Size = drive.TotalSize,
+                            FreeSpace = drive.AvailableFreeSpace,
+                        });
+                    }
+                    catch
+                    {
+                        // Skip inaccessible drive
+                    }
                 }
             }
             else
             {
-                // On Unix-like systems, if root is requested or default
-                if (Directory.Exists("/"))
+                var seenPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                // 1. Mounted filesystems/drives
+                foreach (var drive in drives)
                 {
-                    var rootInfo = new DirectoryInfo("/");
-                    foreach (var dir in rootInfo.EnumerateDirectories().OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
+                    try
                     {
+                        var mountPath = drive.RootDirectory.FullName;
+                        if (!seenPaths.Add(mountPath))
+                        {
+                            continue;
+                        }
+
+                        long? totalSize = null;
+                        long? freeSpace = null;
+                        string volumeLabel = null;
+
                         try
                         {
-                            result.Directories.Add(new FileSystemEntryResource
-                            {
-                                Name = dir.Name,
-                                Path = dir.FullName,
-                                Type = "folder",
-                                LastModified = dir.LastWriteTimeUtc == DateTime.MinValue ? null : dir.LastWriteTimeUtc,
-                            });
+                            totalSize = drive.TotalSize;
+                            freeSpace = drive.AvailableFreeSpace;
+                            volumeLabel = drive.VolumeLabel;
                         }
                         catch
                         {
+                            // Some virtual mounts may fail to report size/label
                         }
+
+                        var label = !string.IsNullOrWhiteSpace(volumeLabel)
+                            ? $"{mountPath} ({volumeLabel})"
+                            : mountPath;
+
+                        result.Directories.Add(new FileSystemEntryResource
+                        {
+                            Name = label,
+                            Path = mountPath,
+                            Type = "drive",
+                            Size = totalSize,
+                            FreeSpace = freeSpace,
+                        });
+                    }
+                    catch
+                    {
+                        // Skip unreadable drive
+                    }
+                }
+
+                // 2. Well-known container mount points if present
+                var wellKnownMounts = new[] { "/downloads", "/data", "/config", "/media", "/torrents", "/storage" };
+                foreach (var mount in wellKnownMounts)
+                {
+                    try
+                    {
+                        if (Directory.Exists(mount) && seenPaths.Add(mount))
+                        {
+                            long? size = null;
+                            long? free = null;
+                            try
+                            {
+                                var drive = new DriveInfo(mount);
+                                if (drive.IsReady)
+                                {
+                                    size = drive.TotalSize;
+                                    free = drive.AvailableFreeSpace;
+                                }
+                            }
+                            catch
+                            {
+                            }
+
+                            result.Directories.Add(new FileSystemEntryResource
+                            {
+                                Name = mount,
+                                Path = mount,
+                                Type = "drive",
+                                Size = size,
+                                FreeSpace = free,
+                            });
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                // 3. Directories directly under root that exist and are accessible
+                if (Directory.Exists("/"))
+                {
+                    try
+                    {
+                        var rootInfo = new DirectoryInfo("/");
+                        var enumOptions = new EnumerationOptions
+                        {
+                            IgnoreInaccessible = true,
+                            RecurseSubdirectories = false,
+                        };
+
+                        var rootDirs = rootInfo.EnumerateDirectories("*", enumOptions)
+                            .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase);
+
+                        foreach (var dir in rootDirs)
+                        {
+                            try
+                            {
+                                if (!seenPaths.Add(dir.FullName))
+                                {
+                                    continue;
+                                }
+
+                                result.Directories.Add(new FileSystemEntryResource
+                                {
+                                    Name = dir.Name,
+                                    Path = dir.FullName,
+                                    Type = "folder",
+                                    LastModified = dir.LastWriteTimeUtc == DateTime.MinValue ? null : dir.LastWriteTimeUtc,
+                                });
+                            }
+                            catch
+                            {
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to enumerate root directories in GetRootListing");
                     }
                 }
             }

@@ -1209,6 +1209,7 @@ export interface FileSystemEntryResource {
   path: string;
   type: "folder" | "file" | "drive" | string;
   size?: number | null;
+  freeSpace?: number | null;
   lastModified?: string | null;
 }
 
