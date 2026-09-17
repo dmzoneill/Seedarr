@@ -276,10 +276,10 @@ public static class NotificationPayloadBuilder
                 : torrentDetails;
             var desc = Truncate(rawDesc, 4096);
 
-            return new
+            var payloadDict = new Dictionary<string, object>
             {
-                username = "Seedarr",
-                embeds = new object[]
+                ["username"] = "Seedarr",
+                ["embeds"] = new object[]
                 {
                     new
                     {
@@ -290,6 +290,36 @@ public static class NotificationPayloadBuilder
                     },
                 },
             };
+
+            if (torrent != null)
+            {
+                payloadDict["components"] = new object[]
+                {
+                    new
+                    {
+                        type = 1,
+                        components = new object[]
+                        {
+                            new
+                            {
+                                type = 2,
+                                style = 2,
+                                label = "Pause",
+                                custom_id = $"pause:{torrent.Id}",
+                            },
+                            new
+                            {
+                                type = 2,
+                                style = 3,
+                                label = "Resume",
+                                custom_id = $"resume:{torrent.Id}",
+                            },
+                        },
+                    },
+                };
+            }
+
+            return payloadDict;
         }
 
         if (string.Equals(implementation, "Slack", StringComparison.OrdinalIgnoreCase))
