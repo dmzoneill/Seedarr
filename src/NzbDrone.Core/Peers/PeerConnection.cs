@@ -119,6 +119,8 @@ public class PeerConnection : IDisposable
     public DateTime LastUnchokedAt { get; set; } = DateTime.MinValue;
     public DateTime LastPexReceived { get; set; } = DateTime.MinValue;
     public int PexRateLimitViolations { get; set; }
+    public PeerPexTracker PexTracker { get; } = new();
+    public bool SupportsPex => RemoteExtensions.TryGetValue("ut_pex", out var id) && id > 0;
 
     private bool _isSeed;
 
@@ -567,6 +569,39 @@ public class PeerConnection : IDisposable
         }
     }
 
+    public virtual void SendExtendedMessage(byte extensionId, byte[] payload)
+    {
+        var length = payload?.Length ?? 0;
+        var extendedPayload = new byte[1 + length];
+        extendedPayload[0] = extensionId;
+        if (payload != null && length > 0)
+        {
+            Array.Copy(payload, 0, extendedPayload, 1, length);
+        }
+
+        SendMessage(new PeerMessage
+        {
+            Type = PeerMessageType.Extended,
+            Payload = extendedPayload
+        });
+    }
+
+    public virtual void SendExtendedMessage(int extensionId, byte[] payload)
+    {
+        SendExtendedMessage((byte)extensionId, payload);
+    }
+
+    public virtual bool SendExtendedMessage(string extensionName, byte[] payload)
+    {
+        if (RemoteExtensions.TryGetValue(extensionName, out var extId) && extId > 0)
+        {
+            SendExtendedMessage((byte)extId, payload);
+            return true;
+        }
+
+        return false;
+    }
+
     public void SendKeepAlive()
     {
         var buffer = new byte[4];
@@ -962,4 +997,10 @@ public class PeerConnection : IDisposable
             _client?.Dispose();
         }
     }
+}
+
+public class PeerPexTracker
+{
+    public DateTime LastPexSent { get; set; } = DateTime.MinValue;
+    public HashSet<string> PreviouslySentPeers { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
