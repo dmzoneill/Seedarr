@@ -647,4 +647,77 @@ public class DiskSpaceServiceTest
 
         Assert.That(result, Is.Not.Null);
     }
+
+    // --- TTL Caching & Event Decoupling tests ---
+
+    [Test]
+    public void GetDiskSpace_called_twice_within_ttl_should_return_cached_result()
+    {
+        var categoryRepo = Substitute.For<ICategoryRepository>();
+        categoryRepo.All().Returns(new List<Category>());
+        var service = new DiskSpaceService(_appFolderInfo, categoryRepo);
+
+        var first = service.GetDiskSpace();
+        var second = service.GetDiskSpace();
+
+        Assert.That(second, Is.SameAs(first));
+        categoryRepo.Received(1).All();
+    }
+
+    [Test]
+    public void GetDiskSpace_with_force_refresh_true_should_bypass_cache()
+    {
+        var categoryRepo = Substitute.For<ICategoryRepository>();
+        categoryRepo.All().Returns(new List<Category>());
+        var service = new DiskSpaceService(_appFolderInfo, categoryRepo);
+
+        var first = service.GetDiskSpace();
+        var second = service.GetDiskSpace(forceRefresh: true);
+
+        Assert.That(second, Is.Not.SameAs(first));
+        categoryRepo.Received(2).All();
+    }
+
+    [Test]
+    public void GetDiskSpace_should_not_publish_critical_or_low_events()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+
+        var result = service.GetDiskSpace();
+
+        Assert.That(result, Is.Not.Null);
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceCriticalEvent>());
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceLowEvent>());
+        eventAggregator.DidNotReceive().PublishEvent(Arg.Any<DiskSpaceRestoredEvent>());
+    }
+
+    [Test]
+    public void CheckDiskSpaceThresholds_should_publish_events_when_disk_space_is_below_thresholds()
+    {
+        var eventAggregator = Substitute.For<IEventAggregator>();
+        var service = new DiskSpaceService(_appFolderInfo, eventAggregator);
+        var mockDrives = new List<DiskSpaceInfo>
+        {
+            new()
+            {
+                Path = "/critical-disk",
+                Label = "Critical",
+                FreeSpace = 500L * 1024 * 1024,
+                TotalSpace = 100L * 1024 * 1024 * 1024,
+            },
+            new()
+            {
+                Path = "/low-disk",
+                Label = "Low",
+                FreeSpace = 3L * 1024 * 1024 * 1024,
+                TotalSpace = 100L * 1024 * 1024 * 1024,
+            },
+        };
+
+        service.CheckDiskSpaceThresholds(mockDrives);
+
+        eventAggregator.Received(1).PublishEvent(Arg.Is<DiskSpaceCriticalEvent>(e => e.DrivePath == "/critical-disk"));
+        eventAggregator.Received(1).PublishEvent(Arg.Is<DiskSpaceLowEvent>(e => e.DrivePath == "/low-disk"));
+    }
 }

@@ -29,8 +29,15 @@ public interface IDiskSpaceService
     /// <summary>
     /// Returns disk space information for all relevant locations.
     /// </summary>
+    /// <param name="forceRefresh">Whether to bypass the in-memory TTL cache and query the filesystem immediately.</param>
     /// <returns>A list of disk space information.</returns>
-    List<DiskSpaceInfo> GetDiskSpace();
+    List<DiskSpaceInfo> GetDiskSpace(bool forceRefresh = false);
+
+    /// <summary>
+    /// Evaluates disk space health against critical and low thresholds, publishing health transition events as needed.
+    /// </summary>
+    /// <param name="diskSpaces">Optional explicit disk space items to evaluate. If null, queries current disk space.</param>
+    void CheckDiskSpaceThresholds(IEnumerable<DiskSpaceInfo> diskSpaces = null);
 
     /// <summary>
     /// Gets the current health state for the specified drive path.
@@ -67,8 +74,13 @@ public class DiskSpaceService : IDiskSpaceService
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, DiskSpaceHealthState> _healthStates = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _stateLock = new();
+    private readonly object _cacheLock = new();
+    private List<DiskSpaceInfo> _cachedDiskSpace;
+    private DateTime _lastCacheTime = DateTime.MinValue;
 
     public TimeSpan DriveTimeout { get; set; } = TimeSpan.FromSeconds(3);
+
+    public TimeSpan CacheTtl { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DiskSpaceService"/> class.
@@ -117,6 +129,11 @@ public class DiskSpaceService : IDiskSpaceService
     public void ResetHealthStates()
     {
         _healthStates.Clear();
+        lock (_cacheLock)
+        {
+            _cachedDiskSpace = null;
+            _lastCacheTime = DateTime.MinValue;
+        }
     }
 
     /// <inheritdoc/>
@@ -153,7 +170,36 @@ public class DiskSpaceService : IDiskSpaceService
     }
 
     /// <inheritdoc/>
-    public List<DiskSpaceInfo> GetDiskSpace()
+    public List<DiskSpaceInfo> GetDiskSpace(bool forceRefresh = false)
+    {
+        lock (_cacheLock)
+        {
+            var now = DateTime.UtcNow;
+            if (!forceRefresh && _cachedDiskSpace != null && (now - _lastCacheTime) < CacheTtl)
+            {
+                return _cachedDiskSpace;
+            }
+
+            _cachedDiskSpace = QueryDiskSpace();
+            _lastCacheTime = now;
+            return _cachedDiskSpace;
+        }
+    }
+
+    /// <inheritdoc/>
+    public void CheckDiskSpaceThresholds(IEnumerable<DiskSpaceInfo> diskSpaces = null)
+    {
+        var items = diskSpaces ?? GetDiskSpace(forceRefresh: true);
+        foreach (var info in items)
+        {
+            if (info.TotalSpace > 0)
+            {
+                UpdateDiskSpaceHealth(info.Path, info.FreeSpace, info.TotalSpace);
+            }
+        }
+    }
+
+    private List<DiskSpaceInfo> QueryDiskSpace()
     {
         var result = new List<DiskSpaceInfo>();
         var seenRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -223,14 +269,6 @@ public class DiskSpaceService : IDiskSpaceService
             {
                 var label = !string.IsNullOrWhiteSpace(category.Name) ? category.Name : "Category";
                 AddDriveInfoWithDrives(result, categorySeen, category.SavePath, label, allDrives);
-            }
-        }
-
-        foreach (var info in result)
-        {
-            if (info.TotalSpace > 0)
-            {
-                UpdateDiskSpaceHealth(info.Path, info.FreeSpace, info.TotalSpace);
             }
         }
 

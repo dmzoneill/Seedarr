@@ -26,11 +26,12 @@ public class DiskSpaceController : Controller
     /// <summary>
     /// Gets disk space information for all relevant locations.
     /// </summary>
+    /// <param name="refresh">Whether to force fresh disk space evaluation bypassing TTL cache.</param>
     /// <returns>A list of disk space resources.</returns>
     [HttpGet]
-    public ActionResult<List<DiskSpaceResource>> GetDiskSpace()
+    public ActionResult<List<DiskSpaceResource>> GetDiskSpace([FromQuery] bool refresh = false)
     {
-        var diskSpace = _diskSpaceService.GetDiskSpace();
+        var diskSpace = _diskSpaceService.GetDiskSpace(refresh);
 
         return Ok(diskSpace.Select(d => new DiskSpaceResource
         {
