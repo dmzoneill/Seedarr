@@ -95,6 +95,11 @@ public class PeerConnection : IDisposable
     public int? MetadataSize { get; set; }
     public bool IsSnubbed { get; set; }
     public bool IsOptimisticUnchoked { get; set; }
+    public const int RateWindowSeconds = 20;
+
+    private readonly object _rateLock = new();
+    private readonly LinkedList<(DateTime Timestamp, long Uploaded, long Downloaded)> _rateSamples = new();
+
     public long BytesUploaded { get; set; }
     public long BytesDownloaded { get; set; }
     public long UploadRate { get; set; }
@@ -109,6 +114,69 @@ public class PeerConnection : IDisposable
     {
         get => UploadRate;
         set => UploadRate = value;
+    }
+
+    public void UpdateTransferRates()
+    {
+        UpdateTransferRates(DateTime.UtcNow);
+    }
+
+    public void UpdateTransferRates(DateTime currentTime)
+    {
+        lock (_rateLock)
+        {
+            _rateSamples.AddLast((currentTime, BytesUploaded, BytesDownloaded));
+
+            var cutoff = currentTime.AddSeconds(-RateWindowSeconds);
+            while (_rateSamples.Count > 1 && _rateSamples.First.Value.Timestamp < cutoff)
+            {
+                _rateSamples.RemoveFirst();
+            }
+
+            if (_rateSamples.Count < 2)
+            {
+                return;
+            }
+
+            var earliest = _rateSamples.First.Value;
+            var latest = _rateSamples.Last.Value;
+            var elapsedSeconds = (latest.Timestamp - earliest.Timestamp).TotalSeconds;
+
+            if (elapsedSeconds > 0.001)
+            {
+                var deltaUp = Math.Max(0, latest.Uploaded - earliest.Uploaded);
+                var deltaDown = Math.Max(0, latest.Downloaded - earliest.Downloaded);
+
+                UploadRate = (long)Math.Round(deltaUp / elapsedSeconds);
+                DownloadRate = (long)Math.Round(deltaDown / elapsedSeconds);
+            }
+        }
+    }
+
+    public void RecordBytesUploaded(long bytes)
+    {
+        if (bytes > 0)
+        {
+            BytesUploaded += bytes;
+        }
+    }
+
+    public void RecordBytesDownloaded(long bytes)
+    {
+        if (bytes > 0)
+        {
+            BytesDownloaded += bytes;
+        }
+    }
+
+    public void ResetTransferRates()
+    {
+        lock (_rateLock)
+        {
+            _rateSamples.Clear();
+            UploadRate = 0;
+            DownloadRate = 0;
+        }
     }
 
     public double Progress { get; set; }
@@ -689,6 +757,13 @@ public class PeerConnection : IDisposable
             {
                 message.Payload = new byte[length - 1];
                 Array.Copy(messageBuffer, 1, message.Payload, 0, length - 1);
+            }
+
+            if (message.Type == PeerMessageType.Piece)
+            {
+                var payloadSize = message.Payload != null ? message.Payload.Length : 0;
+                var pieceDataSize = payloadSize > 8 ? payloadSize - 8 : 0;
+                BytesDownloaded += pieceDataSize;
             }
 
             LastActivity = DateTime.UtcNow;

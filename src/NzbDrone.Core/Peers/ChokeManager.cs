@@ -77,6 +77,12 @@ public class ChokeManager : BackgroundService, IChokeManager
             {
                 var now = DateTime.UtcNow;
 
+                var connections = _connectionManager.GetAllConnections();
+                foreach (var conn in connections)
+                {
+                    conn.UpdateTransferRates(now);
+                }
+
                 if ((now - _lastRegularUnchoke).TotalSeconds >= RegularUnchokeIntervalSeconds)
                 {
                     ProcessRegularUnchoke();
@@ -220,8 +226,8 @@ public class ChokeManager : BackgroundService, IChokeManager
                     {
                         // More active torrents than regular slots: prioritize swarms by highest candidate peer rate
                         var prioritizedTorrents = torrentGroups
-                            .OrderByDescending(g => g.IsSeeding ? g.Candidates[0].UploadRate : (g.Candidates[0].UploadRate + g.Candidates[0].DownloadRate))
-                            .ThenByDescending(g => g.Candidates[0].BytesUploaded)
+                            .OrderByDescending(g => g.IsSeeding ? g.Candidates[0].UploadRate : g.Candidates[0].DownloadRate)
+                            .ThenByDescending(g => g.IsSeeding ? g.Candidates[0].BytesUploaded : g.Candidates[0].BytesDownloaded)
                             .Take(remainingSlots);
 
                         foreach (var tg in prioritizedTorrents)
@@ -240,7 +246,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                             .OrderByDescending(g =>
                             {
                                 var nextPeer = g.Candidates[allocatedSlots[g.InfoHash]];
-                                return g.IsSeeding ? nextPeer.UploadRate : (nextPeer.UploadRate + nextPeer.DownloadRate);
+                                return g.IsSeeding ? nextPeer.UploadRate : nextPeer.DownloadRate;
                             })
                             .ThenBy(g =>
                             {
@@ -275,7 +281,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                         var leftoverCandidates = torrentGroups
                             .SelectMany(g => g.Candidates)
                             .Where(c => !selectedRegular.Contains(c))
-                            .OrderByDescending(c => IsTorrentSeeding(c.InfoHash) ? c.UploadRate : (c.UploadRate + c.DownloadRate))
+                            .OrderByDescending(c => IsTorrentSeeding(c.InfoHash) ? c.UploadRate : c.DownloadRate)
                             .ThenBy(c => IsTorrentSeeding(c.InfoHash) ? (c.LastUnchokedAt ?? DateTime.MinValue) : DateTime.MaxValue)
                             .ThenBy(c => c.ConnectedAt)
                             .Take(regularSlotCount - selectedRegular.Count);
@@ -512,6 +518,7 @@ public class ChokeManager : BackgroundService, IChokeManager
     public void UpdatePeerActivity(PeerConnection connection)
     {
         connection.LastRequestReceived = DateTime.UtcNow;
+        connection.UpdateTransferRates();
         if (connection.IsSnubbed)
         {
             _logger.Debug("Peer {0}:{1} unsnubbed due to active request", connection.RemoteIp, connection.RemotePort);
@@ -973,8 +980,8 @@ public class ChokeManager : BackgroundService, IChokeManager
             return false;
         }
 
-        var challengerRate = isSeeding ? challenger.UploadRate : (challenger.UploadRate + challenger.DownloadRate);
-        var incumbentRate = isSeeding ? incumbent.UploadRate : (incumbent.UploadRate + incumbent.DownloadRate);
+        var challengerRate = isSeeding ? challenger.UploadRate : challenger.DownloadRate;
+        var incumbentRate = isSeeding ? incumbent.UploadRate : incumbent.DownloadRate;
 
         // 2. If lease has expired, standard rate comparison applies
         if (duration >= MaxUnchokeLeaseSeconds)
@@ -1028,15 +1035,21 @@ public class ChokeManager : BackgroundService, IChokeManager
         }
         else
         {
-            var aRate = a.UploadRate + a.DownloadRate;
-            var bRate = b.UploadRate + b.DownloadRate;
-            var rateCompare = bRate.CompareTo(aRate);
+            var rateCompare = b.DownloadRate.CompareTo(a.DownloadRate);
             if (rateCompare != 0)
             {
                 return rateCompare;
             }
 
-            var bytesCompare = b.BytesUploaded.CompareTo(a.BytesUploaded);
+            var aLast = a.LastUnchokedAt ?? DateTime.MinValue;
+            var bLast = b.LastUnchokedAt ?? DateTime.MinValue;
+            var lastCompare = aLast.CompareTo(bLast);
+            if (lastCompare != 0)
+            {
+                return lastCompare;
+            }
+
+            var bytesCompare = b.BytesDownloaded.CompareTo(a.BytesDownloaded);
             if (bytesCompare != 0)
             {
                 return bytesCompare;
