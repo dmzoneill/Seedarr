@@ -326,14 +326,88 @@ public static class NotificationPayloadBuilder
         {
             var err = ExtractErrorMessage(genericPayload);
             var errSuffix = !string.IsNullOrWhiteSpace(err) ? $"\nError: {err}" : string.Empty;
-            var text = torrent != null
+            var fallbackText = torrent != null
                 ? $"*Seedarr [{eventType}]* - *{torrent.Name}*\nCategory: {torrent.Category ?? torrent.Label ?? "None"} | Status: {torrent.Status} | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB{errSuffix}"
                 : $"*Seedarr [{eventType}]*\n{ExtractMessage(genericPayload, eventType)}";
 
-            return new
+            var blocks = new List<object>
             {
-                text = Truncate(text, 3500),
-                username = "Seedarr",
+                new Dictionary<string, object>
+                {
+                    ["type"] = "header",
+                    ["text"] = new Dictionary<string, object>
+                    {
+                        ["type"] = "plain_text",
+                        ["text"] = Truncate($"Seedarr [{eventType}]", 150),
+                        ["emoji"] = true,
+                    },
+                },
+            };
+
+            var sectionBlock = new Dictionary<string, object>
+            {
+                ["type"] = "section",
+            };
+
+            if (torrent != null)
+            {
+                sectionBlock["text"] = new Dictionary<string, object>
+                {
+                    ["type"] = "mrkdwn",
+                    ["text"] = Truncate($"*{torrent.Name}*{errSuffix}", 3000),
+                };
+
+                var ratioOrEta = torrent.Eta > 0
+                    ? $"{torrent.Ratio:F2} (ETA: {torrent.Eta}s)"
+                    : $"{torrent.Ratio:F2}";
+
+                sectionBlock["fields"] = new object[]
+                {
+                    new Dictionary<string, object> { ["type"] = "mrkdwn", ["text"] = $"*Category:*\n{torrent.Category ?? torrent.Label ?? "None"}" },
+                    new Dictionary<string, object> { ["type"] = "mrkdwn", ["text"] = $"*Status:*\n{torrent.Status}" },
+                    new Dictionary<string, object> { ["type"] = "mrkdwn", ["text"] = $"*Size:*\n{torrent.TotalSize / (1024.0 * 1024.0):F2} MB" },
+                    new Dictionary<string, object> { ["type"] = "mrkdwn", ["text"] = $"*Ratio/ETA:*\n{ratioOrEta}" },
+                };
+            }
+            else
+            {
+                var msg = ExtractMessage(genericPayload, eventType);
+                sectionBlock["text"] = new Dictionary<string, object>
+                {
+                    ["type"] = "mrkdwn",
+                    ["text"] = Truncate(!string.IsNullOrWhiteSpace(msg) ? msg : $"Event: {eventType}", 3000),
+                };
+            }
+
+            blocks.Add(sectionBlock);
+
+            blocks.Add(new Dictionary<string, object>
+            {
+                ["type"] = "context",
+                ["elements"] = new object[]
+                {
+                    new Dictionary<string, object>
+                    {
+                        ["type"] = "mrkdwn",
+                        ["text"] = "Seedarr Notification",
+                    },
+                },
+            });
+
+            var attachments = new object[]
+            {
+                new Dictionary<string, object>
+                {
+                    ["color"] = GetSlackColor(eventType),
+                },
+            };
+
+            return new Dictionary<string, object>
+            {
+                ["text"] = Truncate(fallbackText, 3500),
+                ["username"] = "Seedarr",
+                ["blocks"] = blocks,
+                ["attachments"] = attachments,
             };
         }
 
@@ -380,11 +454,20 @@ public static class NotificationPayloadBuilder
         {
             var err = ExtractErrorMessage(genericPayload);
             var errSuffix = !string.IsNullOrWhiteSpace(err) ? $" - Error: {err}" : string.Empty;
-            return new
+            var priority = ExtractPriority(settings, 5);
+
+            return new Dictionary<string, object>
             {
-                title = $"Seedarr: {eventType}",
-                message = torrent != null ? $"{torrent.Name} ({torrent.Category ?? torrent.Label ?? "Default"}) - {torrent.Status}{errSuffix}" : ExtractMessage(genericPayload, eventType),
-                priority = 5,
+                ["title"] = $"Seedarr: {eventType}",
+                ["message"] = torrent != null ? $"{torrent.Name} ({torrent.Category ?? torrent.Label ?? "Default"}) - {torrent.Status}{errSuffix}" : ExtractMessage(genericPayload, eventType),
+                ["priority"] = priority,
+                ["extras"] = new Dictionary<string, object>
+                {
+                    ["client::display"] = new Dictionary<string, object>
+                    {
+                        ["contentType"] = "text/markdown",
+                    },
+                },
             };
         }
 
@@ -567,5 +650,73 @@ public static class NotificationPayloadBuilder
         {
             return null;
         }
+    }
+
+    public static string GetSlackColor(string eventType)
+    {
+        if (string.IsNullOrWhiteSpace(eventType))
+        {
+            return "#3AA3E3";
+        }
+
+        if (eventType.Contains("Grab", StringComparison.OrdinalIgnoreCase) ||
+            eventType.Contains("Complete", StringComparison.OrdinalIgnoreCase) ||
+            eventType.Contains("Success", StringComparison.OrdinalIgnoreCase) ||
+            eventType.Contains("Restored", StringComparison.OrdinalIgnoreCase) ||
+            eventType.Contains("GoalReached", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#2eb886";
+        }
+
+        if (eventType.Contains("Error", StringComparison.OrdinalIgnoreCase) ||
+            eventType.Contains("Fail", StringComparison.OrdinalIgnoreCase) ||
+            eventType.Contains("Issue", StringComparison.OrdinalIgnoreCase))
+        {
+            return "#a30200";
+        }
+
+        return "#3AA3E3";
+    }
+
+    public static int ExtractPriority(string settings, int defaultPriority = 5)
+    {
+        if (string.IsNullOrWhiteSpace(settings))
+        {
+            return Math.Clamp(defaultPriority, 1, 10);
+        }
+
+        var priority = defaultPriority;
+        if (settings.TrimStart().StartsWith("{"))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(settings);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("priority", out var p) || root.TryGetProperty("Priority", out p))
+                {
+                    if (p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var pVal))
+                    {
+                        priority = pVal;
+                    }
+                    else if (p.ValueKind == JsonValueKind.String && int.TryParse(p.GetString(), out var pStrVal))
+                    {
+                        priority = pStrVal;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+        else
+        {
+            var match = Regex.Match(settings, @"(?:^|[&?])(?:priority|Priority)=(\d+)", RegexOptions.IgnoreCase);
+            if (match.Success && int.TryParse(match.Groups[1].Value, out var pVal))
+            {
+                priority = pVal;
+            }
+        }
+
+        return Math.Clamp(priority, 1, 10);
     }
 }
