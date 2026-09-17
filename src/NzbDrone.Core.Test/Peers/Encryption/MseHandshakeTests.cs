@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.IO.Pipes;
 using System.Linq;
+using System.Security;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +14,7 @@ using NzbDrone.Core.Torrents;
 namespace NzbDrone.Core.Test.Peers.Encryption;
 
 [TestFixture]
-public class MseHandshakeTest
+public class MseHandshakeTests
 {
     private static readonly byte[] TestInfoHash =
     [
@@ -572,6 +573,78 @@ public class MseHandshakeTest
                 await incoming.NegotiateIncomingAsync(sideB, ValidateInfoHash, cts.Token);
             });
         }
+    }
+
+    [TestCase(0x00u)]
+    [TestCase(0x03u)]
+    [TestCase(0x07u)]
+    public void ValidateCryptoSelect_should_reject_when_multiple_or_zero_bits_set(uint value)
+    {
+        var handshake = new MseHandshake(TestInfoHash, EncryptionMode.PreferEncrypted);
+        var ex = Assert.Throws<InvalidOperationException>(() => handshake.ValidateCryptoSelect((CryptoMethod)value));
+        Assert.That(ex.Message, Does.Contain("multiple or zero bits set"));
+    }
+
+    [Test]
+    public void ValidateCryptoSelect_should_reject_downgrade_to_plain_text_when_encryption_is_required()
+    {
+        var handshake = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        var ex = Assert.Throws<SecurityException>(() => handshake.ValidateCryptoSelect(CryptoMethod.PlainText));
+        Assert.That(ex.Message, Does.Contain("downgrade"));
+    }
+
+    [Test]
+    public void SelectCryptoMethod_should_reject_in_require_encrypted_mode_when_peer_only_offers_plain_text()
+    {
+        var handshake = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        var ex = Assert.Throws<SecurityException>(() => handshake.SelectCryptoMethod(CryptoMethod.PlainText));
+        Assert.That(ex.Message, Does.Contain("RC4 encryption"));
+    }
+
+    [Test]
+    public void ValidateCryptoSelect_should_accept_single_bit_rc4()
+    {
+        var handshake = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        Assert.DoesNotThrow(() => handshake.ValidateCryptoSelect(CryptoMethod.Rc4));
+    }
+
+    [Test]
+    public void ValidateCryptoSelect_should_accept_single_bit_plain_text_in_compatible_mode()
+    {
+        var handshake = new MseHandshake(TestInfoHash, EncryptionMode.PreferPlainText);
+        Assert.DoesNotThrow(() => handshake.ValidateCryptoSelect(CryptoMethod.PlainText));
+    }
+
+    [Test]
+    public void Handshake_successful_when_rc4_is_selected_in_require_encrypted_mode()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        var taskA = Task.Run(() => outgoing.NegotiateOutgoing(sideA));
+        var taskB = Task.Run(() => incoming.NegotiateIncoming(sideB, ValidateInfoHash));
+
+        Task.WaitAll(taskA, taskB);
+
+        Assert.That(outgoing.NegotiatedMethod, Is.EqualTo(CryptoMethod.Rc4));
+        Assert.That(incoming.NegotiatedMethod, Is.EqualTo(CryptoMethod.Rc4));
+    }
+
+    [Test]
+    public void Handshake_successful_when_plain_text_is_selected_in_compatible_mode()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.PreferPlainText);
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.PreferPlainText);
+
+        var taskA = Task.Run(() => outgoing.NegotiateOutgoing(sideA));
+        var taskB = Task.Run(() => incoming.NegotiateIncoming(sideB, ValidateInfoHash));
+
+        Task.WaitAll(taskA, taskB);
+
+        Assert.That(outgoing.NegotiatedMethod, Is.EqualTo(CryptoMethod.PlainText));
+        Assert.That(incoming.NegotiatedMethod, Is.EqualTo(CryptoMethod.PlainText));
     }
 
     /// <summary>
