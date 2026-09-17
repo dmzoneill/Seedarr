@@ -882,6 +882,7 @@ export interface MediaMetadata {
   imdbId?: string | null;
   tmdbId?: number | null;
   tvdbId?: number | null;
+  musicBrainzId?: string | null;
 }
 
 export interface DownloadHistoryEntry {

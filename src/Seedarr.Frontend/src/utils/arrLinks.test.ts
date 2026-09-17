@@ -5,6 +5,7 @@ import {
   getArrInstanceUrl,
   getDownloadClientUrl,
   getMediaDeepLink,
+  getMusicBrainzUrl,
 } from "./arrLinks";
 
 function createMockArrConnection(
@@ -270,5 +271,21 @@ describe("arrLinks: getMediaDeepLink", () => {
     );
 
     assert.equal(link, null);
+  });
+});
+
+describe("arrLinks: getMusicBrainzUrl", () => {
+  it("should return null when musicBrainzId is null, undefined, or empty", () => {
+    assert.equal(getMusicBrainzUrl(null), null);
+    assert.equal(getMusicBrainzUrl(undefined), null);
+    assert.equal(getMusicBrainzUrl(""), null);
+    assert.equal(getMusicBrainzUrl("   "), null);
+  });
+
+  it("should return MusicBrainz URL for valid ID", () => {
+    assert.equal(
+      getMusicBrainzUrl("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
+      "https://musicbrainz.org/release-group/a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    );
   });
 });

@@ -693,4 +693,44 @@ public class SonarrConnectionTest
         Assert.That(result.Title, Is.EqualTo("Lookup Show"));
         Assert.That(result.Year, Is.EqualTo(2023));
     }
+
+    [Test]
+    public void GetMediaDetails_extracts_tvdbId_imdbId_and_rewrites_mediacover_url()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""id"":42,""title"":""Test Show"",""tvdbId"":12345,""imdbId"":""tt1234567"",""images"":[{""coverType"":""poster"",""url"":""/MediaCover/42/poster.jpg""}]}");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8989";
+        connection.ApiKey = "test-key";
+        connection.ConnectionId = 5;
+
+        var result = connection.GetMediaDetails(42);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TvdbId, Is.EqualTo(12345));
+        Assert.That(result.ImdbId, Is.EqualTo("tt1234567"));
+        Assert.That(result.PosterUrl, Is.EqualTo("/api/v1/arr/image-proxy?connectionId=5&path=%2FMediaCover%2F42%2Fposter.jpg"));
+    }
+
+    [Test]
+    public void LookupMedia_extracts_tvdbId_imdbId_and_rewrites_mediacover_url()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"[{""id"":42,""title"":""Test Show"",""tvdbId"":12345,""imdbId"":""tt1234567"",""images"":[{""coverType"":""poster"",""url"":""/MediaCover/42/poster.jpg""}]}]");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8989";
+        connection.ApiKey = "test-key";
+        connection.ConnectionId = 5;
+
+        var result = connection.LookupMedia("Test Show");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TvdbId, Is.EqualTo(12345));
+        Assert.That(result.ImdbId, Is.EqualTo("tt1234567"));
+        Assert.That(result.PosterUrl, Is.EqualTo("/api/v1/arr/image-proxy?connectionId=5&path=%2FMediaCover%2F42%2Fposter.jpg"));
+    }
 }

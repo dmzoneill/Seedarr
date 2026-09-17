@@ -17,6 +17,7 @@ import {
   getImdbUrl,
   getTmdbUrl,
   getTvdbUrl,
+  getMusicBrainzUrl,
   getActorSearchUrl,
   getProwlarrUrl,
 } from "../utils/arrLinks";
@@ -1434,6 +1435,31 @@ export default function DownloadHistory() {
                         title="View on TheTVDB"
                       >
                         TheTVDB ↗
+                      </a>
+                    )}
+
+                    {/* MusicBrainz link */}
+                    {selectedDetailItem.metadata?.musicBrainzId && (
+                      <a
+                        href={
+                          getMusicBrainzUrl(
+                            selectedDetailItem.metadata.musicBrainzId,
+                          ) || "#"
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="badge"
+                        style={{
+                          backgroundColor: "#ba478f",
+                          color: "#fff",
+                          fontWeight: 700,
+                          textDecoration: "none",
+                          fontSize: "0.75rem",
+                          padding: "0.25rem 0.5rem",
+                        }}
+                        title="View on MusicBrainz"
+                      >
+                        MusicBrainz ↗
                       </a>
                     )}
 

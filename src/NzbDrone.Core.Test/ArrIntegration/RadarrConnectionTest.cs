@@ -648,4 +648,44 @@ public class RadarrConnectionTest
 
         Assert.That(result, Is.False);
     }
+
+    [Test]
+    public void GetMediaDetails_extracts_tmdbId_imdbId_and_rewrites_mediacover_url()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""id"":42,""title"":""Test Movie"",""tmdbId"":9999,""imdbId"":""tt9876543"",""images"":[{""coverType"":""poster"",""url"":""/MediaCover/42/poster.jpg""}]}");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:7878";
+        connection.ApiKey = "test-key";
+        connection.ConnectionId = 3;
+
+        var result = connection.GetMediaDetails(42);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TmdbId, Is.EqualTo(9999));
+        Assert.That(result.ImdbId, Is.EqualTo("tt9876543"));
+        Assert.That(result.PosterUrl, Is.EqualTo("/api/v1/arr/image-proxy?connectionId=3&path=%2FMediaCover%2F42%2Fposter.jpg"));
+    }
+
+    [Test]
+    public void LookupMedia_extracts_tmdbId_imdbId_and_rewrites_mediacover_url()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"[{""id"":42,""title"":""Test Movie"",""tmdbId"":9999,""imdbId"":""tt9876543"",""images"":[{""coverType"":""poster"",""url"":""/MediaCover/42/poster.jpg""}]}]");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:7878";
+        connection.ApiKey = "test-key";
+        connection.ConnectionId = 3;
+
+        var result = connection.LookupMedia("Test Movie");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TmdbId, Is.EqualTo(9999));
+        Assert.That(result.ImdbId, Is.EqualTo("tt9876543"));
+        Assert.That(result.PosterUrl, Is.EqualTo("/api/v1/arr/image-proxy?connectionId=3&path=%2FMediaCover%2F42%2Fposter.jpg"));
+    }
 }

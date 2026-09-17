@@ -19,6 +19,7 @@ namespace NzbDrone.Core.ArrIntegration
         public string ImdbId { get; set; }
         public int? TmdbId { get; set; }
         public int? TvdbId { get; set; }
+        public string MusicBrainzId { get; set; }
     }
 
     public class MediaActor

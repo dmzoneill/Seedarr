@@ -75,4 +75,29 @@ public static class ArrConnectionResources
         normalizedUrl = candidate.TrimEnd('/');
         return true;
     }
+
+    public static string NormalizeCoverUrl(string url, int connectionId = 0)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        var trimmed = url.Trim();
+        if (trimmed.StartsWith("/MediaCover/", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("MediaCover/", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("/Content/Images/", StringComparison.OrdinalIgnoreCase) ||
+            (trimmed.StartsWith('/') && !trimmed.StartsWith("/api/", StringComparison.OrdinalIgnoreCase)))
+        {
+            var path = trimmed.StartsWith('/') ? trimmed : "/" + trimmed;
+            return $"/api/v1/arr/image-proxy?connectionId={connectionId}&path={Uri.EscapeDataString(path)}";
+        }
+
+        if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Concat("https://", trimmed.AsSpan("http://".Length));
+        }
+
+        return trimmed;
+    }
 }

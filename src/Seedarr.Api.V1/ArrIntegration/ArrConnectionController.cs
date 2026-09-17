@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.ArrIntegration;
@@ -15,16 +18,19 @@ public class ArrConnectionController : Controller
     private readonly IArrConnectionFactory _connectionFactory;
     private readonly IArrSyncService _arrSyncService;
     private readonly IArrWebhookRegistration _webhookRegistration;
+    private readonly HttpClient _explicitHttpClient;
     private readonly Logger _logger;
 
     public ArrConnectionController(
         IArrConnectionFactory connectionFactory,
         IArrSyncService arrSyncService,
-        IArrWebhookRegistration webhookRegistration)
+        IArrWebhookRegistration webhookRegistration,
+        HttpClient httpClient = null)
     {
         _connectionFactory = connectionFactory;
         _arrSyncService = arrSyncService;
         _webhookRegistration = webhookRegistration;
+        _explicitHttpClient = httpClient;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -195,6 +201,63 @@ public class ArrConnectionController : Controller
     {
         var result = _arrSyncService.Sync();
         return Ok(result);
+    }
+
+    [HttpGet("image-proxy")]
+    [HttpGet("/api/v1/arr/image-proxy")]
+    public async Task<IActionResult> GetImageProxy([FromQuery] int connectionId, [FromQuery] string path, CancellationToken cancellationToken = default)
+    {
+        if (connectionId <= 0 || string.IsNullOrWhiteSpace(path))
+        {
+            return BadRequest("connectionId and path are required");
+        }
+
+        var definition = _connectionFactory.Get(connectionId);
+        if (definition == null || string.IsNullOrWhiteSpace(definition.Url))
+        {
+            return NotFound("Arr connection not found");
+        }
+
+        if (!path.StartsWith('/'))
+        {
+            path = "/" + path;
+        }
+
+        var targetUrl = $"{definition.Url.TrimEnd('/')}{path}";
+        var client = _explicitHttpClient ?? ArrConnectionResources.GetClient(definition.AcceptInvalidCertificates);
+
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, targetUrl);
+            if (!string.IsNullOrEmpty(definition.ApiKey))
+            {
+                request.Headers.Add("X-Api-Key", definition.ApiKey);
+            }
+
+            var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return StatusCode((int)response.StatusCode);
+            }
+
+            var contentType = response.Content.Headers.ContentType?.ToString() ?? "image/jpeg";
+            if (Response != null)
+            {
+                Response.Headers["Cache-Control"] = "public, max-age=86400";
+            }
+
+            var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            return File(stream, contentType);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Error proxying image from Arr connection {0} for path {1}", connectionId, path);
+            return StatusCode(502, "Failed to proxy image from Arr instance");
+        }
     }
 
     private static ArrConnectionDefinition MaskApiKey(ArrConnectionDefinition definition)

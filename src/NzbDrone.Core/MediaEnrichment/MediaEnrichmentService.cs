@@ -202,6 +202,11 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                     metadata.TvdbId = arrMetadata.TvdbId.Value.ToString();
                 }
 
+                if (!string.IsNullOrEmpty(arrMetadata.MusicBrainzId))
+                {
+                    metadata.MusicBrainzId = arrMetadata.MusicBrainzId;
+                }
+
                 if (!string.IsNullOrEmpty(arrMetadata.MediaType))
                 {
                     metadata.ArrType = NormalizeArrType(arrMetadata.MediaType);
@@ -992,6 +997,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         provider.Url = ArrConnectionResources.NormalizeUrl(definition.Url);
         provider.ApiKey = definition.ApiKey;
         provider.AcceptInvalidCertificates = definition.AcceptInvalidCertificates;
+        provider.ConnectionId = definition.Id;
         return provider;
     }
 

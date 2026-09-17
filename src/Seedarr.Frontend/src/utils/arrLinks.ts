@@ -16,8 +16,12 @@ export function getArrInstanceUrl(
   const match = connections.find(
     (c) =>
       c.enable &&
-      ((c.arrType && c.arrType.toLowerCase() === cleanedSource) ||
-        (c.name && c.name.toLowerCase() === cleanedSource) ||
+      ((c.arrType &&
+        c.arrType.trim() !== "" &&
+        c.arrType.trim().toLowerCase() === cleanedSource) ||
+        (c.name &&
+          c.name.trim() !== "" &&
+          c.name.trim().toLowerCase() === cleanedSource) ||
         (c.arrType &&
           c.arrType.trim() !== "" &&
           cleanedSource.includes(c.arrType.trim().toLowerCase())) ||
@@ -142,6 +146,13 @@ export function getTmdbUrl(
 export function getTvdbUrl(tvdbId?: number | null): string | null {
   if (!tvdbId) return null;
   return `https://thetvdb.com/dereferrer/series/${tvdbId}`;
+}
+
+export function getMusicBrainzUrl(
+  musicBrainzId?: string | null,
+): string | null {
+  if (!musicBrainzId || !musicBrainzId.trim()) return null;
+  return `https://musicbrainz.org/release-group/${encodeURIComponent(musicBrainzId.trim())}`;
 }
 
 export function getActorSearchUrl(actorName: string): string {
