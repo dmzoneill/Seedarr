@@ -23,7 +23,7 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
-public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>, IHandle<VpnRestoredEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>
+public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>, IHandle<VpnRestoredEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>, IHandle<PeerRequestRejectedEvent>
 {
     private const int OutgoingConnectTimeoutMs = 5000;
     private const int UnauthenticatedHandshakeTimeoutMs = 5000;
@@ -50,6 +50,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private readonly Extensions.ISyntheticMetadataGenerator _syntheticMetadataGenerator;
     private readonly Extensions.IMagnetMetadataDownloader _magnetMetadataDownloader;
     private readonly Extensions.IPeerExchange _peerExchange;
+    private readonly IPiecePicker _piecePicker;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
@@ -63,6 +64,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private CancellationTokenSource _listenerCts;
 
     public Socket ListenerSocket => _listener?.Server;
+    public IPiecePicker PiecePicker => _piecePicker;
 
     internal bool IsOutgoingEndpointInFlight(string ip, int port) => _inFlightOutgoingEndpoints.ContainsKey($"{ip}:{port}");
 
@@ -89,7 +91,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         Extensions.IMetadataExchange metadataExchange = null,
         Extensions.ISyntheticMetadataGenerator syntheticMetadataGenerator = null,
         Extensions.IMagnetMetadataDownloader magnetMetadataDownloader = null,
-        Extensions.IPeerExchange peerExchange = null)
+        Extensions.IPeerExchange peerExchange = null,
+        IPiecePicker piecePicker = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -109,6 +112,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         _syntheticMetadataGenerator = syntheticMetadataGenerator ?? new Extensions.SyntheticMetadataGenerator();
         _magnetMetadataDownloader = magnetMetadataDownloader;
         _peerExchange = peerExchange ?? new Extensions.PeerExchange(_configService);
+        _piecePicker = piecePicker ?? new PiecePicker();
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -117,6 +121,11 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         _random = random ?? new RandomNumberGenerator();
         _utpManager = utpManager;
         _vpnKillSwitchService = vpnKillSwitchService;
+
+        if (_fastExtensionHandler != null)
+        {
+            _fastExtensionHandler.OnRequestRejected += OnFastExtensionRequestRejected;
+        }
 
         var maxGlobal = configService.MaxGlobalConnections > 0 ? configService.MaxGlobalConnections : 200;
         var maxHalfOpen = configService.MaximumHalfOpenConnections > 0 ? configService.MaximumHalfOpenConnections : 50;
@@ -208,6 +217,19 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 }
             }
         }
+    }
+
+    public void Handle(PeerRequestRejectedEvent message)
+    {
+        if (message?.Connection != null)
+        {
+            _piecePicker?.OnBlockRejected(message.Connection, message.PieceIndex, message.Begin, message.Length);
+        }
+    }
+
+    private void OnFastExtensionRequestRejected(PeerConnection connection, int pieceIndex, int begin, int length)
+    {
+        _piecePicker?.OnBlockRejected(connection, pieceIndex, begin, length);
     }
 
     public void SetTorrentMetadata(string infoHash, byte[] metadata)
@@ -1616,14 +1638,22 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 break;
 
             case PeerMessageType.RejectRequest:
-                if (connection.PendingRequestCount > 0)
-                {
-                    connection.PendingRequestCount--;
-                }
-
                 if (connection.SupportsFastExtension && _fastExtensionHandler != null)
                 {
                     _fastExtensionHandler.HandleMessage(connection, message, torrent?.PieceCount ?? 0);
+                }
+                else
+                {
+                    connection.DecrementPendingRequests();
+
+                    if (message.Payload != null && message.Payload.Length >= 12)
+                    {
+                        var pieceIndex = (int)(((uint)message.Payload[0] << 24) | ((uint)message.Payload[1] << 16) | ((uint)message.Payload[2] << 8) | message.Payload[3]);
+                        var begin = (int)(((uint)message.Payload[4] << 24) | ((uint)message.Payload[5] << 16) | ((uint)message.Payload[6] << 8) | message.Payload[7]);
+                        var length = (int)(((uint)message.Payload[8] << 24) | ((uint)message.Payload[9] << 16) | ((uint)message.Payload[10] << 8) | message.Payload[11]);
+
+                        _piecePicker?.OnBlockRejected(connection, pieceIndex, begin, length);
+                    }
                 }
 
                 break;

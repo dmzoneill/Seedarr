@@ -161,4 +161,127 @@ public class FastExtensionTest
         var msgType = (FastMessageType)data[4];
         Assert.That(msgType, Is.EqualTo(FastMessageType.HaveAll));
     }
+
+    [Test]
+    public void HandleMessage_reject_request_should_decrement_pending_request_count()
+    {
+        using var connection = CreateConnection();
+        connection.PendingRequestCount = 5;
+
+        var message = _handler.SerializeRejectRequest(1, 0, 16384);
+        _handler.HandleMessage(connection, message, 100);
+
+        Assert.That(connection.PendingRequestCount, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void HandleMessage_reject_request_should_not_decrement_pending_request_count_below_zero()
+    {
+        using var connection = CreateConnection();
+        connection.PendingRequestCount = 0;
+
+        var message = _handler.SerializeRejectRequest(1, 0, 16384);
+        _handler.HandleMessage(connection, message, 100);
+
+        Assert.That(connection.PendingRequestCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleMessage_reject_request_should_fire_on_request_rejected_event()
+    {
+        using var connection = CreateConnection();
+        PeerConnection eventConnection = null;
+        var eventPiece = -1;
+        var eventBegin = -1;
+        var eventLength = -1;
+
+        _handler.OnRequestRejected += (conn, piece, begin, length) =>
+        {
+            eventConnection = conn;
+            eventPiece = piece;
+            eventBegin = begin;
+            eventLength = length;
+        };
+
+        var message = _handler.SerializeRejectRequest(3, 16384, 16384);
+        _handler.HandleMessage(connection, message, 100);
+
+        Assert.That(eventConnection, Is.EqualTo(connection));
+        Assert.That(eventPiece, Is.EqualTo(3));
+        Assert.That(eventBegin, Is.EqualTo(16384));
+        Assert.That(eventLength, Is.EqualTo(16384));
+    }
+
+    [Test]
+    public void HandleMessage_reject_request_releases_block_in_piece_picker_for_immediate_reassignment_without_waiting_for_timeout()
+    {
+        using var peer1 = CreateConnection("1.2.3.4", 5000);
+        using var peer2 = CreateConnection("5.6.7.8", 5001);
+        peer1.PeerChoking = false;
+        peer2.PeerChoking = false;
+        peer1.PeerPieces = new bool[10];
+        peer2.PeerPieces = new bool[10];
+        peer1.PeerPieces[2] = true;
+        peer2.PeerPieces[2] = true;
+
+        var picker = new PiecePicker();
+        picker.AddActivePiece(2, 32768, 16384);
+
+        // Assign block to peer1
+        var block = picker.RequestBlock(peer1, 2);
+        Assert.That(block, Is.Not.Null);
+        Assert.That(block.IsRequested, Is.True);
+        Assert.That(block.RequestedFrom, Is.EqualTo(peer1));
+        Assert.That(peer1.PendingRequestCount, Is.EqualTo(1));
+
+        // Connect handler to picker
+        _handler.OnRequestRejected += (conn, piece, begin, length) =>
+        {
+            picker.OnBlockRejected(conn, piece, begin, length);
+        };
+
+        // Peer1 rejects the request
+        var rejectMsg = _handler.SerializeRejectRequest(block.PieceIndex, block.Begin, block.Length);
+        _handler.HandleMessage(peer1, rejectMsg, 10);
+
+        // Verify PendingRequestCount decremented on peer1
+        Assert.That(peer1.PendingRequestCount, Is.EqualTo(0));
+
+        // Verify block released in active piece block map immediately without timeout
+        Assert.That(block.IsRequested, Is.False);
+        Assert.That(block.RequestedFrom, Is.Null);
+
+        // Verify block can immediately be reassigned to peer2
+        var reassignedBlock = picker.RequestBlock(peer2, 2);
+        Assert.That(reassignedBlock, Is.Not.Null);
+        Assert.That(reassignedBlock.PieceIndex, Is.EqualTo(block.PieceIndex));
+        Assert.That(reassignedBlock.Begin, Is.EqualTo(block.Begin));
+        Assert.That(reassignedBlock.RequestedFrom, Is.EqualTo(peer2));
+        Assert.That(peer2.PendingRequestCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void SerializeRejectRequest_should_format_12_byte_payload_with_index_begin_length_in_big_endian_order()
+    {
+        var message = _handler.SerializeRejectRequest(0x01020304, 0x05060708, 0x090A0B0C);
+
+        Assert.That(message.Type, Is.EqualTo((PeerMessageType)FastMessageType.RejectRequest));
+        Assert.That(message.Payload, Is.Not.Null);
+        Assert.That(message.Payload.Length, Is.EqualTo(12));
+
+        Assert.That(message.Payload[0], Is.EqualTo(0x01));
+        Assert.That(message.Payload[1], Is.EqualTo(0x02));
+        Assert.That(message.Payload[2], Is.EqualTo(0x03));
+        Assert.That(message.Payload[3], Is.EqualTo(0x04));
+
+        Assert.That(message.Payload[4], Is.EqualTo(0x05));
+        Assert.That(message.Payload[5], Is.EqualTo(0x06));
+        Assert.That(message.Payload[6], Is.EqualTo(0x07));
+        Assert.That(message.Payload[7], Is.EqualTo(0x08));
+
+        Assert.That(message.Payload[8], Is.EqualTo(0x09));
+        Assert.That(message.Payload[9], Is.EqualTo(0x0A));
+        Assert.That(message.Payload[10], Is.EqualTo(0x0B));
+        Assert.That(message.Payload[11], Is.EqualTo(0x0C));
+    }
 }

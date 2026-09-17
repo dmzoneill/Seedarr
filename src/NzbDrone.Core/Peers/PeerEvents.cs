@@ -27,3 +27,20 @@ public class PeerDisconnectedEvent : IEvent
         RemoteIp = remoteIp;
     }
 }
+
+public class PeerRequestRejectedEvent : IEvent
+{
+    public PeerConnection Connection { get; }
+    public string InfoHash => Connection?.InfoHash;
+    public int PieceIndex { get; }
+    public int Begin { get; }
+    public int Length { get; }
+
+    public PeerRequestRejectedEvent(PeerConnection connection, int pieceIndex, int begin, int length)
+    {
+        Connection = connection;
+        PieceIndex = pieceIndex;
+        Begin = begin;
+        Length = length;
+    }
+}

@@ -60,7 +60,32 @@ public class PeerConnection : IDisposable
     public int MessageReadTimeoutMs { get; set; }
     public int KeepAliveIntervalSeconds { get; set; } = 120;
     public int MaxPipelinedRequests { get; set; } = 200;
-    public int PendingRequestCount { get; set; }
+
+    private int _pendingRequestCount;
+
+    public int PendingRequestCount
+    {
+        get => Volatile.Read(ref _pendingRequestCount);
+        set => Interlocked.Exchange(ref _pendingRequestCount, Math.Max(0, value));
+    }
+
+    public int DecrementPendingRequests()
+    {
+        while (true)
+        {
+            var current = _pendingRequestCount;
+            if (current <= 0)
+            {
+                return 0;
+            }
+
+            if (Interlocked.CompareExchange(ref _pendingRequestCount, current - 1, current) == current)
+            {
+                return current - 1;
+            }
+        }
+    }
+
     public double IdleChance { get; set; }
     public byte[] ReservedBytes { get; private set; } = new byte[8];
     public bool SupportsExtensionProtocol { get; private set; }
