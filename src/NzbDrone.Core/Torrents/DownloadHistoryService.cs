@@ -17,6 +17,7 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
     private readonly ICategoryService _categoryService;
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly Logger _logger;
+    private readonly object _lock = new();
 
     public DownloadHistoryService(
         IDownloadHistoryRepository historyRepository,
@@ -39,7 +40,8 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
             string.IsNullOrEmpty(entry.Category) &&
             !entry.DownloadClientId.HasValue &&
             string.IsNullOrEmpty(entry.SourcePath) &&
-            !entry.IsPrivate.HasValue)
+            !entry.IsPrivate.HasValue &&
+            string.IsNullOrEmpty(entry.RemovalReason))
         {
             return;
         }
@@ -79,6 +81,12 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
             if (entry.IsPrivate.HasValue && !dict.ContainsKey("isPrivate"))
             {
                 dict["isPrivate"] = entry.IsPrivate.Value;
+            }
+
+            if (!string.IsNullOrEmpty(entry.RemovalReason))
+            {
+                dict["errorMessage"] = entry.RemovalReason;
+                dict["removalReason"] = entry.RemovalReason;
             }
 
             entry.DataJson = JsonSerializer.Serialize(dict);
@@ -171,95 +179,98 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
             return null;
         }
 
-        var existing = !string.IsNullOrEmpty(torrent.InfoHash)
-            ? _historyRepository.FindByInfoHash(torrent.InfoHash)
-            : null;
-
-        var effectiveMagnetUrl = !string.IsNullOrEmpty(magnetUrl) ? magnetUrl : torrent.MagnetUrl;
-        var effectiveDownloadUrl = !string.IsNullOrEmpty(downloadUrl) ? downloadUrl : torrent.DownloadUrl;
-
-        if (existing != null)
+        lock (_lock)
         {
-            existing.TorrentId = torrent.Id;
-            existing.Title = torrent.Name ?? existing.Title;
-            existing.TotalSize = torrent.TotalSize > 0 ? torrent.TotalSize : existing.TotalSize;
-            existing.PrimaryTracker = torrent.TrackerUrl ?? existing.PrimaryTracker;
-            existing.Status = "Active";
-            existing.DateRemoved = null;
+            var existing = !string.IsNullOrEmpty(torrent.InfoHash)
+                ? _historyRepository.FindByInfoHash(torrent.InfoHash)
+                : null;
 
-            if (!string.IsNullOrEmpty(torrent.SavePath))
+            var effectiveMagnetUrl = !string.IsNullOrEmpty(magnetUrl) ? magnetUrl : torrent.MagnetUrl;
+            var effectiveDownloadUrl = !string.IsNullOrEmpty(downloadUrl) ? downloadUrl : torrent.DownloadUrl;
+
+            if (existing != null)
             {
-                existing.SavePath = torrent.SavePath;
+                existing.TorrentId = torrent.Id;
+                existing.Title = torrent.Name ?? existing.Title;
+                existing.TotalSize = torrent.TotalSize > 0 ? torrent.TotalSize : existing.TotalSize;
+                existing.PrimaryTracker = torrent.TrackerUrl ?? existing.PrimaryTracker;
+                existing.Status = "Active";
+                existing.DateRemoved = null;
+
+                if (!string.IsNullOrEmpty(torrent.SavePath))
+                {
+                    existing.SavePath = torrent.SavePath;
+                }
+
+                if (!string.IsNullOrEmpty(torrent.Category))
+                {
+                    existing.Category = torrent.Category;
+                }
+
+                if (torrent.DownloadClientId.HasValue)
+                {
+                    existing.DownloadClientId = torrent.DownloadClientId;
+                }
+
+                if (!string.IsNullOrEmpty(torrent.SourcePath))
+                {
+                    existing.SourcePath = torrent.SourcePath;
+                }
+
+                if (!string.IsNullOrEmpty(source))
+                {
+                    existing.Source = source;
+                }
+
+                if (!string.IsNullOrEmpty(effectiveMagnetUrl))
+                {
+                    existing.MagnetUrl = effectiveMagnetUrl;
+                }
+
+                if (!string.IsNullOrEmpty(effectiveDownloadUrl))
+                {
+                    existing.DownloadUrl = effectiveDownloadUrl;
+                }
+
+                if (!string.IsNullOrEmpty(indexerName))
+                {
+                    existing.IndexerName = indexerName;
+                }
+
+                EnrichDataJson(existing);
+                _historyRepository.Update(existing);
+                return existing;
             }
 
-            if (!string.IsNullOrEmpty(torrent.Category))
+            var entry = new DownloadHistory
             {
-                existing.Category = torrent.Category;
-            }
+                TorrentId = torrent.Id,
+                Title = torrent.Name ?? "Unknown Release",
+                InfoHash = torrent.InfoHash ?? string.Empty,
+                TotalSize = torrent.TotalSize,
+                DateAdded = torrent.DateAdded != default ? torrent.DateAdded : DateTime.UtcNow,
+                DateCompleted = torrent.Progress >= 1.0 ? DateTime.UtcNow : null,
+                DateRemoved = null,
+                Uploaded = torrent.Uploaded,
+                Downloaded = torrent.Downloaded,
+                Ratio = torrent.Ratio,
+                SeedingTime = torrent.SeedingTime,
+                PrimaryTracker = torrent.TrackerUrl,
+                IndexerName = indexerName,
+                Source = source ?? "Manual",
+                MagnetUrl = effectiveMagnetUrl,
+                DownloadUrl = effectiveDownloadUrl,
+                SavePath = torrent.SavePath,
+                Category = torrent.Category,
+                DownloadClientId = torrent.DownloadClientId,
+                SourcePath = torrent.SourcePath,
+                IsPrivate = torrent.IsPrivate,
+                Status = "Active"
+            };
 
-            if (torrent.DownloadClientId.HasValue)
-            {
-                existing.DownloadClientId = torrent.DownloadClientId;
-            }
-
-            if (!string.IsNullOrEmpty(torrent.SourcePath))
-            {
-                existing.SourcePath = torrent.SourcePath;
-            }
-
-            if (!string.IsNullOrEmpty(source))
-            {
-                existing.Source = source;
-            }
-
-            if (!string.IsNullOrEmpty(effectiveMagnetUrl))
-            {
-                existing.MagnetUrl = effectiveMagnetUrl;
-            }
-
-            if (!string.IsNullOrEmpty(effectiveDownloadUrl))
-            {
-                existing.DownloadUrl = effectiveDownloadUrl;
-            }
-
-            if (!string.IsNullOrEmpty(indexerName))
-            {
-                existing.IndexerName = indexerName;
-            }
-
-            EnrichDataJson(existing);
-            _historyRepository.Update(existing);
-            return existing;
+            EnrichDataJson(entry);
+            return _historyRepository.Insert(entry);
         }
-
-        var entry = new DownloadHistory
-        {
-            TorrentId = torrent.Id,
-            Title = torrent.Name ?? "Unknown Release",
-            InfoHash = torrent.InfoHash ?? string.Empty,
-            TotalSize = torrent.TotalSize,
-            DateAdded = torrent.DateAdded != default ? torrent.DateAdded : DateTime.UtcNow,
-            DateCompleted = torrent.Progress >= 1.0 ? DateTime.UtcNow : null,
-            DateRemoved = null,
-            Uploaded = torrent.Uploaded,
-            Downloaded = torrent.Downloaded,
-            Ratio = torrent.Ratio,
-            SeedingTime = torrent.SeedingTime,
-            PrimaryTracker = torrent.TrackerUrl,
-            IndexerName = indexerName,
-            Source = source ?? "Manual",
-            MagnetUrl = effectiveMagnetUrl,
-            DownloadUrl = effectiveDownloadUrl,
-            SavePath = torrent.SavePath,
-            Category = torrent.Category,
-            DownloadClientId = torrent.DownloadClientId,
-            SourcePath = torrent.SourcePath,
-            IsPrivate = torrent.IsPrivate,
-            Status = "Active"
-        };
-
-        EnrichDataJson(entry);
-        return _historyRepository.Insert(entry);
     }
 
     public void RecordTorrentUpdated(Torrent torrent)
@@ -723,25 +734,62 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
             return;
         }
 
-        var torrent = message.Torrent;
-        var entry = _historyRepository.FindByTorrentId(torrent.Id)
-            ?? (!string.IsNullOrEmpty(torrent.InfoHash) ? _historyRepository.FindByInfoHash(torrent.InfoHash) : null);
-
-        if (entry != null)
+        lock (_lock)
         {
-            if (message.NewStatus == TorrentStatus.Error)
-            {
-                entry.Status = "Error";
-                _historyRepository.Update(entry);
-            }
-            else if (message.NewStatus == TorrentStatus.Seeding)
-            {
-                entry.DateCompleted ??= DateTime.UtcNow;
-                if (entry.Status == "Active")
-                {
-                    entry.Status = "Completed";
-                }
+            var torrent = message.Torrent;
+            var entry = _historyRepository.FindByTorrentId(torrent.Id)
+                ?? (!string.IsNullOrEmpty(torrent.InfoHash) ? _historyRepository.FindByInfoHash(torrent.InfoHash) : null);
 
+            if (entry == null)
+            {
+                return;
+            }
+
+            var updated = false;
+            switch (message.NewStatus)
+            {
+                case TorrentStatus.Error:
+                    entry.Status = "Error";
+                    var errorMsg = !string.IsNullOrWhiteSpace(message.ErrorMessage)
+                        ? message.ErrorMessage
+                        : (!string.IsNullOrWhiteSpace(torrent.ErrorMessage) ? torrent.ErrorMessage : null);
+                    if (!string.IsNullOrWhiteSpace(errorMsg))
+                    {
+                        entry.RemovalReason = errorMsg;
+                    }
+
+                    EnrichDataJson(entry);
+                    updated = true;
+                    break;
+
+                case TorrentStatus.Paused:
+                    entry.Status = "Paused";
+                    EnrichDataJson(entry);
+                    updated = true;
+                    break;
+
+                case TorrentStatus.Downloading:
+                    entry.Status = "Downloading";
+                    EnrichDataJson(entry);
+                    updated = true;
+                    break;
+
+                case TorrentStatus.Checking:
+                    entry.Status = "Checking";
+                    EnrichDataJson(entry);
+                    updated = true;
+                    break;
+
+                case TorrentStatus.Seeding:
+                    entry.DateCompleted ??= DateTime.UtcNow;
+                    entry.Status = "Completed";
+                    EnrichDataJson(entry);
+                    updated = true;
+                    break;
+            }
+
+            if (updated)
+            {
                 _historyRepository.Update(entry);
             }
         }
