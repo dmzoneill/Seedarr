@@ -1208,7 +1208,7 @@ export interface InstallMarketplaceTemplateRequest {
 export interface FileSystemEntryResource {
   name: string;
   path: string;
-  type: "folder" | "file" | "drive" | string;
+  type: "folder" | "file" | "drive" | "symlink" | string;
   size?: number | null;
   freeSpace?: number | null;
   lastModified?: string | null;

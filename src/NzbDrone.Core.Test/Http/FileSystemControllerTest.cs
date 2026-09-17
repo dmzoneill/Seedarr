@@ -258,4 +258,136 @@ public class FileSystemControllerTest
             }
         }
     }
+
+    [Test]
+    public void GetContents_BlockedSystemPath_Returns_BadRequest()
+    {
+        var blockedPath = OperatingSystem.IsWindows() ? @"C:\Windows" : "/etc";
+        var actionResult = _controller.GetContents(blockedPath);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void GetContents_BlockedSubdirectory_Returns_BadRequest()
+    {
+        var blockedPath = OperatingSystem.IsWindows() ? @"C:\Windows\System32" : "/etc/ssl";
+        var actionResult = _controller.GetContents(blockedPath);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public void GetContents_WhenShowHiddenFalse_FiltersOut_Hidden_Directories_And_Files()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "seedarr_test_hidden_false_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempDir, "visible_dir"));
+            Directory.CreateDirectory(Path.Combine(tempDir, ".hidden_dir"));
+            File.WriteAllText(Path.Combine(tempDir, "visible_file.txt"), "hello");
+            File.WriteAllText(Path.Combine(tempDir, ".hidden_file.txt"), "secret");
+
+            var actionResult = _controller.GetContents(tempDir, includeFiles: true, showHidden: false);
+
+            Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+            var okResult = (OkObjectResult)actionResult.Result;
+            var resource = (FileSystemResource)okResult.Value;
+
+            Assert.That(resource.Directories.Any(d => d.Name == "visible_dir"), Is.True);
+            Assert.That(resource.Directories.Any(d => d.Name == ".hidden_dir"), Is.False);
+            Assert.That(resource.Files.Any(f => f.Name == "visible_file.txt"), Is.True);
+            Assert.That(resource.Files.Any(f => f.Name == ".hidden_file.txt"), Is.False);
+            Assert.That(resource.TotalDirectories, Is.EqualTo(1));
+            Assert.That(resource.TotalFiles, Is.EqualTo(1));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
+
+    [Test]
+    public void GetContents_WhenShowHiddenTrue_Includes_Hidden_Directories_And_Files()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "seedarr_test_hidden_true_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(tempDir, "visible_dir"));
+            Directory.CreateDirectory(Path.Combine(tempDir, ".hidden_dir"));
+            File.WriteAllText(Path.Combine(tempDir, "visible_file.txt"), "hello");
+            File.WriteAllText(Path.Combine(tempDir, ".hidden_file.txt"), "secret");
+
+            var actionResult = _controller.GetContents(tempDir, includeFiles: true, showHidden: true);
+
+            Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+            var okResult = (OkObjectResult)actionResult.Result;
+            var resource = (FileSystemResource)okResult.Value;
+
+            Assert.That(resource.Directories.Any(d => d.Name == "visible_dir"), Is.True);
+            Assert.That(resource.Directories.Any(d => d.Name == ".hidden_dir"), Is.True);
+            Assert.That(resource.Files.Any(f => f.Name == "visible_file.txt"), Is.True);
+            Assert.That(resource.Files.Any(f => f.Name == ".hidden_file.txt"), Is.True);
+            Assert.That(resource.TotalDirectories, Is.EqualTo(2));
+            Assert.That(resource.TotalFiles, Is.EqualTo(2));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
+
+    [Test]
+    public void GetContents_Symlink_Entries_Are_Properly_Tagged_With_Type_Symlink()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "seedarr_test_symlink_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var targetDir = Path.Combine(tempDir, "real_dir");
+            Directory.CreateDirectory(targetDir);
+
+            var symlinkDir = Path.Combine(tempDir, "symlink_dir");
+            Directory.CreateSymbolicLink(symlinkDir, targetDir);
+
+            var targetFile = Path.Combine(tempDir, "real_file.txt");
+            File.WriteAllText(targetFile, "content");
+
+            var symlinkFile = Path.Combine(tempDir, "symlink_file.txt");
+            File.CreateSymbolicLink(symlinkFile, targetFile);
+
+            var actionResult = _controller.GetContents(tempDir, includeFiles: true);
+
+            Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+            var okResult = (OkObjectResult)actionResult.Result;
+            var resource = (FileSystemResource)okResult.Value;
+
+            var dirEntry = resource.Directories.FirstOrDefault(d => d.Name == "symlink_dir");
+            var fileEntry = resource.Files.FirstOrDefault(f => f.Name == "symlink_file.txt");
+
+            Assert.That(dirEntry, Is.Not.Null);
+            Assert.That(dirEntry.Type, Is.EqualTo("symlink"));
+
+            Assert.That(fileEntry, Is.Not.Null);
+            Assert.That(fileEntry.Type, Is.EqualTo("symlink"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+        }
+    }
 }
