@@ -135,4 +135,50 @@ public class InfoHashCalculatorTest
 
         Assert.That(result, Does.Match("^[0-9a-f]+$"));
     }
+
+    [Test]
+    public void Calculate_raw_bytes_should_return_sha1_hex_string_for_known_input()
+    {
+        var rawBytes = "d4:name5:helloe"u8;
+        var expectedHash = Convert.ToHexString(SHA1.HashData(rawBytes)).ToLowerInvariant();
+
+        var result = InfoHashCalculator.Calculate(rawBytes);
+
+        Assert.That(result, Is.EqualTo(expectedHash));
+    }
+
+    [Test]
+    public void Calculate_raw_bytes_should_maintain_authentic_hash_for_non_canonical_order()
+    {
+        // Non-canonical key order: "name" before "length"
+        var rawBytes = "d4:name8:test.txt6:lengthi1024e12:piece lengthi16384e6:pieces20:12345678901234567890e"u8;
+        var expectedHash = Convert.ToHexString(SHA1.HashData(rawBytes)).ToLowerInvariant();
+
+        var result = InfoHashCalculator.Calculate(rawBytes);
+
+        Assert.That(result, Is.EqualTo(expectedHash));
+    }
+
+    [Test]
+    public void Calculate_should_fallback_to_dictionary_encoding_when_raw_bytes_are_not_provided()
+    {
+        var info = new BDictionary
+        {
+            { "name", new BString("fallback-test") },
+            { "piece length", new BNumber(16384) }
+        };
+
+        var encoded = info.EncodeAsBytes();
+        var expectedHash = Convert.ToHexString(SHA1.HashData(encoded)).ToLowerInvariant();
+
+        var result = InfoHashCalculator.Calculate(info);
+
+        Assert.That(result, Is.EqualTo(expectedHash));
+    }
+
+    [Test]
+    public void Calculate_dictionary_should_throw_when_null()
+    {
+        Assert.Throws<ArgumentNullException>(() => InfoHashCalculator.Calculate(null as BDictionary));
+    }
 }

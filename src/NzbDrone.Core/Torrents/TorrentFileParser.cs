@@ -38,6 +38,7 @@ public interface ITorrentFileParser
 {
     ParsedTorrent Parse(string filePath);
     ParsedTorrent Parse(Stream stream);
+    ParsedTorrent Parse(byte[] bytes);
 }
 
 public class TorrentFileParser : ITorrentFileParser
@@ -76,11 +77,41 @@ public class TorrentFileParser : ITorrentFileParser
             throw new InvalidTorrentFileException("Torrent file exceeds maximum permitted size of 10 MiB.");
         }
 
+        using var memoryStream = new MemoryStream();
+        var buffer = new byte[81920];
+        long totalRead = 0;
+        int bytesRead;
+
+        while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            totalRead += bytesRead;
+            if (totalRead > MaxTorrentStreamBytes)
+            {
+                throw new InvalidTorrentFileException("Torrent file exceeds maximum permitted size of 10 MiB.");
+            }
+
+            memoryStream.Write(buffer, 0, bytesRead);
+        }
+
+        return Parse(memoryStream.ToArray());
+    }
+
+    public ParsedTorrent Parse(byte[] bytes)
+    {
+        if (bytes == null)
+        {
+            throw new ArgumentNullException(nameof(bytes));
+        }
+
+        if (bytes.Length > MaxTorrentStreamBytes)
+        {
+            throw new InvalidTorrentFileException("Torrent file exceeds maximum permitted size of 10 MiB.");
+        }
+
         try
         {
-            var parseStream = stream.CanSeek ? stream : new BoundedStream(stream, MaxTorrentStreamBytes);
             var parser = new BencodeParser();
-            var torrent = parser.Parse<BDictionary>(parseStream);
+            var torrent = parser.Parse<BDictionary>(bytes);
 
             ValidateRecursionDepth(torrent);
 
@@ -153,10 +184,14 @@ public class TorrentFileParser : ITorrentFileParser
                 announceUrl = announceListParsed[0][0];
             }
 
+            var infoHash = TryExtractRawInfoBytes(bytes, out var rawInfoBytes)
+                ? InfoHashCalculator.Calculate(rawInfoBytes)
+                : InfoHashCalculator.Calculate(info);
+
             var result = new ParsedTorrent
             {
                 Name = torrentName,
-                InfoHash = InfoHashCalculator.Calculate(info),
+                InfoHash = infoHash,
                 PieceLength = (int)pieceLengthNum.Value,
                 PieceCount = pieceCount,
                 Comment = GetStringWithUtf8Fallback(torrent, "comment"),
@@ -406,71 +441,219 @@ public class TorrentFileParser : ITorrentFileParser
         }
     }
 
-    private sealed class BoundedStream : Stream
+    internal static bool TryExtractRawInfoBytes(ReadOnlySpan<byte> bytes, out ReadOnlySpan<byte> rawInfoBytes)
     {
-        private readonly Stream _inner;
-        private readonly long _maxBytes;
-        private long _bytesRead;
+        rawInfoBytes = default;
 
-        public BoundedStream(Stream inner, long maxBytes)
+        if (bytes.IsEmpty || bytes[0] != (byte)'d')
         {
-            _inner = inner;
-            _maxBytes = maxBytes;
+            return false;
         }
 
-        public override bool CanRead => _inner.CanRead;
-        public override bool CanSeek => _inner.CanSeek;
-        public override bool CanWrite => false;
-        public override long Length => _inner.Length;
-
-        public override long Position
+        var index = 1;
+        while (index < bytes.Length && bytes[index] != (byte)'e')
         {
-            get => _inner.Position;
-            set => _inner.Position = value;
-        }
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            var read = _inner.Read(buffer, offset, count);
-            _bytesRead += read;
-            if (_bytesRead > _maxBytes)
+            if (bytes[index] < (byte)'0' || bytes[index] > (byte)'9')
             {
-                throw new InvalidTorrentFileException("Torrent file exceeds maximum permitted size of 10 MiB.");
+                return false;
             }
 
-            return read;
-        }
-
-        public override int Read(Span<byte> buffer)
-        {
-            var read = _inner.Read(buffer);
-            _bytesRead += read;
-            if (_bytesRead > _maxBytes)
+            var keyLen = 0;
+            while (index < bytes.Length && bytes[index] >= (byte)'0' && bytes[index] <= (byte)'9')
             {
-                throw new InvalidTorrentFileException("Torrent file exceeds maximum permitted size of 10 MiB.");
-            }
-
-            return read;
-        }
-
-        public override int ReadByte()
-        {
-            var b = _inner.ReadByte();
-            if (b != -1)
-            {
-                _bytesRead++;
-                if (_bytesRead > _maxBytes)
+                var digit = bytes[index] - (byte)'0';
+                if (keyLen > (int.MaxValue - digit) / 10)
                 {
-                    throw new InvalidTorrentFileException("Torrent file exceeds maximum permitted size of 10 MiB.");
+                    return false;
+                }
+
+                keyLen = (keyLen * 10) + digit;
+                index++;
+            }
+
+            if (index >= bytes.Length || bytes[index] != (byte)':')
+            {
+                return false;
+            }
+
+            index++; // skip ':'
+            if (bytes.Length - index < keyLen)
+            {
+                return false;
+            }
+
+            var key = bytes.Slice(index, keyLen);
+            index += keyLen;
+
+            var isInfo = key.SequenceEqual("info"u8);
+            if (isInfo)
+            {
+                if (index >= bytes.Length || bytes[index] != (byte)'d')
+                {
+                    return false;
+                }
+
+                var infoStart = index;
+                if (!TrySkipContainer(bytes, ref index))
+                {
+                    return false;
+                }
+
+                rawInfoBytes = bytes.Slice(infoStart, index - infoStart);
+                return true;
+            }
+
+            if (!TrySkipElement(bytes, ref index))
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TrySkipElement(ReadOnlySpan<byte> bytes, ref int index)
+    {
+        if (index >= bytes.Length)
+        {
+            return false;
+        }
+
+        var b = bytes[index];
+        if (b == (byte)'d' || b == (byte)'l')
+        {
+            return TrySkipContainer(bytes, ref index);
+        }
+
+        if (b == (byte)'i')
+        {
+            index++;
+            while (index < bytes.Length && bytes[index] != (byte)'e')
+            {
+                index++;
+            }
+
+            if (index >= bytes.Length || bytes[index] != (byte)'e')
+            {
+                return false;
+            }
+
+            index++;
+            return true;
+        }
+
+        if (b >= (byte)'0' && b <= (byte)'9')
+        {
+            var strLen = 0;
+            while (index < bytes.Length && bytes[index] >= (byte)'0' && bytes[index] <= (byte)'9')
+            {
+                var digit = bytes[index] - (byte)'0';
+                if (strLen > (int.MaxValue - digit) / 10)
+                {
+                    return false;
+                }
+
+                strLen = (strLen * 10) + digit;
+                index++;
+            }
+
+            if (index >= bytes.Length || bytes[index] != (byte)':')
+            {
+                return false;
+            }
+
+            index++; // skip ':'
+            if (bytes.Length - index < strLen)
+            {
+                return false;
+            }
+
+            index += strLen;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TrySkipContainer(ReadOnlySpan<byte> bytes, ref int index)
+    {
+        if (index >= bytes.Length || (bytes[index] != (byte)'d' && bytes[index] != (byte)'l'))
+        {
+            return false;
+        }
+
+        var depth = 0;
+        while (index < bytes.Length)
+        {
+            var b = bytes[index];
+            if (b == (byte)'d' || b == (byte)'l')
+            {
+                depth++;
+                if (depth > MaxRecursionDepth)
+                {
+                    return false;
+                }
+
+                index++;
+            }
+            else if (b == (byte)'e')
+            {
+                depth--;
+                index++;
+                if (depth == 0)
+                {
+                    return true;
                 }
             }
+            else if (b == (byte)'i')
+            {
+                index++;
+                while (index < bytes.Length && bytes[index] != (byte)'e')
+                {
+                    index++;
+                }
 
-            return b;
+                if (index >= bytes.Length || bytes[index] != (byte)'e')
+                {
+                    return false;
+                }
+
+                index++;
+            }
+            else if (b >= (byte)'0' && b <= (byte)'9')
+            {
+                var strLen = 0;
+                while (index < bytes.Length && bytes[index] >= (byte)'0' && bytes[index] <= (byte)'9')
+                {
+                    var digit = bytes[index] - (byte)'0';
+                    if (strLen > (int.MaxValue - digit) / 10)
+                    {
+                        return false;
+                    }
+
+                    strLen = (strLen * 10) + digit;
+                    index++;
+                }
+
+                if (index >= bytes.Length || bytes[index] != (byte)':')
+                {
+                    return false;
+                }
+
+                index++; // skip ':'
+                if (bytes.Length - index < strLen)
+                {
+                    return false;
+                }
+
+                index += strLen;
+            }
+            else
+            {
+                return false;
+            }
         }
 
-        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        public override void Flush() => _inner.Flush();
+        return false;
     }
 }

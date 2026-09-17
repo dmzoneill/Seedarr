@@ -1,6 +1,9 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
 using BencodeNET.Objects;
+using BencodeNET.Parsing;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Exceptions;
@@ -986,5 +989,99 @@ public class TorrentFileParserTest
 
         Assert.That(result.TotalSize, Is.EqualTo(3000));
         Assert.That(result.ContentSize, Is.EqualTo(2000));
+    }
+
+    [Test]
+    public void Parse_should_compute_info_hash_from_raw_bytes_preserving_non_canonical_key_ordering()
+    {
+        // Non-canonical key ordering inside info dict: "name" comes before "length" (canonical requires "length" < "name")
+        var nonCanonicalInfo = "d4:name8:test.txt6:lengthi1024e12:piece lengthi16384e6:pieces20:12345678901234567890e"u8.ToArray();
+        var torrentBytes = "d4:info"u8.ToArray()
+            .Concat(nonCanonicalInfo)
+            .Concat("e"u8.ToArray())
+            .ToArray();
+
+        var expectedHash = Convert.ToHexString(SHA1.HashData(nonCanonicalInfo)).ToLowerInvariant();
+
+        var resultStream = _subject.Parse(new MemoryStream(torrentBytes));
+        var resultBytes = _subject.Parse(torrentBytes);
+
+        Assert.That(resultStream.InfoHash, Is.EqualTo(expectedHash));
+        Assert.That(resultBytes.InfoHash, Is.EqualTo(expectedHash));
+
+        // Re-encoding through BDictionary sorts keys canonically, which produces a different hash
+        var parser = new BencodeParser();
+        var parsedDict = parser.Parse<BDictionary>(torrentBytes);
+        var canonicalReencodedBytes = ((BDictionary)parsedDict["info"]).EncodeAsBytes();
+        var canonicalHash = Convert.ToHexString(SHA1.HashData(canonicalReencodedBytes)).ToLowerInvariant();
+
+        Assert.That(resultStream.InfoHash, Is.Not.EqualTo(canonicalHash));
+    }
+
+    [Test]
+    public void Parse_should_compute_info_hash_from_raw_bytes_with_non_standard_encodings()
+    {
+        // Non-standard binary data and custom keys inside info dictionary
+        var prefix = "d4:name8:test.txt6:custom5:"u8.ToArray();
+        var customBinary = new byte[] { 0x00, 0xFF, 0xFE, 0x01, 0x7F };
+        var suffix = "6:lengthi2048e12:piece lengthi16384e6:pieces20:12345678901234567890e"u8.ToArray();
+
+        var nonStandardInfo = prefix.Concat(customBinary).Concat(suffix).ToArray();
+        var torrentBytes = "d4:info"u8.ToArray()
+            .Concat(nonStandardInfo)
+            .Concat("e"u8.ToArray())
+            .ToArray();
+
+        var expectedHash = Convert.ToHexString(SHA1.HashData(nonStandardInfo)).ToLowerInvariant();
+
+        var result = _subject.Parse(torrentBytes);
+
+        Assert.That(result.InfoHash, Is.EqualTo(expectedHash));
+    }
+
+    [Test]
+    public void Parse_byte_array_should_throw_when_null()
+    {
+        Assert.Throws<ArgumentNullException>(() => _subject.Parse((byte[])null));
+    }
+
+    [Test]
+    public void Parse_byte_array_should_throw_when_exceeds_10_mib()
+    {
+        var oversized = new byte[(10 * 1024 * 1024) + 1];
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(oversized));
+        Assert.That(ex.Message, Does.Contain("10 MiB"));
+    }
+
+    [Test]
+    public void TryExtractRawInfoBytes_should_return_false_when_root_is_not_dictionary()
+    {
+        var bytes = "i12345e"u8.ToArray();
+        var success = TorrentFileParser.TryExtractRawInfoBytes(bytes, out _);
+        Assert.That(success, Is.False);
+    }
+
+    [Test]
+    public void TryExtractRawInfoBytes_should_return_false_when_info_key_is_missing()
+    {
+        var bytes = "d4:name8:test.txte"u8.ToArray();
+        var success = TorrentFileParser.TryExtractRawInfoBytes(bytes, out _);
+        Assert.That(success, Is.False);
+    }
+
+    [Test]
+    public void TryExtractRawInfoBytes_should_return_false_when_info_value_is_not_dictionary()
+    {
+        var bytes = "d4:info5:helloe"u8.ToArray();
+        var success = TorrentFileParser.TryExtractRawInfoBytes(bytes, out _);
+        Assert.That(success, Is.False);
+    }
+
+    [Test]
+    public void TryExtractRawInfoBytes_should_return_false_when_info_dictionary_is_truncated()
+    {
+        var bytes = "d4:infod4:name5:hello"u8.ToArray();
+        var success = TorrentFileParser.TryExtractRawInfoBytes(bytes, out _);
+        Assert.That(success, Is.False);
     }
 }
