@@ -29,6 +29,7 @@ public class PeerDiscoveryService : IPeerDiscoveryService
     private const int MaxPeersPerTorrent = 200;
     private const int MaxFailCount = 3;
     private const int RetryDelayMinutes = 10;
+    private const int LocalRetryDelayMinutes = 1;
 
     private readonly ConcurrentDictionary<string, List<DiscoveredPeer>> _peers = new(StringComparer.OrdinalIgnoreCase);
 
@@ -49,7 +50,11 @@ public class PeerDiscoveryService : IPeerDiscoveryService
                 if (existing != null)
                 {
                     existing.DiscoveredAt = DateTime.UtcNow;
-                    existing.Source = source;
+                    if (GetSourcePriority(source) >= GetSourcePriority(existing.Source))
+                    {
+                        existing.Source = source;
+                    }
+
                     continue;
                 }
 
@@ -64,7 +69,16 @@ public class PeerDiscoveryService : IPeerDiscoveryService
 
             if (list.Count > MaxPeersPerTorrent)
             {
-                list.RemoveRange(0, list.Count - MaxPeersPerTorrent);
+                var toRemoveCount = list.Count - MaxPeersPerTorrent;
+                var peersToRemove = list
+                    .OrderByDescending(p => p.FailCount >= MaxFailCount ? 1 : 0)
+                    .ThenBy(p => GetSourcePriority(p.Source))
+                    .ThenByDescending(p => p.FailCount)
+                    .ThenBy(p => p.DiscoveredAt)
+                    .Take(toRemoveCount)
+                    .ToHashSet();
+
+                list.RemoveAll(peersToRemove.Contains);
             }
         }
     }
@@ -82,8 +96,9 @@ public class PeerDiscoveryService : IPeerDiscoveryService
         {
             return list
                 .Where(p => p.FailCount < MaxFailCount)
-                .Where(p => !p.LastAttempt.HasValue || (now - p.LastAttempt.Value).TotalMinutes >= RetryDelayMinutes)
+                .Where(p => !p.LastAttempt.HasValue || (now - p.LastAttempt.Value).TotalMinutes >= GetRetryDelayMinutes(p.Source))
                 .OrderBy(p => p.FailCount)
+                .ThenByDescending(p => GetSourcePriority(p.Source))
                 .ThenByDescending(p => p.DiscoveredAt)
                 .Take(maxCount)
                 .ToList();
@@ -130,4 +145,18 @@ public class PeerDiscoveryService : IPeerDiscoveryService
             return list.Count(p => p.FailCount < MaxFailCount);
         }
     }
+
+    private static int GetSourcePriority(string source) => source?.ToLowerInvariant() switch
+    {
+        "lpd" => 4,     // Local Peer Discovery: 1st priority
+        "pex" => 3,     // Peer Exchange: 2nd priority
+        "tracker" => 2, // Trackers: 3rd priority
+        "dht" => 1,     // DHT: 4th priority
+        _ => 0
+    };
+
+    private static int GetRetryDelayMinutes(string source) =>
+        string.Equals(source, "lpd", StringComparison.OrdinalIgnoreCase)
+            ? LocalRetryDelayMinutes
+            : RetryDelayMinutes;
 }
