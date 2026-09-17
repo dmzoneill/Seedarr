@@ -2173,4 +2173,30 @@ public class PeerServerTest
         Assert.That(parsed.Data, Is.Not.Null);
         Assert.That(parsed.Data.Length, Is.GreaterThan(0));
     }
+
+    [Test]
+    public void ConnectToPeer_should_reject_self_connection_when_port_matches_listening_port_on_loopback()
+    {
+        _configService.ListeningPort.Returns(6881);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = 6881,
+            Source = "pex"
+        };
+
+        InvokeConnectToPeer(_server, torrent, candidate);
+
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+        _peerDiscovery.Received().MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+    }
 }

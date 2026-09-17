@@ -921,9 +921,23 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
             return;
         }
 
-        if (!_configService.EnableIPv6 &&
-            IPAddress.TryParse(candidate.Ip, out var candIp) &&
-            candIp.AddressFamily == AddressFamily.InterNetworkV6)
+        if (!IPAddress.TryParse(candidate.Ip, out var candIp))
+        {
+            _logger.Debug("Skipping invalid IP candidate '{0}'", candidate.Ip);
+            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+            return;
+        }
+
+        var listeningPort = _configService?.ListeningPort ?? 0;
+        if (listeningPort > 0 && candidate.Port == listeningPort &&
+            (IPAddress.IsLoopback(candIp) || Lpd.LocalPeerDiscovery.IsLocalAddress(candIp)))
+        {
+            _logger.Debug("PeerServer: rejected self-connection to {0}:{1}", candidate.Ip, candidate.Port);
+            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+            return;
+        }
+
+        if (!_configService.EnableIPv6 && candIp.AddressFamily == AddressFamily.InterNetworkV6)
         {
             _logger.Debug("IPv6 disabled, skipping IPv6 peer {0}:{1}", candidate.Ip, candidate.Port);
             return;
