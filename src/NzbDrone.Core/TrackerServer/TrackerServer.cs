@@ -19,6 +19,9 @@ namespace NzbDrone.Core.TrackerServer;
 
 public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 {
+    private static readonly byte[] MissingParametersResponse = Encoding.ASCII.GetBytes("d14:failure reason25:Missing required parameterse");
+    private static readonly byte[] InvalidParametersResponse = Encoding.ASCII.GetBytes("d14:failure reason18:Invalid parameterse");
+
     private readonly IPeerDatabase _peerDatabase;
     private readonly IConfigService _configService;
     private readonly IScrapeCache _scrapeCache;
@@ -355,6 +358,11 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
                     var rawBytes = DecodeUrlBytes(rawValue);
                     result[key] = NormalizeInfoHashToHex(rawBytes);
                 }
+                else if (string.Equals(key, "peer_id", StringComparison.OrdinalIgnoreCase))
+                {
+                    var rawBytes = DecodeUrlBytes(rawValue);
+                    result[key] = Encoding.Latin1.GetString(rawBytes);
+                }
                 else
                 {
                     try
@@ -448,18 +456,27 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         if (!parameters.TryGetValue("info_hash", out var infoHash) ||
-            !parameters.TryGetValue("port", out var portStr))
+            !parameters.TryGetValue("peer_id", out var peerId) ||
+            !parameters.TryGetValue("port", out var portStr) ||
+            !parameters.TryGetValue("uploaded", out var uploadedStr) ||
+            !parameters.TryGetValue("downloaded", out var downloadedStr) ||
+            !parameters.TryGetValue("left", out var leftStr))
         {
-            return Encoding.ASCII.GetBytes("d14:failure reason25:Missing required parameterse");
+            return MissingParametersResponse;
         }
 
-        if (!int.TryParse(portStr, out var port) || port < 1 || port > 65535)
+        if (string.IsNullOrEmpty(infoHash) ||
+            string.IsNullOrEmpty(peerId) ||
+            peerId.Length != 20 ||
+            !int.TryParse(portStr, out var port) || port < 1 || port > 65535 ||
+            !long.TryParse(uploadedStr, out var uploaded) || uploaded < 0 ||
+            !long.TryParse(downloadedStr, out var downloaded) || downloaded < 0 ||
+            !long.TryParse(leftStr, out var left) || left < 0)
         {
-            return Encoding.ASCII.GetBytes("d14:failure reason12:invalid porte");
+            return InvalidParametersResponse;
         }
 
         var peerIp = remoteEndpoint.Address.ToString();
-        var peerId = parameters.GetValueOrDefault("peer_id", "");
         var eventType = parameters.GetValueOrDefault("event", "");
 
         if (eventType == "stopped")
@@ -476,17 +493,29 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         var peers = _peerDatabase.GetPeers(infoHash);
         var interval = _configService.TrackerAnnounceInterval;
         var maxPeers = _configService.TrackerMaxPeersPerAnnounce;
-        var compactPeers = BuildCompactPeers(peers, peerIp, port, maxPeers);
+
+        IBObject peersObject;
+        var compact = parameters.GetValueOrDefault("compact");
+        if (compact == "0")
+        {
+            peersObject = BuildDictionaryPeers(peers, peerIp, port, maxPeers);
+        }
+        else
+        {
+            var compactPeers = BuildCompactPeers(peers, peerIp, port, maxPeers);
+            peersObject = new BString(compactPeers);
+        }
 
         if (_configService.TrackerLogAnnounces)
         {
+            var returningPeersCount = peersObject is BList bList ? bList.Count : ((BString)peersObject).Value.Length / 6;
             _logger.Info(
                 "HTTP announce for {0} from {1}:{2}, event={3}, returning {4} peers",
                 infoHash,
                 peerIp,
                 port,
                 eventType,
-                compactPeers.Length / 6);
+                returningPeersCount);
         }
 
         var minInterval = _configService.MinAnnounceIntervalSeconds;
@@ -494,7 +523,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         {
             ["interval"] = new BNumber(interval),
             ["min interval"] = new BNumber(minInterval),
-            ["peers"] = new BString(compactPeers),
+            ["peers"] = peersObject,
         };
 
         if (_configService.TrackerPrivateMode)
@@ -631,6 +660,24 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         return chunks.ToArray();
+    }
+
+    private static BList BuildDictionaryPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
+    {
+        var filtered = peers.Where(p => p.Ip != excludeIp || p.Port != excludePort).Take(maxPeers).ToList();
+        var list = new BList();
+        foreach (var peer in filtered)
+        {
+            var peerDict = new BDictionary
+            {
+                ["ip"] = new BString(peer.Ip),
+                ["port"] = new BNumber(peer.Port),
+                ["peer id"] = new BString(Encoding.Latin1.GetBytes(peer.PeerId ?? string.Empty))
+            };
+            list.Add(peerDict);
+        }
+
+        return list;
     }
 
     private bool IsRateLimited(string ip) => IsRateLimited(ip, null);
