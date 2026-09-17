@@ -310,8 +310,8 @@ public class RoutingTable
         if (bytesA.Length == 4 && bytesB.Length == 4)
         {
             return bytesA[0] == bytesB[0] &&
-                   bytesA[1] == bytesB[1] &&
-                   bytesA[2] == bytesB[2];
+                bytesA[1] == bytesB[1] &&
+                bytesA[2] == bytesB[2];
         }
 
         // IPv6 /48 prefix: first 6 bytes (48 bits)

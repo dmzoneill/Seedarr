@@ -245,7 +245,7 @@ public class ConfigModel : ModelBase
 
 public class ConfigService : IConfigService
 {
-    public const string DefaultTmdbApiKey = "b69b7f0431f4d3cd5116acc5e73b6668";
+    public const string DefaultTmdbApiKey = "b69b7f0431f4d3cd5116acc5e73b6668"; // gitleaks:allow
 
     private readonly IBasicRepository<ConfigModel> _repository;
     private readonly IEventAggregator _eventAggregator;

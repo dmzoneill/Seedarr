@@ -239,8 +239,8 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
     private bool IsValidSessionId()
     {
         return Request.Headers.TryGetValue(SessionHeaderName, out var sessionVal) &&
-               !string.IsNullOrEmpty(sessionVal) &&
-               string.Equals(sessionVal, _currentSessionId, StringComparison.Ordinal);
+            !string.IsNullOrEmpty(sessionVal) &&
+            string.Equals(sessionVal, _currentSessionId, StringComparison.Ordinal);
     }
 
     [HttpGet]

@@ -538,11 +538,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 "num_leechs" or "num_incomplete" => d => d.TryGetValue("num_leechs", out var v) && v is int i ? i : 0,
                 "dlspeed" => d => d.TryGetValue("dlspeed", out var v) && v is long l ? l : 0L,
                 "upspeed" => d => d.TryGetValue("upspeed", out var v) && v is long l ? l : 0L,
-                _ => d =>
-                {
-                    var match = d.FirstOrDefault(kv => string.Equals(kv.Key, sortKey, StringComparison.OrdinalIgnoreCase));
-                    return match.Value;
-                },
+                _ => d => d.FirstOrDefault(kv => string.Equals(kv.Key, sortKey, StringComparison.OrdinalIgnoreCase)).Value,
             };
 
             query = reverse
@@ -1516,9 +1512,9 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         }
 
         var names = categories.Split(new[] { '\n', '\r', ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                              .Select(n => n.Trim())
-                              .Where(n => !string.IsNullOrWhiteSpace(n))
-                              .Distinct(StringComparer.OrdinalIgnoreCase);
+            .Select(n => n.Trim())
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
 
         foreach (var name in names)
         {

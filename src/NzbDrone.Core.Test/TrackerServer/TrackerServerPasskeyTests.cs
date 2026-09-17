@@ -55,7 +55,7 @@ public class TrackerServerPasskeyTests
     [Test]
     public void ExtractPasskey_from_path_returns_passkey()
     {
-        var passkey = "0123456789abcdef0123456789abcdef";
+        var passkey = "0123456789abcdef0123456789abcdef"; // gitleaks:allow
 
         Assert.That(
             Core.TrackerServer.TrackerServer.ExtractPasskey($"/announce/{passkey}"),
@@ -292,7 +292,7 @@ public class TrackerServerPasskeyTests
 
         // Update
         user1.Username = "alice_updated";
-        user1.Passkey = "newalicepasskey1234567890123456";
+        user1.Passkey = "newalicepasskey1234567890123456"; // gitleaks:allow
         service.UpdateUser(user1);
 
         Assert.That(service.GetById(user1.Id).Username, Is.EqualTo("alice_updated"));
