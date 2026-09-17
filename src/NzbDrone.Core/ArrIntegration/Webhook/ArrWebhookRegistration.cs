@@ -249,32 +249,44 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
     private string GetSeedarrBaseUrl(ArrConnectionDefinition connection)
     {
+        var urlBase = NormalizeUrlBase(_configFileProvider.UrlBase);
+
         var envUrl = Environment.GetEnvironmentVariable("SEEDARR_URL");
         if (!string.IsNullOrWhiteSpace(envUrl))
         {
-            return envUrl.TrimEnd('/');
+            return AppendUrlBase(envUrl, urlBase);
         }
 
         var scheme = _configFileProvider.EnableSsl ? "https" : "http";
         var port = _configFileProvider.EnableSsl ? _configFileProvider.SslPort : _configFileProvider.Port;
-        var urlBase = NormalizeUrlBase(_configFileProvider.UrlBase);
 
-        var connectionHost = connection?.WebhookHost;
-        if (!string.IsNullOrWhiteSpace(connectionHost))
+        var hostCandidate = connection?.WebhookHost;
+        if (string.IsNullOrWhiteSpace(hostCandidate))
         {
-            if (connectionHost.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                connectionHost.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            hostCandidate = _configService?.WebhookBaseUrl;
+        }
+
+        if (!string.IsNullOrWhiteSpace(hostCandidate))
+        {
+            if (hostCandidate.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                hostCandidate.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
-                return connectionHost.TrimEnd('/');
+                return AppendUrlBase(hostCandidate, urlBase);
             }
 
-            return $"{scheme}://{connectionHost}:{port}{urlBase}";
+            return AppendUrlBase($"{scheme}://{FormatHostWithPort(hostCandidate, port)}", urlBase);
         }
 
         var envHost = Environment.GetEnvironmentVariable("SEEDARR_HOST");
         if (!string.IsNullOrWhiteSpace(envHost))
         {
-            return $"{scheme}://{envHost}:{port}{urlBase}";
+            if (envHost.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                envHost.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                return AppendUrlBase(envHost, urlBase);
+            }
+
+            return AppendUrlBase($"{scheme}://{FormatHostWithPort(envHost, port)}", urlBase);
         }
 
         var bindAddress = _configFileProvider.BindAddress;
@@ -296,7 +308,66 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
             }
         }
 
-        return $"{scheme}://{bindAddress}:{port}{urlBase}";
+        return AppendUrlBase($"{scheme}://{FormatHostWithPort(bindAddress, port)}", urlBase);
+    }
+
+    private static string AppendUrlBase(string baseUrl, string urlBase)
+    {
+        if (string.IsNullOrWhiteSpace(baseUrl))
+        {
+            return string.Empty;
+        }
+
+        var trimmedBase = baseUrl.Trim().TrimEnd('/');
+        if (string.IsNullOrEmpty(urlBase))
+        {
+            return trimmedBase;
+        }
+
+        if (trimmedBase.EndsWith(urlBase, StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmedBase;
+        }
+
+        return $"{trimmedBase}{urlBase}";
+    }
+
+    private static string FormatHostWithPort(string host, int port)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return string.Empty;
+        }
+
+        var trimmedHost = host.Trim().TrimEnd('/');
+
+        bool hasPort;
+        if (trimmedHost.StartsWith('[') && trimmedHost.Contains(']'))
+        {
+            hasPort = trimmedHost.Substring(trimmedHost.IndexOf(']') + 1).Contains(':');
+        }
+        else
+        {
+            hasPort = trimmedHost.Contains(':');
+        }
+
+        if (hasPort)
+        {
+            return trimmedHost;
+        }
+
+        if (port == 80 || port == 443)
+        {
+            return trimmedHost;
+        }
+
+        var hostWithoutBrackets = trimmedHost.Trim('[', ']');
+        if (trimmedHost.Contains('.') && !IPAddress.TryParse(hostWithoutBrackets, out _))
+        {
+            return trimmedHost;
+        }
+
+        return $"{trimmedHost}:{port}";
     }
 
     private static string NormalizeUrlBase(string urlBase)
