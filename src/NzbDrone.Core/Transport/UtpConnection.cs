@@ -73,6 +73,8 @@ public class UtpConnection : IUtpConnection
     private uint _lastTimestampDiff;
     private uint _remoteWindowSize = DefaultWindowSize;
     private ushort _expectedSeqNr;
+    private bool _hasReceivedFin;
+    private bool _isClosing;
     private bool _isDisposed;
 
     public static Func<uint> MicrosecondProvider { get; set; }
@@ -82,6 +84,8 @@ public class UtpConnection : IUtpConnection
     public Action<IUtpConnection> OnConnected { get; set; }
 
     public bool IsConnected { get; private set; }
+    public bool HasReceivedFin => _hasReceivedFin;
+    public bool IsClosing => _isClosing;
     public IPEndPoint RemoteEndPoint => _remoteEndpoint;
     public bool OwnsUdpClient => _ownsUdpClient;
     public ushort ReceiveId { get; private set; }
@@ -221,20 +225,20 @@ public class UtpConnection : IUtpConnection
 
     public int Send(byte[] data, int offset, int length)
     {
-        if (!IsConnected || length <= 0)
+        if (!IsConnected || _isClosing || length <= 0)
         {
             return 0;
         }
 
         lock (_sendLock)
         {
-            if (!IsConnected)
+            if (!IsConnected || _isClosing)
             {
                 return 0;
             }
 
             var totalSent = 0;
-            while (totalSent < length && IsConnected)
+            while (totalSent < length && IsConnected && !_isClosing)
             {
                 var chunkSize = Math.Min(MaxPayloadSize, length - totalSent);
                 var payload = new byte[chunkSize];
@@ -267,7 +271,7 @@ public class UtpConnection : IUtpConnection
     public void Flush()
     {
         var sendStart = DateTime.UtcNow;
-        while (!_inFlightPackets.IsEmpty && IsConnected && (DateTime.UtcNow - sendStart).TotalSeconds < _connectionTimeoutSeconds)
+        while (!_inFlightPackets.IsEmpty && (IsConnected || _isClosing) && (DateTime.UtcNow - sendStart).TotalSeconds < _connectionTimeoutSeconds)
         {
             TryReceiveUdpNonBlocking();
             RetransmitUnackedPackets();
@@ -296,7 +300,7 @@ public class UtpConnection : IUtpConnection
 
     public int Receive(byte[] buffer, int offset, int length)
     {
-        if (!IsConnected || length <= 0)
+        if (length <= 0)
         {
             return 0;
         }
@@ -319,9 +323,14 @@ public class UtpConnection : IUtpConnection
                 return bytesToCopy;
             }
 
+            if (_hasReceivedFin || !IsConnected)
+            {
+                return 0;
+            }
+
             if (!_ownsUdpClient)
             {
-                while (IsConnected && _receiveQueue.Count == 0)
+                while (IsConnected && !_hasReceivedFin && _receiveQueue.Count == 0)
                 {
                     var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
                     if (elapsed >= timeoutMs)
@@ -355,16 +364,16 @@ public class UtpConnection : IUtpConnection
 
         var receiveEndpoint = new IPEndPoint(IPAddress.Any, 0);
 
-        while (IsConnected)
+        while (IsConnected && !_hasReceivedFin)
         {
             byte[] data;
             try
             {
                 lock (_socketReceiveLock)
                 {
-                    if (!IsConnected)
+                    if (!IsConnected || _hasReceivedFin)
                     {
-                        return 0;
+                        break;
                     }
 
                     data = _udpClient.Receive(ref receiveEndpoint);
@@ -375,14 +384,14 @@ public class UtpConnection : IUtpConnection
                 RetransmitUnackedPackets();
                 if ((DateTime.UtcNow - startTime).TotalMilliseconds >= timeoutMs)
                 {
-                    return 0;
+                    break;
                 }
 
                 continue;
             }
             catch (Exception)
             {
-                return 0;
+                break;
             }
 
             HandleIncomingPacket(data, receiveEndpoint);
@@ -400,6 +409,25 @@ public class UtpConnection : IUtpConnection
 
                     return bytesToCopy;
                 }
+
+                if (_hasReceivedFin)
+                {
+                    return 0;
+                }
+            }
+        }
+
+        lock (_receiveLock)
+        {
+            if (_receiveQueue.Count > 0)
+            {
+                var bytesToCopy = Math.Min(_receiveQueue.Count, length);
+                for (var i = 0; i < bytesToCopy; i++)
+                {
+                    buffer[offset + i] = _receiveQueue.Dequeue();
+                }
+
+                return bytesToCopy;
             }
         }
 
@@ -444,9 +472,9 @@ public class UtpConnection : IUtpConnection
             _ackNumber = header.SequenceNumber;
             var ack = BuildPacket(UtpPacketType.State, Array.Empty<byte>());
             SendUdpPacket(ack, ack.Length, sender);
-            IsConnected = false;
             lock (_receiveLock)
             {
+                _hasReceivedFin = true;
                 Monitor.PulseAll(_receiveLock);
             }
 
@@ -657,13 +685,18 @@ public class UtpConnection : IUtpConnection
 
     private void RetransmitUnackedPackets()
     {
-        if (_inFlightPackets.IsEmpty || !IsConnected || _remoteEndpoint == null)
+        if (_inFlightPackets.IsEmpty || (!IsConnected && !_isClosing) || _remoteEndpoint == null)
         {
             return;
         }
 
         var now = Environment.TickCount64;
         var unacked = new List<InFlightPacket>(_inFlightPackets.Values);
+        if (unacked.Count == 0)
+        {
+            return;
+        }
+
         unacked.Sort((a, b) => (short)(a.SequenceNumber - b.SequenceNumber));
 
         var head = unacked[0];
@@ -672,6 +705,41 @@ public class UtpConnection : IUtpConnection
             head.Retries++;
             head.SentTimestamp = now;
             SendUdpPacket(head.PacketData, head.PacketData.Length, _remoteEndpoint);
+        }
+    }
+
+    private void WaitForFinAck(ushort finSeq)
+    {
+        var startTime = DateTime.UtcNow;
+        var maxWaitMs = Math.Min(300, _connectionTimeoutSeconds > 0 ? _connectionTimeoutSeconds * 1000 : 300);
+
+        while (_inFlightPackets.ContainsKey(finSeq) && (DateTime.UtcNow - startTime).TotalMilliseconds < maxWaitMs)
+        {
+            TryReceiveUdpNonBlocking();
+
+            if (!_inFlightPackets.ContainsKey(finSeq))
+            {
+                break;
+            }
+
+            RetransmitUnackedPackets();
+
+            var elapsedMs = (DateTime.UtcNow - startTime).TotalMilliseconds;
+            var remainingMs = maxWaitMs - elapsedMs;
+            if (remainingMs <= 0)
+            {
+                break;
+            }
+
+            var waitMs = (int)Math.Min(50, remainingMs);
+            _ackReceivedEvent.Reset();
+
+            if (!_inFlightPackets.ContainsKey(finSeq))
+            {
+                break;
+            }
+
+            _ackReceivedEvent.Wait(waitMs);
         }
     }
 
@@ -696,20 +764,45 @@ public class UtpConnection : IUtpConnection
 
         if (IsConnected)
         {
+            _isClosing = true;
+            IsConnected = false;
+
             try
             {
-                var fin = BuildPacket(UtpPacketType.Fin, Array.Empty<byte>());
                 if (_remoteEndpoint != null)
                 {
-                    SendUdpPacket(fin, fin.Length, _remoteEndpoint);
+                    ushort finSeq;
+                    byte[] finPacket;
+                    lock (_sendLock)
+                    {
+                        finSeq = _sequenceNumber;
+                        finPacket = BuildPacket(UtpPacketType.Fin, Array.Empty<byte>());
+                        _sequenceNumber++;
+                    }
+
+                    var inFlight = new InFlightPacket
+                    {
+                        SequenceNumber = finSeq,
+                        PacketData = finPacket,
+                        PayloadLength = 0,
+                        SentTimestamp = Environment.TickCount64,
+                        Retries = 0
+                    };
+
+                    _inFlightPackets[finSeq] = inFlight;
+                    SendUdpPacket(finPacket, finPacket.Length, _remoteEndpoint);
+
+                    WaitForFinAck(finSeq);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Best effort
+                _logger.Debug(ex, "Error during graceful FIN teardown");
             }
-
-            IsConnected = false;
+            finally
+            {
+                _isClosing = false;
+            }
         }
 
         lock (_receiveLock)
