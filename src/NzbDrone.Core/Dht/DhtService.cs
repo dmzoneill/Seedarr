@@ -75,7 +75,26 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         _torrentService = torrentService;
         _customPort = port;
         _dhtStateService = dhtStateService;
-        _nodeId = RandomNumberGenerator.GetBytes(20);
+
+        var persistedHex = configService.DhtNodeIdHex;
+        if (!string.IsNullOrWhiteSpace(persistedHex) && persistedHex.Length == 40)
+        {
+            try
+            {
+                _nodeId = Convert.FromHexString(persistedHex);
+            }
+            catch
+            {
+                _nodeId = null;
+            }
+        }
+
+        if (_nodeId == null || _nodeId.Length != 20)
+        {
+            _nodeId = DhtSecurity.GenerateNodeId(IPAddress.Loopback);
+            configService.DhtNodeIdHex = Convert.ToHexString(_nodeId);
+        }
+
         _routingTable = new RoutingTable(
             _nodeId,
             configService.DhtBucketSize,
@@ -106,11 +125,44 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     public DhtPeerStore PeerStore => _peerStore;
 
+    public byte[] NodeId => _nodeId;
+
     public int BoundPort => _boundPort;
 
     public bool IsRunning => _udpClient != null;
 
     public IPEndPoint LocalEndPoint => _udpClient?.Client?.LocalEndPoint as IPEndPoint;
+
+    public void UpdateExternalAddress(IPAddress address)
+    {
+        if (address == null || RoutingTable.IsLocalOrLinkLocal(address))
+        {
+            return;
+        }
+
+        if (!DhtSecurity.IsNodeIdValid(_nodeId, address))
+        {
+            var newNodeId = DhtSecurity.GenerateNodeId(address);
+            Array.Copy(newNodeId, _nodeId, 20);
+            _configService.DhtNodeIdHex = Convert.ToHexString(_nodeId);
+            _logger.Info("Updated DHT Node ID to BEP 42 compliant ID {0} for external IP {1}", Convert.ToHexString(_nodeId), address);
+        }
+    }
+
+    private static bool IsNodeIdValidForEndpoint(byte[] nodeId, IPEndPoint endpoint)
+    {
+        if (nodeId == null || nodeId.Length != 20 || endpoint == null)
+        {
+            return false;
+        }
+
+        if (RoutingTable.IsLocalOrLinkLocal(endpoint.Address))
+        {
+            return true;
+        }
+
+        return DhtSecurity.IsNodeIdValid(nodeId, endpoint.Address);
+    }
 
     public void Handle(ConfigSavedEvent message)
     {
@@ -580,6 +632,17 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return;
         }
 
+        if (args.ContainsKey("id") && args["id"] is BString queryIdStr && queryIdStr.Value.Length == 20)
+        {
+            var queryingNodeId = queryIdStr.Value.ToArray();
+            if (!IsNodeIdValidForEndpoint(queryingNodeId, sender))
+            {
+                _logger.Debug("DHT query from {0} rejected: invalid BEP 42 node ID", sender);
+                SendErrorResponse(sender, transactionId, 203, "Invalid Node ID");
+                return;
+            }
+        }
+
         var queryType = qStr.ToString();
 
         switch (queryType)
@@ -605,12 +668,15 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         if (args.ContainsKey("id") && args["id"] is BString idStr && idStr.Value.Length == 20)
         {
             var nodeId = idStr.Value.ToArray();
-            _routingTable.AddNode(new DhtNode
+            if (IsNodeIdValidForEndpoint(nodeId, sender))
             {
-                NodeId = nodeId,
-                EndPoint = sender,
-                LastSeen = DateTime.UtcNow
-            });
+                _routingTable.AddNode(new DhtNode
+                {
+                    NodeId = nodeId,
+                    EndPoint = sender,
+                    LastSeen = DateTime.UtcNow
+                });
+            }
         }
     }
 
@@ -642,17 +708,35 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return;
         }
 
+        if (message.ContainsKey("ip") && message["ip"] is BString ipBStr)
+        {
+            var raw = ipBStr.Value.Span;
+            if (raw.Length == 6)
+            {
+                var extIp = new IPAddress(raw.Slice(0, 4));
+                UpdateExternalAddress(extIp);
+            }
+            else if (raw.Length == 18)
+            {
+                var extIp = new IPAddress(raw.Slice(0, 16));
+                UpdateExternalAddress(extIp);
+            }
+        }
+
         var response = (BDictionary)message["r"];
 
         if (response.ContainsKey("id"))
         {
             var nodeId = ((BString)response["id"]).Value.ToArray();
-            _routingTable.AddNode(new DhtNode
+            if (IsNodeIdValidForEndpoint(nodeId, sender))
             {
-                NodeId = nodeId,
-                EndPoint = sender,
-                LastSeen = DateTime.UtcNow
-            });
+                _routingTable.AddNode(new DhtNode
+                {
+                    NodeId = nodeId,
+                    EndPoint = sender,
+                    LastSeen = DateTime.UtcNow
+                });
+            }
         }
 
         // Parse compact node info from find_node / get_peers responses
@@ -782,7 +866,8 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         {
             ["t"] = transactionId,
             ["y"] = new BString("r"),
-            ["r"] = responseDict
+            ["r"] = responseDict,
+            ["ip"] = new BString(EncodeCompactAddress(sender))
         };
 
         var bytes = response.EncodeAsBytes();
@@ -870,13 +955,17 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             var nodeId = data.Slice(i, 20).ToArray();
             var ip = new IPAddress(data.Slice(i + 20, 4));
             var port = (data[i + 24] << 8) | data[i + 25];
+            var ep = new IPEndPoint(ip, port);
 
-            _routingTable.AddNode(new DhtNode
+            if (IsNodeIdValidForEndpoint(nodeId, ep))
             {
-                NodeId = nodeId,
-                EndPoint = new IPEndPoint(ip, port),
-                LastSeen = DateTime.UtcNow
-            });
+                _routingTable.AddNode(new DhtNode
+                {
+                    NodeId = nodeId,
+                    EndPoint = ep,
+                    LastSeen = DateTime.UtcNow
+                });
+            }
         }
     }
 
@@ -896,6 +985,21 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         return compactNodes;
     }
 
+    private static byte[] EncodeCompactAddress(IPEndPoint endpoint)
+    {
+        if (endpoint == null)
+        {
+            return Array.Empty<byte>();
+        }
+
+        var ipBytes = endpoint.Address.GetAddressBytes();
+        var result = new byte[ipBytes.Length + 2];
+        Array.Copy(ipBytes, 0, result, 0, ipBytes.Length);
+        result[ipBytes.Length] = (byte)(endpoint.Port >> 8);
+        result[ipBytes.Length + 1] = (byte)(endpoint.Port & 0xFF);
+        return result;
+    }
+
     private void SendPingResponse(IPEndPoint target, BString transactionId)
     {
         var response = new BDictionary
@@ -905,7 +1009,8 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             ["r"] = new BDictionary
             {
                 ["id"] = new BString(_nodeId)
-            }
+            },
+            ["ip"] = new BString(EncodeCompactAddress(target))
         };
 
         var bytes = response.EncodeAsBytes();
@@ -928,7 +1033,8 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             {
                 ["id"] = new BString(_nodeId),
                 ["nodes"] = new BString(EncodeCompactNodes(closest))
-            }
+            },
+            ["ip"] = new BString(EncodeCompactAddress(sender))
         };
 
         var bytes = response.EncodeAsBytes();

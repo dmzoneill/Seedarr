@@ -9,6 +9,7 @@ public interface IDhtService
 {
     RoutingTable RoutingTable { get; }
     DhtPeerStore PeerStore { get; }
+    byte[] NodeId { get; }
     event EventHandler<PeersDiscoveredEventArgs> PeersDiscovered;
     Task SendGetPeers(IPEndPoint target, byte[] infoHash, CancellationToken ct = default);
     Task SendGetPeers(IPEndPoint target, string infoHash, CancellationToken ct = default);
