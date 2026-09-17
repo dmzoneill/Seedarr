@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -8,12 +9,14 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.RemotePathMappings;
 
 namespace NzbDrone.Core.DownloadClients.Transmission;
 
 public class TransmissionClient : IDownloadClient, IDisposable
 {
     private readonly Logger _logger;
+    private readonly SemaphoreSlim _sessionLock = new(1, 1);
     private HttpClient _client;
     private string _sessionId;
 
@@ -25,10 +28,13 @@ public class TransmissionClient : IDownloadClient, IDisposable
     public string Username { get; set; } = "";
     public string Password { get; set; } = "";
     public string Category { get; set; } = "";
+    public IRemotePathMappingService RemotePathMappingService { get; set; }
+    public string LocalTorrentDirectory { get; set; }
 
-    public TransmissionClient(HttpClient client = null)
+    public TransmissionClient(HttpClient client = null, IRemotePathMappingService remotePathMappingService = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
+        RemotePathMappingService = remotePathMappingService;
         if (client != null)
         {
             _client = client;
@@ -76,9 +82,19 @@ public class TransmissionClient : IDownloadClient, IDisposable
 
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
-            if (response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
+            var initialSessionId = _sessionId;
+            _sessionLock.Wait();
+            try
             {
-                _sessionId = string.Join("", values);
+                if (_sessionId == initialSessionId &&
+                    response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
+                {
+                    _sessionId = string.Join("", values);
+                }
+            }
+            finally
+            {
+                _sessionLock.Release();
             }
 
             response.Dispose();
@@ -101,9 +117,19 @@ public class TransmissionClient : IDownloadClient, IDisposable
 
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
-            if (response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
+            var initialSessionId = _sessionId;
+            await _sessionLock.WaitAsync(cancellationToken);
+            try
             {
-                _sessionId = string.Join("", values);
+                if (_sessionId == initialSessionId &&
+                    response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
+                {
+                    _sessionId = string.Join("", values);
+                }
+            }
+            finally
+            {
+                _sessionLock.Release();
             }
 
             response.Dispose();
@@ -200,12 +226,36 @@ public class TransmissionClient : IDownloadClient, IDisposable
                 if (t.TryGetProperty("torrentFile", out var tf))
                 {
                     var filePath = tf.GetString();
-                    if (!string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
+                    if (string.IsNullOrEmpty(filePath))
                     {
-                        return System.IO.File.ReadAllBytes(filePath);
+                        continue;
                     }
 
-                    _logger.Warn("Transmission torrent file path not accessible: {0}", filePath);
+                    if (File.Exists(filePath))
+                    {
+                        return File.ReadAllBytes(filePath);
+                    }
+
+                    if (RemotePathMappingService != null)
+                    {
+                        var remapped = RemotePathMappingService.Remap(Host, filePath);
+                        if (!string.IsNullOrEmpty(remapped) && File.Exists(remapped))
+                        {
+                            return File.ReadAllBytes(remapped);
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(LocalTorrentDirectory))
+                    {
+                        var fileName = Path.GetFileName(filePath);
+                        var candidate = Path.Combine(LocalTorrentDirectory, fileName);
+                        if (File.Exists(candidate))
+                        {
+                            return File.ReadAllBytes(candidate);
+                        }
+                    }
+
+                    _logger.Warn("Transmission torrent file path not accessible locally: {0}", filePath);
                 }
             }
         }
@@ -366,6 +416,7 @@ public class TransmissionClient : IDownloadClient, IDisposable
     public void Dispose()
     {
         _client?.Dispose();
+        _sessionLock?.Dispose();
     }
 
     public async Task<DownloadClientSpeedLimits> GetSpeedLimitsAsync(CancellationToken cancellationToken = default)

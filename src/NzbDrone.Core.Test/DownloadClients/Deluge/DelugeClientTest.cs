@@ -1,8 +1,13 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.DownloadClients.Deluge;
+using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Test.TestHelpers;
 
 namespace NzbDrone.Core.Test.DownloadClients.Deluge;
@@ -196,9 +201,13 @@ public class DelugeClientTest
         handler.Enqueue(HttpStatusCode.OK,
             @"{""result"":true,""id"":0}");
 
+        // web.connected check
+        handler.Enqueue(HttpStatusCode.OK,
+            @"{""result"":true,""id"":1}");
+
         // update_ui response with torrents as an object keyed by hash
         handler.Enqueue(HttpStatusCode.OK,
-            @"{""result"":{""torrents"":{""abc123"":{""name"":""Test Torrent"",""total_size"":1048576,""total_remaining"":256,""state"":""Seeding"",""save_path"":""/downloads"",""label"":""seedarr""}}},""id"":1}");
+            @"{""result"":{""torrents"":{""abc123"":{""name"":""Test Torrent"",""total_size"":1048576,""total_remaining"":256,""state"":""Seeding"",""save_path"":""/downloads"",""label"":""seedarr""}}},""id"":2}");
 
         InjectMockClient(handler);
 
@@ -219,12 +228,13 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
         handler.Enqueue(HttpStatusCode.OK,
             @"{""result"":{""torrents"":{" +
             @"""hash1"":{""name"":""T1"",""total_size"":100,""total_remaining"":0,""state"":""Seeding"",""save_path"":""/dl1"",""label"":""a""}," +
             @"""hash2"":{""name"":""T2"",""total_size"":200,""total_remaining"":100,""state"":""Downloading"",""save_path"":""/dl2"",""label"":""b""}," +
             @"""hash3"":{""name"":""T3"",""total_size"":300,""total_remaining"":0,""state"":""Paused"",""save_path"":""/dl3"",""label"":""c""}" +
-            @"}},""id"":1}");
+            @"}},""id"":2}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
@@ -250,7 +260,8 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
-        handler.Enqueue(HttpStatusCode.OK, @"{""id"":1}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""id"":2}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
@@ -264,7 +275,8 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
-        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""stats"":{}},""id"":1}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""stats"":{}},""id"":2}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
@@ -278,8 +290,9 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
         handler.Enqueue(HttpStatusCode.OK,
-            @"{""result"":{""torrents"":{""hash1"":{}}},""id"":1}");
+            @"{""result"":{""torrents"":{""hash1"":{}}},""id"":2}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
@@ -299,6 +312,7 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
         handler.Enqueue(HttpStatusCode.OK,
             @"{""result"":{""torrents"":{" +
             @"""a"":{""state"":""Downloading""}," +
@@ -307,7 +321,7 @@ public class DelugeClientTest
             @"""d"":{""state"":""Queued""}," +
             @"""e"":{""state"":""Error""}," +
             @"""f"":{""state"":""Unknown""}" +
-            @"}},""id"":1}");
+            @"}},""id"":2}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
@@ -329,9 +343,12 @@ public class DelugeClientTest
         // Auth response
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
 
+        // web.connected check
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
+
         // daemon.get_method_list response
         handler.Enqueue(HttpStatusCode.OK,
-            @"{""result"":[""daemon.info"",""daemon.get_method_list""],""id"":1}");
+            @"{""result"":[""daemon.info"",""daemon.get_method_list""],""id"":2}");
 
         InjectMockClient(handler);
 
@@ -357,7 +374,8 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
-        handler.Enqueue(HttpStatusCode.OK, @"{""error"":""no method"",""id"":1}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""error"":""no method"",""id"":2}");
         InjectMockClient(handler);
 
         var result = _client.TestConnection();
@@ -370,7 +388,8 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
-        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""torrents"":{}},""id"":1}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""torrents"":{}},""id"":2}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
@@ -401,8 +420,9 @@ public class DelugeClientTest
         _client.Category = "tv";
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
         handler.Enqueue(HttpStatusCode.OK,
-            @"{""result"":{""torrents"":{""tvhash"":{""name"":""Show S01E01"",""total_size"":700,""total_remaining"":0,""state"":""Seeding"",""save_path"":""/dl"",""label"":""tv""}}},""id"":1}");
+            @"{""result"":{""torrents"":{""tvhash"":{""name"":""Show S01E01"",""total_size"":700,""total_remaining"":0,""state"":""Seeding"",""save_path"":""/dl"",""label"":""tv""}}},""id"":2}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
@@ -417,8 +437,9 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
 
-        // Auth succeeds; no second response queued so update_ui gets default 500 -> throws
+        // Auth succeeds
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
@@ -432,8 +453,9 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
 
-        // Auth succeeds; no second response queued so daemon call gets default 500 -> throws
+        // Auth succeeds
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
         InjectMockClient(handler);
 
         var result = _client.TestConnection();
@@ -459,12 +481,13 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
         handler.Enqueue(HttpStatusCode.OK,
             @"{""result"":{""torrents"":{" +
             @"""s"":{""state"":""Seeding""}," +
             @"""d"":{""state"":""Downloading""}," +
             @"""q"":{""state"":""Queued""}" +
-            @"}},""id"":1}");
+            @"}},""id"":2}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
@@ -480,12 +503,13 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}");
         handler.Enqueue(
             HttpStatusCode.OK,
             @"{""result"":{""torrents"":{" +
             @"""priv1"":{""name"":""Private"",""total_size"":1000,""total_remaining"":0,""state"":""Seeding"",""private"":true}," +
             @"""pub1"":{""name"":""Public"",""total_size"":2000,""total_remaining"":0,""state"":""Seeding"",""private"":false}" +
-            @"}},""id"":1}");
+            @"}},""id"":2}");
         InjectMockClient(handler);
 
         var result = _client.GetItems();
@@ -504,8 +528,9 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
-        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""max_upload_speed"":500.0,""max_download_speed"":1000.0},""id"":1}"); // core.get_config
-        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""upload_rate"":102400.0,""download_rate"":204800.0},""id"":2}"); // core.get_session_status
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""max_upload_speed"":500.0,""max_download_speed"":1000.0},""id"":2}"); // core.get_config
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":{""upload_rate"":102400.0,""download_rate"":204800.0},""id"":3}"); // core.get_session_status
         InjectMockClient(handler);
 
         var result = await _client.GetSpeedLimitsAsync();
@@ -522,12 +547,13 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
-        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // core.set_config
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":2}"); // core.set_config
         InjectMockClient(handler);
 
         await _client.SetSpeedLimitsAsync(500 * 1024, 1000 * 1024);
 
-        Assert.That(handler.Requests, Has.Count.EqualTo(2));
+        Assert.That(handler.Requests, Has.Count.EqualTo(3));
     }
 
     [Test]
@@ -535,11 +561,132 @@ public class DelugeClientTest
     {
         var handler = new MockHttpMessageHandler();
         handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
-        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // core.set_torrent_options
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":2}"); // core.set_torrent_options
         InjectMockClient(handler);
 
         await _client.SetTorrentLimitsAsync("hash123", 250 * 1024, 500 * 1024);
 
-        Assert.That(handler.Requests, Has.Count.EqualTo(2));
+        Assert.That(handler.Requests, Has.Count.EqualTo(3));
+    }
+
+    [Test]
+    public void Authenticate_should_query_hosts_and_connect_when_web_disconnected()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":false,""id"":1}"); // web.connected (false)
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":[[""host-id-123"",""127.0.0.1"",58846,""Online""]],""id"":2}"); // web.get_hosts
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":3}"); // web.connect
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":4}"); // web.connected (true)
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":[""daemon.info""],""id"":5}"); // daemon.get_method_list
+        InjectMockClient(handler);
+
+        var result = _client.TestConnection();
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void Authenticate_should_return_false_when_web_connect_fails()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":false,""id"":1}"); // web.connected (false)
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":[[""host-id-123"",""127.0.0.1"",58846,""Offline""]],""id"":2}"); // web.get_hosts
+        InjectMockClient(handler);
+
+        var result = _client.TestConnection();
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void Authenticate_should_return_false_when_post_connect_still_disconnected()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":false,""id"":1}"); // web.connected (false)
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":[[""host-id-123"",""127.0.0.1"",58846,""Online""]],""id"":2}"); // web.get_hosts
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":3}"); // web.connect
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":false,""id"":4}"); // web.connected (still false)
+        InjectMockClient(handler);
+
+        var result = _client.TestConnection();
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void GetTorrentFile_should_return_bytes_when_local_torrent_directory_configured()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var hash = "aabbccdd112233445566";
+            var filePath = Path.Combine(tempDir, $"{hash}.torrent");
+            var expectedBytes = new byte[] { 1, 2, 3, 4, 5 };
+            File.WriteAllBytes(filePath, expectedBytes);
+
+            _client.LocalTorrentDirectory = tempDir;
+
+            var result = _client.GetTorrentFile(hash);
+
+            Assert.That(result, Is.EqualTo(expectedBytes));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public void GetTorrentFile_should_remap_using_remote_path_mapping_service()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var hash = "torrent123";
+            var localPath = Path.Combine(tempDir, $"{hash}.torrent");
+            var expectedBytes = new byte[] { 9, 8, 7, 6 };
+            File.WriteAllBytes(localPath, expectedBytes);
+
+            var remotePath = $"/var/lib/deluge/state/{hash}.torrent";
+            var mappingService = Substitute.For<IRemotePathMappingService>();
+            mappingService.Remap(_client.Host, remotePath).Returns(localPath);
+
+            var handler = new MockHttpMessageHandler();
+            handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+            handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
+            handler.Enqueue(HttpStatusCode.OK,
+                $@"{{""result"":{{""torrent_file"":""{remotePath}""}},""id"":2}}"); // core.get_torrent_status
+            InjectMockClient(handler);
+
+            _client.RemotePathMappingService = mappingService;
+
+            var result = _client.GetTorrentFile(hash);
+
+            Assert.That(result, Is.EqualTo(expectedBytes));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public void GetTorrentFile_should_handle_missing_torrent_gracefully_without_throwing()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":0}"); // login
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":true,""id"":1}"); // web.connected
+        handler.Enqueue(HttpStatusCode.OK, @"{""result"":null,""id"":2}"); // core.get_torrent_status
+        InjectMockClient(handler);
+
+        var result = _client.GetTorrentFile("nonexistent123");
+
+        Assert.That(result, Is.Null);
     }
 }

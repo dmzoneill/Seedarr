@@ -712,6 +712,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 Username = definition.Username,
                 Password = definition.Password,
                 Category = definition.Category,
+                RemotePathMappingService = _remotePathMappingService,
             },
             "Deluge" => new NzbDrone.Core.DownloadClients.Deluge.DelugeClient
             {
@@ -721,6 +722,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 Username = definition.Username,
                 Password = definition.Password,
                 Category = definition.Category,
+                RemotePathMappingService = _remotePathMappingService,
             },
             _ => null
         };

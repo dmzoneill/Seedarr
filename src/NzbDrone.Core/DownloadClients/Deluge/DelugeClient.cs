@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -7,6 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.RemotePathMappings;
 
 namespace NzbDrone.Core.DownloadClients.Deluge;
 
@@ -25,10 +27,13 @@ public class DelugeClient : IDownloadClient, IDisposable
     public string Username { get; set; } = "";
     public string Password { get; set; } = "deluge";
     public string Category { get; set; } = "";
+    public IRemotePathMappingService RemotePathMappingService { get; set; }
+    public string LocalTorrentDirectory { get; set; }
 
-    public DelugeClient(HttpClient client = null)
+    public DelugeClient(HttpClient client = null, IRemotePathMappingService remotePathMappingService = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
+        RemotePathMappingService = remotePathMappingService;
         if (client != null)
         {
             _client = client;
@@ -90,11 +95,169 @@ public class DelugeClient : IDownloadClient, IDisposable
         try
         {
             using var doc = SendRequest("auth.login", new object[] { Password });
-            return doc.RootElement.TryGetProperty("result", out var result) && result.GetBoolean();
+            if (!doc.RootElement.TryGetProperty("result", out var result) || !result.GetBoolean())
+            {
+                return false;
+            }
+
+            return EnsureDaemonConnected();
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Deluge auth failed");
+            return false;
+        }
+    }
+
+    private async Task<bool> AuthenticateAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var doc = await SendRequestAsync("auth.login", new object[] { Password }, cancellationToken);
+            if (!doc.RootElement.TryGetProperty("result", out var result) || !result.GetBoolean())
+            {
+                return false;
+            }
+
+            return await EnsureDaemonConnectedAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Deluge auth failed");
+            return false;
+        }
+    }
+
+    private bool EnsureDaemonConnected()
+    {
+        try
+        {
+            using var connectedDoc = SendRequest("web.connected", Array.Empty<object>());
+            if (connectedDoc.RootElement.TryGetProperty("result", out var connectedRes) &&
+                connectedRes.ValueKind == JsonValueKind.True)
+            {
+                return true;
+            }
+
+            _logger.Debug("Deluge web is not connected to daemon, querying hosts...");
+            using var hostsDoc = SendRequest("web.get_hosts", Array.Empty<object>());
+            if (!hostsDoc.RootElement.TryGetProperty("result", out var hostsRes) || hostsRes.ValueKind != JsonValueKind.Array)
+            {
+                _logger.Warn("Failed to retrieve hosts from Deluge web");
+                return false;
+            }
+
+            string targetHostId = null;
+            foreach (var hostEl in hostsRes.EnumerateArray())
+            {
+                if (hostEl.ValueKind == JsonValueKind.Array && hostEl.GetArrayLength() >= 1)
+                {
+                    var hostId = hostEl[0].GetString();
+                    var status = hostEl.GetArrayLength() >= 4 ? hostEl[3].GetString() : null;
+
+                    if (string.Equals(status, "Online", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(status, "Connected", StringComparison.OrdinalIgnoreCase))
+                    {
+                        targetHostId = hostId;
+                        break;
+                    }
+
+                    targetHostId ??= hostId;
+                }
+            }
+
+            if (string.IsNullOrEmpty(targetHostId))
+            {
+                _logger.Warn("No available Deluge daemon hosts found");
+                return false;
+            }
+
+            _logger.Debug("Connecting Deluge web to daemon host: {0}", targetHostId);
+            using (SendRequest("web.connect", new object[] { targetHostId }))
+            {
+            }
+
+            using var verifyDoc = SendRequest("web.connected", Array.Empty<object>());
+            var isConnected = verifyDoc.RootElement.TryGetProperty("result", out var verifyRes) &&
+                verifyRes.ValueKind == JsonValueKind.True;
+
+            if (!isConnected)
+            {
+                _logger.Warn("Failed to connect Deluge web to daemon host: {0}", targetHostId);
+            }
+
+            return isConnected;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to perform Deluge daemon connection handshake");
+            return false;
+        }
+    }
+
+    private async Task<bool> EnsureDaemonConnectedAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var connectedDoc = await SendRequestAsync("web.connected", Array.Empty<object>(), cancellationToken);
+            if (connectedDoc.RootElement.TryGetProperty("result", out var connectedRes) &&
+                connectedRes.ValueKind == JsonValueKind.True)
+            {
+                return true;
+            }
+
+            _logger.Debug("Deluge web is not connected to daemon, querying hosts...");
+            using var hostsDoc = await SendRequestAsync("web.get_hosts", Array.Empty<object>(), cancellationToken);
+            if (!hostsDoc.RootElement.TryGetProperty("result", out var hostsRes) || hostsRes.ValueKind != JsonValueKind.Array)
+            {
+                _logger.Warn("Failed to retrieve hosts from Deluge web");
+                return false;
+            }
+
+            string targetHostId = null;
+            foreach (var hostEl in hostsRes.EnumerateArray())
+            {
+                if (hostEl.ValueKind == JsonValueKind.Array && hostEl.GetArrayLength() >= 1)
+                {
+                    var hostId = hostEl[0].GetString();
+                    var status = hostEl.GetArrayLength() >= 4 ? hostEl[3].GetString() : null;
+
+                    if (string.Equals(status, "Online", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(status, "Connected", StringComparison.OrdinalIgnoreCase))
+                    {
+                        targetHostId = hostId;
+                        break;
+                    }
+
+                    targetHostId ??= hostId;
+                }
+            }
+
+            if (string.IsNullOrEmpty(targetHostId))
+            {
+                _logger.Warn("No available Deluge daemon hosts found");
+                return false;
+            }
+
+            _logger.Debug("Connecting Deluge web to daemon host: {0}", targetHostId);
+            using (await SendRequestAsync("web.connect", new object[] { targetHostId }, cancellationToken))
+            {
+            }
+
+            using var verifyDoc = await SendRequestAsync("web.connected", Array.Empty<object>(), cancellationToken);
+            var isConnected = verifyDoc.RootElement.TryGetProperty("result", out var verifyRes) &&
+                verifyRes.ValueKind == JsonValueKind.True;
+
+            if (!isConnected)
+            {
+                _logger.Warn("Failed to connect Deluge web to daemon host: {0}", targetHostId);
+            }
+
+            return isConnected;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to perform Deluge daemon connection handshake");
             return false;
         }
     }
@@ -164,7 +327,78 @@ public class DelugeClient : IDownloadClient, IDisposable
 
     public byte[] GetTorrentFile(string infoHash)
     {
-        _logger.Warn("Deluge does not support direct .torrent export via Web API for hash: {0}", infoHash);
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return null;
+        }
+
+        try
+        {
+            if (!string.IsNullOrEmpty(LocalTorrentDirectory))
+            {
+                var candidate = Path.Combine(LocalTorrentDirectory, $"{infoHash}.torrent");
+                if (File.Exists(candidate))
+                {
+                    return File.ReadAllBytes(candidate);
+                }
+
+                var lowerCandidate = Path.Combine(LocalTorrentDirectory, $"{infoHash.ToLowerInvariant()}.torrent");
+                if (File.Exists(lowerCandidate))
+                {
+                    return File.ReadAllBytes(lowerCandidate);
+                }
+            }
+
+            if (Authenticate())
+            {
+                try
+                {
+                    using var doc = SendRequest("core.get_torrent_status", new object[] { infoHash, new[] { "torrent_file" } });
+                    if (doc.RootElement.TryGetProperty("result", out var result) &&
+                        result.TryGetProperty("torrent_file", out var tfProp))
+                    {
+                        var filePath = tfProp.GetString();
+                        if (!string.IsNullOrEmpty(filePath))
+                        {
+                            if (File.Exists(filePath))
+                            {
+                                return File.ReadAllBytes(filePath);
+                            }
+
+                            if (RemotePathMappingService != null)
+                            {
+                                var remapped = RemotePathMappingService.Remap(Host, filePath);
+                                if (!string.IsNullOrEmpty(remapped) && File.Exists(remapped))
+                                {
+                                    return File.ReadAllBytes(remapped);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Deluge core.get_torrent_status did not provide accessible torrent_file for {0}", infoHash);
+                }
+            }
+
+            if (RemotePathMappingService != null)
+            {
+                var standardRemoteState = $"/config/state/{infoHash.ToLowerInvariant()}.torrent";
+                var remapped = RemotePathMappingService.Remap(Host, standardRemoteState);
+                if (!string.IsNullOrEmpty(remapped) && File.Exists(remapped))
+                {
+                    return File.ReadAllBytes(remapped);
+                }
+            }
+
+            _logger.Debug("Deluge torrent file for {0} is not accessible locally or via RPC; continuing gracefully", infoHash);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Error attempting to retrieve Deluge torrent file for {0}", infoHash);
+        }
+
         return null;
     }
 
@@ -324,7 +558,7 @@ public class DelugeClient : IDownloadClient, IDisposable
     public async Task<DownloadClientSpeedLimits> GetSpeedLimitsAsync(CancellationToken cancellationToken = default)
     {
         var result = new DownloadClientSpeedLimits();
-        if (!Authenticate())
+        if (!await AuthenticateAsync(cancellationToken))
         {
             return result;
         }
@@ -369,7 +603,7 @@ public class DelugeClient : IDownloadClient, IDisposable
 
     public async Task SetSpeedLimitsAsync(long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default)
     {
-        if (!Authenticate())
+        if (!await AuthenticateAsync(cancellationToken))
         {
             return;
         }
@@ -400,7 +634,7 @@ public class DelugeClient : IDownloadClient, IDisposable
 
     public async Task SetTorrentLimitsAsync(string infoHash, long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(infoHash) || !Authenticate())
+        if (string.IsNullOrWhiteSpace(infoHash) || !await AuthenticateAsync(cancellationToken))
         {
             return;
         }
