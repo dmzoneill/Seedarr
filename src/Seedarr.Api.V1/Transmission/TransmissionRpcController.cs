@@ -604,47 +604,109 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
                 if (request.Arguments.TryGetValue("seedRatioLimit", out var srlVal) && srlVal.ValueKind == JsonValueKind.Number)
                 {
-                    _ = srlVal.GetDouble();
+                    t.RatioLimit = srlVal.GetDouble();
                 }
 
                 if (request.Arguments.TryGetValue("seedRatioMode", out var srmVal) && srmVal.ValueKind == JsonValueKind.Number)
                 {
-                    _ = srmVal.GetInt32();
+                    var mode = srmVal.GetInt32();
+                    if (mode == 0)
+                    {
+                        t.RatioLimit = null;
+                    }
+                    else if (mode == 2)
+                    {
+                        t.RatioLimit = -1;
+                    }
                 }
 
                 if (request.Arguments.TryGetValue("seedIdleLimit", out var silVal) && silVal.ValueKind == JsonValueKind.Number)
                 {
-                    _ = silVal.GetInt32();
+                    t.SeedingTimeLimit = silVal.GetInt32();
                 }
 
                 if (request.Arguments.TryGetValue("seedIdleMode", out var simVal) && simVal.ValueKind == JsonValueKind.Number)
                 {
-                    _ = simVal.GetInt32();
+                    var mode = simVal.GetInt32();
+                    if (mode == 0)
+                    {
+                        t.SeedingTimeLimit = null;
+                    }
+                    else if (mode == 2)
+                    {
+                        t.SeedingTimeLimit = -1;
+                    }
                 }
 
-                if (request.Arguments.TryGetValue("files-wanted", out var fwVal) && fwVal.ValueKind == JsonValueKind.Array)
+                var files = _torrentFileService.GetByTorrentId(t.Id);
+                if (files.Count > 0)
                 {
-                    var fileIndices = fwVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
-                }
+                    var modifiedFiles = new HashSet<TorrentFile>();
 
-                if (request.Arguments.TryGetValue("files-unwanted", out var fuVal) && fuVal.ValueKind == JsonValueKind.Array)
-                {
-                    var fileIndices = fuVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
-                }
+                    if (request.Arguments.TryGetValue("files-wanted", out var fwVal) && fwVal.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var idx in fwVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()))
+                        {
+                            if (idx >= 0 && idx < files.Count)
+                            {
+                                files[idx].Wanted = true;
+                                modifiedFiles.Add(files[idx]);
+                            }
+                        }
+                    }
 
-                if (request.Arguments.TryGetValue("priority-high", out var phVal) && phVal.ValueKind == JsonValueKind.Array)
-                {
-                    var fileIndices = phVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
-                }
+                    if (request.Arguments.TryGetValue("files-unwanted", out var fuVal) && fuVal.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var idx in fuVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()))
+                        {
+                            if (idx >= 0 && idx < files.Count)
+                            {
+                                files[idx].Wanted = false;
+                                modifiedFiles.Add(files[idx]);
+                            }
+                        }
+                    }
 
-                if (request.Arguments.TryGetValue("priority-low", out var plVal) && plVal.ValueKind == JsonValueKind.Array)
-                {
-                    var fileIndices = plVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
-                }
+                    if (request.Arguments.TryGetValue("priority-high", out var phVal) && phVal.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var idx in phVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()))
+                        {
+                            if (idx >= 0 && idx < files.Count)
+                            {
+                                files[idx].Priority = 1;
+                                modifiedFiles.Add(files[idx]);
+                            }
+                        }
+                    }
 
-                if (request.Arguments.TryGetValue("priority-normal", out var pnVal) && pnVal.ValueKind == JsonValueKind.Array)
-                {
-                    var fileIndices = pnVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
+                    if (request.Arguments.TryGetValue("priority-low", out var plVal) && plVal.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var idx in plVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()))
+                        {
+                            if (idx >= 0 && idx < files.Count)
+                            {
+                                files[idx].Priority = -1;
+                                modifiedFiles.Add(files[idx]);
+                            }
+                        }
+                    }
+
+                    if (request.Arguments.TryGetValue("priority-normal", out var pnVal) && pnVal.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var idx in pnVal.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()))
+                        {
+                            if (idx >= 0 && idx < files.Count)
+                            {
+                                files[idx].Priority = 0;
+                                modifiedFiles.Add(files[idx]);
+                            }
+                        }
+                    }
+
+                    foreach (var file in modifiedFiles)
+                    {
+                        _torrentFileService.Update(file);
+                    }
                 }
 
                 _torrentService.Update(t);
@@ -881,7 +943,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
     private IActionResult HandleFreeSpace(TransmissionRpcRequest request, object tag)
     {
         var targetPath = request.Arguments != null && request.Arguments.TryGetValue("path", out var p) ? p.GetString() : (_configService?.WatchFolderPath ?? "/downloads");
-        var freeBytes = 100L * 1024 * 1024 * 1024;
+        var freeBytes = GetFreeDiskSpace(targetPath);
 
         return Ok(new TransmissionRpcResponse
         {
@@ -893,6 +955,45 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             },
             Tag = tag,
         });
+    }
+
+    private static long GetFreeDiskSpace(string path, long fallback = 100L * 1024 * 1024 * 1024)
+    {
+        try
+        {
+            var targetPath = !string.IsNullOrWhiteSpace(path) ? path : "/";
+            var fullPath = Path.GetFullPath(targetPath);
+            var root = Path.GetPathRoot(fullPath);
+            if (string.IsNullOrEmpty(root))
+            {
+                root = fullPath;
+            }
+
+            var drive = new DriveInfo(root);
+            if (drive.IsReady)
+            {
+                return drive.AvailableFreeSpace;
+            }
+        }
+        catch
+        {
+            // Drive lookup failed; try current directory root or fallback.
+        }
+
+        try
+        {
+            var rootDrive = new DriveInfo(Path.GetPathRoot(Environment.CurrentDirectory) ?? "/");
+            if (rootDrive.IsReady)
+            {
+                return rootDrive.AvailableFreeSpace;
+            }
+        }
+        catch
+        {
+            // Fallback to default.
+        }
+
+        return fallback;
     }
 
     private IActionResult HandleQueueMove(TransmissionRpcRequest request, object tag, string position)
@@ -1120,23 +1221,52 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
     {
         var totalSize = t.TotalSize;
         var downloaded = t.Downloaded;
-        var leftUntilDone = Math.Max(0, totalSize - downloaded);
 
-        var needFiles = fields == null || fields.Count == 0 || fields.Contains("files") || fields.Contains("fileStats");
+        var needFiles = fields == null || fields.Count == 0 || fields.Contains("files") || fields.Contains("fileStats") || fields.Contains("sizeWhenDone") || fields.Contains("leftUntilDone") || fields.Contains("priorities") || fields.Contains("wanted");
         var needTrackers = fields == null || fields.Count == 0 || fields.Contains("trackers") || fields.Contains("trackerStats");
 
         var files = needFiles ? _torrentFileService.GetByTorrentId(t.Id) : new List<TorrentFile>();
+        var sizeWhenDone = files.Count > 0 ? files.Where(f => f.Wanted).Sum(f => f.Size) : totalSize;
+        var leftUntilDone = Math.Max(0L, sizeWhenDone - downloaded);
 
         var trackers = new List<Dictionary<string, object>>();
+        var trackerStats = new List<Dictionary<string, object>>();
         if (needTrackers)
         {
             var trkList = _trackerEntryService.GetByTorrentId(t.Id);
-            trackers = trkList.Select((tr, idx) => new Dictionary<string, object>
+            trackers = trkList.Select(tr => new Dictionary<string, object>
             {
                 ["id"] = tr.Id,
                 ["announce"] = tr.Url ?? string.Empty,
                 ["scrape"] = tr.Url ?? string.Empty,
                 ["tier"] = tr.Tier,
+            }).ToList();
+
+            trackerStats = trkList.Select(tr =>
+            {
+                var host = string.Empty;
+                if (!string.IsNullOrWhiteSpace(tr.Url) && Uri.TryCreate(tr.Url, UriKind.Absolute, out var uri))
+                {
+                    host = uri.Host;
+                }
+
+                return new Dictionary<string, object>
+                {
+                    ["id"] = tr.Id,
+                    ["announce"] = tr.Url ?? string.Empty,
+                    ["scrape"] = tr.Url ?? string.Empty,
+                    ["tier"] = tr.Tier,
+                    ["host"] = host,
+                    ["seederCount"] = tr.Seeders,
+                    ["leecherCount"] = tr.Leechers,
+                    ["downloadCount"] = tr.Downloaded,
+                    ["hasAnnounced"] = tr.LastAnnounce != null,
+                    ["hasScraped"] = tr.LastScrape != null,
+                    ["lastAnnounceSucceeded"] = tr.Status == TrackerStatus.Working,
+                    ["lastAnnounceTime"] = tr.LastAnnounce != null ? new DateTimeOffset(tr.LastAnnounce.Value).ToUnixTimeSeconds() : 0L,
+                    ["lastScrapeTime"] = tr.LastScrape != null ? new DateTimeOffset(tr.LastScrape.Value).ToUnixTimeSeconds() : 0L,
+                    ["nextAnnounceTime"] = tr.NextAnnounce != null ? new DateTimeOffset(tr.NextAnnounce.Value).ToUnixTimeSeconds() : 0L,
+                };
             }).ToList();
 
             if (trackers.Count == 0 && !string.IsNullOrWhiteSpace(t.TrackerUrl))
@@ -1147,6 +1277,30 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                     ["announce"] = t.TrackerUrl,
                     ["scrape"] = t.TrackerUrl,
                     ["tier"] = 0,
+                });
+
+                var fallbackHost = string.Empty;
+                if (Uri.TryCreate(t.TrackerUrl, UriKind.Absolute, out var uri))
+                {
+                    fallbackHost = uri.Host;
+                }
+
+                trackerStats.Add(new Dictionary<string, object>
+                {
+                    ["id"] = 1,
+                    ["announce"] = t.TrackerUrl,
+                    ["scrape"] = t.TrackerUrl,
+                    ["tier"] = 0,
+                    ["host"] = fallbackHost,
+                    ["seederCount"] = t.Seeders,
+                    ["leecherCount"] = t.Leechers,
+                    ["downloadCount"] = 0L,
+                    ["hasAnnounced"] = true,
+                    ["hasScraped"] = false,
+                    ["lastAnnounceSucceeded"] = true,
+                    ["lastAnnounceTime"] = 0L,
+                    ["lastScrapeTime"] = 0L,
+                    ["nextAnnounceTime"] = 0L,
                 });
             }
         }
@@ -1179,7 +1333,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             ["isFinished"] = t.Progress >= 1.0,
             ["isStalled"] = t.Status == TorrentStatus.Downloading && t.DownloadSpeed == 0,
             ["error"] = t.Status == TorrentStatus.Error ? 1 : 0,
-            ["errorString"] = string.Empty,
+            ["errorString"] = t.ErrorMessage ?? string.Empty,
             ["addedDate"] = new DateTimeOffset(t.DateAdded).ToUnixTimeSeconds(),
             ["activityDate"] = new DateTimeOffset(t.LastActive ?? t.DateAdded).ToUnixTimeSeconds(),
             ["doneDate"] = t.Progress >= 1.0 ? new DateTimeOffset(t.LastActive ?? t.DateAdded).ToUnixTimeSeconds() : 0,
@@ -1188,19 +1342,22 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             ["trackers"] = trackers,
             ["files"] = files.Select(f => new Dictionary<string, object>
             {
-                ["bytesCompleted"] = (long)(f.Size * t.Progress),
+                ["bytesCompleted"] = f.BytesCompleted > 0 ? f.BytesCompleted : (long)(f.Size * t.Progress),
                 ["length"] = f.Size,
                 ["name"] = f.Path ?? string.Empty,
             }).ToList(),
             ["fileStats"] = files.Select(f => new Dictionary<string, object>
             {
-                ["bytesCompleted"] = (long)(f.Size * t.Progress),
-                ["wanted"] = true,
-                ["priority"] = 0,
+                ["bytesCompleted"] = f.BytesCompleted > 0 ? f.BytesCompleted : (long)(f.Size * t.Progress),
+                ["wanted"] = f.Wanted,
+                ["priority"] = f.Priority,
             }).ToList(),
-            ["trackerStats"] = trackers,
+            ["priorities"] = files.Select(f => f.Priority).ToList(),
+            ["wanted"] = files.Select(f => f.Wanted ? 1 : 0).ToList(),
+            ["trackerStats"] = trackerStats,
             ["pieceCount"] = t.PieceCount,
             ["pieceSize"] = t.PieceLength,
+            ["sizeWhenDone"] = sizeWhenDone,
             ["leftUntilDone"] = leftUntilDone,
             ["recheckProgress"] = 1.0,
             ["queuePosition"] = t.SortOrder,

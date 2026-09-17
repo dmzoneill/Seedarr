@@ -169,4 +169,182 @@ public class TransmissionRpcControllerTest
         Assert.That(torrent.Name, Is.EqualTo("Multi File Torrent"));
         _torrentService.Received(1).Recheck(2);
     }
+
+    [Test]
+    public async Task HandleRpc_TorrentGet_Projects_SizeWhenDone_FileStats_Wanted_Priorities_And_ErrorString()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Transmission Test",
+            InfoHash = "1122334455667788990011223344556677889900",
+            TotalSize = 10000,
+            Downloaded = 4000,
+            Progress = 0.4,
+            Status = TorrentStatus.Downloading,
+            ErrorMessage = "Tracker connection error",
+        };
+
+        var file1 = new TorrentFile
+        {
+            Id = 101,
+            TorrentId = 1,
+            Path = "file1.mkv",
+            Size = 6000,
+            Wanted = true,
+            Priority = 1,
+            BytesCompleted = 3000,
+        };
+        var file2 = new TorrentFile
+        {
+            Id = 102,
+            TorrentId = 1,
+            Path = "file2.mkv",
+            Size = 4000,
+            Wanted = false,
+            Priority = -1,
+            BytesCompleted = 1000,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file1, file2 });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-get",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["fields"] = JsonDocument.Parse("[\"id\", \"sizeWhenDone\", \"leftUntilDone\", \"errorString\", \"fileStats\", \"priorities\", \"wanted\"]").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+
+        var args = response.Arguments as Dictionary<string, object>;
+        Assert.That(args, Is.Not.Null);
+        var torrentList = args["torrents"] as List<Dictionary<string, object>>;
+        Assert.That(torrentList, Is.Not.Null);
+        Assert.That(torrentList.Count, Is.EqualTo(1));
+
+        var t = torrentList[0];
+        Assert.That(t["id"], Is.EqualTo(1));
+        Assert.That(t["sizeWhenDone"], Is.EqualTo(6000L));
+        Assert.That(t["leftUntilDone"], Is.EqualTo(2000L));
+        Assert.That(t["errorString"], Is.EqualTo("Tracker connection error"));
+
+        var fileStats = t["fileStats"] as List<Dictionary<string, object>>;
+        Assert.That(fileStats, Is.Not.Null);
+        Assert.That(fileStats.Count, Is.EqualTo(2));
+        Assert.That(fileStats[0]["wanted"], Is.EqualTo(true));
+        Assert.That(fileStats[0]["priority"], Is.EqualTo(1));
+        Assert.That(fileStats[0]["bytesCompleted"], Is.EqualTo(3000L));
+        Assert.That(fileStats[1]["wanted"], Is.EqualTo(false));
+        Assert.That(fileStats[1]["priority"], Is.EqualTo(-1));
+        Assert.That(fileStats[1]["bytesCompleted"], Is.EqualTo(1000L));
+
+        var priorities = t["priorities"] as List<int>;
+        Assert.That(priorities, Is.Not.Null);
+        Assert.That(priorities, Is.EqualTo(new List<int> { 1, -1 }));
+
+        var wanted = t["wanted"] as List<int>;
+        Assert.That(wanted, Is.Not.Null);
+        Assert.That(wanted, Is.EqualTo(new List<int> { 1, 0 }));
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentSet_Persists_FilesWanted_FilesUnwanted_And_Priorities()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Transmission Test",
+            InfoHash = "1122334455667788990011223344556677889900",
+        };
+
+        var file1 = new TorrentFile
+        {
+            Id = 101,
+            TorrentId = 1,
+            Path = "file1.mkv",
+            Size = 6000,
+            Wanted = false,
+            Priority = 0,
+        };
+        var file2 = new TorrentFile
+        {
+            Id = 102,
+            TorrentId = 1,
+            Path = "file2.mkv",
+            Size = 4000,
+            Wanted = true,
+            Priority = 0,
+        };
+
+        _torrentService.Get(1).Returns(torrent);
+        _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file1, file2 });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-set",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[1]").RootElement,
+                ["files-wanted"] = JsonDocument.Parse("[0]").RootElement,
+                ["files-unwanted"] = JsonDocument.Parse("[1]").RootElement,
+                ["priority-high"] = JsonDocument.Parse("[0]").RootElement,
+                ["priority-low"] = JsonDocument.Parse("[1]").RootElement,
+                ["seedRatioLimit"] = JsonDocument.Parse("2.5").RootElement,
+                ["seedIdleLimit"] = JsonDocument.Parse("60").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+
+        Assert.That(file1.Wanted, Is.True);
+        Assert.That(file1.Priority, Is.EqualTo(1));
+        Assert.That(file2.Wanted, Is.False);
+        Assert.That(file2.Priority, Is.EqualTo(-1));
+        Assert.That(torrent.RatioLimit, Is.EqualTo(2.5));
+        Assert.That(torrent.SeedingTimeLimit, Is.EqualTo(60));
+
+        _torrentFileService.Received(1).Update(file1);
+        _torrentFileService.Received(1).Update(file2);
+        _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public async Task HandleRpc_FreeSpace_Returns_Drive_FreeSpace()
+    {
+        var request = new TransmissionRpcRequest
+        {
+            Method = "free-space",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["path"] = JsonDocument.Parse("\"/\"").RootElement,
+            },
+            Tag = JsonDocument.Parse("123").RootElement,
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+
+        var args = response.Arguments as Dictionary<string, object>;
+        Assert.That(args, Is.Not.Null);
+        Assert.That(args["path"], Is.EqualTo("/"));
+        Assert.That((long)args["size-bytes"], Is.GreaterThan(0L));
+    }
 }
