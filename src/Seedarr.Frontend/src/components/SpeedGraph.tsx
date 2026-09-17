@@ -51,6 +51,8 @@ export const TIME_RANGES: Record<TimeRange, TimeRangeConfig> = {
 export const TIME_RANGE_OPTIONS: TimeRangeConfig[] = Object.values(TIME_RANGES);
 export const MAX_BUFFER_POINTS = 1800;
 const STORAGE_KEY = "seedarr_speedgraph_range";
+const SCALE_HOLD_DELAY_MS = 8000;
+const LERP_FACTOR = 0.15;
 
 function getInitialRange(propMaxPoints?: number): TimeRange {
   try {
@@ -112,6 +114,100 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
   const { data: serverHistory } = useSpeedHistory();
   const { data: stats } = useSeedingStats();
 
+  let maxSpeed = 0;
+  for (const point of history) {
+    maxSpeed = Math.max(maxSpeed, point.uploadSpeed, point.downloadSpeed);
+  }
+  const rawNiceMax = getNiceMax(maxSpeed > 0 ? maxSpeed * 1.15 : 1024);
+
+  const [targetNiceMax, setTargetNiceMax] = useState<number>(rawNiceMax);
+  const [renderedMax, setRenderedMax] = useState<number>(rawNiceMax);
+
+  const decayHoldRef = useRef<{
+    dropStartTime: number;
+    highestRawDuringDrop: number;
+  } | null>(null);
+
+  const renderedMaxRef = useRef<number>(renderedMax);
+  renderedMaxRef.current = renderedMax;
+  const targetMaxRef = useRef<number>(targetNiceMax);
+  targetMaxRef.current = targetNiceMax;
+
+  // Scale Hysteresis with Decay Hold Timer
+  useEffect(() => {
+    const now = Date.now();
+
+    if (rawNiceMax > targetNiceMax) {
+      // 1. Instant expansion: expand immediately to prevent line clipping
+      setTargetNiceMax(rawNiceMax);
+      decayHoldRef.current = null;
+    } else if (rawNiceMax === targetNiceMax) {
+      // Steady in current tier
+      decayHoldRef.current = null;
+    } else {
+      // 2. Decay hold timer: bandwidth dropped below current tier
+      if (!decayHoldRef.current) {
+        decayHoldRef.current = {
+          dropStartTime: now,
+          highestRawDuringDrop: rawNiceMax,
+        };
+      } else {
+        decayHoldRef.current.highestRawDuringDrop = Math.max(
+          decayHoldRef.current.highestRawDuringDrop,
+          rawNiceMax,
+        );
+      }
+
+      const elapsed = now - decayHoldRef.current.dropStartTime;
+      const remaining = Math.max(0, SCALE_HOLD_DELAY_MS - elapsed);
+
+      const timer = setTimeout(() => {
+        if (decayHoldRef.current) {
+          const newTarget = Math.max(
+            1024,
+            decayHoldRef.current.highestRawDuringDrop,
+          );
+          setTargetNiceMax(newTarget);
+          decayHoldRef.current = null;
+        }
+      }, remaining);
+
+      return () => clearTimeout(timer);
+    }
+  }, [rawNiceMax, targetNiceMax]);
+
+  // Smooth Exponential Interpolation (Lerp) towards targetNiceMax
+  useEffect(() => {
+    let animId: number;
+
+    const animate = () => {
+      const current = renderedMaxRef.current;
+      const target = targetMaxRef.current;
+      const diff = target - current;
+
+      if (Math.abs(diff) < 0.5 || Math.abs(diff / target) < 0.002) {
+        setRenderedMax(target);
+        renderedMaxRef.current = target;
+        return;
+      }
+
+      const next = current + diff * LERP_FACTOR;
+      setRenderedMax(next);
+      renderedMaxRef.current = next;
+      animId = requestAnimationFrame(animate);
+    };
+
+    if (Math.abs(renderedMaxRef.current - targetNiceMax) >= 0.5) {
+      animId = requestAnimationFrame(animate);
+    }
+
+    return () => {
+      if (animId) {
+        cancelAnimationFrame(animId);
+      }
+    };
+  }, [targetNiceMax]);
+
   useEffect(() => {
     if (!containerRef.current) return;
     const el = containerRef.current;
@@ -142,7 +238,10 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
         s.downloadSpeed,
       );
     }
-    setHistory(ringBufferRef.current.getPoints(currentRangeConfig.points));
+    const initialPoints = ringBufferRef.current.getPoints(
+      currentRangeConfig.points,
+    );
+    setHistory(initialPoints);
 
     if (serverHistory.length > 0) {
       const last = serverHistory[serverHistory.length - 1];
@@ -151,6 +250,17 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
         totalDownloaded: last.totalDownloaded,
         timestamp: new Date(last.timestamp).getTime(),
       };
+
+      let initialMax = 0;
+      for (const p of initialPoints) {
+        initialMax = Math.max(initialMax, p.uploadSpeed, p.downloadSpeed);
+      }
+      const initialNiceMax = getNiceMax(
+        initialMax > 0 ? initialMax * 1.15 : 1024,
+      );
+      setTargetNiceMax(initialNiceMax);
+      setRenderedMax(initialNiceMax);
+      renderedMaxRef.current = initialNiceMax;
     }
   }, [serverHistory, currentRangeConfig.points]);
 
@@ -188,7 +298,17 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
     setSelectedRange(range);
     const cfg = TIME_RANGES[range];
     if (cfg) {
-      setHistory(ringBufferRef.current.getPoints(cfg.points));
+      const points = ringBufferRef.current.getPoints(cfg.points);
+      setHistory(points);
+      decayHoldRef.current = null;
+      let newMaxSpeed = 0;
+      for (const p of points) {
+        newMaxSpeed = Math.max(newMaxSpeed, p.uploadSpeed, p.downloadSpeed);
+      }
+      const newNiceMax = getNiceMax(
+        newMaxSpeed > 0 ? newMaxSpeed * 1.15 : 1024,
+      );
+      setTargetNiceMax(newNiceMax);
     }
     try {
       localStorage.setItem(STORAGE_KEY, range);
@@ -201,11 +321,7 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
   const chartWidth = Math.max(100, svgWidth - PADDING.left - PADDING.right);
   const chartHeight = SVG_HEIGHT - PADDING.top - PADDING.bottom;
 
-  let maxSpeed = 0;
-  for (const point of history) {
-    maxSpeed = Math.max(maxSpeed, point.uploadSpeed, point.downloadSpeed);
-  }
-  const niceMax = getNiceMax(maxSpeed > 0 ? maxSpeed * 1.15 : 1024);
+  const niceMax = Math.max(1024, renderedMax);
 
   const gridLineCount = 3;
   const gridLines = Array.from({ length: gridLineCount + 1 }, (_, i) => {
@@ -262,8 +378,10 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
         const x =
           PADDING.left +
           ((offset + point.index) / Math.max(1, windowPoints - 1)) * chartWidth;
-        const y =
-          PADDING.top + chartHeight - (point[key] / niceMax) * chartHeight;
+        const y = Math.max(
+          PADDING.top,
+          PADDING.top + chartHeight - (point[key] / niceMax) * chartHeight,
+        );
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(" ");
@@ -289,8 +407,10 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
         const x =
           PADDING.left +
           ((offset + point.index) / Math.max(1, windowPoints - 1)) * chartWidth;
-        const y =
-          PADDING.top + chartHeight - (point[key] / niceMax) * chartHeight;
+        const y = Math.max(
+          PADDING.top,
+          PADDING.top + chartHeight - (point[key] / niceMax) * chartHeight,
+        );
         return `L ${x.toFixed(1)} ${y.toFixed(1)}`;
       })
       .join(" ");
