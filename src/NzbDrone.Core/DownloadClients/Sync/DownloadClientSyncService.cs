@@ -483,16 +483,14 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             var existingFiles = _torrentFileService.GetByTorrentId(torrentId);
             if (existingFiles.Count == 0)
             {
-                foreach (var f in parsed.Files)
+                var filesToAdd = parsed.Files.Select(f => new TorrentFile
                 {
-                    _torrentFileService.Add(new TorrentFile
-                    {
-                        TorrentId = torrentId,
-                        Path = f.Path,
-                        Size = f.Size,
-                        IsPaddingFile = f.IsPaddingFile
-                    });
-                }
+                    TorrentId = torrentId,
+                    Path = f.Path,
+                    Size = f.Size,
+                    IsPaddingFile = f.IsPaddingFile
+                }).ToList();
+                _torrentFileService.AddMany(filesToAdd);
             }
         }
 
@@ -501,6 +499,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             var existingTrackers = _trackerEntryService.GetByTorrentId(torrentId)
                 .Select(t => t.Url.Trim().ToLowerInvariant())
                 .ToHashSet();
+
+            var newTrackers = new List<TrackerEntry>();
 
             if (parsed.AnnounceList != null && parsed.AnnounceList.Count > 0)
             {
@@ -512,7 +512,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                         var clean = url.Trim();
                         if (!string.IsNullOrEmpty(clean) && !existingTrackers.Contains(clean.ToLowerInvariant()))
                         {
-                            _trackerEntryService.Add(new TrackerEntry
+                            newTrackers.Add(new TrackerEntry
                             {
                                 TorrentId = torrentId,
                                 Url = clean,
@@ -531,7 +531,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 var clean = parsed.AnnounceUrl.Trim();
                 if (!existingTrackers.Contains(clean.ToLowerInvariant()))
                 {
-                    _trackerEntryService.Add(new TrackerEntry
+                    newTrackers.Add(new TrackerEntry
                     {
                         TorrentId = torrentId,
                         Url = clean,
@@ -539,6 +539,11 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                         Enabled = true
                     });
                 }
+            }
+
+            if (newTrackers.Count > 0)
+            {
+                _trackerEntryService.AddMany(newTrackers);
             }
         }
     }
@@ -554,13 +559,14 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             .Select(t => t.Url.Trim().ToLowerInvariant())
             .ToHashSet();
 
+        var newTrackers = new List<TrackerEntry>();
         var tier = 1;
         foreach (var tr in clientTrackers)
         {
             var clean = tr.Trim();
             if (!string.IsNullOrEmpty(clean) && !existingTrackers.Contains(clean.ToLowerInvariant()))
             {
-                _trackerEntryService.Add(new TrackerEntry
+                newTrackers.Add(new TrackerEntry
                 {
                     TorrentId = torrentId,
                     Url = clean,
@@ -569,6 +575,11 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 });
                 existingTrackers.Add(clean.ToLowerInvariant());
             }
+        }
+
+        if (newTrackers.Count > 0)
+        {
+            _trackerEntryService.AddMany(newTrackers);
         }
     }
 

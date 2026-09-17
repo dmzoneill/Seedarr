@@ -14,6 +14,8 @@ public interface IDownloadHistoryService
     void RecordTorrentRemoved(Torrent torrent, string reason = "Deleted from library");
     Torrent ReAdd(int historyId);
     void Update(DownloadHistory history);
+    void AddMany(IList<DownloadHistory> entries);
+    void AddMany(IEnumerable<DownloadHistory> entries);
     int ReconcileAllTorrents();
     int PruneHistory(int retentionDays);
 }

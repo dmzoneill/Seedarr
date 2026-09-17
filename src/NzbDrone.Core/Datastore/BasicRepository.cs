@@ -14,6 +14,8 @@ public interface IBasicRepository<TModel>
     IEnumerable<TModel> All();
     TModel Get(int id);
     TModel Insert(TModel model);
+    void InsertMany(IList<TModel> models);
+    void InsertMany(IEnumerable<TModel> models);
     TModel Update(TModel model);
     void UpdateMany(IEnumerable<TModel> models);
     void Delete(int id);
@@ -88,6 +90,52 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
 
             return model;
         });
+    }
+
+    public void InsertMany(IList<TModel> models)
+    {
+        if (models == null || models.Count == 0)
+        {
+            return;
+        }
+
+        RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                connection.Execute(
+                    TableMapping.GetInsertSql<TModel>(_table),
+                    models,
+                    transaction);
+                transaction.Commit();
+            }
+            catch
+            {
+                try
+                {
+                    transaction.Rollback();
+                }
+                catch
+                {
+                    // best-effort rollback
+                }
+
+                throw;
+            }
+        });
+    }
+
+    public void InsertMany(IEnumerable<TModel> models)
+    {
+        if (models == null)
+        {
+            return;
+        }
+
+        var list = models as IList<TModel> ?? models.ToList();
+        InsertMany(list);
     }
 
     public TModel Update(TModel model)

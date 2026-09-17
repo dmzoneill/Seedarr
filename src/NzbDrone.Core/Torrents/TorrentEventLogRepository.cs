@@ -11,7 +11,6 @@ public interface ITorrentEventLogRepository : IBasicRepository<TorrentEventLog>
     List<TorrentEventLog> GetByTorrentId(int torrentId, int count);
     void Purge(DateTime before);
     void Purge(DateTime before, int maxLogsPerTorrent);
-    void InsertMany(IEnumerable<TorrentEventLog> logs);
 }
 
 public class TorrentEventLogRepository : BasicRepository<TorrentEventLog>, ITorrentEventLogRepository
@@ -65,45 +64,6 @@ public class TorrentEventLogRepository : BasicRepository<TorrentEventLog>, ITorr
                         transaction);
                 }
 
-                transaction.Commit();
-            }
-            catch
-            {
-                try
-                {
-                    transaction.Rollback();
-                }
-                catch
-                {
-                    // best-effort rollback
-                }
-
-                throw;
-            }
-        });
-    }
-
-    public void InsertMany(IEnumerable<TorrentEventLog> logs)
-    {
-        if (logs == null)
-        {
-            return;
-        }
-
-        var list = logs as IList<TorrentEventLog> ?? logs.ToList();
-        if (list.Count == 0)
-        {
-            return;
-        }
-
-        RetryPolicy.Execute(() =>
-        {
-            using var connection = _database.OpenConnection();
-            using var transaction = connection.BeginTransaction();
-            try
-            {
-                var sql = TableMapping.GetInsertSql<TorrentEventLog>(_table);
-                connection.Execute(sql, list, transaction);
                 transaction.Commit();
             }
             catch

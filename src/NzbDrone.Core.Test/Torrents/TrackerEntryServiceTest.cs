@@ -67,6 +67,19 @@ public class TrackerEntryServiceTest
     }
 
     [Test]
+    public void AddMany_should_delegate_to_repository()
+    {
+        var entries = new List<TrackerEntry>
+        {
+            new() { TorrentId = 1, Url = "http://tracker.example.com/announce" }
+        };
+
+        _subject.AddMany(entries);
+
+        _repository.Received(1).InsertMany(entries);
+    }
+
+    [Test]
     public void Update_should_delegate_to_repository()
     {
         var entry = new TrackerEntry { Id = 5, TorrentId = 1, Url = "http://tracker.example.com/announce" };

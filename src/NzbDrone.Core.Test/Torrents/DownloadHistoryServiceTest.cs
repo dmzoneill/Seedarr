@@ -68,6 +68,20 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
+        public void AddMany_should_enrich_and_call_repository_insert_many()
+        {
+            var entries = new List<DownloadHistory>
+            {
+                new() { InfoHash = "abc123hash", SavePath = "/downloads/linux" }
+            };
+
+            _subject.AddMany(entries);
+
+            _historyRepository.Received(1).InsertMany(Arg.Is<IList<DownloadHistory>>(list =>
+                list.Count == 1 && list[0].DataJson.Contains("savePath")));
+        }
+
+        [Test]
         public void RecordTorrentRemoved_should_mark_entry_removed()
         {
             var torrent = new Torrent
