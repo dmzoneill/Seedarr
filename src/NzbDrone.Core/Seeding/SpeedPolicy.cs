@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using NLog;
@@ -14,10 +15,16 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Seeding;
 
-public class SpeedPolicy : ISpeedPolicy
+public class SpeedPolicy : ISpeedPolicy,
+    IHandle<TorrentStatusChangedEvent>,
+    IHandle<TorrentPausedEvent>,
+    IHandle<TorrentDeletedEvent>
 {
+    public const long DefaultMaxUploadPerLeecherBps = 2_500_000;
+    public const double WarmUpWindowSeconds = 180.0;
     private const double SuperSeedingBoost = 1.5;
 
+    private readonly ConcurrentDictionary<int, DateTime> _seedingStartTimes = new();
     private readonly ISpeedDistributionManager _distributionManager;
     private readonly ISpeedScheduler _speedScheduler;
     private readonly IConfigService _configService;
@@ -143,6 +150,7 @@ public class SpeedPolicy : ISpeedPolicy
         var stoppedIndices = _stopPolicy.SelectStoppedTorrents(torrents);
         var variationMin = _configService.SpeedVariationMin;
         var variationMax = _configService.SpeedVariationMax;
+        var currentTime = DateTime.UtcNow;
 
         var activeTorrentIndices = new List<int>();
         for (var i = 0; i < torrents.Count; i++)
@@ -190,6 +198,7 @@ public class SpeedPolicy : ISpeedPolicy
 
             if (stoppedIndices.Contains(i))
             {
+                ResetSeedingStartTime(torrent.Id);
                 uploadBytesThisTick = 0;
             }
             else
@@ -240,15 +249,30 @@ public class SpeedPolicy : ISpeedPolicy
                             break;
                     }
 
-                    if (rec.Recommendation == SeedingRecommendation.Pause || torrent.Leechers <= 0)
+                    if (rec.Recommendation == SeedingRecommendation.Pause)
                     {
                         bytesPerSecond = 0;
                         isPausedOrZeroLeechers = true;
                     }
                 }
 
-                var variationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
-                uploadBytesThisTick = isPausedOrZeroLeechers ? 0 : (long)(bytesPerSecond * variationFactor * tickInterval.TotalSeconds);
+                _seedingStartTimes.GetOrAdd(torrent.Id, _ =>
+                    torrent.SeedingTime > 0
+                        ? currentTime.AddSeconds(-torrent.SeedingTime)
+                        : currentTime);
+
+                bytesPerSecond = CalculateEffectiveUploadSpeed(torrent, bytesPerSecond, currentTime);
+
+                if (torrent.Leechers <= 0 || bytesPerSecond <= 0)
+                {
+                    isPausedOrZeroLeechers = true;
+                    uploadBytesThisTick = 0;
+                }
+                else
+                {
+                    var variationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
+                    uploadBytesThisTick = (long)(bytesPerSecond * variationFactor * tickInterval.TotalSeconds);
+                }
             }
 
             if (!seederActive || isPausedOrZeroLeechers)
@@ -413,5 +437,86 @@ public class SpeedPolicy : ISpeedPolicy
         }
 
         return tags;
+    }
+
+    public void SetSeedingStartTime(int torrentId, DateTime startTime)
+    {
+        _seedingStartTimes[torrentId] = startTime;
+    }
+
+    public void ResetSeedingStartTime(int torrentId)
+    {
+        _seedingStartTimes.TryRemove(torrentId, out _);
+    }
+
+    public void Handle(TorrentStatusChangedEvent message)
+    {
+        if (message?.Torrent == null)
+        {
+            return;
+        }
+
+        if (message.NewStatus != TorrentStatus.Seeding)
+        {
+            ResetSeedingStartTime(message.Torrent.Id);
+        }
+    }
+
+    public void Handle(TorrentPausedEvent message)
+    {
+        if (message?.Torrent != null)
+        {
+            ResetSeedingStartTime(message.Torrent.Id);
+        }
+    }
+
+    public void Handle(TorrentDeletedEvent message)
+    {
+        var torrentId = message.TorrentId > 0 ? message.TorrentId : message.Torrent?.Id ?? 0;
+        if (torrentId > 0)
+        {
+            ResetSeedingStartTime(torrentId);
+        }
+    }
+
+    public long ComputeUploadSpeed(Torrent torrent, long targetSpeed, DateTime? now = null)
+    {
+        return CalculateEffectiveUploadSpeed(torrent, targetSpeed, now);
+    }
+
+    public long CalculateEffectiveUploadSpeed(Torrent torrent, long targetSpeed, DateTime? now = null)
+    {
+        if (torrent == null || targetSpeed <= 0)
+        {
+            return 0;
+        }
+
+        if (torrent.Leechers <= 0)
+        {
+            return 0;
+        }
+
+        var maxPlausibleUpload = (long)torrent.Leechers * DefaultMaxUploadPerLeecherBps;
+        var speed = Math.Min(targetSpeed, maxPlausibleUpload);
+
+        var currentTime = now ?? DateTime.UtcNow;
+        DateTime startTime;
+        if (_seedingStartTimes.TryGetValue(torrent.Id, out var existingStart))
+        {
+            startTime = existingStart;
+        }
+        else if (torrent.SeedingTime > 0)
+        {
+            startTime = currentTime.AddSeconds(-torrent.SeedingTime);
+            _seedingStartTimes.TryAdd(torrent.Id, startTime);
+        }
+        else
+        {
+            return speed;
+        }
+
+        var elapsedSeconds = (currentTime - startTime).TotalSeconds;
+        var rampFactor = Math.Clamp(elapsedSeconds / WarmUpWindowSeconds, 0.05, 1.0);
+        return (long)(speed * rampFactor);
     }
 }
