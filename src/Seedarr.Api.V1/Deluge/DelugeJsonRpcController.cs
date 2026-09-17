@@ -49,6 +49,7 @@ public class DelugeJsonRpcController : ControllerBase
     private readonly IRemotePathMappingService _remotePathMappingService;
     private readonly ICallerHostResolver _callerHostResolver;
     private readonly ICategoryService _categoryService;
+    private readonly ITrackerEntryService _trackerService;
     private readonly Logger _logger;
 
     public static bool IsWebConnected
@@ -69,7 +70,8 @@ public class DelugeJsonRpcController : ControllerBase
         IRpcSessionStore sessionStore = null,
         IRemotePathMappingService remotePathMappingService = null,
         ICallerHostResolver callerHostResolver = null,
-        ICategoryService categoryService = null)
+        ICategoryService categoryService = null,
+        ITrackerEntryService trackerService = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -83,6 +85,7 @@ public class DelugeJsonRpcController : ControllerBase
         _remotePathMappingService = remotePathMappingService;
         _callerHostResolver = callerHostResolver;
         _categoryService = categoryService;
+        _trackerService = trackerService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -1573,6 +1576,17 @@ public class DelugeJsonRpcController : ControllerBase
                 if (priorities.ValueKind == JsonValueKind.Array)
                 {
                     var prioList = priorities.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.Number).Select(x => x.GetInt32()).ToList();
+                    var files = _torrentFileService.GetByTorrentId(torrent.Id);
+                    for (var i = 0; i < prioList.Count; i++)
+                    {
+                        if (i < files.Count)
+                        {
+                            var file = files[i];
+                            file.Priority = prioList[i];
+                            file.Wanted = prioList[i] > 0;
+                            _torrentFileService.Update(file);
+                        }
+                    }
                 }
             }
         }
@@ -1690,7 +1704,72 @@ public class DelugeJsonRpcController : ControllerBase
 
     private Dictionary<string, object> MapTorrentToDelugeStatus(Torrent t, HashSet<string> keys)
     {
-        var status = new Dictionary<string, object>
+        var needFiles = keys == null || keys.Count == 0 || keys.Contains("files") || keys.Contains("file_progress") || keys.Contains("file_priorities") || keys.Contains("num_files");
+        var needTrackers = keys == null || keys.Count == 0 || keys.Contains("trackers") || keys.Contains("tracker_status") || keys.Contains("tracker_host");
+
+        var files = new List<TorrentFile>();
+        if (needFiles)
+        {
+            if (_torrentFileService != null)
+            {
+                files = _torrentFileService.GetByTorrentId(t.Id) ?? new List<TorrentFile>();
+            }
+
+            if (files.Count == 0 && t.Files != null && t.Files.Count > 0)
+            {
+                files = t.Files;
+            }
+        }
+
+        var fileList = new List<object>(files.Count);
+        var fileProgressList = new List<double>(files.Count);
+        var filePrioritiesList = new List<int>(files.Count);
+        long runningOffset = 0;
+        for (var i = 0; i < files.Count; i++)
+        {
+            var file = files[i];
+            var offset = file.ByteOffset != 0 ? file.ByteOffset : runningOffset;
+            file.ByteOffset = offset;
+            runningOffset += file.Size;
+
+            fileList.Add(new
+            {
+                index = i,
+                path = file.Path ?? string.Empty,
+                size = file.Size,
+                offset = file.ByteOffset,
+            });
+            fileProgressList.Add(file.Size > 0 ? (double)file.BytesCompleted / file.Size : 0.0);
+            filePrioritiesList.Add(file.Priority);
+        }
+
+        var trackerList = new List<object>();
+        if (needTrackers)
+        {
+            if (_trackerService != null)
+            {
+                var entries = _trackerService.GetByTorrentId(t.Id);
+                if (entries != null && entries.Count > 0)
+                {
+                    trackerList.AddRange(entries.Select(tr => new
+                    {
+                        tier = tr.Tier,
+                        url = tr.Url ?? string.Empty,
+                    }));
+                }
+            }
+
+            if (trackerList.Count == 0 && !string.IsNullOrWhiteSpace(t.TrackerUrl))
+            {
+                trackerList.Add(new
+                {
+                    tier = 0,
+                    url = t.TrackerUrl,
+                });
+            }
+        }
+
+        var status = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase)
         {
             ["hash"] = (t.InfoHash ?? string.Empty).ToLowerInvariant(),
             ["name"] = t.Name ?? string.Empty,
@@ -1722,7 +1801,11 @@ public class DelugeJsonRpcController : ControllerBase
             ["remove_at_ratio"] = false,
             ["max_download_speed"] = t.DownloadLimit,
             ["max_upload_speed"] = t.UploadLimit,
-            ["num_files"] = 1,
+            ["num_files"] = files.Count > 0 ? files.Count : 1,
+            ["files"] = fileList,
+            ["file_progress"] = fileProgressList,
+            ["file_priorities"] = filePrioritiesList,
+            ["trackers"] = trackerList,
             ["tracker_status"] = "Announce OK",
             ["tracker_host"] = t.TrackerUrl ?? string.Empty,
             ["queue"] = t.SortOrder,
