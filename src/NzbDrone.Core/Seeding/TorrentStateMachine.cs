@@ -32,6 +32,7 @@ public class TorrentStateMachine : ITorrentStateMachine
                 _logger.Info("Torrent {0} is force-completed, switching to seeding", torrent.Name);
                 _eventLogService.Info(torrent.Id, "Seeding", "Force-completed (100%), switched to seeding");
                 _eventAggregator?.PublishEvent(new TorrentDownloadCompletedEvent(torrent));
+                _eventAggregator?.PublishEvent(new TorrentFinishedEvent(torrent));
                 _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Seeding));
                 return true;
             }
@@ -50,6 +51,7 @@ public class TorrentStateMachine : ITorrentStateMachine
             _eventLogService.Info(torrent.Id, "Seeding", $"Download reached threshold ({(int)(effectiveThreshold * 100)}%), switching to seeding");
             torrent.Status = TorrentStatus.Seeding;
             _eventAggregator?.PublishEvent(new TorrentDownloadCompletedEvent(torrent));
+            _eventAggregator?.PublishEvent(new TorrentFinishedEvent(torrent));
             _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Seeding));
             return true;
         }

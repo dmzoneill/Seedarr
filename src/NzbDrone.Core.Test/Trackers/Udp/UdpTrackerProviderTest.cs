@@ -44,7 +44,7 @@ public class UdpTrackerProviderTest
             Uploaded = 1024,
             Downloaded = 2048,
             Left = 4096,
-            Event = "started",
+            Event = AnnounceEvent.Started,
             NumWant = 50
         };
 
@@ -96,7 +96,7 @@ public class UdpTrackerProviderTest
     {
         var method = typeof(UdpTrackerProvider).GetMethod("BuildAnnouncePacket", BindingFlags.NonPublic | BindingFlags.Static);
         var request = CreateRequest();
-        request.Event = "started";
+        request.Event = AnnounceEvent.Started;
 
         var result = (byte[])method.Invoke(null, new object[] { 0L, 0, request });
 
@@ -109,7 +109,7 @@ public class UdpTrackerProviderTest
     {
         var method = typeof(UdpTrackerProvider).GetMethod("BuildAnnouncePacket", BindingFlags.NonPublic | BindingFlags.Static);
         var request = CreateRequest();
-        request.Event = "completed";
+        request.Event = AnnounceEvent.Completed;
 
         var result = (byte[])method.Invoke(null, new object[] { 0L, 0, request });
 
@@ -122,7 +122,7 @@ public class UdpTrackerProviderTest
     {
         var method = typeof(UdpTrackerProvider).GetMethod("BuildAnnouncePacket", BindingFlags.NonPublic | BindingFlags.Static);
         var request = CreateRequest();
-        request.Event = "stopped";
+        request.Event = AnnounceEvent.Stopped;
 
         var result = (byte[])method.Invoke(null, new object[] { 0L, 0, request });
 
@@ -131,11 +131,11 @@ public class UdpTrackerProviderTest
     }
 
     [Test]
-    public void BuildAnnouncePacket_should_encode_empty_event_as_0()
+    public void BuildAnnouncePacket_should_encode_none_event_as_0()
     {
         var method = typeof(UdpTrackerProvider).GetMethod("BuildAnnouncePacket", BindingFlags.NonPublic | BindingFlags.Static);
         var request = CreateRequest();
-        request.Event = "";
+        request.Event = AnnounceEvent.None;
 
         var result = (byte[])method.Invoke(null, new object[] { 0L, 0, request });
 
@@ -342,19 +342,6 @@ public class UdpTrackerProviderTest
 
         var uploaded = ReadInt64BigEndian(result, 72);
         Assert.That(uploaded, Is.EqualTo(0x1112131415161718L));
-    }
-
-    [Test]
-    public void BuildAnnouncePacket_should_encode_null_event_as_0()
-    {
-        var method = typeof(UdpTrackerProvider).GetMethod("BuildAnnouncePacket", BindingFlags.NonPublic | BindingFlags.Static);
-        var request = CreateRequest();
-        request.Event = null;
-
-        var result = (byte[])method.Invoke(null, new object[] { 0L, 0, request });
-
-        var eventValue = ReadInt32BigEndian(result, 80);
-        Assert.That(eventValue, Is.EqualTo(0));
     }
 
     [Test]

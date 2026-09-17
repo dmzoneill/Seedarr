@@ -85,6 +85,20 @@ public class TorrentDownloadCompletedEvent : IEvent
     }
 }
 
+public class TorrentFinishedEvent : IEvent
+{
+    public Torrent Torrent { get; set; }
+
+    public TorrentFinishedEvent()
+    {
+    }
+
+    public TorrentFinishedEvent(Torrent torrent)
+    {
+        this.Torrent = torrent;
+    }
+}
+
 public class TorrentSeedGoalReachedEvent : IEvent
 {
     public Torrent Torrent { get; set; }
