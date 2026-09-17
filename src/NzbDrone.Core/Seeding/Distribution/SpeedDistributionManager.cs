@@ -13,8 +13,10 @@ public interface ISpeedDistributionManager
     long[] DistributeSpeeds(int torrentCount, long maxSpeed);
     long[] DistributeUploadSpeeds(int torrentCount, long maxSpeed);
     long[] DistributeUploadSpeeds(int torrentCount, long maxSpeed, double[] priorityWeights);
+    long[] DistributeUploadSpeeds(int torrentCount, long maxSpeed, double[] priorityWeights, long[] caps);
     long[] DistributeDownloadSpeeds(int torrentCount, long maxSpeed);
     long[] DistributeDownloadSpeeds(int torrentCount, long maxSpeed, double[] priorityWeights);
+    long[] DistributeDownloadSpeeds(int torrentCount, long maxSpeed, double[] priorityWeights, long[] caps);
     List<string> GetAvailableDistributions();
     string CurrentDistribution { get; }
     void InvalidateCache();
@@ -22,6 +24,7 @@ public interface ISpeedDistributionManager
 
 public class SpeedDistributionManager : ISpeedDistributionManager
 {
+    public const long MinimumFloorBytesPerSec = 5 * 1024;
     private const long DefaultBytesPerSecond = 1_048_576;
 
     private readonly IEnumerable<ISpeedDistributor> _distributors;
@@ -115,8 +118,13 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
     public long[] DistributeUploadSpeeds(int torrentCount, long maxSpeed, double[] priorityWeights)
     {
+        return DistributeUploadSpeeds(torrentCount, maxSpeed, priorityWeights, null);
+    }
+
+    public long[] DistributeUploadSpeeds(int torrentCount, long maxSpeed, double[] priorityWeights, long[] caps)
+    {
         var speeds = DistributeUploadSpeeds(torrentCount, maxSpeed);
-        return ApplyPriorityWeights(speeds, priorityWeights);
+        return ApplyPriorityWeights(speeds, priorityWeights, caps);
     }
 
     public long[] DistributeDownloadSpeeds(int torrentCount, long maxSpeed)
@@ -161,8 +169,13 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
     public long[] DistributeDownloadSpeeds(int torrentCount, long maxSpeed, double[] priorityWeights)
     {
+        return DistributeDownloadSpeeds(torrentCount, maxSpeed, priorityWeights, null);
+    }
+
+    public long[] DistributeDownloadSpeeds(int torrentCount, long maxSpeed, double[] priorityWeights, long[] caps)
+    {
         var speeds = DistributeDownloadSpeeds(torrentCount, maxSpeed);
-        return ApplyPriorityWeights(speeds, priorityWeights);
+        return ApplyPriorityWeights(speeds, priorityWeights, caps);
     }
 
     public void InvalidateCache()
@@ -193,30 +206,11 @@ public class SpeedDistributionManager : ISpeedDistributionManager
         return _distributors.Select(d => d.Name).ToList();
     }
 
-    private long[] DistributeWithConfig(int torrentCount, long maxSpeed, string algorithm, int spreadPercentage)
-    {
-        var distributor = _distributors.FirstOrDefault(d =>
-                string.Equals(d.Name, algorithm, StringComparison.OrdinalIgnoreCase))
-            ?? _distributors.First();
-
-        var effectiveSpeed = maxSpeed > 0 ? maxSpeed : DefaultBytesPerSecond;
-        var speeds = distributor.Distribute(effectiveSpeed, torrentCount);
-
-        if (spreadPercentage < 100 && torrentCount > 0)
-        {
-            var equalShare = effectiveSpeed / torrentCount;
-            var spreadFactor = spreadPercentage / 100.0;
-
-            for (var i = 0; i < torrentCount; i++)
-            {
-                speeds[i] = (long)(equalShare + ((speeds[i] - equalShare) * spreadFactor));
-            }
-        }
-
-        return speeds;
-    }
-
-    private static long[] ApplyPriorityWeights(long[] speeds, double[] weights)
+    public static long[] ApplyPriorityWeights(
+        long[] speeds,
+        double[] weights,
+        long[] caps = null,
+        long floorBytesPerSec = MinimumFloorBytesPerSec)
     {
         if (speeds == null)
         {
@@ -244,10 +238,11 @@ public class SpeedDistributionManager : ISpeedDistributionManager
             return (long[])speeds.Clone();
         }
 
-        var weightedSpeeds = new double[speeds.Length];
-        var totalWeighted = 0.0;
+        var count = speeds.Length;
+        var sanitizedWeights = new double[count];
+        var totalWeight = 0.0;
 
-        for (var i = 0; i < speeds.Length; i++)
+        for (var i = 0; i < count; i++)
         {
             var w = weights[i];
             double sanitizedWeight;
@@ -260,22 +255,276 @@ public class SpeedDistributionManager : ISpeedDistributionManager
                 sanitizedWeight = Math.Clamp(w, 0.01, 100.0);
             }
 
-            weightedSpeeds[i] = speeds[i] * sanitizedWeight;
-            totalWeighted += weightedSpeeds[i];
+            sanitizedWeights[i] = sanitizedWeight;
+            totalWeight += sanitizedWeight;
         }
 
-        if (double.IsNaN(totalWeighted) || double.IsInfinity(totalWeighted) || totalWeighted <= 0.0)
+        if (double.IsNaN(totalWeight) || double.IsInfinity(totalWeight) || totalWeight <= 0.0)
         {
-            return (long[])speeds.Clone();
+            for (var i = 0; i < count; i++)
+            {
+                sanitizedWeights[i] = 1.0;
+            }
+
+            totalWeight = count;
         }
 
-        var result = new long[speeds.Length];
-        for (var i = 0; i < speeds.Length; i++)
+        var effectiveCaps = new long[count];
+        for (var i = 0; i < count; i++)
         {
-            result[i] = Math.Max(0L, (long)(totalOriginal * (weightedSpeeds[i] / totalWeighted)));
+            if (caps != null && i < caps.Length && caps[i] > 0)
+            {
+                effectiveCaps[i] = caps[i];
+            }
+            else
+            {
+                effectiveCaps[i] = long.MaxValue;
+            }
         }
 
-        return result;
+        var allocated = new long[count];
+        var saturated = new bool[count];
+        var totalFloorRequired = (long)count * floorBytesPerSec;
+
+        if (totalOriginal < totalFloorRequired || floorBytesPerSec <= 0)
+        {
+            // Tier 1: If total bandwidth is less than N * floor, divide total bandwidth equally with surplus reallocation.
+            var remainingBandwidth = totalOriginal;
+            while (remainingBandwidth > 0)
+            {
+                var eligible = new List<int>();
+                for (var i = 0; i < count; i++)
+                {
+                    if (!saturated[i] && allocated[i] < effectiveCaps[i])
+                    {
+                        eligible.Add(i);
+                    }
+                }
+
+                if (eligible.Count == 0)
+                {
+                    break;
+                }
+
+                var tentativeShare = new long[count];
+                var cappedAny = false;
+                var equalShare = remainingBandwidth / eligible.Count;
+
+                foreach (var i in eligible)
+                {
+                    tentativeShare[i] = equalShare;
+                    if (allocated[i] + equalShare >= effectiveCaps[i])
+                    {
+                        cappedAny = true;
+                    }
+                }
+
+                if (cappedAny)
+                {
+                    foreach (var i in eligible)
+                    {
+                        if (allocated[i] + tentativeShare[i] >= effectiveCaps[i])
+                        {
+                            var consumed = effectiveCaps[i] - allocated[i];
+                            allocated[i] = effectiveCaps[i];
+                            saturated[i] = true;
+                            remainingBandwidth -= consumed;
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (var i in eligible)
+                    {
+                        allocated[i] += tentativeShare[i];
+                        remainingBandwidth -= tentativeShare[i];
+                    }
+
+                    if (remainingBandwidth > 0)
+                    {
+                        while (remainingBandwidth > 0)
+                        {
+                            var allocatedAnyRemainder = false;
+                            foreach (var idx in eligible)
+                            {
+                                if (allocated[idx] < effectiveCaps[idx])
+                                {
+                                    allocated[idx]++;
+                                    remainingBandwidth--;
+                                    allocatedAnyRemainder = true;
+                                    if (remainingBandwidth == 0)
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (!allocatedAnyRemainder)
+                            {
+                                break;
+                            }
+                        }
+                    }
+
+                    break;
+                }
+            }
+
+            return allocated;
+        }
+
+        // Tier 1: Guarantee minimum floor to all active torrents.
+        for (var i = 0; i < count; i++)
+        {
+            if (effectiveCaps[i] < floorBytesPerSec)
+            {
+                allocated[i] = effectiveCaps[i];
+                saturated[i] = true;
+            }
+            else
+            {
+                allocated[i] = floorBytesPerSec;
+                if (allocated[i] >= effectiveCaps[i])
+                {
+                    saturated[i] = true;
+                }
+            }
+        }
+
+        var allocatedSoFar = 0L;
+        for (var i = 0; i < count; i++)
+        {
+            allocatedSoFar += allocated[i];
+        }
+
+        var spareBandwidth = totalOriginal - allocatedSoFar;
+
+        // Tier 2: Distribute remaining spare bandwidth proportionally based on priority weights with surplus reallocation.
+        while (spareBandwidth > 0)
+        {
+            var eligible = new List<int>();
+            for (var i = 0; i < count; i++)
+            {
+                if (!saturated[i] && allocated[i] < effectiveCaps[i])
+                {
+                    eligible.Add(i);
+                }
+            }
+
+            if (eligible.Count == 0)
+            {
+                break;
+            }
+
+            var activeWeightSum = 0.0;
+            foreach (var i in eligible)
+            {
+                activeWeightSum += sanitizedWeights[i];
+            }
+
+            if (activeWeightSum <= 0.0)
+            {
+                foreach (var i in eligible)
+                {
+                    sanitizedWeights[i] = 1.0;
+                }
+
+                activeWeightSum = eligible.Count;
+            }
+
+            var tentativeShare = new long[count];
+            var cappedAny = false;
+
+            foreach (var i in eligible)
+            {
+                var share = (long)(spareBandwidth * (sanitizedWeights[i] / activeWeightSum));
+                tentativeShare[i] = share;
+                if (allocated[i] + share >= effectiveCaps[i])
+                {
+                    cappedAny = true;
+                }
+            }
+
+            if (cappedAny)
+            {
+                foreach (var i in eligible)
+                {
+                    if (allocated[i] + tentativeShare[i] >= effectiveCaps[i])
+                    {
+                        var consumed = effectiveCaps[i] - allocated[i];
+                        allocated[i] = effectiveCaps[i];
+                        saturated[i] = true;
+                        spareBandwidth -= consumed;
+                    }
+                }
+            }
+            else
+            {
+                foreach (var i in eligible)
+                {
+                    allocated[i] += tentativeShare[i];
+                    spareBandwidth -= tentativeShare[i];
+                }
+
+                if (spareBandwidth > 0)
+                {
+                    var sortedEligible = eligible
+                        .OrderByDescending(i => sanitizedWeights[i])
+                        .ThenBy(i => i)
+                        .ToList();
+
+                    while (spareBandwidth > 0)
+                    {
+                        var allocatedAnyRemainder = false;
+                        foreach (var idx in sortedEligible)
+                        {
+                            if (allocated[idx] < effectiveCaps[idx])
+                            {
+                                allocated[idx]++;
+                                spareBandwidth--;
+                                allocatedAnyRemainder = true;
+                                if (spareBandwidth == 0)
+                                {
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!allocatedAnyRemainder)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                break;
+            }
+        }
+
+        return allocated;
+    }
+
+    private long[] DistributeWithConfig(int torrentCount, long maxSpeed, string algorithm, int spreadPercentage)
+    {
+        var distributor = _distributors.FirstOrDefault(d =>
+                string.Equals(d.Name, algorithm, StringComparison.OrdinalIgnoreCase))
+            ?? _distributors.First();
+
+        var effectiveSpeed = maxSpeed > 0 ? maxSpeed : DefaultBytesPerSecond;
+        var speeds = distributor.Distribute(effectiveSpeed, torrentCount);
+
+        if (spreadPercentage < 100 && torrentCount > 0)
+        {
+            var equalShare = effectiveSpeed / torrentCount;
+            var spreadFactor = spreadPercentage / 100.0;
+
+            for (var i = 0; i < torrentCount; i++)
+            {
+                speeds[i] = (long)(equalShare + ((speeds[i] - equalShare) * spreadFactor));
+            }
+        }
+
+        return speeds;
     }
 
     private bool ShouldRedistribute(
