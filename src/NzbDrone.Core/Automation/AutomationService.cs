@@ -8,6 +8,7 @@ using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
+using NzbDrone.Core.Extraction;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
@@ -34,6 +35,7 @@ public class AutomationService : IAutomationService
     private readonly ICustomScriptService? _customScriptService;
     private readonly INotificationRepository? _notificationRepository;
     private readonly IWebhookDispatcher? _webhookDispatcher;
+    private readonly IArchiveExtractorService? _archiveExtractorService;
     private readonly Logger _logger;
     private readonly JintScriptRunner _jintRunner;
     private readonly YamlScriptRunner _yamlRunner;
@@ -47,7 +49,8 @@ public class AutomationService : IAutomationService
         IConfigFileProvider? configFileProvider = null,
         ICustomScriptService? customScriptService = null,
         INotificationRepository? notificationRepository = null,
-        IWebhookDispatcher? webhookDispatcher = null)
+        IWebhookDispatcher? webhookDispatcher = null,
+        IArchiveExtractorService? archiveExtractorService = null)
     {
         _scriptRepository = scriptRepository;
         _torrentRepository = torrentRepository;
@@ -57,6 +60,7 @@ public class AutomationService : IAutomationService
         _customScriptService = customScriptService;
         _notificationRepository = notificationRepository;
         _webhookDispatcher = webhookDispatcher;
+        _archiveExtractorService = archiveExtractorService;
         _logger = LogManager.GetCurrentClassLogger();
         _jintRunner = new JintScriptRunner(commandQueue, configFileProvider);
         _yamlRunner = new YamlScriptRunner(commandQueue);
@@ -216,6 +220,24 @@ public class AutomationService : IAutomationService
                         }
                     });
                 }
+            }
+
+            // Side-effects: Archive extraction
+            if (result.Success && result.ShouldExtractArchive && torrent != null && _archiveExtractorService != null)
+            {
+                var dest = result.ExtractDestination;
+                var deleteArchive = result.DeleteArchiveOnExtract;
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _archiveExtractorService.ExtractTorrentArchiveAsync(torrent, dest, deleteArchive).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Failed to execute archive extraction from automation script for torrent '{0}'", torrent.Name);
+                    }
+                });
             }
 
             // Side-effects: Notifications to send
