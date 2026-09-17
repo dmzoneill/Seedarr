@@ -210,6 +210,110 @@ public class MultiTrackerManagerTest
     }
 
     [Test]
+    public void Announce_should_only_announce_to_primary_tracker_when_torrent_is_private_even_if_multi_tier_enabled()
+    {
+        _configService.AnnounceToAllTiers.Returns(true);
+        _configService.AnnounceToAllInTier.Returns(true);
+        _httpTracker.Announce(Arg.Any<TrackerAnnounceRequest>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var request = CreateRequest();
+        request.IsPrivate = true;
+
+        var announceList = new List<List<string>>
+        {
+            new() { "http://primary.tracker.org/announce1", "http://primary.tracker.org/announce2" },
+            new() { "http://primary.tracker.org/announce3" }
+        };
+
+        var result = _manager.Announce(request, announceList);
+
+        Assert.That(result.Success, Is.True);
+        // Even though AnnounceToAllTiers and AnnounceToAllInTier are true, private torrent must only announce to primary!
+        _httpTracker.Received(1).Announce(Arg.Any<TrackerAnnounceRequest>());
+        _httpTracker.Received(1).Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://primary.tracker.org/announce1"));
+    }
+
+    [Test]
+    public void Announce_should_fail_over_sequentially_for_private_torrent_when_primary_fails()
+    {
+        _configService.AnnounceToAllTiers.Returns(true);
+        _configService.AnnounceToAllInTier.Returns(true);
+
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://primary.tracker.org/announce1"))
+            .Returns(new TrackerAnnounceResponse { Success = false, FailureReason = "offline" });
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://primary.tracker.org/announce2"))
+            .Returns(new TrackerAnnounceResponse { Success = true, Interval = 1800 });
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://primary.tracker.org/announce3"))
+            .Returns(new TrackerAnnounceResponse { Success = true, Interval = 1800 });
+
+        var request = CreateRequest();
+        request.IsPrivate = true;
+
+        var announceList = new List<List<string>>
+        {
+            new() { "http://primary.tracker.org/announce1", "http://primary.tracker.org/announce2" },
+            new() { "http://primary.tracker.org/announce3" }
+        };
+
+        var result = _manager.Announce(request, announceList);
+
+        Assert.That(result.Success, Is.True);
+        // Primary failed, so it tried mirror 2 which succeeded, and then stopped without trying tier 2
+        _httpTracker.Received(1).Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://primary.tracker.org/announce1"));
+        _httpTracker.Received(1).Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://primary.tracker.org/announce2"));
+        _httpTracker.DidNotReceive().Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://primary.tracker.org/announce3"));
+    }
+
+    [Test]
+    public void Announce_should_respect_announce_to_all_tiers_and_in_tier_for_public_torrent()
+    {
+        _configService.AnnounceToAllTiers.Returns(true);
+        _configService.AnnounceToAllInTier.Returns(true);
+        _httpTracker.Announce(Arg.Any<TrackerAnnounceRequest>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var request = CreateRequest();
+        request.IsPrivate = false;
+
+        var announceList = new List<List<string>>
+        {
+            new() { "http://t1.com/announce", "http://t2.com/announce" },
+            new() { "http://t3.com/announce", "http://t4.com/announce" }
+        };
+
+        var result = _manager.Announce(request, announceList);
+
+        Assert.That(result.Success, Is.True);
+        _httpTracker.Received(4).Announce(Arg.Any<TrackerAnnounceRequest>());
+    }
+
+    [Test]
+    public void Announce_should_skip_unauthorized_domain_trackers_on_private_torrent()
+    {
+        _configService.AnnounceToAllTiers.Returns(false);
+        _configService.AnnounceToAllInTier.Returns(false);
+
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://private.tracker.org/announce"))
+            .Returns(new TrackerAnnounceResponse { Success = false, FailureReason = "down" });
+
+        var request = CreateRequest();
+        request.IsPrivate = true;
+
+        var announceList = new List<List<string>>
+        {
+            new() { "http://private.tracker.org/announce", "udp://tracker.opentrackr.org:1337/announce" }
+        };
+
+        var result = _manager.Announce(request, announceList);
+
+        Assert.That(result.Success, Is.False);
+        _httpTracker.Received(1).Announce(Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == "http://private.tracker.org/announce"));
+        // Unauthorized public tracker on different domain must be skipped!
+        _udpTracker.DidNotReceive().Announce(Arg.Any<TrackerAnnounceRequest>());
+    }
+
+    [Test]
     public void Announce_should_skip_backed_off_tracker()
     {
         _configService.FailoverMaxConsecutiveFailures.Returns(1);
