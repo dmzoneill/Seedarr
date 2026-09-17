@@ -3,6 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.DataProtection;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Authentication;
@@ -243,5 +244,89 @@ public class IdentityProviderServiceTest
         var result = await _service.TestConnectionAsync(provider);
 
         Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void Add_WhenClientSecretProvided_EncryptsSecretAtRest()
+    {
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var service = new IdentityProviderService(_repository, null, dataProtection);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "test_encrypt",
+            Name = "Test Encrypt",
+            ClientSecretEncrypted = "raw-super-secret-123",
+        };
+
+        _repository.Insert(Arg.Any<IdentityProviderDefinition>()).Returns(x => x.Arg<IdentityProviderDefinition>());
+
+        var result = service.Add(provider);
+
+        Assert.That(result.ClientSecretEncrypted, Is.Not.Null);
+        Assert.That(result.ClientSecretEncrypted, Is.Not.EqualTo("raw-super-secret-123"));
+
+        var decrypted = service.DecryptClientSecret(result.ClientSecretEncrypted);
+        Assert.That(decrypted, Is.EqualTo("raw-super-secret-123"));
+    }
+
+    [Test]
+    public void Update_WhenNewClientSecretProvided_EncryptsSecretAtRest()
+    {
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var service = new IdentityProviderService(_repository, null, dataProtection);
+
+        var provider = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test_encrypt",
+            Name = "Test Encrypt",
+            ClientSecretEncrypted = "updated-raw-secret-456",
+        };
+
+        var result = service.Update(provider);
+
+        Assert.That(result.ClientSecretEncrypted, Is.Not.Null);
+        Assert.That(result.ClientSecretEncrypted, Is.Not.EqualTo("updated-raw-secret-456"));
+
+        var decrypted = service.DecryptClientSecret(result.ClientSecretEncrypted);
+        Assert.That(decrypted, Is.EqualTo("updated-raw-secret-456"));
+    }
+
+    [Test]
+    public void DecryptClientSecret_WhenLegacyPlaintextSecret_ReturnsPlaintextUnchanged()
+    {
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var service = new IdentityProviderService(_repository, null, dataProtection);
+
+        var legacyPlaintext = "unencrypted-legacy-secret-xyz";
+        var decrypted = service.DecryptClientSecret(legacyPlaintext);
+
+        Assert.That(decrypted, Is.EqualTo("unencrypted-legacy-secret-xyz"));
+    }
+
+    [Test]
+    public void EncryptClientSecret_WhenAlreadyEncrypted_DoesNotDoubleEncrypt()
+    {
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var service = new IdentityProviderService(_repository, null, dataProtection);
+
+        var encryptedOnce = service.EncryptClientSecret("my-secret");
+        var encryptedTwice = service.EncryptClientSecret(encryptedOnce);
+
+        Assert.That(encryptedTwice, Is.EqualTo(encryptedOnce));
+        Assert.That(service.DecryptClientSecret(encryptedTwice), Is.EqualTo("my-secret"));
+    }
+
+    [Test]
+    [TestCase(null)]
+    [TestCase("")]
+    public void EncryptAndDecryptClientSecret_WhenNullOrEmpty_ReturnsOriginal(string secret)
+    {
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var service = new IdentityProviderService(_repository, null, dataProtection);
+
+        Assert.That(service.EncryptClientSecret(secret), Is.EqualTo(secret));
+        Assert.That(service.DecryptClientSecret(secret), Is.EqualTo(secret));
     }
 }

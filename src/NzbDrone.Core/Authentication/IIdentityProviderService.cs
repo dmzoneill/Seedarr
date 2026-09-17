@@ -20,4 +20,8 @@ public interface IIdentityProviderService
     void Delete(int id);
 
     Task<bool> TestConnectionAsync(IdentityProviderDefinition provider);
+
+    string EncryptClientSecret(string secret);
+
+    string DecryptClientSecret(string encryptedSecret);
 }

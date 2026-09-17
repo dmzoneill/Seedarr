@@ -174,8 +174,8 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
         var model = ToModel(resource);
         model.Id = id;
 
-        // If client secret is masked (e.g. "********" or "******"), preserve original
-        if (string.IsNullOrEmpty(model.ClientSecretEncrypted) ||
+        // If client secret is masked (e.g. "********" or "******") or empty, preserve original
+        if (string.IsNullOrWhiteSpace(model.ClientSecretEncrypted) ||
             model.ClientSecretEncrypted == MaskedSecret ||
             model.ClientSecretEncrypted == AlternateMaskedSecret)
         {
@@ -245,7 +245,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
 
         var model = ToModel(resource);
         if (resource.Id > 0 &&
-            (string.IsNullOrEmpty(model.ClientSecretEncrypted) ||
+            (string.IsNullOrWhiteSpace(model.ClientSecretEncrypted) ||
                 model.ClientSecretEncrypted == MaskedSecret ||
                 model.ClientSecretEncrypted == AlternateMaskedSecret))
         {
