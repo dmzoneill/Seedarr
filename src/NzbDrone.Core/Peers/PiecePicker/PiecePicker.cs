@@ -88,6 +88,7 @@ public interface IDownloadManager : IPieceBlockDownloader
     PieceBlock RequestBlock(PeerConnection peer, int pieceIndex, bool sequential, bool firstLastPiecePrio, int pieceCount = 0, IReadOnlyCollection<int> customBoundaryPieces = null);
     IPiecePicker SequentialPicker { get; }
     IPiecePicker RarestFirstPicker { get; }
+    StreamingPiecePicker StreamingPicker { get; }
     IPiecePicker GetPicker(Torrent torrent);
     IPiecePicker GetPicker(bool sequential);
     void MarkBlockRequested(PeerConnection peer, int pieceIndex, int begin, int length, TimeSpan? timeout = null);
@@ -104,20 +105,31 @@ public class PiecePicker : IDownloadManager, IPiecePicker
     private readonly object _syncLock = new();
     private readonly IPiecePicker _sequentialPicker;
     private readonly IPiecePicker _rarestFirstPicker;
+    private readonly StreamingPiecePicker _streamingPicker;
 
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
     public IReadOnlyDictionary<int, ActivePiece> ActivePieces => _activePieces;
     public IPiecePicker SequentialPicker => _sequentialPicker;
     public IPiecePicker RarestFirstPicker => _rarestFirstPicker;
+    public StreamingPiecePicker StreamingPicker => _streamingPicker;
 
-    public PiecePicker(IPiecePicker sequentialPicker = null, IPiecePicker rarestFirstPicker = null)
+    public PiecePicker(
+        IPiecePicker sequentialPicker = null,
+        IPiecePicker rarestFirstPicker = null,
+        StreamingPiecePicker streamingPicker = null)
     {
         _rarestFirstPicker = rarestFirstPicker ?? new RarestFirstPiecePicker();
         _sequentialPicker = sequentialPicker ?? new SequentialPiecePicker(_rarestFirstPicker);
+        _streamingPicker = streamingPicker ?? new StreamingPiecePicker();
     }
 
     public IPiecePicker GetPicker(Torrent torrent)
     {
+        if (torrent != null && _streamingPicker != null && _streamingPicker.HasActiveStream(torrent.Id))
+        {
+            return _streamingPicker;
+        }
+
         return torrent?.SequentialDownload == true ? _sequentialPicker : _rarestFirstPicker;
     }
 
@@ -240,12 +252,73 @@ public class PiecePicker : IDownloadManager, IPiecePicker
 
     public PieceBlock RequestBlock(PeerConnection peer, int pieceIndex, Torrent torrent)
     {
+        if (torrent != null && _streamingPicker != null && _streamingPicker.HasActiveStream(torrent.Id))
+        {
+            var streamingBlock = RequestBlockForStreaming(peer, pieceIndex, torrent);
+            if (streamingBlock != null)
+            {
+                return streamingBlock;
+            }
+        }
+
         return RequestBlock(
             peer,
             pieceIndex,
             torrent?.SequentialDownload ?? false,
             torrent?.FirstLastPiecePrio ?? false,
             torrent?.PieceCount ?? 0);
+    }
+
+    private PieceBlock RequestBlockForStreaming(PeerConnection peer, int pieceIndex, Torrent torrent)
+    {
+        if (peer == null || peer.PendingRequestCount >= peer.MaxPipelinedRequests)
+        {
+            return null;
+        }
+
+        lock (_syncLock)
+        {
+            if (pieceIndex >= 0)
+            {
+                return RequestBlock(peer, pieceIndex, torrent?.SequentialDownload ?? false);
+            }
+
+            if (peer.PeerChoking)
+            {
+                return null;
+            }
+
+            var urgent = _streamingPicker.GetUrgentPieces(torrent.Id, torrent.PieceCount);
+            var lookahead = _streamingPicker.GetLookaheadPieces(torrent.Id, torrent.PieceCount);
+            var urgentSet = new HashSet<int>(urgent);
+            var lookaheadSet = new HashSet<int>(lookahead);
+
+            var urgentPieces = urgent.Where(p => _activePieces.ContainsKey(p)).Select(p => new KeyValuePair<int, ActivePiece>(p, _activePieces[p]));
+            var lookaheadPieces = lookahead.Where(p => _activePieces.ContainsKey(p)).Select(p => new KeyValuePair<int, ActivePiece>(p, _activePieces[p]));
+            var otherPieces = _activePieces.Where(kvp => !urgentSet.Contains(kvp.Key) && !lookaheadSet.Contains(kvp.Key)).OrderBy(kvp => kvp.Key);
+
+            var piecesToConsider = urgentPieces.Concat(lookaheadPieces).Concat(otherPieces);
+
+            foreach (var kvp in piecesToConsider)
+            {
+                var idx = kvp.Key;
+                var activePiece = kvp.Value;
+
+                if (!CanPeerServePiece(peer, idx))
+                {
+                    continue;
+                }
+
+                var block = activePiece.GetNextAvailableBlock();
+                if (block != null)
+                {
+                    AssignBlock(peer, block);
+                    return block;
+                }
+            }
+
+            return null;
+        }
     }
 
     public PieceBlock RequestBlock(PeerConnection peer, int pieceIndex, bool sequential)

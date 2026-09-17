@@ -77,6 +77,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     public PiecePicker.IPiecePicker GetPiecePicker(Torrent torrent)
     {
+        if (torrent != null && _piecePicker?.StreamingPicker != null && _piecePicker.StreamingPicker.HasActiveStream(torrent.Id))
+        {
+            return _piecePicker.StreamingPicker;
+        }
+
         return torrent?.SequentialDownload == true ? SequentialPicker : RarestFirstPicker;
     }
 

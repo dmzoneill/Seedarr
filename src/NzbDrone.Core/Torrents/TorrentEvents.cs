@@ -575,3 +575,23 @@ public class TorrentMetadataResolvedEvent : IEvent
         this.Torrent = torrent;
     }
 }
+
+public class TorrentStreamPlayheadMovedEvent : IEvent
+{
+    public int TorrentId { get; set; }
+
+    public long ByteOffset { get; set; }
+
+    public int HeadPiece { get; set; }
+
+    public TorrentStreamPlayheadMovedEvent()
+    {
+    }
+
+    public TorrentStreamPlayheadMovedEvent(int torrentId, long byteOffset, int headPiece)
+    {
+        this.TorrentId = torrentId;
+        this.ByteOffset = byteOffset;
+        this.HeadPiece = headPiece;
+    }
+}
