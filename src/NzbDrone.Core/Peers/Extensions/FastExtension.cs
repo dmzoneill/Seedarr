@@ -27,6 +27,7 @@ public class FastMessage
 public interface IFastExtensionHandler
 {
     HashSet<int> ComputeAllowedFastSet(string ipAddress, byte[] infoHash, int pieceCount, int setSize);
+    HashSet<int> ComputeAllowedFastSet(byte[] infoHash, IPAddress peerIp, int totalPieces, int k = 10);
     PeerMessage SerializeHaveAll();
     PeerMessage SerializeHaveNone();
     PeerMessage SerializeSuggestPiece(int pieceIndex);
@@ -37,6 +38,7 @@ public interface IFastExtensionHandler
     HashSet<int> GetAllowedFastSet(PeerConnection connection);
     bool IsFastPeer(PeerConnection connection);
     void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll = true);
+    void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll, bool hasNone);
     PeerMessage BuildRejectForRequest(byte[] payload);
     void RegisterFastPeer(PeerConnection connection, byte[] infoHash, int pieceCount, int setSize);
     void UnregisterPeer(PeerConnection connection);
@@ -58,6 +60,16 @@ public class FastExtensionHandler : IFastExtensionHandler
 
     public HashSet<int> ComputeAllowedFastSet(string ipAddress, byte[] infoHash, int pieceCount, int setSize)
     {
+        if (string.IsNullOrWhiteSpace(ipAddress) || !IPAddress.TryParse(ipAddress, out var address))
+        {
+            return new HashSet<int>();
+        }
+
+        return ComputeAllowedFastSet(infoHash, address, pieceCount, setSize);
+    }
+
+    public HashSet<int> ComputeAllowedFastSet(byte[] infoHash, IPAddress peerIp, int totalPieces, int k = 10)
+    {
         // BEP 6 algorithm: generate a deterministic set of allowed-fast piece indices
         // from the peer's IP address and the torrent's infohash.
         //
@@ -67,23 +79,25 @@ public class FastExtensionHandler : IFastExtensionHandler
         //    When all 5 chunks are consumed, x = SHA-1(x) and repeat.
         var allowedSet = new HashSet<int>();
 
-        if (pieceCount <= 0 || infoHash == null || infoHash.Length == 0 || string.IsNullOrWhiteSpace(ipAddress))
+        if (totalPieces <= 0 || infoHash == null || infoHash.Length == 0 || peerIp == null)
         {
             return allowedSet;
         }
 
-        if (setSize <= 0)
-        {
-            setSize = DefaultFastSetSize;
-        }
-
-        setSize = Math.Min(setSize, pieceCount);
-
-        var ipBytes = MaskIpToSubnet(ipAddress);
-        if (ipBytes == null)
+        if (peerIp.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork)
         {
             return allowedSet;
         }
+
+        if (k <= 0)
+        {
+            k = DefaultFastSetSize;
+        }
+
+        k = Math.Min(k, totalPieces);
+
+        var ipBytes = peerIp.GetAddressBytes();
+        ipBytes[3] = 0;
 
         // x = SHA-1(ip[0..3] + infohash)
         var input = new byte[ipBytes.Length + infoHash.Length];
@@ -92,18 +106,17 @@ public class FastExtensionHandler : IFastExtensionHandler
 
         var x = SHA1.HashData(input);
 
-        while (allowedSet.Count < setSize)
+        while (allowedSet.Count < k)
         {
-            for (var i = 0; i < 5 && allowedSet.Count < setSize; i++)
+            for (var i = 0; i < 5 && allowedSet.Count < k; i++)
             {
                 var offset = i * 4;
-                var index = ((x[offset] << 24) | (x[offset + 1] << 16) |
-                    (x[offset + 2] << 8) | x[offset + 3]) & 0x7FFFFFFF;
-                var pieceIndex = index % pieceCount;
+                var y = BinaryPrimitives.ReadUInt32BigEndian(x.AsSpan(offset, 4));
+                var pieceIndex = (int)(y % (uint)totalPieces);
                 allowedSet.Add(pieceIndex);
             }
 
-            if (allowedSet.Count < setSize)
+            if (allowedSet.Count < k)
             {
                 x = SHA1.HashData(x);
             }
@@ -239,18 +252,49 @@ public class FastExtensionHandler : IFastExtensionHandler
         {
             case FastMessageType.HaveAll:
                 _logger.Debug("Peer {0} sent HaveAll", connection.RemoteIp);
+                if (pieceCount > 0)
+                {
+                    connection.PeerPieces = new bool[pieceCount];
+                    Array.Fill(connection.PeerPieces, true);
+                }
+                else if (connection.PeerPieces != null && connection.PeerPieces.Length > 0)
+                {
+                    Array.Fill(connection.PeerPieces, true);
+                }
+
+                connection.Progress = 1.0;
                 break;
 
             case FastMessageType.HaveNone:
                 _logger.Debug("Peer {0} sent HaveNone", connection.RemoteIp);
+                if (pieceCount > 0)
+                {
+                    connection.PeerPieces = new bool[pieceCount];
+                }
+                else if (connection.PeerPieces != null && connection.PeerPieces.Length > 0)
+                {
+                    Array.Fill(connection.PeerPieces, false);
+                }
+
+                connection.Progress = 0.0;
                 break;
 
             case FastMessageType.SuggestPiece:
                 _logger.Debug("Peer {0} suggests piece {1}", connection.RemoteIp, fastMessage.PieceIndex);
+                lock (connection.SuggestedPieces)
+                {
+                    connection.SuggestedPieces.Add(fastMessage.PieceIndex);
+                }
+
                 break;
 
             case FastMessageType.AllowedFast:
                 _logger.Debug("Peer {0} allows fast piece {1}", connection.RemoteIp, fastMessage.PieceIndex);
+                lock (connection.AllowedFastPieces)
+                {
+                    connection.AllowedFastPieces.Add(fastMessage.PieceIndex);
+                }
+
                 RecordAllowedFastPiece(connection, fastMessage.PieceIndex);
                 break;
 
@@ -320,13 +364,22 @@ public class FastExtensionHandler : IFastExtensionHandler
         }
     }
 
-    public void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool allPiecesAvailable)
+    public void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll)
     {
-        if (IsFastPeer(connection) && allPiecesAvailable)
+        SendHaveAllOrBitfield(connection, pieceCount, hasAll, false);
+    }
+
+    public void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll, bool hasNone)
+    {
+        if (IsFastPeer(connection) && hasAll)
         {
             connection.SendMessage(SerializeHaveAll());
         }
-        else if (IsFastPeer(connection) && pieceCount > 0 && !allPiecesAvailable)
+        else if (IsFastPeer(connection) && hasNone)
+        {
+            connection.SendMessage(SerializeHaveNone());
+        }
+        else if (IsFastPeer(connection) && pieceCount > 0 && !hasAll)
         {
             connection.SendBitfield(pieceCount);
         }
