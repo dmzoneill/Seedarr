@@ -666,14 +666,20 @@ public class TelegramUpdateHandler : ITelegramUpdateHandler
         return "[" + new string('█', filled) + new string('░', empty) + "]";
     }
 
+    private string GetBotToken()
+    {
+        return !string.IsNullOrWhiteSpace(_settings?.BotToken) ? _settings.BotToken : _configService?.TelegramBotToken;
+    }
+
     public async Task AnswerCallbackQueryAsync(string callbackQueryId, string text = null, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_settings?.BotToken) || string.IsNullOrWhiteSpace(callbackQueryId))
+        var botToken = GetBotToken();
+        if (string.IsNullOrWhiteSpace(botToken) || string.IsNullOrWhiteSpace(callbackQueryId))
         {
             return;
         }
 
-        var url = $"https://api.telegram.org/bot{_settings.BotToken}/answerCallbackQuery";
+        var url = $"https://api.telegram.org/bot{botToken}/answerCallbackQuery";
         var payload = new Dictionary<string, object>
         {
             ["callback_query_id"] = callbackQueryId
@@ -698,12 +704,13 @@ public class TelegramUpdateHandler : ITelegramUpdateHandler
 
     public async Task SendMessageAsync(long chatId, string text, object replyMarkup = null, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_settings?.BotToken) || chatId == 0)
+        var botToken = GetBotToken();
+        if (string.IsNullOrWhiteSpace(botToken) || chatId == 0)
         {
             return;
         }
 
-        var url = $"https://api.telegram.org/bot{_settings.BotToken}/sendMessage";
+        var url = $"https://api.telegram.org/bot{botToken}/sendMessage";
         var payload = new Dictionary<string, object>
         {
             ["chat_id"] = chatId,
@@ -730,12 +737,13 @@ public class TelegramUpdateHandler : ITelegramUpdateHandler
 
     public async Task EditMessageReplyMarkupAsync(long chatId, long messageId, object replyMarkup, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_settings?.BotToken) || chatId == 0 || messageId == 0)
+        var botToken = GetBotToken();
+        if (string.IsNullOrWhiteSpace(botToken) || chatId == 0 || messageId == 0)
         {
             return;
         }
 
-        var url = $"https://api.telegram.org/bot{_settings.BotToken}/editMessageReplyMarkup";
+        var url = $"https://api.telegram.org/bot{botToken}/editMessageReplyMarkup";
         var payload = new Dictionary<string, object>
         {
             ["chat_id"] = chatId,

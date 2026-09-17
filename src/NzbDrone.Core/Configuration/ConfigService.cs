@@ -214,6 +214,12 @@ public interface IConfigService
     string FileLogLevel { get; }
     bool DebugMode { get; }
     int UiRefreshRateSec { get; }
+
+    // Telegram
+    string TelegramBotToken { get; }
+    string TelegramSecretToken { get; }
+    string TelegramWebhookUrl { get; }
+    bool TelegramUsePolling { get; }
 }
 
 public class ConfigModel : ModelBase
@@ -558,6 +564,12 @@ public class ConfigService : IConfigService
     public string FileLogLevel => GetValue("FileLogLevel", "Info");
     public bool DebugMode => GetValueBoolean("DebugMode", false);
     public int UiRefreshRateSec => GetValueInt("UiRefreshRateSec", 9);
+
+    // Telegram
+    public string TelegramBotToken => GetValue("TelegramBotToken", "");
+    public string TelegramSecretToken => GetValue("TelegramSecretToken", "");
+    public string TelegramWebhookUrl => GetValue("TelegramWebhookUrl", "");
+    public bool TelegramUsePolling => GetValueBoolean("TelegramUsePolling", false);
 }
 
 public class ConfigSavedEvent : IEvent
