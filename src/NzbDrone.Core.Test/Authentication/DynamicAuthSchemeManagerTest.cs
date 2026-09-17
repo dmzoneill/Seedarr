@@ -275,4 +275,125 @@ public class DynamicAuthSchemeManagerTest
         var resultingRoles2 = tokenContext2.Principal.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList();
         Assert.That(resultingRoles2, Is.EquivalentTo(new[] { "Admin" }));
     }
+
+    [Test]
+    public async Task InitializeConfiguredProvidersAsync_should_handle_offline_idp_discovery_without_crashing_and_schedule_retry()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+
+        var failingPostConfigure = Substitute.For<IPostConfigureOptions<OpenIdConnectOptions>>();
+        failingPostConfigure.When(p => p.PostConfigure("Oidc_offline_idp", Arg.Any<OpenIdConnectOptions>()))
+            .Do(_ => throw new InvalidOperationException("IDX20803: Unable to obtain configuration from: https://offline.example.com/.well-known/openid-configuration"));
+
+        services.AddSingleton(failingPostConfigure);
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var offlineProvider = new IdentityProviderDefinition
+        {
+            ProviderId = "offline_idp",
+            Name = "Offline Keycloak",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://offline.example.com",
+            ClientId = "client-id",
+            IsEnabled = true,
+        };
+
+        var onlineProvider = new IdentityProviderDefinition
+        {
+            ProviderId = "online_idp",
+            Name = "Online Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://online.example.com",
+            ClientId = "client-id",
+            IsEnabled = true,
+        };
+
+        repo.GetEnabled().Returns(new[] { offlineProvider, onlineProvider });
+
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        // Act - should not throw
+        Assert.DoesNotThrowAsync(async () => await manager.InitializeConfiguredProvidersAsync());
+
+        // Verify provider was not deactivated or corrupted in the repository
+        repo.DidNotReceive().Update(Arg.Is<IdentityProviderDefinition>(p => p.ProviderId == "offline_idp" && !p.IsEnabled));
+
+        // Verify online provider was registered
+        var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
+        var onlineScheme = await schemeProvider.GetSchemeAsync("Oidc_online_idp");
+        Assert.That(onlineScheme, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task InitializeConfiguredProvidersAsync_should_defer_metadata_discovery_and_register_scheme_when_idp_offline()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var offlineProvider = new IdentityProviderDefinition
+        {
+            ProviderId = "slow_boot_authentik",
+            Name = "Slow Boot Authentik",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://authentik.local/application/o/seedarr/",
+            MetadataUrl = "https://authentik.local/application/o/seedarr/.well-known/openid-configuration",
+            ClientId = "seedarr-client",
+            IsEnabled = true,
+        };
+
+        repo.GetEnabled().Returns(new[] { offlineProvider });
+
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        await manager.InitializeConfiguredProvidersAsync();
+
+        // Scheme should be registered with deferred discovery
+        var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
+        var scheme = await schemeProvider.GetSchemeAsync("Oidc_slow_boot_authentik");
+        Assert.That(scheme, Is.Not.Null);
+        Assert.That(scheme.DisplayName, Is.EqualTo("Slow Boot Authentik"));
+
+        // Options should preserve MetadataAddress
+        var cache = sp.GetRequiredService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+        var options = cache.GetOrAdd("Oidc_slow_boot_authentik", () => new OpenIdConnectOptions());
+        Assert.That(options.MetadataAddress, Is.EqualTo("https://authentik.local/application/o/seedarr/.well-known/openid-configuration"));
+
+        // Provider configuration was not corrupted
+        Assert.That(offlineProvider.IsEnabled, Is.True);
+    }
+
+    [Test]
+    public async Task RemoveProviderSchemeAsync_should_clear_pending_retry()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "transient_idp",
+            Name = "Transient Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://transient.example.com",
+            ClientId = "client-id",
+            IsEnabled = true,
+        };
+
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+        manager.ScheduleRetry(provider, 60);
+
+        Assert.That(manager.HasPendingRetry("transient_idp"), Is.True);
+
+        await manager.RemoveProviderSchemeAsync("transient_idp");
+
+        Assert.That(manager.HasPendingRetry("transient_idp"), Is.False);
+    }
 }

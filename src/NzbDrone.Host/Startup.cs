@@ -10,11 +10,13 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.OpenApi;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Security;
@@ -60,7 +62,15 @@ public class Startup
             });
 
         services.AddSignalR();
-        services.AddDataProtection();
+
+        var appFolderInfo = this._container?.Resolve<IAppFolderInfo>();
+        var keysFolder = Path.Combine(appFolderInfo?.AppDataFolder ?? AppContext.BaseDirectory, "DataProtection-Keys");
+        Directory.CreateDirectory(keysFolder);
+
+        services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(keysFolder))
+            .SetApplicationName("Seedarr");
+
         services.AddHttpClient();
         services.AddSingleton<ICertificateManager, CertificateManager>();
         services.AddSingleton<IRpcSessionStore, RpcSessionStore>();
