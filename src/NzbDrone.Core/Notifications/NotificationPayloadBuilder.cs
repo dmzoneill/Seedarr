@@ -475,10 +475,18 @@ public static class NotificationPayloadBuilder
         {
             var err = ExtractErrorMessage(genericPayload);
             var errSuffix = !string.IsNullOrWhiteSpace(err) ? $" - Error: {err}" : string.Empty;
+            var rawTitle = $"Seedarr: {eventType}";
+            var rawMessage = torrent != null
+                ? $"{torrent.Name} ({torrent.Category ?? torrent.Label ?? "Default"}) - {torrent.Status}{errSuffix}"
+                : ExtractMessage(genericPayload, eventType);
+
+            var (priority, retry, expire, device, sound) = ExtractPushoverSettings(settings);
+
             var payloadDict = new Dictionary<string, object>
             {
-                ["title"] = $"Seedarr: {eventType}",
-                ["message"] = torrent != null ? $"{torrent.Name} ({torrent.Category ?? torrent.Label ?? "Default"}) - {torrent.Status}{errSuffix}" : ExtractMessage(genericPayload, eventType),
+                ["title"] = Truncate(rawTitle, 250),
+                ["message"] = Truncate(rawMessage, 1024),
+                ["priority"] = priority,
             };
 
             if (!string.IsNullOrEmpty(token))
@@ -489,6 +497,24 @@ public static class NotificationPayloadBuilder
             if (!string.IsNullOrEmpty(user))
             {
                 payloadDict["user"] = user;
+            }
+
+            if (priority == 2)
+            {
+                var clampedRetry = Math.Max(30, retry > 0 ? retry : 60);
+                var clampedExpire = Math.Min(10800, expire > 0 ? expire : 3600);
+                payloadDict["retry"] = clampedRetry;
+                payloadDict["expire"] = clampedExpire;
+            }
+
+            if (!string.IsNullOrWhiteSpace(device))
+            {
+                payloadDict["device"] = device;
+            }
+
+            if (!string.IsNullOrWhiteSpace(sound))
+            {
+                payloadDict["sound"] = sound;
             }
 
             return payloadDict;
@@ -625,7 +651,7 @@ public static class NotificationPayloadBuilder
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
     }
 
-    internal static string Truncate(string value, int maxLength)
+    public static string Truncate(string value, int maxLength)
     {
         if (string.IsNullOrEmpty(value) || value.Length <= maxLength)
         {
@@ -718,5 +744,123 @@ public static class NotificationPayloadBuilder
         }
 
         return Math.Clamp(priority, 1, 10);
+    }
+
+    public static (int Priority, int Retry, int Expire, string Device, string Sound) ExtractPushoverSettings(string settings)
+    {
+        var priority = 0;
+        var retry = 60;
+        var expire = 3600;
+        string device = null;
+        string sound = null;
+
+        if (string.IsNullOrWhiteSpace(settings))
+        {
+            return (0, 60, 3600, null, null);
+        }
+
+        var trimmed = settings.Trim();
+        if (trimmed.StartsWith("{"))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("priority", out var p) || root.TryGetProperty("Priority", out p))
+                {
+                    if (p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var pVal))
+                    {
+                        priority = pVal;
+                    }
+                    else if (p.ValueKind == JsonValueKind.String && int.TryParse(p.GetString(), out var pStrVal))
+                    {
+                        priority = pStrVal;
+                    }
+                }
+
+                if (root.TryGetProperty("retry", out var r) || root.TryGetProperty("Retry", out r) ||
+                    root.TryGetProperty("retrySeconds", out r) || root.TryGetProperty("RetrySeconds", out r))
+                {
+                    if (r.ValueKind == JsonValueKind.Number && r.TryGetInt32(out var rVal))
+                    {
+                        retry = rVal;
+                    }
+                    else if (r.ValueKind == JsonValueKind.String && int.TryParse(r.GetString(), out var rStrVal))
+                    {
+                        retry = rStrVal;
+                    }
+                }
+
+                if (root.TryGetProperty("expire", out var e) || root.TryGetProperty("Expire", out e) ||
+                    root.TryGetProperty("expireSeconds", out e) || root.TryGetProperty("ExpireSeconds", out e))
+                {
+                    if (e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out var eVal))
+                    {
+                        expire = eVal;
+                    }
+                    else if (e.ValueKind == JsonValueKind.String && int.TryParse(e.GetString(), out var eStrVal))
+                    {
+                        expire = eStrVal;
+                    }
+                }
+
+                if (root.TryGetProperty("device", out var d) || root.TryGetProperty("Device", out d))
+                {
+                    var dVal = d.GetString() ?? d.ToString();
+                    if (!string.IsNullOrWhiteSpace(dVal))
+                    {
+                        device = dVal;
+                    }
+                }
+
+                if (root.TryGetProperty("sound", out var s) || root.TryGetProperty("Sound", out s))
+                {
+                    var sVal = s.GetString() ?? s.ToString();
+                    if (!string.IsNullOrWhiteSpace(sVal))
+                    {
+                        sound = sVal;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+        else
+        {
+            var pMatch = Regex.Match(trimmed, @"(?:^|[&?])(?:priority|Priority)=(-?\d+)", RegexOptions.IgnoreCase);
+            if (pMatch.Success && int.TryParse(pMatch.Groups[1].Value, out var pVal))
+            {
+                priority = pVal;
+            }
+
+            var rMatch = Regex.Match(trimmed, @"(?:^|[&?])(?:retry|Retry|retrySeconds|RetrySeconds)=(\d+)", RegexOptions.IgnoreCase);
+            if (rMatch.Success && int.TryParse(rMatch.Groups[1].Value, out var rVal))
+            {
+                retry = rVal;
+            }
+
+            var eMatch = Regex.Match(trimmed, @"(?:^|[&?])(?:expire|Expire|expireSeconds|ExpireSeconds)=(\d+)", RegexOptions.IgnoreCase);
+            if (eMatch.Success && int.TryParse(eMatch.Groups[1].Value, out var eVal))
+            {
+                expire = eVal;
+            }
+
+            var dMatch = Regex.Match(trimmed, @"(?:^|[&?])(?:device|Device)=([^&]+)", RegexOptions.IgnoreCase);
+            if (dMatch.Success)
+            {
+                device = Uri.UnescapeDataString(dMatch.Groups[1].Value);
+            }
+
+            var sMatch = Regex.Match(trimmed, @"(?:^|[&?])(?:sound|Sound)=([^&]+)", RegexOptions.IgnoreCase);
+            if (sMatch.Success)
+            {
+                sound = Uri.UnescapeDataString(sMatch.Groups[1].Value);
+            }
+        }
+
+        priority = Math.Clamp(priority, -2, 2);
+        return (priority, retry, expire, device, sound);
     }
 }
