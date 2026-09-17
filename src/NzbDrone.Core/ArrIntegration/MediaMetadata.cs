@@ -27,6 +27,15 @@ namespace NzbDrone.Core.ArrIntegration
         public string SceneCode { get; set; }
         public DateTime? ReleaseDate { get; set; }
         public string Edition { get; set; }
+        public string Author { get; set; }
+        public string BookTitle { get; set; }
+        public string Isbn { get; set; }
+        public string Publisher { get; set; }
+        public int? PageCount { get; set; }
+        public string PackagingFormat { get; set; }
+        public string SeriesName { get; set; }
+        public string SeriesPosition { get; set; }
+        public string Asin { get; set; }
     }
 
     public class MediaActor

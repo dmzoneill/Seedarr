@@ -64,6 +64,24 @@ public class MediaMetadataResource : RestResource
     public DateTime? ReleaseDate { get; set; }
 
     public string Edition { get; set; }
+
+    public string Author { get; set; }
+
+    public string BookTitle { get; set; }
+
+    public string Isbn { get; set; }
+
+    public string Publisher { get; set; }
+
+    public int? PageCount { get; set; }
+
+    public string PackagingFormat { get; set; }
+
+    public string SeriesName { get; set; }
+
+    public string SeriesPosition { get; set; }
+
+    public string Asin { get; set; }
 }
 
 public static class MediaMetadataResourceMapper
@@ -117,6 +135,15 @@ public static class MediaMetadataResourceMapper
             SceneCode = model.SceneCode,
             ReleaseDate = model.ReleaseDate,
             Edition = model.Edition,
+            Author = model.Author,
+            BookTitle = model.BookTitle,
+            Isbn = model.Isbn,
+            Publisher = model.Publisher,
+            PageCount = model.PageCount,
+            PackagingFormat = model.PackagingFormat,
+            SeriesName = model.SeriesName,
+            SeriesPosition = model.SeriesPosition,
+            Asin = model.Asin,
         };
     }
 }

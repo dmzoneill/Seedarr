@@ -292,6 +292,51 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 {
                     metadata.Edition = arrMetadata.Edition;
                 }
+
+                if (!string.IsNullOrEmpty(arrMetadata.Author))
+                {
+                    metadata.Author = arrMetadata.Author;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.BookTitle))
+                {
+                    metadata.BookTitle = arrMetadata.BookTitle;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.Isbn))
+                {
+                    metadata.Isbn = arrMetadata.Isbn;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.Publisher))
+                {
+                    metadata.Publisher = arrMetadata.Publisher;
+                }
+
+                if (arrMetadata.PageCount.HasValue)
+                {
+                    metadata.PageCount = arrMetadata.PageCount.Value;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.PackagingFormat))
+                {
+                    metadata.PackagingFormat = arrMetadata.PackagingFormat;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.SeriesName))
+                {
+                    metadata.SeriesName = arrMetadata.SeriesName;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.SeriesPosition))
+                {
+                    metadata.SeriesPosition = arrMetadata.SeriesPosition;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.Asin))
+                {
+                    metadata.Asin = arrMetadata.Asin;
+                }
             }
             else if (_tmdbProvider != null)
             {
@@ -1134,6 +1179,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 break;
             case "lidarr":
                 provider = new LidarrConnection(_explicitHttpClient);
+                break;
+            case "readarr":
+                provider = new ReadarrConnection(_explicitHttpClient);
                 break;
             case "whisparr":
                 provider = new WhisparrConnection(_explicitHttpClient);

@@ -866,6 +866,9 @@ public class ArrSyncServiceTest
     [TestCase("lidarr", typeof(LidarrConnection))]
     [TestCase("Lidarr", typeof(LidarrConnection))]
     [TestCase("LIDARR", typeof(LidarrConnection))]
+    [TestCase("readarr", typeof(ReadarrConnection))]
+    [TestCase("Readarr", typeof(ReadarrConnection))]
+    [TestCase("READARR", typeof(ReadarrConnection))]
     [TestCase("whisparr", typeof(WhisparrConnection))]
     [TestCase("Whisparr", typeof(WhisparrConnection))]
     [TestCase("WHISPARR", typeof(WhisparrConnection))]
@@ -899,6 +902,7 @@ public class ArrSyncServiceTest
     [TestCase("sonarr")]
     [TestCase("radarr")]
     [TestCase("lidarr")]
+    [TestCase("readarr")]
     public void TestConnectionDetailedDirect_should_create_provider_for_lowercase_arr_types(string arrType)
     {
         var def = new ArrConnectionDefinition

@@ -19,13 +19,17 @@ INSERT INTO ""{_table}"" (
     ""PosterUrl"", ""PosterLocalPath"", ""BackdropUrl"", ""BackdropLocalPath"",
     ""MediaInfoJson"", ""Genres"", ""Rating"", ""ImdbId"", ""TmdbId"", ""TvdbId"",
     ""BannerUrl"", ""MusicBrainzId"", ""ArtistName"", ""AlbumTitle"", ""Cast"",
-    ""Studio"", ""SiteName"", ""Performers"", ""SceneCode"", ""ReleaseDate""
+    ""Studio"", ""SiteName"", ""Performers"", ""SceneCode"", ""ReleaseDate"",
+    ""Author"", ""BookTitle"", ""Isbn"", ""Publisher"", ""PageCount"",
+    ""PackagingFormat"", ""SeriesName"", ""SeriesPosition"", ""Asin""
 ) VALUES (
     @TorrentId, @ArrType, @ArrMediaId, @Title, @Year, @Overview,
     @PosterUrl, @PosterLocalPath, @BackdropUrl, @BackdropLocalPath,
     @MediaInfoJson, @Genres, @Rating, @ImdbId, @TmdbId, @TvdbId,
     @BannerUrl, @MusicBrainzId, @ArtistName, @AlbumTitle, @Cast,
-    @Studio, @SiteName, @Performers, @SceneCode, @ReleaseDate
+    @Studio, @SiteName, @Performers, @SceneCode, @ReleaseDate,
+    @Author, @BookTitle, @Isbn, @Publisher, @PageCount,
+    @PackagingFormat, @SeriesName, @SeriesPosition, @Asin
 )
 ON CONFLICT(""TorrentId"") DO UPDATE SET
     ""ArrType"" = excluded.""ArrType"",
@@ -52,7 +56,16 @@ ON CONFLICT(""TorrentId"") DO UPDATE SET
     ""SiteName"" = excluded.""SiteName"",
     ""Performers"" = excluded.""Performers"",
     ""SceneCode"" = excluded.""SceneCode"",
-    ""ReleaseDate"" = excluded.""ReleaseDate""
+    ""ReleaseDate"" = excluded.""ReleaseDate"",
+    ""Author"" = excluded.""Author"",
+    ""BookTitle"" = excluded.""BookTitle"",
+    ""Isbn"" = excluded.""Isbn"",
+    ""Publisher"" = excluded.""Publisher"",
+    ""PageCount"" = excluded.""PageCount"",
+    ""PackagingFormat"" = excluded.""PackagingFormat"",
+    ""SeriesName"" = excluded.""SeriesName"",
+    ""SeriesPosition"" = excluded.""SeriesPosition"",
+    ""Asin"" = excluded.""Asin""
 RETURNING ""Id"";";
     }
 

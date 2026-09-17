@@ -285,7 +285,7 @@ public class ArrSyncService : IArrSyncService
         if (provider == null)
         {
             _logger.Warn("Unknown ArrType '{0}' for connection '{1}'", definition.ArrType, definition.Name);
-            return ArrTestResult.Fail($"Unknown ArrType '{definition.ArrType}'. Supported types are Sonarr, Radarr, Lidarr, Whisparr.");
+            return ArrTestResult.Fail($"Unknown ArrType '{definition.ArrType}'. Supported types are Sonarr, Radarr, Lidarr, Readarr, Whisparr.");
         }
 
         return provider.TestConnectionDetailed();
@@ -305,6 +305,9 @@ public class ArrSyncService : IArrSyncService
                 break;
             case "lidarr":
                 provider = new LidarrConnection();
+                break;
+            case "readarr":
+                provider = new ReadarrConnection();
                 break;
             case "whisparr":
                 provider = new WhisparrConnection();
