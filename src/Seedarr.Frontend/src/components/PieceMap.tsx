@@ -127,6 +127,11 @@ export function PieceMap({
           style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}
         >
           <div
+            role="progressbar"
+            aria-valuenow={Math.round(Math.min(100, Math.max(0, progress * 100)))}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuetext={`${(progress * 100).toFixed(1)}% verified`}
             style={{
               position: "relative",
               width: "100%",

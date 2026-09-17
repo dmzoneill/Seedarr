@@ -35,6 +35,7 @@ import { AutomationPage } from "./pages/AutomationPage";
 import LoginPage from "./pages/LoginPage";
 import StatusBar from "./components/StatusBar";
 import ToastContainer from "./components/Toast";
+import AriaLiveAnnouncer from "./components/AriaLiveAnnouncer";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SignalRProvider from "./components/SignalRProvider";
 import { useSignalR } from "./api/signalr";
@@ -1211,6 +1212,7 @@ function App() {
           isReconnecting={isReconnecting}
         />
       </div>
+      <AriaLiveAnnouncer />
       <SignalRProvider />
       {showAddTorrentModal && (
         <AddTorrentModal onClose={() => setShowAddTorrentModal(false)} />
