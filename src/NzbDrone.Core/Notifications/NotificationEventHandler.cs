@@ -406,7 +406,7 @@ public class NotificationEventHandler :
         if (eventTags == null && payload != null)
         {
             var prop = payload.GetType().GetProperty("Tags", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                       ?? payload.GetType().GetProperty("TagIds", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                ?? payload.GetType().GetProperty("TagIds", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
             if (prop != null && prop.GetValue(payload) is IEnumerable<int> extracted)
             {
                 eventTags = extracted;
