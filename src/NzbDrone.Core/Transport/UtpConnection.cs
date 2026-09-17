@@ -788,7 +788,7 @@ public class UtpConnection : IUtpConnection
         unacked.Sort((a, b) => (short)(a.SequenceNumber - b.SequenceNumber));
 
         var head = unacked[0];
-        if (now - head.SentTimestamp >= 50)
+        if (now - head.SentTimestamp >= 200)
         {
             head.Retries++;
             head.SentTimestamp = now;

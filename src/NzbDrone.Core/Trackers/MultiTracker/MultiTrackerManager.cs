@@ -186,14 +186,14 @@ public class MultiTrackerManager : IMultiTrackerManager
     {
         try
         {
-            request.TrackerUrl = trackerUrl;
+            var trackerRequest = request.Clone(trackerUrl);
             var provider = GetProvider(trackerUrl);
             if (provider == null)
             {
                 return (new TrackerAnnounceResponse { Success = false, FailureReason = "Unknown tracker protocol" }, true);
             }
 
-            var response = provider.Announce(request);
+            var response = provider.Announce(trackerRequest);
             if (!response.Success)
             {
                 _logger.Warn("Tracker {0} failed: {1}", trackerUrl, response.FailureReason);
@@ -415,7 +415,7 @@ public class MultiTrackerManager : IMultiTrackerManager
         var trackerDomain = GetRootDomain(trackerHost);
 
         return !string.IsNullOrEmpty(primaryDomain) &&
-               string.Equals(primaryDomain, trackerDomain, StringComparison.OrdinalIgnoreCase);
+            string.Equals(primaryDomain, trackerDomain, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GetRootDomain(string host)

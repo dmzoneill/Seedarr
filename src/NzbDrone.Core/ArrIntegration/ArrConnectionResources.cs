@@ -58,6 +58,14 @@ public static class ArrConnectionResources
         }
 
         var candidate = url.Trim();
+        if (candidate.Contains("://") &&
+            !candidate.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !candidate.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            errorMessage = $"Invalid URL format: '{url}'";
+            return false;
+        }
+
         if (!candidate.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
             !candidate.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {

@@ -666,6 +666,7 @@ public class CertificateManagerTest
 
         var cachedPfx = Path.Combine(_tempDir, "seedarr-selfsigned.pfx");
         Assert.That(File.Exists(cachedPfx), Is.True);
+        var initialThumbprint = initialCert.Thumbprint;
 
         // Update LastWriteTimeUtc of cached PFX file
         File.SetLastWriteTimeUtc(cachedPfx, DateTime.UtcNow.AddMinutes(5));
@@ -674,7 +675,7 @@ public class CertificateManagerTest
 
         Assert.That(reloadedCert, Is.Not.Null);
         Assert.That(reloadedCert, Is.Not.SameAs(initialCert));
-        Assert.That(reloadedCert.Thumbprint, Is.EqualTo(initialCert.Thumbprint));
+        Assert.That(reloadedCert.Thumbprint, Is.EqualTo(initialThumbprint));
 
         // Verify superseded certificate was disposed
         Assert.That(initialCert.Handle, Is.EqualTo(IntPtr.Zero));

@@ -135,7 +135,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     public void UpdateExternalAddress(IPAddress address)
     {
-        if (address == null || RoutingTable.IsLocalOrLinkLocal(address))
+        if (address == null || IsPrivateOrLocalAddress(address))
         {
             return;
         }
@@ -149,6 +149,59 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         }
     }
 
+    private static bool IsPrivateOrLocalAddress(IPAddress address)
+    {
+        if (address == null)
+        {
+            return false;
+        }
+
+        if (RoutingTable.IsLocalOrLinkLocal(address))
+        {
+            return true;
+        }
+
+        var normalized = address.IsIPv4MappedToIPv6 ? address.MapToIPv4() : address;
+        var bytes = normalized.GetAddressBytes();
+
+        if (bytes.Length == 4)
+        {
+            // RFC 1918: 10.0.0.0/8
+            if (bytes[0] == 10)
+            {
+                return true;
+            }
+
+            // RFC 1918: 172.16.0.0/12
+            if (bytes[0] == 172 && (bytes[1] >= 16 && bytes[1] <= 31))
+            {
+                return true;
+            }
+
+            // RFC 1918: 192.168.0.0/16
+            if (bytes[0] == 192 && bytes[1] == 168)
+            {
+                return true;
+            }
+
+            // RFC 6598: Carrier-grade NAT 100.64.0.0/10
+            if (bytes[0] == 100 && (bytes[1] >= 64 && bytes[1] <= 127))
+            {
+                return true;
+            }
+        }
+        else if (bytes.Length == 16)
+        {
+            // Unique local address (ULA) fc00::/7
+            if ((bytes[0] & 0xFE) == 0xFC)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool IsNodeIdValidForEndpoint(byte[] nodeId, IPEndPoint endpoint)
     {
         if (nodeId == null || nodeId.Length != 20 || endpoint == null)
@@ -156,7 +209,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             return false;
         }
 
-        if (RoutingTable.IsLocalOrLinkLocal(endpoint.Address))
+        if (IsPrivateOrLocalAddress(endpoint.Address))
         {
             return true;
         }

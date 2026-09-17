@@ -107,7 +107,7 @@ public class StopPolicy : IStopPolicy
                 if (ratioRequired && timeRequired)
                 {
                     return torrent.Ratio >= tag.MinSeedRatio.Value ||
-                           torrent.SeedingTime >= tag.MinSeedTimeSeconds.Value;
+                        torrent.SeedingTime >= tag.MinSeedTimeSeconds.Value;
                 }
 
                 if (ratioRequired)

@@ -205,7 +205,7 @@ public class PeerConnection : IDisposable
     {
         DhKeyPool = dhKeyPool;
         _client = client;
-        _networkStream = client.GetStream();
+        _networkStream = client?.GetStream();
         _activeStream = _networkStream;
         _logger = LogManager.GetCurrentClassLogger();
         if (client?.Client?.RemoteEndPoint is not IPEndPoint endpoint)
@@ -1078,8 +1078,8 @@ public class PeerConnection : IDisposable
     private static bool IsTimeoutException(Exception ex)
     {
         return (ex is SocketException se && se.SocketErrorCode == SocketError.TimedOut) ||
-               (ex is IOException io && ((io.InnerException is SocketException innerSe && innerSe.SocketErrorCode == SocketError.TimedOut) || io.InnerException is TimeoutException)) ||
-               ex is TimeoutException;
+            (ex is IOException io && ((io.InnerException is SocketException innerSe && innerSe.SocketErrorCode == SocketError.TimedOut) || io.InnerException is TimeoutException)) ||
+            ex is TimeoutException;
     }
 
     private bool ReadExact(byte[] buffer, int count)
