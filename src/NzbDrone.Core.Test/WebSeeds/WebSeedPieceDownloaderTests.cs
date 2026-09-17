@@ -281,6 +281,7 @@ public class WebSeedPieceDownloaderTests
         Assert.That(handler.PooledConnectionIdleTimeout, Is.EqualTo(TimeSpan.FromMinutes(2)));
         Assert.That(handler.MaxConnectionsPerServer, Is.EqualTo(4));
         Assert.That(handler.EnableMultipleHttp2Connections, Is.True);
+        Assert.That(handler.AllowAutoRedirect, Is.False);
     }
 
     [Test]

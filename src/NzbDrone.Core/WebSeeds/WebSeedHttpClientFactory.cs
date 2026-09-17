@@ -29,7 +29,8 @@ public class WebSeedHttpClientFactory : IWebSeedHttpClientFactory, IDisposable
             PooledConnectionLifetime = TimeSpan.FromMinutes(15),
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
             MaxConnectionsPerServer = 4,
-            EnableMultipleHttp2Connections = true
+            EnableMultipleHttp2Connections = true,
+            AllowAutoRedirect = false
         };
     }
 

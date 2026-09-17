@@ -22,16 +22,29 @@ public class WebSeedPieceDownloader : IWebSeedPieceDownloader
     public const int ChunkSize = 16 * 1024;
 
     private readonly HttpClient _httpClient;
+    private readonly IWebSeedRedirectHandler _redirectHandler;
 
     public WebSeedPieceDownloader(IWebSeedHttpClientFactory httpClientFactory)
+        : this(httpClientFactory, new WebSeedRedirectHandler())
+    {
+    }
+
+    public WebSeedPieceDownloader(IWebSeedHttpClientFactory httpClientFactory, IWebSeedRedirectHandler redirectHandler)
     {
         ArgumentNullException.ThrowIfNull(httpClientFactory);
         _httpClient = httpClientFactory.GetClient();
+        _redirectHandler = redirectHandler ?? new WebSeedRedirectHandler();
     }
 
     public WebSeedPieceDownloader(HttpClient httpClient)
+        : this(httpClient, new WebSeedRedirectHandler())
+    {
+    }
+
+    public WebSeedPieceDownloader(HttpClient httpClient, IWebSeedRedirectHandler redirectHandler)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _redirectHandler = redirectHandler ?? new WebSeedRedirectHandler();
     }
 
     public static (long Start, long End) CalculateByteRange(int pieceIndex, long pieceLength, long totalTorrentSize)
@@ -83,12 +96,18 @@ public class WebSeedPieceDownloader : IWebSeedPieceDownloader
             throw new InvalidOperationException($"Piece length ({expectedLength} bytes) exceeds maximum supported buffer size.");
         }
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, webSeedUrl);
+        var resolvedUrl = _redirectHandler.GetResolvedUrl(webSeedUrl);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, resolvedUrl);
         request.Headers.Range = new RangeHeaderValue(rangeStart, rangeEnd);
         request.Version = HttpVersion.Version20;
         request.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
 
-        using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        using var response = await _redirectHandler.SendWithRedirectsAsync(
+            _httpClient,
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
 
         if (response.StatusCode != HttpStatusCode.PartialContent && response.StatusCode != HttpStatusCode.OK)
         {
