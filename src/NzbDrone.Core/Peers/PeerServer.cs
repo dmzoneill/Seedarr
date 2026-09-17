@@ -1215,14 +1215,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 _fastExtensionHandler.RegisterFastPeer(connection, Convert.FromHexString(torrent.InfoHash), torrent.PieceCount, 10);
             }
 
-            if (connection.SupportsExtensionProtocol && _extensionManager != null)
-            {
-                var extHandshake = _extensionManager.BuildExtensionHandshake(torrent.IsPrivate, profile);
-                var payload = new byte[extHandshake.Length + 1];
-                payload[0] = 0;
-                Array.Copy(extHandshake, 0, payload, 1, extHandshake.Length);
-                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
-            }
+            SendExtensionHandshake(connection, torrent, profile);
 
             SendInitialAvailability(connection, torrent);
 
@@ -1457,14 +1450,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     _fastExtensionHandler.RegisterFastPeer(connection, Convert.FromHexString(torrent.InfoHash), torrent.PieceCount, 10);
                 }
 
-                if (connection.SupportsExtensionProtocol && _extensionManager != null)
-                {
-                    var extHandshake = _extensionManager.BuildExtensionHandshake(torrent.IsPrivate, profile);
-                    var payload = new byte[extHandshake.Length + 1];
-                    payload[0] = 0;
-                    Array.Copy(extHandshake, 0, payload, 1, extHandshake.Length);
-                    connection.SendMessage(new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
-                }
+                SendExtensionHandshake(connection, torrent, profile);
 
                 SendInitialAvailability(connection, torrent);
 
@@ -1829,10 +1815,36 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         return false;
     }
 
+    private void SendExtensionHandshake(PeerConnection connection, Torrent torrent, IClientProfile profile)
+    {
+        if (connection == null || !connection.SupportsExtensionProtocol || _extensionManager == null)
+        {
+            return;
+        }
+
+        IPAddress.TryParse(connection.RemoteIp, out var remoteIp);
+        var listeningPort = _configService?.ListeningPort ?? 0;
+        var metadata = GetTorrentMetadata(torrent?.InfoHash);
+        var metadataSize = metadata?.Length ?? 0;
+
+        var extHandshake = _extensionManager.BuildExtensionHandshake(
+            remoteIp: remoteIp,
+            listeningPort: listeningPort,
+            metadataSize: metadataSize,
+            isPrivate: torrent?.IsPrivate ?? false,
+            clientProfile: profile);
+
+        var payload = new byte[extHandshake.Length + 1];
+        payload[0] = 0;
+        Array.Copy(extHandshake, 0, payload, 1, extHandshake.Length);
+        connection.SendMessage(new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
+    }
+
     private void HandleExtendedMessage(PeerConnection connection, PeerMessage message, Torrent torrent)
     {
         if (message.Payload == null || message.Payload.Length < 2)
         {
+            _logger.Trace("Ignoring invalid extended message payload from {0}", connection?.RemoteIp);
             return;
         }
 
@@ -1843,23 +1855,42 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         {
             try
             {
-                var parser = new BencodeParser();
-                using var stream = new MemoryStream(extendedPayload);
-                var dict = parser.Parse<BDictionary>(stream);
-                if (dict.TryGetValue("m", out var mObj) && mObj is BDictionary mDict)
+                if (_extensionManager != null)
                 {
-                    foreach (var kvp in mDict)
+                    var handshake = _extensionManager.ParseExtensionHandshake(extendedPayload);
+                    if (handshake != null)
                     {
-                        if (kvp.Value is BNumber num)
+                        foreach (var kvp in handshake.Extensions)
                         {
-                            connection.RemoteExtensions[kvp.Key.ToString()] = (int)num.Value;
+                            connection.RemoteExtensions[kvp.Key] = kvp.Value;
+                        }
+
+                        if (handshake.MetadataSize.HasValue)
+                        {
+                            connection.MetadataSize = (int)handshake.MetadataSize.Value;
                         }
                     }
                 }
-
-                if (dict.TryGetValue("metadata_size", out var metaSizeObj) && metaSizeObj is BNumber metaSizeNum)
+                else
                 {
-                    connection.MetadataSize = (int)metaSizeNum.Value;
+                    var parser = new BencodeParser();
+                    using var stream = new MemoryStream(extendedPayload);
+                    var dict = parser.Parse<BDictionary>(stream);
+                    if (dict.TryGetValue("m", out var mObj) && mObj is BDictionary mDict)
+                    {
+                        foreach (var kvp in mDict)
+                        {
+                            if (kvp.Value is BNumber num)
+                            {
+                                connection.RemoteExtensions[kvp.Key.ToString()] = (int)num.Value;
+                            }
+                        }
+                    }
+
+                    if (dict.TryGetValue("metadata_size", out var metaSizeObj) && metaSizeObj is BNumber metaSizeNum)
+                    {
+                        connection.MetadataSize = (int)metaSizeNum.Value;
+                    }
                 }
             }
             catch (Exception ex)
@@ -1884,7 +1915,10 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         if (IsUtPexExtension(connection, extId, torrent))
         {
             HandleUtPexMessage(connection, extendedPayload, torrent);
+            return;
         }
+
+        _logger.Trace("Ignoring unknown extension message ID {0} from {1}", extId, connection.RemoteIp);
     }
 
     private void HandleUtPexMessage(PeerConnection connection, byte[] extendedPayload, Torrent torrent)

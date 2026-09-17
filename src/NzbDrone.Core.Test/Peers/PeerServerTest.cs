@@ -2259,6 +2259,34 @@ public class PeerServerTest
     }
 
     [Test]
+    public void HandleMessage_should_safely_ignore_unknown_extended_message_id_without_dropping_connection()
+    {
+        var conn = CreateTestConnection();
+        var payload = new byte[] { 99, 1, 2, 3 };
+
+        Assert.DoesNotThrow(() =>
+        {
+            InvokeHandleMessage(conn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
+        });
+
+        Assert.That(conn.IsConnected, Is.True);
+    }
+
+    [Test]
+    public void HandleMessage_should_safely_ignore_invalid_extended_payload_without_dropping_connection()
+    {
+        var conn = CreateTestConnection();
+
+        Assert.DoesNotThrow(() =>
+        {
+            InvokeHandleMessage(conn, new PeerMessage { Type = PeerMessageType.Extended, Payload = new byte[] { 1 } });
+            InvokeHandleMessage(conn, new PeerMessage { Type = PeerMessageType.Extended, Payload = Array.Empty<byte>() });
+        });
+
+        Assert.That(conn.IsConnected, Is.True);
+    }
+
+    [Test]
     public void HandleMessage_should_serve_synthetic_metadata_when_physical_torrent_file_is_missing()
     {
         var (clientConn, serverConn) = CreateTestPair();
