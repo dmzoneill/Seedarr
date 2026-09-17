@@ -25,9 +25,19 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
     private const int PeerTtlMinutes = 30;
     private const int SecretRotationMinutes = 10;
 
+    public static readonly string[] DefaultBootstrapRouters = new[]
+    {
+        "router.bittorrent.com:6881",
+        "router.utorrent.com:6881",
+        "dht.transmissionbt.com:6881",
+        "dht.aelitis.com:6881",
+        "dht.libtorrent.org:25401"
+    };
+
     private readonly IConfigService _configService;
     private readonly IPeerDiscoveryService _peerDiscovery;
     private readonly ITorrentService _torrentService;
+    private readonly IDhtStateService _dhtStateService;
     private readonly int? _customPort;
     private readonly RoutingTable _routingTable;
     private readonly Logger _logger;
@@ -57,12 +67,14 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         IConfigService configService,
         IPeerDiscoveryService peerDiscovery = null,
         ITorrentService torrentService = null,
-        int? port = null)
+        int? port = null,
+        IDhtStateService dhtStateService = null)
     {
         _configService = configService;
         _peerDiscovery = peerDiscovery;
         _torrentService = torrentService;
         _customPort = port;
+        _dhtStateService = dhtStateService;
         _nodeId = RandomNumberGenerator.GetBytes(20);
         _routingTable = new RoutingTable(
             _nodeId,
@@ -83,6 +95,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
 
     public override void Dispose()
     {
+        SaveRoutingTableState();
         StopDht();
         _querySemaphore?.Dispose();
         base.Dispose();
@@ -170,6 +183,8 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                 return;
             }
 
+            LoadRoutingTableState();
+
             var portToBind = _customPort ?? DhtPort;
             try
             {
@@ -199,6 +214,8 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         lock (_stateLock)
         {
             _wasEnabled = false;
+
+            SaveRoutingTableState();
 
             if (_workerCts != null)
             {
@@ -232,6 +249,56 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             }
 
             _workerTask = null;
+        }
+    }
+
+    public void LoadRoutingTableState()
+    {
+        if (_dhtStateService == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var cachedNodes = _dhtStateService.LoadRoutingTable();
+            if (cachedNodes != null && cachedNodes.Count > 0)
+            {
+                foreach (var node in cachedNodes)
+                {
+                    _routingTable.AddNode(node);
+                }
+
+                _logger.Info("DHT loaded {0} cached nodes from state", cachedNodes.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to load DHT state on startup");
+        }
+    }
+
+    public void SaveRoutingTableState()
+    {
+        if (_dhtStateService == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var goodNodes = _routingTable.GetGoodNodes();
+            if (goodNodes.Count == 0)
+            {
+                goodNodes = _routingTable.GetAllNodes();
+            }
+
+            _dhtStateService.SaveRoutingTable(goodNodes);
+            _logger.Debug("DHT saved {0} nodes to state", goodNodes.Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to save DHT routing table state");
         }
     }
 
@@ -308,6 +375,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
                     }
 
                     await AnnounceTorrentsAsync(stoppingToken);
+                    SaveRoutingTableState();
 
                     _nextRefresh = DateTime.UtcNow.AddSeconds(_configService.DhtAnnouncementInterval);
                 }
@@ -382,26 +450,60 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         }
     }
 
+    public IEnumerable<string> GetBootstrapNodes()
+    {
+        var nodes = new List<string>();
+        if (!string.IsNullOrWhiteSpace(_configService?.DhtBootstrapNodes))
+        {
+            var userNodes = _configService.DhtBootstrapNodes
+                .Split(new[] { ',', ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(s => s.Trim())
+                .Where(s => !string.IsNullOrEmpty(s) && s.Contains(':'));
+
+            nodes.AddRange(userNodes);
+        }
+
+        foreach (var def in DefaultBootstrapRouters)
+        {
+            if (!nodes.Contains(def, StringComparer.OrdinalIgnoreCase))
+            {
+                nodes.Add(def);
+            }
+        }
+
+        return nodes;
+    }
+
     private async Task Bootstrap(CancellationToken stoppingToken)
     {
-        // Send find_node to bootstrap nodes
-        var bootstrapNodes = new[]
-        {
-            "router.bittorrent.com:6881",
-            "dht.transmissionbt.com:6881"
-        };
+        var bootstrapNodes = GetBootstrapNodes();
 
         foreach (var node in bootstrapNodes)
         {
             try
             {
-                var parts = node.Split(':');
-                var addresses = await Dns.GetHostAddressesAsync(parts[0], stoppingToken);
-                if (addresses.Length > 0)
+                var lastColon = node.LastIndexOf(':');
+                if (lastColon <= 0 || !int.TryParse(node.AsSpan(lastColon + 1), out var port))
                 {
-                    var endpoint = new IPEndPoint(addresses[0], int.Parse(parts[1]));
+                    continue;
+                }
+
+                var host = node.Substring(0, lastColon).Trim('[', ']');
+                if (IPAddress.TryParse(host, out var ip))
+                {
+                    var endpoint = new IPEndPoint(ip, port);
                     await SendFindNode(endpoint, _nodeId, stoppingToken);
                     _logger.Debug("DHT bootstrap: sent find_node to {0}", node);
+                }
+                else
+                {
+                    var addresses = await Dns.GetHostAddressesAsync(host, stoppingToken);
+                    if (addresses.Length > 0)
+                    {
+                        var endpoint = new IPEndPoint(addresses[0], port);
+                        await SendFindNode(endpoint, _nodeId, stoppingToken);
+                        _logger.Debug("DHT bootstrap: sent find_node to {0}", node);
+                    }
                 }
             }
             catch (OperationCanceledException)
