@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Exceptions;
+using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http.Security;
@@ -40,6 +41,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     private readonly ITagService _tagService;
     private readonly IConfigFileProvider _configFileProvider;
     private readonly HttpClient _httpClient;
+    private readonly IRemotePathMappingService _remotePathMappingService;
+    private readonly ICallerHostResolver _callerHostResolver;
     private readonly Logger _logger;
 
     public QBittorrentApiController(
@@ -53,7 +56,9 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         IConfigFileProvider configFileProvider = null,
         HttpClient httpClient = null,
         IRpcSessionStore sessionStore = null,
-        IHttpClientFactory httpClientFactory = null)
+        IHttpClientFactory httpClientFactory = null,
+        IRemotePathMappingService remotePathMappingService = null,
+        ICallerHostResolver callerHostResolver = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -65,6 +70,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         _configFileProvider = configFileProvider;
         _httpClient = httpClient ?? httpClientFactory?.CreateClient() ?? DefaultHttpClient;
         _sessionStore = sessionStore ?? RpcSessionStore.SharedSessionStore;
+        _remotePathMappingService = remotePathMappingService;
+        _callerHostResolver = callerHostResolver;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -137,6 +144,31 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         return false;
     }
 
+    private string GetCallerHost()
+    {
+        return _callerHostResolver?.ResolveHost(HttpContext) ?? "localhost";
+    }
+
+    private string RemapRemoteToLocal(string path)
+    {
+        if (string.IsNullOrEmpty(path) || _remotePathMappingService == null)
+        {
+            return path;
+        }
+
+        return _remotePathMappingService.RemapRemoteToLocal(GetCallerHost(), path);
+    }
+
+    private string RemapLocalToRemote(string path)
+    {
+        if (string.IsNullOrEmpty(path) || _remotePathMappingService == null)
+        {
+            return path;
+        }
+
+        return _remotePathMappingService.RemapLocalToRemote(GetCallerHost(), path);
+    }
+
     [HttpPost("auth/login")]
     public ActionResult Login([FromForm] string username = null, [FromForm] string password = null)
     {
@@ -199,7 +231,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     [HttpGet("app/preferences")]
     public ActionResult<Dictionary<string, object>> GetPreferences()
     {
-        var savePath = !string.IsNullOrWhiteSpace(_configService?.WatchFolderPath) ? _configService.WatchFolderPath : "/downloads";
+        var rawSavePath = !string.IsNullOrWhiteSpace(_configService?.WatchFolderPath) ? _configService.WatchFolderPath : "/downloads";
+        var savePath = RemapLocalToRemote(rawSavePath);
 
         return Ok(new Dictionary<string, object>
         {
@@ -333,7 +366,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     [HttpGet("app/defaultSavePath")]
     public ActionResult<string> GetDefaultSavePath()
     {
-        return Content(_configService?.WatchFolderPath ?? "/downloads", "text/plain");
+        var rawPath = _configService?.WatchFolderPath ?? "/downloads";
+        return Content(RemapLocalToRemote(rawPath), "text/plain");
     }
 
     [HttpGet("torrents/info")]
@@ -431,7 +465,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         var result = torrents.Select(t =>
         {
             var state = MapToQBitState(t.Status, t.Progress);
-            var savePath = !string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads");
+            var rawSavePath = !string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads");
+            var savePath = RemapLocalToRemote(rawSavePath);
             var contentPath = Path.Combine(savePath, t.Name ?? string.Empty);
             var amountLeft = (long)(t.TotalSize * Math.Max(0.0, 1.0 - t.Progress));
 
@@ -705,7 +740,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         if (!string.IsNullOrWhiteSpace(request.EffectiveSavePath))
         {
-            added.SourcePath = request.EffectiveSavePath;
+            added.SourcePath = RemapRemoteToLocal(request.EffectiveSavePath);
             needsUpdate = true;
         }
 
@@ -1219,7 +1254,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     public ActionResult<Dictionary<string, object>> GetCategories()
     {
         var torrents = _torrentService.GetAll();
-        var defaultPath = _configService?.WatchFolderPath ?? "/downloads";
+        var defaultPath = RemapLocalToRemote(_configService?.WatchFolderPath ?? "/downloads");
         var distinctCategories = torrents
             .Select(t => !string.IsNullOrWhiteSpace(t.Category) ? t.Category : t.Label)
             .Where(l => !string.IsNullOrWhiteSpace(l))
@@ -1438,7 +1473,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         }
 
         var addedDate = new DateTimeOffset(torrent.DateAdded).ToUnixTimeSeconds();
-        var savePath = !string.IsNullOrWhiteSpace(torrent.SourcePath) ? torrent.SourcePath : (_configService?.WatchFolderPath ?? "/downloads");
+        var rawSavePath = !string.IsNullOrWhiteSpace(torrent.SourcePath) ? torrent.SourcePath : (_configService?.WatchFolderPath ?? "/downloads");
+        var savePath = RemapLocalToRemote(rawSavePath);
 
         return Ok(new Dictionary<string, object>
         {
@@ -1509,7 +1545,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             sessionState.LastAccessed = DateTime.UtcNow;
 
             var torrents = _torrentService.GetAll();
-            var defaultPath = _configService?.WatchFolderPath ?? "/downloads";
+            var localDefaultPath = _configService?.WatchFolderPath ?? "/downloads";
+            var defaultPath = RemapLocalToRemote(localDefaultPath);
 
             var categories = torrents
                 .Select(t => t.Label)
@@ -1524,7 +1561,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             var totalDl = torrents.Sum(t => t.Downloaded);
             var totalUl = torrents.Sum(t => t.Uploaded);
             var globalRatio = totalDl > 0 ? (double)totalUl / totalDl : 0.0;
-            var freeSpace = GetFreeDiskSpace(defaultPath);
+            var freeSpace = GetFreeDiskSpace(localDefaultPath);
 
             var serverState = new
             {
@@ -1561,7 +1598,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 foreach (var t in torrents)
                 {
                     currentHashes.Add(t.InfoHash);
-                    var savePath = !string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : defaultPath;
+                    var rawSavePath = !string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : localDefaultPath;
+                    var savePath = RemapLocalToRemote(rawSavePath);
                     var contentPath = Path.Combine(savePath, t.Name ?? string.Empty);
                     var snapshot = QBitTorrentSnapshot.FromTorrent(t, savePath, contentPath);
 
@@ -1612,7 +1650,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             foreach (var t in torrents)
             {
                 currentHashes.Add(t.InfoHash);
-                var savePath = !string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : defaultPath;
+                var rawSavePath = !string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : localDefaultPath;
+                var savePath = RemapLocalToRemote(rawSavePath);
                 var contentPath = Path.Combine(savePath, t.Name ?? string.Empty);
                 var snapshot = QBitTorrentSnapshot.FromTorrent(t, savePath, contentPath);
 
@@ -1810,9 +1849,10 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     {
         if (!string.IsNullOrWhiteSpace(hashes) && !string.IsNullOrWhiteSpace(location))
         {
+            var remappedLocation = RemapRemoteToLocal(location);
             foreach (var t in ResolveTorrents(hashes))
             {
-                t.SourcePath = location;
+                t.SourcePath = remappedLocation;
                 _torrentService.Update(t);
             }
         }

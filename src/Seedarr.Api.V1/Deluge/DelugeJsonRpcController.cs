@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Exceptions;
+using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http.Security;
@@ -44,6 +45,8 @@ public class DelugeJsonRpcController : ControllerBase
     private readonly ITagService _tagService;
     private readonly IConfigFileProvider _configFileProvider;
     private readonly HttpClient _httpClient;
+    private readonly IRemotePathMappingService _remotePathMappingService;
+    private readonly ICallerHostResolver _callerHostResolver;
     private readonly Logger _logger;
 
     public static bool IsWebConnected
@@ -61,7 +64,9 @@ public class DelugeJsonRpcController : ControllerBase
         ITagService tagService = null,
         IConfigFileProvider configFileProvider = null,
         HttpClient httpClient = null,
-        IRpcSessionStore sessionStore = null)
+        IRpcSessionStore sessionStore = null,
+        IRemotePathMappingService remotePathMappingService = null,
+        ICallerHostResolver callerHostResolver = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -72,7 +77,34 @@ public class DelugeJsonRpcController : ControllerBase
         _configFileProvider = configFileProvider;
         _httpClient = httpClient ?? _sharedHttpClient;
         _sessionStore = sessionStore ?? RpcSessionStore.SharedSessionStore;
+        _remotePathMappingService = remotePathMappingService;
+        _callerHostResolver = callerHostResolver;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    private string GetCallerHost()
+    {
+        return _callerHostResolver?.ResolveHost(HttpContext) ?? "localhost";
+    }
+
+    private string RemapRemoteToLocal(string path)
+    {
+        if (string.IsNullOrEmpty(path) || _remotePathMappingService == null)
+        {
+            return path;
+        }
+
+        return _remotePathMappingService.RemapRemoteToLocal(GetCallerHost(), path);
+    }
+
+    private string RemapLocalToRemote(string path)
+    {
+        if (string.IsNullOrEmpty(path) || _remotePathMappingService == null)
+        {
+            return path;
+        }
+
+        return _remotePathMappingService.RemapLocalToRemote(GetCallerHost(), path);
     }
 
     private bool IsDelugeAuthenticated()
@@ -774,7 +806,7 @@ public class DelugeJsonRpcController : ControllerBase
 
                 if (cfgElem.TryGetProperty("download_location", out var dlLocProp) && dlLocProp.ValueKind == JsonValueKind.String)
                 {
-                    cfgUpdates["WatchFolderPath"] = dlLocProp.GetString();
+                    cfgUpdates["WatchFolderPath"] = RemapRemoteToLocal(dlLocProp.GetString());
                 }
 
                 if (cfgElem.TryGetProperty("max_connections_global", out var mcgProp) && mcgProp.ValueKind == JsonValueKind.Number && mcgProp.TryGetInt32(out var mcgVal))
@@ -1186,7 +1218,7 @@ public class DelugeJsonRpcController : ControllerBase
         var needsUpdate = false;
         if (options.TryGetProperty("download_location", out var dlProp) && dlProp.ValueKind == JsonValueKind.String)
         {
-            added.SourcePath = dlProp.GetString();
+            added.SourcePath = RemapRemoteToLocal(dlProp.GetString());
             needsUpdate = true;
         }
 
@@ -1359,10 +1391,11 @@ public class DelugeJsonRpcController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(newPath))
         {
+            var remappedPath = RemapRemoteToLocal(newPath);
             var allTorrents = _torrentService.GetAll();
             foreach (var t in allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())))
             {
-                t.SourcePath = newPath;
+                t.SourcePath = remappedPath;
                 _torrentService.Update(t);
             }
         }
@@ -1483,8 +1516,8 @@ public class DelugeJsonRpcController : ControllerBase
         {
             ["max_download_speed"] = (double)(_configService?.MaxDownloadSpeedKbps ?? 1250),
             ["max_upload_speed"] = (double)(_configService?.MaxUploadSpeedKbps ?? 625),
-            ["download_location"] = _configService?.WatchFolderPath ?? "/downloads",
-            ["move_completed_path"] = _configService?.WatchFolderPath ?? "/downloads",
+            ["download_location"] = RemapLocalToRemote(_configService?.WatchFolderPath ?? "/downloads"),
+            ["move_completed_path"] = RemapLocalToRemote(_configService?.WatchFolderPath ?? "/downloads"),
             ["move_completed"] = false,
             ["max_connections_global"] = _configService?.MaxGlobalConnections ?? 200,
             ["max_connections_per_torrent"] = _configService?.MaxPerTorrentConnections ?? 50,
@@ -1530,8 +1563,8 @@ public class DelugeJsonRpcController : ControllerBase
             ["total_uploaded"] = t.Uploaded,
             ["total_payload_download"] = t.Downloaded,
             ["total_payload_upload"] = t.Uploaded,
-            ["save_path"] = !string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads"),
-            ["download_location"] = !string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads"),
+            ["save_path"] = RemapLocalToRemote(!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads")),
+            ["download_location"] = RemapLocalToRemote(!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads")),
             ["label"] = t.Label ?? string.Empty,
             ["time_since_transfer"] = 0,
             ["time_added"] = new DateTimeOffset(t.DateAdded).ToUnixTimeSeconds(),

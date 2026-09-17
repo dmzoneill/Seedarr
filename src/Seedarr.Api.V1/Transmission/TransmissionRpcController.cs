@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -13,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http.Security;
@@ -63,6 +65,8 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
     private readonly IConfigFileProvider _configFileProvider;
     private readonly ITagService _tagService;
     private readonly HttpClient _httpClient;
+    private readonly IRemotePathMappingService _remotePathMappingService;
+    private readonly ICallerHostResolver _callerHostResolver;
     private readonly Logger _logger;
 
     public static void RecordRemovedId(int id)
@@ -104,6 +108,32 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         }
     }
 
+    private bool IsLocalOrWhitelisted()
+    {
+        var connection = HttpContext?.Connection;
+        if (connection?.RemoteIpAddress == null)
+        {
+            return true;
+        }
+
+        if (IPAddress.IsLoopback(connection.RemoteIpAddress))
+        {
+            return true;
+        }
+
+        if (_configService != null)
+        {
+            var remoteIpStr = connection.RemoteIpAddress.ToString();
+            if (remoteIpStr.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                remoteIpStr.Equals("::1", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool IsRecentlyActive(Dictionary<string, JsonElement> arguments)
     {
         if (arguments == null)
@@ -142,7 +172,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         IConfigService configService,
         IConfigFileProvider configFileProvider = null,
         ITagService tagService = null,
-        HttpClient httpClient = null)
+        HttpClient httpClient = null,
+        IRemotePathMappingService remotePathMappingService = null,
+        ICallerHostResolver callerHostResolver = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -153,7 +185,34 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         _configFileProvider = configFileProvider;
         _tagService = tagService;
         _httpClient = httpClient ?? _sharedHttpClient;
+        _remotePathMappingService = remotePathMappingService;
+        _callerHostResolver = callerHostResolver;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    private string GetCallerHost()
+    {
+        return _callerHostResolver?.ResolveHost(HttpContext) ?? "localhost";
+    }
+
+    private string RemapRemoteToLocal(string path)
+    {
+        if (string.IsNullOrEmpty(path) || _remotePathMappingService == null)
+        {
+            return path;
+        }
+
+        return _remotePathMappingService.RemapRemoteToLocal(GetCallerHost(), path);
+    }
+
+    private string RemapLocalToRemote(string path)
+    {
+        if (string.IsNullOrEmpty(path) || _remotePathMappingService == null)
+        {
+            return path;
+        }
+
+        return _remotePathMappingService.RemapLocalToRemote(GetCallerHost(), path);
     }
 
     [HttpGet]
@@ -268,7 +327,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 { "version", "3.00 (Seedarr)" },
                 { "rpc-version", 17 },
                 { "rpc-version-minimum", 1 },
-                { "download-dir", _configService?.WatchFolderPath ?? "/downloads" },
+                { "download-dir", RemapLocalToRemote(_configService?.WatchFolderPath ?? "/downloads") },
                 { "incomplete-dir", "/downloads/incomplete" },
                 { "incomplete-dir-enabled", false },
                 { "speed-limit-down", _configService?.MaxDownloadSpeedKbps ?? 1250 },
@@ -303,7 +362,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
             if (request.Arguments.TryGetValue("download-dir", out var dlDir) && dlDir.ValueKind == JsonValueKind.String)
             {
-                updates["WatchFolderPath"] = dlDir.GetString();
+                updates["WatchFolderPath"] = RemapRemoteToLocal(dlDir.GetString());
             }
 
             if (request.Arguments.TryGetValue("speed-limit-down", out var dlLimit) && dlLimit.ValueKind == JsonValueKind.Number)
@@ -495,7 +554,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                     var targetLocation = locVal.GetString();
                     if (!string.IsNullOrWhiteSpace(targetLocation))
                     {
-                        t.SourcePath = targetLocation;
+                        t.SourcePath = RemapRemoteToLocal(targetLocation);
                     }
                 }
 
@@ -586,12 +645,13 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
 
         if (!string.IsNullOrWhiteSpace(newLocation))
         {
+            var remappedLocation = RemapRemoteToLocal(newLocation);
             foreach (var id in locIds)
             {
                 var t = _torrentService.Get(id);
                 if (t != null)
                 {
-                    t.SourcePath = newLocation;
+                    t.SourcePath = remappedLocation;
                     _torrentService.Update(t);
                 }
             }
@@ -695,7 +755,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 var needsUpdate = false;
                 if (!string.IsNullOrWhiteSpace(downloadDir))
                 {
-                    added.SourcePath = downloadDir;
+                    added.SourcePath = RemapRemoteToLocal(downloadDir);
                     needsUpdate = true;
                 }
 
@@ -1021,7 +1081,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             ["peersTotal"] = t.Leechers + t.Seeders,
             ["seeders"] = t.Seeders,
             ["leechers"] = t.Leechers,
-            ["downloadDir"] = !string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads"),
+            ["downloadDir"] = RemapLocalToRemote(!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads")),
             ["isFinished"] = t.Progress >= 1.0,
             ["isStalled"] = t.Status == TorrentStatus.Downloading && t.DownloadSpeed == 0,
             ["error"] = t.Status == TorrentStatus.Error ? 1 : 0,

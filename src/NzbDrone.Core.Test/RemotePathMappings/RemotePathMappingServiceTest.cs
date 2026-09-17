@@ -413,4 +413,202 @@ public class RemotePathMappingServiceTest
         var winMatch = _service.Remap("win-host", @"d:\media\downloads\file.mkv");
         Assert.That(winMatch, Is.EqualTo("/local/downloads/file.mkv"));
     }
+
+    [Test]
+    public void Remap_matches_exact_ip_and_strips_port()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "192.168.1.50",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/local/downloads"
+        });
+
+        var resultWithPort = _service.Remap("192.168.1.50:8080", "/remote/downloads/file.mkv");
+        Assert.That(resultWithPort, Is.EqualTo("/local/downloads/file.mkv"));
+
+        var resultWithoutPort = _service.Remap("192.168.1.50", "/remote/downloads/file.mkv");
+        Assert.That(resultWithoutPort, Is.EqualTo("/local/downloads/file.mkv"));
+    }
+
+    [Test]
+    public void Remap_matches_cidr_subnet()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "192.168.1.0/24",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/local/downloads"
+        });
+
+        var inSubnet = _service.Remap("192.168.1.105", "/remote/downloads/file.mkv");
+        Assert.That(inSubnet, Is.EqualTo("/local/downloads/file.mkv"));
+
+        var outOfSubnet = _service.Remap("192.168.2.105", "/remote/downloads/file.mkv");
+        Assert.That(outOfSubnet, Is.EqualTo("/remote/downloads/file.mkv"));
+    }
+
+    [Test]
+    public void Remap_matches_wildcard_fallback()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "*",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/local/downloads"
+        });
+
+        var result = _service.Remap("unmapped-client.lan", "/remote/downloads/file.mkv");
+        Assert.That(result, Is.EqualTo("/local/downloads/file.mkv"));
+    }
+
+    [Test]
+    public void Remap_matches_default_and_all_as_wildcard_fallback()
+    {
+        var defaultService = new RemotePathMappingService();
+        defaultService.Add(new RemotePathMapping
+        {
+            Host = "default",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/local/downloads"
+        });
+
+        Assert.That(defaultService.Remap("random-caller", "/remote/downloads/file.mkv"), Is.EqualTo("/local/downloads/file.mkv"));
+
+        var allService = new RemotePathMappingService();
+        allService.Add(new RemotePathMapping
+        {
+            Host = "all",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/local/downloads"
+        });
+
+        Assert.That(allService.Remap("random-caller", "/remote/downloads/file.mkv"), Is.EqualTo("/local/downloads/file.mkv"));
+    }
+
+    [Test]
+    public void Precedence_exact_takes_priority_over_cidr_and_wildcard()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "*",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/wildcard/downloads"
+        });
+
+        _service.Add(new RemotePathMapping
+        {
+            Host = "192.168.1.0/24",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/cidr/downloads"
+        });
+
+        _service.Add(new RemotePathMapping
+        {
+            Host = "192.168.1.105",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/exact/downloads"
+        });
+
+        // Exact match
+        var exactResult = _service.Remap("192.168.1.105", "/remote/downloads/file.mkv");
+        Assert.That(exactResult, Is.EqualTo("/exact/downloads/file.mkv"));
+
+        // CIDR match (different IP in same subnet)
+        var cidrResult = _service.Remap("192.168.1.50", "/remote/downloads/file.mkv");
+        Assert.That(cidrResult, Is.EqualTo("/cidr/downloads/file.mkv"));
+
+        // Wildcard match (outside subnet)
+        var wildcardResult = _service.Remap("10.0.0.1", "/remote/downloads/file.mkv");
+        Assert.That(wildcardResult, Is.EqualTo("/wildcard/downloads/file.mkv"));
+    }
+
+    [Test]
+    public void Precedence_more_specific_cidr_takes_priority_over_broad_cidr()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "192.168.0.0/16",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/broad/downloads"
+        });
+
+        _service.Add(new RemotePathMapping
+        {
+            Host = "192.168.1.0/24",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/specific/downloads"
+        });
+
+        var result = _service.Remap("192.168.1.105", "/remote/downloads/file.mkv");
+        Assert.That(result, Is.EqualTo("/specific/downloads/file.mkv"));
+
+        var broadResult = _service.Remap("192.168.2.105", "/remote/downloads/file.mkv");
+        Assert.That(broadResult, Is.EqualTo("/broad/downloads/file.mkv"));
+    }
+
+    [Test]
+    public void Remap_falls_back_to_wildcard_when_exact_rule_prefix_does_not_match()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "sonarr.lan",
+            RemotePath = "/remote/tv",
+            LocalPath = "/local/tv"
+        });
+
+        _service.Add(new RemotePathMapping
+        {
+            Host = "*",
+            RemotePath = "/remote/movies",
+            LocalPath = "/local/movies"
+        });
+
+        var result = _service.Remap("sonarr.lan", "/remote/movies/avatar.mkv");
+        Assert.That(result, Is.EqualTo("/local/movies/avatar.mkv"));
+    }
+
+    [Test]
+    public void RemapLocalToRemote_translates_local_path_to_remote_path()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "192.168.1.0/24",
+            RemotePath = @"D:\Downloads",
+            LocalPath = "/local/downloads"
+        });
+
+        var remotePath = _service.RemapLocalToRemote("192.168.1.55", "/local/downloads/movie/file.mkv");
+        Assert.That(remotePath, Is.EqualTo(@"D:\Downloads\movie\file.mkv"));
+    }
+
+    [Test]
+    public void CallerHostResolver_resolves_headers_in_priority_order()
+    {
+        var resolver = new CallerHostResolver();
+
+        // 1. X-Forwarded-For first entry
+        var fromFwdFor = resolver.ResolveFromHeaders("203.0.113.195, 70.41.3.18", "198.51.100.1", "proxy.lan", "10.0.0.1");
+        Assert.That(fromFwdFor, Is.EqualTo("203.0.113.195"));
+
+        // 2. X-Forwarded-For with port
+        var fromFwdForPort = resolver.ResolveFromHeaders("203.0.113.195:8080", null, null, null);
+        Assert.That(fromFwdForPort, Is.EqualTo("203.0.113.195"));
+
+        // 3. X-Real-IP when X-Forwarded-For is empty
+        var fromRealIp = resolver.ResolveFromHeaders(null, "198.51.100.1", "proxy.lan", "10.0.0.1");
+        Assert.That(fromRealIp, Is.EqualTo("198.51.100.1"));
+
+        // 4. X-Forwarded-Host when X-Forwarded-For and X-Real-IP are empty
+        var fromFwdHost = resolver.ResolveFromHeaders(null, null, "client.lan:8989", "10.0.0.1");
+        Assert.That(fromFwdHost, Is.EqualTo("client.lan"));
+
+        // 5. Remote socket IP when headers are empty
+        var fromRemoteIp = resolver.ResolveFromHeaders(null, null, null, "10.0.0.1:54321");
+        Assert.That(fromRemoteIp, Is.EqualTo("10.0.0.1"));
+
+        // 6. Default fallback
+        var fromDefault = resolver.ResolveFromHeaders(null, null, null, null);
+        Assert.That(fromDefault, Is.EqualTo("localhost"));
+    }
 }
