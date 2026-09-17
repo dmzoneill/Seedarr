@@ -1452,4 +1452,78 @@ public class PeerConnectionTest
         Assert.That(handshake[27] & 0x04, Is.EqualTo(0x04));
         Assert.That(handshake[27] & 0x01, Is.EqualTo(0));
     }
+
+    [Test]
+    public void UpdateTransferRates_should_calculate_accurate_rates_over_rolling_20_second_window()
+    {
+        var conn = new PeerConnection(new MemoryStream(), "127.0.0.1", 1001);
+        _connections.Add(conn);
+
+        var t0 = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+
+        // Initial sample at t0: 0 bytes transferred
+        conn.BytesDownloaded = 0;
+        conn.BytesUploaded = 0;
+        conn.UpdateTransferRates(t0);
+
+        Assert.That(conn.DownloadRate, Is.EqualTo(0));
+        Assert.That(conn.UploadRate, Is.EqualTo(0));
+
+        // At t0 + 10s: 100,000 bytes down, 50,000 bytes up (10s elapsed)
+        var t1 = t0.AddSeconds(10);
+        conn.BytesDownloaded = 100_000;
+        conn.BytesUploaded = 50_000;
+        conn.UpdateTransferRates(t1);
+
+        // Rate = 100,000 / 10 = 10,000 B/s down, 50,000 / 10 = 5,000 B/s up
+        Assert.That(conn.DownloadRate, Is.EqualTo(10_000));
+        Assert.That(conn.UploadRate, Is.EqualTo(5_000));
+
+        // At t0 + 20s: 300,000 bytes down, 150,000 bytes up (20s elapsed over full window)
+        var t2 = t0.AddSeconds(20);
+        conn.BytesDownloaded = 300_000;
+        conn.BytesUploaded = 150_000;
+        conn.UpdateTransferRates(t2);
+
+        // Rate = 300,000 / 20 = 15,000 B/s down, 150,000 / 20 = 7,500 B/s up
+        Assert.That(conn.DownloadRate, Is.EqualTo(15_000));
+        Assert.That(conn.UploadRate, Is.EqualTo(7_500));
+
+        // At t0 + 30s: Transfers stopped, Bytes stay 300,000 / 150,000 (rolling window evicts t0 sample)
+        var t3 = t0.AddSeconds(30);
+        conn.UpdateTransferRates(t3);
+
+        // Window spans [t1, t3] = 20s. Delta down = 300k - 100k = 200k. Delta up = 150k - 50k = 100k.
+        // Rate = 200,000 / 20 = 10,000 B/s down, 100,000 / 20 = 5,000 B/s up
+        Assert.That(conn.DownloadRate, Is.EqualTo(10_000));
+        Assert.That(conn.UploadRate, Is.EqualTo(5_000));
+
+        // At t0 + 40s: Idle for full 20s window (all samples within window have 300k / 150k)
+        var t4 = t0.AddSeconds(40);
+        conn.UpdateTransferRates(t4);
+
+        // Delta = 0 => rates drop to 0
+        Assert.That(conn.DownloadRate, Is.EqualTo(0));
+        Assert.That(conn.UploadRate, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void RecordBytes_and_ResetTransferRates_should_update_byte_counters_and_reset_rates()
+    {
+        var conn = new PeerConnection(new MemoryStream(), "127.0.0.1", 1001);
+        _connections.Add(conn);
+
+        conn.RecordBytesUploaded(5000);
+        conn.RecordBytesDownloaded(10000);
+
+        Assert.That(conn.BytesUploaded, Is.EqualTo(5000));
+        Assert.That(conn.BytesDownloaded, Is.EqualTo(10000));
+
+        conn.UploadRate = 500;
+        conn.DownloadRate = 1000;
+        conn.ResetTransferRates();
+
+        Assert.That(conn.UploadRate, Is.EqualTo(0));
+        Assert.That(conn.DownloadRate, Is.EqualTo(0));
+    }
 }

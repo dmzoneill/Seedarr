@@ -42,6 +42,7 @@ public class ChokeManagerTest
         conn.PeerInterested = interested;
         conn.AmChoking = true;
         conn.UploadRate = rate;
+        conn.DownloadRate = rate;
         _connections.Add(conn);
         return conn;
     }
@@ -722,5 +723,96 @@ public class ChokeManagerTest
 
         Assert.That(optimisticA.AmChoking, Is.False);
         Assert.That(optimisticB.AmChoking, Is.False);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_order_candidate_peers_by_download_rate_descending_when_leeching()
+    {
+        _configService.MaxUploadSlots.Returns(3); // 2 regular slots
+        _subject.SetTorrentSeeding("hashA", false);
+
+        var peer1 = CreatePeer("hashA", 1001);
+        peer1.DownloadRate = 1000;
+        peer1.UploadRate = 10;
+
+        var peer2 = CreatePeer("hashA", 1002);
+        peer2.DownloadRate = 500;
+        peer2.UploadRate = 5000;
+
+        var peer3 = CreatePeer("hashA", 1003);
+        peer3.DownloadRate = 100;
+        peer3.UploadRate = 10000;
+
+        _subject.ProcessRegularUnchoke();
+
+        // In Tit-for-Tat leeching mode, peers must be ordered by DownloadRate descending
+        Assert.That(peer1.AmChoking, Is.False);
+        Assert.That(peer2.AmChoking, Is.False);
+        Assert.That(peer3.AmChoking, Is.True);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_order_candidate_peers_by_upload_rate_descending_when_seeding()
+    {
+        _configService.MaxUploadSlots.Returns(3); // 2 regular slots
+        _subject.SetTorrentSeeding("hashA", true);
+
+        var peer1 = CreatePeer("hashA", 1001);
+        peer1.UploadRate = 1000;
+        peer1.DownloadRate = 10;
+
+        var peer2 = CreatePeer("hashA", 1002);
+        peer2.UploadRate = 500;
+        peer2.DownloadRate = 5000;
+
+        var peer3 = CreatePeer("hashA", 1003);
+        peer3.UploadRate = 100;
+        peer3.DownloadRate = 10000;
+
+        _subject.ProcessRegularUnchoke();
+
+        // In seeding mode, peers must be ordered by UploadRate descending
+        Assert.That(peer1.AmChoking, Is.False);
+        Assert.That(peer2.AmChoking, Is.False);
+        Assert.That(peer3.AmChoking, Is.True);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_allocate_slots_fairly_across_multiple_swarms_without_starvation()
+    {
+        _configService.MaxUploadSlots.Returns(5); // 4 regular slots
+
+        // 3 active swarms with interested peers
+        for (var i = 1; i <= 5; i++)
+        {
+            var peerA = CreatePeer("hashA", 1000 + i);
+            peerA.DownloadRate = 5000 * i;
+        }
+
+        for (var i = 1; i <= 3; i++)
+        {
+            var peerB = CreatePeer("hashB", 2000 + i);
+            peerB.DownloadRate = 500 * i;
+        }
+
+        for (var i = 1; i <= 2; i++)
+        {
+            var peerC = CreatePeer("hashC", 3000 + i);
+            peerC.DownloadRate = 50 * i;
+        }
+
+        _subject.ProcessRegularUnchoke();
+
+        var unchokedA = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
+        var unchokedB = _connections.Where(c => c.InfoHash == "hashB" && !c.AmChoking).ToList();
+        var unchokedC = _connections.Where(c => c.InfoHash == "hashC" && !c.AmChoking).ToList();
+
+        // Fair allocation ensures every active swarm receives at least 1 baseline slot
+        Assert.That(unchokedA.Count, Is.GreaterThanOrEqualTo(1));
+        Assert.That(unchokedB.Count, Is.GreaterThanOrEqualTo(1));
+        Assert.That(unchokedC.Count, Is.GreaterThanOrEqualTo(1));
+
+        // Total regular unchoked slots across all 3 swarms must equal regularSlotCount (4)
+        Assert.That(unchokedA.Count + unchokedB.Count + unchokedC.Count, Is.EqualTo(4));
     }
 }
