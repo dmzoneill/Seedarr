@@ -1159,6 +1159,14 @@ public class PeerServerTest
         method.Invoke(server, new object[] { torrent, candidate });
     }
 
+    private void InvokeConnectToDiscoveredPeers(PeerServer server, Torrent torrent, CancellationToken stoppingToken)
+    {
+        var method = typeof(PeerServer).GetMethod(
+            "ConnectToDiscoveredPeers",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        method.Invoke(server, new object[] { torrent, stoppingToken });
+    }
+
     [Test]
     public void GetBindAddress_should_return_null_when_dedicated_interface_is_unplumbed()
     {
@@ -1837,5 +1845,24 @@ public class PeerServerTest
         conn.Dispose();
 
         Assert.That(conn.PendingRequestCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ConnectToDiscoveredPeers_should_skip_peer_endpoints_already_in_flight()
+    {
+        var torrent = new Torrent { Id = 1, InfoHash = "0123456789abcdef0123456789abcdef01234567", Name = "Test" };
+        _connectionManager.CanAddConnectionForTorrent(torrent.InfoHash).Returns(true);
+
+        var candidate = new DiscoveredPeer { Ip = "1.2.3.4", Port = 5000 };
+        _peerDiscovery.GetPeers(torrent.InfoHash, 5).Returns(new List<DiscoveredPeer> { candidate });
+
+        // Simulate that 1.2.3.4:5000 is already in flight
+        var inFlightField = typeof(PeerServer).GetField("_inFlightOutgoingEndpoints", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var inFlightDict = (ConcurrentDictionary<string, byte>)inFlightField.GetValue(_server)!;
+        inFlightDict.TryAdd("1.2.3.4:5000", 0);
+
+        InvokeConnectToDiscoveredPeers(_server, torrent, CancellationToken.None);
+
+        Assert.That(_server.IsOutgoingEndpointInFlight("1.2.3.4", 5000), Is.True);
     }
 }
