@@ -629,6 +629,8 @@ public class PeerConnection : IDisposable
 
     public PeerMessage ReceiveMessage()
     {
+        var bytesReadForCurrentMessage = 0;
+
         try
         {
             if (_isDisposed)
@@ -649,7 +651,7 @@ public class PeerConnection : IDisposable
             }
 
             var lengthBuffer = new byte[4];
-            if (!ReadExact(lengthBuffer, 4))
+            if (!ReadExact(lengthBuffer, 4, ref bytesReadForCurrentMessage))
             {
                 Dispose();
                 return null;
@@ -672,7 +674,7 @@ public class PeerConnection : IDisposable
             }
 
             var messageBuffer = new byte[length];
-            if (!ReadExact(messageBuffer, length))
+            if (!ReadExact(messageBuffer, length, ref bytesReadForCurrentMessage))
             {
                 Dispose();
                 return null;
@@ -692,12 +694,14 @@ public class PeerConnection : IDisposable
             LastActivity = DateTime.UtcNow;
             return message;
         }
-        catch (IOException ex) when (ex.InnerException is SocketException { SocketErrorCode: SocketError.TimedOut })
+        catch (Exception ex) when (IsTimeoutException(ex))
         {
-            return null;
-        }
-        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
-        {
+            if (bytesReadForCurrentMessage > 0)
+            {
+                _logger.Debug(ex, "Timeout or read error during partial message framing from {0}:{1}; terminating connection", RemoteIp, RemotePort);
+                Dispose();
+            }
+
             return null;
         }
         catch (Exception ex)
@@ -996,7 +1000,20 @@ public class PeerConnection : IDisposable
         }
     }
 
+    private static bool IsTimeoutException(Exception ex)
+    {
+        return (ex is SocketException se && se.SocketErrorCode == SocketError.TimedOut) ||
+               (ex is IOException io && ((io.InnerException is SocketException innerSe && innerSe.SocketErrorCode == SocketError.TimedOut) || io.InnerException is TimeoutException)) ||
+               ex is TimeoutException;
+    }
+
     private bool ReadExact(byte[] buffer, int count)
+    {
+        var bytesRead = 0;
+        return ReadExact(buffer, count, ref bytesRead);
+    }
+
+    private bool ReadExact(byte[] buffer, int count, ref int bytesReadForMessage)
     {
         var offset = 0;
         while (offset < count)
@@ -1008,6 +1025,7 @@ public class PeerConnection : IDisposable
             }
 
             offset += read;
+            bytesReadForMessage += read;
         }
 
         return true;
