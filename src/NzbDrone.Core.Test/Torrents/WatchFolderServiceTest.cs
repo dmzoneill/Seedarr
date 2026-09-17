@@ -564,7 +564,7 @@ public class WatchFolderServiceTest
         var info = new BDictionary
         {
             { "name", new BString("dummy") },
-            { "piece length", new BNumber(512) },
+            { "piece length", new BNumber(16384) },
             { "pieces", new BString(pieces) },
             { "length", new BNumber(1024) }
         };

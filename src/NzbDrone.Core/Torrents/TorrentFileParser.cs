@@ -39,6 +39,12 @@ public interface ITorrentFileParser
 
 public class TorrentFileParser : ITorrentFileParser
 {
+    private const long MaxTorrentStreamBytes = 10 * 1024 * 1024; // 10 MiB
+    private const int MaxPermittedPieces = 500000;
+    private const int MaxRecursionDepth = 32;
+    private const long MinPieceLength = 16384; // 16 KiB
+    private const long MaxPieceLength = 67108864; // 64 MiB
+
     private readonly Logger _logger;
 
     public TorrentFileParser()
@@ -55,10 +61,23 @@ public class TorrentFileParser : ITorrentFileParser
 
     public ParsedTorrent Parse(Stream stream)
     {
+        if (stream == null)
+        {
+            throw new ArgumentNullException(nameof(stream));
+        }
+
+        if (stream.CanSeek && stream.Length > MaxTorrentStreamBytes)
+        {
+            throw new InvalidTorrentFileException("Torrent file exceeds maximum permitted size of 10 MiB.");
+        }
+
         try
         {
+            var parseStream = stream.CanSeek ? stream : new BoundedStream(stream, MaxTorrentStreamBytes);
             var parser = new BencodeParser();
-            var torrent = parser.Parse<BDictionary>(stream);
+            var torrent = parser.Parse<BDictionary>(parseStream);
+
+            ValidateRecursionDepth(torrent);
 
             if (!torrent.ContainsKey("info") || torrent["info"] is not BDictionary info)
             {
@@ -70,17 +89,27 @@ public class TorrentFileParser : ITorrentFileParser
                 throw new InvalidTorrentFileException("Malformed torrent file: missing or invalid 'piece length'.");
             }
 
+            var pieceLength = pieceLengthNum.Value;
+            if (pieceLength < MinPieceLength || pieceLength > MaxPieceLength || (pieceLength & (pieceLength - 1)) != 0)
+            {
+                throw new InvalidTorrentFileException($"Invalid piece length: {pieceLength}. Must be a power of two between 16 KiB and 64 MiB.");
+            }
+
             if (!info.ContainsKey("pieces") || info["pieces"] is not BString piecesStr)
             {
                 throw new InvalidTorrentFileException("Malformed torrent file: missing or invalid 'pieces'.");
+            }
+
+            var pieceCount = piecesStr.Value.Length / 20;
+            if (pieceCount <= 0 || pieceCount > MaxPermittedPieces)
+            {
+                throw new InvalidTorrentFileException($"Piece count {pieceCount} exceeds maximum permitted limit of {MaxPermittedPieces}.");
             }
 
             if (!info.ContainsKey("name") || info["name"] is not BString nameStr)
             {
                 throw new InvalidTorrentFileException("Malformed torrent file: missing or invalid 'name'.");
             }
-
-            var pieceCount = piecesStr.Value.Length / 20;
 
             string announceUrl = null;
             if (torrent.ContainsKey("announce") && torrent["announce"] is BString mainAnnounceStr)
@@ -153,6 +182,11 @@ public class TorrentFileParser : ITorrentFileParser
                         throw new InvalidTorrentFileException("Malformed torrent file: file entry missing or invalid 'length'.");
                     }
 
+                    if (fileLengthNum.Value < 0)
+                    {
+                        throw new InvalidTorrentFileException($"Malformed torrent file: negative file length {fileLengthNum.Value}.");
+                    }
+
                     if (!file.ContainsKey("path") || file["path"] is not BList pathList)
                     {
                         throw new InvalidTorrentFileException("Malformed torrent file: file entry missing or invalid 'path'.");
@@ -181,6 +215,11 @@ public class TorrentFileParser : ITorrentFileParser
                 if (!info.ContainsKey("length") || info["length"] is not BNumber lengthNum)
                 {
                     throw new InvalidTorrentFileException("Malformed torrent file: missing or invalid 'length' for single-file torrent.");
+                }
+
+                if (lengthNum.Value < 0)
+                {
+                    throw new InvalidTorrentFileException($"Malformed torrent file: negative file length {lengthNum.Value}.");
                 }
 
                 result.Files.Add(new ParsedTorrentFile
@@ -228,5 +267,96 @@ public class TorrentFileParser : ITorrentFileParser
                 }
             }
         }
+    }
+
+    private static void ValidateRecursionDepth(IBObject obj, int currentDepth = 0)
+    {
+        if (currentDepth > MaxRecursionDepth)
+        {
+            throw new InvalidTorrentFileException($"Torrent file exceeds maximum recursion depth limit of {MaxRecursionDepth}.");
+        }
+
+        if (obj is BDictionary dict)
+        {
+            foreach (var kvp in dict)
+            {
+                ValidateRecursionDepth(kvp.Value, currentDepth + 1);
+            }
+        }
+        else if (obj is BList list)
+        {
+            foreach (var item in list)
+            {
+                ValidateRecursionDepth(item, currentDepth + 1);
+            }
+        }
+    }
+
+    private sealed class BoundedStream : Stream
+    {
+        private readonly Stream _inner;
+        private readonly long _maxBytes;
+        private long _bytesRead;
+
+        public BoundedStream(Stream inner, long maxBytes)
+        {
+            _inner = inner;
+            _maxBytes = maxBytes;
+        }
+
+        public override bool CanRead => _inner.CanRead;
+        public override bool CanSeek => _inner.CanSeek;
+        public override bool CanWrite => false;
+        public override long Length => _inner.Length;
+
+        public override long Position
+        {
+            get => _inner.Position;
+            set => _inner.Position = value;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var read = _inner.Read(buffer, offset, count);
+            _bytesRead += read;
+            if (_bytesRead > _maxBytes)
+            {
+                throw new InvalidTorrentFileException("Torrent file exceeds maximum permitted size of 10 MiB.");
+            }
+
+            return read;
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            var read = _inner.Read(buffer);
+            _bytesRead += read;
+            if (_bytesRead > _maxBytes)
+            {
+                throw new InvalidTorrentFileException("Torrent file exceeds maximum permitted size of 10 MiB.");
+            }
+
+            return read;
+        }
+
+        public override int ReadByte()
+        {
+            var b = _inner.ReadByte();
+            if (b != -1)
+            {
+                _bytesRead++;
+                if (_bytesRead > _maxBytes)
+                {
+                    throw new InvalidTorrentFileException("Torrent file exceeds maximum permitted size of 10 MiB.");
+                }
+            }
+
+            return b;
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Flush() => _inner.Flush();
     }
 }
