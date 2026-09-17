@@ -1,10 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Threading.Tasks;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.DownloadClients.Transmission;
+using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Test.TestHelpers;
 
 namespace NzbDrone.Core.Test.DownloadClients.Transmission;
@@ -765,5 +769,113 @@ public class TransmissionClientTest
         await _client.SetTorrentLimitsAsync("hash123", 200 * 1024, 400 * 1024);
 
         Assert.That(handler.Requests, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task SendRequest_should_handle_concurrent_409_conflicts_thread_safely()
+    {
+        var handler = new MockHttpMessageHandler();
+
+        for (var i = 0; i < 5; i++)
+        {
+            handler.EnqueueWithHeaders(
+                HttpStatusCode.Conflict,
+                @"{}",
+                new Dictionary<string, string> { { "X-Transmission-Session-Id", "concurrent-session-456" } });
+        }
+
+        for (var i = 0; i < 5; i++)
+        {
+            handler.Enqueue(HttpStatusCode.OK, @"{""result"":""success"",""arguments"":{}}");
+        }
+
+        InjectMockClient(handler);
+
+        var tasks = new List<Task<bool>>();
+        for (var i = 0; i < 5; i++)
+        {
+            tasks.Add(Task.Run(() => _client.TestConnection()));
+        }
+
+        var results = await Task.WhenAll(tasks);
+
+        Assert.That(results, Is.All.True);
+
+        var sessionField = typeof(TransmissionClient).GetField("_sessionId",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.That(sessionField.GetValue(_client), Is.EqualTo("concurrent-session-456"));
+    }
+
+    [Test]
+    public void GetTorrentFile_should_remap_remote_path_using_remote_path_mapping_service()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        var localFilePath = Path.Combine(tempDir, "remote_torrent.torrent");
+        var expectedBytes = new byte[] { 0x64, 0x34, 0x3A, 0x69, 0x6E, 0x66, 0x6F, 0x65 };
+        File.WriteAllBytes(localFilePath, expectedBytes);
+
+        try
+        {
+            var mockMappingService = Substitute.For<IRemotePathMappingService>();
+            mockMappingService.Remap(_client.Host, "/remote/path/remote_torrent.torrent").Returns(localFilePath);
+            _client.RemotePathMappingService = mockMappingService;
+
+            var handler = new MockHttpMessageHandler();
+            handler.Enqueue(HttpStatusCode.OK,
+                @"{""arguments"":{""torrents"":[{""torrentFile"":""/remote/path/remote_torrent.torrent""}]},""result"":""success""}");
+            InjectMockClient(handler);
+
+            var result = _client.GetTorrentFile("abc123");
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Is.EqualTo(expectedBytes));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public void GetTorrentFile_should_fallback_to_local_torrent_directory_when_file_not_found_at_remote_path()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+        Directory.CreateDirectory(tempDir);
+        var localFilePath = Path.Combine(tempDir, "container_file.torrent");
+        var expectedBytes = new byte[] { 0x01, 0x02, 0x03, 0x04 };
+        File.WriteAllBytes(localFilePath, expectedBytes);
+
+        try
+        {
+            _client.LocalTorrentDirectory = tempDir;
+
+            var handler = new MockHttpMessageHandler();
+            handler.Enqueue(HttpStatusCode.OK,
+                @"{""arguments"":{""torrents"":[{""torrentFile"":""/var/lib/transmission-daemon/info/container_file.torrent""}]},""result"":""success""}");
+            InjectMockClient(handler);
+
+            var result = _client.GetTorrentFile("hash123");
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Is.EqualTo(expectedBytes));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public void GetTorrentFile_should_handle_inaccessible_remote_path_gracefully_without_throwing()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            @"{""arguments"":{""torrents"":[{""torrentFile"":""/nonexistent/remote/file.torrent""}]},""result"":""success""}");
+        InjectMockClient(handler);
+
+        var result = _client.GetTorrentFile("abc123");
+
+        Assert.That(result, Is.Null);
     }
 }
