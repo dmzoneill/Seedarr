@@ -7,6 +7,7 @@ using System.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Core.FileSystem;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.FileSystem;
@@ -38,6 +39,32 @@ public class FileSystemController : Controller
         @"C:\Program Files (x86)",
         @"C:\ProgramData",
     };
+
+    private readonly IFileSystemValidationService _fileSystemValidationService;
+
+    public FileSystemController(IFileSystemValidationService fileSystemValidationService = null)
+    {
+        _fileSystemValidationService = fileSystemValidationService ?? new FileSystemValidationService();
+    }
+
+    /// <summary>
+    /// Validates directory syntax and probes write permissions.
+    /// </summary>
+    [HttpPost("validate")]
+    public ActionResult<FileSystemValidationResult> ValidateDirectory([FromBody] DirectoryValidationRequest request)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Path))
+        {
+            return BadRequest(new FileSystemValidationResult
+            {
+                IsValid = false,
+                ErrorMessage = "Path cannot be empty or whitespace.",
+            });
+        }
+
+        var result = _fileSystemValidationService.ValidateDirectory(request.Path, request.TestWrite);
+        return result.IsValid ? Ok(result) : BadRequest(result);
+    }
 
     /// <summary>
     /// Browses directory contents at the specified path.
