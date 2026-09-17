@@ -326,6 +326,23 @@ public static class NotificationPayloadBuilder
                 payloadDict["chat_id"] = chatId;
             }
 
+            if (torrent != null)
+            {
+                var actionButtonText = torrent.Status == TorrentStatus.Paused ? "▶️ Resume" : "⏸️ Pause";
+                var actionCallback = torrent.Status == TorrentStatus.Paused ? $"resume:{torrent.Id}" : $"pause:{torrent.Id}";
+                payloadDict["reply_markup"] = new
+                {
+                    inline_keyboard = new[]
+                    {
+                        new[]
+                        {
+                            new { text = actionButtonText, callback_data = actionCallback },
+                            new { text = "🐢 Turtle", callback_data = "turtle:toggle" },
+                        }
+                    }
+                };
+            }
+
             return payloadDict;
         }
 
