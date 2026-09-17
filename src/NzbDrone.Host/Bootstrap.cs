@@ -176,7 +176,23 @@ public static class Bootstrap
                     {
                         listenOptions.UseHttps(httpsOptions =>
                         {
-                            httpsOptions.ServerCertificateSelector = (connectionContext, name) => certManager.GetOrCreateCertificate(configProvider);
+                            httpsOptions.ServerCertificateSelector = (connectionContext, name) =>
+                            {
+                                var cert = certManager.GetOrCreateCertificate(configProvider);
+                                var chain = certManager.GetCertificateChain();
+                                if (chain != null && chain.Count > 0)
+                                {
+                                    httpsOptions.ServerCertificateChain = chain;
+                                }
+
+                                return cert;
+                            };
+
+                            var initialChain = certManager.GetCertificateChain();
+                            if (initialChain != null && initialChain.Count > 0)
+                            {
+                                httpsOptions.ServerCertificateChain = initialChain;
+                            }
                         });
                     });
                     Logger.Info("Configured SSL dual-stack listener on port {0}", configProvider.SslPort);
@@ -205,7 +221,23 @@ public static class Bootstrap
                     {
                         listenOptions.UseHttps(httpsOptions =>
                         {
-                            httpsOptions.ServerCertificateSelector = (connectionContext, name) => certManager.GetOrCreateCertificate(configProvider);
+                            httpsOptions.ServerCertificateSelector = (connectionContext, name) =>
+                            {
+                                var cert = certManager.GetOrCreateCertificate(configProvider);
+                                var chain = certManager.GetCertificateChain();
+                                if (chain != null && chain.Count > 0)
+                                {
+                                    httpsOptions.ServerCertificateChain = chain;
+                                }
+
+                                return cert;
+                            };
+
+                            var initialChain = certManager.GetCertificateChain();
+                            if (initialChain != null && initialChain.Count > 0)
+                            {
+                                httpsOptions.ServerCertificateChain = initialChain;
+                            }
                         });
                     });
                     Logger.Info("Configured SSL on {0}:{1}", ip, configProvider.SslPort);
