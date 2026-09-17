@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using NSubstitute;
@@ -302,6 +303,59 @@ public class ConnectionManagerTest
         var result = _manager.GetUploadSlotCount();
 
         Assert.That(result, Is.EqualTo(8));
+    }
+
+    [Test]
+    public void GetDynamicUploadSlotCount_with_low_bandwidth_cap_yields_at_least_four_slots()
+    {
+        _configService.MaxUploadSpeedKbps.Returns(50);
+        _configService.MaxUploadSlots.Returns(0);
+
+        var slots = _manager.GetDynamicUploadSlotCount();
+
+        Assert.That(slots, Is.GreaterThanOrEqualTo(4));
+    }
+
+    [Test]
+    public void GetDynamicUploadSlotCount_with_high_bandwidth_cap_scales_up_slots_according_to_sqrt_formula()
+    {
+        _configService.MaxUploadSpeedKbps.Returns(10000);
+        _configService.MaxUploadSlots.Returns(0);
+
+        var expected = (int)Math.Ceiling(Math.Sqrt(2.0 * 10000));
+        var slots = _manager.GetDynamicUploadSlotCount();
+
+        Assert.That(slots, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void GetDynamicUploadSlotCount_with_unlimited_bandwidth_scales_with_active_leechers()
+    {
+        _configService.MaxUploadSpeedKbps.Returns(0);
+        _configService.MaxUploadSlots.Returns(20);
+
+        for (var i = 1; i <= 50; i++)
+        {
+            var conn = new PeerConnection(new MemoryStream(), "127.0.0.1", 1000 + i);
+            SetInfoHash(conn, "hashX");
+            conn.IsSeed = false;
+            _manager.Add(conn);
+        }
+
+        var slots = _manager.GetDynamicUploadSlotCount("hashX");
+
+        // 50 active leechers * 0.2 = 10 slots (clamped between 4 and 20)
+        Assert.That(slots, Is.EqualTo(10));
+    }
+
+    [Test]
+    public void GetDynamicUploadSlotCount_with_unlimited_bandwidth_and_no_active_leechers_falls_back_to_max_upload_slots()
+    {
+        _configService.MaxUploadSpeedKbps.Returns(0);
+        _configService.MaxUploadSlots.Returns(8);
+
+        Assert.That(_manager.GetDynamicUploadSlotCount(), Is.EqualTo(8));
+        Assert.That(_manager.GetDynamicUploadSlotCount("emptyHash"), Is.EqualTo(8));
     }
 
     [Test]

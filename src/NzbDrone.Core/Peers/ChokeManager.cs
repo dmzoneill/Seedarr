@@ -104,7 +104,14 @@ public class ChokeManager : BackgroundService, IChokeManager
                 return;
             }
 
-            var maxUploadSlots = _configService.MaxUploadSlots;
+            var maxUploadSlots = _connectionManager != null
+                ? _connectionManager.GetDynamicUploadSlotCount(connections.FirstOrDefault(c => !string.IsNullOrEmpty(c.InfoHash))?.InfoHash)
+                : _configService.MaxUploadSlots;
+            if (maxUploadSlots <= 0)
+            {
+                maxUploadSlots = _configService.MaxUploadSlots;
+            }
+
             if (maxUploadSlots <= 0)
             {
                 // 0 means unlimited: unchoke all interested peers
@@ -350,7 +357,14 @@ public class ChokeManager : BackgroundService, IChokeManager
                 return;
             }
 
-            var maxUploadSlots = _configService.MaxUploadSlots;
+            var maxUploadSlots = _connectionManager != null
+                ? _connectionManager.GetDynamicUploadSlotCount(connections.FirstOrDefault(c => !string.IsNullOrEmpty(c.InfoHash))?.InfoHash)
+                : _configService.MaxUploadSlots;
+            if (maxUploadSlots <= 0)
+            {
+                maxUploadSlots = _configService.MaxUploadSlots;
+            }
+
             if (maxUploadSlots <= 1)
             {
                 return;
@@ -489,7 +503,14 @@ public class ChokeManager : BackgroundService, IChokeManager
             return false;
         }
 
-        var maxUploadSlots = _configService.MaxUploadSlots;
+        var maxUploadSlots = _connectionManager != null
+            ? _connectionManager.GetDynamicUploadSlotCount(infoHash)
+            : _configService.MaxUploadSlots;
+        if (maxUploadSlots <= 0)
+        {
+            maxUploadSlots = _configService.MaxUploadSlots;
+        }
+
         if (maxUploadSlots <= 0)
         {
             return true;

@@ -28,6 +28,8 @@ public class ChokeManagerTest
         _connectionManager.GetConnections(Arg.Any<string>()).Returns(x =>
             _connections.Where(c => string.Equals(c.InfoHash, x.Arg<string>(), StringComparison.OrdinalIgnoreCase)).ToList());
         _configService.MaxUploadSlots.Returns(4);
+        _connectionManager.GetDynamicUploadSlotCount(Arg.Any<string>()).Returns(x => _configService.MaxUploadSlots);
+        _connectionManager.GetDynamicUploadSlotCount().Returns(x => _configService.MaxUploadSlots);
 
         _subject = new ChokeManager(_connectionManager, _configService);
     }
@@ -436,5 +438,29 @@ public class ChokeManagerTest
         // Round-robin must pick the least recently unchoked peer rather than locking onto BytesUploaded
         Assert.That(neverUnchoked.AmChoking, Is.False);
         Assert.That(recentlyUnchoked.AmChoking, Is.True);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_unchoke_dynamic_number_of_peers_based_on_connection_manager()
+    {
+        for (var i = 1; i <= 10; i++)
+        {
+            CreatePeer("hashA", 1000 + i, rate: i * 100);
+        }
+
+        // Dynamically allocate 6 total slots (1 reserved for optimistic unchoke => 5 regular unchoke slots)
+        _connectionManager.GetDynamicUploadSlotCount(Arg.Any<string>()).Returns(6);
+        _connectionManager.GetDynamicUploadSlotCount().Returns(6);
+
+        _subject.ProcessRegularUnchoke();
+
+        var unchokedRegular = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
+        Assert.That(unchokedRegular.Count, Is.EqualTo(5));
+
+        _subject.ProcessOptimisticUnchoke();
+
+        var unchokedTotal = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
+        Assert.That(unchokedTotal.Count, Is.EqualTo(6));
+        Assert.That(unchokedTotal.Count(c => c.IsOptimisticUnchoked), Is.EqualTo(1));
     }
 }
