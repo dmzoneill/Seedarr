@@ -2217,10 +2217,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         if (!string.IsNullOrWhiteSpace(hashes))
         {
             var torrents = ResolveTorrents(hashes);
-            for (var i = torrents.Count - 1; i >= 0; i--)
-            {
-                _torrentService.MoveQueue(torrents[i].Id, "top");
-            }
+            _torrentService.BatchMoveQueue(torrents.Select(t => t.Id), "top");
         }
 
         return Content("Ok.", "text/plain");
@@ -2232,10 +2229,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         if (!string.IsNullOrWhiteSpace(hashes))
         {
             var torrents = ResolveTorrents(hashes);
-            foreach (var t in torrents)
-            {
-                _torrentService.MoveQueue(t.Id, "bottom");
-            }
+            _torrentService.BatchMoveQueue(torrents.Select(t => t.Id), "bottom");
         }
 
         return Content("Ok.", "text/plain");
@@ -2246,11 +2240,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     {
         if (!string.IsNullOrWhiteSpace(hashes))
         {
-            var torrents = ResolveTorrents(hashes).OrderBy(t => t.SortOrder).ToList();
-            foreach (var t in torrents)
-            {
-                _torrentService.MoveQueue(t.Id, "up");
-            }
+            var torrents = ResolveTorrents(hashes);
+            _torrentService.BatchMoveQueue(torrents.Select(t => t.Id), "up");
         }
 
         return Content("Ok.", "text/plain");
@@ -2261,11 +2252,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     {
         if (!string.IsNullOrWhiteSpace(hashes))
         {
-            var torrents = ResolveTorrents(hashes).OrderByDescending(t => t.SortOrder).ToList();
-            foreach (var t in torrents)
-            {
-                _torrentService.MoveQueue(t.Id, "down");
-            }
+            var torrents = ResolveTorrents(hashes);
+            _torrentService.BatchMoveQueue(torrents.Select(t => t.Id), "down");
         }
 
         return Content("Ok.", "text/plain");

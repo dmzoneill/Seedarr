@@ -1053,10 +1053,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
         }
 
-        foreach (var id in ids)
-        {
-            _torrentService.MoveQueue(id, position);
-        }
+        _torrentService.BatchMoveQueue(ids, position);
 
         return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
     }
