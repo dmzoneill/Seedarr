@@ -441,4 +441,72 @@ public class TrafficPatternSimulatorTest
             Is.LessThan(0.5),
             "Active (non-expired) Idle state should keep multiplier depressed");
     }
+
+    [Test]
+    public void GetSpeedMultiplier_with_extreme_behavior_variation_should_remain_strictly_positive()
+    {
+        _configService.RealisticVariations.Returns(true);
+        _configService.BehaviorVariation.Returns(2.0);
+
+        // Controlled random returning 0.0 would produce 1.0 + ((0 - 1) * 2.0) = -1.0 without clamping
+        var controlled = new ControlledRandom(0.0, 10);
+        var clock = Substitute.For<ISystemClock>();
+        clock.UtcNow.Returns(new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc));
+
+        var simulator = new TrafficPatternSimulator(_configService, controlled, clock);
+        var result = simulator.GetSpeedMultiplier(SeedingProfile.Balanced);
+
+        Assert.That(result, Is.GreaterThanOrEqualTo(0.05));
+    }
+
+    [Test]
+    public void GetSpeedMultiplier_multiple_queries_in_same_second_should_not_re_evaluate_state_transitions()
+    {
+        _configService.RealisticVariations.Returns(true);
+        _configService.BehaviorVariation.Returns(0.0);
+
+        var random = Substitute.For<IRandomNumberGenerator>();
+        // First call in Normal state rolls 0.5 (stays in Normal)
+        // If state transition were re-evaluated, 0.01 would force Burst state
+        random.NextDouble().Returns(0.5, 0.01);
+
+        var clock = Substitute.For<ISystemClock>();
+        clock.UtcNow.Returns(new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc));
+
+        var simulator = new TrafficPatternSimulator(_configService, random, clock);
+
+        for (var i = 0; i < 50; i++)
+        {
+            var result = simulator.GetSpeedMultiplier(SeedingProfile.Balanced);
+            // Since state remains Normal and variation is 0, multiplier stays around base 1.0 (with congestion)
+            Assert.That(result, Is.LessThan(2.0), "State transitions should not trigger Burst in the same second");
+        }
+
+        // Random was only queried once for state transition evaluation during the 50 queries in the same second
+        random.Received(1).NextDouble();
+    }
+
+    [Test]
+    public void GetSpeedMultiplier_congestion_should_be_smooth_and_continuous_across_midnight()
+    {
+        _configService.RealisticVariations.Returns(true);
+        _configService.BehaviorVariation.Returns(0.0);
+
+        var controlled = new ControlledRandom(0.99, 10);
+        var clock = Substitute.For<ISystemClock>();
+
+        var beforeMidnight = new DateTime(2026, 1, 1, 23, 59, 59, DateTimeKind.Utc);
+        var atMidnight = new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc);
+
+        clock.UtcNow.Returns(beforeMidnight);
+        var simulator = new TrafficPatternSimulator(_configService, controlled, clock);
+        var multiplierBefore = simulator.GetSpeedMultiplier(SeedingProfile.Balanced);
+
+        clock.UtcNow.Returns(atMidnight);
+        var multiplierAt = simulator.GetSpeedMultiplier(SeedingProfile.Balanced);
+
+        // Over 1 second, the change in the 60-second sine wave is small (~0.015 max delta)
+        var delta = Math.Abs(multiplierAt - multiplierBefore);
+        Assert.That(delta, Is.LessThan(0.05), "Congestion multiplier should transition smoothly across midnight");
+    }
 }
