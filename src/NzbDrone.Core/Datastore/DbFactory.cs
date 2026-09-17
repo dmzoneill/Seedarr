@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Dapper;
@@ -151,6 +153,125 @@ public class DbFactory : IDbFactory
         return cleaned;
     }
 
+    public static string GetSqliteDbPath(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return null;
+        }
+
+        var cleaned = CleanSqliteConnectionString(connectionString);
+        var builder = new SqliteConnectionStringBuilder(cleaned);
+        var dataSource = builder.DataSource;
+
+        if (string.IsNullOrWhiteSpace(dataSource)
+            || dataSource.Equals(":memory:", StringComparison.OrdinalIgnoreCase)
+            || connectionString.Contains("Mode=Memory", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return Path.GetFullPath(dataSource);
+    }
+
+    public string CreatePreMigrationSnapshot(string connectionString)
+    {
+        var dbPath = GetSqliteDbPath(connectionString);
+        if (dbPath == null || !File.Exists(dbPath))
+        {
+            return null;
+        }
+
+        FlushSqliteWal(connectionString);
+
+        try
+        {
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
+            var snapshotPath = $"{dbPath}.pre-migration-{timestamp}.bak";
+            if (File.Exists(snapshotPath))
+            {
+                var counter = 1;
+                while (File.Exists($"{dbPath}.pre-migration-{timestamp}_{counter}.bak"))
+                {
+                    counter++;
+                }
+
+                snapshotPath = $"{dbPath}.pre-migration-{timestamp}_{counter}.bak";
+            }
+
+            File.Copy(dbPath, snapshotPath, overwrite: true);
+            _logger.Info("Created pre-migration database snapshot at {0}", snapshotPath);
+
+            PrunePreMigrationSnapshots(dbPath, 3, _logger);
+
+            return snapshotPath;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to create pre-migration database snapshot for {0}", dbPath);
+            return null;
+        }
+    }
+
+    public static void PrunePreMigrationSnapshots(string dbPath, int maxToRetain = 3, Logger logger = null)
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(dbPath);
+            if (string.IsNullOrEmpty(dir))
+            {
+                dir = Directory.GetCurrentDirectory();
+            }
+
+            if (!Directory.Exists(dir))
+            {
+                return;
+            }
+
+            var fileName = Path.GetFileName(dbPath);
+            var searchPattern = $"{fileName}.pre-migration-*.bak";
+            var snapshots = Directory.GetFiles(dir, searchPattern)
+                .OrderByDescending(f => f, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (snapshots.Count > maxToRetain)
+            {
+                foreach (var oldSnapshot in snapshots.Skip(maxToRetain))
+                {
+                    try
+                    {
+                        File.Delete(oldSnapshot);
+                        logger?.Info("Pruned old pre-migration database snapshot: {0}", oldSnapshot);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger?.Warn(ex, "Failed to prune old pre-migration snapshot: {0}", oldSnapshot);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger?.Warn(ex, "Failed to prune pre-migration database snapshots for {0}", dbPath);
+        }
+    }
+
+    private void FlushSqliteWal(string connectionString)
+    {
+        try
+        {
+            using var conn = new SqliteConnection(connectionString);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+            cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to flush SQLite WAL before pre-migration snapshot");
+        }
+    }
+
     private void EnableSqlitePragmas(string connectionString)
     {
         try
@@ -181,6 +302,12 @@ public class DbFactory : IDbFactory
 
     private void RunMigrations(DatabaseType dbType, string connectionString)
     {
+        string snapshotPath = null;
+        if (dbType == DatabaseType.SQLite)
+        {
+            snapshotPath = CreatePreMigrationSnapshot(connectionString);
+        }
+
         var services = new ServiceCollection();
 
         services.AddFluentMigratorCore()
@@ -216,7 +343,23 @@ public class DbFactory : IDbFactory
             }
         }
 
-        runner.MigrateUp();
+        try
+        {
+            runner.MigrateUp();
+        }
+        catch (Exception ex)
+        {
+            if (!string.IsNullOrEmpty(snapshotPath))
+            {
+                _logger.Error(ex, "Database migration failed. A pre-migration snapshot is available at: {0}. Restore this backup file to recover the database.", snapshotPath);
+            }
+            else
+            {
+                _logger.Error(ex, "Database migration failed");
+            }
+
+            throw;
+        }
 
         _logger.Info("Database migrations complete");
     }
