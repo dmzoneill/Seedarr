@@ -3,8 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using NLog;
+using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.ArrIntegration
@@ -17,12 +17,6 @@ namespace NzbDrone.Core.ArrIntegration
         private readonly Func<ArrConnectionDefinition, IArrConnection> _providerFactory;
         private readonly ConcurrentDictionary<string, MediaMetadata> _mediaDetailsCache = new();
         private readonly Logger _logger;
-
-        private static readonly Regex SceneTagsRegex = new(
-            @"\b(1080p|720p|2160p|4k|uhd|hdr|hdr10|dv|remux|bluray|blu-ray|bdrip|web-dl|webrip|web|hdtv|x264|x265|h264|h265|hevc|aac|dts|dts-hd|truehd|atmos|flac|mp3|extended|repack|proper|complete|season|\bS\d{1,2}(E\d{1,2})?\b|\bEP?\d{1,3}\b)\b.*$",
-            RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-        private static readonly Regex YearRegex = new(@"\b(19\d{2}|20\d{2})\b", RegexOptions.Compiled);
 
         public ArrMetadataEnricherService(
             IArrConnectionFactory connectionFactory,
@@ -340,36 +334,7 @@ namespace NzbDrone.Core.ArrIntegration
 
         public static string CleanReleaseTitle(string rawTitle)
         {
-            if (string.IsNullOrWhiteSpace(rawTitle))
-            {
-                return string.Empty;
-            }
-
-            var clean = rawTitle.Trim();
-
-            // Strip extension if present
-            if (clean.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase) ||
-                clean.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) ||
-                clean.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ||
-                clean.EndsWith(".avi", StringComparison.OrdinalIgnoreCase))
-            {
-                var dotIdx = clean.LastIndexOf('.');
-                if (dotIdx > 0)
-                {
-                    clean = clean.Substring(0, dotIdx);
-                }
-            }
-
-            // Replace separators with spaces
-            clean = clean.Replace('.', ' ').Replace('_', ' ').Replace('+', ' ');
-
-            // Strip release scene tags
-            clean = SceneTagsRegex.Replace(clean, string.Empty);
-
-            // Clean multiple whitespace
-            clean = Regex.Replace(clean, @"\s+", " ").Trim();
-
-            return clean;
+            return ReleaseTitleParser.CleanTitle(rawTitle);
         }
 
         protected virtual IArrConnection CreateProvider(ArrConnectionDefinition definition)

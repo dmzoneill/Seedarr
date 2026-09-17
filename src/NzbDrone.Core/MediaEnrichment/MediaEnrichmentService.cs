@@ -74,11 +74,6 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         "thumb",
     };
 
-    private static readonly Regex SceneTagsRegex = new(
-        @"\b(1080p|720p|2160p|4k|uhd|hdr|hdr10|hdr10plus|dv|dovi|remux|bluray|blu-ray|bdrip|web-dl|webrip|web|hdtv|x264|x265|h264|h265|hevc|av1|xvid|aac|dts|dts-hd|truehd|atmos|flac|mp3|extended|repack|proper|complete|season|\bS\d{1,2}(E\d{1,2})?\b|\bEP?\d{1,3}\b)\b.*$",
-        RegexOptions.IgnoreCase | RegexOptions.Compiled);
-
-    private static readonly Regex YearRegex = new(@"\b(19\d{2}|20\d{2})\b", RegexOptions.Compiled);
     private static readonly Regex ImdbIdRegex = new(@"\b(tt\d{7,10})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public MediaEnrichmentService(
@@ -157,8 +152,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             }
 
             // 2. Parse release title & year
-            var cleanTitle = CleanReleaseTitle(torrent.Name);
-            var parsedYear = ExtractYear(torrent.Name);
+            var parsedRelease = ReleaseTitleParser.Parse(torrent.Name);
+            var cleanTitle = parsedRelease.CleanTitle;
+            var parsedYear = parsedRelease.Year ?? 0;
 
             // 3. Query connected Servarr APIs (Sonarr / Radarr / Lidarr) if configured
             var arrMetadata = await QueryServarrAsync(torrent, cleanTitle, cancellationToken).ConfigureAwait(false);
@@ -1126,52 +1122,12 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
 
     public static string CleanReleaseTitle(string rawTitle)
     {
-        if (string.IsNullOrWhiteSpace(rawTitle))
-        {
-            return string.Empty;
-        }
-
-        var clean = rawTitle.Trim();
-
-        // Strip extension if present
-        if (clean.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase) ||
-            clean.EndsWith(".mkv", StringComparison.OrdinalIgnoreCase) ||
-            clean.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) ||
-            clean.EndsWith(".avi", StringComparison.OrdinalIgnoreCase))
-        {
-            var dotIdx = clean.LastIndexOf('.');
-            if (dotIdx > 0)
-            {
-                clean = clean[..dotIdx];
-            }
-        }
-
-        // Replace separators with spaces
-        clean = clean.Replace('.', ' ').Replace('_', ' ').Replace('+', ' ');
-
-        // Strip release scene tags
-        clean = SceneTagsRegex.Replace(clean, string.Empty);
-
-        // Clean multiple whitespace
-        clean = Regex.Replace(clean, @"\s+", " ").Trim();
-
-        return clean;
+        return ReleaseTitleParser.CleanTitle(rawTitle);
     }
 
     public static int ExtractYear(string title)
     {
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            return 0;
-        }
-
-        var match = YearRegex.Match(title);
-        if (match.Success && int.TryParse(match.Value, out var year))
-        {
-            return year;
-        }
-
-        return 0;
+        return ReleaseTitleParser.ExtractYear(title) ?? 0;
     }
 
     public static string ExtractImdbId(string releaseTitle, string filePath = null)
