@@ -439,7 +439,7 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
 
         if (_downloadClientFactory != null && !string.IsNullOrWhiteSpace(entry.InfoHash))
         {
-            var clients = _downloadClientFactory.All().Where(c => c.Enable).ToList();
+            var clients = _downloadClientFactory.All()?.Where(c => c.Enable).ToList() ?? new List<DownloadClientDefinition>();
             foreach (var clientDef in clients)
             {
                 try
