@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
@@ -21,6 +22,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
     private readonly IServiceProvider _serviceProvider;
     private readonly IIdentityProviderRepository _identityProviderRepository;
     private readonly Logger _logger;
+    private readonly ConcurrentDictionary<string, IdentityProviderDefinition> _pendingRetryProviders = new();
 
     public DynamicAuthSchemeManager(
         IServiceProvider serviceProvider,
@@ -31,16 +33,33 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         _logger = LogManager.GetCurrentClassLogger();
     }
 
+    public bool HasPendingRetry(string providerId) => _pendingRetryProviders.ContainsKey(providerId);
+
+    public IReadOnlyCollection<string> PendingRetryProviderIds => _pendingRetryProviders.Keys.ToList();
+
     public async Task InitializeConfiguredProvidersAsync()
     {
         try
         {
             var enabledProviders = _identityProviderRepository.GetEnabled();
+            if (enabledProviders == null)
+            {
+                return;
+            }
+
             foreach (var provider in enabledProviders)
             {
                 if (provider.ProviderType == IdentityProviderType.Oidc || provider.ProviderType == IdentityProviderType.Social)
                 {
-                    await RegisterOrUpdateOidcProviderAsync(provider);
+                    try
+                    {
+                        await RegisterOrUpdateOidcProviderAsync(provider);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to initialize dynamic authentication provider '{0}' ({1}) during startup. Scheduling background retry.", provider.Name, provider.ProviderId);
+                        ScheduleRetry(provider);
+                    }
                 }
             }
         }
@@ -48,6 +67,43 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         {
             _logger.Error(ex, "Failed to initialize configured dynamic authentication schemes");
         }
+    }
+
+    public void ScheduleRetry(IdentityProviderDefinition provider, int delaySeconds = 30)
+    {
+        if (provider == null || string.IsNullOrWhiteSpace(provider.ProviderId))
+        {
+            return;
+        }
+
+        _pendingRetryProviders[provider.ProviderId] = provider;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
+                if (_pendingRetryProviders.TryGetValue(provider.ProviderId, out var pending))
+                {
+                    var current = _identityProviderRepository.FindByProviderId(provider.ProviderId);
+                    if (current != null && current.IsEnabled)
+                    {
+                        await RegisterOrUpdateOidcProviderAsync(current);
+                        _pendingRetryProviders.TryRemove(provider.ProviderId, out _);
+                        _logger.Info("Successfully registered dynamic OIDC authentication scheme on retry: Oidc_{0} ({1})", current.ProviderId, current.Name);
+                    }
+                    else
+                    {
+                        _pendingRetryProviders.TryRemove(provider.ProviderId, out _);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Retry registration failed for OIDC provider {0} ({1}), will retry again", provider.ProviderId, provider.Name);
+                ScheduleRetry(provider, Math.Min(delaySeconds * 2, 300));
+            }
+        });
     }
 
     public async Task RegisterOrUpdateOidcProviderAsync(IdentityProviderDefinition provider)
@@ -142,9 +198,21 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
             options.Scope.Add(scope);
         }
 
-        if (oidcPostConfigure != null)
+        if (!string.IsNullOrWhiteSpace(provider.MetadataUrl))
         {
-            oidcPostConfigure.PostConfigure(schemeName, options);
+            options.MetadataAddress = provider.MetadataUrl;
+        }
+
+        try
+        {
+            if (oidcPostConfigure != null)
+            {
+                oidcPostConfigure.PostConfigure(schemeName, options);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Post-configuration for OIDC provider '{0}' ({1}) encountered an error. Proceeding with deferred metadata discovery.", provider.Name, provider.ProviderId);
         }
 
         oidcOptionsCache.TryAdd(schemeName, options);
@@ -158,6 +226,8 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         var newScheme = new AuthenticationScheme(schemeName, provider.Name, typeof(OpenIdConnectHandler));
         schemeProvider.AddScheme(newScheme);
 
+        _pendingRetryProviders.TryRemove(provider.ProviderId, out _);
+
         _logger.Info("Registered dynamic OIDC authentication scheme: {0} ({1})", schemeName, provider.Name);
     }
 
@@ -166,6 +236,8 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         var schemeName = $"Oidc_{providerId}";
         var schemeProvider = _serviceProvider.GetService<IAuthenticationSchemeProvider>();
         var oidcOptionsCache = _serviceProvider.GetService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+
+        _pendingRetryProviders.TryRemove(providerId, out _);
 
         if (schemeProvider != null)
         {
