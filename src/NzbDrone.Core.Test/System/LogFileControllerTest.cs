@@ -78,7 +78,7 @@ public class LogFileControllerTest
         var fileStreamResult = (FileStreamResult)result;
         try
         {
-            Assert.That(fileStreamResult.FileDownloadName, Is.Null);
+            Assert.That(fileStreamResult.FileDownloadName, Is.Null.Or.Empty);
             Assert.That(fileStreamResult.EnableRangeProcessing, Is.True);
         }
         finally

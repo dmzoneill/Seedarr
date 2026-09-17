@@ -343,7 +343,12 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             path = FindArtworkOnDisk(torrentId, meta, type);
         }
 
-        if (string.IsNullOrEmpty(path) || path.Contains("..") || !global::System.IO.File.Exists(path))
+        if (!string.IsNullOrEmpty(path) && path.Contains(".."))
+        {
+            return NotFound();
+        }
+
+        if (string.IsNullOrEmpty(path) || !global::System.IO.File.Exists(path))
         {
             return ServeMissingArtworkFallback(torrentId, meta, type);
         }
@@ -360,7 +365,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             if (!fullPath.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) &&
                 !fullPath.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase))
             {
-                return ServeMissingArtworkFallback(torrentId, meta, type);
+                return NotFound();
             }
         }
 

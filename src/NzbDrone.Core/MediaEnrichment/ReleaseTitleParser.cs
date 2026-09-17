@@ -59,7 +59,7 @@ public static class ReleaseTitleParser
         RegexOptions.Compiled);
 
     private static readonly Regex DelimitedYearRegex = new(
-        @"(?:[\s\._\(\[])(?<year>19\d{2}|20\d{2})(?:$|[\s\._\)\],-])",
+        @"(?<=^|[\s\._\(\[])(?<year>19\d{2}|20\d{2})(?=$|[\s\._\)\],-])",
         RegexOptions.Compiled);
 
     private static readonly Regex StandardTvRegex = new(
@@ -141,9 +141,6 @@ public static class ReleaseTitleParser
 
         // 3. Strip CRC32 hashes
         working = Crc32Regex.Replace(working, string.Empty).Trim();
-
-        // 4. Extract structured attributes before stripping
-        ExtractAttributes(working, info);
 
         // 5. Extract trailing scene group if not set
         if (string.IsNullOrEmpty(info.ReleaseGroup))
@@ -294,6 +291,13 @@ public static class ReleaseTitleParser
             clean = working.Trim();
         }
 
+        var metadataText = boundary < working.Length ? working.Substring(boundary) : working;
+        ExtractAttributes(metadataText, info);
+        if (string.IsNullOrEmpty(info.Resolution) || string.IsNullOrEmpty(info.Source) || string.IsNullOrEmpty(info.Codec) || string.IsNullOrEmpty(info.Audio))
+        {
+            ExtractMissingAttributes(working, info);
+        }
+
         // 12. Normalize title whitespace and separators
         clean = clean.Replace('.', ' ').Replace('_', ' ').Replace('+', ' ');
         clean = Regex.Replace(clean, @"\s+", " ").Trim(' ', '-', '_', '.', ':', ',', ';');
@@ -398,5 +402,16 @@ public static class ReleaseTitleParser
         }
 
         info.Edition = EpisodicParser.ExtractEditionStatic(text);
+    }
+
+    private static void ExtractMissingAttributes(string text, ParsedReleaseInfo info)
+    {
+        var temp = new ParsedReleaseInfo();
+        ExtractAttributes(text, temp);
+        info.Resolution ??= temp.Resolution;
+        info.Source ??= temp.Source;
+        info.Codec ??= temp.Codec;
+        info.Audio ??= temp.Audio;
+        info.Edition ??= temp.Edition;
     }
 }

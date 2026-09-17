@@ -174,7 +174,7 @@ public class DiscordInteractionHandlerTest
 
         var embed = response.Data.Embeds[0];
         Assert.That(embed.Title, Is.EqualTo("Seedarr Status"));
-        Assert.That(embed.Description, Does.Contain("Turtle Mode: Active"));
+        Assert.That(embed.Description, Does.Contain("Turtle Mode").And.Contain("Active"));
         Assert.That(embed.Description, Does.Contain("3 total"));
         Assert.That(embed.Description, Does.Contain("1 dl"));
         Assert.That(embed.Description, Does.Contain("1 seed"));

@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Categories;
@@ -701,34 +700,25 @@ public class DiskSpaceService : IDiskSpaceService
 
         try
         {
-            var task = Task.Run(() =>
+            if (DriveStatsReader != null)
             {
-                if (DriveStatsReader != null)
+                var custom = DriveStatsReader(drive);
+                if (custom.HasValue)
                 {
-                    return DriveStatsReader(drive);
-                }
-
-                return ReadDriveStats(drive);
-            });
-
-            if (task.Wait(DriveTimeout))
-            {
-                var res = task.Result;
-                if (res.HasValue)
-                {
-                    stats = res.Value;
+                    stats = custom.Value;
                     return true;
                 }
 
                 return false;
             }
 
-            _logger.Warn("Timed out inspecting drive {0}", drive.Name);
-            return false;
-        }
-        catch (AggregateException ae)
-        {
-            _logger.Warn(ae.InnerException ?? ae, "Failed to inspect drive {0}", drive.Name);
+            var direct = ReadDriveStats(drive);
+            if (direct.HasValue)
+            {
+                stats = direct.Value;
+                return true;
+            }
+
             return false;
         }
         catch (Exception ex)

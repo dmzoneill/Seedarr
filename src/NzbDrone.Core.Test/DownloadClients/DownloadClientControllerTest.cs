@@ -290,6 +290,8 @@ public class DownloadClientControllerTest
             Id = 1,
             Name = "Existing Client",
             ClientType = "QBitTorrent",
+            Host = "localhost",
+            Port = 8080,
             Password = "OldPassword",
         };
         _downloadClientFactory.Get(1).Returns(existing);
@@ -299,6 +301,8 @@ public class DownloadClientControllerTest
             Id = 1,
             Name = "Existing Client",
             ClientType = "QBitTorrent",
+            Host = "localhost",
+            Port = 8080,
             Password = "Secret*Pass123",
         };
 
@@ -316,6 +320,8 @@ public class DownloadClientControllerTest
             Id = 1,
             Name = "Existing Client",
             ClientType = "QBitTorrent",
+            Host = "localhost",
+            Port = 8080,
             Password = "OriginalPassword",
         };
         _downloadClientFactory.Get(1).Returns(existing);
@@ -325,6 +331,8 @@ public class DownloadClientControllerTest
             Id = 1,
             Name = "Existing Client",
             ClientType = "QBitTorrent",
+            Host = "localhost",
+            Port = 8080,
             Password = "********",
         };
 
@@ -342,6 +350,8 @@ public class DownloadClientControllerTest
             Id = 1,
             Name = "Existing Client",
             ClientType = "QBitTorrent",
+            Host = "localhost",
+            Port = 8080,
             Password = "OriginalPassword",
         };
         _downloadClientFactory.Get(1).Returns(existing);
@@ -351,6 +361,8 @@ public class DownloadClientControllerTest
             Id = 1,
             Name = "Existing Client",
             ClientType = "QBitTorrent",
+            Host = "localhost",
+            Port = 8080,
             Password = "   ",
         };
 

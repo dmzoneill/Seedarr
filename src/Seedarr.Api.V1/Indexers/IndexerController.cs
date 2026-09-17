@@ -505,13 +505,13 @@ public class IndexerController : Controller
         return clone;
     }
 
-    private static IIndexer CreateIndexer(IndexerDefinition definition)
+    private IIndexer CreateIndexer(IndexerDefinition definition)
     {
         return definition.IndexerType switch
         {
-            "Prowlarr" => new ProwlarrIndexer(),
-            "Torznab" => new TorznabIndexer(),
-            "Newznab" => new NewznabIndexer(),
+            "Prowlarr" => new ProwlarrIndexer(_httpClient),
+            "Torznab" => new TorznabIndexer(_httpClient),
+            "Newznab" => new NewznabIndexer(_httpClient),
             _ => throw new ArgumentException($"Unknown indexer type: {definition.IndexerType}"),
         };
     }

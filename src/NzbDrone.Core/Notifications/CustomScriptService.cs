@@ -420,11 +420,13 @@ public class CustomScriptService : ICustomScriptService
                 string path = null;
                 string arguments = null;
 
+                var hasPathProp = false;
                 var pathProps = new[] { "path", "Path", "scriptPath", "ScriptPath", "script", "Script", "filename", "Filename" };
                 foreach (var prop in pathProps)
                 {
                     if (root.TryGetProperty(prop, out var val))
                     {
+                        hasPathProp = true;
                         path = val.GetString() ?? val.ToString();
                         if (!string.IsNullOrWhiteSpace(path))
                         {
@@ -446,9 +448,9 @@ public class CustomScriptService : ICustomScriptService
                     }
                 }
 
-                if (!string.IsNullOrWhiteSpace(path))
+                if (hasPathProp)
                 {
-                    return (path, string.IsNullOrWhiteSpace(arguments) ? null : arguments);
+                    return (path ?? string.Empty, string.IsNullOrWhiteSpace(arguments) ? null : arguments);
                 }
             }
             catch
