@@ -139,6 +139,7 @@ public abstract class RestControllerWithSignalR<TResource, TModel> : RestControl
         }
     }
 
+    [Microsoft.AspNetCore.Mvc.NonAction]
     public void Flush()
     {
         List<TModel> toFlush;

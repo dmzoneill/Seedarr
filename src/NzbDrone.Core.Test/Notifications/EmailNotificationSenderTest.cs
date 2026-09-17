@@ -262,6 +262,9 @@ public class EmailNotificationSenderTest
     {
         var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":587,\"to\":\"recipient@example.com\",\"from\":\"test@example.com\"}}";
         MailMessage capturedMessage = null;
+        var viewCount = 0;
+        string plainType = null;
+        string htmlType = null;
 
         EmailNotificationSender.SendEmailNotification(
             settings,
@@ -272,16 +275,18 @@ public class EmailNotificationSenderTest
             (client, message) =>
             {
                 capturedMessage = message;
+                viewCount = message.AlternateViews.Count;
+                if (viewCount >= 2)
+                {
+                    plainType = message.AlternateViews[0].ContentType.MediaType;
+                    htmlType = message.AlternateViews[1].ContentType.MediaType;
+                }
             });
 
         Assert.That(capturedMessage, Is.Not.Null);
-        Assert.That(capturedMessage.AlternateViews.Count, Is.EqualTo(2));
-
-        var plainTextView = capturedMessage.AlternateViews[0];
-        Assert.That(plainTextView.ContentType.MediaType, Is.EqualTo("text/plain"));
-
-        var htmlView = capturedMessage.AlternateViews[1];
-        Assert.That(htmlView.ContentType.MediaType, Is.EqualTo("text/html"));
+        Assert.That(viewCount, Is.EqualTo(2));
+        Assert.That(plainType, Is.EqualTo("text/plain"));
+        Assert.That(htmlType, Is.EqualTo("text/html"));
     }
 
     [Test]

@@ -62,6 +62,8 @@ public class NotificationControllerTest
             OnHealthRestored = false,
             OnManualInteractionRequired = false,
             OnApplicationUpdate = false,
+            OnBackupComplete = false,
+            OnBackupFailed = false,
             Categories = new List<string> { "Movies" },
         };
 
@@ -418,6 +420,8 @@ public class NotificationControllerTest
             OnHealthRestored = false,
             OnManualInteractionRequired = false,
             OnApplicationUpdate = false,
+            OnBackupComplete = false,
+            OnBackupFailed = false,
         };
 
         var result = _controller.Update(1, resource);

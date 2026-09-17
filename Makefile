@@ -50,6 +50,7 @@ test:
 	dotnet test $(UNIT_TEST) --configuration Release --no-build \
 		--settings .runsettings \
 		-maxcpucount:4 \
+		--logger "console;verbosity=normal" \
 		--logger "trx;LogFileName=test-results.trx" \
 		--collect:"XPlat Code Coverage"
 
@@ -60,6 +61,7 @@ integration: stack-clean stack-init stack-build stack-up stack-healthy stack-con
 	dotnet test $(INTEGRATION_TEST) --no-build \
 		--settings .runsettings \
 		-maxcpucount:4 \
+		--logger "console;verbosity=normal" \
 		--logger "trx;LogFileName=integration-test-results.trx" \
 		--collect:"XPlat Code Coverage"
 	@echo ""
@@ -72,6 +74,7 @@ integration: stack-clean stack-init stack-build stack-up stack-healthy stack-con
 	dotnet test $(AUTOMATION_TEST) --no-build \
 		--settings .runsettings \
 		-maxcpucount:4 \
+		--logger "console;verbosity=normal" \
 		--logger "trx;LogFileName=automation-results.trx"
 	@echo ""
 	@echo "Extracting automation coverage..."

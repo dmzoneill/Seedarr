@@ -68,7 +68,8 @@ public class MediaCoverSecurityTest
             BackdropLocalPath = "/home/daoneill/.config/Seedarr/MediaCover/1/backdrop.jpg"
         };
 
-        var json = JsonSerializer.Serialize(resource);
+        var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        var json = JsonSerializer.Serialize(resource, options);
 
         Assert.That(json, Does.Not.Contain("posterLocalPath"));
         Assert.That(json, Does.Not.Contain("backdropLocalPath"));
