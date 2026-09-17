@@ -8,6 +8,7 @@ using BencodeNET.Objects;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Torrents;
 
@@ -22,6 +23,7 @@ public class WatchFolderServiceTest
     private ITorrentFileService _torrentFileService;
     private IAppFolderInfo _appFolderInfo;
     private IConfigService _configService;
+    private ICategoryService _categoryService;
     private WatchFolderService _subject;
     private string _tempDir;
 
@@ -37,6 +39,7 @@ public class WatchFolderServiceTest
         _torrentFileService = Substitute.For<ITorrentFileService>();
         _appFolderInfo = Substitute.For<IAppFolderInfo>();
         _configService = Substitute.For<IConfigService>();
+        _categoryService = Substitute.For<ICategoryService>();
 
         _appFolderInfo.AppDataFolder.Returns(_tempDir);
         _configService.WatchFolderScanIntervalSeconds.Returns(1);
@@ -45,7 +48,7 @@ public class WatchFolderServiceTest
         _configService.WatchFolderAutoStartTorrents.Returns(true);
         _configService.WatchFolderDeleteAddedTorrents.Returns(false);
 
-        _subject = new WatchFolderService(_parser, _torrentService, _trackerEntryService, _torrentFileService, _appFolderInfo, _configService);
+        _subject = new WatchFolderService(_parser, _torrentService, _trackerEntryService, _torrentFileService, _appFolderInfo, _configService, _categoryService);
     }
 
     [TearDown]
@@ -555,6 +558,141 @@ public class WatchFolderServiceTest
         method.Invoke(_subject, new object[] { torrentPath });
 
         _torrentFileService.DidNotReceive().Add(Arg.Any<TorrentFile>());
+    }
+
+    [Test]
+    public void ProcessTorrentFile_should_map_subfolder_to_category_and_resolve_category_save_path()
+    {
+        var watchDir = Path.Combine(_tempDir, "watch");
+        var subDir = Path.Combine(watchDir, "movies");
+        Directory.CreateDirectory(subDir);
+        _configService.WatchFolderPath.Returns(watchDir);
+
+        var torrentPath = Path.Combine(subDir, "test.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "MovieTorrent",
+            InfoHash = "movie123",
+            TotalSize = 1024,
+            PieceCount = 1,
+            PieceLength = 1024,
+            Files = new List<ParsedTorrentFile>()
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+
+        var category = new Category
+        {
+            Id = 1,
+            Name = "movies",
+            SavePath = "/media/movies"
+        };
+        _categoryService.GetByName("movies").Returns(category);
+        _categoryService.GetSavePathForCategory("movies", Arg.Any<string>()).Returns("/media/movies");
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath, watchDir });
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Name == "MovieTorrent" &&
+            t.Category == "movies" &&
+            t.SavePath == "/media/movies"));
+    }
+
+    [Test]
+    public void ProcessTorrentFile_in_root_watch_folder_should_have_save_path_set_to_default_directory()
+    {
+        var watchDir = Path.Combine(_tempDir, "watch");
+        Directory.CreateDirectory(watchDir);
+        _configService.WatchFolderPath.Returns(watchDir);
+        var defaultDownloads = Path.Combine(_tempDir, "default_downloads");
+        _configService.TorrentSaveDirectory.Returns(defaultDownloads);
+
+        var torrentPath = Path.Combine(watchDir, "root.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "RootTorrent",
+            InfoHash = "root123",
+            TotalSize = 1024,
+            PieceCount = 1,
+            PieceLength = 1024,
+            Files = new List<ParsedTorrentFile>()
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath, watchDir });
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Name == "RootTorrent" &&
+            string.IsNullOrEmpty(t.Category) &&
+            t.SavePath == defaultDownloads));
+    }
+
+    [Test]
+    public void ProcessTorrentFile_when_file_locked_should_retry_and_handle_gracefully_without_unhandled_exceptions()
+    {
+        var watchDir = Path.Combine(_tempDir, "watch");
+        Directory.CreateDirectory(watchDir);
+        _configService.WatchFolderPath.Returns(watchDir);
+
+        var torrentPath = Path.Combine(watchDir, "locked.torrent");
+        File.WriteAllBytes(torrentPath, new byte[] { 1, 2, 3, 4 });
+
+        using (var lockStream = new FileStream(torrentPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+
+            Assert.DoesNotThrow(() => method.Invoke(_subject, new object[] { torrentPath, watchDir }));
+        }
+
+        _parser.DidNotReceive().Parse(Arg.Any<string>());
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void WaitForFileReady_should_return_false_when_file_is_locked()
+    {
+        var torrentPath = Path.Combine(_tempDir, "exclusively_locked.torrent");
+        File.WriteAllBytes(torrentPath, new byte[] { 1, 2, 3 });
+
+        using var lockStream = new FileStream(torrentPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        var result = _subject.WaitForFileReady(torrentPath, maxAttempts: 2, initialDelayMs: 10, stabilityDelayMs: 5);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void WaitForFileReady_should_return_true_when_file_is_unlocked_and_stable()
+    {
+        var torrentPath = Path.Combine(_tempDir, "ready.torrent");
+        File.WriteAllBytes(torrentPath, new byte[] { 1, 2, 3 });
+
+        var result = _subject.WaitForFileReady(torrentPath, maxAttempts: 2, initialDelayMs: 10, stabilityDelayMs: 5);
+
+        Assert.That(result, Is.True);
+    }
+
+    [Test]
+    public void WaitForFileReady_should_succeed_after_lock_is_released_during_retry()
+    {
+        var torrentPath = Path.Combine(_tempDir, "unlocking.torrent");
+        File.WriteAllBytes(torrentPath, new byte[] { 1, 2, 3 });
+
+        var lockStream = new FileStream(torrentPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        Task.Delay(30).ContinueWith(_ => lockStream.Dispose());
+
+        var result = _subject.WaitForFileReady(torrentPath, maxAttempts: 5, initialDelayMs: 25, stabilityDelayMs: 5);
+
+        Assert.That(result, Is.True);
     }
 
     private static void CreateDummyTorrentFile(string path)
