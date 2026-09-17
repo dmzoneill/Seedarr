@@ -1674,6 +1674,14 @@ namespace NzbDrone.Core.Test.Configuration
             Assert.That(_subject.TrackerRateLimitPerMinute, Is.EqualTo(60));
         }
 
+        [Test]
+        public void TrackerPasskeyAuthEnabled_should_default_to_false()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.TrackerPasskeyAuthEnabled, Is.False);
+        }
+
         // ---- Property defaults (Advanced/Logging) ----
 
         [Test]

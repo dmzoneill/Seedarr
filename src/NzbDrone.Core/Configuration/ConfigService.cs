@@ -217,6 +217,7 @@ public interface IConfigService
     bool TrackerPrivateMode { get; }
     bool TrackerLogAnnounces { get; }
     int TrackerRateLimitPerMinute { get; }
+    bool TrackerPasskeyAuthEnabled { get; }
 
     // Advanced/Logging
     bool LogToFile { get; }
@@ -604,6 +605,7 @@ public class ConfigService : IConfigService
     public bool TrackerPrivateMode => GetValueBoolean("TrackerPrivateMode", false);
     public bool TrackerLogAnnounces => GetValueBoolean("TrackerLogAnnounces", false);
     public int TrackerRateLimitPerMinute => GetValueInt("TrackerRateLimitPerMinute", 60);
+    public bool TrackerPasskeyAuthEnabled => GetValueBoolean("TrackerPasskeyAuthEnabled", false);
 
     // Advanced/Logging
     public bool LogToFile => GetValueBoolean("LogToFile", true);
