@@ -86,20 +86,20 @@ public class ArrWebhookServiceTest
     {
         _torrentService.GetAll().Returns(new List<Torrent>
         {
-            new() { InfoHash = "abc123def456" }
+            new() { InfoHash = "0123456789abcdef0123456789abcdef01234567" }
         });
 
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "ABC123DEF456"
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567"
         };
 
         var result = _service.ProcessWebhook(payload);
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Message, Does.Contain("already exists"));
-        Assert.That(result.InfoHash, Is.EqualTo("abc123def456"));
+        Assert.That(result.InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
     }
 
     [Test]
@@ -107,13 +107,13 @@ public class ArrWebhookServiceTest
     {
         _torrentService.GetAll().Returns(new List<Torrent>
         {
-            new() { InfoHash = "ABCDEF123456" }
+            new() { InfoHash = "0123456789ABCDEF0123456789ABCDEF01234567" }
         });
 
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "abcdef123456"
+            DownloadId = "0123456789abcdef0123456789abcdef01234567"
         };
 
         var result = _service.ProcessWebhook(payload);
@@ -128,7 +128,7 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "ABC123",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
             InstanceName = "Sonarr",
             Release = new ArrWebhookRelease
             {
@@ -142,7 +142,7 @@ public class ArrWebhookServiceTest
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Message, Does.Contain("Added"));
-        Assert.That(result.InfoHash, Is.EqualTo("abc123"));
+        Assert.That(result.InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
         _torrentService.Received(1).Add(Arg.Any<Torrent>());
     }
 
@@ -163,7 +163,7 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "ABC123DEF",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
             InstanceName = "Sonarr",
             Release = new ArrWebhookRelease
             {
@@ -177,7 +177,7 @@ public class ArrWebhookServiceTest
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Message, Is.EqualTo("Skipped automatic add"));
-        Assert.That(result.InfoHash, Is.EqualTo("abc123def"));
+        Assert.That(result.InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
     }
 
@@ -187,14 +187,14 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "ABCDEF123456",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
             Release = new ArrWebhookRelease { ReleaseTitle = "Test" }
         };
 
         var result = _service.ProcessWebhook(payload);
 
-        Assert.That(result.InfoHash, Is.EqualTo("abcdef123456"));
-        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == "abcdef123456"));
+        Assert.That(result.InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == "0123456789abcdef0123456789abcdef01234567"));
     }
 
     [Test]
@@ -203,7 +203,7 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "hash123",
+            DownloadId = "0123456789abcdef0123456789abcdef01234567",
             Release = new ArrWebhookRelease
             {
                 ReleaseTitle = "My.Movie.2024.1080p"
@@ -221,13 +221,13 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "HASH123",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
             Release = null
         };
 
         _service.ProcessWebhook(payload);
 
-        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.Name == "hash123"));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.Name == "0123456789abcdef0123456789abcdef01234567"));
     }
 
     [Test]
@@ -236,13 +236,13 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "HASH456",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
             Release = new ArrWebhookRelease { ReleaseTitle = null }
         };
 
         _service.ProcessWebhook(payload);
 
-        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.Name == "hash456"));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.Name == "0123456789abcdef0123456789abcdef01234567"));
     }
 
     [Test]
@@ -251,7 +251,7 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "hash789"
+            DownloadId = "7777777777777777777777777777777777777777"
         };
 
         _service.ProcessWebhook(payload);
@@ -265,7 +265,7 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "hash111",
+            DownloadId = "1111111111111111111111111111111111111111",
             Release = new ArrWebhookRelease { Size = 999888777 }
         };
 
@@ -280,7 +280,7 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "hash222",
+            DownloadId = "2222222222222222222222222222222222222222",
             Release = null
         };
 
@@ -296,7 +296,7 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "hash333"
+            DownloadId = "3333333333333333333333333333333333333333"
         };
 
         _service.ProcessWebhook(payload);
@@ -426,7 +426,7 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "HASH999",
+            DownloadId = "9999999999999999999999999999999999999999",
             InstanceName = "My Sonarr Instance",
             Release = new ArrWebhookRelease
             {
@@ -438,7 +438,7 @@ public class ArrWebhookServiceTest
         var result = _service.ProcessWebhook(payload);
 
         Assert.That(result.Success, Is.True);
-        Assert.That(result.InfoHash, Is.EqualTo("hash999"));
+        Assert.That(result.InfoHash, Is.EqualTo("9999999999999999999999999999999999999999"));
         _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
             t.Name == "Show.S01E01.720p" &&
             t.TotalSize == 500000 &&
@@ -545,14 +545,14 @@ public class ArrWebhookServiceTest
     }
 
     [Test]
-    public void ProcessWebhook_should_handle_whitespace_only_download_id()
+    public void ProcessWebhook_should_reject_whitespace_only_download_id()
     {
         var payload = new ArrWebhookPayload { EventType = "Grab", DownloadId = "   " };
 
         var result = _service.ProcessWebhook(payload);
 
-        Assert.That(result.Success, Is.True);
-        Assert.That(result.InfoHash, Is.EqualTo("   "));
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Message, Does.Contain("Invalid infohash or non-torrent downloadId"));
     }
 
     [Test]
@@ -560,13 +560,13 @@ public class ArrWebhookServiceTest
     {
         _torrentService.GetAll().Returns(new List<Torrent>
         {
-            new() { InfoHash = "existinghash" }
+            new() { InfoHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" }
         });
 
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "EXISTINGHASH"
+            DownloadId = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
         };
 
         var result = _service.ProcessWebhook(payload);
@@ -817,7 +817,7 @@ public class ArrWebhookServiceTest
         var payload = new ArrWebhookPayload
         {
             EventType = "Grab",
-            DownloadId = "hash444",
+            DownloadId = "4444444444444444444444444444444444444444",
             Release = new ArrWebhookRelease { ReleaseTitle = "Test" }
         };
 
@@ -1272,5 +1272,255 @@ public class ArrWebhookServiceTest
         Assert.DoesNotThrowAsync(async () => await task);
 
         _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ProcessWebhook_should_reject_non_hex_download_id()
+    {
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Grab",
+            DownloadId = "SABnzbd_nzo_7y8u9i",
+            InstanceName = "Sonarr"
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Message, Does.Contain("Invalid infohash or non-torrent downloadId"));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ProcessWebhook_should_reject_nzbget_grab()
+    {
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Grab",
+            DownloadId = "NZBGet_12345",
+            DownloadClient = "NZBGet"
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Message, Does.Contain("Rejected Usenet grab"));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ProcessWebhook_should_reject_usenet_client_type()
+    {
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Grab",
+            DownloadId = "0123456789abcdef0123456789abcdef01234567",
+            DownloadClientType = "Usenet"
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Message, Does.Contain("Rejected Usenet grab"));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ProcessWebhook_should_reject_sabnzbd_client()
+    {
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Grab",
+            DownloadId = "0123456789abcdef0123456789abcdef01234567",
+            DownloadClient = "SABnzbd"
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.Message, Does.Contain("Rejected Usenet grab"));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ProcessWebhook_should_accept_valid_64_character_v2_infohash()
+    {
+        var hex64 = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Grab",
+            DownloadId = hex64.ToUpperInvariant(),
+            Release = new ArrWebhookRelease { ReleaseTitle = "BitTorrent.v2.Release" }
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.InfoHash, Is.EqualTo(hex64));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == hex64));
+    }
+
+    [Test]
+    public void ProcessWebhook_should_record_in_download_history_when_enable_automatic_add_is_false()
+    {
+        var historyService = Substitute.For<IDownloadHistoryService>();
+        var serviceWithHistory = new ArrWebhookService(
+            _connectionFactory,
+            _torrentService,
+            _torrentFileParser,
+            trackerEntryService: null,
+            torrentFileService: null,
+            downloadClientFactory: null,
+            downloadHistoryService: historyService)
+        {
+            EnrichDelayMs = 0
+        };
+
+        var hash = "0123456789abcdef0123456789abcdef01234567";
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition>
+        {
+            new()
+            {
+                Name = "MySonarr",
+                ArrType = "Sonarr",
+                Enable = true,
+                EnableAutomaticAdd = false
+            }
+        });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Grab",
+            DownloadId = hash,
+            InstanceName = "Sonarr",
+            Release = new ArrWebhookRelease
+            {
+                ReleaseTitle = "Show.S01E01",
+                Indexer = "NZBGeek",
+                Size = 1048576
+            }
+        };
+
+        var result = serviceWithHistory.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Is.EqualTo("Skipped automatic add"));
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+        historyService.Received(1).RecordTorrentAdded(
+            Arg.Is<Torrent>(t => t.InfoHash == hash && t.Name == "Show.S01E01"),
+            "Sonarr",
+            null,
+            null,
+            "NZBGeek");
+    }
+
+    [Test]
+    public void QueryHistoryForDownloadUrl_should_strip_trailing_slashes_from_connection_url()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"{""records"":[]}");
+
+        var service = CreateWithMockClient(handler);
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = "Radarr",
+            Url = "http://radarr:7878/",
+            ApiKey = "test-key"
+        };
+
+        var method = typeof(ArrWebhookService).GetMethod("QueryHistoryForDownloadUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(service, new object[] { connection, "v3", "0123456789abcdef0123456789abcdef01234567" });
+
+        Assert.That(handler.LastRequest, Is.Not.Null);
+        Assert.That(handler.LastRequest.RequestUri.AbsoluteUri,
+            Does.StartWith("http://radarr:7878/api/v3/history?"));
+        Assert.That(handler.LastRequest.RequestUri.AbsoluteUri,
+            Does.Not.Contain("//api/"));
+    }
+
+    [Test]
+    public void FindConnection_when_inconclusive_should_search_history_across_multiple_connections()
+    {
+        var handler = new MockHttpMessageHandler();
+        // First call to Radarr history returns no records
+        handler.Enqueue(HttpStatusCode.OK, @"{""records"":[]}");
+        // Second call to Sonarr history returns matching record
+        handler.Enqueue(HttpStatusCode.OK, @"{""records"":[{""id"":1,""downloadId"":""0123456789abcdef0123456789abcdef01234567""}]}");
+
+        var radarr = new ArrConnectionDefinition
+        {
+            Name = "Living-Room-Movies",
+            ArrType = "Radarr",
+            Url = "http://radarr:7878",
+            ApiKey = "key1",
+            Enable = true
+        };
+        var sonarr = new ArrConnectionDefinition
+        {
+            Name = "Living-Room-TV",
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "key2",
+            Enable = true
+        };
+
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { radarr, sonarr });
+
+        var service = CreateWithMockClient(handler);
+        var payload = new ArrWebhookPayload
+        {
+            InstanceName = "Custom-Setup",
+            DownloadId = "0123456789abcdef0123456789abcdef01234567"
+        };
+
+        var method = typeof(ArrWebhookService).GetMethod("FindConnection",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (ArrConnectionDefinition)method.Invoke(service, new object[] { payload });
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Name, Is.EqualTo("Living-Room-TV"));
+        Assert.That(result.ArrType, Is.EqualTo("Sonarr"));
+    }
+
+    [Test]
+    public void FindConnection_when_inconclusive_and_not_in_history_should_return_null()
+    {
+        var handler = new MockHttpMessageHandler();
+        // Both Radarr and Sonarr return no records
+        handler.Enqueue(HttpStatusCode.OK, @"{""records"":[]}");
+        handler.Enqueue(HttpStatusCode.OK, @"{""records"":[]}");
+
+        var radarr = new ArrConnectionDefinition
+        {
+            Name = "Radarr-1",
+            ArrType = "Radarr",
+            Url = "http://radarr:7878",
+            ApiKey = "key1",
+            Enable = true
+        };
+        var sonarr = new ArrConnectionDefinition
+        {
+            Name = "Sonarr-1",
+            ArrType = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "key2",
+            Enable = true
+        };
+
+        _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { radarr, sonarr });
+
+        var service = CreateWithMockClient(handler);
+        var payload = new ArrWebhookPayload
+        {
+            InstanceName = "Custom-Setup",
+            DownloadId = "0123456789abcdef0123456789abcdef01234567"
+        };
+
+        var method = typeof(ArrWebhookService).GetMethod("FindConnection",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (ArrConnectionDefinition)method.Invoke(service, new object[] { payload });
+
+        Assert.That(result, Is.Null);
     }
 }

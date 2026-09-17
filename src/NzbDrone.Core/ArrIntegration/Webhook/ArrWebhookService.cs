@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
@@ -35,6 +36,9 @@ public class ArrWebhookService : IArrWebhookService
         AllowAutoRedirect = false,
     });
     private static readonly ResiliencePipeline SharedPolicy = ResiliencePolicies.GetArrApiPolicy();
+    private static readonly Regex InfoHashRegex = new(
+        @"^[0-9a-fA-F]{40}$|^[0-9a-fA-F]{64}$",
+        RegexOptions.Compiled);
 
     private readonly HttpClient _client;
     private readonly ResiliencePipeline _policy;
@@ -44,6 +48,7 @@ public class ArrWebhookService : IArrWebhookService
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly ITorrentFileService _torrentFileService;
     private readonly IDownloadClientFactory _downloadClientFactory;
+    private readonly IDownloadHistoryService _downloadHistoryService;
     private readonly Logger _logger;
 
     public ArrWebhookService(
@@ -52,8 +57,9 @@ public class ArrWebhookService : IArrWebhookService
         ITorrentFileParser torrentFileParser,
         ITrackerEntryService trackerEntryService = null,
         ITorrentFileService torrentFileService = null,
-        IDownloadClientFactory downloadClientFactory = null)
-        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, null, null)
+        IDownloadClientFactory downloadClientFactory = null,
+        IDownloadHistoryService downloadHistoryService = null)
+        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, downloadHistoryService, null, null)
     {
     }
 
@@ -63,7 +69,7 @@ public class ArrWebhookService : IArrWebhookService
         ITorrentFileParser torrentFileParser,
         HttpClient client,
         ResiliencePipeline policy)
-        : this(connectionFactory, torrentService, torrentFileParser, null, null, null, client, policy)
+        : this(connectionFactory, torrentService, torrentFileParser, null, null, null, null, client, policy)
     {
     }
 
@@ -76,6 +82,20 @@ public class ArrWebhookService : IArrWebhookService
         IDownloadClientFactory downloadClientFactory,
         HttpClient client,
         ResiliencePipeline policy)
+        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, null, client, policy)
+    {
+    }
+
+    public ArrWebhookService(
+        IArrConnectionFactory connectionFactory,
+        ITorrentService torrentService,
+        ITorrentFileParser torrentFileParser,
+        ITrackerEntryService trackerEntryService,
+        ITorrentFileService torrentFileService,
+        IDownloadClientFactory downloadClientFactory,
+        IDownloadHistoryService downloadHistoryService,
+        HttpClient client,
+        ResiliencePipeline policy)
     {
         _connectionFactory = connectionFactory;
         _torrentService = torrentService;
@@ -83,6 +103,7 @@ public class ArrWebhookService : IArrWebhookService
         _trackerEntryService = trackerEntryService;
         _torrentFileService = torrentFileService;
         _downloadClientFactory = downloadClientFactory;
+        _downloadHistoryService = downloadHistoryService;
         _logger = LogManager.GetCurrentClassLogger();
         _client = client ?? SharedClient;
         _policy = policy ?? SharedPolicy;
@@ -103,7 +124,32 @@ public class ArrWebhookService : IArrWebhookService
             return new ArrWebhookResult { Success = false, Message = "No downloadId in webhook payload" };
         }
 
-        var infoHash = downloadId.ToLowerInvariant();
+        if (IsUsenetGrab(payload))
+        {
+            _logger.Info(
+                "Webhook: rejected Usenet grab for client '{0}' (type '{1}'), downloadId '{2}'",
+                payload.DownloadClient,
+                payload.DownloadClientType,
+                downloadId);
+
+            return new ArrWebhookResult
+            {
+                Success = false,
+                Message = $"Rejected Usenet grab ({payload.DownloadClientType ?? payload.DownloadClient})"
+            };
+        }
+
+        if (!IsValidInfoHash(downloadId))
+        {
+            _logger.Warn("Webhook: rejected non-hex or invalid infohash downloadId '{0}'", downloadId);
+            return new ArrWebhookResult
+            {
+                Success = false,
+                Message = $"Invalid infohash or non-torrent downloadId: {downloadId}"
+            };
+        }
+
+        var infoHash = downloadId.Trim().ToLowerInvariant();
 
         var existing = _torrentService.GetAll().FirstOrDefault(t =>
             string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
@@ -127,6 +173,23 @@ public class ArrWebhookService : IArrWebhookService
                 connection.ArrType,
                 payload.Release?.ReleaseTitle ?? infoHash);
 
+            if (_downloadHistoryService != null && _downloadHistoryService.GetByInfoHash(infoHash) == null)
+            {
+                var historyTorrent = new Torrent
+                {
+                    Name = payload.Release?.ReleaseTitle ?? infoHash,
+                    InfoHash = infoHash,
+                    TotalSize = payload.Release?.Size ?? 0,
+                    DateAdded = DateTime.UtcNow,
+                    Status = TorrentStatus.Queued
+                };
+
+                _downloadHistoryService.RecordTorrentAdded(
+                    historyTorrent,
+                    source: connection.ArrType,
+                    indexerName: payload.Release?.Indexer);
+            }
+
             return new ArrWebhookResult
             {
                 Success = true,
@@ -149,10 +212,39 @@ public class ArrWebhookService : IArrWebhookService
 
         if (connection != null)
         {
-            _ = EnrichTorrentFromHistoryAsync(torrent.Id, infoHash, downloadId, connection, payload.InstanceName, CancellationToken.None);
+            _ = EnrichTorrentFromHistoryAsync(torrent.Id, infoHash, downloadId.Trim(), connection, payload.InstanceName, CancellationToken.None);
         }
 
         return new ArrWebhookResult { Success = true, Message = "Added with basic metadata", InfoHash = infoHash };
+    }
+
+    private static bool IsValidInfoHash(string downloadId)
+    {
+        if (string.IsNullOrWhiteSpace(downloadId))
+        {
+            return false;
+        }
+
+        return InfoHashRegex.IsMatch(downloadId.Trim());
+    }
+
+    private static bool IsUsenetGrab(ArrWebhookPayload payload)
+    {
+        if (!string.IsNullOrEmpty(payload.DownloadClientType) &&
+            (payload.DownloadClientType.IndexOf("usenet", StringComparison.OrdinalIgnoreCase) >= 0 ||
+             payload.DownloadClientType.IndexOf("nzb", StringComparison.OrdinalIgnoreCase) >= 0))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrEmpty(payload.DownloadClient) &&
+            (payload.DownloadClient.IndexOf("sabnzbd", StringComparison.OrdinalIgnoreCase) >= 0 ||
+             payload.DownloadClient.IndexOf("nzbget", StringComparison.OrdinalIgnoreCase) >= 0))
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private async Task EnrichTorrentFromHistoryAsync(int torrentId, string infoHash, string downloadId, ArrConnectionDefinition connection, string instanceName, CancellationToken cancellationToken)
@@ -344,24 +436,43 @@ public class ArrWebhookService : IArrWebhookService
     private ArrConnectionDefinition FindConnection(ArrWebhookPayload payload)
     {
         var definitions = _connectionFactory.All();
+        var enabled = definitions.Where(d => d.Enable).ToList();
+        if (enabled.Count == 0)
+        {
+            return null;
+        }
 
         if (!string.IsNullOrEmpty(payload.ApplicationUrl))
         {
-            var match = definitions.FirstOrDefault(d =>
-                d.Enable && !string.IsNullOrEmpty(d.Url) &&
+            var match = enabled.FirstOrDefault(d =>
+                !string.IsNullOrEmpty(d.Url) &&
                 payload.ApplicationUrl.TrimEnd('/').Equals(d.Url.TrimEnd('/'), StringComparison.OrdinalIgnoreCase));
 
             if (match != null)
             {
                 return match;
             }
+
+            if (Uri.TryCreate(payload.ApplicationUrl, UriKind.Absolute, out var payloadUri))
+            {
+                var hostMatch = enabled.FirstOrDefault(d =>
+                    Uri.TryCreate(d.Url, UriKind.Absolute, out var connUri) &&
+                    string.Equals(payloadUri.Host, connUri.Host, StringComparison.OrdinalIgnoreCase) &&
+                    payloadUri.Port == connUri.Port);
+
+                if (hostMatch != null)
+                {
+                    return hostMatch;
+                }
+            }
         }
 
         if (!string.IsNullOrEmpty(payload.InstanceName))
         {
-            var match = definitions.FirstOrDefault(d =>
-                d.Enable && !string.IsNullOrEmpty(d.ArrType) &&
-                payload.InstanceName.Contains(d.ArrType, StringComparison.OrdinalIgnoreCase));
+            var match = enabled.FirstOrDefault(d =>
+                (!string.IsNullOrEmpty(d.ArrType) && payload.InstanceName.Contains(d.ArrType, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(d.Name) && payload.InstanceName.Contains(d.Name, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(d.Name) && d.Name.Contains(payload.InstanceName, StringComparison.OrdinalIgnoreCase)));
 
             if (match != null)
             {
@@ -369,7 +480,82 @@ public class ArrWebhookService : IArrWebhookService
             }
         }
 
-        return definitions.FirstOrDefault(d => d.Enable);
+        if (enabled.Count == 1)
+        {
+            return enabled[0];
+        }
+
+        if (!string.IsNullOrEmpty(payload.DownloadId) && IsValidInfoHash(payload.DownloadId))
+        {
+            foreach (var conn in enabled)
+            {
+                if (ConnectionHasDownloadInHistory(conn, payload.DownloadId.Trim()))
+                {
+                    _logger.Info(
+                        "FindConnection: matched connection '{0}' ({1}) via history query for downloadId '{2}'",
+                        conn.Name,
+                        conn.ArrType,
+                        payload.DownloadId);
+
+                    return conn;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private bool ConnectionHasDownloadInHistory(ArrConnectionDefinition connection, string downloadId)
+    {
+        if (string.IsNullOrEmpty(downloadId) || string.IsNullOrEmpty(connection.Url) || string.IsNullOrEmpty(connection.ApiKey))
+        {
+            return false;
+        }
+
+        var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
+        var variants = new[] { downloadId, downloadId.ToUpperInvariant() };
+
+        foreach (var id in variants)
+        {
+            try
+            {
+                var hasRecord = _policy.Execute(ct =>
+                {
+                    var cleanUrl = connection.Url.TrimEnd('/');
+                    using var request = new HttpRequestMessage(
+                        HttpMethod.Get,
+                        $"{cleanUrl}/api/{apiVersion}/history?downloadId={id}&pageSize=1");
+                    request.Headers.Add("X-Api-Key", connection.ApiKey);
+
+                    using var response = _client.Send(request, ct);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        return false;
+                    }
+
+                    using var stream = response.Content.ReadAsStream(ct);
+                    using var doc = JsonDocument.Parse(stream);
+
+                    if (!doc.RootElement.TryGetProperty("records", out var records))
+                    {
+                        return false;
+                    }
+
+                    return records.GetArrayLength() > 0;
+                });
+
+                if (hasRecord)
+                {
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to check history for downloadId {0} in {1}", id, connection.Name);
+            }
+        }
+
+        return false;
     }
 
     private async Task<string> GetDownloadUrlFromHistoryAsync(ArrConnectionDefinition connection, string downloadId, CancellationToken cancellationToken)
@@ -405,8 +591,9 @@ public class ArrWebhookService : IArrWebhookService
         {
             return _policy.Execute(ct =>
             {
+                var cleanUrl = connection.Url?.TrimEnd('/');
                 using var request = new HttpRequestMessage(HttpMethod.Get,
-                    $"{connection.Url}/api/{apiVersion}/history?downloadId={downloadId}&pageSize=1");
+                    $"{cleanUrl}/api/{apiVersion}/history?downloadId={downloadId}&pageSize=1");
                 request.Headers.Add("X-Api-Key", connection.ApiKey);
 
                 using var response = _client.Send(request, ct);
