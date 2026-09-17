@@ -23,4 +23,6 @@ public interface IPieceStorage
     int[] GetPieceStates(string infoHash, int pieceCount, double progress = 0.0, HashSet<int> activePieces = null);
 
     void Clear(string infoHash);
+
+    void Flush();
 }

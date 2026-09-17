@@ -1846,4 +1846,12 @@ public class SeedingEngineTest
 
         _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStalledEvent>(e => e.Torrent.Id == 1));
     }
+
+    [Test]
+    public async Task StopAsync_should_disconnect_active_peer_connections()
+    {
+        await _engine.StopAsync(CancellationToken.None);
+
+        await _connectionManager.Received(1).DisconnectAllAsync();
+    }
 }

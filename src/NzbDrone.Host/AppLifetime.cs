@@ -6,11 +6,14 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network;
+using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 using Seedarr.Http.Authentication;
 
 namespace NzbDrone.Host;
@@ -23,6 +26,12 @@ public class AppLifetime : IHostedService, IDisposable
     private readonly IConfigService _configService;
     private readonly IDiskSpaceService _diskSpaceService;
     private readonly IUpnpService _upnpService;
+    private readonly IFastResumeService _fastResumeService;
+    private readonly ITrackerAnnounceService _trackerAnnounceService;
+    private readonly IConnectionManager _connectionManager;
+    private readonly IPieceStorage _pieceStorage;
+    private readonly IMainDatabase _mainDatabase;
+    private readonly IPeerServer _peerServer;
     private readonly Logger _logger;
     private readonly HashSet<int> _stalledTorrentIds = new();
     private bool _speedThresholdExceededState;
@@ -36,7 +45,13 @@ public class AppLifetime : IHostedService, IDisposable
         ITorrentService torrentService = null,
         IConfigService configService = null,
         IDiskSpaceService diskSpaceService = null,
-        IUpnpService upnpService = null)
+        IUpnpService upnpService = null,
+        IFastResumeService fastResumeService = null,
+        ITrackerAnnounceService trackerAnnounceService = null,
+        IConnectionManager connectionManager = null,
+        IPieceStorage pieceStorage = null,
+        IMainDatabase mainDatabase = null,
+        IPeerServer peerServer = null)
     {
         _eventAggregator = eventAggregator;
         _dynamicAuthManager = dynamicAuthManager;
@@ -44,6 +59,12 @@ public class AppLifetime : IHostedService, IDisposable
         _configService = configService;
         _diskSpaceService = diskSpaceService;
         _upnpService = upnpService;
+        _fastResumeService = fastResumeService;
+        _trackerAnnounceService = trackerAnnounceService;
+        _connectionManager = connectionManager;
+        _pieceStorage = pieceStorage;
+        _mainDatabase = mainDatabase;
+        _peerServer = peerServer;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -86,6 +107,129 @@ public class AppLifetime : IHostedService, IDisposable
             }
             catch
             {
+            }
+        }
+
+        // Phase 1: Halt inbound traffic & announce stopped to trackers
+        _logger.Info("Executing phased shutdown phase 1: halting inbound traffic and announcing stopped to trackers");
+        try
+        {
+            _peerServer?.StopListening();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Error stopping peer listener on shutdown");
+        }
+
+        if (_trackerAnnounceService != null && _torrentService != null)
+        {
+            try
+            {
+                var torrents = _torrentService.GetAll() ?? new List<Torrent>();
+                var activeTorrents = torrents.Where(t =>
+                    t.Status == TorrentStatus.Downloading ||
+                    t.Status == TorrentStatus.Seeding ||
+                    t.Active).ToList();
+
+                if (activeTorrents.Count > 0)
+                {
+                    var announceTasks = activeTorrents.Select(torrent =>
+                        Task.Run(
+                            () =>
+                            {
+                                try
+                                {
+                                    _trackerAnnounceService.AnnounceTorrent(torrent, force: true, eventType: AnnounceEvent.Stopped);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.Debug(ex, "Failed to send stopped tracker announce for torrent {0}", torrent.Id);
+                                }
+                            },
+                            cancellationToken)).ToArray();
+
+                    var allAnnounces = Task.WhenAll(announceTasks);
+                    var timeoutTask = Task.Delay(2500, cancellationToken);
+                    try
+                    {
+                        await Task.WhenAny(allAnnounces, timeoutTask);
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error announcing stopped to trackers on shutdown");
+            }
+        }
+
+        // Phase 2: State & Buffer Serialization
+        _logger.Info("Executing phased shutdown phase 2: flushing piece buffers, saving FastResume, and persisting torrent stats");
+        if (_pieceStorage != null)
+        {
+            try
+            {
+                _pieceStorage.Flush();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error flushing piece storage buffers on shutdown");
+            }
+        }
+
+        if (_fastResumeService != null)
+        {
+            try
+            {
+                _fastResumeService.SaveAll();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error saving FastResume data on shutdown");
+            }
+        }
+
+        if (_torrentService != null)
+        {
+            try
+            {
+                var torrents = _torrentService.GetAll();
+                if (torrents != null && torrents.Count > 0)
+                {
+                    _torrentService.UpdateMany(torrents);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error persisting torrent statistics to database on shutdown");
+            }
+        }
+
+        // Phase 3: Connection Teardown & SQLite Checkpoint
+        _logger.Info("Executing phased shutdown phase 3: disconnecting peer connections and executing database checkpoint");
+        if (_connectionManager != null)
+        {
+            try
+            {
+                await _connectionManager.DisconnectAllAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error disconnecting peer connections on shutdown");
+            }
+        }
+
+        if (_mainDatabase != null)
+        {
+            try
+            {
+                _mainDatabase.Checkpoint();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error checkpointing database on shutdown");
             }
         }
     }

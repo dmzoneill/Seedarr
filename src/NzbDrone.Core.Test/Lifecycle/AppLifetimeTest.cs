@@ -1,12 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
 using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network;
+using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 using NzbDrone.Host;
 
 namespace NzbDrone.Core.Test.Lifecycle;
@@ -19,6 +24,12 @@ public class AppLifetimeTest
     private IConfigService _configService;
     private IDiskSpaceService _diskSpaceService;
     private IUpnpService _upnpService;
+    private IFastResumeService _fastResumeService;
+    private ITrackerAnnounceService _trackerAnnounceService;
+    private IConnectionManager _connectionManager;
+    private IPieceStorage _pieceStorage;
+    private IMainDatabase _mainDatabase;
+    private IPeerServer _peerServer;
     private AppLifetime _subject;
 
     [SetUp]
@@ -29,6 +40,12 @@ public class AppLifetimeTest
         _configService = Substitute.For<IConfigService>();
         _diskSpaceService = Substitute.For<IDiskSpaceService>();
         _upnpService = Substitute.For<IUpnpService>();
+        _fastResumeService = Substitute.For<IFastResumeService>();
+        _trackerAnnounceService = Substitute.For<ITrackerAnnounceService>();
+        _connectionManager = Substitute.For<IConnectionManager>();
+        _pieceStorage = Substitute.For<IPieceStorage>();
+        _mainDatabase = Substitute.For<IMainDatabase>();
+        _peerServer = Substitute.For<IPeerServer>();
 
         _subject = new AppLifetime(
             _eventAggregator,
@@ -36,7 +53,13 @@ public class AppLifetimeTest
             _torrentService,
             _configService,
             _diskSpaceService,
-            _upnpService);
+            _upnpService,
+            _fastResumeService,
+            _trackerAnnounceService,
+            _connectionManager,
+            _pieceStorage,
+            _mainDatabase,
+            _peerServer);
     }
 
     [TearDown]
@@ -233,5 +256,114 @@ public class AppLifetimeTest
         _subject.EvaluateWatchdogMetrics();
 
         _eventAggregator.Received(2).PublishEvent(Arg.Is<PortForwardingFailedEvent>(e => e.Port == 6881));
+    }
+
+    [Test]
+    public async Task StopAsync_should_orchestrate_complete_phased_shutdown_sequence()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Status = TorrentStatus.Downloading,
+            Active = true,
+            Uploaded = 5000,
+            Downloaded = 10000
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        await _subject.StopAsync(CancellationToken.None);
+
+        // Phase 1: Halt inbound traffic and send event=stopped announce
+        _peerServer.Received(1).StopListening();
+        _trackerAnnounceService.Received(1).AnnounceTorrent(
+            Arg.Is<Torrent>(t => t.Id == 1),
+            force: true,
+            eventType: AnnounceEvent.Stopped);
+
+        // Phase 2: State and buffer serialization
+        _pieceStorage.Received(1).Flush();
+        _fastResumeService.Received(1).SaveAll();
+        _torrentService.Received(1).UpdateMany(Arg.Is<List<Torrent>>(list => list.Contains(torrent)));
+
+        // Phase 3: Connection teardown and database checkpoint
+        await _connectionManager.Received(1).DisconnectAllAsync();
+        _mainDatabase.Received(1).Checkpoint();
+    }
+
+    [Test]
+    public async Task StopAsync_should_invoke_FastResumeService_SaveAll()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        await _subject.StopAsync(CancellationToken.None);
+
+        _fastResumeService.Received(1).SaveAll();
+    }
+
+    [Test]
+    public async Task StopAsync_should_announce_stopped_only_for_active_torrents()
+    {
+        var activeTorrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1111111111111111111111111111111111111111",
+            Status = TorrentStatus.Seeding,
+            Active = true
+        };
+        var stoppedTorrent = new Torrent
+        {
+            Id = 2,
+            InfoHash = "2222222222222222222222222222222222222222",
+            Status = TorrentStatus.Stopped,
+            Active = false
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { activeTorrent, stoppedTorrent });
+
+        await _subject.StopAsync(CancellationToken.None);
+
+        _trackerAnnounceService.Received(1).AnnounceTorrent(
+            Arg.Is<Torrent>(t => t.Id == 1),
+            force: true,
+            eventType: AnnounceEvent.Stopped);
+        _trackerAnnounceService.DidNotReceive().AnnounceTorrent(
+            Arg.Is<Torrent>(t => t.Id == 2),
+            Arg.Any<bool>(),
+            Arg.Any<AnnounceEvent>());
+    }
+
+    [Test]
+    public async Task StopAsync_should_disconnect_peer_connections_gracefully()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        await _subject.StopAsync(CancellationToken.None);
+
+        await _connectionManager.Received(1).DisconnectAllAsync();
+    }
+
+    [Test]
+    public async Task StopAsync_should_continue_shutdown_when_tracker_announces_fail()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Status = TorrentStatus.Downloading,
+            Active = true
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _trackerAnnounceService.When(x => x.AnnounceTorrent(Arg.Any<Torrent>(), Arg.Any<bool>(), Arg.Any<AnnounceEvent>()))
+            .Do(_ => throw new InvalidOperationException("Tracker unreachable"));
+
+        Assert.DoesNotThrowAsync(async () => await _subject.StopAsync(CancellationToken.None));
+
+        _fastResumeService.Received(1).SaveAll();
+        _pieceStorage.Received(1).Flush();
+        await _connectionManager.Received(1).DisconnectAllAsync();
+        _mainDatabase.Received(1).Checkpoint();
     }
 }

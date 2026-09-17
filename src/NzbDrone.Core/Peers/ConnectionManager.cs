@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
@@ -25,6 +26,7 @@ public interface IConnectionManager
     int GetDynamicUploadSlotCount(string infoHash = null);
     List<PeerConnection> GetAllConnections();
     void DisconnectAll();
+    Task DisconnectAllAsync();
     void DisconnectByInfoHash(string infoHash);
     void ProcessDropouts();
     void RotateConnections();
@@ -267,6 +269,12 @@ public class ConnectionManager : IConnectionManager,
                 _logger.Debug(ex, "Error disconnecting peer {0}", conn.RemoteIp);
             }
         }
+    }
+
+    public Task DisconnectAllAsync()
+    {
+        DisconnectAll();
+        return Task.CompletedTask;
     }
 
     public void DisconnectByInfoHash(string infoHash)

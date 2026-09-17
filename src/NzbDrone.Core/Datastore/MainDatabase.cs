@@ -8,6 +8,9 @@ namespace NzbDrone.Core.Datastore;
 
 public interface IMainDatabase : IDatabase
 {
+    void Checkpoint();
+
+    void Vacuum();
 }
 
 public class MainDatabase : IMainDatabase
@@ -34,6 +37,43 @@ public class MainDatabase : IMainDatabase
     public IDbConnection OpenConnection() => _database.OpenConnection();
     public DatabaseType DatabaseType => _database.DatabaseType;
     public Version Version => _database.Version;
+
+    public void Checkpoint()
+    {
+        if (DatabaseType == DatabaseType.SQLite)
+        {
+            try
+            {
+                using var conn = _database.OpenConnection();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to execute SQLite WAL checkpoint");
+            }
+        }
+    }
+
+    public void Vacuum()
+    {
+        Checkpoint();
+        if (DatabaseType == DatabaseType.SQLite)
+        {
+            try
+            {
+                using var conn = _database.OpenConnection();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "VACUUM;";
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to execute SQLite VACUUM");
+            }
+        }
+    }
 
     private void ApplyPendingRestore(string appDataFolder)
     {
