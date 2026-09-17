@@ -133,6 +133,7 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
                     }
 
                     _eventAggregator?.PublishEvent(new VpnInterfaceRestoredEvent(iface ?? string.Empty));
+                    _eventAggregator?.PublishEvent(new VpnRestoredEvent(iface ?? string.Empty));
                 }
 
                 _lastKnownInterfaceUp = true;
@@ -181,6 +182,7 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
                     }
 
                     _eventAggregator?.PublishEvent(new VpnInterfaceRestoredEvent(iface));
+                    _eventAggregator?.PublishEvent(new VpnRestoredEvent(iface));
                 }
 
                 return false;

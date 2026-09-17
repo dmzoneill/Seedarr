@@ -240,7 +240,11 @@ export interface HealthCheckResult {
 
 export interface NetworkStatus {
   localIp: string;
+  boundInterface?: string;
+  boundIp?: string;
+  physicalIp?: string;
   externalIp: string;
+  isVpnKillSwitchActive?: boolean;
   upnpAvailable: boolean;
   proxyEnabled: boolean;
   portMappings: PortMapping[];
@@ -808,7 +812,11 @@ export interface Tag {
 
 export interface NetworkDiagnostics {
   localIp: string;
+  boundInterface?: string;
+  boundIp?: string;
+  physicalIp?: string;
   externalIp: string;
+  isVpnKillSwitchActive?: boolean;
   localAddresses: string[];
   upnpAvailable: boolean;
   proxyEnabled: boolean;

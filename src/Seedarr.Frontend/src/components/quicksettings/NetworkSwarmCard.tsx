@@ -18,14 +18,18 @@ export function NetworkSwarmCard() {
 
   const { data: networkStatus } = useNetworkStatus();
 
-  const [vpnKillSwitch, setVpnKillSwitch] = useState<boolean>(() => {
-    const saved = localStorage.getItem("seedarr_vpn_killswitch");
-    return saved !== null ? saved === "true" : true;
-  });
+  const isKillSwitchActive =
+    networkStatus?.isVpnKillSwitchActive ??
+    networkConfig?.enableVpnKillSwitch ??
+    false;
 
-  useEffect(() => {
-    localStorage.setItem("seedarr_vpn_killswitch", String(vpnKillSwitch));
-  }, [vpnKillSwitch]);
+  const handleToggleKillSwitch = () => {
+    if (!networkConfig) return;
+    saveNetworkConfig.mutate({
+      ...networkConfig,
+      enableVpnKillSwitch: !networkConfig.enableVpnKillSwitch,
+    });
+  };
 
   const handleGlobalConnChange = (val: number) => {
     if (!networkConfig) return;
@@ -81,17 +85,17 @@ export function NetworkSwarmCard() {
         </div>
         <div
           className={`quick-settings-vpn-badge ${
-            vpnKillSwitch ? "vpn-active" : "vpn-inactive"
+            isKillSwitchActive ? "vpn-active" : "vpn-inactive"
           }`}
           title={
-            vpnKillSwitch
-              ? "Kill Switch Enabled: Non-VPN traffic is blocked"
+            isKillSwitchActive
+              ? `Kill Switch Active: Swarm bound to ${networkStatus?.boundInterface || "VPN"} (${networkStatus?.boundIp || "Protected"})`
               : "Kill Switch Disabled: Direct connections permitted"
           }
-          onClick={() => setVpnKillSwitch(!vpnKillSwitch)}
+          onClick={handleToggleKillSwitch}
           style={{ cursor: "pointer" }}
         >
-          {vpnKillSwitch ? "🛡️ Kill Switch ON" : "⚠️ Direct Route"}
+          {isKillSwitchActive ? "🛡️ Kill Switch ON" : "⚠️ Direct Route"}
         </div>
       </div>
 
@@ -169,14 +173,77 @@ export function NetworkSwarmCard() {
         </div>
 
         {/* Status info */}
-        <div className="quick-settings-network-info">
-          <span>
-            IP:{" "}
-            {networkStatus?.externalIp || networkStatus?.localIp || "127.0.0.1"}
-          </span>
-          <span>
-            UPnP: {networkConfig?.upnpEnabled ? "Active" : "Disabled"}
-          </span>
+        <div
+          className="quick-settings-network-info"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.25rem",
+            fontSize: "0.78rem",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+            }}
+          >
+            <span>
+              Swarm IP:{" "}
+              <strong>
+                {networkStatus?.boundIp || networkStatus?.localIp || "127.0.0.1"}
+              </strong>
+              {networkStatus?.boundInterface && networkStatus.boundInterface !== "Any" && (
+                <span
+                  style={{
+                    marginLeft: "0.35rem",
+                    fontSize: "0.72rem",
+                    padding: "0.1rem 0.35rem",
+                    borderRadius: "4px",
+                    backgroundColor: isKillSwitchActive
+                      ? "rgba(40, 167, 69, 0.2)"
+                      : "rgba(200, 168, 78, 0.2)",
+                    color: isKillSwitchActive
+                      ? "var(--success, #28a745)"
+                      : "var(--accent, #c8a84e)",
+                    border: `1px solid ${
+                      isKillSwitchActive
+                        ? "var(--success, #28a745)"
+                        : "var(--accent, #c8a84e)"
+                    }`,
+                  }}
+                >
+                  {isKillSwitchActive ? "🛡️ " : ""}
+                  {networkStatus.boundInterface}
+                </span>
+              )}
+            </span>
+            {networkStatus?.physicalIp && (
+              <span
+                title="Primary host physical LAN IP"
+                style={{ color: "var(--text-secondary)" }}
+              >
+                Host: <span>{networkStatus.physicalIp}</span>
+              </span>
+            )}
+          </div>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <span>
+              Public IP: {networkStatus?.externalIp || "Not Detected"}
+            </span>
+            <span>
+              UPnP: {networkConfig?.upnpEnabled ? "Active" : "Disabled"}
+            </span>
+          </div>
         </div>
       </div>
     </div>

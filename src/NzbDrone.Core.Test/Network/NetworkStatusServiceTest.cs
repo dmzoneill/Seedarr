@@ -5,7 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Network;
+using NzbDrone.Core.Network.Vpn;
 
 namespace NzbDrone.Core.Test.Network
 {
@@ -15,6 +17,8 @@ namespace NzbDrone.Core.Test.Network
         private IUpnpService _upnpService;
         private IExternalIpService _externalIpService;
         private IProxySettingsProvider _proxySettings;
+        private IConfigService _configService;
+        private IVpnKillSwitchService _vpnKillSwitchService;
         private NetworkStatusService _subject;
 
         [SetUp]
@@ -23,6 +27,8 @@ namespace NzbDrone.Core.Test.Network
             _upnpService = Substitute.For<IUpnpService>();
             _externalIpService = Substitute.For<IExternalIpService>();
             _proxySettings = Substitute.For<IProxySettingsProvider>();
+            _configService = Substitute.For<IConfigService>();
+            _vpnKillSwitchService = Substitute.For<IVpnKillSwitchService>();
 
             _upnpService.GetMappings().Returns(new List<PortMapping>());
             _upnpService.IsAvailable.Returns(false);
@@ -30,7 +36,7 @@ namespace NzbDrone.Core.Test.Network
             _externalIpService.CachedIp.Returns(string.Empty);
             _proxySettings.IsEnabled.Returns(false);
 
-            _subject = new NetworkStatusService(_upnpService, _externalIpService, _proxySettings);
+            _subject = new NetworkStatusService(_upnpService, _externalIpService, _proxySettings, _configService, _vpnKillSwitchService);
         }
 
         [Test]
@@ -183,6 +189,59 @@ namespace NzbDrone.Core.Test.Network
             var result = await _subject.TestPortAsync(65530, canceledToken);
 
             Assert.That(result.IsOpen, Is.False);
+        }
+
+        [Test]
+        public void GetStatus_when_vpn_interface_is_configured_and_active_should_reflect_bound_tunnel_ip()
+        {
+            _configService.BindInterface.Returns("tun0");
+            _configService.EnableVpnKillSwitch.Returns(true);
+            _vpnKillSwitchService.IsKillSwitchEnabled.Returns(true);
+            _vpnKillSwitchService.GetVpnInterfaceIpAddress(AddressFamily.InterNetwork).Returns(IPAddress.Parse("10.8.0.2"));
+            _subject.LocalAddressesResolver = () => new List<string> { "192.168.1.50", "10.8.0.2" };
+
+            var result = _subject.GetStatus();
+
+            Assert.That(result.LocalIp, Is.EqualTo("10.8.0.2"));
+            Assert.That(result.BoundIp, Is.EqualTo("10.8.0.2"));
+            Assert.That(result.BoundInterface, Is.EqualTo("tun0"));
+            Assert.That(result.PhysicalIp, Is.EqualTo("192.168.1.50"));
+            Assert.That(result.IsVpnKillSwitchActive, Is.True);
+        }
+
+        [Test]
+        public void GetStatus_when_no_specific_interface_is_bound_should_fallback_to_physical_ip_and_any()
+        {
+            _configService.BindInterface.Returns("Any");
+            _configService.EnableVpnKillSwitch.Returns(false);
+            _vpnKillSwitchService.IsKillSwitchEnabled.Returns(false);
+            _subject.LocalAddressesResolver = () => new List<string> { "192.168.1.50" };
+
+            var result = _subject.GetStatus();
+
+            Assert.That(result.BoundInterface, Is.EqualTo("Any"));
+            Assert.That(result.BoundIp, Is.EqualTo("192.168.1.50"));
+            Assert.That(result.LocalIp, Is.EqualTo("192.168.1.50"));
+            Assert.That(result.PhysicalIp, Is.EqualTo("192.168.1.50"));
+            Assert.That(result.IsVpnKillSwitchActive, Is.False);
+        }
+
+        [Test]
+        public void GetStatus_when_vpn_interface_is_configured_but_unplumbed_should_fallback_to_physical_ip_and_any()
+        {
+            _configService.BindInterface.Returns("tun0");
+            _configService.EnableVpnKillSwitch.Returns(true);
+            _vpnKillSwitchService.IsKillSwitchEnabled.Returns(true);
+            _vpnKillSwitchService.GetVpnInterfaceIpAddress(Arg.Any<AddressFamily>()).Returns((IPAddress)null);
+            _subject.LocalAddressesResolver = () => new List<string> { "192.168.1.50" };
+
+            var result = _subject.GetStatus();
+
+            Assert.That(result.BoundInterface, Is.EqualTo("Any"));
+            Assert.That(result.BoundIp, Is.EqualTo("192.168.1.50"));
+            Assert.That(result.LocalIp, Is.EqualTo("192.168.1.50"));
+            Assert.That(result.PhysicalIp, Is.EqualTo("192.168.1.50"));
+            Assert.That(result.IsVpnKillSwitchActive, Is.True);
         }
     }
 }

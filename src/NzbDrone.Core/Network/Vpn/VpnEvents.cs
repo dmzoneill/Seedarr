@@ -21,3 +21,11 @@ public class VpnInterfaceRestoredEvent : IEvent
         InterfaceName = interfaceName;
     }
 }
+
+public class VpnRestoredEvent : VpnInterfaceRestoredEvent
+{
+    public VpnRestoredEvent(string interfaceName)
+        : base(interfaceName)
+    {
+    }
+}
