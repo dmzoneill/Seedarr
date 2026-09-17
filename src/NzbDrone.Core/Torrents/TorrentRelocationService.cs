@@ -1,16 +1,37 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Common.Disk;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 
 namespace NzbDrone.Core.Torrents;
+
+public enum RelocationMoveType
+{
+    AtomicMove,
+    CopyDelete,
+}
+
+public class RelocationJournalEntry
+{
+    public string SourcePath { get; set; }
+
+    public string DestinationPath { get; set; }
+
+    public RelocationMoveType MoveType { get; set; }
+
+    public bool SourceDeleted { get; set; }
+
+    public bool DestinationCreated { get; set; }
+}
 
 public class TorrentRelocationService : ITorrentRelocationService
 {
@@ -26,9 +47,15 @@ public class TorrentRelocationService : ITorrentRelocationService
     private readonly ConcurrentDictionary<int, TorrentRelocationProgress> _activeProgress = new();
     private readonly ConcurrentDictionary<int, SemaphoreSlim> _torrentLocks = new();
 
+    public IDiskProvider DiskProvider { get; set; }
+
     public bool ForceFallbackCopy { get; set; }
 
     public bool SimulateTruncation { get; set; }
+
+    public int? SimulateFailureOnFileIndex { get; set; }
+
+    public Func<string, Task> BeforeFileCopyHook { get; set; }
 
     public TorrentRelocationService(
         ITorrentService torrentService,
@@ -36,7 +63,8 @@ public class TorrentRelocationService : ITorrentRelocationService
         IConfigService configService = null,
         IConnectionManager connectionManager = null,
         IPeerServer peerServer = null,
-        IPieceStorage pieceStorage = null)
+        IPieceStorage pieceStorage = null,
+        IDiskProvider diskProvider = null)
     {
         _torrentService = torrentService ?? throw new ArgumentNullException(nameof(torrentService));
         _eventAggregator = eventAggregator;
@@ -44,6 +72,7 @@ public class TorrentRelocationService : ITorrentRelocationService
         _connectionManager = connectionManager;
         _peerServer = peerServer;
         _pieceStorage = pieceStorage;
+        DiskProvider = diskProvider ?? new DiskProvider();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -76,12 +105,19 @@ public class TorrentRelocationService : ITorrentRelocationService
             throw new ArgumentException("Destination path must not be empty", nameof(newSavePath));
         }
 
+        if (PathSanitizer.ContainsPathTraversal(newSavePath) || !PathSanitizer.IsValidPath(newSavePath))
+        {
+            throw new ArgumentException($"Destination path is invalid: {newSavePath}", nameof(newSavePath));
+        }
+
         var torrentLock = GetTorrentLock(torrentId);
         await torrentLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         var statusTransitioned = false;
         Torrent torrent = null;
         var previousStatus = TorrentStatus.Paused;
+        string currentPath = null;
+        var createdDirectories = new List<string>();
 
         try
         {
@@ -92,7 +128,7 @@ public class TorrentRelocationService : ITorrentRelocationService
                 return false;
             }
 
-            var currentPath = !string.IsNullOrWhiteSpace(torrent.SavePath) ? torrent.SavePath : torrent.SourcePath;
+            currentPath = !string.IsNullOrWhiteSpace(torrent.SavePath) ? torrent.SavePath : torrent.SourcePath;
             if (string.IsNullOrWhiteSpace(currentPath))
             {
                 currentPath = _configService?.DefaultSavePath ?? string.Empty;
@@ -106,18 +142,6 @@ public class TorrentRelocationService : ITorrentRelocationService
                 _logger.Debug("Torrent {0} is already at {1}", torrentId, newSavePath);
                 return true;
             }
-
-            // 1. State transition & peer choking
-            previousStatus = torrent.Status;
-            torrent.Status = TorrentStatus.Moving;
-            _torrentService.Update(torrent);
-            _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, previousStatus, TorrentStatus.Moving));
-            statusTransitioned = true;
-
-            ChokePeers(torrent);
-
-            // 2. Teardown handles & flush buffers
-            TeardownHandlesAndFlushBuffers(torrent);
 
             // Determine source item (file or directory)
             string sourceItem = null;
@@ -172,6 +196,56 @@ public class TorrentRelocationService : ITorrentRelocationService
                 return true;
             }
 
+            // Pre-flight disk space & write permission validation
+            var targetDirectory = isDirectory
+                ? Path.GetDirectoryName(destinationItem.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                : Path.GetDirectoryName(destinationItem);
+
+            if (string.IsNullOrWhiteSpace(targetDirectory))
+            {
+                targetDirectory = normalizedNew;
+            }
+
+            long totalPayloadSize = 0;
+            if (isDirectory)
+            {
+                var files = Directory.GetFiles(sourceItem, "*", SearchOption.AllDirectories);
+                totalPayloadSize = files.Sum(f => new FileInfo(f).Length);
+            }
+            else
+            {
+                totalPayloadSize = new FileInfo(sourceItem).Length;
+            }
+
+            var availableFreeSpace = DiskProvider.GetAvailableFreeSpace(targetDirectory);
+            if (availableFreeSpace < totalPayloadSize)
+            {
+                var errorMsg = $"Insufficient free space on destination volume for torrent {torrentId}: required {totalPayloadSize} bytes, available {availableFreeSpace} bytes";
+                _logger.Error(errorMsg);
+                _eventAggregator?.PublishEvent(new FileMoveFailedEvent(torrent, currentPath, newSavePath, errorMsg));
+                return false;
+            }
+
+            if (!DiskProvider.CheckFolderWritable(targetDirectory))
+            {
+                var errorMsg = $"Destination directory '{targetDirectory}' is not writable or access is denied";
+                _logger.Error(errorMsg);
+                _eventAggregator?.PublishEvent(new FileMoveFailedEvent(torrent, currentPath, newSavePath, errorMsg));
+                return false;
+            }
+
+            // 1. State transition & peer choking
+            previousStatus = torrent.Status;
+            torrent.Status = TorrentStatus.Moving;
+            _torrentService.Update(torrent);
+            _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, previousStatus, TorrentStatus.Moving));
+            statusTransitioned = true;
+
+            ChokePeers(torrent);
+
+            // 2. Teardown handles & flush buffers
+            TeardownHandlesAndFlushBuffers(torrent);
+
             // 3. Fast atomic move first: attempt File.Move / Directory.Move
             if (!ForceFallbackCopy)
             {
@@ -183,7 +257,7 @@ public class TorrentRelocationService : ITorrentRelocationService
 
                     if (!string.IsNullOrWhiteSpace(destParent) && !Directory.Exists(destParent))
                     {
-                        Directory.CreateDirectory(destParent);
+                        TrackAndCreateDirectory(destParent, createdDirectories);
                     }
 
                     if (isDirectory)
@@ -205,12 +279,30 @@ public class TorrentRelocationService : ITorrentRelocationService
                 {
                     _logger.Info(ex, "Atomic move failed with cross-device link for torrent {0}, falling back to streaming copy-verify-delete", torrentId);
                 }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Fast atomic move failed for torrent {0}", torrentId);
+                    RollbackCreatedDirectories(createdDirectories);
+                    throw;
+                }
             }
 
             // 4. Fallback to streaming copy-verify-delete
-            var success = await ExecuteCopyVerifyDeleteAsync(torrent, sourceItem, destinationItem, isDirectory, currentPath, newSavePath, previousStatus, cancellationToken).ConfigureAwait(false);
+            var success = await ExecuteCopyVerifyDeleteAsync(
+                torrent,
+                sourceItem,
+                destinationItem,
+                isDirectory,
+                currentPath,
+                newSavePath,
+                previousStatus,
+                createdDirectories,
+                cancellationToken).ConfigureAwait(false);
+
             if (!success)
             {
+                torrent.SavePath = currentPath;
+                torrent.SourcePath = currentPath;
                 RestoreStatusOnFailure(torrent, previousStatus);
             }
 
@@ -221,8 +313,11 @@ public class TorrentRelocationService : ITorrentRelocationService
         catch (Exception ex)
         {
             _logger.Error(ex, "Relocation failed for torrent {0}", torrentId);
+            RollbackCreatedDirectories(createdDirectories);
             if (statusTransitioned && torrent != null)
             {
+                torrent.SavePath = currentPath;
+                torrent.SourcePath = currentPath;
                 RestoreStatusOnFailure(torrent, previousStatus);
                 UnchokePeers(torrent);
                 statusTransitioned = false;
@@ -245,6 +340,7 @@ public class TorrentRelocationService : ITorrentRelocationService
         string currentPath,
         string newSavePath,
         TorrentStatus previousStatus,
+        List<string> createdDirectories,
         CancellationToken cancellationToken)
     {
         var torrentId = torrent.Id;
@@ -265,12 +361,12 @@ public class TorrentRelocationService : ITorrentRelocationService
             TotalBytes = totalBytes,
             TotalFiles = allFiles.Length,
             BytesTransferred = 0,
-            StartTimeUtc = DateTime.UtcNow
+            StartTimeUtc = DateTime.UtcNow,
         };
         _activeProgress[torrentId] = progress;
 
         string currentTargetFile = null;
-        var copiedFiles = new ConcurrentBag<(string Source, string Target)>();
+        var rollbackJournal = new Stack<RelocationJournalEntry>();
 
         try
         {
@@ -294,7 +390,17 @@ public class TorrentRelocationService : ITorrentRelocationService
                 var targetDir = Path.GetDirectoryName(targetFile);
                 if (!string.IsNullOrWhiteSpace(targetDir) && !Directory.Exists(targetDir))
                 {
-                    Directory.CreateDirectory(targetDir);
+                    TrackAndCreateDirectory(targetDir, createdDirectories);
+                }
+
+                if (SimulateFailureOnFileIndex.HasValue && SimulateFailureOnFileIndex.Value == i)
+                {
+                    throw new IOException($"Simulated relocation failure on file index {i} ({targetFile})");
+                }
+
+                if (BeforeFileCopyHook != null)
+                {
+                    await BeforeFileCopyHook(targetFile).ConfigureAwait(false);
                 }
 
                 var sourceInfo = new FileInfo(sourceFile);
@@ -326,16 +432,7 @@ public class TorrentRelocationService : ITorrentRelocationService
                 var targetInfo = new FileInfo(targetFile);
                 if (targetInfo.Length != sourceInfo.Length)
                 {
-                    _logger.Error("Integrity verification failed for {0}: expected {1} bytes, got {2} bytes", targetFile, sourceInfo.Length, targetInfo.Length);
-                    if (File.Exists(targetFile))
-                    {
-                        File.Delete(targetFile);
-                    }
-
-                    progress.ErrorMessage = $"Integrity verification failed: size mismatch ({targetInfo.Length} != {sourceInfo.Length})";
-                    PublishProgress(progress, sourceFile, i + 1, allFiles.Length, isComplete: true);
-                    _eventAggregator?.PublishEvent(new FileMoveFailedEvent(torrent, currentPath, newSavePath, progress.ErrorMessage));
-                    return false;
+                    throw new IOException($"Integrity verification failed for {targetFile}: expected {sourceInfo.Length} bytes, got {targetInfo.Length} bytes");
                 }
 
                 // Preserve file timestamps and permissions
@@ -355,15 +452,24 @@ public class TorrentRelocationService : ITorrentRelocationService
                     }
                 }
 
-                copiedFiles.Add((sourceFile, targetFile));
+                rollbackJournal.Push(new RelocationJournalEntry
+                {
+                    SourcePath = sourceFile,
+                    DestinationPath = targetFile,
+                    MoveType = RelocationMoveType.CopyDelete,
+                    SourceDeleted = false,
+                    DestinationCreated = true,
+                });
+                currentTargetFile = null;
             }
 
             // Delete source files only after all files are copied and verified
-            foreach (var file in allFiles)
+            foreach (var entry in rollbackJournal)
             {
-                if (File.Exists(file))
+                if (File.Exists(entry.SourcePath))
                 {
-                    File.Delete(file);
+                    File.Delete(entry.SourcePath);
+                    entry.SourceDeleted = true;
                 }
             }
 
@@ -388,35 +494,16 @@ public class TorrentRelocationService : ITorrentRelocationService
         catch (OperationCanceledException)
         {
             _logger.Warn("Relocation for torrent {0} was canceled", torrentId);
-            if (!string.IsNullOrEmpty(currentTargetFile) && File.Exists(currentTargetFile))
-            {
-                try
-                {
-                    File.Delete(currentTargetFile);
-                }
-                catch
-                {
-                }
-            }
-
+            ExecuteRollback(rollbackJournal, createdDirectories, currentTargetFile);
             progress.ErrorMessage = "Relocation canceled";
             PublishProgress(progress, null, 0, allFiles.Length, isComplete: true);
+            _eventAggregator?.PublishEvent(new FileMoveFailedEvent(torrent, currentPath, newSavePath, "Relocation canceled"));
             return false;
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Relocation for torrent {0} failed", torrentId);
-            if (!string.IsNullOrEmpty(currentTargetFile) && File.Exists(currentTargetFile))
-            {
-                try
-                {
-                    File.Delete(currentTargetFile);
-                }
-                catch
-                {
-                }
-            }
-
+            ExecuteRollback(rollbackJournal, createdDirectories, currentTargetFile);
             progress.ErrorMessage = ex.Message;
             PublishProgress(progress, null, 0, allFiles.Length, isComplete: true);
             _eventAggregator?.PublishEvent(new FileMoveFailedEvent(torrent, currentPath, newSavePath, ex.Message));
@@ -425,6 +512,140 @@ public class TorrentRelocationService : ITorrentRelocationService
         finally
         {
             _activeProgress.TryRemove(torrentId, out _);
+        }
+    }
+
+    private void ExecuteRollback(
+        Stack<RelocationJournalEntry> rollbackJournal,
+        List<string> createdDirectories,
+        string currentTargetFile)
+    {
+        _logger.Info("Executing rollback for relocation operations");
+
+        if (!string.IsNullOrEmpty(currentTargetFile) && File.Exists(currentTargetFile))
+        {
+            try
+            {
+                File.Delete(currentTargetFile);
+                _logger.Debug("Rollback: deleted partial file {0}", currentTargetFile);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Rollback: failed to delete partial file {0}", currentTargetFile);
+            }
+        }
+
+        while (rollbackJournal != null && rollbackJournal.Count > 0)
+        {
+            var entry = rollbackJournal.Pop();
+            try
+            {
+                if (entry.MoveType == RelocationMoveType.AtomicMove)
+                {
+                    if (File.Exists(entry.DestinationPath))
+                    {
+                        var srcDir = Path.GetDirectoryName(entry.SourcePath);
+                        if (!string.IsNullOrEmpty(srcDir) && !Directory.Exists(srcDir))
+                        {
+                            Directory.CreateDirectory(srcDir);
+                        }
+
+                        File.Move(entry.DestinationPath, entry.SourcePath, overwrite: true);
+                        _logger.Debug("Rollback: moved {0} back to {1}", entry.DestinationPath, entry.SourcePath);
+                    }
+                }
+                else if (entry.MoveType == RelocationMoveType.CopyDelete)
+                {
+                    if (entry.SourceDeleted)
+                    {
+                        if (File.Exists(entry.DestinationPath))
+                        {
+                            var srcDir = Path.GetDirectoryName(entry.SourcePath);
+                            if (!string.IsNullOrEmpty(srcDir) && !Directory.Exists(srcDir))
+                            {
+                                Directory.CreateDirectory(srcDir);
+                            }
+
+                            File.Move(entry.DestinationPath, entry.SourcePath, overwrite: true);
+                            _logger.Debug("Rollback: restored deleted source {0} from {1}", entry.SourcePath, entry.DestinationPath);
+                        }
+                    }
+                    else
+                    {
+                        if (File.Exists(entry.DestinationPath))
+                        {
+                            File.Delete(entry.DestinationPath);
+                            _logger.Debug("Rollback: deleted destination copy {0}", entry.DestinationPath);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Rollback: failed to undo file operation for {0}", entry.DestinationPath);
+            }
+        }
+
+        RollbackCreatedDirectories(createdDirectories);
+    }
+
+    private void RollbackCreatedDirectories(List<string> createdDirectories)
+    {
+        if (createdDirectories == null || createdDirectories.Count == 0)
+        {
+            return;
+        }
+
+        for (var i = createdDirectories.Count - 1; i >= 0; i--)
+        {
+            var dir = createdDirectories[i];
+            try
+            {
+                if (Directory.Exists(dir) && Directory.GetFileSystemEntries(dir).Length == 0)
+                {
+                    Directory.Delete(dir);
+                    _logger.Debug("Rollback: cleaned up empty directory {0}", dir);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Rollback: failed to clean up directory {0}", dir);
+            }
+        }
+    }
+
+    private static void TrackAndCreateDirectory(string path, List<string> createdDirectories)
+    {
+        if (string.IsNullOrWhiteSpace(path) || Directory.Exists(path))
+        {
+            return;
+        }
+
+        var dirsToCreate = new List<string>();
+        var current = Path.GetFullPath(path);
+        while (!string.IsNullOrEmpty(current) && !Directory.Exists(current))
+        {
+            dirsToCreate.Add(current);
+            var parent = Path.GetDirectoryName(current);
+            if (parent == current || string.IsNullOrEmpty(parent))
+            {
+                break;
+            }
+
+            current = parent;
+        }
+
+        dirsToCreate.Reverse();
+        foreach (var dir in dirsToCreate)
+        {
+            if (!Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+                if (!createdDirectories.Contains(dir, StringComparer.OrdinalIgnoreCase))
+                {
+                    createdDirectories.Add(dir);
+                }
+            }
         }
     }
 
@@ -444,6 +665,7 @@ public class TorrentRelocationService : ITorrentRelocationService
         var restoredStatus = previousStatus != TorrentStatus.Moving ? previousStatus : TorrentStatus.Error;
         torrent.Status = restoredStatus;
         _torrentService.Update(torrent);
+        _logger.Warn("Torrent {0} status restored to {1} at {2}", torrent.Id, restoredStatus, torrent.SavePath);
         _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Moving, restoredStatus));
     }
 
