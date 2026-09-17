@@ -2329,4 +2329,119 @@ public class PeerServerTest
                 p.Last().Ip == "93.184.216.35" && !p.Last().IsSeeder),
             "pex");
     }
+
+    [Test]
+    public void HandleExtendedMessage_pex_received_under_55_seconds_apart_should_be_dropped_as_rate_limit_violation()
+    {
+        _configService.EnablePex.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "RateLimitTorrent",
+            Progress = 0.5
+        };
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var (_, serverConn) = CreateTestPair();
+        serverConn.InfoHash = torrent.InfoHash;
+        serverConn.RemoteExtensions["ut_pex"] = 1;
+        serverConn.LastPexReceived = DateTime.UtcNow.AddSeconds(-30);
+
+        var peerExchange = new PeerExchange(_configService);
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x00 }
+        };
+
+        var pexBytes = peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var payload = new byte[1 + pexBytes.Length];
+        payload[0] = 1;
+        Array.Copy(pexBytes, 0, payload, 1, pexBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload }, torrent);
+
+        _peerDiscovery.DidNotReceive().AddPeers(Arg.Any<string>(), Arg.Any<IEnumerable<PeerInfo>>(), Arg.Any<string>());
+        Assert.That(serverConn.PexRateLimitViolations, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void HandleExtendedMessage_repeated_pex_rate_limit_violations_should_trigger_peer_disconnection()
+    {
+        _configService.EnablePex.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "FloodTorrent",
+            Progress = 0.5
+        };
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var (_, serverConn) = CreateTestPair();
+        serverConn.InfoHash = torrent.InfoHash;
+        serverConn.RemoteExtensions["ut_pex"] = 1;
+        serverConn.LastPexReceived = DateTime.UtcNow.AddSeconds(-10);
+        serverConn.PexRateLimitViolations = 3;
+
+        var peerExchange = new PeerExchange(_configService);
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x00 }
+        };
+
+        var pexBytes = peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var payload = new byte[1 + pexBytes.Length];
+        payload[0] = 1;
+        Array.Copy(pexBytes, 0, payload, 1, pexBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload }, torrent);
+
+        Assert.That(serverConn.PexRateLimitViolations, Is.EqualTo(4));
+        _connectionManager.Received(1).Remove(serverConn);
+        _peerDiscovery.DidNotReceive().AddPeers(Arg.Any<string>(), Arg.Any<IEnumerable<PeerInfo>>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void HandleExtendedMessage_valid_pex_spaced_at_least_55_seconds_apart_should_reset_violations_and_process_normally()
+    {
+        _configService.EnablePex.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "ValidTorrent",
+            Progress = 0.5
+        };
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var (_, serverConn) = CreateTestPair();
+        serverConn.InfoHash = torrent.InfoHash;
+        serverConn.RemoteExtensions["ut_pex"] = 1;
+        serverConn.LastPexReceived = DateTime.UtcNow.AddSeconds(-60);
+        serverConn.PexRateLimitViolations = 2;
+
+        var peerExchange = new PeerExchange(_configService);
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x00 }
+        };
+
+        var pexBytes = peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var payload = new byte[1 + pexBytes.Length];
+        payload[0] = 1;
+        Array.Copy(pexBytes, 0, payload, 1, pexBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload }, torrent);
+
+        Assert.That(serverConn.PexRateLimitViolations, Is.EqualTo(0));
+        Assert.That(serverConn.LastPexReceived, Is.GreaterThan(DateTime.UtcNow.AddSeconds(-5)));
+        _peerDiscovery.Received(1).AddPeers(torrent.InfoHash, Arg.Any<IEnumerable<PeerInfo>>(), "pex");
+    }
 }

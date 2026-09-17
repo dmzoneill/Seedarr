@@ -117,6 +117,8 @@ public class PeerConnection : IDisposable
     public HashSet<int> AllowedFastPieces { get; } = new();
     public DateTime LastRequestReceived { get; set; } = DateTime.UtcNow;
     public DateTime LastUnchokedAt { get; set; } = DateTime.MinValue;
+    public DateTime LastPexReceived { get; set; } = DateTime.MinValue;
+    public int PexRateLimitViolations { get; set; }
 
     private bool _isSeed;
 
