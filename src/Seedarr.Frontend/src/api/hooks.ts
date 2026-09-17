@@ -6,6 +6,7 @@ import type {
   BulkActionResult,
   Category,
   TorrentFileInfo,
+  PieceMapResource,
   SeedingStats,
   SpeedSnapshot,
   TorrentSpeedSnapshot,
@@ -138,6 +139,16 @@ export function useTorrentFiles(torrentId: number) {
     queryKey: ["torrents", torrentId, "files"],
     queryFn: () => apiClient.get(`/torrent/${torrentId}/files`),
     enabled: torrentId > 0,
+  });
+}
+
+export function usePieceMap(torrentId?: number) {
+  const interval = useRefetchInterval();
+  return useQuery<PieceMapResource>({
+    queryKey: ["torrents", torrentId, "piecemap"],
+    queryFn: () => apiClient.get(`/torrents/${torrentId}/piecemap`),
+    enabled: typeof torrentId === "number" && torrentId > 0,
+    refetchInterval: interval,
   });
 }
 

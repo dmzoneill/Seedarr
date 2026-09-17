@@ -181,6 +181,22 @@ export interface TorrentFileInfo {
   isPaddingFile?: boolean;
 }
 
+export interface PieceMapSpan {
+  count: number;
+  state: number;
+}
+
+export interface PieceMapResource {
+  torrentId: number;
+  infoHash: string;
+  totalPieces: number;
+  pieceLength: number;
+  spans: PieceMapSpan[];
+  rleSpans: [number, number][];
+  rarity?: number[];
+  raritySpans?: [number, number][];
+}
+
 export interface SeedingStats {
   activeTorrents: number;
   totalUploaded: number;
