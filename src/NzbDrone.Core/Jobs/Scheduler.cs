@@ -46,7 +46,9 @@ public class Scheduler : BackgroundService
 
                         _logger.Debug("Executing scheduled task: {0}", next.TypeName);
                         var startTime = DateTime.UtcNow;
-                        _taskManager.RecordTaskStarted(next.TypeName);
+                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                        cts.CancelAfter(TimeSpan.FromMinutes(10));
+                        _taskManager.RecordTaskStarted(next.TypeName, cts);
 
                         try
                         {
@@ -56,15 +58,17 @@ public class Scheduler : BackgroundService
 
                             if (taskInstance != null)
                             {
-                                using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-                                cts.CancelAfter(TimeSpan.FromMinutes(10));
-                                await Task.Run(() => taskInstance.Execute(), cts.Token);
+                                await Task.Run(() => taskInstance.Execute(cts.Token), cts.Token);
                                 _logger.Debug("Scheduled task completed: {0}", next.TypeName);
                             }
                             else
                             {
                                 _logger.Warn("No task instance found for scheduled type: {0}", next.TypeName);
                             }
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            _logger.Warn("Scheduled task was canceled or timed out: {0}", next.TypeName);
                         }
                         catch (Exception ex)
                         {

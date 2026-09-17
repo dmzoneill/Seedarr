@@ -184,6 +184,23 @@ function SystemTasks() {
     },
   });
 
+  const abortTaskMutation = useMutation({
+    mutationFn: (task: ScheduledTask) => {
+      const endpoint = task.id
+        ? `/system/task/${task.id}/abort`
+        : `/system/task/${encodeURIComponent(task.typeName)}/abort`;
+      return apiClient.post(endpoint, {});
+    },
+    onSuccess: (_, task) => {
+      showToast(`Aborted execution of ${formatTaskName(task.typeName)}`, "success");
+      queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
+    },
+    onError: (err: Error) => {
+      showToast(`Failed to abort task: ${err.message}`, "error");
+    },
+  });
+
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
       {/* Header Banner */}
@@ -346,7 +363,7 @@ function SystemTasks() {
                     >
                       {formatRelativeTime(task.nextExecution)}
                     </td>
-                    <td style={{ textAlign: "right" }}>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <button
                         className="btn btn-outline"
                         style={{
@@ -362,6 +379,24 @@ function SystemTasks() {
                       >
                         {task.isRunning ? "⏳ Running..." : "⚡ Run Now"}
                       </button>
+                      {task.isRunning && (
+                        <button
+                          className="btn btn-danger"
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "0.25rem 0.6rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                            marginLeft: "0.5rem",
+                          }}
+                          onClick={() => abortTaskMutation.mutate(task)}
+                          disabled={abortTaskMutation.isPending}
+                          title="Abort running task"
+                        >
+                          🛑 Abort
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

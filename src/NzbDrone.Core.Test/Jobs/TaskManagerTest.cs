@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Datastore;
@@ -252,5 +253,99 @@ public class TaskManagerTest
 
         _repository.Received().Update(Arg.Is<ScheduledTask>(t =>
             t.LastStartTime == t.LastExecution));
+    }
+
+    [Test]
+    public void CancelTask_by_id_should_cancel_running_task_and_update_status()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        using var cts = new CancellationTokenSource();
+        _subject.RecordTaskStarted("TestTask", cts);
+
+        var result = _subject.CancelTask(1);
+
+        Assert.That(result, Is.True);
+        Assert.That(cts.IsCancellationRequested, Is.True);
+        Assert.That(_subject.IsCanceled("TestTask"), Is.True);
+        Assert.That(_subject.GetTaskStatus("TestTask"), Is.EqualTo("Canceled"));
+    }
+
+    [Test]
+    public void CancelTask_by_id_should_return_false_when_task_not_found()
+    {
+        _repository.All().Returns(new List<ScheduledTask>());
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        var result = _subject.CancelTask(999);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void CancelTask_by_name_should_cancel_running_task_matching_short_name()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "NzbDrone.Core.Jobs.CleanupTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        using var cts = new CancellationTokenSource();
+        _subject.RecordTaskStarted("NzbDrone.Core.Jobs.CleanupTask", cts);
+
+        var result = _subject.CancelTask("CleanupTask");
+
+        Assert.That(result, Is.True);
+        Assert.That(cts.IsCancellationRequested, Is.True);
+        Assert.That(_subject.IsCanceled("NzbDrone.Core.Jobs.CleanupTask"), Is.True);
+    }
+
+    [Test]
+    public void CancelTask_by_name_should_return_false_when_task_not_running()
+    {
+        _repository.All().Returns(new List<ScheduledTask>());
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        var result = _subject.CancelTask("NonExistentTask");
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void RecordTaskFinished_should_preserve_canceled_status()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        using var cts = new CancellationTokenSource();
+        _subject.RecordTaskStarted("TestTask", cts);
+        _subject.CancelTask(1);
+
+        var startTime = DateTime.UtcNow;
+        _subject.RecordTaskFinished("TestTask", startTime);
+
+        Assert.That(_subject.IsRunning("TestTask"), Is.False);
+        Assert.That(_subject.IsCanceled("TestTask"), Is.True);
+        Assert.That(_subject.GetTaskStatus("TestTask"), Is.EqualTo("Canceled"));
     }
 }
