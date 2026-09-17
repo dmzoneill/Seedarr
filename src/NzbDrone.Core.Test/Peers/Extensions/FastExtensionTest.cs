@@ -163,6 +163,24 @@ public class FastExtensionTest
     }
 
     [Test]
+    public void SendHaveAllOrBitfield_should_send_dynamic_bitfield_when_partial_bitfield_provided()
+    {
+        using var connection = CreateConnection();
+        var ms = (MemoryStream)typeof(PeerConnection)
+            .GetField("_activeStream", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(connection)!;
+        ms.SetLength(0);
+
+        var dynamicBitfield = new byte[] { 0xA0, 0x05 };
+        _handler.SendHaveAllOrBitfield(connection, 16, hasAll: false, hasNone: false, bitfield: dynamicBitfield);
+
+        var data = ms.ToArray();
+        Assert.That(data.Length, Is.GreaterThanOrEqualTo(5));
+        Assert.That(data[4], Is.EqualTo((byte)PeerMessageType.Bitfield));
+        Assert.That(data[5..], Is.EqualTo(dynamicBitfield));
+    }
+
+    [Test]
     public void HandleMessage_reject_request_should_decrement_pending_request_count()
     {
         using var connection = CreateConnection();
