@@ -53,7 +53,7 @@ public class TransmissionRpcControllerTest
             categoryService: _categoryService);
 
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers["X-Transmission-Session-Id"] = "test-session-id";
+        httpContext.Request.Headers["X-Transmission-Session-Id"] = TransmissionRpcController.CurrentSessionId;
         _controller.ControllerContext = new ControllerContext
         {
             HttpContext = httpContext,
@@ -68,8 +68,8 @@ public class TransmissionRpcControllerTest
         var request = new TransmissionRpcRequest { Method = "session-get" };
         var result = _controller.HandleRpc(request).GetAwaiter().GetResult();
 
-        Assert.That(result, Is.InstanceOf<ObjectResult>());
-        var objResult = (ObjectResult)result;
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var objResult = (ContentResult)result;
         Assert.That(objResult.StatusCode, Is.EqualTo(409));
         Assert.That(_controller.Response.Headers.ContainsKey("X-Transmission-Session-Id"), Is.True);
     }
@@ -195,7 +195,7 @@ public class TransmissionRpcControllerTest
             tagService);
 
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers["X-Transmission-Session-Id"] = "test-session-id";
+        httpContext.Request.Headers["X-Transmission-Session-Id"] = TransmissionRpcController.CurrentSessionId;
         controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
         var torrent = new Torrent
@@ -238,7 +238,7 @@ public class TransmissionRpcControllerTest
             tagService);
 
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers["X-Transmission-Session-Id"] = "test-session-id";
+        httpContext.Request.Headers["X-Transmission-Session-Id"] = TransmissionRpcController.CurrentSessionId;
         controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
         var torrent = new Torrent

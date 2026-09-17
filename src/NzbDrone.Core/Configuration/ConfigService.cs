@@ -98,10 +98,14 @@ public interface IConfigService
     int HistoryRetentionDays { get; }
     int MaxUploadSpeedKbps { get; }
     int MaxDownloadSpeedKbps { get; }
+    bool SpeedLimitDownEnabled { get; }
+    bool SpeedLimitUpEnabled { get; }
     bool AlternativeSpeedEnabled { get; }
     int AltUploadSpeedKbps { get; }
     int AltDownloadSpeedKbps { get; }
     double GlobalSeedRatioLimit { get; }
+    bool SeedRatioLimited { get; }
+    bool GlobalSeedRatioLimited { get; }
     string SeedGoalReachedAction { get; }
 
     // Speed Distribution
@@ -463,10 +467,14 @@ public class ConfigService : IConfigService
 
     public int MaxUploadSpeedKbps => GetPositiveSpeedKbps("MaxUploadSpeedKbps", DefaultMaxUploadSpeedKbps);
     public int MaxDownloadSpeedKbps => GetPositiveSpeedKbps("MaxDownloadSpeedKbps", DefaultMaxDownloadSpeedKbps);
+    public bool SpeedLimitDownEnabled => GetValueBoolean("SpeedLimitDownEnabled", false);
+    public bool SpeedLimitUpEnabled => GetValueBoolean("SpeedLimitUpEnabled", false);
     public bool AlternativeSpeedEnabled => GetValueBoolean("AlternativeSpeedEnabled", false);
     public int AltUploadSpeedKbps => GetPositiveSpeedKbps("AltUploadSpeedKbps", 50);
     public int AltDownloadSpeedKbps => GetPositiveSpeedKbps("AltDownloadSpeedKbps", 100);
     public double GlobalSeedRatioLimit => GetValueDouble("GlobalSeedRatioLimit", 0.0);
+    public bool SeedRatioLimited => GlobalSeedRatioLimited;
+    public bool GlobalSeedRatioLimited => GetValueBoolean("GlobalSeedRatioLimited", false) || GetValueBoolean("SeedRatioLimited", false);
     public string SeedGoalReachedAction => GetValue("SeedGoalReachedAction", "Stop");
 
     // Speed Distribution
