@@ -1594,4 +1594,140 @@ public class ArrWebhookServiceTest
         Assert.That(result.Success, Is.True);
         Assert.That(result.Message, Does.Contain($"Handled {eventType} event"));
     }
+
+    [Test]
+    public void ProcessWebhook_should_process_AlbumGrab_event()
+    {
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "AlbumGrab",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
+            InstanceName = "Lidarr",
+            Artist = new ArrWebhookArtist { Id = 1, Name = "Daft Punk" },
+            Album = new ArrWebhookAlbum { Id = 2, Title = "Discovery" },
+            Release = new ArrWebhookRelease
+            {
+                ReleaseTitle = "Daft Punk - Discovery (2001) FLAC",
+                Indexer = "MusicTracker",
+                Size = 350000000
+            }
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Does.Contain("Added"));
+        Assert.That(result.InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Name == "Daft Punk - Discovery (2001) FLAC" &&
+            t.InfoHash == "0123456789abcdef0123456789abcdef01234567" &&
+            t.TotalSize == 350000000));
+    }
+
+    [Test]
+    public void ProcessWebhook_should_process_BookGrab_event()
+    {
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "BookGrab",
+            DownloadId = "1111111111111111111111111111111111111111",
+            InstanceName = "Readarr",
+            Author = new ArrWebhookAuthor { Id = 1, Name = "Frank Herbert" },
+            Book = new ArrWebhookBook { Id = 2, Title = "Dune" },
+            Release = new ArrWebhookRelease
+            {
+                ReleaseTitle = "Frank Herbert - Dune (EPUB)",
+                Indexer = "BookTracker",
+                Size = 1500000
+            }
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Does.Contain("Added"));
+        Assert.That(result.InfoHash, Is.EqualTo("1111111111111111111111111111111111111111"));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Name == "Frank Herbert - Dune (EPUB)" &&
+            t.TotalSize == 1500000));
+    }
+
+    [Test]
+    public void ProcessWebhook_should_process_AlbumDownload_event_and_mark_torrent_as_seeding()
+    {
+        var existingTorrent = new Torrent
+        {
+            Id = 20,
+            Name = "Daft Punk - Discovery",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Status = TorrentStatus.Downloading,
+            Progress = 0.5
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "AlbumDownload",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
+            InstanceName = "Lidarr"
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Does.Contain("Processed AlbumDownload"));
+        Assert.That(result.InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
+        Assert.That(existingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(existingTorrent.Progress, Is.EqualTo(1.0));
+        _torrentService.Received(1).Update(existingTorrent);
+    }
+
+    [Test]
+    public void ProcessWebhook_should_process_BookDownload_event_and_mark_torrent_as_seeding()
+    {
+        var existingTorrent = new Torrent
+        {
+            Id = 21,
+            Name = "Frank Herbert - Dune",
+            InfoHash = "1111111111111111111111111111111111111111",
+            Status = TorrentStatus.Downloading,
+            Progress = 0.3
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "BookDownload",
+            DownloadId = "1111111111111111111111111111111111111111",
+            InstanceName = "Readarr"
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Does.Contain("Processed BookDownload"));
+        Assert.That(result.InfoHash, Is.EqualTo("1111111111111111111111111111111111111111"));
+        Assert.That(existingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(existingTorrent.Progress, Is.EqualTo(1.0));
+        _torrentService.Received(1).Update(existingTorrent);
+    }
+
+    [TestCase("TrackFileDelete")]
+    [TestCase("ArtistDelete")]
+    [TestCase("BookFileDelete")]
+    [TestCase("AuthorDelete")]
+    public void ProcessWebhook_should_handle_lidarr_and_readarr_delete_events(string eventType)
+    {
+        var payload = new ArrWebhookPayload
+        {
+            EventType = eventType
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Does.Contain($"Handled {eventType} event"));
+    }
 }

@@ -142,11 +142,13 @@ public class TorrentFileParser : ITorrentFileParser
                 throw new InvalidTorrentFileException($"Piece count {pieceCount} exceeds maximum permitted limit of {MaxPermittedPieces}.");
             }
 
-            var torrentName = GetStringWithUtf8Fallback(info, "name");
+            var torrentName = GetStringWithUtf8Fallback(info, "name") ?? GetStringWithUtf8Fallback(torrent, "name");
             if (torrentName == null)
             {
                 throw new InvalidTorrentFileException("Malformed torrent file: missing or invalid 'name'.");
             }
+
+            torrentName = torrentName.Normalize(NormalizationForm.FormC);
 
             string announceUrl = null;
             if (torrent.ContainsKey("announce") && torrent["announce"] is BString mainAnnounceStr)
@@ -209,7 +211,7 @@ public class TorrentFileParser : ITorrentFileParser
 
             if (info.ContainsKey("files") && info["files"] is BList files)
             {
-                var rootDirName = result.Name?.Replace('\\', '/').Trim('/', '\\');
+                var rootDirName = result.Name?.Replace('\\', '/').Trim('/', '\\')?.Normalize(NormalizationForm.FormC);
 
                 foreach (var fileObj in files)
                 {
@@ -236,7 +238,8 @@ public class TorrentFileParser : ITorrentFileParser
 
                     var pathParts = pathList.OfType<BString>()
                         .Select(p => DecodeBString(p).Replace('\\', '/').Trim('/', '\\'))
-                        .Where(p => !string.IsNullOrWhiteSpace(p));
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .Select(p => p.Normalize(NormalizationForm.FormC));
 
                     var relativePath = string.Join("/", pathParts);
                     var fullRelativePath = string.IsNullOrEmpty(rootDirName)
@@ -244,6 +247,8 @@ public class TorrentFileParser : ITorrentFileParser
                         : string.IsNullOrEmpty(relativePath)
                             ? rootDirName
                             : $"{rootDirName}/{relativePath}";
+
+                    fullRelativePath = fullRelativePath.Normalize(NormalizationForm.FormC);
 
                     var isPadding = IsPadding(file, fullRelativePath);
 
@@ -267,9 +272,25 @@ public class TorrentFileParser : ITorrentFileParser
                     throw new InvalidTorrentFileException($"Malformed torrent file: negative file length {lengthNum.Value}.");
                 }
 
+                var singleFilePath = result.Name;
+                var pathList = GetPathListWithUtf8Fallback(info) ?? GetPathListWithUtf8Fallback(torrent);
+                if (pathList != null)
+                {
+                    var pathParts = pathList.OfType<BString>()
+                        .Select(p => DecodeBString(p).Replace('\\', '/').Trim('/', '\\'))
+                        .Where(p => !string.IsNullOrWhiteSpace(p))
+                        .Select(p => p.Normalize(NormalizationForm.FormC));
+
+                    var resolvedPath = string.Join("/", pathParts);
+                    if (!string.IsNullOrWhiteSpace(resolvedPath))
+                    {
+                        singleFilePath = resolvedPath;
+                    }
+                }
+
                 result.Files.Add(new ParsedTorrentFile
                 {
-                    Path = result.Name,
+                    Path = singleFilePath.Normalize(NormalizationForm.FormC),
                     Size = lengthNum.Value,
                     IsPaddingFile = false
                 });
@@ -339,6 +360,11 @@ public class TorrentFileParser : ITorrentFileParser
 
     private static string GetStringWithUtf8Fallback(BDictionary dict, string primaryKey)
     {
+        if (dict == null)
+        {
+            return null;
+        }
+
         var utf8Key1 = primaryKey + ".utf-8";
         var utf8Key2 = primaryKey + ".utf8";
 
@@ -362,6 +388,11 @@ public class TorrentFileParser : ITorrentFileParser
 
     private static BList GetPathListWithUtf8Fallback(BDictionary dict)
     {
+        if (dict == null)
+        {
+            return null;
+        }
+
         if (dict.TryGetValue("path.utf-8", out var val1))
         {
             if (val1 is BList bl1)
@@ -399,6 +430,21 @@ public class TorrentFileParser : ITorrentFileParser
             {
                 return new BList { bs };
             }
+        }
+
+        if (dict.TryGetValue("name.utf-8", out var nVal1) && nVal1 is BString nbs1)
+        {
+            return new BList { nbs1 };
+        }
+
+        if (dict.TryGetValue("name.utf8", out var nVal2) && nVal2 is BString nbs2)
+        {
+            return new BList { nbs2 };
+        }
+
+        if (dict.TryGetValue("name", out var nVal) && nVal is BString nbs)
+        {
+            return new BList { nbs };
         }
 
         return null;

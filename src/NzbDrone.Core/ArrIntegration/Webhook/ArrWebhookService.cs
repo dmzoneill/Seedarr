@@ -116,19 +116,27 @@ public class ArrWebhookService : IArrWebhookService
     {
         if (string.Equals(payload.EventType, "SiteDelete", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(payload.EventType, "PerformerDelete", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(payload.EventType, "MovieDelete", StringComparison.OrdinalIgnoreCase))
+            string.Equals(payload.EventType, "MovieDelete", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "TrackFileDelete", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "ArtistDelete", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "BookFileDelete", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "AuthorDelete", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.Info("Webhook: handled Whisparr event '{0}'", payload.EventType);
+            _logger.Info("Webhook: handled delete event '{0}'", payload.EventType);
             return new ArrWebhookResult { Success = true, Message = $"Handled {payload.EventType} event" };
         }
 
-        if (string.Equals(payload.EventType, "MovieDownload", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(payload.EventType, "MovieDownload", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "AlbumDownload", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "BookDownload", StringComparison.OrdinalIgnoreCase))
         {
             return ProcessMovieDownload(payload);
         }
 
         var isGrab = string.Equals(payload.EventType, "Grab", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(payload.EventType, "MovieGrab", StringComparison.OrdinalIgnoreCase);
+                     string.Equals(payload.EventType, "MovieGrab", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(payload.EventType, "AlbumGrab", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(payload.EventType, "BookGrab", StringComparison.OrdinalIgnoreCase);
 
         if (!isGrab)
         {
@@ -175,10 +183,27 @@ public class ArrWebhookService : IArrWebhookService
             return new ArrWebhookResult { Success = true, Message = "Torrent already exists", InfoHash = infoHash };
         }
 
+        var releaseTitle = payload.Release?.ReleaseTitle;
+        if (string.IsNullOrWhiteSpace(releaseTitle))
+        {
+            if (payload.Album != null && !string.IsNullOrWhiteSpace(payload.Album.Title))
+            {
+                releaseTitle = payload.Artist != null && !string.IsNullOrWhiteSpace(payload.Artist.Name)
+                    ? $"{payload.Artist.Name} - {payload.Album.Title}"
+                    : payload.Album.Title;
+            }
+            else if (payload.Book != null && !string.IsNullOrWhiteSpace(payload.Book.Title))
+            {
+                releaseTitle = payload.Author != null && !string.IsNullOrWhiteSpace(payload.Author.Name)
+                    ? $"{payload.Author.Name} - {payload.Book.Title}"
+                    : payload.Book.Title;
+            }
+        }
+
         _logger.Info(
             "Webhook received: {0} grabbed '{1}' from {2}",
             payload.InstanceName,
-            payload.Release?.ReleaseTitle,
+            releaseTitle,
             payload.Release?.Indexer);
 
         var connection = FindConnection(payload);
@@ -188,13 +213,13 @@ public class ArrWebhookService : IArrWebhookService
                 "Webhook: automatic add is disabled for connection '{0}' ({1}), skipping torrent '{2}'",
                 connection.Name,
                 connection.ArrType,
-                payload.Release?.ReleaseTitle ?? infoHash);
+                releaseTitle ?? infoHash);
 
             if (_downloadHistoryService != null && _downloadHistoryService.GetByInfoHash(infoHash) == null)
             {
                 var historyTorrent = new Torrent
                 {
-                    Name = payload.Release?.ReleaseTitle ?? infoHash,
+                    Name = releaseTitle ?? infoHash,
                     InfoHash = infoHash,
                     TotalSize = payload.Release?.Size ?? 0,
                     DateAdded = DateTime.UtcNow,
@@ -217,7 +242,7 @@ public class ArrWebhookService : IArrWebhookService
 
         var torrent = new Torrent
         {
-            Name = payload.Release?.ReleaseTitle ?? infoHash,
+            Name = releaseTitle ?? infoHash,
             InfoHash = infoHash,
             TotalSize = payload.Release?.Size ?? 0,
             DateAdded = DateTime.UtcNow,
@@ -259,11 +284,11 @@ public class ArrWebhookService : IArrWebhookService
 
         if (existing == null)
         {
-            _logger.Info("Webhook MovieDownload: torrent with infohash '{0}' not found", infoHash);
+            _logger.Info("Webhook {0}: torrent with infohash '{1}' not found", payload.EventType, infoHash);
             return new ArrWebhookResult
             {
                 Success = true,
-                Message = "Torrent not found for MovieDownload",
+                Message = $"Torrent not found for {payload.EventType}",
                 InfoHash = infoHash
             };
         }
@@ -271,7 +296,7 @@ public class ArrWebhookService : IArrWebhookService
         existing.Status = TorrentStatus.Seeding;
         existing.Progress = 1.0;
         _torrentService.Update(existing);
-        _logger.Info("Webhook MovieDownload: marked torrent '{0}' as Seeding", existing.Name);
+        _logger.Info("Webhook {0}: marked torrent '{1}' as Seeding", payload.EventType, existing.Name);
 
         var connection = FindConnection(payload);
         if (connection != null)
@@ -282,7 +307,7 @@ public class ArrWebhookService : IArrWebhookService
         return new ArrWebhookResult
         {
             Success = true,
-            Message = "Processed MovieDownload event",
+            Message = $"Processed {payload.EventType} event",
             InfoHash = infoHash
         };
     }

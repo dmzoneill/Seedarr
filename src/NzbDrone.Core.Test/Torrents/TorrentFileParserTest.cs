@@ -1084,4 +1084,95 @@ public class TorrentFileParserTest
         var success = TorrentFileParser.TryExtractRawInfoBytes(bytes, out _);
         Assert.That(success, Is.False);
     }
+
+    [Test]
+    public void Parse_should_support_bep0047_name_utf8_in_info_dictionary()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var info = new BDictionary
+        {
+            { "name", new BString("ascii-fallback.txt") },
+            { "name.utf-8", new BString("Ren\u00e9_L\u00e9vesque.txt") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "length", new BNumber(1024) }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Name, Is.EqualTo("Ren\u00e9_L\u00e9vesque.txt"));
+    }
+
+    [Test]
+    public void Parse_should_support_bep0047_path_utf8_in_files_dictionary()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        var fileDict = new BDictionary
+        {
+            { "length", new BNumber(2048) },
+            { "path", new BList { new BString("CD1"), new BString("track01.mp3") } },
+            { "path.utf-8", new BList { new BString("Disc 1"), new BString("01 - Ch\u00e2teau.flac") } }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("MyAlbum") },
+            { "name.utf-8", new BString("My_Ch\u00e2teau_Album") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "files", new BList { fileDict } }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Name, Is.EqualTo("My_Ch\u00e2teau_Album"));
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("My_Ch\u00e2teau_Album/Disc 1/01 - Ch\u00e2teau.flac"));
+    }
+
+    [Test]
+    public void Parse_should_normalize_names_and_paths_to_unicode_nfc()
+    {
+        var pieces = new byte[20];
+        new Random(42).NextBytes(pieces);
+
+        // NFD decomposed form: "e\u0301" (e + combining acute)
+        // NFC composed form: "\u00e9"
+        var decomposedName = "Re\u0301sume\u0301";
+        var composedName = "R\u00e9sum\u00e9";
+
+        var fileDict = new BDictionary
+        {
+            { "length", new BNumber(1024) },
+            { "path", new BList { new BString("Disc 1"), new BString(decomposedName + ".mp3") } }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString(decomposedName) },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(pieces) },
+            { "files", new BList { fileDict } }
+        };
+
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Name, Is.EqualTo(composedName));
+        Assert.That(result.Files[0].Path, Is.EqualTo($"{composedName}/Disc 1/{composedName}.mp3"));
+        Assert.That(result.Name.IsNormalized(System.Text.NormalizationForm.FormC), Is.True);
+        Assert.That(result.Files[0].Path.IsNormalized(System.Text.NormalizationForm.FormC), Is.True);
+    }
 }
