@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Messaging.Events;
@@ -8,7 +11,7 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Trackers.Metrics;
 
-public interface ITrackerMetricService
+public interface ITrackerMetricService : IDisposable
 {
     TrackerMetric RecordAnnounce(
         string trackerUrl,
@@ -40,6 +43,9 @@ public interface ITrackerMetricService
     void ResetMetrics(int id);
     void DeleteMetric(int id);
     void SeedFromExistingTrackers();
+    void Flush();
+    Task FlushAsync();
+    void PruneSnapshots(DateTime cutoff);
 }
 
 public class TrackerMetricsSummary
@@ -100,7 +106,7 @@ public class HourlyTrafficPoint
     public double AvgLatencyMs { get; set; }
 }
 
-public class TrackerMetricService : ITrackerMetricService
+public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDisposable
 {
     private readonly ITrackerMetricRepository _metricRepository;
     private readonly ITrackerMetricSnapshotRepository _snapshotRepository;
@@ -109,6 +115,19 @@ public class TrackerMetricService : ITrackerMetricService
     private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
     private readonly object _lock = new();
+
+    private readonly Channel<TrackerMetricSnapshot> _snapshotChannel = Channel.CreateBounded<TrackerMetricSnapshot>(
+        new BoundedChannelOptions(5000)
+        {
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleReader = false,
+            SingleWriter = false
+        });
+    private readonly CancellationTokenSource _cts = new();
+    private readonly Task _flushTask;
+    private readonly Timer _pruneTimer;
+    private readonly SemaphoreSlim _flushLock = new(1, 1);
+    private bool _disposed;
 
     public TrackerMetricService(
         ITrackerMetricRepository metricRepository,
@@ -123,6 +142,23 @@ public class TrackerMetricService : ITrackerMetricService
         _torrentRepository = torrentRepository;
         _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
+
+        _flushTask = Task.Run(ProcessSnapshotQueueAsync);
+        _pruneTimer = new Timer(
+            _ =>
+            {
+                try
+                {
+                    PruneSnapshots(DateTime.UtcNow.AddDays(-7));
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "Error during automatic tracker metric snapshot prune");
+                }
+            },
+            null,
+            TimeSpan.FromMinutes(15),
+            TimeSpan.FromHours(24));
 
         Task.Run(SeedFromExistingTrackers);
     }
@@ -190,10 +226,12 @@ public class TrackerMetricService : ITrackerMetricService
             return null;
         }
 
+        var now = DateTime.UtcNow;
+        TrackerMetric metric;
+
         lock (_lock)
         {
-            var metric = GetOrCreateMetric(trackerUrl);
-            var now = DateTime.UtcNow;
+            metric = GetOrCreateMetric(trackerUrl);
 
             metric.TotalAnnounces++;
             metric.LastAnnounce = now;
@@ -250,32 +288,24 @@ public class TrackerMetricService : ITrackerMetricService
 
             _metricRepository.Update(metric);
             _eventAggregator?.PublishEvent(new TrackerMetricUpdatedEvent(metric.TrackerUrl, metric.TotalAnnounces, metric.TotalUploaded, metric.TotalDownloaded, metric.Status));
-
-            // Record snapshot for time-series history
-            try
-            {
-                _snapshotRepository.Insert(new TrackerMetricSnapshot
-                {
-                    TrackerMetricId = metric.Id,
-                    TrackerUrl = metric.TrackerUrl,
-                    Timestamp = now,
-                    ResponseTimeMs = responseTimeMs,
-                    Uploaded = uploaded,
-                    Downloaded = downloaded,
-                    Seeders = seeders,
-                    Leechers = leechers,
-                    PeersDiscovered = peersCount,
-                    IsSuccess = success,
-                    Operation = "Announce"
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Failed inserting tracker metric snapshot");
-            }
-
-            return metric;
         }
+
+        _snapshotChannel.Writer.TryWrite(new TrackerMetricSnapshot
+        {
+            TrackerMetricId = metric.Id,
+            TrackerUrl = metric.TrackerUrl,
+            Timestamp = now,
+            ResponseTimeMs = responseTimeMs,
+            Uploaded = uploaded,
+            Downloaded = downloaded,
+            Seeders = seeders,
+            Leechers = leechers,
+            PeersDiscovered = peersCount,
+            IsSuccess = success,
+            Operation = "Announce"
+        });
+
+        return metric;
     }
 
     public TrackerMetric RecordScrape(
@@ -292,10 +322,12 @@ public class TrackerMetricService : ITrackerMetricService
             return null;
         }
 
+        var now = DateTime.UtcNow;
+        TrackerMetric metric;
+
         lock (_lock)
         {
-            var metric = GetOrCreateMetric(trackerUrl);
-            var now = DateTime.UtcNow;
+            metric = GetOrCreateMetric(trackerUrl);
 
             metric.TotalScrapes++;
             metric.LastScrape = now;
@@ -327,31 +359,24 @@ public class TrackerMetricService : ITrackerMetricService
 
             _metricRepository.Update(metric);
             _eventAggregator?.PublishEvent(new TrackerMetricUpdatedEvent(metric.TrackerUrl, metric.TotalAnnounces, metric.TotalUploaded, metric.TotalDownloaded, metric.Status));
-
-            try
-            {
-                _snapshotRepository.Insert(new TrackerMetricSnapshot
-                {
-                    TrackerMetricId = metric.Id,
-                    TrackerUrl = metric.TrackerUrl,
-                    Timestamp = now,
-                    ResponseTimeMs = responseTimeMs,
-                    Uploaded = 0,
-                    Downloaded = 0,
-                    Seeders = seeders,
-                    Leechers = leechers,
-                    PeersDiscovered = 0,
-                    IsSuccess = success,
-                    Operation = "Scrape"
-                });
-            }
-            catch (Exception ex)
-            {
-                _logger.Debug(ex, "Failed inserting tracker scrape snapshot");
-            }
-
-            return metric;
         }
+
+        _snapshotChannel.Writer.TryWrite(new TrackerMetricSnapshot
+        {
+            TrackerMetricId = metric.Id,
+            TrackerUrl = metric.TrackerUrl,
+            Timestamp = now,
+            ResponseTimeMs = responseTimeMs,
+            Uploaded = 0,
+            Downloaded = 0,
+            Seeders = seeders,
+            Leechers = leechers,
+            PeersDiscovered = 0,
+            IsSuccess = success,
+            Operation = "Scrape"
+        });
+
+        return metric;
     }
 
     public List<TrackerMetric> GetAllMetrics()
@@ -511,34 +536,94 @@ public class TrackerMetricService : ITrackerMetricService
             var now = DateTime.UtcNow;
             var currentHour = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0, DateTimeKind.Utc);
             var oldestBucketStart = currentHour.AddHours(-24);
-            var snapshots = _snapshotRepository.GetRecentSnapshots(oldestBucketStart);
+            var aggregated = _snapshotRepository.GetHourlyAggregatedMetrics(oldestBucketStart);
 
-            var hourlyBuckets = new List<HourlyTrafficPoint>(24);
-            for (var i = 0; i < 24; i++)
+            if (aggregated != null)
             {
-                var bucketStart = oldestBucketStart.AddHours(i);
-                var bucketEnd = bucketStart.AddHours(1);
-
-                var inBucket = snapshots.Where(s => s.Timestamp >= bucketStart && s.Timestamp < bucketEnd).ToList();
-                hourlyBuckets.Add(new HourlyTrafficPoint
+                var metricsByBucket = new Dictionary<string, HourlyTrackerMetricPoint>(StringComparer.OrdinalIgnoreCase);
+                foreach (var point in aggregated)
                 {
-                    TimeLabel = bucketStart.ToString("HH:mm"),
-                    Timestamp = bucketStart,
-                    Uploaded = inBucket.Sum(s => s.Uploaded),
-                    Downloaded = inBucket.Sum(s => s.Downloaded),
-                    Announces = inBucket.Count(s => s.Operation == "Announce"),
-                    PeersDiscovered = inBucket.Sum(s => s.PeersDiscovered),
-                    AvgLatencyMs = inBucket.Where(s => s.ResponseTimeMs > 0).Select(s => (double)s.ResponseTimeMs).DefaultIfEmpty(0).Average()
-                });
+                    if (point.Bucket != null)
+                    {
+                        metricsByBucket[point.Bucket] = point;
+                        if (DateTime.TryParse(point.Bucket, out var parsedDt))
+                        {
+                            metricsByBucket[parsedDt.ToString("yyyy-MM-dd HH:00:00")] = point;
+                        }
+                    }
+                }
+
+                var hourlyBuckets = new List<HourlyTrafficPoint>(24);
+                for (var i = 0; i < 24; i++)
+                {
+                    var bucketStart = oldestBucketStart.AddHours(i);
+                    var bucketKey = bucketStart.ToString("yyyy-MM-dd HH:00:00");
+
+                    if (metricsByBucket.TryGetValue(bucketKey, out var point))
+                    {
+                        hourlyBuckets.Add(new HourlyTrafficPoint
+                        {
+                            TimeLabel = bucketStart.ToString("HH:mm"),
+                            Timestamp = bucketStart,
+                            Uploaded = point.Uploaded,
+                            Downloaded = point.Downloaded,
+                            Announces = point.Announces,
+                            PeersDiscovered = point.PeersDiscovered,
+                            AvgLatencyMs = point.AvgLatencyMs
+                        });
+                    }
+                    else
+                    {
+                        hourlyBuckets.Add(new HourlyTrafficPoint
+                        {
+                            TimeLabel = bucketStart.ToString("HH:mm"),
+                            Timestamp = bucketStart,
+                            Uploaded = 0,
+                            Downloaded = 0,
+                            Announces = 0,
+                            PeersDiscovered = 0,
+                            AvgLatencyMs = 0
+                        });
+                    }
+                }
+
+                summary.HourlyHistory = hourlyBuckets;
+            }
+            else
+            {
+                // Fallback to in-memory scans if repository returns null (e.g., in unmocked tests)
+                var snapshots = _snapshotRepository.GetRecentSnapshots(oldestBucketStart);
+                if (snapshots != null)
+                {
+                    var hourlyBuckets = new List<HourlyTrafficPoint>(24);
+                    for (var i = 0; i < 24; i++)
+                    {
+                        var bucketStart = oldestBucketStart.AddHours(i);
+                        var bucketEnd = bucketStart.AddHours(1);
+
+                        var inBucket = snapshots.Where(s => s.Timestamp >= bucketStart && s.Timestamp < bucketEnd).ToList();
+                        hourlyBuckets.Add(new HourlyTrafficPoint
+                        {
+                            TimeLabel = bucketStart.ToString("HH:mm"),
+                            Timestamp = bucketStart,
+                            Uploaded = inBucket.Sum(s => s.Uploaded),
+                            Downloaded = inBucket.Sum(s => s.Downloaded),
+                            Announces = inBucket.Count(s => s.Operation == "Announce"),
+                            PeersDiscovered = inBucket.Sum(s => s.PeersDiscovered),
+                            AvgLatencyMs = inBucket.Where(s => s.ResponseTimeMs > 0).Select(s => (double)s.ResponseTimeMs).DefaultIfEmpty(0).Average()
+                        });
+                    }
+
+                    summary.HourlyHistory = hourlyBuckets;
+                }
             }
 
-            summary.HourlyHistory = hourlyBuckets;
-
             // SLA Latency Percentiles (P50, P95, P99)
-            var validLatencies = snapshots
+            var recentSnapshots = _snapshotRepository.GetRecentSnapshots(oldestBucketStart);
+            var validLatencies = recentSnapshots?
                 .Where(s => s.IsSuccess && s.ResponseTimeMs > 0)
                 .Select(s => (double)s.ResponseTimeMs)
-                .ToList();
+                .ToList() ?? new List<double>();
 
             if (validLatencies.Count > 0)
             {
@@ -748,6 +833,203 @@ public class TrackerMetricService : ITrackerMetricService
             metric.LatencyP50Ms = 0;
             metric.LatencyP95Ms = 0;
             metric.LatencyP99Ms = 0;
+        }
+    }
+
+    public void Flush()
+    {
+        DrainRemainingSnapshots();
+        _flushLock.Wait();
+        _flushLock.Release();
+    }
+
+    public async Task FlushAsync()
+    {
+        while (_snapshotChannel.Reader.Count > 0)
+        {
+            await Task.Delay(10).ConfigureAwait(false);
+        }
+
+        await _flushLock.WaitAsync().ConfigureAwait(false);
+        _flushLock.Release();
+    }
+
+    public void PruneSnapshots(DateTime cutoff)
+    {
+        try
+        {
+            _snapshotRepository.PruneOlderThan(cutoff);
+            _logger.Trace("Pruned tracker metric snapshots older than {0}", cutoff);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to prune tracker metric snapshots older than {0}", cutoff);
+        }
+    }
+
+    private async Task ProcessSnapshotQueueAsync()
+    {
+        var batch = new List<TrackerMetricSnapshot>(50);
+        var flushInterval = TimeSpan.FromSeconds(2);
+
+        try
+        {
+            while (await _snapshotChannel.Reader.WaitToReadAsync(_cts.Token).ConfigureAwait(false))
+            {
+                var stopwatch = Stopwatch.StartNew();
+
+                while (batch.Count < 50 && stopwatch.Elapsed < flushInterval)
+                {
+                    if (_snapshotChannel.Reader.TryRead(out var snapshot))
+                    {
+                        batch.Add(snapshot);
+                    }
+                    else
+                    {
+                        var remaining = flushInterval - stopwatch.Elapsed;
+                        if (remaining <= TimeSpan.Zero)
+                        {
+                            break;
+                        }
+
+                        using var delayCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+                        delayCts.CancelAfter(remaining);
+                        try
+                        {
+                            await _snapshotChannel.Reader.WaitToReadAsync(delayCts.Token).ConfigureAwait(false);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                if (batch.Count > 0)
+                {
+                    FlushBatch(batch);
+                    batch.Clear();
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected during shutdown / cancellation
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Unexpected error in tracker metric snapshot processor");
+        }
+        finally
+        {
+            DrainRemainingSnapshots();
+        }
+    }
+
+    private void FlushBatch(List<TrackerMetricSnapshot> batch)
+    {
+        if (batch == null || batch.Count == 0)
+        {
+            return;
+        }
+
+        _flushLock.Wait();
+        try
+        {
+            _snapshotRepository.InsertMany(batch.ToList());
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to persist batch of {0} tracker metric snapshots", batch.Count);
+        }
+        finally
+        {
+            _flushLock.Release();
+        }
+    }
+
+    private void DrainRemainingSnapshots()
+    {
+        var batch = new List<TrackerMetricSnapshot>(50);
+        while (_snapshotChannel.Reader.TryRead(out var snapshot))
+        {
+            batch.Add(snapshot);
+            if (batch.Count >= 50)
+            {
+                FlushBatch(batch);
+                batch.Clear();
+            }
+        }
+
+        if (batch.Count > 0)
+        {
+            FlushBatch(batch);
+        }
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _pruneTimer?.Dispose();
+        _snapshotChannel.Writer.TryComplete();
+
+        if (_flushTask != null)
+        {
+            try
+            {
+                await _flushTask.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error while waiting for tracker metric snapshot processor shutdown");
+            }
+        }
+
+        _cts.Dispose();
+        _flushLock.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            _disposed = true;
+            _pruneTimer?.Dispose();
+
+            if (disposing)
+            {
+                _snapshotChannel.Writer.TryComplete();
+                if (_flushTask != null)
+                {
+                    try
+                    {
+                        if (!_flushTask.Wait(TimeSpan.FromSeconds(5)))
+                        {
+                            _cts.Cancel();
+                            _flushTask.Wait(TimeSpan.FromSeconds(1));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Error while waiting for tracker metric snapshot processor shutdown");
+                    }
+                }
+
+                _cts.Dispose();
+                _flushLock.Dispose();
+            }
         }
     }
 }
