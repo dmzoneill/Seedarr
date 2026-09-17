@@ -134,7 +134,8 @@ public static class TorrentResourceMapper
             Path = model.Path,
             Size = model.Size,
             PieceOffset = model.PieceOffset,
-            PieceCount = model.PieceCount
+            PieceCount = model.PieceCount,
+            IsPaddingFile = model.IsPaddingFile
         };
     }
 

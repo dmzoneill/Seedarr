@@ -468,7 +468,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     }
 
     [HttpGet("{torrentId:int}/files")]
-    public ActionResult<List<TorrentFileResource>> GetFiles(int torrentId)
+    public ActionResult<List<TorrentFileResource>> GetFiles(int torrentId, [FromQuery] bool? includePadding = null)
     {
         var torrent = _torrentService.Get(torrentId);
         if (torrent == null)
@@ -477,6 +477,11 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         var files = _torrentFileService.GetByTorrentId(torrentId);
+        if (includePadding == false)
+        {
+            files = files.Where(f => !f.IsPaddingFile).ToList();
+        }
+
         return files.Select(TorrentResourceMapper.ToFileResource).ToList();
     }
 

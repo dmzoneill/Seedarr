@@ -416,7 +416,7 @@ public class IndexerController : Controller
                 {
                     foreach (var f in parsed.Files)
                     {
-                        _torrentFileService.Add(new TorrentFile { TorrentId = addedTorrent.Id, Path = f.Path, Size = f.Size });
+                        _torrentFileService.Add(new TorrentFile { TorrentId = addedTorrent.Id, Path = f.Path, Size = f.Size, IsPaddingFile = f.IsPaddingFile });
                     }
                 }
 

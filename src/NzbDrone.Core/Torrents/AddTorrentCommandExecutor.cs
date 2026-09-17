@@ -122,7 +122,8 @@ public class AddTorrentCommandExecutor : IExecute<AddTorrentCommand>
                 {
                     TorrentId = added.Id,
                     Path = file.Path,
-                    Size = file.Size
+                    Size = file.Size,
+                    IsPaddingFile = file.IsPaddingFile
                 });
             }
         }

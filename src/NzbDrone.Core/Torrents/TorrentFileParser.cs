@@ -15,6 +15,7 @@ public class ParsedTorrent
     public string Name { get; set; }
     public string InfoHash { get; set; }
     public long TotalSize { get; set; }
+    public long ContentSize { get; set; }
     public int PieceCount { get; set; }
     public int PieceLength { get; set; }
     public string Comment { get; set; }
@@ -30,6 +31,7 @@ public class ParsedTorrentFile
 {
     public string Path { get; set; }
     public long Size { get; set; }
+    public bool IsPaddingFile { get; set; }
 }
 
 public interface ITorrentFileParser
@@ -208,10 +210,13 @@ public class TorrentFileParser : ITorrentFileParser
                             ? rootDirName
                             : $"{rootDirName}/{relativePath}";
 
+                    var isPadding = IsPadding(file, fullRelativePath);
+
                     result.Files.Add(new ParsedTorrentFile
                     {
                         Path = fullRelativePath,
-                        Size = fileLengthNum.Value
+                        Size = fileLengthNum.Value,
+                        IsPaddingFile = isPadding
                     });
                 }
             }
@@ -230,11 +235,13 @@ public class TorrentFileParser : ITorrentFileParser
                 result.Files.Add(new ParsedTorrentFile
                 {
                     Path = result.Name,
-                    Size = lengthNum.Value
+                    Size = lengthNum.Value,
+                    IsPaddingFile = false
                 });
             }
 
             result.TotalSize = result.Files.Sum(f => f.Size);
+            result.ContentSize = result.Files.Where(f => !f.IsPaddingFile).Sum(f => f.Size);
 
             return result;
         }
@@ -360,6 +367,20 @@ public class TorrentFileParser : ITorrentFileParser
         }
 
         return null;
+    }
+
+    private static bool IsPadding(BDictionary fileDict, string path)
+    {
+        if (fileDict.TryGetValue("attr", out var attrVal) && attrVal is BString attrStr && attrStr.ToString().Contains('p'))
+        {
+            return true;
+        }
+
+        var normalizedPath = path.Replace('\\', '/');
+        var fileName = Path.GetFileName(normalizedPath);
+        return fileName.StartsWith("_____padding_file_", StringComparison.OrdinalIgnoreCase)
+            || normalizedPath.StartsWith(".pad/", StringComparison.OrdinalIgnoreCase)
+            || normalizedPath.Contains("/.pad/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ValidateRecursionDepth(IBObject obj, int currentDepth = 0)

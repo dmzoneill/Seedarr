@@ -484,7 +484,8 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                     {
                         TorrentId = torrentId,
                         Path = f.Path,
-                        Size = f.Size
+                        Size = f.Size,
+                        IsPaddingFile = f.IsPaddingFile
                     });
                 }
             }

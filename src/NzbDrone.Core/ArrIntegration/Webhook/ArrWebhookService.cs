@@ -212,7 +212,8 @@ public class ArrWebhookService : IArrWebhookService
                         {
                             TorrentId = torrentId,
                             Path = f.Path,
-                            Size = f.Size
+                            Size = f.Size,
+                            IsPaddingFile = f.IsPaddingFile
                         });
                     }
                 }

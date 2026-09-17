@@ -33,7 +33,8 @@ public class TorrentFileRepositoryTest
                 ""Path"" TEXT NOT NULL,
                 ""Size"" INTEGER NOT NULL DEFAULT 0,
                 ""PieceOffset"" INTEGER NOT NULL DEFAULT 0,
-                ""PieceCount"" INTEGER NOT NULL DEFAULT 0
+                ""PieceCount"" INTEGER NOT NULL DEFAULT 0,
+                ""IsPaddingFile"" INTEGER NOT NULL DEFAULT 0
             )";
         cmd.ExecuteNonQuery();
 
@@ -141,5 +142,6 @@ public class TorrentFileRepositoryTest
         Assert.That(result[0].Size, Is.EqualTo(1073741824));
         Assert.That(result[0].Path, Is.EqualTo("big.mkv"));
         Assert.That(result[0].TorrentId, Is.EqualTo(1));
+        Assert.That(result[0].IsPaddingFile, Is.False);
     }
 }

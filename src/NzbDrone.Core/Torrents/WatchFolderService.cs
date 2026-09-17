@@ -254,7 +254,8 @@ public class WatchFolderService : BackgroundService
                 {
                     TorrentId = torrentId,
                     Path = file.Path,
-                    Size = file.Size
+                    Size = file.Size,
+                    IsPaddingFile = file.IsPaddingFile
                 });
             }
         }

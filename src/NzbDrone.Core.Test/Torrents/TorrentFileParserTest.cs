@@ -817,4 +817,174 @@ public class TorrentFileParserTest
         var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
         Assert.That(ex.Message, Does.Contain("missing or invalid 'path'"));
     }
+
+    [Test]
+    public void Parse_should_flag_file_with_attr_p_as_padding_file()
+    {
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1024) },
+                { "path", new BList { new BString("video.mkv") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(512) },
+                { "path", new BList { new BString("pad_file.dat") } },
+                { "attr", new BString("p") }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(2));
+        Assert.That(result.Files[0].IsPaddingFile, Is.False);
+        Assert.That(result.Files[1].IsPaddingFile, Is.True);
+    }
+
+    [Test]
+    public void Parse_should_flag_file_with_padding_filename_convention_as_padding_file()
+    {
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1024) },
+                { "path", new BList { new BString("video.mkv") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(256) },
+                { "path", new BList { new BString("_____padding_file_0_____") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(2));
+        Assert.That(result.Files[0].IsPaddingFile, Is.False);
+        Assert.That(result.Files[1].IsPaddingFile, Is.True);
+    }
+
+    [Test]
+    public void Parse_should_flag_file_with_dot_pad_path_as_padding_file()
+    {
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1024) },
+                { "path", new BList { new BString("video.mkv") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(512) },
+                { "path", new BList { new BString(".pad"), new BString("123") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(2));
+        Assert.That(result.Files[0].IsPaddingFile, Is.False);
+        Assert.That(result.Files[1].IsPaddingFile, Is.True);
+    }
+
+    [Test]
+    public void Parse_should_flag_standard_payload_files_as_not_padding_file()
+    {
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1024) },
+                { "path", new BList { new BString("dir"), new BString("video.mkv") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(512) },
+                { "path", new BList { new BString("dir"), new BString("sample.nfo") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(2));
+        Assert.That(result.Files[0].IsPaddingFile, Is.False);
+        Assert.That(result.Files[1].IsPaddingFile, Is.False);
+    }
+
+    [Test]
+    public void Parse_should_compute_content_size_excluding_padding_files()
+    {
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(2000) },
+                { "path", new BList { new BString("movie.mkv") } }
+            },
+            new BDictionary
+            {
+                { "length", new BNumber(1000) },
+                { "path", new BList { new BString("_____padding_file_1_____") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.TotalSize, Is.EqualTo(3000));
+        Assert.That(result.ContentSize, Is.EqualTo(2000));
+    }
 }
