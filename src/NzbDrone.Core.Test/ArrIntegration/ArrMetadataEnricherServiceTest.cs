@@ -111,6 +111,9 @@ namespace NzbDrone.Core.Test.ArrIntegration
         [TestCase("lidarr", typeof(LidarrConnection))]
         [TestCase("Lidarr", typeof(LidarrConnection))]
         [TestCase("LIDARR", typeof(LidarrConnection))]
+        [TestCase("whisparr", typeof(WhisparrConnection))]
+        [TestCase("Whisparr", typeof(WhisparrConnection))]
+        [TestCase("WHISPARR", typeof(WhisparrConnection))]
         public void CreateProvider_should_handle_case_insensitive_arr_type(string arrType, Type expectedType)
         {
             var service = new TestableArrMetadataEnricherService(_connectionFactory, _downloadHistoryRepository);

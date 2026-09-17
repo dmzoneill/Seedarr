@@ -391,6 +391,9 @@ namespace NzbDrone.Core.ArrIntegration
                 case "lidarr":
                     provider = new LidarrConnection();
                     break;
+                case "whisparr":
+                    provider = new WhisparrConnection();
+                    break;
                 default:
                     return null;
             }

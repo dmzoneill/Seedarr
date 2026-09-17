@@ -94,6 +94,8 @@ public class MediaEnrichmentServiceTest
     [TestCase("albums", "Radiohead-OK.Computer.1997.MP3", "Lidarr")]
     [TestCase("books", "Stephen.King-The.Shining.EPUB", "Readarr")]
     [TestCase("readarr-ebooks", "Frank.Herbert-Dune.MOBI", "Readarr")]
+    [TestCase("whisparr", "Scene.Title.2024.1080p", "Whisparr")]
+    [TestCase("adult", "Scene.Title.2024.1080p", "Whisparr")]
     [TestCase("other", "Random.Archive.Release.zip", "Unknown")]
     public async Task EnrichTorrentAsync_ArrTypeClassification_CorrectlyMapsToServarrApp(
         string label, string name, string expectedArrType)

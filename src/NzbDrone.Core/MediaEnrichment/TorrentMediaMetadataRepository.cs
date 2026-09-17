@@ -18,12 +18,14 @@ INSERT INTO ""{_table}"" (
     ""TorrentId"", ""ArrType"", ""ArrMediaId"", ""Title"", ""Year"", ""Overview"",
     ""PosterUrl"", ""PosterLocalPath"", ""BackdropUrl"", ""BackdropLocalPath"",
     ""MediaInfoJson"", ""Genres"", ""Rating"", ""ImdbId"", ""TmdbId"", ""TvdbId"",
-    ""BannerUrl"", ""MusicBrainzId"", ""ArtistName"", ""AlbumTitle"", ""Cast""
+    ""BannerUrl"", ""MusicBrainzId"", ""ArtistName"", ""AlbumTitle"", ""Cast"",
+    ""Studio"", ""SiteName"", ""Performers"", ""SceneCode"", ""ReleaseDate""
 ) VALUES (
     @TorrentId, @ArrType, @ArrMediaId, @Title, @Year, @Overview,
     @PosterUrl, @PosterLocalPath, @BackdropUrl, @BackdropLocalPath,
     @MediaInfoJson, @Genres, @Rating, @ImdbId, @TmdbId, @TvdbId,
-    @BannerUrl, @MusicBrainzId, @ArtistName, @AlbumTitle, @Cast
+    @BannerUrl, @MusicBrainzId, @ArtistName, @AlbumTitle, @Cast,
+    @Studio, @SiteName, @Performers, @SceneCode, @ReleaseDate
 )
 ON CONFLICT(""TorrentId"") DO UPDATE SET
     ""ArrType"" = excluded.""ArrType"",
@@ -45,7 +47,12 @@ ON CONFLICT(""TorrentId"") DO UPDATE SET
     ""MusicBrainzId"" = excluded.""MusicBrainzId"",
     ""ArtistName"" = excluded.""ArtistName"",
     ""AlbumTitle"" = excluded.""AlbumTitle"",
-    ""Cast"" = excluded.""Cast""
+    ""Cast"" = excluded.""Cast"",
+    ""Studio"" = excluded.""Studio"",
+    ""SiteName"" = excluded.""SiteName"",
+    ""Performers"" = excluded.""Performers"",
+    ""SceneCode"" = excluded.""SceneCode"",
+    ""ReleaseDate"" = excluded.""ReleaseDate""
 RETURNING ""Id"";";
     }
 

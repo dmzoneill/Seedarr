@@ -866,6 +866,9 @@ public class ArrSyncServiceTest
     [TestCase("lidarr", typeof(LidarrConnection))]
     [TestCase("Lidarr", typeof(LidarrConnection))]
     [TestCase("LIDARR", typeof(LidarrConnection))]
+    [TestCase("whisparr", typeof(WhisparrConnection))]
+    [TestCase("Whisparr", typeof(WhisparrConnection))]
+    [TestCase("WHISPARR", typeof(WhisparrConnection))]
     public void CreateProvider_should_handle_case_insensitive_arr_type(string arrType, Type expectedType)
     {
         var exposeService = new ExposeProviderArrSyncService(_connectionFactory, _torrentService);

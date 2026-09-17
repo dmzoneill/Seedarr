@@ -1,3 +1,4 @@
+using System;
 using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.MediaEnrichment;
@@ -45,4 +46,14 @@ public class TorrentMediaMetadata : ModelBase
     public string AlbumTitle { get; set; }
 
     public string Cast { get; set; }
+
+    public string Studio { get; set; }
+
+    public string SiteName { get; set; }
+
+    public string Performers { get; set; }
+
+    public string SceneCode { get; set; }
+
+    public DateTime? ReleaseDate { get; set; }
 }

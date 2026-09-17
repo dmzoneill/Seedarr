@@ -1523,4 +1523,75 @@ public class ArrWebhookServiceTest
 
         Assert.That(result, Is.Null);
     }
+
+    [Test]
+    public void ProcessWebhook_should_accept_and_add_torrent_for_MovieGrab_event()
+    {
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "MovieGrab",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
+            InstanceName = "Whisparr",
+            Release = new ArrWebhookRelease
+            {
+                ReleaseTitle = "Adult.Movie.2024.1080p",
+                Indexer = "AdultTracker",
+                Size = 2048000
+            }
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Does.Contain("Added"));
+        Assert.That(result.InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
+        _torrentService.Received(1).Add(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public void ProcessWebhook_should_process_MovieDownload_event_and_mark_torrent_as_seeding()
+    {
+        var existingTorrent = new Torrent
+        {
+            Id = 10,
+            Name = "Adult.Movie.2024.1080p",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Status = TorrentStatus.Downloading,
+            Progress = 0.75
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "MovieDownload",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
+            InstanceName = "Whisparr"
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Does.Contain("Processed MovieDownload"));
+        Assert.That(result.InfoHash, Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
+        Assert.That(existingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(existingTorrent.Progress, Is.EqualTo(1.0));
+        _torrentService.Received(1).Update(existingTorrent);
+    }
+
+    [TestCase("SiteDelete")]
+    [TestCase("PerformerDelete")]
+    [TestCase("MovieDelete")]
+    public void ProcessWebhook_should_handle_whisparr_delete_events(string eventType)
+    {
+        var payload = new ArrWebhookPayload
+        {
+            EventType = eventType
+        };
+
+        var result = _service.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Does.Contain($"Handled {eventType} event"));
+    }
 }
