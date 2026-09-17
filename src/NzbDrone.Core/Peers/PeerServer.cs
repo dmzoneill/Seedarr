@@ -66,6 +66,10 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     public Socket ListenerSocket => _listener?.Server;
     public IPiecePicker PiecePicker => _piecePicker;
+    public bool IsListening { get; private set; }
+    public bool BindFailed { get; private set; }
+    public int ListeningPort { get; private set; }
+    public string BindErrorMessage { get; private set; }
 
     internal bool IsOutgoingEndpointInFlight(string ip, int port) => _inFlightOutgoingEndpoints.ContainsKey($"{ip}:{port}");
 
@@ -226,6 +230,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             _vpnKillSwitchService.VpnDropped += OnVpnDropped;
             _vpnKillSwitchService.VpnRestored += OnVpnRestored;
         }
+
+        ListeningPort = configService.ListeningPort;
     }
 
     private void OnVpnDropped(string iface)
@@ -423,6 +429,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     {
         lock (_listenerLock)
         {
+            IsListening = false;
+
             if (_listenerCts != null && !_listenerCts.IsCancellationRequested)
             {
                 try
@@ -667,6 +675,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             }
 
             var listeningPort = _configService.ListeningPort;
+            ListeningPort = listeningPort;
             TcpListener listener;
 
             try
@@ -684,6 +693,19 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             {
                 if (HasDedicatedBindInterface())
                 {
+                    if (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
+                    {
+                        _logger.Warn(
+                            ex,
+                            "Peer server failed to bind configured interface {0}:{1}: Port is already in use.",
+                            bindAddress,
+                            listeningPort);
+                        BindFailed = true;
+                        IsListening = false;
+                        BindErrorMessage = ex.Message;
+                        return;
+                    }
+
                     _logger.Warn(
                         ex,
                         "Peer server failed to bind configured interface {0}:{1}. Deferring listener binding.",
@@ -720,10 +742,27 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                         fallbackEx,
                         "Peer server failed fallback bind on port {0}, skipping",
                         listeningPort);
+                    BindFailed = true;
+                    IsListening = false;
+                    BindErrorMessage = fallbackEx.Message;
                     return;
                 }
             }
+            catch (Exception ex)
+            {
+                _logger.Warn(
+                    ex,
+                    "Peer server failed to bind on port {0}, skipping",
+                    listeningPort);
+                BindFailed = true;
+                IsListening = false;
+                BindErrorMessage = ex.Message;
+                return;
+            }
 
+            BindFailed = false;
+            IsListening = true;
+            BindErrorMessage = null;
             _logger.Info("Peer server listening on {0}:{1}", bindAddress, listeningPort);
 
             CancellationToken linkedToken;
@@ -790,6 +829,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
                     _listenerCts?.Dispose();
                     _listenerCts = null;
+                    IsListening = false;
                 }
             }
         }

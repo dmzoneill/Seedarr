@@ -1,8 +1,14 @@
+using System;
+
 namespace NzbDrone.Core.HealthCheck;
 
 public interface IHealthCheck
 {
     HealthCheckResult Check();
+}
+
+public interface IProvideHealthCheck : IHealthCheck
+{
 }
 
 public enum HealthCheckResultType
@@ -15,9 +21,42 @@ public enum HealthCheckResultType
 
 public class HealthCheckResult
 {
+    public enum HealthType
+    {
+        Ok = HealthCheckResultType.Ok,
+        Notice = HealthCheckResultType.Notice,
+        Warning = HealthCheckResultType.Warning,
+        Error = HealthCheckResultType.Error
+    }
+
     public HealthCheckResultType Type { get; set; }
+
     public string Source { get; set; }
+
     public string Message { get; set; }
+
+    public HealthCheckResult()
+    {
+    }
+
+    public HealthCheckResult(Type source)
+        : this(source, HealthType.Ok, null)
+    {
+    }
+
+    public HealthCheckResult(Type source, HealthType type, string message = null)
+    {
+        Source = source?.Name;
+        Type = (HealthCheckResultType)type;
+        Message = message;
+    }
+
+    public HealthCheckResult(Type source, HealthCheckResultType type, string message = null)
+    {
+        Source = source?.Name;
+        Type = type;
+        Message = message;
+    }
 
     public static HealthCheckResult Ok(string source)
     {
