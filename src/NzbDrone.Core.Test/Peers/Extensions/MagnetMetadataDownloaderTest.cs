@@ -366,6 +366,26 @@ public class MagnetMetadataDownloaderTest
         };
 
         var raw = dict.EncodeAsBytes();
+        if (raw.Length < totalSize)
+        {
+            var padNeeded = (int)totalSize - raw.Length;
+            dict["padding"] = new BString(new byte[padNeeded]);
+            raw = dict.EncodeAsBytes();
+            while (raw.Length < totalSize)
+            {
+                padNeeded += (int)totalSize - raw.Length;
+                dict["padding"] = new BString(new byte[padNeeded]);
+                raw = dict.EncodeAsBytes();
+            }
+
+            while (raw.Length > totalSize)
+            {
+                padNeeded -= raw.Length - (int)totalSize;
+                dict["padding"] = new BString(new byte[padNeeded]);
+                raw = dict.EncodeAsBytes();
+            }
+        }
+
         infoHash = Convert.ToHexString(SHA1.HashData(raw));
         return raw;
     }

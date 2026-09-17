@@ -208,6 +208,7 @@ public class ChokeManagerTest
 
         // Peer2 (optimistic) now outperforms peer3 and should be promoted into regular unchoke slots
         peer2.UploadRate = 600;
+        peer2.DownloadRate = 600;
 
         _subject.ProcessRegularUnchoke();
 
@@ -593,6 +594,7 @@ public class ChokeManagerTest
 
         // Peer 1 ramps up transfer rate and outperforms regular peers
         peer1.UploadRate = 500;
+        peer1.DownloadRate = 500;
 
         _subject.ProcessRegularUnchoke();
 

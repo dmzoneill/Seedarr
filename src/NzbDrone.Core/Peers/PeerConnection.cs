@@ -23,7 +23,7 @@ public class PeerConnection : IDisposable
     private const int MaxMessageLength = 16 * 1024 * 1024;
 
     private readonly TcpClient _client;
-    private readonly NetworkStream _networkStream;
+    private readonly Stream _networkStream;
     private readonly Logger _logger;
     private readonly object _writeLock = new();
     private readonly object _disposeLock = new();
@@ -180,7 +180,7 @@ public class PeerConnection : IDisposable
     }
 
     public double Progress { get; set; }
-    public bool[] PeerPieces { get; set; }
+    public virtual bool[] PeerPieces { get; set; }
     public HashSet<int> SuggestedPieces { get; } = new();
     public HashSet<int> RemoteAllowedFastPieces { get; } = new();
     public HashSet<int> AllowedFastPieces => RemoteAllowedFastPieces;
@@ -229,7 +229,8 @@ public class PeerConnection : IDisposable
     public PeerConnection(Stream stream, string remoteIp, int remotePort, IDhKeyPool dhKeyPool = null)
     {
         DhKeyPool = dhKeyPool;
-        _activeStream = stream ?? throw new ArgumentNullException(nameof(stream));
+        _networkStream = stream ?? throw new ArgumentNullException(nameof(stream));
+        _activeStream = _networkStream;
         _logger = LogManager.GetCurrentClassLogger();
         RemoteIp = remoteIp;
         RemotePort = remotePort;
@@ -306,7 +307,7 @@ public class PeerConnection : IDisposable
                 payload = BuildHandshake(infoHash, PeerId);
             }
 
-            _activeStream = handshake.NegotiateOutgoing(_networkStream, payload);
+            _activeStream = handshake.NegotiateOutgoing(_networkStream ?? _activeStream, payload);
             EncryptionMethod = handshake.NegotiatedMethod;
             InitialApplicationData = handshake.InitialApplicationData;
             IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
@@ -344,7 +345,7 @@ public class PeerConnection : IDisposable
                 payload = BuildHandshake(infoHash, PeerId);
             }
 
-            _activeStream = await handshake.NegotiateOutgoingAsync(_networkStream, payload, cancellationToken);
+            _activeStream = await handshake.NegotiateOutgoingAsync(_networkStream ?? _activeStream, payload, cancellationToken);
             EncryptionMethod = handshake.NegotiatedMethod;
             InitialApplicationData = handshake.InitialApplicationData;
             IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;

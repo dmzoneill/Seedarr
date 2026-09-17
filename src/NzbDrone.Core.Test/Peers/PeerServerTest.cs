@@ -56,6 +56,11 @@ public class PeerServerTest
         _configService.PeerRequestCount.Returns(200);
         _configService.PeerIdleChance.Returns(0.0);
         _configService.PeerContactIntervalSeconds.Returns(300);
+        _configService.PexMaxPeersPerMessage.Returns(50);
+        _torrentService.GetByInfoHash(Arg.Any<string>())
+            .Returns(x => _torrentService.GetAll()?.FirstOrDefault(t => string.Equals(t.InfoHash, x.Arg<string>(), StringComparison.OrdinalIgnoreCase)));
+        _torrentService.FindByInfoHash(Arg.Any<string>())
+            .Returns(x => _torrentService.GetAll()?.FirstOrDefault(t => string.Equals(t.InfoHash, x.Arg<string>(), StringComparison.OrdinalIgnoreCase)));
 
         _server = new PeerServer(_configService, _torrentService, _connectionManager, _peerDiscovery, _multiTracker, mseSkeyRegistry: _mseSkeyRegistry);
         _connectionManager.TryReserveSlot(Arg.Any<string>(), Arg.Any<bool>(), out Arg.Any<IConnectionReservation>())
@@ -2709,6 +2714,7 @@ public class PeerServerTest
     [CancelAfter(5000)]
     public async Task ProcessCandidateAsync_should_close_and_dispose_when_remote_peer_returns_different_info_hash()
     {
+        _configService.EncryptionMode.Returns("disabled");
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         _listeners.Add(listener);
