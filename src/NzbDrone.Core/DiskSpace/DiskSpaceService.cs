@@ -110,6 +110,13 @@ public interface IDiskSpaceService
     /// Clears any cached health states.
     /// </summary>
     void ResetHealthStates();
+
+    /// <summary>
+    /// Gets disk space information for the drive matching the specified path.
+    /// </summary>
+    /// <param name="path">The filesystem path to match.</param>
+    /// <returns>Matching disk space info, or null if not found.</returns>
+    DiskSpaceInfo GetDiskSpaceForPath(string path);
 }
 
 /// <summary>
@@ -275,6 +282,62 @@ public class DiskSpaceService : IDiskSpaceService
                 UpdateDiskSpaceHealth(info.Path, info.FreeSpace, info.TotalSpace);
             }
         }
+    }
+
+    /// <inheritdoc/>
+    public DiskSpaceInfo GetDiskSpaceForPath(string path)
+    {
+        var diskSpaces = GetDiskSpace();
+        if (diskSpaces == null || diskSpaces.Count == 0)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return diskSpaces.FirstOrDefault(d => d.Path == "/" || d.Path.StartsWith("C:", StringComparison.OrdinalIgnoreCase)) ?? diskSpaces[0];
+        }
+
+        string fullPath;
+        try
+        {
+            fullPath = Path.GetFullPath(path).Replace('\\', '/');
+        }
+        catch
+        {
+            fullPath = path.Replace('\\', '/');
+        }
+
+        if (!fullPath.EndsWith("/"))
+        {
+            fullPath += "/";
+        }
+
+        DiskSpaceInfo bestMatch = null;
+        var longestLen = -1;
+
+        foreach (var disk in diskSpaces)
+        {
+            if (disk == null || string.IsNullOrWhiteSpace(disk.Path))
+            {
+                continue;
+            }
+
+            var diskPath = disk.Path.Replace('\\', '/');
+            var checkPath = diskPath.EndsWith("/") ? diskPath : diskPath + "/";
+
+            if (fullPath.StartsWith(checkPath, StringComparison.OrdinalIgnoreCase) ||
+                fullPath.Equals(checkPath, StringComparison.OrdinalIgnoreCase))
+            {
+                if (diskPath.Length > longestLen)
+                {
+                    longestLen = diskPath.Length;
+                    bestMatch = disk;
+                }
+            }
+        }
+
+        return bestMatch ?? diskSpaces.FirstOrDefault(d => d.Path == "/" || d.Path.StartsWith("C:", StringComparison.OrdinalIgnoreCase)) ?? diskSpaces[0];
     }
 
     private List<DiskSpaceInfo> QueryDiskSpace()

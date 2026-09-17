@@ -819,4 +819,29 @@ public class DiskSpaceServiceTest
         Assert.That(zfsEntry.FileSystemType, Is.EqualTo("zfs"));
         Assert.That(zfsEntry.IsReadOnly, Is.True);
     }
+
+    [Test]
+    public void GetDiskSpaceForPath_should_return_matching_disk_info_with_longest_prefix()
+    {
+        var rootDrive = new DriveInfo("/");
+        var downloadsDrive = new DriveInfo("/downloads");
+
+        _subject.DrivesProvider = () => new[] { rootDrive, downloadsDrive };
+        _subject.ProcMountsProvider = () =>
+            "/dev/sda1 / ext4 rw,relatime 0 0\n" +
+            "/dev/sdb1 /downloads ext4 rw,relatime 0 0\n";
+
+        _subject.DriveStatsReader = drive => new DriveSpaceStats
+        {
+            FreeSpace = drive.Name.Contains("download") ? 100L * 1024 * 1024 * 1024 : 10L * 1024 * 1024 * 1024,
+            TotalSpace = 200L * 1024 * 1024 * 1024,
+            VolumeLabel = drive.Name,
+        };
+
+        var match = _subject.GetDiskSpaceForPath("/downloads/movies/subfolder");
+
+        Assert.That(match, Is.Not.Null);
+        Assert.That(match.Path, Is.EqualTo("/downloads"));
+        Assert.That(match.FreeSpace, Is.EqualTo(100L * 1024 * 1024 * 1024));
+    }
 }

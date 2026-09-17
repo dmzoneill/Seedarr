@@ -1072,8 +1072,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                     throw new KeyNotFoundException($"Torrent {id} not found");
                 }
 
-                torrent.Resume();
-                _torrentService.Update(torrent);
+                _torrentService.Start(id);
                 _eventLogService?.Info(id, "Bulk", "Started torrent");
                 break;
             }
@@ -1087,8 +1086,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                     throw new KeyNotFoundException($"Torrent {id} not found");
                 }
 
-                torrent.Stop();
-                _torrentService.Update(torrent);
+                _torrentService.Pause(id);
                 _eventLogService?.Info(id, "Bulk", "Stopped torrent");
                 break;
             }
