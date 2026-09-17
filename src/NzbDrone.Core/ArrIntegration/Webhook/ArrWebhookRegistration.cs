@@ -51,7 +51,8 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
         try
         {
-            var apiVersion = connection.ArrType == "Lidarr" ? "v1" : "v3";
+            var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
             var seedarrUrl = GetSeedarrBaseUrl(connection);
             var webhookUrl = $"{seedarrUrl}/api/v1/webhook/arr";
             var currentApiKey = _configFileProvider.ApiKey ?? string.Empty;
@@ -148,7 +149,8 @@ public class ArrWebhookRegistration : IArrWebhookRegistration
 
         try
         {
-            var apiVersion = connection.ArrType == "Lidarr" ? "v1" : "v3";
+            var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
             var existing = FindExistingWebhook(connection, apiVersion);
             if (existing == null)
             {

@@ -611,7 +611,8 @@ public class ArrWebhookService : IArrWebhookService
             return false;
         }
 
-        var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
+        var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
         var variants = new[] { downloadId, downloadId.ToUpperInvariant() };
 
         foreach (var id in variants)
@@ -659,7 +660,8 @@ public class ArrWebhookService : IArrWebhookService
 
     private async Task<string> GetDownloadUrlFromHistoryAsync(ArrConnectionDefinition connection, string downloadId, CancellationToken cancellationToken)
     {
-        var apiVersion = connection.ArrType == "Lidarr" ? "v1" : "v3";
+        var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
         var variants = new[] { downloadId, downloadId.ToUpperInvariant() };
 
         for (var attempt = 0; attempt < 5; attempt++)

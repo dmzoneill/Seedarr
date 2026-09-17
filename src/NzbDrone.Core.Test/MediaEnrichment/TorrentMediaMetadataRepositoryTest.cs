@@ -50,7 +50,21 @@ public class TorrentMediaMetadataRepositoryTest
                 ""MusicBrainzId"" TEXT NULL,
                 ""ArtistName"" TEXT NULL,
                 ""AlbumTitle"" TEXT NULL,
-                ""Cast"" TEXT NULL
+                ""Cast"" TEXT NULL,
+                ""Studio"" TEXT NULL,
+                ""SiteName"" TEXT NULL,
+                ""Performers"" TEXT NULL,
+                ""SceneCode"" TEXT NULL,
+                ""ReleaseDate"" DATETIME NULL,
+                ""Author"" TEXT NULL,
+                ""BookTitle"" TEXT NULL,
+                ""Isbn"" TEXT NULL,
+                ""Publisher"" TEXT NULL,
+                ""PageCount"" INTEGER NULL,
+                ""PackagingFormat"" TEXT NULL,
+                ""SeriesName"" TEXT NULL,
+                ""SeriesPosition"" TEXT NULL,
+                ""Asin"" TEXT NULL
             )";
         cmd.ExecuteNonQuery();
 
