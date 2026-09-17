@@ -22,6 +22,63 @@ public enum DiskSpaceHealthState
 }
 
 /// <summary>
+/// Represents parsed mount point information from /proc/mounts.
+/// </summary>
+public class MountInfo
+{
+    /// <summary>
+    /// Gets or sets the underlying device identifier.
+    /// </summary>
+    public string Device { get; set; }
+
+    /// <summary>
+    /// Gets or sets the mount point path.
+    /// </summary>
+    public string MountPoint { get; set; }
+
+    /// <summary>
+    /// Gets or sets the filesystem type (e.g., ext4, nfs, cifs).
+    /// </summary>
+    public string FileSystemType { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the mount is read-only.
+    /// </summary>
+    public bool IsReadOnly { get; set; }
+}
+
+/// <summary>
+/// Raw drive space statistics.
+/// </summary>
+public struct DriveSpaceStats
+{
+    /// <summary>
+    /// Gets or sets free space in bytes.
+    /// </summary>
+    public long FreeSpace { get; set; }
+
+    /// <summary>
+    /// Gets or sets total space in bytes.
+    /// </summary>
+    public long TotalSpace { get; set; }
+
+    /// <summary>
+    /// Gets or sets volume label.
+    /// </summary>
+    public string VolumeLabel { get; set; }
+
+    /// <summary>
+    /// Gets or sets filesystem type.
+    /// </summary>
+    public string FileSystemType { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the drive is read-only.
+    /// </summary>
+    public bool IsReadOnly { get; set; }
+}
+
+/// <summary>
 /// Provides disk space information for relevant locations.
 /// </summary>
 public interface IDiskSpaceService
@@ -78,9 +135,30 @@ public class DiskSpaceService : IDiskSpaceService
     private List<DiskSpaceInfo> _cachedDiskSpace;
     private DateTime _lastCacheTime = DateTime.MinValue;
 
-    public TimeSpan DriveTimeout { get; set; } = TimeSpan.FromSeconds(3);
+    /// <summary>
+    /// Gets or sets the timeout for probing individual drives.
+    /// </summary>
+    public TimeSpan DriveTimeout { get; set; } = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// Gets or sets the TTL cache duration for disk space queries.
+    /// </summary>
     public TimeSpan CacheTtl { get; set; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Gets or sets a custom drive provider delegate, primarily for testing.
+    /// </summary>
+    public Func<DriveInfo[]> DrivesProvider { get; set; }
+
+    /// <summary>
+    /// Gets or sets a custom drive stats reader delegate, primarily for testing.
+    /// </summary>
+    public Func<DriveInfo, DriveSpaceStats?> DriveStatsReader { get; set; }
+
+    /// <summary>
+    /// Gets or sets a custom /proc/mounts provider delegate, primarily for testing.
+    /// </summary>
+    public Func<string> ProcMountsProvider { get; set; }
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DiskSpaceService"/> class.
@@ -203,32 +281,63 @@ public class DiskSpaceService : IDiskSpaceService
     {
         var result = new List<DiskSpaceInfo>();
         var seenRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var systemSeenDevices = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var allDrives = GetAllDrivesSafe();
-
-        var readyFixedOrNetworkDrives = allDrives
-            .Where(d =>
-            {
-                try
-                {
-                    return d.DriveType == DriveType.Fixed || d.DriveType == DriveType.Network;
-                }
-                catch
-                {
-                    return false;
-                }
-            })
-            .ToArray();
+        var mounts = ParseMounts(ReadProcMounts());
 
         // 1. All fixed and network system drives (ensures the root mount '/' and physical storage drives are reported)
-        foreach (var drive in readyFixedOrNetworkDrives)
+        foreach (var drive in allDrives)
         {
+            if (drive == null)
+            {
+                continue;
+            }
+
             try
             {
-                var rootPath = drive.RootDirectory.FullName;
+                var driveType = DriveType.Unknown;
+                try
+                {
+                    driveType = drive.DriveType;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to get drive type for drive {0}, skipping", drive.Name);
+                }
+
+                string rootPath;
+                try
+                {
+                    rootPath = drive.RootDirectory.FullName;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to get root directory for drive {0}", drive.Name);
+                    continue;
+                }
+
                 if (!seenRoots.Add(rootPath))
                 {
                     continue;
+                }
+
+                var mountInfo = FindMountForPath(rootPath, mounts);
+                var isPhysicalOrNetwork = (driveType == DriveType.Fixed || driveType == DriveType.Network) ||
+                                          (mountInfo != null && IsPhysicalOrNetworkDevice(mountInfo.Device, mountInfo.FileSystemType));
+
+                if (!isPhysicalOrNetwork)
+                {
+                    continue;
+                }
+
+                if (mountInfo != null && IsPhysicalOrNetworkDevice(mountInfo.Device, mountInfo.FileSystemType))
+                {
+                    if (!systemSeenDevices.Add(mountInfo.Device))
+                    {
+                        _logger.Debug("Skipping drive {0} because device {1} is already monitored", rootPath, mountInfo.Device);
+                        continue;
+                    }
                 }
 
                 if (!TryGetDriveStats(drive, out var stats))
@@ -240,12 +349,20 @@ public class DiskSpaceService : IDiskSpaceService
                     ? stats.VolumeLabel
                     : (rootPath == "/" ? "Root Drive" : rootPath);
 
+                var fileSystemType = !string.IsNullOrWhiteSpace(mountInfo?.FileSystemType)
+                    ? mountInfo.FileSystemType
+                    : stats.FileSystemType;
+
+                var isReadOnly = (mountInfo != null && mountInfo.IsReadOnly) || stats.IsReadOnly;
+
                 var info = new DiskSpaceInfo
                 {
                     Path = rootPath,
                     Label = label,
                     FreeSpace = stats.FreeSpace,
                     TotalSpace = stats.TotalSpace,
+                    FileSystemType = fileSystemType,
+                    IsReadOnly = isReadOnly,
                 };
                 result.Add(info);
             }
@@ -257,18 +374,19 @@ public class DiskSpaceService : IDiskSpaceService
 
         // 2. AppData and Startup folders (appended separately rather than masking root drive)
         var appFolderSeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        AddDriveInfoWithDrives(result, appFolderSeen, _appFolderInfo?.AppDataFolder, "AppData", allDrives);
-        AddDriveInfoWithDrives(result, appFolderSeen, _appFolderInfo?.StartUpFolder, "Startup", allDrives);
+        AddDriveInfoWithDrives(result, appFolderSeen, null, _appFolderInfo?.AppDataFolder, "AppData", allDrives, mounts);
+        AddDriveInfoWithDrives(result, appFolderSeen, null, _appFolderInfo?.StartUpFolder, "Startup", allDrives, mounts);
 
         // 3. Configured category save paths (ensures mounted torrent volumes and bind/FUSE mounts are inspected and reported)
         var categorySeen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var categorySeenDevices = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var categories = GetCategories();
         foreach (var category in categories)
         {
             if (!string.IsNullOrWhiteSpace(category.SavePath))
             {
                 var label = !string.IsNullOrWhiteSpace(category.Name) ? category.Name : "Category";
-                AddDriveInfoWithDrives(result, categorySeen, category.SavePath, label, allDrives);
+                AddDriveInfoWithDrives(result, categorySeen, categorySeenDevices, category.SavePath, label, allDrives, mounts);
             }
         }
 
@@ -305,21 +423,22 @@ public class DiskSpaceService : IDiskSpaceService
 
     private DriveInfo[] GetAllDrivesSafe()
     {
+        if (DrivesProvider != null)
+        {
+            try
+            {
+                return DrivesProvider() ?? Array.Empty<DriveInfo>();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to enumerate drives from custom provider");
+                return Array.Empty<DriveInfo>();
+            }
+        }
+
         try
         {
-            return DriveInfo.GetDrives()
-                .Where(d =>
-                {
-                    try
-                    {
-                        return d.IsReady;
-                    }
-                    catch
-                    {
-                        return false;
-                    }
-                })
-                .ToArray();
+            return DriveInfo.GetDrives() ?? Array.Empty<DriveInfo>();
         }
         catch (Exception ex)
         {
@@ -429,15 +548,17 @@ public class DiskSpaceService : IDiskSpaceService
         string path,
         string label)
     {
-        AddDriveInfoWithDrives(result, seen, path, label, null);
+        AddDriveInfoWithDrives(result, seen, null, path, label, null, null);
     }
 
     private void AddDriveInfoWithDrives(
         List<DiskSpaceInfo> result,
-        HashSet<string> seen,
+        HashSet<string> seenRoots,
+        HashSet<string> seenDevices,
         string path,
         string label,
-        DriveInfo[] drives)
+        DriveInfo[] drives,
+        List<MountInfo> mounts)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -454,10 +575,29 @@ public class DiskSpaceService : IDiskSpaceService
                 return;
             }
 
-            var rootKey = drive.RootDirectory.FullName;
-            if (!seen.Add(rootKey))
+            string rootKey;
+            try
+            {
+                rootKey = drive.RootDirectory.FullName;
+            }
+            catch
+            {
+                rootKey = path;
+            }
+
+            if (!seenRoots.Add(rootKey))
             {
                 return;
+            }
+
+            var mountInfo = FindMountForPath(path, mounts) ?? FindMountForPath(rootKey, mounts);
+            if (seenDevices != null && mountInfo != null && IsPhysicalOrNetworkDevice(mountInfo.Device, mountInfo.FileSystemType))
+            {
+                if (!seenDevices.Add(mountInfo.Device))
+                {
+                    _logger.Debug("Skipping path {0} because device {1} is already monitored", path, mountInfo.Device);
+                    return;
+                }
             }
 
             if (!TryGetDriveStats(drive, out var stats))
@@ -465,12 +605,20 @@ public class DiskSpaceService : IDiskSpaceService
                 return;
             }
 
+            var fileSystemType = !string.IsNullOrWhiteSpace(mountInfo?.FileSystemType)
+                ? mountInfo.FileSystemType
+                : stats.FileSystemType;
+
+            var isReadOnly = (mountInfo != null && mountInfo.IsReadOnly) || stats.IsReadOnly;
+
             var info = new DiskSpaceInfo
             {
                 Path = path,
                 Label = label,
                 FreeSpace = stats.FreeSpace,
                 TotalSpace = stats.TotalSpace,
+                FileSystemType = fileSystemType,
+                IsReadOnly = isReadOnly,
             };
             result.Add(info);
         }
@@ -490,32 +638,34 @@ public class DiskSpaceService : IDiskSpaceService
 
         try
         {
-            if (drive.DriveType == DriveType.Network)
+            var task = Task.Run(() =>
             {
-                var task = Task.Run(() => ReadDriveStats(drive));
-                if (task.Wait(DriveTimeout))
+                if (DriveStatsReader != null)
                 {
-                    var res = task.Result;
-                    if (res.HasValue)
-                    {
-                        stats = res.Value;
-                        return true;
-                    }
-
-                    return false;
+                    return DriveStatsReader(drive);
                 }
 
-                _logger.Warn("Timed out inspecting network drive {0}", drive.Name);
+                return ReadDriveStats(drive);
+            });
+
+            if (task.Wait(DriveTimeout))
+            {
+                var res = task.Result;
+                if (res.HasValue)
+                {
+                    stats = res.Value;
+                    return true;
+                }
+
                 return false;
             }
 
-            var direct = ReadDriveStats(drive);
-            if (direct.HasValue)
-            {
-                stats = direct.Value;
-                return true;
-            }
-
+            _logger.Warn("Timed out inspecting drive {0}", drive.Name);
+            return false;
+        }
+        catch (AggregateException ae)
+        {
+            _logger.Warn(ae.InnerException ?? ae, "Failed to inspect drive {0}", drive.Name);
             return false;
         }
         catch (Exception ex)
@@ -543,11 +693,22 @@ public class DiskSpaceService : IDiskSpaceService
             {
             }
 
+            string fsType = null;
+            try
+            {
+                fsType = drive.DriveFormat;
+            }
+            catch
+            {
+            }
+
             return new DriveSpaceStats
             {
                 FreeSpace = drive.AvailableFreeSpace,
                 TotalSpace = drive.TotalSize,
                 VolumeLabel = label,
+                FileSystemType = fsType,
+                IsReadOnly = false,
             };
         }
         catch
@@ -588,7 +749,7 @@ public class DiskSpaceService : IDiskSpaceService
             {
                 try
                 {
-                    if (!drive.IsReady)
+                    if (drive == null)
                     {
                         continue;
                     }
@@ -625,7 +786,7 @@ public class DiskSpaceService : IDiskSpaceService
         try
         {
             var directDrive = new DriveInfo(fullPath);
-            if (directDrive.IsReady && (bestMatch == null || directDrive.RootDirectory.FullName.Length > bestMatch.RootDirectory.FullName.Length))
+            if (bestMatch == null || directDrive.RootDirectory.FullName.Length > bestMatch.RootDirectory.FullName.Length)
             {
                 return directDrive;
             }
@@ -654,10 +815,180 @@ public class DiskSpaceService : IDiskSpaceService
         return null;
     }
 
-    private struct DriveSpaceStats
+    private string ReadProcMounts()
     {
-        public long FreeSpace;
-        public long TotalSpace;
-        public string VolumeLabel;
+        if (ProcMountsProvider != null)
+        {
+            try
+            {
+                return ProcMountsProvider();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to read mounts from custom provider");
+                return null;
+            }
+        }
+
+        try
+        {
+            if (File.Exists("/proc/mounts"))
+            {
+                return File.ReadAllText("/proc/mounts");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Trace(ex, "Unable to read /proc/mounts");
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Parses Linux /proc/mounts content into a list of <see cref="MountInfo"/> objects.
+    /// </summary>
+    /// <param name="content">Raw /proc/mounts file content.</param>
+    /// <returns>A list of parsed mount items.</returns>
+    public static List<MountInfo> ParseMounts(string content)
+    {
+        var mounts = new List<MountInfo>();
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return mounts;
+        }
+
+        using var reader = new StringReader(content);
+        string line;
+        while ((line = reader.ReadLine()) != null)
+        {
+            line = line.Trim();
+            if (string.IsNullOrEmpty(line) || line.StartsWith("#"))
+            {
+                continue;
+            }
+
+            var parts = line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 4)
+            {
+                continue;
+            }
+
+            var device = UnescapeMountString(parts[0]);
+            var mountPoint = UnescapeMountString(parts[1]);
+            var fsType = parts[2];
+            var options = parts[3];
+
+            var isReadOnly = options.Split(',').Any(opt => string.Equals(opt, "ro", StringComparison.OrdinalIgnoreCase));
+
+            mounts.Add(new MountInfo
+            {
+                Device = device,
+                MountPoint = mountPoint,
+                FileSystemType = fsType,
+                IsReadOnly = isReadOnly,
+            });
+        }
+
+        return mounts;
+    }
+
+    private static string UnescapeMountString(string value)
+    {
+        if (string.IsNullOrEmpty(value) || !value.Contains('\\'))
+        {
+            return value;
+        }
+
+        return value
+            .Replace("\\040", " ")
+            .Replace("\\011", "\t")
+            .Replace("\\012", "\n")
+            .Replace("\\134", "\\");
+    }
+
+    private static MountInfo FindMountForPath(string path, List<MountInfo> mounts)
+    {
+        if (mounts == null || mounts.Count == 0 || string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var normalizedPath = path.Replace('\\', '/');
+        if (!normalizedPath.EndsWith("/"))
+        {
+            normalizedPath += "/";
+        }
+
+        MountInfo bestMatch = null;
+        var bestMatchLen = -1;
+
+        foreach (var mount in mounts)
+        {
+            var mountPoint = mount.MountPoint.Replace('\\', '/');
+            var checkPoint = mountPoint.EndsWith("/") ? mountPoint : mountPoint + "/";
+
+            if (normalizedPath.StartsWith(checkPoint, StringComparison.Ordinal) ||
+                normalizedPath.Equals(checkPoint, StringComparison.Ordinal))
+            {
+                if (mountPoint.Length >= bestMatchLen)
+                {
+                    bestMatchLen = mountPoint.Length;
+                    bestMatch = mount;
+                }
+            }
+        }
+
+        return bestMatch;
+    }
+
+    private static bool IsPhysicalOrNetworkDevice(string device, string fsType)
+    {
+        if (string.IsNullOrWhiteSpace(device))
+        {
+            return false;
+        }
+
+        if (device.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+            device.Equals("tmpfs", StringComparison.OrdinalIgnoreCase) ||
+            device.Equals("devtmpfs", StringComparison.OrdinalIgnoreCase) ||
+            device.Equals("overlay", StringComparison.OrdinalIgnoreCase) ||
+            device.Equals("ramfs", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(fsType))
+        {
+            var pseudoFs = new[] { "tmpfs", "devtmpfs", "devpts", "proc", "sysfs", "cgroup", "cgroup2", "pstore", "bpf", "configfs", "selinuxfs", "autofs", "ramfs", "mqueue", "hugetlbfs", "fusectl", "nsfs" };
+            if (pseudoFs.Any(p => string.Equals(p, fsType, StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
+            var physicalOrNetworkFs = new[] { "ext4", "ext3", "ext2", "xfs", "btrfs", "zfs", "ntfs", "vfat", "fat32", "f2fs", "nfs", "nfs4", "cifs", "smb3", "glusterfs", "ceph", "sshfs" };
+            if (physicalOrNetworkFs.Any(n => string.Equals(n, fsType, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        if (device.StartsWith("/dev/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (device.StartsWith("//") || device.StartsWith(@"\\") || device.Contains(':'))
+        {
+            return true;
+        }
+
+        if (device.StartsWith("UUID=", StringComparison.OrdinalIgnoreCase) ||
+            device.StartsWith("LABEL=", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
     }
 }

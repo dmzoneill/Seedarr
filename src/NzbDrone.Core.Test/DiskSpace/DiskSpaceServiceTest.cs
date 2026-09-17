@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using NSubstitute;
@@ -299,12 +300,16 @@ public class DiskSpaceServiceTest
             Label = "Data Drive",
             FreeSpace = 1024L * 1024 * 1024,
             TotalSpace = 10L * 1024 * 1024 * 1024,
+            FileSystemType = "ext4",
+            IsReadOnly = true,
         };
 
         Assert.That(info.Path, Is.EqualTo("/data"));
         Assert.That(info.Label, Is.EqualTo("Data Drive"));
         Assert.That(info.FreeSpace, Is.EqualTo(1024L * 1024 * 1024));
         Assert.That(info.TotalSpace, Is.EqualTo(10L * 1024 * 1024 * 1024));
+        Assert.That(info.FileSystemType, Is.EqualTo("ext4"));
+        Assert.That(info.IsReadOnly, Is.True);
     }
 
     [Test]
@@ -316,6 +321,8 @@ public class DiskSpaceServiceTest
         Assert.That(info.Label, Is.Null);
         Assert.That(info.FreeSpace, Is.EqualTo(0));
         Assert.That(info.TotalSpace, Is.EqualTo(0));
+        Assert.That(info.FileSystemType, Is.Null);
+        Assert.That(info.IsReadOnly, Is.False);
     }
 
     // --- GetDiskSpace includes drive enumeration ---
@@ -719,5 +726,97 @@ public class DiskSpaceServiceTest
 
         eventAggregator.Received(1).PublishEvent(Arg.Is<DiskSpaceCriticalEvent>(e => e.DrivePath == "/critical-disk"));
         eventAggregator.Received(1).PublishEvent(Arg.Is<DiskSpaceLowEvent>(e => e.DrivePath == "/low-disk"));
+    }
+
+    // --- Resilience and mount deduplication tests (#537) ---
+
+    [Test]
+    public void GetDiskSpace_should_isolate_failing_or_stale_network_mount_and_return_healthy_drives()
+    {
+        var rootDrive = new DriveInfo("/");
+        var staleDrive = new DriveInfo("/mnt/stale-share");
+
+        _subject.DrivesProvider = () => new[] { staleDrive, rootDrive };
+        _subject.ProcMountsProvider = () =>
+            "/dev/sda1 / ext4 rw,relatime 0 0\n" +
+            "192.168.1.100:/export /mnt/stale-share nfs rw,relatime 0 0\n";
+
+        _subject.DriveStatsReader = drive =>
+        {
+            if (drive.Name.Contains("stale"))
+            {
+                throw new IOException("Stale file handle (ESTALE)");
+            }
+
+            return new DriveSpaceStats
+            {
+                FreeSpace = 40L * 1024 * 1024 * 1024,
+                TotalSpace = 100L * 1024 * 1024 * 1024,
+                VolumeLabel = "RootVolume",
+                FileSystemType = "ext4",
+                IsReadOnly = false,
+            };
+        };
+
+        var result = _subject.GetDiskSpace(forceRefresh: true);
+
+        Assert.That(result, Is.Not.Null);
+        var healthy = result.FirstOrDefault(d => d.Path == "/" || d.Label == "RootVolume");
+        Assert.That(healthy, Is.Not.Null, "Healthy drive should be returned despite adjacent stale share failure");
+        Assert.That(result.Any(d => d.Path.Contains("stale")), Is.False, "Stale drive should be isolated and omitted");
+    }
+
+    [Test]
+    public void GetDiskSpace_should_deduplicate_container_bind_mounts_sharing_same_device_id()
+    {
+        var rootDrive = new DriveInfo("/");
+        var downloadsDrive = new DriveInfo("/downloads");
+        var dataDrive = new DriveInfo("/data");
+
+        _subject.DrivesProvider = () => new[] { rootDrive, downloadsDrive, dataDrive };
+        _subject.ProcMountsProvider = () =>
+            "/dev/sda1 / ext4 rw,relatime 0 0\n" +
+            "/dev/sda1 /downloads ext4 rw,relatime 0 0\n" +
+            "/dev/sda1 /data ext4 rw,relatime 0 0\n";
+
+        _subject.DriveStatsReader = drive => new DriveSpaceStats
+        {
+            FreeSpace = 20L * 1024 * 1024 * 1024,
+            TotalSpace = 50L * 1024 * 1024 * 1024,
+            VolumeLabel = drive.Name,
+            FileSystemType = "ext4",
+            IsReadOnly = false,
+        };
+
+        var result = _subject.GetDiskSpace(forceRefresh: true);
+
+        Assert.That(result, Is.Not.Null);
+        var sda1Entries = result.Where(d => d.Path == "/" || d.Path == "/downloads" || d.Path == "/data").ToList();
+        Assert.That(sda1Entries.Count, Is.EqualTo(1), "Duplicate bind mounts on /dev/sda1 should be deduplicated to a single entry");
+    }
+
+    [Test]
+    public void GetDiskSpace_should_populate_filesystem_type_and_read_only_flags_from_mounts()
+    {
+        var zfsDrive = new DriveInfo("/mnt/storage");
+
+        _subject.DrivesProvider = () => new[] { zfsDrive };
+        _subject.ProcMountsProvider = () =>
+            "pool/storage /mnt/storage zfs ro,relatime 0 0\n";
+
+        _subject.DriveStatsReader = drive => new DriveSpaceStats
+        {
+            FreeSpace = 100L * 1024 * 1024 * 1024,
+            TotalSpace = 500L * 1024 * 1024 * 1024,
+            VolumeLabel = "ZfsPool",
+        };
+
+        var result = _subject.GetDiskSpace(forceRefresh: true);
+
+        Assert.That(result, Is.Not.Null);
+        var zfsEntry = result.FirstOrDefault(d => d.Path == "/mnt/storage");
+        Assert.That(zfsEntry, Is.Not.Null);
+        Assert.That(zfsEntry.FileSystemType, Is.EqualTo("zfs"));
+        Assert.That(zfsEntry.IsReadOnly, Is.True);
     }
 }

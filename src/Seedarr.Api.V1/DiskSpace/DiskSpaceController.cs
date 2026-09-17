@@ -39,6 +39,8 @@ public class DiskSpaceController : Controller
             Label = d.Label,
             FreeSpace = d.FreeSpace,
             TotalSpace = d.TotalSpace,
+            FileSystemType = d.FileSystemType,
+            IsReadOnly = d.IsReadOnly,
         }).ToList());
     }
 }

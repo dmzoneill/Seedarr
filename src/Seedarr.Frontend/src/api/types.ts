@@ -231,6 +231,8 @@ export interface DiskSpaceInfo {
   label: string;
   freeSpace: number;
   totalSpace: number;
+  fileSystemType?: string;
+  isReadOnly?: boolean;
 }
 
 export interface HealthCheckResult {

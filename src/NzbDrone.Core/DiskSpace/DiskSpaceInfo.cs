@@ -24,4 +24,14 @@ public class DiskSpaceInfo
     /// Gets or sets the total size in bytes.
     /// </summary>
     public long TotalSpace { get; set; }
+
+    /// <summary>
+    /// Gets or sets the filesystem type (e.g. ext4, zfs, nfs, btrfs, ntfs).
+    /// </summary>
+    public string FileSystemType { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the filesystem is read-only.
+    /// </summary>
+    public bool IsReadOnly { get; set; }
 }
