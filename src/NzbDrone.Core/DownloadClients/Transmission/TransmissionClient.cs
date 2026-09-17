@@ -77,86 +77,72 @@ public class TransmissionClient : IDownloadClient, IDisposable
 
     private JsonDocument SendRequest(string method, object arguments)
     {
-        for (var attempt = 0; attempt < 5; attempt++)
+        var request = CreateRequest(method, arguments);
+        var response = _client.Send(request);
+
+        if (response.StatusCode == HttpStatusCode.Conflict)
         {
-            var request = CreateRequest(method, arguments);
-            var response = _client.Send(request);
-
-            if (response.StatusCode == HttpStatusCode.Conflict)
+            var initialSessionId = _sessionId;
+            _sessionLock.Wait();
+            try
             {
-                var initialSessionId = _sessionId;
-                _sessionLock.Wait();
-                try
+                if (_sessionId == initialSessionId &&
+                    response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
                 {
-                    if (response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
-                    {
-                        var newSessionId = string.Join("", values);
-                        if (!string.IsNullOrEmpty(newSessionId))
-                        {
-                            _sessionId = newSessionId;
-                        }
-                    }
+                    _sessionId = string.Join("", values);
                 }
-                finally
-                {
-                    _sessionLock.Release();
-                }
-
-                response.Dispose();
-                continue;
+            }
+            finally
+            {
+                _sessionLock.Release();
             }
 
-            using (response)
-            {
-                response.EnsureSuccessStatusCode();
-                using var stream = response.Content.ReadAsStream();
-                return JsonDocument.Parse(stream);
-            }
+            response.Dispose();
+            request = CreateRequest(method, arguments);
+            response = _client.Send(request);
         }
 
-        throw new HttpRequestException("Too many Transmission session conflicts (409)");
+        using (response)
+        {
+            response.EnsureSuccessStatusCode();
+            using var stream = response.Content.ReadAsStream();
+            return JsonDocument.Parse(stream);
+        }
     }
 
     private async Task<JsonDocument> SendRequestAsync(string method, object arguments, CancellationToken cancellationToken = default)
     {
-        for (var attempt = 0; attempt < 5; attempt++)
+        var request = CreateRequest(method, arguments);
+        var response = await _client.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Conflict)
         {
-            var request = CreateRequest(method, arguments);
-            var response = await _client.SendAsync(request, cancellationToken);
-
-            if (response.StatusCode == HttpStatusCode.Conflict)
+            var initialSessionId = _sessionId;
+            await _sessionLock.WaitAsync(cancellationToken);
+            try
             {
-                var initialSessionId = _sessionId;
-                await _sessionLock.WaitAsync(cancellationToken);
-                try
+                if (_sessionId == initialSessionId &&
+                    response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
                 {
-                    if (response.Headers.TryGetValues("X-Transmission-Session-Id", out var values))
-                    {
-                        var newSessionId = string.Join("", values);
-                        if (!string.IsNullOrEmpty(newSessionId))
-                        {
-                            _sessionId = newSessionId;
-                        }
-                    }
+                    _sessionId = string.Join("", values);
                 }
-                finally
-                {
-                    _sessionLock.Release();
-                }
-
-                response.Dispose();
-                continue;
+            }
+            finally
+            {
+                _sessionLock.Release();
             }
 
-            using (response)
-            {
-                response.EnsureSuccessStatusCode();
-                using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-                return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            }
+            response.Dispose();
+            request = CreateRequest(method, arguments);
+            response = await _client.SendAsync(request, cancellationToken);
         }
 
-        throw new HttpRequestException("Too many Transmission session conflicts (409)");
+        using (response)
+        {
+            response.EnsureSuccessStatusCode();
+            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        }
     }
 
     public List<DownloadClientItem> GetItems()

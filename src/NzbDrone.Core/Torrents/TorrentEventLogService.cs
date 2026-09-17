@@ -84,6 +84,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IDisposable, IAsy
 
     public List<TorrentEventLog> GetByTorrentId(int torrentId, int count)
     {
+        DrainRemainingLogs();
         return _repository.GetByTorrentId(torrentId, count);
     }
 
@@ -100,11 +101,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IDisposable, IAsy
 
     public async Task FlushAsync()
     {
-        while (_logChannel.Reader.Count > 0)
-        {
-            await Task.Delay(10).ConfigureAwait(false);
-        }
-
+        DrainRemainingLogs();
         await _flushLock.WaitAsync().ConfigureAwait(false);
         _flushLock.Release();
     }
@@ -136,7 +133,6 @@ public class TorrentEventLogService : ITorrentEventLogService, IDisposable, IAsy
         {
             while (await _logChannel.Reader.WaitToReadAsync(_cts.Token).ConfigureAwait(false))
             {
-                await Task.Delay(25, _cts.Token).ConfigureAwait(false);
                 while (batch.Count < 100 && _logChannel.Reader.TryRead(out var log))
                 {
                     batch.Add(log);
@@ -173,7 +169,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IDisposable, IAsy
         _flushLock.Wait();
         try
         {
-            _repository.InsertMany(batch.ToList());
+            _repository.InsertMany((IEnumerable<TorrentEventLog>)batch.ToList());
         }
         catch (Exception ex)
         {

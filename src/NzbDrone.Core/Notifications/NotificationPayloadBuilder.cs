@@ -254,7 +254,7 @@ public static class NotificationPayloadBuilder
         return explicitHeaders;
     }
 
-    public static object BuildProviderPayload(string implementation, string eventType, Torrent torrent, dynamic meta, object genericPayload, string settings = null)
+    public static object BuildProviderPayload(string implementation, string eventType, Torrent torrent, object meta, object genericPayload, string settings = null)
     {
         var (chatId, token, user) = ExtractProviderSettings(settings);
         var torrentName = torrent?.Name ?? ExtractMessage(genericPayload, eventType);
@@ -661,7 +661,7 @@ public static class NotificationPayloadBuilder
         return value.Length > maxLength ? string.Concat(value.AsSpan(0, maxLength - 3), "...") : value;
     }
 
-    internal static string ExtractOverview(dynamic meta)
+    internal static string ExtractOverview(object meta)
     {
         if (meta == null)
         {
@@ -670,7 +670,8 @@ public static class NotificationPayloadBuilder
 
         try
         {
-            return (string)meta.Overview;
+            var prop = meta.GetType().GetProperty("Overview");
+            return prop?.GetValue(meta)?.ToString();
         }
         catch
         {

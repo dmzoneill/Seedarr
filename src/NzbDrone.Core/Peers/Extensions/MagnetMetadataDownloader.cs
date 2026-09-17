@@ -52,6 +52,7 @@ public class MetadataDownloadSession
     public Queue<int> UnassignedPieces { get; } = new();
     public Dictionary<int, PieceRequestState> InFlightRequests { get; } = new();
     public Dictionary<PeerConnection, HashSet<int>> PeerInFlightRequests { get; } = new();
+    public Dictionary<int, HashSet<PeerConnection>> ExcludedPeersPerPiece { get; } = new();
     public List<PeerConnection> Peers { get; } = new();
     public bool IsComplete { get; set; }
     public bool IsFailed { get; set; }
@@ -153,8 +154,8 @@ public class MagnetMetadataDownloader : IMagnetMetadataDownloader,
     public bool IsDownloading(string infoHash)
     {
         return !string.IsNullOrWhiteSpace(infoHash) &&
-               _sessions.TryGetValue(infoHash, out var session) &&
-               !session.IsComplete && !session.IsFailed;
+            _sessions.TryGetValue(infoHash, out var session) &&
+            !session.IsComplete && !session.IsFailed;
     }
 
     public MetadataDownloadSession GetSession(string infoHash)
@@ -327,22 +328,33 @@ public class MagnetMetadataDownloader : IMagnetMetadataDownloader,
                 return;
             }
 
-            while (session.UnassignedPieces.Count > 0)
+            var unassignedCount = session.UnassignedPieces.Count;
+            for (var i = 0; i < unassignedCount; i++)
             {
+                var pieceIndex = session.UnassignedPieces.Dequeue();
                 var candidatePeers = eligiblePeers
+                    .Where(p => (!session.ExcludedPeersPerPiece.TryGetValue(pieceIndex, out var excluded) || !excluded.Contains(p)))
                     .Where(p => GetPeerInFlightCount(session, p) < MaxPipelinedRequestsPerPeer)
                     .OrderBy(p => GetPeerInFlightCount(session, p))
                     .ToList();
 
-                if (candidatePeers.Count == 0)
+                if (candidatePeers.Count == 0 && eligiblePeers.All(p => session.ExcludedPeersPerPiece.TryGetValue(pieceIndex, out var excluded) && excluded.Contains(p)))
                 {
-                    break;
+                    candidatePeers = eligiblePeers
+                        .Where(p => GetPeerInFlightCount(session, p) < MaxPipelinedRequestsPerPeer)
+                        .OrderBy(p => GetPeerInFlightCount(session, p))
+                        .ToList();
                 }
 
-                var bestPeer = candidatePeers[0];
-                var pieceIndex = session.UnassignedPieces.Dequeue();
-
-                SendPieceRequest(session, bestPeer, pieceIndex);
+                if (candidatePeers.Count > 0)
+                {
+                    var bestPeer = candidatePeers[0];
+                    SendPieceRequest(session, bestPeer, pieceIndex);
+                }
+                else
+                {
+                    session.UnassignedPieces.Enqueue(pieceIndex);
+                }
             }
         }
     }
@@ -437,6 +449,14 @@ public class MagnetMetadataDownloader : IMagnetMetadataDownloader,
             if (message.MessageType == 2)
             {
                 _logger.Debug("Peer {0} rejected metadata piece {1}", peer.RemoteIp, message.Piece);
+                if (!session.ExcludedPeersPerPiece.TryGetValue(message.Piece, out var excluded))
+                {
+                    excluded = new HashSet<PeerConnection>();
+                    session.ExcludedPeersPerPiece[message.Piece] = excluded;
+                }
+
+                excluded.Add(peer);
+
                 if (session.InFlightRequests.TryGetValue(message.Piece, out var reqState) && reqState.Peer == peer)
                 {
                     session.InFlightRequests.Remove(message.Piece);
@@ -562,9 +582,20 @@ public class MagnetMetadataDownloader : IMagnetMetadataDownloader,
                     if (session.InFlightRequests.Remove(pieceIndex, out var reqState))
                     {
                         _logger.Warn("Metadata request for piece {0} timed out on peer {1}", pieceIndex, reqState.Peer?.RemoteIp);
-                        if (reqState.Peer != null && session.PeerInFlightRequests.TryGetValue(reqState.Peer, out var inFlight))
+                        if (reqState.Peer != null)
                         {
-                            inFlight.Remove(pieceIndex);
+                            if (!session.ExcludedPeersPerPiece.TryGetValue(pieceIndex, out var excluded))
+                            {
+                                excluded = new HashSet<PeerConnection>();
+                                session.ExcludedPeersPerPiece[pieceIndex] = excluded;
+                            }
+
+                            excluded.Add(reqState.Peer);
+
+                            if (session.PeerInFlightRequests.TryGetValue(reqState.Peer, out var inFlight))
+                            {
+                                inFlight.Remove(pieceIndex);
+                            }
                         }
 
                         if (!session.CompletedPieces.Contains(pieceIndex) && !session.UnassignedPieces.Contains(pieceIndex))

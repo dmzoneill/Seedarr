@@ -76,7 +76,10 @@ public class SpeedPolicy : ISpeedPolicy,
             ? _configService.AltDownloadSpeedKbps
             : _configService.MaxDownloadSpeedKbps;
 
-        SpeedLimitMerger.Apply(limits, (long)configUploadSpeedKbps * 1024, (long)configDownloadSpeedKbps * 1024);
+        var uploadLimitBps = configUploadSpeedKbps > 0 ? (long)configUploadSpeedKbps * 1024 : SpeedLimits.Unlimited;
+        var downloadLimitBps = configDownloadSpeedKbps > 0 ? (long)configDownloadSpeedKbps * 1024 : SpeedLimits.Unlimited;
+
+        SpeedLimitMerger.Apply(limits, uploadLimitBps, downloadLimitBps);
         return limits;
     }
 

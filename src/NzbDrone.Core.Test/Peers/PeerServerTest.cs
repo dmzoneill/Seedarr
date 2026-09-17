@@ -57,10 +57,6 @@ public class PeerServerTest
         _configService.PeerIdleChance.Returns(0.0);
         _configService.PeerContactIntervalSeconds.Returns(300);
         _configService.PexMaxPeersPerMessage.Returns(50);
-        _torrentService.GetByInfoHash(Arg.Any<string>())
-            .Returns(x => _torrentService.GetAll()?.FirstOrDefault(t => string.Equals(t.InfoHash, x.Arg<string>(), StringComparison.OrdinalIgnoreCase)));
-        _torrentService.FindByInfoHash(Arg.Any<string>())
-            .Returns(x => _torrentService.GetAll()?.FirstOrDefault(t => string.Equals(t.InfoHash, x.Arg<string>(), StringComparison.OrdinalIgnoreCase)));
 
         _server = new PeerServer(_configService, _torrentService, _connectionManager, _peerDiscovery, _multiTracker, mseSkeyRegistry: _mseSkeyRegistry);
         _connectionManager.TryReserveSlot(Arg.Any<string>(), Arg.Any<bool>(), out Arg.Any<IConnectionReservation>())
