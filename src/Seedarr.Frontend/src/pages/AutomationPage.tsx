@@ -474,6 +474,7 @@ const getTriggerLabels = (t: any): Record<string, string> => ({
   TorrentStarted: t("automation.triggers.onTorrentResumedStarted"),
   TorrentPaused: t("automation.triggers.onTorrentPausedStopped"),
   TorrentStalled: t("automation.triggers.onTorrentStalled"),
+  TorrentStallResolved: t("automation.triggers.onTorrentStallResolved"),
   SeedingTimeReached: t("automation.triggers.onSeedingTimeTargetMet"),
   HashCheckCompleted: t("automation.triggers.onHashCheckCompleted"),
   ProgressMilestone: t("automation.triggers.onProgressMilestone"),

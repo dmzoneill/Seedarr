@@ -7,8 +7,13 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NzbDrone.Core\Seedarr.Core.csproj" />
+    <ProjectReference Include="..\NzbDrone.Host\Seedarr.Host.csproj" />
     <ProjectReference Include="..\Seedarr.Http\Seedarr.Http.csproj" />
     <ProjectReference Include="..\Seedarr.Api.V1\Seedarr.Api.V1.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>

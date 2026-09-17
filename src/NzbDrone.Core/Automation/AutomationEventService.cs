@@ -31,6 +31,7 @@ public class AutomationEventService :
     IHandle<TorrentStartedEvent>,
     IHandle<TorrentPausedEvent>,
     IHandle<TorrentStalledEvent>,
+    IHandle<TorrentStallResolvedEvent>,
     IHandle<TorrentSeedingTimeReachedEvent>,
     IHandle<TorrentHashCheckCompletedEvent>,
     IHandle<TorrentProgressMilestoneEvent>,
@@ -197,6 +198,14 @@ public class AutomationEventService :
         if (message?.Torrent != null)
         {
             DispatchTrigger(AutomationTrigger.TorrentStalled, message.Torrent);
+        }
+    }
+
+    public void Handle(TorrentStallResolvedEvent message)
+    {
+        if (message?.Torrent != null)
+        {
+            DispatchTrigger(AutomationTrigger.TorrentStallResolved, message.Torrent);
         }
     }
 

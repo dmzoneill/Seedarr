@@ -1122,6 +1122,7 @@ export type AutomationTrigger =
   | "TorrentStarted"
   | "TorrentPaused"
   | "TorrentStalled"
+  | "TorrentStallResolved"
   | "SeedingTimeReached"
   | "HashCheckCompleted"
   | "ProgressMilestone"

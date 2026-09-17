@@ -271,6 +271,20 @@ public class TorrentStalledEvent : IEvent
     }
 }
 
+public class TorrentStallResolvedEvent : IEvent
+{
+    public Torrent Torrent { get; set; }
+
+    public TorrentStallResolvedEvent()
+    {
+    }
+
+    public TorrentStallResolvedEvent(Torrent torrent)
+    {
+        this.Torrent = torrent;
+    }
+}
+
 public class TorrentSeedingTimeReachedEvent : IEvent
 {
     public Torrent Torrent { get; set; }
