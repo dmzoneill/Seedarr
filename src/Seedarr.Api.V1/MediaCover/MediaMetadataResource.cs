@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
@@ -51,6 +52,16 @@ public class MediaMetadataResource : RestResource
     public string AlbumTitle { get; set; }
 
     public List<string> Cast { get; set; } = new();
+
+    public string Studio { get; set; }
+
+    public string SiteName { get; set; }
+
+    public List<string> Performers { get; set; } = new();
+
+    public string SceneCode { get; set; }
+
+    public DateTime? ReleaseDate { get; set; }
 }
 
 public static class MediaMetadataResourceMapper
@@ -96,6 +107,13 @@ public static class MediaMetadataResourceMapper
             Cast = string.IsNullOrWhiteSpace(model.Cast)
                 ? new List<string>()
                 : model.Cast.Split(',').Select(c => c.Trim()).Where(c => c.Length > 0).ToList(),
+            Studio = model.Studio,
+            SiteName = model.SiteName,
+            Performers = string.IsNullOrWhiteSpace(model.Performers)
+                ? new List<string>()
+                : model.Performers.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0).ToList(),
+            SceneCode = model.SceneCode,
+            ReleaseDate = model.ReleaseDate,
         };
     }
 }

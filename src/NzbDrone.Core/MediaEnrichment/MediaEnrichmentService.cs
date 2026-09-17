@@ -221,6 +221,35 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 {
                     metadata.Cast = string.Join(", ", arrMetadata.Actors.Select(a => a.Name).Where(n => !string.IsNullOrWhiteSpace(n)));
                 }
+
+                if (!string.IsNullOrEmpty(arrMetadata.Studio))
+                {
+                    metadata.Studio = arrMetadata.Studio;
+                }
+                else if (!string.IsNullOrEmpty(arrMetadata.StudioOrNetwork))
+                {
+                    metadata.Studio = arrMetadata.StudioOrNetwork;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.SiteName))
+                {
+                    metadata.SiteName = arrMetadata.SiteName;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.Performers))
+                {
+                    metadata.Performers = arrMetadata.Performers;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.SceneCode))
+                {
+                    metadata.SceneCode = arrMetadata.SceneCode;
+                }
+
+                if (arrMetadata.ReleaseDate.HasValue)
+                {
+                    metadata.ReleaseDate = arrMetadata.ReleaseDate.Value;
+                }
             }
 
             // 4. Fallbacks
@@ -990,6 +1019,9 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             case "lidarr":
                 provider = new LidarrConnection(_explicitHttpClient);
                 break;
+            case "whisparr":
+                provider = new WhisparrConnection(_explicitHttpClient);
+                break;
             default:
                 return null;
         }
@@ -1056,6 +1088,11 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         var cat = (category ?? string.Empty).ToLowerInvariant();
         var n = (name ?? string.Empty).ToLowerInvariant();
 
+        if (cat.Contains("whisparr") || cat.Contains("adult") || cat.Contains("xxx") || cat.Contains("nsfw") || cat.Contains("porn"))
+        {
+            return "Whisparr";
+        }
+
         if (cat.Contains("tv") || cat.Contains("sonarr") || cat.Contains("show") || cat.Contains("season") || cat.Contains("series") || cat.Contains("episode") || cat.Contains("anime") ||
             Regex.IsMatch(n, @"(?i)\b(s\d{1,2}(e\d{1,2})?|season\s*\d+|episode\s*\d+)\b"))
         {
@@ -1088,6 +1125,11 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         }
 
         var mt = mediaType.ToLowerInvariant();
+        if (mt.Contains("whisparr") || mt.Contains("adult"))
+        {
+            return "Whisparr";
+        }
+
         if (mt.Contains("series") || mt.Contains("tv") || mt.Contains("show") || mt.Contains("sonarr"))
         {
             return "Sonarr";

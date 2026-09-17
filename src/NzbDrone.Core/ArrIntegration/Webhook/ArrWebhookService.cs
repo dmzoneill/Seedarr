@@ -114,7 +114,23 @@ public class ArrWebhookService : IArrWebhookService
 
     public ArrWebhookResult ProcessWebhook(ArrWebhookPayload payload)
     {
-        if (payload.EventType != "Grab")
+        if (string.Equals(payload.EventType, "SiteDelete", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "PerformerDelete", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "MovieDelete", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.Info("Webhook: handled Whisparr event '{0}'", payload.EventType);
+            return new ArrWebhookResult { Success = true, Message = $"Handled {payload.EventType} event" };
+        }
+
+        if (string.Equals(payload.EventType, "MovieDownload", StringComparison.OrdinalIgnoreCase))
+        {
+            return ProcessMovieDownload(payload);
+        }
+
+        var isGrab = string.Equals(payload.EventType, "Grab", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(payload.EventType, "MovieGrab", StringComparison.OrdinalIgnoreCase);
+
+        if (!isGrab)
         {
             return new ArrWebhookResult { Success = true, Message = $"Ignored event type: {payload.EventType}" };
         }
@@ -217,6 +233,58 @@ public class ArrWebhookService : IArrWebhookService
         }
 
         return new ArrWebhookResult { Success = true, Message = "Added with basic metadata", InfoHash = infoHash };
+    }
+
+    private ArrWebhookResult ProcessMovieDownload(ArrWebhookPayload payload)
+    {
+        var downloadId = payload.DownloadId;
+        if (string.IsNullOrEmpty(downloadId))
+        {
+            return new ArrWebhookResult { Success = false, Message = "No downloadId in webhook payload" };
+        }
+
+        if (!IsValidInfoHash(downloadId))
+        {
+            _logger.Warn("Webhook: rejected non-hex or invalid infohash downloadId '{0}'", downloadId);
+            return new ArrWebhookResult
+            {
+                Success = false,
+                Message = $"Invalid infohash or non-torrent downloadId: {downloadId}"
+            };
+        }
+
+        var infoHash = downloadId.Trim().ToLowerInvariant();
+        var existing = _torrentService.GetAll().FirstOrDefault(t =>
+            string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+
+        if (existing == null)
+        {
+            _logger.Info("Webhook MovieDownload: torrent with infohash '{0}' not found", infoHash);
+            return new ArrWebhookResult
+            {
+                Success = true,
+                Message = "Torrent not found for MovieDownload",
+                InfoHash = infoHash
+            };
+        }
+
+        existing.Status = TorrentStatus.Seeding;
+        existing.Progress = 1.0;
+        _torrentService.Update(existing);
+        _logger.Info("Webhook MovieDownload: marked torrent '{0}' as Seeding", existing.Name);
+
+        var connection = FindConnection(payload);
+        if (connection != null)
+        {
+            _ = EnrichTorrentFromHistoryAsync(existing.Id, infoHash, downloadId.Trim(), connection, payload.InstanceName, CancellationToken.None);
+        }
+
+        return new ArrWebhookResult
+        {
+            Success = true,
+            Message = "Processed MovieDownload event",
+            InfoHash = infoHash
+        };
     }
 
     private static bool IsValidInfoHash(string downloadId)

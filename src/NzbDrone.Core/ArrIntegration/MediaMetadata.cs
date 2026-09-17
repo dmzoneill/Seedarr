@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace NzbDrone.Core.ArrIntegration
@@ -20,6 +21,11 @@ namespace NzbDrone.Core.ArrIntegration
         public int? TmdbId { get; set; }
         public int? TvdbId { get; set; }
         public string MusicBrainzId { get; set; }
+        public string Studio { get; set; }
+        public string SiteName { get; set; }
+        public string Performers { get; set; }
+        public string SceneCode { get; set; }
+        public DateTime? ReleaseDate { get; set; }
     }
 
     public class MediaActor
