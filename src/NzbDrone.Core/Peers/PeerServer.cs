@@ -1074,7 +1074,9 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
             if (_fastExtensionHandler != null && connection.SupportsFastExtension)
             {
-                _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, true);
+                var hasAll = torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding;
+                var hasNone = torrent.Progress <= 0.0 && torrent.Downloaded == 0;
+                _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, hasAll, hasNone);
             }
             else
             {
@@ -1320,7 +1322,9 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
                 if (_fastExtensionHandler != null && connection.SupportsFastExtension)
                 {
-                    _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, true);
+                    var hasAll = torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding;
+                    var hasNone = torrent.Progress <= 0.0 && torrent.Downloaded == 0;
+                    _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, hasAll, hasNone);
                 }
                 else
                 {

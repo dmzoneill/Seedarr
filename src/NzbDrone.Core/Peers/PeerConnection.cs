@@ -1,6 +1,7 @@
 using System;
 using System.Buffers;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -87,6 +88,8 @@ public class PeerConnection : IDisposable
 
     public double Progress { get; set; }
     public bool[] PeerPieces { get; set; }
+    public HashSet<int> SuggestedPieces { get; } = new();
+    public HashSet<int> AllowedFastPieces { get; } = new();
     public DateTime LastRequestReceived { get; set; } = DateTime.UtcNow;
     public DateTime LastUnchokedAt { get; set; } = DateTime.MinValue;
 
