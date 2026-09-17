@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -9,6 +10,8 @@ using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
+using Polly;
+using Polly.Retry;
 
 namespace NzbDrone.Core.Backup;
 
@@ -26,6 +29,20 @@ public class BackupService : IBackupService
     private const string BackupFolderName = "Backups";
     private const string DbFileName = "seedarr.db";
     private const string ConfigFileName = "config.xml";
+
+    private static readonly RetryPolicy DefaultVacuumRetryPolicy = Policy
+        .Handle<SqliteException>(ex => ex.SqliteErrorCode is 5 or 6)
+        .WaitAndRetry(
+            new[]
+            {
+                TimeSpan.FromMilliseconds(500),
+                TimeSpan.FromMilliseconds(1000),
+                TimeSpan.FromMilliseconds(2000)
+            },
+            (exception, timeSpan, retryCount, _) =>
+            {
+                LogManager.GetCurrentClassLogger().Warn(exception, "Database locked during VACUUM INTO, retrying backup attempt {0} after {1}ms", retryCount, timeSpan.TotalMilliseconds);
+            });
 
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IConnectionStringFactory _connectionStringFactory;
@@ -47,6 +64,12 @@ public class BackupService : IBackupService
         _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
     }
+
+    internal Action<SqliteConnection, string> OnSqliteConnectionConfigured { get; set; }
+
+    internal Func<SqliteCommand, int> ExecuteVacuumCommand { get; set; } = cmd => cmd.ExecuteNonQuery();
+
+    internal RetryPolicy VacuumRetryPolicy { get; set; } = DefaultVacuumRetryPolicy;
 
     public BackupInfo CreateBackup(BackupType type = BackupType.Manual)
     {
@@ -109,10 +132,32 @@ public class BackupService : IBackupService
 
                     var connStr = DbFactory.CleanSqliteConnectionString(_connectionStringFactory.MainDbConnectionString);
                     using var conn = new SqliteConnection(connStr);
+                    conn.DefaultTimeout = 30;
                     conn.Open();
-                    using var cmd = conn.CreateCommand();
-                    cmd.CommandText = $"VACUUM INTO '{dbStagingPath.Replace("'", "''")}';";
-                    cmd.ExecuteNonQuery();
+
+                    using (var pragmaCmd = conn.CreateCommand())
+                    {
+                        pragmaCmd.CommandText = "PRAGMA busy_timeout = 30000; PRAGMA wal_checkpoint(PASSIVE);";
+                        pragmaCmd.ExecuteNonQuery();
+                        OnSqliteConnectionConfigured?.Invoke(conn, pragmaCmd.CommandText);
+                    }
+
+                    (VacuumRetryPolicy ?? DefaultVacuumRetryPolicy).Execute(() =>
+                    {
+                        if (conn.State != ConnectionState.Open)
+                        {
+                            conn.Open();
+                        }
+
+                        if (File.Exists(dbStagingPath))
+                        {
+                            File.Delete(dbStagingPath);
+                        }
+
+                        using var cmd = conn.CreateCommand();
+                        cmd.CommandText = $"VACUUM INTO '{dbStagingPath.Replace("'", "''")}';";
+                        (ExecuteVacuumCommand ?? (c => c.ExecuteNonQuery()))(cmd);
+                    });
 
                     using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
                     {

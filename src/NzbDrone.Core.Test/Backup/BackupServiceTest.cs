@@ -1,12 +1,14 @@
 using System;
 using System.IO;
 using System.IO.Compression;
+using Microsoft.Data.Sqlite;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Backup;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
+using Polly;
 
 namespace NzbDrone.Core.Test.Backup;
 
@@ -406,5 +408,108 @@ public class BackupServiceTest
             e.Type == BackupType.Manual &&
             e.ErrorMessage.Contains("Insufficient disk space") &&
             e.Exception is InvalidOperationException));
+    }
+
+    [Test]
+    public void CreateBackup_sqlite_should_configure_busy_timeout_and_wal_checkpoint_pragma()
+    {
+        CreateTestSqliteDatabase();
+        int? configuredTimeout = null;
+        string executedPragmas = null;
+        int? busyTimeoutPragmaValue = null;
+
+        _subject.OnSqliteConnectionConfigured = (conn, pragmas) =>
+        {
+            configuredTimeout = conn.DefaultTimeout;
+            executedPragmas = pragmas;
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA busy_timeout;";
+            busyTimeoutPragmaValue = Convert.ToInt32(cmd.ExecuteScalar());
+        };
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(configuredTimeout, Is.EqualTo(30));
+        Assert.That(executedPragmas, Does.Contain("PRAGMA busy_timeout = 30000;"));
+        Assert.That(executedPragmas, Does.Contain("PRAGMA wal_checkpoint(PASSIVE);"));
+        Assert.That(busyTimeoutPragmaValue, Is.EqualTo(30000));
+    }
+
+    [Test]
+    public void CreateBackup_sqlite_should_succeed_when_database_is_in_wal_mode_with_uncheckpointed_data()
+    {
+        var dbPath = Path.Combine(_tempDir, "seedarr.db");
+        using (var conn = new SqliteConnection($"Data Source={dbPath}"))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA journal_mode=WAL; CREATE TABLE TestWal (Id INT); INSERT INTO TestWal VALUES (100);";
+            cmd.ExecuteNonQuery();
+        }
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(File.Exists(result.Path), Is.True);
+
+        using var zip = ZipFile.OpenRead(result.Path);
+        Assert.That(zip.GetEntry("seedarr.db"), Is.Not.Null);
+    }
+
+    [Test]
+    public void CreateBackup_sqlite_should_retry_and_succeed_when_database_initially_locked()
+    {
+        CreateTestSqliteDatabase();
+        var attempts = 0;
+
+        _subject.VacuumRetryPolicy = Policy
+            .Handle<SqliteException>(ex => ex.SqliteErrorCode is 5 or 6)
+            .WaitAndRetry(3, _ => TimeSpan.FromMilliseconds(1));
+
+        _subject.ExecuteVacuumCommand = cmd =>
+        {
+            attempts++;
+            if (attempts < 3)
+            {
+                throw new SqliteException("database is locked", 5);
+            }
+
+            return cmd.ExecuteNonQuery();
+        };
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(attempts, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void CreateBackup_sqlite_should_fail_and_publish_BackupFailedEvent_when_lock_retries_exhausted()
+    {
+        CreateTestSqliteDatabase();
+        var attempts = 0;
+
+        _subject.VacuumRetryPolicy = Policy
+            .Handle<SqliteException>(ex => ex.SqliteErrorCode is 5 or 6)
+            .WaitAndRetry(2, _ => TimeSpan.FromMilliseconds(1));
+
+        _subject.ExecuteVacuumCommand = cmd =>
+        {
+            attempts++;
+            throw new SqliteException("database is locked", 5);
+        };
+
+        var ex = Assert.Throws<SqliteException>(() => _subject.CreateBackup(BackupType.Manual));
+        Assert.That(ex.SqliteErrorCode, Is.EqualTo(5));
+        Assert.That(attempts, Is.EqualTo(3));
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<BackupFailedEvent>(e =>
+            e.Type == BackupType.Manual &&
+            e.Exception is SqliteException));
+
+        var stagingPath = Path.Combine(_tempDir, "seedarr.db.backup-staging");
+        Assert.That(File.Exists(stagingPath), Is.False);
     }
 }
