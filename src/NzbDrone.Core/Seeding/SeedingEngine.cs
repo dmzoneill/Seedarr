@@ -15,6 +15,7 @@ using NzbDrone.Core.Seeding.Scheduling;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Simulation.Swarm;
 using NzbDrone.Core.Simulation.Traffic;
+using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerServer;
 
@@ -72,7 +73,8 @@ public class SeedingEngine : BackgroundService
         ITrafficPatternSimulator trafficPatternSimulator = null,
         IClientBehaviorSimulator clientBehaviorSimulator = null,
         ISwarmAnalyzer swarmAnalyzer = null,
-        ICategoryService categoryService = null)
+        ICategoryService categoryService = null,
+        ITagService tagService = null)
     {
         _torrentService = torrentService;
         _distributionManager = distributionManager;
@@ -85,12 +87,12 @@ public class SeedingEngine : BackgroundService
         _clock = clock ?? new SystemClock();
         _random = random ?? new NzbDrone.Common.EnvironmentInfo.RandomNumberGenerator();
         _stateMachine = stateMachine ?? new TorrentStateMachine(eventLogService, eventAggregator, torrentService);
-        _stopPolicy = stopPolicy ?? new StopPolicy(configService, _random);
+        _stopPolicy = stopPolicy ?? new StopPolicy(configService, _random, tagService);
         _swarmAnalyzer = swarmAnalyzer ?? new SwarmAnalyzer(configService);
         _trafficPatternSimulator = trafficPatternSimulator ?? new TrafficPatternSimulator(configService, _random, _clock);
         _clientBehaviorSimulator = clientBehaviorSimulator;
         _categoryService = categoryService;
-        _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator, categoryService);
+        _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator, categoryService, tagService);
         _logger = LogManager.GetCurrentClassLogger();
     }
 

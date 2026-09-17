@@ -836,6 +836,12 @@ export interface SpeedLimits {
 export interface Tag {
   id: number;
   label: string;
+  color?: string;
+  uploadLimitKbps?: number;
+  downloadLimitKbps?: number;
+  minSeedRatio?: number;
+  minSeedTimeSeconds?: number;
+  torrentCount?: number;
 }
 
 export interface NetworkDiagnostics {

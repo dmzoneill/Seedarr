@@ -8,6 +8,8 @@ namespace NzbDrone.Core.Seeding;
 public interface ISpeedPolicy
 {
     SpeedLimits GetEffectiveLimits();
+    int GetUploadLimit(Torrent torrent);
+    int GetDownloadLimit(Torrent torrent);
     void ProcessDownloading(List<Torrent> torrents, SpeedLimits limits, TimeSpan tickInterval);
     void ProcessSeeding(List<Torrent> torrents, SpeedLimits limits, TimeSpan tickInterval);
 }

@@ -9,6 +9,7 @@ using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Seeding.Distribution;
 using NzbDrone.Core.Seeding.Scheduling;
 using NzbDrone.Core.Simulation.Swarm;
+using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Seeding;
@@ -23,6 +24,7 @@ public class SpeedPolicyTest
     private ITorrentStateMachine _stateMachine;
     private IStopPolicy _stopPolicy;
     private ICategoryService _categoryService;
+    private ITagService _tagService;
     private SpeedPolicy _subject;
 
     [SetUp]
@@ -35,6 +37,7 @@ public class SpeedPolicyTest
         _stateMachine = Substitute.For<ITorrentStateMachine>();
         _stopPolicy = Substitute.For<IStopPolicy>();
         _categoryService = Substitute.For<ICategoryService>();
+        _tagService = Substitute.For<ITagService>();
 
         _configService.AlternativeSpeedEnabled.Returns(false);
         _configService.MaxUploadSpeedKbps.Returns(100);
@@ -58,7 +61,8 @@ public class SpeedPolicyTest
             _stateMachine,
             _stopPolicy,
             new RandomNumberGenerator(42),
-            categoryService: _categoryService);
+            categoryService: _categoryService,
+            tagService: _tagService);
     }
 
     [Test]
@@ -396,5 +400,148 @@ public class SpeedPolicyTest
         subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
 
         Assert.That(torrent.Uploaded, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GetUploadLimit_when_torrent_has_no_tags_and_no_category_returns_zero()
+    {
+        var torrent = new Torrent { Id = 1, UploadLimit = 0 };
+
+        var limit = _subject.GetUploadLimit(torrent);
+
+        Assert.That(limit, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GetUploadLimit_when_torrent_has_explicit_limit_returns_torrent_limit()
+    {
+        var torrent = new Torrent { Id = 1, UploadLimit = 500, TagIds = new List<int> { 1 } };
+        _tagService.Get(1).Returns(new Tag { Id = 1, UploadLimitKbps = 200 });
+
+        var limit = _subject.GetUploadLimit(torrent);
+
+        Assert.That(limit, Is.EqualTo(500));
+    }
+
+    [Test]
+    public void GetUploadLimit_when_torrent_has_tag_with_limit_returns_tag_limit()
+    {
+        var torrent = new Torrent { Id = 1, UploadLimit = 0, TagIds = new List<int> { 1 } };
+        _tagService.Get(1).Returns(new Tag { Id = 1, UploadLimitKbps = 250 });
+
+        var limit = _subject.GetUploadLimit(torrent);
+
+        Assert.That(limit, Is.EqualTo(250));
+    }
+
+    [Test]
+    public void GetUploadLimit_when_torrent_has_multiple_tags_enforces_lowest_positive_limit()
+    {
+        var torrent = new Torrent { Id = 1, UploadLimit = 0, TagIds = new List<int> { 1, 2, 3 } };
+        _tagService.Get(1).Returns(new Tag { Id = 1, UploadLimitKbps = 300 });
+        _tagService.Get(2).Returns(new Tag { Id = 2, UploadLimitKbps = 150 });
+        _tagService.Get(3).Returns(new Tag { Id = 3, UploadLimitKbps = null });
+
+        var limit = _subject.GetUploadLimit(torrent);
+
+        Assert.That(limit, Is.EqualTo(150));
+    }
+
+    [Test]
+    public void GetUploadLimit_tag_limit_takes_precedence_over_category_default_limit()
+    {
+        var torrent = new Torrent { Id = 1, UploadLimit = 0, Category = "LinuxISO", TagIds = new List<int> { 1 } };
+        _categoryService.GetByName("LinuxISO").Returns(new Category { Name = "LinuxISO", DefaultUploadLimit = 500 });
+        _tagService.Get(1).Returns(new Tag { Id = 1, UploadLimitKbps = 100 });
+
+        var limit = _subject.GetUploadLimit(torrent);
+
+        Assert.That(limit, Is.EqualTo(100));
+    }
+
+    [Test]
+    public void GetDownloadLimit_when_torrent_has_tag_with_limit_returns_tag_limit()
+    {
+        var torrent = new Torrent { Id = 1, DownloadLimit = 0, TagIds = new List<int> { 1 } };
+        _tagService.Get(1).Returns(new Tag { Id = 1, DownloadLimitKbps = 400 });
+
+        var limit = _subject.GetDownloadLimit(torrent);
+
+        Assert.That(limit, Is.EqualTo(400));
+    }
+
+    [Test]
+    public void GetDownloadLimit_when_torrent_has_multiple_tags_enforces_lowest_positive_limit()
+    {
+        var torrent = new Torrent { Id = 1, DownloadLimit = 0, TagIds = new List<int> { 1, 2 } };
+        _tagService.Get(1).Returns(new Tag { Id = 1, DownloadLimitKbps = 600 });
+        _tagService.Get(2).Returns(new Tag { Id = 2, DownloadLimitKbps = 200 });
+
+        var limit = _subject.GetDownloadLimit(torrent);
+
+        Assert.That(limit, Is.EqualTo(200));
+    }
+
+    [Test]
+    public void GetDownloadLimit_tag_limit_takes_precedence_over_category_default_limit()
+    {
+        var torrent = new Torrent { Id = 1, DownloadLimit = 0, Category = "LinuxISO", TagIds = new List<int> { 1 } };
+        _categoryService.GetByName("LinuxISO").Returns(new Category { Name = "LinuxISO", DefaultDownloadLimit = 800 });
+        _tagService.Get(1).Returns(new Tag { Id = 1, DownloadLimitKbps = 300 });
+
+        var limit = _subject.GetDownloadLimit(torrent);
+
+        Assert.That(limit, Is.EqualTo(300));
+    }
+
+    [Test]
+    public void ProcessDownloading_applies_tag_download_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            DownloadLimit = 0,
+            Downloaded = 0,
+            TotalSize = 10_000_000,
+            TagIds = new List<int> { 1 }
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _tagService.Get(1).Returns(new Tag { Id = 1, DownloadLimitKbps = 150 });
+        _stopPolicy.SelectDownloadStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeDownloadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 500_000 });
+
+        _subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Downloaded, Is.EqualTo(150 * 1024));
+    }
+
+    [Test]
+    public void ProcessSeeding_applies_tag_upload_limit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            UploadLimit = 0,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Seeders = 5,
+            Leechers = 2,
+            TagIds = new List<int> { 1 }
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _tagService.Get(1).Returns(new Tag { Id = 1, UploadLimitKbps = 75 });
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 500_000 });
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Uploaded, Is.EqualTo(75 * 1024));
     }
 }

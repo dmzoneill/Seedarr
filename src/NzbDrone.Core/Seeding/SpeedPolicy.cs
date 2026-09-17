@@ -9,6 +9,7 @@ using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Seeding.Distribution;
 using NzbDrone.Core.Seeding.Scheduling;
 using NzbDrone.Core.Simulation.Swarm;
+using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Seeding;
@@ -27,6 +28,7 @@ public class SpeedPolicy : ISpeedPolicy
     private readonly ISwarmAnalyzer _swarmAnalyzer;
     private readonly IEventAggregator _eventAggregator;
     private readonly ICategoryService _categoryService;
+    private readonly ITagService _tagService;
     private readonly Logger _logger;
 
     public SpeedPolicy(
@@ -39,7 +41,8 @@ public class SpeedPolicy : ISpeedPolicy
         IRandomNumberGenerator random = null,
         ISwarmAnalyzer swarmAnalyzer = null,
         IEventAggregator eventAggregator = null,
-        ICategoryService categoryService = null)
+        ICategoryService categoryService = null,
+        ITagService tagService = null)
     {
         _distributionManager = distributionManager;
         _speedScheduler = speedScheduler;
@@ -51,6 +54,7 @@ public class SpeedPolicy : ISpeedPolicy
         _swarmAnalyzer = swarmAnalyzer ?? new SwarmAnalyzer(configService);
         _eventAggregator = eventAggregator;
         _categoryService = categoryService;
+        _tagService = tagService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -100,15 +104,7 @@ public class SpeedPolicy : ISpeedPolicy
 
             var bytesPerSecond = speeds[i];
 
-            var effectiveDlLimit = torrent.DownloadLimit;
-            if (effectiveDlLimit == 0 && _categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
-            {
-                var cat = _categoryService.GetByName(torrent.Category);
-                if (cat != null && cat.DefaultDownloadLimit > 0)
-                {
-                    effectiveDlLimit = cat.DefaultDownloadLimit;
-                }
-            }
+            var effectiveDlLimit = GetDownloadLimit(torrent);
 
             if (effectiveDlLimit > 0)
             {
@@ -198,15 +194,7 @@ public class SpeedPolicy : ISpeedPolicy
             {
                 var bytesPerSecond = speeds[activeIndex++];
 
-                var effectiveUlLimit = torrent.UploadLimit;
-                if (effectiveUlLimit == 0 && _categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
-                {
-                    var cat = _categoryService.GetByName(torrent.Category);
-                    if (cat != null && cat.DefaultUploadLimit > 0)
-                    {
-                        effectiveUlLimit = cat.DefaultUploadLimit;
-                    }
-                }
+                var effectiveUlLimit = GetUploadLimit(torrent);
 
                 if (effectiveUlLimit > 0)
                 {
@@ -323,5 +311,105 @@ public class SpeedPolicy : ISpeedPolicy
         }
 
         return $"{size:F1} {units[unit]}";
+    }
+
+    public int GetDownloadLimit(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return 0;
+        }
+
+        if (torrent.DownloadLimit != 0)
+        {
+            return torrent.DownloadLimit;
+        }
+
+        var tags = GetTagsForTorrent(torrent);
+        var tagLimits = tags
+            .Where(t => t.DownloadLimitKbps.HasValue && t.DownloadLimitKbps.Value > 0)
+            .Select(t => t.DownloadLimitKbps.Value)
+            .ToList();
+
+        if (tagLimits.Count > 0)
+        {
+            return tagLimits.Min();
+        }
+
+        if (_categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
+        {
+            var cat = _categoryService.GetByName(torrent.Category);
+            if (cat != null && cat.DefaultDownloadLimit > 0)
+            {
+                return cat.DefaultDownloadLimit;
+            }
+        }
+
+        return 0;
+    }
+
+    public int GetUploadLimit(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return 0;
+        }
+
+        if (torrent.UploadLimit != 0)
+        {
+            return torrent.UploadLimit;
+        }
+
+        var tags = GetTagsForTorrent(torrent);
+        var tagLimits = tags
+            .Where(t => t.UploadLimitKbps.HasValue && t.UploadLimitKbps.Value > 0)
+            .Select(t => t.UploadLimitKbps.Value)
+            .ToList();
+
+        if (tagLimits.Count > 0)
+        {
+            return tagLimits.Min();
+        }
+
+        if (_categoryService != null && !string.IsNullOrWhiteSpace(torrent.Category))
+        {
+            var cat = _categoryService.GetByName(torrent.Category);
+            if (cat != null && cat.DefaultUploadLimit > 0)
+            {
+                return cat.DefaultUploadLimit;
+            }
+        }
+
+        return 0;
+    }
+
+    private List<Tag> GetTagsForTorrent(Torrent torrent)
+    {
+        if (_tagService == null || torrent.TagIds == null || torrent.TagIds.Count == 0)
+        {
+            return new List<Tag>();
+        }
+
+        var allTags = _tagService.GetAll();
+        if (allTags != null && allTags.Count > 0)
+        {
+            var matched = allTags.Where(t => torrent.TagIds.Contains(t.Id)).ToList();
+            if (matched.Count > 0)
+            {
+                return matched;
+            }
+        }
+
+        var tags = new List<Tag>();
+        foreach (var id in torrent.TagIds)
+        {
+            var tag = _tagService.Get(id);
+            if (tag != null)
+            {
+                tags.Add(tag);
+            }
+        }
+
+        return tags;
     }
 }

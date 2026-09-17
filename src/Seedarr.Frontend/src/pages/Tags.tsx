@@ -9,6 +9,25 @@ import {
 } from "../api/hooks";
 import type { Tag } from "../api/types";
 
+const COLOR_PRESETS = [
+  "#3b82f6", // Blue
+  "#10b981", // Emerald
+  "#f59e0b", // Amber
+  "#ef4444", // Red
+  "#8b5cf6", // Purple
+  "#ec4899", // Pink
+  "#06b6d4", // Cyan
+  "#6366f1", // Indigo
+];
+
+function formatTime(seconds?: number): string {
+  if (!seconds || seconds <= 0) return "";
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
+  return `${(seconds / 86400).toFixed(1)}d`;
+}
+
 function Tags() {
   const { data: tags, isLoading, isError } = useTags();
   const { data: torrents } = useTorrents();
@@ -17,9 +36,7 @@ function Tags() {
   const updateTag = useUpdateTag();
   const deleteTag = useDeleteTag();
 
-  const [editing, setEditing] = useState<Tag | null>(null);
-  const [newLabel, setNewLabel] = useState("");
-  const [showAdd, setShowAdd] = useState(false);
+  const [modalTag, setModalTag] = useState<Partial<Tag> | null>(null);
   const [deletingTag, setDeletingTag] = useState<Tag | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
 
@@ -45,30 +62,28 @@ function Tags() {
     return count;
   };
 
-  function handleCreate() {
-    if (!newLabel.trim()) return;
-    createTag.mutate(
-      { label: newLabel.trim() },
-      {
-        onSuccess: () => {
-          setNewLabel("");
-          setShowAdd(false);
-        },
-      },
-    );
-  }
+  function handleSaveModal() {
+    if (!modalTag || !modalTag.label?.trim()) return;
 
-  function handleUpdate() {
-    if (!editing || !editing.label.trim()) return;
-    updateTag.mutate(
-      {
-        ...editing,
-        label: editing.label.trim(),
-      },
-      {
-        onSuccess: () => setEditing(null),
-      },
-    );
+    const payload: Partial<Tag> = {
+      ...modalTag,
+      label: modalTag.label.trim(),
+      color: modalTag.color?.trim() || undefined,
+      uploadLimitKbps: modalTag.uploadLimitKbps ? Number(modalTag.uploadLimitKbps) : undefined,
+      downloadLimitKbps: modalTag.downloadLimitKbps ? Number(modalTag.downloadLimitKbps) : undefined,
+      minSeedRatio: modalTag.minSeedRatio ? Number(modalTag.minSeedRatio) : undefined,
+      minSeedTimeSeconds: modalTag.minSeedTimeSeconds ? Number(modalTag.minSeedTimeSeconds) : undefined,
+    };
+
+    if (payload.id) {
+      updateTag.mutate(payload as Tag, {
+        onSuccess: () => setModalTag(null),
+      });
+    } else {
+      createTag.mutate(payload, {
+        onSuccess: () => setModalTag(null),
+      });
+    }
   }
 
   function confirmDeleteTag() {
@@ -113,7 +128,7 @@ function Tags() {
               fontSize: "0.9rem",
             }}
           >
-            Organize and filter torrent swarms by custom labels and categories
+            Organize and filter torrent swarms by custom labels, colors, and seeding policies
           </p>
         </div>
 
@@ -142,61 +157,12 @@ function Tags() {
           )}
           <button
             className="btn btn-primary"
-            onClick={() => setShowAdd(true)}
+            onClick={() => setModalTag({ label: "", color: "#3b82f6" })}
           >
             + Add Tag
           </button>
         </div>
       </div>
-
-      {showAdd && (
-        <div
-          className="card"
-          style={{
-            marginBottom: "1.25rem",
-            borderRadius: "8px",
-            boxShadow:
-              "0 4px 14px rgba(0, 0, 0, 0.32), 0 1px 3px rgba(0, 0, 0, 0.18)",
-            border: "1px solid rgba(200, 168, 78, 0.4)",
-            padding: "1rem 1.25rem",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              gap: "0.75rem",
-              alignItems: "center",
-              maxWidth: "500px",
-            }}
-          >
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Tag name (e.g. 4k-hdr, seedbox, anime)"
-              value={newLabel}
-              onChange={(e) => setNewLabel(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleCreate()}
-              autoFocus
-            />
-            <button
-              className="btn btn-primary btn-small"
-              onClick={handleCreate}
-              disabled={createTag.isPending || !newLabel.trim()}
-            >
-              {createTag.isPending ? "Saving..." : "Save Tag"}
-            </button>
-            <button
-              className="btn btn-outline btn-small"
-              onClick={() => {
-                setShowAdd(false);
-                setNewLabel("");
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
 
       <div
         className="card"
@@ -223,6 +189,7 @@ function Tags() {
               <thead>
                 <tr>
                   <th className="torrent-table-th">Tag Label</th>
+                  <th className="torrent-table-th">Seeding Policies</th>
                   <th className="torrent-table-th">Assigned Torrents</th>
                   <th
                     className="torrent-table-th"
@@ -235,7 +202,7 @@ function Tags() {
               <tbody>
                 {tagList.length === 0 ? (
                   <tr>
-                    <td colSpan={3} className="torrent-table-empty">
+                    <td colSpan={4} className="torrent-table-empty">
                       No tags defined yet. Click &quot;+ Add Tag&quot; to create
                       one.
                     </td>
@@ -244,35 +211,57 @@ function Tags() {
                   tagList.map((tag) => (
                     <tr key={tag.id} className="torrent-table-row">
                       <td>
-                        {editing?.id === tag.id ? (
-                          <input
-                            type="text"
-                            className="form-input"
-                            value={editing.label}
-                            onChange={(e) =>
-                              setEditing({ ...editing, label: e.target.value })
-                            }
-                            onKeyDown={(e) =>
-                              e.key === "Enter" && handleUpdate()
-                            }
-                            autoFocus
-                            style={{ maxWidth: "250px" }}
-                          />
-                        ) : (
-                          <span
-                            className="badge badge-primary"
-                            style={{
-                              fontSize: "0.82rem",
-                              padding: "0.2rem 0.6rem",
-                            }}
-                          >
-                            🏷️ {tag.label}
-                          </span>
-                        )}
+                        <span
+                          className={`badge ${!tag.color ? "badge-primary" : ""}`}
+                          style={{
+                            fontSize: "0.82rem",
+                            padding: "0.25rem 0.65rem",
+                            backgroundColor: tag.color || undefined,
+                            borderColor: tag.color || undefined,
+                            color: tag.color ? "#fff" : undefined,
+                            fontWeight: 600,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.35rem",
+                          }}
+                        >
+                          🏷️ {tag.label}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", fontSize: "0.8rem" }}>
+                          {tag.uploadLimitKbps ? (
+                            <span className="badge badge-secondary" title="Upload Limit">
+                              ↑ {tag.uploadLimitKbps} KB/s
+                            </span>
+                          ) : null}
+                          {tag.downloadLimitKbps ? (
+                            <span className="badge badge-secondary" title="Download Limit">
+                              ↓ {tag.downloadLimitKbps} KB/s
+                            </span>
+                          ) : null}
+                          {tag.minSeedRatio ? (
+                            <span className="badge badge-secondary" title="Min Seed Ratio">
+                              Ratio: {tag.minSeedRatio}
+                            </span>
+                          ) : null}
+                          {tag.minSeedTimeSeconds ? (
+                            <span className="badge badge-secondary" title="Min Seed Time">
+                              Time: {formatTime(tag.minSeedTimeSeconds)}
+                            </span>
+                          ) : null}
+                          {!tag.uploadLimitKbps && !tag.downloadLimitKbps && !tag.minSeedRatio && !tag.minSeedTimeSeconds && (
+                            <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
+                              Default
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td>
                         <span style={{ fontWeight: 600 }}>
-                          {getTagUsageCount(tag)}
+                          {selectedCategory === "All" && tag.torrentCount !== undefined
+                            ? tag.torrentCount
+                            : getTagUsageCount(tag)}
                         </span>{" "}
                         <span
                           style={{
@@ -286,42 +275,22 @@ function Tags() {
                         </span>
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        {editing?.id === tag.id ? (
-                          <div
-                            style={{ display: "inline-flex", gap: "0.5rem" }}
+                        <div
+                          style={{ display: "inline-flex", gap: "0.5rem" }}
+                        >
+                          <button
+                            className="btn btn-outline btn-small"
+                            onClick={() => setModalTag({ ...tag })}
                           >
-                            <button
-                              className="btn btn-primary btn-small"
-                              onClick={handleUpdate}
-                              disabled={updateTag.isPending}
-                            >
-                              Save
-                            </button>
-                            <button
-                              className="btn btn-outline btn-small"
-                              onClick={() => setEditing(null)}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <div
-                            style={{ display: "inline-flex", gap: "0.5rem" }}
+                            Edit
+                          </button>
+                          <button
+                            className="btn btn-danger btn-small"
+                            onClick={() => setDeletingTag(tag)}
                           >
-                            <button
-                              className="btn btn-outline btn-small"
-                              onClick={() => setEditing({ ...tag })}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              className="btn btn-danger btn-small"
-                              onClick={() => setDeletingTag(tag)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
+                            Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -331,6 +300,270 @@ function Tags() {
           </div>
         )}
       </div>
+
+      {/* Add / Edit Tag Modal */}
+      {modalTag && (
+        <div
+          className="modal-overlay"
+          onClick={() => setModalTag(null)}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 520,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid var(--border-light)",
+            }}
+          >
+            <h3
+              className="modal-title"
+              style={{ fontSize: "1.15rem", marginBottom: "1rem" }}
+            >
+              {modalTag.id ? `Edit Tag: "${modalTag.label}"` : "Add Tag"}
+            </h3>
+
+            {/* Label Input */}
+            <div style={{ marginBottom: "1rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  marginBottom: "0.35rem",
+                }}
+              >
+                Tag Label *
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="e.g. 4k-hdr, seedbox, ptp"
+                value={modalTag.label || ""}
+                onChange={(e) => setModalTag({ ...modalTag, label: e.target.value })}
+                autoFocus
+              />
+            </div>
+
+            {/* Color Customization */}
+            <div style={{ marginBottom: "1.25rem" }}>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  marginBottom: "0.35rem",
+                }}
+              >
+                Color Customization
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                <input
+                  type="color"
+                  value={modalTag.color || "#3b82f6"}
+                  onChange={(e) => setModalTag({ ...modalTag, color: e.target.value })}
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    padding: "0",
+                    border: "1px solid var(--border-light)",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    backgroundColor: "transparent",
+                  }}
+                />
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="#3b82f6"
+                  value={modalTag.color || ""}
+                  onChange={(e) => setModalTag({ ...modalTag, color: e.target.value })}
+                  style={{ width: "110px" }}
+                />
+                {modalTag.color && (
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-small"
+                    onClick={() => setModalTag({ ...modalTag, color: undefined })}
+                    title="Clear color"
+                  >
+                    Clear
+                  </button>
+                )}
+                {/* Live chip preview */}
+                <span
+                  className={`badge ${!modalTag.color ? "badge-primary" : ""}`}
+                  style={{
+                    marginLeft: "auto",
+                    backgroundColor: modalTag.color || undefined,
+                    borderColor: modalTag.color || undefined,
+                    color: modalTag.color ? "#fff" : undefined,
+                    fontSize: "0.82rem",
+                    padding: "0.25rem 0.65rem",
+                  }}
+                >
+                  🏷️ {modalTag.label?.trim() || "Preview"}
+                </span>
+              </div>
+              <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Presets:</span>
+                {COLOR_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setModalTag({ ...modalTag, color: preset })}
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      backgroundColor: preset,
+                      border: modalTag.color === preset ? "2px solid #fff" : "1px solid transparent",
+                      cursor: "pointer",
+                      padding: 0,
+                    }}
+                    title={preset}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Bandwidth Limits */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1rem" }}>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Upload Limit (KB/s)
+                </label>
+                <input
+                  type="number"
+                  className="form-input"
+                  placeholder="Unlimited"
+                  min="0"
+                  value={modalTag.uploadLimitKbps ?? ""}
+                  onChange={(e) =>
+                    setModalTag({
+                      ...modalTag,
+                      uploadLimitKbps: e.target.value ? Number(e.target.value) : undefined,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Download Limit (KB/s)
+                </label>
+                <input
+                  type="number"
+                  className="form-input"
+                  placeholder="Unlimited"
+                  min="0"
+                  value={modalTag.downloadLimitKbps ?? ""}
+                  onChange={(e) =>
+                    setModalTag({
+                      ...modalTag,
+                      downloadLimitKbps: e.target.value ? Number(e.target.value) : undefined,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            {/* Seeding Policy Goals */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", marginBottom: "1.5rem" }}>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Min Seed Ratio
+                </label>
+                <input
+                  type="number"
+                  className="form-input"
+                  placeholder="e.g. 2.0"
+                  step="0.1"
+                  min="0"
+                  value={modalTag.minSeedRatio ?? ""}
+                  onChange={(e) =>
+                    setModalTag({
+                      ...modalTag,
+                      minSeedRatio: e.target.value ? Number(e.target.value) : undefined,
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    marginBottom: "0.35rem",
+                  }}
+                >
+                  Min Seed Time (Seconds)
+                </label>
+                <input
+                  type="number"
+                  className="form-input"
+                  placeholder="e.g. 86400"
+                  min="0"
+                  value={modalTag.minSeedTimeSeconds ?? ""}
+                  onChange={(e) =>
+                    setModalTag({
+                      ...modalTag,
+                      minSeedTimeSeconds: e.target.value ? Number(e.target.value) : undefined,
+                    })
+                  }
+                />
+              </div>
+            </div>
+
+            <div
+              className="modal-actions"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: "0.5rem",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-outline btn-small"
+                onClick={() => setModalTag(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-small"
+                onClick={handleSaveModal}
+                disabled={!modalTag.label?.trim() || createTag.isPending || updateTag.isPending}
+              >
+                {createTag.isPending || updateTag.isPending ? "Saving..." : "Save Tag"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deletingTag && (
