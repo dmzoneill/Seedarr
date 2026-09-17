@@ -13,16 +13,20 @@ public class IndexerStatus
     public string LastFailureMessage { get; set; }
     public int? LastStatusCode { get; set; }
     public bool IsDisabled => DisabledTill.HasValue && DisabledTill.Value > DateTime.UtcNow;
+    public bool IsAuthFailure => (LastStatusCode == 401 || LastStatusCode == 403) && IsDisabled;
+    public bool IsRateLimited => LastStatusCode == 429 && IsDisabled;
 }
 
 public interface IIndexerStatusService
 {
     void RecordSuccess(int indexerId);
-    void RecordFailure(int indexerId, int? statusCode = null, string errorMessage = null, Exception ex = null);
+    void RecordFailure(int indexerId, int? statusCode = null, string errorMessage = null, Exception ex = null, TimeSpan? retryAfter = null);
     bool IsDisabled(int indexerId);
+    bool IsAuthFailed(int indexerId);
+    bool IsRateLimited(int indexerId);
     IndexerStatus GetStatus(int indexerId);
     IReadOnlyDictionary<int, IndexerStatus> GetAllStatuses();
     void Reset(int indexerId);
     void ResetAll();
-    TimeSpan CalculateBackoff(int consecutiveFailures, int? statusCode = null);
+    TimeSpan CalculateBackoff(int consecutiveFailures, int? statusCode = null, TimeSpan? retryAfter = null, bool applyJitter = true);
 }

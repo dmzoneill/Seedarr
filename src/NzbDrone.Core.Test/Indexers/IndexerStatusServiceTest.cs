@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net;
 using NUnit.Framework;
 using NzbDrone.Core.Indexers;
@@ -37,7 +38,7 @@ public class IndexerStatusServiceTest
     [Test]
     public void RecordSuccess_should_reset_indexer_failures_and_recovery()
     {
-        _service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Service Unavailable");
+        _service.RecordFailure(1, (int)HttpStatusCode.TooManyRequests, "Rate limited");
         Assert.That(_service.IsDisabled(1), Is.True);
 
         _service.RecordSuccess(1);
@@ -48,24 +49,145 @@ public class IndexerStatusServiceTest
     }
 
     [Test]
+    public void RecordFailure_HTTP_401_403_should_trigger_auth_failure_extended_backoff_and_disable()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        service.RecordFailure(1, (int)HttpStatusCode.Unauthorized, "Invalid API Key");
+
+        Assert.That(service.IsDisabled(1), Is.True);
+        Assert.That(service.IsAuthFailed(1), Is.True);
+
+        var status = service.GetStatus(1);
+        Assert.That(status.ConsecutiveFailures, Is.EqualTo(1));
+        Assert.That(status.LastStatusCode, Is.EqualTo(401));
+        Assert.That(status.IsAuthFailure, Is.True);
+        Assert.That(status.DisabledTill, Is.Not.Null);
+
+        // Extended 24-hour backoff with +/- 15% jitter falls between 20.4 and 27.6 hours
+        var backoff = status.DisabledTill.Value - currentTime;
+        Assert.That(backoff.TotalHours, Is.GreaterThanOrEqualTo(20.4));
+        Assert.That(backoff.TotalHours, Is.LessThanOrEqualTo(27.6));
+
+        // Test 403 Forbidden
+        service.RecordFailure(2, (int)HttpStatusCode.Forbidden, "Account suspended");
+        Assert.That(service.IsDisabled(2), Is.True);
+        Assert.That(service.IsAuthFailed(2), Is.True);
+    }
+
+    [Test]
+    public void RecordFailure_HTTP_429_should_apply_rate_limit_backoff()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        // Default 429 backoff: minimum 1 hour with +/- 15% jitter
+        service.RecordFailure(1, (int)HttpStatusCode.TooManyRequests, "Rate limit exceeded");
+
+        Assert.That(service.IsDisabled(1), Is.True);
+        Assert.That(service.IsRateLimited(1), Is.True);
+
+        var status1 = service.GetStatus(1);
+        Assert.That(status1.IsRateLimited, Is.True);
+        var backoff1 = status1.DisabledTill.Value - currentTime;
+        Assert.That(backoff1.TotalMinutes, Is.GreaterThanOrEqualTo(51.0));
+        Assert.That(backoff1.TotalMinutes, Is.LessThanOrEqualTo(69.0));
+
+        // Explicit retryAfter
+        service.RecordFailure(2, (int)HttpStatusCode.TooManyRequests, "Rate limited", retryAfter: TimeSpan.FromSeconds(120));
+        var status2 = service.GetStatus(2);
+        var backoff2 = status2.DisabledTill.Value - currentTime;
+        Assert.That(backoff2.TotalSeconds, Is.GreaterThanOrEqualTo(102.0));
+        Assert.That(backoff2.TotalSeconds, Is.LessThanOrEqualTo(138.0));
+
+        // Parsed retryAfter from message
+        service.RecordFailure(3, (int)HttpStatusCode.TooManyRequests, "Rate limit reached. Retry-After: 300");
+        var status3 = service.GetStatus(3);
+        var backoff3 = status3.DisabledTill.Value - currentTime;
+        Assert.That(backoff3.TotalSeconds, Is.GreaterThanOrEqualTo(255.0));
+        Assert.That(backoff3.TotalSeconds, Is.LessThanOrEqualTo(345.0));
+    }
+
+    [Test]
+    public void RecordFailure_generic_errors_should_require_consecutive_failure_threshold_before_disabling()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        // Failure 1: transient network error, below threshold (3)
+        service.RecordFailure(1, (int)HttpStatusCode.InternalServerError, "Server Error 1");
+        Assert.That(service.IsDisabled(1), Is.False);
+        var status1 = service.GetStatus(1);
+        Assert.That(status1.ConsecutiveFailures, Is.EqualTo(1));
+        Assert.That(status1.DisabledTill, Is.Null);
+
+        // Failure 2: transient error, below threshold (3)
+        service.RecordFailure(1, null, "Connection timeout");
+        Assert.That(service.IsDisabled(1), Is.False);
+        var status2 = service.GetStatus(1);
+        Assert.That(status2.ConsecutiveFailures, Is.EqualTo(2));
+        Assert.That(status2.DisabledTill, Is.Null);
+
+        // Failure 3: reaches threshold, indexer is disabled
+        service.RecordFailure(1, (int)HttpStatusCode.BadGateway, "Bad Gateway");
+        Assert.That(service.IsDisabled(1), Is.True);
+        var status3 = service.GetStatus(1);
+        Assert.That(status3.ConsecutiveFailures, Is.EqualTo(3));
+        Assert.That(status3.DisabledTill, Is.Not.Null);
+    }
+
+    [Test]
+    public void CalculateBackoff_should_apply_randomized_jitter_within_expected_percentage_range()
+    {
+        // For generic errors reaching threshold (3), base backoff is 5 minutes (300 seconds)
+        var samples = new List<double>();
+        for (var i = 0; i < 50; i++)
+        {
+            var backoff = _service.CalculateBackoff(3, (int)HttpStatusCode.InternalServerError);
+            var seconds = backoff.TotalSeconds;
+            // +/- 15% range of 300 seconds is [255, 345]
+            Assert.That(seconds, Is.GreaterThanOrEqualTo(255.0));
+            Assert.That(seconds, Is.LessThanOrEqualTo(345.0));
+            samples.Add(seconds);
+        }
+
+        // Verify randomized variation: not all samples are identical
+        var hasVariation = false;
+        for (var i = 1; i < samples.Count; i++)
+        {
+            if (Math.Abs(samples[i] - samples[0]) > 0.001)
+            {
+                hasVariation = true;
+                break;
+            }
+        }
+
+        Assert.That(hasVariation, Is.True);
+    }
+
+    [Test]
     public void CalculateBackoff_scales_exponentially()
     {
-        Assert.That(_service.CalculateBackoff(1), Is.EqualTo(TimeSpan.FromMinutes(5)));
-        Assert.That(_service.CalculateBackoff(2), Is.EqualTo(TimeSpan.FromMinutes(15)));
-        Assert.That(_service.CalculateBackoff(3), Is.EqualTo(TimeSpan.FromMinutes(30)));
-        Assert.That(_service.CalculateBackoff(4), Is.EqualTo(TimeSpan.FromHours(1)));
-        Assert.That(_service.CalculateBackoff(5), Is.EqualTo(TimeSpan.FromHours(2)));
-        Assert.That(_service.CalculateBackoff(6), Is.EqualTo(TimeSpan.FromHours(4)));
-        Assert.That(_service.CalculateBackoff(7), Is.EqualTo(TimeSpan.FromHours(8)));
-        Assert.That(_service.CalculateBackoff(8), Is.EqualTo(TimeSpan.FromHours(24)));
-        Assert.That(_service.CalculateBackoff(10), Is.EqualTo(TimeSpan.FromHours(24)));
+        // Unjittered calculation for effective failures (failureThreshold: 1)
+        var service = new IndexerStatusService(() => DateTime.UtcNow, () => 0.5, failureThreshold: 1);
+
+        Assert.That(service.CalculateBackoff(1, applyJitter: false), Is.EqualTo(TimeSpan.FromMinutes(5)));
+        Assert.That(service.CalculateBackoff(2, applyJitter: false), Is.EqualTo(TimeSpan.FromMinutes(15)));
+        Assert.That(service.CalculateBackoff(3, applyJitter: false), Is.EqualTo(TimeSpan.FromMinutes(30)));
+        Assert.That(service.CalculateBackoff(4, applyJitter: false), Is.EqualTo(TimeSpan.FromHours(1)));
+        Assert.That(service.CalculateBackoff(5, applyJitter: false), Is.EqualTo(TimeSpan.FromHours(2)));
+        Assert.That(service.CalculateBackoff(6, applyJitter: false), Is.EqualTo(TimeSpan.FromHours(4)));
+        Assert.That(service.CalculateBackoff(7, applyJitter: false), Is.EqualTo(TimeSpan.FromHours(8)));
+        Assert.That(service.CalculateBackoff(8, applyJitter: false), Is.EqualTo(TimeSpan.FromHours(24)));
+        Assert.That(service.CalculateBackoff(10, applyJitter: false), Is.EqualTo(TimeSpan.FromHours(24)));
     }
 
     [Test]
     public void IsDisabled_should_decay_consecutive_failures_when_backoff_window_has_elapsed()
     {
         var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
-        var service = new IndexerStatusService(() => currentTime);
+        var service = new IndexerStatusService(() => currentTime, () => 0.5, failureThreshold: 2);
 
         service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Fail 1");
         currentTime = currentTime.AddMinutes(1);
@@ -75,7 +197,7 @@ public class IndexerStatusServiceTest
         Assert.That(statusBefore.ConsecutiveFailures, Is.EqualTo(2));
         Assert.That(service.IsDisabled(1), Is.True);
 
-        // Advance time past the 15-minute backoff window
+        // Advance time past the backoff window
         currentTime = currentTime.AddMinutes(16);
 
         // When IsDisabled is checked after backoff expires, it decays failure and returns false
@@ -90,7 +212,7 @@ public class IndexerStatusServiceTest
     public void DecayFailures_should_reset_failure_metadata_when_decaying_to_zero()
     {
         var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
-        var service = new IndexerStatusService(() => currentTime);
+        var service = new IndexerStatusService(() => currentTime, () => 0.5, failureThreshold: 1);
 
         service.RecordFailure(1, (int)HttpStatusCode.BadGateway, "Bad Gateway");
         Assert.That(service.IsDisabled(1), Is.True);
@@ -110,7 +232,7 @@ public class IndexerStatusServiceTest
     public void RecordFailure_after_decay_should_increment_from_decayed_count()
     {
         var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
-        var service = new IndexerStatusService(() => currentTime);
+        var service = new IndexerStatusService(() => currentTime, () => 0.5, failureThreshold: 1);
 
         // 3 consecutive failures -> 30 min backoff
         service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Fail 1");
@@ -136,7 +258,7 @@ public class IndexerStatusServiceTest
     public void GetAllStatuses_should_decay_expired_statuses()
     {
         var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
-        var service = new IndexerStatusService(() => currentTime);
+        var service = new IndexerStatusService(() => currentTime, () => 0.5, failureThreshold: 1);
 
         service.RecordFailure(1, (int)HttpStatusCode.ServiceUnavailable, "Fail 1");
         service.RecordFailure(2, (int)HttpStatusCode.ServiceUnavailable, "Fail 2");

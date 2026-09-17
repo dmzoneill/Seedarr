@@ -58,7 +58,8 @@ public class ProwlarrIndexer : IIndexer
                 return new IndexerTestResult
                 {
                     Success = false,
-                    Message = "Authentication failed: Invalid API Key."
+                    Message = "Authentication failed: Invalid API Key.",
+                    StatusCode = (int)response.StatusCode
                 };
             }
 
@@ -67,14 +68,26 @@ public class ProwlarrIndexer : IIndexer
                 return new IndexerTestResult
                 {
                     Success = false,
-                    Message = $"Prowlarr health endpoint not found at {url}. Please verify the host and port."
+                    Message = $"Prowlarr health endpoint not found at {url}. Please verify the host and port.",
+                    StatusCode = (int)response.StatusCode
                 };
             }
 
             return new IndexerTestResult
             {
                 Success = false,
-                Message = $"Prowlarr returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase})."
+                Message = $"Prowlarr returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).",
+                StatusCode = (int)response.StatusCode
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.Error(ex, "Failed to test Prowlarr connection at {0}", definition.Url);
+            return new IndexerTestResult
+            {
+                Success = false,
+                Message = $"Unable to connect to Prowlarr at {definition.Url}: {ex.Message}",
+                StatusCode = (int?)ex.StatusCode
             };
         }
         catch (Exception ex)
@@ -188,7 +201,21 @@ public class ProwlarrIndexer : IIndexer
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Prowlarr search returned status code {0}", response.StatusCode);
-                return results;
+                var ex = new HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
+                if (response.Headers.RetryAfter != null)
+                {
+                    if (response.Headers.RetryAfter.Delta.HasValue)
+                    {
+                        ex.Data["RetryAfter"] = response.Headers.RetryAfter.Delta.Value;
+                    }
+                    else if (response.Headers.RetryAfter.Date.HasValue)
+                    {
+                        var diff = response.Headers.RetryAfter.Date.Value - DateTimeOffset.UtcNow;
+                        ex.Data["RetryAfter"] = diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
+                    }
+                }
+
+                throw ex;
             }
 
             using var searchStream = response.Content.ReadAsStream();
@@ -267,6 +294,10 @@ public class ProwlarrIndexer : IIndexer
                     results.Add(release);
                 }
             }
+        }
+        catch (HttpRequestException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
