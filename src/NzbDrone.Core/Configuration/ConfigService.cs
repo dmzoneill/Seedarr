@@ -220,6 +220,10 @@ public interface IConfigService
     string TelegramSecretToken { get; }
     string TelegramWebhookUrl { get; }
     bool TelegramUsePolling { get; }
+
+    // Discord
+    string DiscordPublicKey { get; }
+    string DiscordApplicationId { get; }
 }
 
 public class ConfigModel : ModelBase
@@ -570,6 +574,10 @@ public class ConfigService : IConfigService
     public string TelegramSecretToken => GetValue("TelegramSecretToken", "");
     public string TelegramWebhookUrl => GetValue("TelegramWebhookUrl", "");
     public bool TelegramUsePolling => GetValueBoolean("TelegramUsePolling", false);
+
+    // Discord
+    public string DiscordPublicKey => GetValue("DiscordPublicKey", "");
+    public string DiscordApplicationId => GetValue("DiscordApplicationId", "");
 }
 
 public class ConfigSavedEvent : IEvent
