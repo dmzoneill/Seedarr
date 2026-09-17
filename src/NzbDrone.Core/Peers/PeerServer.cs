@@ -2,11 +2,14 @@ using System;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using BencodeNET.Objects;
+using BencodeNET.Parsing;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
@@ -42,11 +45,13 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private readonly Network.IProxySettingsProvider _proxySettingsProvider;
     private readonly IDhKeyPool _dhKeyPool;
     private readonly IMseSkeyRegistry _mseSkeyRegistry;
+    private readonly Extensions.IMetadataExchange _metadataExchange;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, byte> _inFlightOutgoingEndpoints = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Torrent> _torrentCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte[]> _metadataCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Logger _logger;
     private readonly object _listenerLock = new();
     private readonly SemaphoreSlim _rebindSignal = new(0, 1);
@@ -76,7 +81,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         IChokeManager chokeManager = null,
         Network.IProxySettingsProvider proxySettingsProvider = null,
         IDhKeyPool dhKeyPool = null,
-        IMseSkeyRegistry mseSkeyRegistry = null)
+        IMseSkeyRegistry mseSkeyRegistry = null,
+        Extensions.IMetadataExchange metadataExchange = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -92,6 +98,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         _proxySettingsProvider = proxySettingsProvider;
         _dhKeyPool = dhKeyPool;
         _mseSkeyRegistry = mseSkeyRegistry ?? new MseSkeyRegistry(_torrentService);
+        _metadataExchange = metadataExchange ?? new Extensions.MetadataExchange();
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -168,6 +175,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         if (!string.IsNullOrEmpty(infoHash))
         {
             _torrentCache.TryRemove(infoHash, out _);
+            _metadataCache.TryRemove(infoHash, out _);
             _peerDiscovery?.RemoveTorrent(infoHash);
             _mseSkeyRegistry?.UnregisterTorrent(infoHash);
         }
@@ -178,12 +186,55 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 if (kvp.Value?.Id == message.TorrentId)
                 {
                     _torrentCache.TryRemove(kvp.Key, out _);
+                    _metadataCache.TryRemove(kvp.Key, out _);
                     _peerDiscovery?.RemoveTorrent(kvp.Key);
                     _mseSkeyRegistry?.UnregisterTorrent(kvp.Key);
                     break;
                 }
             }
         }
+    }
+
+    public void SetTorrentMetadata(string infoHash, byte[] metadata)
+    {
+        if (!string.IsNullOrWhiteSpace(infoHash) && metadata != null)
+        {
+            _metadataCache[infoHash] = metadata;
+        }
+    }
+
+    public byte[] GetTorrentMetadata(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return null;
+        }
+
+        if (_metadataCache.TryGetValue(infoHash, out var cached))
+        {
+            return cached;
+        }
+
+        var torrent = GetCachedTorrent(infoHash);
+        if (torrent != null && !string.IsNullOrWhiteSpace(torrent.SourcePath) && File.Exists(torrent.SourcePath))
+        {
+            try
+            {
+                var fileBytes = File.ReadAllBytes(torrent.SourcePath);
+                if (TorrentFileParser.TryExtractRawInfoBytes(fileBytes, out var rawInfoBytes))
+                {
+                    var metadata = rawInfoBytes.ToArray();
+                    _metadataCache[infoHash] = metadata;
+                    return metadata;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to extract metadata from {0}", torrent.SourcePath);
+            }
+        }
+
+        return null;
     }
 
     public override void Dispose()
@@ -1475,12 +1526,132 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 break;
 
             case PeerMessageType.Extended:
+                HandleExtendedMessage(connection, message, torrent);
                 break;
 
             default:
                 _logger.Trace("Ignoring message type {0} from {1}", message.Type, connection.RemoteIp);
                 break;
         }
+    }
+
+    private bool IsUtMetadataExtension(PeerConnection connection, byte extId, Torrent torrent)
+    {
+        if (_extensionManager != null)
+        {
+            var localExts = _extensionManager.GetSupportedExtensions(torrent?.IsPrivate ?? false);
+            if (localExts.TryGetValue("ut_metadata", out var localId) && extId == localId)
+            {
+                return true;
+            }
+        }
+
+        if (connection.RemoteExtensions.TryGetValue("ut_metadata", out var remoteId) && extId == remoteId)
+        {
+            return true;
+        }
+
+        if (_extensionManager == null && connection.RemoteExtensions.IsEmpty && (extId == 1 || extId == 2))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private void HandleExtendedMessage(PeerConnection connection, PeerMessage message, Torrent torrent)
+    {
+        if (message.Payload == null || message.Payload.Length < 2)
+        {
+            return;
+        }
+
+        var extId = message.Payload[0];
+        var extendedPayload = message.Payload[1..];
+
+        if (extId == 0)
+        {
+            try
+            {
+                var parser = new BencodeParser();
+                using var stream = new MemoryStream(extendedPayload);
+                var dict = parser.Parse<BDictionary>(stream);
+                if (dict.TryGetValue("m", out var mObj) && mObj is BDictionary mDict)
+                {
+                    foreach (var kvp in mDict)
+                    {
+                        if (kvp.Value is BNumber num)
+                        {
+                            connection.RemoteExtensions[kvp.Key.ToString()] = (int)num.Value;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to parse extension handshake from {0}", connection.RemoteIp);
+            }
+
+            return;
+        }
+
+        if (IsUtMetadataExtension(connection, extId, torrent))
+        {
+            HandleUtMetadataMessage(connection, extId, extendedPayload, torrent);
+        }
+    }
+
+    private void HandleUtMetadataMessage(PeerConnection connection, byte extId, byte[] extendedPayload, Torrent torrent)
+    {
+        var metaMsg = _metadataExchange.ParseMetadataMessage(extendedPayload);
+        if (metaMsg.MessageType != 0)
+        {
+            return;
+        }
+
+        var remoteExtId = connection.RemoteExtensions.TryGetValue("ut_metadata", out var rId) && rId > 0
+            ? (byte)rId
+            : extId;
+
+        var infoHash = !string.IsNullOrEmpty(connection.InfoHash) ? connection.InfoHash : torrent?.InfoHash;
+        var metadata = GetTorrentMetadata(infoHash);
+
+        if (metadata != null && metadata.Length > 0)
+        {
+            var totalSize = metadata.Length;
+            var totalPieces = (int)Math.Ceiling((double)totalSize / Extensions.MetadataExchange.MetadataBlockSize);
+
+            if (metaMsg.Piece >= 0 && metaMsg.Piece < totalPieces)
+            {
+                var offset = metaMsg.Piece * Extensions.MetadataExchange.MetadataBlockSize;
+                var chunkSize = Math.Min(Extensions.MetadataExchange.MetadataBlockSize, totalSize - offset);
+                var chunk = new byte[chunkSize];
+                Array.Copy(metadata, offset, chunk, 0, chunkSize);
+
+                var responseBytes = _metadataExchange.BuildMetadataResponse(metaMsg.Piece, totalSize, chunk);
+                var payload = new byte[1 + responseBytes.Length];
+                payload[0] = remoteExtId;
+                Array.Copy(responseBytes, 0, payload, 1, responseBytes.Length);
+
+                connection.SendMessage(new PeerMessage
+                {
+                    Type = PeerMessageType.Extended,
+                    Payload = payload
+                });
+                return;
+            }
+        }
+
+        var rejectBytes = _metadataExchange.BuildMetadataReject(metaMsg.Piece);
+        var rejectPayload = new byte[1 + rejectBytes.Length];
+        rejectPayload[0] = remoteExtId;
+        Array.Copy(rejectBytes, 0, rejectPayload, 1, rejectBytes.Length);
+
+        connection.SendMessage(new PeerMessage
+        {
+            Type = PeerMessageType.Extended,
+            Payload = rejectPayload
+        });
     }
 
     private static void HandlePieceRequest(PeerConnection connection, byte[] payload)

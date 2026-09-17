@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -51,6 +52,7 @@ public class PeerConnection : IDisposable
     public bool SupportsExtensionProtocol { get; private set; }
     public bool SupportsFastExtension { get; private set; }
     public bool SupportsDht { get; private set; }
+    public ConcurrentDictionary<string, int> RemoteExtensions { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool IsSnubbed { get; set; }
     public bool IsOptimisticUnchoked { get; set; }
     public long BytesUploaded { get; set; }

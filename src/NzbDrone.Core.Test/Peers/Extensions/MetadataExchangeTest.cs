@@ -278,6 +278,15 @@ public class MetadataExchangeTest
     }
 
     [Test]
+    public void BuildMetadataReject_should_match_bep9_specification()
+    {
+        var result = _exchange.BuildMetadataReject(5);
+        var text = System.Text.Encoding.ASCII.GetString(result);
+
+        Assert.That(text, Is.EqualTo("d8:msg_typei2e5:piecei5ee"));
+    }
+
+    [Test]
     public void ValidateMetadata_should_accept_when_hash_matches()
     {
         var metadataBytes = new byte[1024];
