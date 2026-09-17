@@ -111,7 +111,14 @@ public class TorrentRelocationService : ITorrentRelocationService
         }
 
         var torrentLock = GetTorrentLock(torrentId);
-        await torrentLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await torrentLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
 
         var statusTransitioned = false;
         Torrent torrent = null;
@@ -237,7 +244,27 @@ public class TorrentRelocationService : ITorrentRelocationService
             // 1. State transition & peer choking
             previousStatus = torrent.Status;
             torrent.Status = TorrentStatus.Moving;
-            _torrentService.Update(torrent);
+            var movingUpdate = new Torrent
+            {
+                Id = torrent.Id,
+                InfoHash = torrent.InfoHash,
+                Name = torrent.Name,
+                TotalSize = torrent.TotalSize,
+                Downloaded = torrent.Downloaded,
+                Uploaded = torrent.Uploaded,
+                Ratio = torrent.Ratio,
+                Status = TorrentStatus.Moving,
+                SavePath = torrent.SavePath,
+                SourcePath = torrent.SourcePath,
+                Category = torrent.Category,
+                Tags = torrent.Tags,
+                TrackerUrl = torrent.TrackerUrl,
+                DownloadSpeed = torrent.DownloadSpeed,
+                UploadSpeed = torrent.UploadSpeed,
+                Progress = torrent.Progress,
+                DateAdded = torrent.DateAdded
+            };
+            _torrentService.Update(movingUpdate);
             _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, previousStatus, TorrentStatus.Moving));
             statusTransitioned = true;
 

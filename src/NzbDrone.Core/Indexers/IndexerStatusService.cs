@@ -71,6 +71,7 @@ public class IndexerStatusService : IIndexerStatusService
             status.ConsecutiveFailures++;
             status.LastStatusCode = statusCode;
             status.LastFailureMessage = errorMessage ?? ex?.Message ?? "Unknown error";
+            status.CurrentTime = now;
 
             if (!retryAfter.HasValue)
             {
@@ -186,12 +187,13 @@ public class IndexerStatusService : IIndexerStatusService
                     DisabledTill = status.DisabledTill,
                     ConsecutiveFailures = status.ConsecutiveFailures,
                     LastFailureMessage = status.LastFailureMessage,
-                    LastStatusCode = status.LastStatusCode
+                    LastStatusCode = status.LastStatusCode,
+                    CurrentTime = now
                 };
             }
         }
 
-        return new IndexerStatus { IndexerId = indexerId };
+        return new IndexerStatus { IndexerId = indexerId, CurrentTime = _nowProvider() };
     }
 
     public IReadOnlyDictionary<int, IndexerStatus> GetAllStatuses()
@@ -211,7 +213,8 @@ public class IndexerStatusService : IIndexerStatusService
                     DisabledTill = kvp.Value.DisabledTill,
                     ConsecutiveFailures = kvp.Value.ConsecutiveFailures,
                     LastFailureMessage = kvp.Value.LastFailureMessage,
-                    LastStatusCode = kvp.Value.LastStatusCode
+                    LastStatusCode = kvp.Value.LastStatusCode,
+                    CurrentTime = now
                 };
             }
         }

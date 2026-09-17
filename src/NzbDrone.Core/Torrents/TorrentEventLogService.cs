@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -172,7 +171,7 @@ public class TorrentEventLogService : ITorrentEventLogService, IDisposable, IAsy
         _flushLock.Wait();
         try
         {
-            _repository.InsertMany(batch.ToList());
+            _repository.InsertMany((IEnumerable<TorrentEventLog>)batch);
         }
         catch (Exception ex)
         {

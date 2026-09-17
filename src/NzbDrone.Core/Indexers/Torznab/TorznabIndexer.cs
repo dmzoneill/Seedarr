@@ -535,13 +535,23 @@ public class TorznabIndexer : IIndexer
 
                 if (pubDateNode != null && !string.IsNullOrWhiteSpace(pubDateNode.InnerText))
                 {
-                    if (DateTimeOffset.TryParse(pubDateNode.InnerText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
+                    var dateText = pubDateNode.InnerText.Trim();
+                    if (DateTimeOffset.TryParse(dateText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
                     {
                         release.PublishDate = dto.UtcDateTime;
                     }
-                    else if (DateTime.TryParse(pubDateNode.InnerText, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var pDate))
+                    else
                     {
-                        release.PublishDate = DateTime.SpecifyKind(pDate, DateTimeKind.Utc);
+                        var commaIdx = dateText.IndexOf(',');
+                        var stripped = commaIdx >= 0 ? dateText[(commaIdx + 1)..].Trim() : dateText;
+                        if (DateTimeOffset.TryParse(stripped, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dtoStripped))
+                        {
+                            release.PublishDate = dtoStripped.UtcDateTime;
+                        }
+                        else if (DateTime.TryParse(dateText, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var pDate))
+                        {
+                            release.PublishDate = DateTime.SpecifyKind(pDate, DateTimeKind.Utc);
+                        }
                     }
                 }
 
@@ -598,6 +608,10 @@ public class TorznabIndexer : IIndexer
                             {
                                 release.DownloadVolumeFactor = Math.Clamp(dvf, 0.0, 10.0);
                             }
+                            else
+                            {
+                                release.DownloadVolumeFactor = null;
+                            }
                         }
                         else if (name == "uploadvolumefactor")
                         {
@@ -605,6 +619,10 @@ public class TorznabIndexer : IIndexer
                                 && double.IsFinite(uvf) && uvf >= 0.0)
                             {
                                 release.UploadVolumeFactor = Math.Clamp(uvf, 0.0, 10.0);
+                            }
+                            else
+                            {
+                                release.UploadVolumeFactor = null;
                             }
                         }
                         else if (name == "freeleech")

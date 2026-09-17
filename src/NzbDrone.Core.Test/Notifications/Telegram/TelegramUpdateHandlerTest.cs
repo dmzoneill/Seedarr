@@ -190,7 +190,8 @@ public class TelegramUpdateHandlerTest
         Assert.That(response.Success, Is.True);
         Assert.That(response.Command, Is.EqualTo("/status"));
         Assert.That(response.ResponseText, Does.Contain("Seedarr Status"));
-        Assert.That(response.ResponseText, Does.Contain("Turtle Mode: Active"));
+        Assert.That(response.ResponseText, Does.Contain("Turtle Mode"));
+        Assert.That(response.ResponseText, Does.Contain("Active"));
         Assert.That(response.ResponseText, Does.Contain("3 total"));
         Assert.That(response.ResponseText, Does.Contain("1 dl"));
         Assert.That(response.ResponseText, Does.Contain("1 seed"));

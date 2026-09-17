@@ -160,7 +160,7 @@ public class TrackerBoostServiceTest
     [Test]
     public void UdpReceive_with_cancelled_token_throws_OperationCanceledException_handled_gracefully()
     {
-        using var client = new UdpClient();
+        using var client = new UdpClient(0);
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 

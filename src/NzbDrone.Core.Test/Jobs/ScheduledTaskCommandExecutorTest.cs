@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Jobs;
@@ -41,9 +42,16 @@ public class ScheduledTaskCommandExecutorTest
         _subject.Execute(command);
 
         Assert.That(sampleTask.Executed, Is.True);
-        _taskManager.Received(1).RecordTaskStarted(typeof(SampleTask).FullName);
+        _taskManager.Received(1).RecordTaskStarted(
+            typeof(SampleTask).FullName,
+            Arg.Any<CancellationTokenSource>(),
+            Arg.Any<TimeSpan?>(),
+            Arg.Any<ScheduledTaskTriggerSource>());
         _taskManager.Received(1).UpdateLastExecution(typeof(SampleTask).FullName);
-        _taskManager.Received(1).RecordTaskFinished(typeof(SampleTask).FullName, Arg.Any<DateTime>());
+        _taskManager.Received(1).RecordTaskFinished(
+            typeof(SampleTask).FullName,
+            Arg.Any<DateTime>(),
+            Arg.Any<ScheduledTaskTriggerSource?>());
     }
 
     [Test]

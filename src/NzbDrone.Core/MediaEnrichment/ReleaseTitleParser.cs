@@ -295,7 +295,7 @@ public static class ReleaseTitleParser
         ExtractAttributes(metadataText, info);
         if (string.IsNullOrEmpty(info.Resolution) || string.IsNullOrEmpty(info.Source) || string.IsNullOrEmpty(info.Codec) || string.IsNullOrEmpty(info.Audio))
         {
-            ExtractMissingAttributes(working, info);
+            ExtractMissingAttributes(info.OriginalTitle, info);
         }
 
         // 12. Normalize title whitespace and separators

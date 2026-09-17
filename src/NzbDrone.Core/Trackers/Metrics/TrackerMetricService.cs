@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
@@ -127,7 +126,21 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
     private readonly Task _flushTask;
     private readonly Timer _pruneTimer;
     private readonly SemaphoreSlim _flushLock = new(1, 1);
+    private readonly object _flushGate = new();
+    private CancellationTokenSource _flushSignalCts = new();
+    private volatile bool _isProcessingBatch;
     private bool _disposed;
+
+    private void TriggerFlush()
+    {
+        lock (_flushGate)
+        {
+            if (!_flushSignalCts.IsCancellationRequested)
+            {
+                _flushSignalCts.Cancel();
+            }
+        }
+    }
 
     public TrackerMetricService(
         ITrackerMetricRepository metricRepository,
@@ -838,19 +851,27 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
 
     public void Flush()
     {
-        DrainRemainingSnapshots();
-        _flushLock.Wait();
+        TriggerFlush();
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while ((_snapshotChannel.Reader.Count > 0 || _isProcessingBatch) && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(5);
+        }
+
+        _flushLock.Wait(TimeSpan.FromSeconds(5));
         _flushLock.Release();
     }
 
     public async Task FlushAsync()
     {
-        while (_snapshotChannel.Reader.Count > 0)
+        TriggerFlush();
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while ((_snapshotChannel.Reader.Count > 0 || _isProcessingBatch) && DateTime.UtcNow < deadline)
         {
-            await Task.Delay(10).ConfigureAwait(false);
+            await Task.Delay(5).ConfigureAwait(false);
         }
 
-        await _flushLock.WaitAsync().ConfigureAwait(false);
+        await _flushLock.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
         _flushLock.Release();
     }
 
@@ -870,35 +891,61 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
     private async Task ProcessSnapshotQueueAsync()
     {
         var batch = new List<TrackerMetricSnapshot>(50);
-        var flushInterval = TimeSpan.FromSeconds(2);
 
         try
         {
             while (await _snapshotChannel.Reader.WaitToReadAsync(_cts.Token).ConfigureAwait(false))
             {
-                var stopwatch = Stopwatch.StartNew();
-
-                while (batch.Count < 50 && stopwatch.Elapsed < flushInterval)
+                while (batch.Count < 50 && _snapshotChannel.Reader.TryRead(out var snapshot))
                 {
-                    if (_snapshotChannel.Reader.TryRead(out var snapshot))
+                    batch.Add(snapshot);
+                }
+
+                if (batch.Count > 0)
+                {
+                    _isProcessingBatch = true;
+                }
+
+                if (batch.Count < 50 && batch.Count > 0)
+                {
+                    var deadline = DateTime.UtcNow.AddSeconds(2);
+                    while (batch.Count < 50)
                     {
-                        batch.Add(snapshot);
-                    }
-                    else
-                    {
-                        var remaining = flushInterval - stopwatch.Elapsed;
+                        var remaining = deadline - DateTime.UtcNow;
                         if (remaining <= TimeSpan.Zero)
                         {
                             break;
                         }
 
-                        using var delayCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
-                        delayCts.CancelAfter(remaining);
+                        CancellationToken flushToken;
+                        lock (_flushGate)
+                        {
+                            if (_flushSignalCts.IsCancellationRequested)
+                            {
+                                _flushSignalCts.Dispose();
+                                _flushSignalCts = new CancellationTokenSource();
+                            }
+
+                            flushToken = _flushSignalCts.Token;
+                        }
+
+                        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token, flushToken);
+                        timeoutCts.CancelAfter(remaining);
+
                         try
                         {
-                            await _snapshotChannel.Reader.WaitToReadAsync(delayCts.Token).ConfigureAwait(false);
+                            var available = await _snapshotChannel.Reader.WaitToReadAsync(timeoutCts.Token).ConfigureAwait(false);
+                            if (!available)
+                            {
+                                break;
+                            }
+
+                            while (batch.Count < 50 && _snapshotChannel.Reader.TryRead(out var snapshot))
+                            {
+                                batch.Add(snapshot);
+                            }
                         }
-                        catch (OperationCanceledException)
+                        catch (OperationCanceledException) when (!_cts.IsCancellationRequested)
                         {
                             break;
                         }
@@ -909,6 +956,7 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
                 {
                     FlushBatch(batch);
                     batch.Clear();
+                    _isProcessingBatch = false;
                 }
             }
         }
@@ -922,6 +970,7 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
         }
         finally
         {
+            _isProcessingBatch = false;
             DrainRemainingSnapshots();
         }
     }
@@ -997,6 +1046,7 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
         }
 
         _cts.Dispose();
+        _flushSignalCts.Dispose();
         _flushLock.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -1028,6 +1078,7 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
                 }
 
                 _cts.Dispose();
+                _flushSignalCts.Dispose();
                 _flushLock.Dispose();
             }
         }
