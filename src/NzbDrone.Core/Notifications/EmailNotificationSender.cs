@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Notifications.Email;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
 using Polly;
@@ -216,8 +217,19 @@ public static class EmailNotificationSender
         {
             From = new MailAddress(string.IsNullOrWhiteSpace(from) ? "seedarr@localhost" : from),
             Subject = subject,
-            Body = body
+            Body = body,
         };
+
+        mail.Headers.Add("Auto-Submitted", "auto-generated");
+        mail.Headers.Add("X-Auto-Response-Suppress", "All");
+        mail.Headers.Add("Precedence", "bulk");
+
+        var plainTextView = AlternateView.CreateAlternateViewFromString(body, null, "text/plain");
+        mail.AlternateViews.Add(plainTextView);
+
+        var htmlBody = EmailTemplateRenderer.Render(eventType, body, torrent, meta, genericPayload, err);
+        var htmlView = AlternateView.CreateAlternateViewFromString(htmlBody, null, "text/html");
+        mail.AlternateViews.Add(htmlView);
 
         var recipients = to.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         foreach (var recipient in recipients)

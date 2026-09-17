@@ -99,6 +99,17 @@ public class EmailNotification : INotificationService
             message.Body = body;
             message.IsBodyHtml = false;
 
+            message.Headers.Add("Auto-Submitted", "auto-generated");
+            message.Headers.Add("X-Auto-Response-Suppress", "All");
+            message.Headers.Add("Precedence", "bulk");
+
+            var plainTextView = AlternateView.CreateAlternateViewFromString(body, null, "text/plain");
+            message.AlternateViews.Add(plainTextView);
+
+            var htmlBody = EmailTemplateRenderer.Render(subject, body);
+            var htmlView = AlternateView.CreateAlternateViewFromString(htmlBody, null, "text/html");
+            message.AlternateViews.Add(htmlView);
+
             var recipients = Settings.ToAddresses
                 .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Where(a => !string.IsNullOrWhiteSpace(a));
