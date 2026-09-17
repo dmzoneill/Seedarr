@@ -1322,4 +1322,28 @@ export interface CustomScriptTestResult {
   workingDirectory?: string;
 }
 
+export interface RemotePathMapping {
+  id?: number;
+  host: string;
+  remotePath: string;
+  localPath: string;
+}
+
+export interface RemotePathMappingTestResult {
+  inputPath: string;
+  mappedPath: string;
+  ruleApplied: boolean;
+  matchedRuleId?: number | null;
+  matchedRuleHost?: string | null;
+  matchedRemotePrefix?: string | null;
+  matchedLocalPrefix?: string | null;
+  localPathExists: boolean;
+}
+
+export interface RemotePathMappingTestRequest {
+  host: string;
+  path: string;
+  direction?: string;
+}
+
 

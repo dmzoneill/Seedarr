@@ -10,4 +10,5 @@ public interface IRemotePathMappingService
     void Update(RemotePathMapping mapping);
     void Delete(int id);
     string Remap(string host, string remotePath);
+    RemotePathMappingTestResult TestMapping(string host, string path, string direction = "remoteToLocal");
 }

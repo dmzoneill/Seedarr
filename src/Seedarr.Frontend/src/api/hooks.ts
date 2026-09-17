@@ -74,6 +74,9 @@ import type {
   FileSystemResource,
   CustomScriptTestRequest,
   CustomScriptTestResult,
+  RemotePathMapping,
+  RemotePathMappingTestResult,
+  RemotePathMappingTestRequest,
 } from "./types";
 
 const DEFAULT_REFETCH_MS = 5000;
@@ -757,6 +760,56 @@ export function useTestDirectDownloadClient() {
     Partial<DownloadClientDefinition>
   >({
     mutationFn: (client) => apiClient.post("/downloadclients/test", client),
+  });
+}
+
+export function useRemotePathMappings() {
+  return useQuery<RemotePathMapping[]>({
+    queryKey: ["remotepathmapping"],
+    queryFn: () => apiClient.get("/remotepathmapping"),
+  });
+}
+
+export function useCreateRemotePathMapping() {
+  const queryClient = useQueryClient();
+  return useMutation<
+    RemotePathMapping,
+    Error,
+    Partial<RemotePathMapping>
+  >({
+    mutationFn: (mapping) => apiClient.post("/remotepathmapping", mapping),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["remotepathmapping"] }),
+  });
+}
+
+export function useUpdateRemotePathMapping() {
+  const queryClient = useQueryClient();
+  return useMutation<RemotePathMapping, Error, RemotePathMapping>({
+    mutationFn: (mapping) =>
+      apiClient.put(`/remotepathmapping/${mapping.id}`, mapping),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["remotepathmapping"] }),
+  });
+}
+
+export function useDeleteRemotePathMapping() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/remotepathmapping/${id}`),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["remotepathmapping"] }),
+  });
+}
+
+export function useTestRemotePathMapping() {
+  return useMutation<
+    RemotePathMappingTestResult,
+    Error,
+    RemotePathMappingTestRequest
+  >({
+    mutationFn: (request) =>
+      apiClient.post("/remotepathmapping/test", request),
   });
 }
 

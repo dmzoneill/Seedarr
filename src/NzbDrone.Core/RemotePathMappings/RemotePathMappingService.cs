@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace NzbDrone.Core.RemotePathMappings;
@@ -149,5 +150,104 @@ public class RemotePathMappingService : IRemotePathMappingService
             RemotePath = source.RemotePath,
             LocalPath = source.LocalPath,
         };
+    }
+
+    public RemotePathMappingTestResult TestMapping(string host, string path, string direction = "remoteToLocal")
+    {
+        var result = new RemotePathMappingTestResult
+        {
+            InputPath = path,
+            MappedPath = path,
+            RuleApplied = false,
+            LocalPathExists = CheckPathExists(path),
+        };
+
+        if (string.IsNullOrEmpty(path) || string.IsNullOrWhiteSpace(host))
+        {
+            return result;
+        }
+
+        var isLocalToRemote = string.Equals(direction, "localToRemote", StringComparison.OrdinalIgnoreCase);
+
+        List<RemotePathMapping> candidates;
+        lock (_lock)
+        {
+            candidates = _mappings
+                .Where(m => !string.IsNullOrWhiteSpace(m.Host) &&
+                            !string.IsNullOrWhiteSpace(m.RemotePath) &&
+                            !string.IsNullOrWhiteSpace(m.LocalPath) &&
+                            string.Equals(m.Host.Trim(), host.Trim(), StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(m => (isLocalToRemote ? m.LocalPath : m.RemotePath).Length)
+                .ToList();
+        }
+
+        if (candidates.Count == 0)
+        {
+            return result;
+        }
+
+        var normInput = path.Replace('\\', '/').TrimEnd('/');
+
+        foreach (var mapping in candidates)
+        {
+            var sourcePrefix = isLocalToRemote ? mapping.LocalPath : mapping.RemotePath;
+            var targetPrefix = isLocalToRemote ? mapping.RemotePath : mapping.LocalPath;
+
+            var normSource = sourcePrefix.Replace('\\', '/').TrimEnd('/');
+            var targetSep = targetPrefix.Contains('\\') ? '\\' : '/';
+            var targetClean = targetPrefix.TrimEnd('/', '\\');
+
+            string mappedPath = null;
+
+            if (string.Equals(normInput, normSource, StringComparison.OrdinalIgnoreCase))
+            {
+                mappedPath = targetPrefix;
+            }
+            else if (normInput.StartsWith(normSource + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                var relative = normInput.Substring(normSource.Length).TrimStart('/');
+                var relativeClean = targetSep == '/' ? relative.Replace('\\', '/') : relative.Replace('/', '\\');
+
+                mappedPath = string.IsNullOrEmpty(targetClean)
+                    ? $"{targetSep}{relativeClean}"
+                    : $"{targetClean}{targetSep}{relativeClean}";
+
+                if (path.EndsWith('/') || path.EndsWith('\\'))
+                {
+                    mappedPath += targetSep;
+                }
+            }
+
+            if (mappedPath != null)
+            {
+                result.MappedPath = mappedPath;
+                result.RuleApplied = true;
+                result.MatchedRuleId = mapping.Id;
+                result.MatchedRuleHost = mapping.Host;
+                result.MatchedRemotePrefix = mapping.RemotePath;
+                result.MatchedLocalPrefix = mapping.LocalPath;
+                result.LocalPathExists = isLocalToRemote ? CheckPathExists(path) : CheckPathExists(mappedPath);
+                return result;
+            }
+        }
+
+        return result;
+    }
+
+    private static bool CheckPathExists(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        try
+        {
+            return Directory.Exists(path) || File.Exists(path);
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
