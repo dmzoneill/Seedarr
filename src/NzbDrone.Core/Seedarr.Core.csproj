@@ -8,6 +8,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Seedarr.Core.Test" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="AngleSharp" Version="1.8.1" />
     <PackageReference Include="BencodeNET" Version="5.0.0" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
