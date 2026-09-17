@@ -73,6 +73,7 @@ public class UtpConnection : IUtpConnection
     private uint _lastTimestampDiff;
     private uint _remoteWindowSize = DefaultWindowSize;
     private ushort _expectedSeqNr;
+    private bool _hasReceivedFirstPacket;
     private bool _hasReceivedFin;
     private bool _isClosing;
     private bool _isDisposed;
@@ -84,8 +85,10 @@ public class UtpConnection : IUtpConnection
     public Action<IUtpConnection> OnConnected { get; set; }
 
     public bool IsConnected { get; private set; }
+    public bool HasReceivedFirstPacket => _hasReceivedFirstPacket;
     public bool HasReceivedFin => _hasReceivedFin;
     public bool IsClosing => _isClosing;
+    public int OutOfOrderCount => _outOfOrderBuffer.Count;
     public IPEndPoint RemoteEndPoint => _remoteEndpoint;
     public bool OwnsUdpClient => _ownsUdpClient;
     public ushort ReceiveId { get; private set; }
@@ -485,6 +488,7 @@ public class UtpConnection : IUtpConnection
         {
             _ackNumber = header.SequenceNumber;
             _expectedSeqNr = (ushort)(header.SequenceNumber + 1);
+            _hasReceivedFirstPacket = true;
             IsConnected = true;
             var ack = BuildPacket(UtpPacketType.State, Array.Empty<byte>());
             SendUdpPacket(ack, ack.Length, sender);
@@ -494,16 +498,29 @@ public class UtpConnection : IUtpConnection
         if (header.Type == UtpPacketType.Data)
         {
             var payloadLen = data.Length - HeaderSize;
-            if (payloadLen > 0)
+            lock (_receiveLock)
             {
-                var payload = new byte[payloadLen];
-                Array.Copy(data, HeaderSize, payload, 0, payloadLen);
-
-                lock (_receiveLock)
+                if (payloadLen > 0)
                 {
-                    if (_expectedSeqNr == 0 || header.SequenceNumber == _expectedSeqNr)
+                    var payload = new byte[payloadLen];
+                    Array.Copy(data, HeaderSize, payload, 0, payloadLen);
+
+                    if (!_hasReceivedFirstPacket)
                     {
+                        _hasReceivedFirstPacket = true;
                         _expectedSeqNr = (ushort)(header.SequenceNumber + 1);
+                        _ackNumber = header.SequenceNumber;
+
+                        for (var i = 0; i < payloadLen; i++)
+                        {
+                            _receiveQueue.Enqueue(payload[i]);
+                        }
+
+                        Monitor.PulseAll(_receiveLock);
+                    }
+                    else if (header.SequenceNumber == _expectedSeqNr)
+                    {
+                        _expectedSeqNr = (ushort)(_expectedSeqNr + 1);
                         _ackNumber = header.SequenceNumber;
 
                         for (var i = 0; i < payloadLen; i++)
@@ -514,7 +531,7 @@ public class UtpConnection : IUtpConnection
                         while (_outOfOrderBuffer.TryRemove(_expectedSeqNr, out var nextPayload))
                         {
                             _ackNumber = _expectedSeqNr;
-                            _expectedSeqNr++;
+                            _expectedSeqNr = (ushort)(_expectedSeqNr + 1);
                             for (var i = 0; i < nextPayload.Length; i++)
                             {
                                 _receiveQueue.Enqueue(nextPayload[i]);
@@ -527,10 +544,10 @@ public class UtpConnection : IUtpConnection
                     {
                         _outOfOrderBuffer[header.SequenceNumber] = payload;
                     }
-
-                    var ack = BuildPacket(UtpPacketType.State, Array.Empty<byte>());
-                    SendUdpPacket(ack, ack.Length, sender);
                 }
+
+                var ack = BuildPacket(UtpPacketType.State, Array.Empty<byte>());
+                SendUdpPacket(ack, ack.Length, sender);
             }
         }
     }
