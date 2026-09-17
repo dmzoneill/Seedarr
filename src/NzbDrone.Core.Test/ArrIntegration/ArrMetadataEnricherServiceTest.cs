@@ -75,7 +75,7 @@ namespace NzbDrone.Core.Test.ArrIntegration
         }
 
         [TestCase("Severance.S01E01.1080p.WEB-DL.x265-FLUX.mkv", "Severance")]
-        [TestCase("Dune.Part.Two.2024.2160p.UHD.Remux.mkv", "Dune Part Two 2024")]
+        [TestCase("Dune.Part.Two.2024.2160p.UHD.Remux.mkv", "Dune Part Two")]
         [TestCase("The.Penguin.S01.720p.HDTV.x264-SPARKS", "The Penguin")]
         public void CleanReleaseTitle_should_clean_scene_tags(string raw, string expected)
         {

@@ -230,7 +230,16 @@ public class MediaEnrichmentServiceTest
     public void CleanReleaseTitle_StripsSceneTagsAndExtensions()
     {
         var cleaned = MediaEnrichmentService.CleanReleaseTitle("The.Matrix.1999.2160p.UHD.BluRay.x265-GROUP.mkv");
-        Assert.That(cleaned, Is.EqualTo("The Matrix 1999"));
+        Assert.That(cleaned, Is.EqualTo("The Matrix"));
+    }
+
+    [Test]
+    public void CleanReleaseTitle_ProtectsSensitiveKeywordsAndAnimeBrackets()
+    {
+        Assert.That(MediaEnrichmentService.CleanReleaseTitle("Charlotte's Web (2006)"), Is.EqualTo("Charlotte's Web"));
+        Assert.That(MediaEnrichmentService.CleanReleaseTitle("A Season in Hell (1991)"), Is.EqualTo("A Season in Hell"));
+        Assert.That(MediaEnrichmentService.CleanReleaseTitle("The Complete Walk (2016)"), Is.EqualTo("The Complete Walk"));
+        Assert.That(MediaEnrichmentService.CleanReleaseTitle("[SubsPlease] Sousou no Frieren - 01 (1080p) [F2E4A9B1].mkv"), Is.EqualTo("Sousou no Frieren"));
     }
 
     [Test]
