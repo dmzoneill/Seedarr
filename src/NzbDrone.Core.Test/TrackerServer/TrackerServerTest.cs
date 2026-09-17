@@ -1501,11 +1501,12 @@ public class TrackerServerTest
     [Test]
     public void ReadBoundedLine_with_buffered_stream_parses_request_line_and_headers_correctly()
     {
-        var rawRequest = "GET /announce?info_hash=abcdefghijklmnopqrst&port=6881 HTTP/1.1\r\n" +
-                         "Host: localhost:6969\r\n" +
-                         "User-Agent: Transmission/3.00\r\n" +
-                         "Accept: */*\r\n" +
-                         "\r\n";
+        var rawRequest =
+            "GET /announce?info_hash=abcdefghijklmnopqrst&port=6881 HTTP/1.1\r\n" +
+            "Host: localhost:6969\r\n" +
+            "User-Agent: Transmission/3.00\r\n" +
+            "Accept: */*\r\n" +
+            "\r\n";
 
         using var memoryStream = new MemoryStream(Encoding.ASCII.GetBytes(rawRequest));
         using var bufferedStream = new BufferedStream(memoryStream, 4096);

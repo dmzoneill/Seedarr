@@ -40,7 +40,7 @@ services:
         condition: service_healthy
 
   leecharr:
-    image: ${LEECHARR_IMAGE:-leecharr:latest}
+    image: ${LEECHARR_IMAGE:-docker.io/feeditout/leecharr:latest}
     container_name: leecharr
     hostname: leecharr.local
     ports:
