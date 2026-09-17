@@ -2005,6 +2005,56 @@ public class PeerServerTest
     }
 
     [Test]
+    public void HandleMessage_reject_request_decrements_pending_request_count()
+    {
+        var conn = CreateTestConnection();
+        conn.PendingRequestCount = 5;
+
+        var payload = BuildRequestPayload(1, 0, 16384);
+        var message = new PeerMessage { Type = PeerMessageType.RejectRequest, Payload = payload };
+        InvokeHandleMessage(conn, message);
+
+        Assert.That(conn.PendingRequestCount, Is.EqualTo(4));
+    }
+
+    [Test]
+    public void HandleMessage_reject_request_releases_block_in_piece_picker_for_immediate_reassignment()
+    {
+        var conn = CreateTestConnection();
+        conn.PeerChoking = false;
+        conn.PeerPieces = new bool[5];
+        conn.PeerPieces[0] = true;
+
+        var picker = _server.PiecePicker;
+        picker.AddActivePiece(0, 32768, 16384);
+
+        var block = picker.RequestBlock(conn, 0);
+        Assert.That(block, Is.Not.Null);
+        Assert.That(block.IsRequested, Is.True);
+        Assert.That(block.RequestedFrom, Is.EqualTo(conn));
+        Assert.That(conn.PendingRequestCount, Is.EqualTo(1));
+
+        var payload = BuildRequestPayload(block.PieceIndex, block.Begin, block.Length);
+        var message = new PeerMessage { Type = PeerMessageType.RejectRequest, Payload = payload };
+        InvokeHandleMessage(conn, message);
+
+        Assert.That(conn.PendingRequestCount, Is.EqualTo(0));
+        Assert.That(block.IsRequested, Is.False);
+        Assert.That(block.RequestedFrom, Is.Null);
+
+        var otherConn = CreateTestConnection();
+        otherConn.PeerChoking = false;
+        otherConn.PeerPieces = new bool[5];
+        otherConn.PeerPieces[0] = true;
+
+        var reassigned = picker.RequestBlock(otherConn, 0);
+        Assert.That(reassigned, Is.Not.Null);
+        Assert.That(reassigned.PieceIndex, Is.EqualTo(block.PieceIndex));
+        Assert.That(reassigned.Begin, Is.EqualTo(block.Begin));
+        Assert.That(reassigned.RequestedFrom, Is.EqualTo(otherConn));
+    }
+
+    [Test]
     public void ConnectToDiscoveredPeers_should_skip_peer_endpoints_already_in_flight()
     {
         var torrent = new Torrent { Id = 1, InfoHash = "0123456789abcdef0123456789abcdef01234567", Name = "Test" };

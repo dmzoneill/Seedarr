@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Security.Cryptography;
 using NLog;
+using NzbDrone.Core.Messaging.Events;
 
 namespace NzbDrone.Core.Peers.Extensions;
 
@@ -26,6 +27,8 @@ public class FastMessage
 
 public interface IFastExtensionHandler
 {
+    event Action<PeerConnection, int, int, int> OnRequestRejected;
+    event Action<PeerConnection, int, int, int> RequestRejected;
     HashSet<int> ComputeAllowedFastSet(string ipAddress, byte[] infoHash, int pieceCount, int setSize);
     HashSet<int> ComputeAllowedFastSet(byte[] infoHash, IPAddress peerIp, int totalPieces, int k = 10);
     PeerMessage SerializeHaveAll();
@@ -51,10 +54,19 @@ public class FastExtensionHandler : IFastExtensionHandler
     private readonly Dictionary<string, HashSet<int>> _fastSets = new();
     private readonly HashSet<string> _fastPeers = new();
     private readonly object _lock = new();
+    private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
 
-    public FastExtensionHandler()
+    public event Action<PeerConnection, int, int, int> OnRequestRejected;
+    public event Action<PeerConnection, int, int, int> RequestRejected
     {
+        add => OnRequestRejected += value;
+        remove => OnRequestRejected -= value;
+    }
+
+    public FastExtensionHandler(IEventAggregator eventAggregator = null)
+    {
+        _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -299,12 +311,17 @@ public class FastExtensionHandler : IFastExtensionHandler
                 break;
 
             case FastMessageType.RejectRequest:
+                connection.DecrementPendingRequests();
+
                 _logger.Debug(
                     "Peer {0} rejected request: piece={1} begin={2} length={3}",
                     connection.RemoteIp,
                     fastMessage.PieceIndex,
                     fastMessage.Begin,
                     fastMessage.Length);
+
+                OnRequestRejected?.Invoke(connection, fastMessage.PieceIndex, fastMessage.Begin, fastMessage.Length);
+                _eventAggregator?.PublishEvent(new PeerRequestRejectedEvent(connection, fastMessage.PieceIndex, fastMessage.Begin, fastMessage.Length));
                 break;
         }
     }
