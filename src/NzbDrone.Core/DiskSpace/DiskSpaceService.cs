@@ -386,7 +386,7 @@ public class DiskSpaceService : IDiskSpaceService
 
                 var mountInfo = FindMountForPath(rootPath, mounts);
                 var isPhysicalOrNetwork = (driveType == DriveType.Fixed || driveType == DriveType.Network) ||
-                                          (mountInfo != null && IsPhysicalOrNetworkDevice(mountInfo.Device, mountInfo.FileSystemType));
+                    (mountInfo != null && IsPhysicalOrNetworkDevice(mountInfo.Device, mountInfo.FileSystemType));
 
                 if (!isPhysicalOrNetwork)
                 {

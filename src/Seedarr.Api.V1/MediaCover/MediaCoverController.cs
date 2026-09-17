@@ -291,16 +291,18 @@ public class MediaCoverController : RestController<MediaMetadataResource>
     {
         var title = meta?.Title ?? $"Torrent #{torrentId}";
         var category = meta?.ArrType;
-        var width = string.Equals(type, "backdrop", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(type, "fanart", StringComparison.OrdinalIgnoreCase)
+        var isBackdropOrFanart = string.Equals(type, "backdrop", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(type, "fanart", StringComparison.OrdinalIgnoreCase);
+        var isBanner = string.Equals(type, "banner", StringComparison.OrdinalIgnoreCase);
+
+        var width = isBackdropOrFanart
             ? 800
-            : string.Equals(type, "banner", StringComparison.OrdinalIgnoreCase)
+            : isBanner
                 ? 750
                 : 300;
-        var height = string.Equals(type, "backdrop", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(type, "fanart", StringComparison.OrdinalIgnoreCase)
+        var height = isBackdropOrFanart
             ? 450
-            : string.Equals(type, "banner", StringComparison.OrdinalIgnoreCase)
+            : isBanner
                 ? 140
                 : 450;
 
@@ -333,7 +335,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             path = meta?.PosterLocalPath;
         }
         else if (string.Equals(type, "backdrop", StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(type, "fanart", StringComparison.OrdinalIgnoreCase))
+            string.Equals(type, "fanart", StringComparison.OrdinalIgnoreCase))
         {
             path = meta?.BackdropLocalPath;
         }
