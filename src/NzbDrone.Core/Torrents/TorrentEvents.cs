@@ -59,15 +59,18 @@ public class TorrentStatusChangedEvent : IEvent
 
     public bool IsQueueManagerInternal { get; set; }
 
+    public string ErrorMessage { get; set; }
+
     public TorrentStatusChangedEvent()
     {
     }
 
-    public TorrentStatusChangedEvent(Torrent torrent, TorrentStatus oldStatus, TorrentStatus newStatus)
+    public TorrentStatusChangedEvent(Torrent torrent, TorrentStatus oldStatus, TorrentStatus newStatus, string errorMessage = null)
     {
         this.Torrent = torrent;
         this.OldStatus = oldStatus;
         this.NewStatus = newStatus;
+        this.ErrorMessage = errorMessage;
     }
 }
 

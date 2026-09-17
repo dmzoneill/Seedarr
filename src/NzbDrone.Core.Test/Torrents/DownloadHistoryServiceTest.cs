@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Categories;
@@ -326,6 +327,150 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.ClearAll();
 
             _historyRepository.Received(1).DeleteAll();
+        }
+
+        [Test]
+        public void RecordTorrentAdded_when_called_concurrently_should_not_create_duplicate_records()
+        {
+            var storedEntries = new List<DownloadHistory>();
+            var repoLock = new object();
+
+            _historyRepository.FindByInfoHash(Arg.Any<string>()).Returns(x =>
+            {
+                lock (repoLock)
+                {
+                    var hash = (string)x[0];
+                    return storedEntries.FirstOrDefault(e => e.InfoHash == hash);
+                }
+            });
+
+            _historyRepository.Insert(Arg.Any<DownloadHistory>()).Returns(x =>
+            {
+                lock (repoLock)
+                {
+                    var entry = (DownloadHistory)x[0];
+                    storedEntries.Add(entry);
+                    return entry;
+                }
+            });
+
+            _historyRepository.When(r => r.Update(Arg.Any<DownloadHistory>())).Do(x =>
+            {
+                lock (repoLock)
+                {
+                    var entry = (DownloadHistory)x[0];
+                    var idx = storedEntries.FindIndex(e => e.InfoHash == entry.InfoHash);
+                    if (idx >= 0)
+                    {
+                        storedEntries[idx] = entry;
+                    }
+                }
+            });
+
+            var torrent = new Torrent
+            {
+                Id = 1,
+                Name = "Test Torrent",
+                InfoHash = "concurrent_info_hash",
+                TotalSize = 1000
+            };
+
+            var tasks = Enumerable.Range(0, 10).Select(_ => Task.Run(() =>
+            {
+                _subject.RecordTorrentAdded(torrent);
+            })).ToArray();
+
+            Task.WaitAll(tasks);
+
+            _historyRepository.Received(1).Insert(Arg.Any<DownloadHistory>());
+            Assert.That(storedEntries.Count(e => e.InfoHash == "concurrent_info_hash"), Is.EqualTo(1));
+        }
+
+        [TestCase(TorrentStatus.Paused, "Paused")]
+        [TestCase(TorrentStatus.Downloading, "Downloading")]
+        [TestCase(TorrentStatus.Checking, "Checking")]
+        public void Handle_TorrentStatusChangedEvent_should_update_status(TorrentStatus status, string expectedStatus)
+        {
+            var torrent = new Torrent
+            {
+                Id = 10,
+                InfoHash = "hash123",
+                Name = "Test Torrent"
+            };
+
+            var entry = new DownloadHistory
+            {
+                TorrentId = 10,
+                InfoHash = "hash123",
+                Status = "Active"
+            };
+
+            _historyRepository.FindByTorrentId(10).Returns(entry);
+
+            var evt = new TorrentStatusChangedEvent(torrent, TorrentStatus.Downloading, status);
+            _subject.Handle(evt);
+
+            Assert.That(entry.Status, Is.EqualTo(expectedStatus));
+            _historyRepository.Received(1).Update(entry);
+        }
+
+        [Test]
+        public void Handle_TorrentStatusChangedEvent_should_record_error_message_in_removal_reason_and_data_json()
+        {
+            var torrent = new Torrent
+            {
+                Id = 20,
+                InfoHash = "errorhash",
+                Name = "Error Torrent"
+            };
+
+            var entry = new DownloadHistory
+            {
+                TorrentId = 20,
+                InfoHash = "errorhash",
+                Status = "Downloading"
+            };
+
+            _historyRepository.FindByTorrentId(20).Returns(entry);
+
+            var evt = new TorrentStatusChangedEvent(torrent, TorrentStatus.Downloading, TorrentStatus.Error, "Tracker unreachable");
+            _subject.Handle(evt);
+
+            Assert.That(entry.Status, Is.EqualTo("Error"));
+            Assert.That(entry.RemovalReason, Is.EqualTo("Tracker unreachable"));
+            Assert.That(entry.DataJson, Does.Contain("Tracker unreachable"));
+            Assert.That(entry.DataJson, Does.Contain("errorMessage"));
+            _historyRepository.Received(1).Update(entry);
+        }
+
+        [Test]
+        public void Handle_TorrentStatusChangedEvent_should_record_torrent_error_message_if_event_error_message_is_empty()
+        {
+            var torrent = new Torrent
+            {
+                Id = 21,
+                InfoHash = "errorhash2",
+                Name = "Error Torrent 2",
+                ErrorMessage = "Disk write error"
+            };
+
+            var entry = new DownloadHistory
+            {
+                TorrentId = 21,
+                InfoHash = "errorhash2",
+                Status = "Downloading"
+            };
+
+            _historyRepository.FindByTorrentId(21).Returns(entry);
+
+            var evt = new TorrentStatusChangedEvent(torrent, TorrentStatus.Downloading, TorrentStatus.Error);
+            _subject.Handle(evt);
+
+            Assert.That(entry.Status, Is.EqualTo("Error"));
+            Assert.That(entry.RemovalReason, Is.EqualTo("Disk write error"));
+            Assert.That(entry.DataJson, Does.Contain("Disk write error"));
+            Assert.That(entry.DataJson, Does.Contain("errorMessage"));
+            _historyRepository.Received(1).Update(entry);
         }
     }
 }

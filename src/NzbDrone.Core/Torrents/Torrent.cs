@@ -65,6 +65,9 @@ public class Torrent : ModelBase
     [Ignore]
     public List<TorrentFile> Files { get; set; }
 
+    [Ignore]
+    public string ErrorMessage { get; set; }
+
     /// <summary>
     /// Applies user-controllable updates while preserving engine-managed state invariants
     /// (such as Uploaded, Downloaded, Ratio, Speeds, Peer counts, and Session stats).
