@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
@@ -24,6 +25,7 @@ public class TransmissionRpcControllerTest
     private ITrackerEntryService _trackerEntryService;
     private IConfigService _configService;
     private IConfigFileProvider _configFileProvider;
+    private ICategoryService _categoryService;
     private TransmissionRpcController _controller;
 
     [SetUp]
@@ -36,6 +38,7 @@ public class TransmissionRpcControllerTest
         _trackerEntryService = Substitute.For<ITrackerEntryService>();
         _configService = Substitute.For<IConfigService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
+        _categoryService = Substitute.For<ICategoryService>();
 
         _configFileProvider.AuthenticationEnabled.Returns(false);
 
@@ -46,7 +49,8 @@ public class TransmissionRpcControllerTest
             _torrentImportService,
             _trackerEntryService,
             _configService,
-            _configFileProvider);
+            _configFileProvider,
+            categoryService: _categoryService);
 
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers["X-Transmission-Session-Id"] = "test-session-id";
@@ -553,5 +557,36 @@ public class TransmissionRpcControllerTest
 
         var removed = TransmissionRpcController.GetRecentlyRemovedIds();
         Assert.That(removed, Does.Contain(99));
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentAdd_With_Labels_Resolves_Category_SavePath_When_DownloadDir_Omitted()
+    {
+        var category = new Category { Id = 1, Name = "tv-sonarr", SavePath = "/data/media/tv" };
+        _categoryService.GetByName("tv-sonarr").Returns(category);
+        _categoryService.GetSavePathForCategory("tv-sonarr", Arg.Any<string>()).Returns("/data/media/tv");
+
+        var imported = new Torrent
+        {
+            Id = 15,
+            Name = "ImportedTest",
+            InfoHash = "aabbcc11223344556677889900aabbcc11223344",
+        };
+        _torrentImportService.ImportFromMagnet(Arg.Any<string>()).Returns(imported);
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-add",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["filename"] = JsonDocument.Parse("\"magnet:?xt=urn:btih:aabbcc11223344556677889900aabbcc11223344&dn=ImportedTest\"").RootElement,
+                ["labels"] = JsonDocument.Parse("[\"tv-sonarr\"]").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Category == "tv-sonarr" && t.SourcePath == "/data/media/tv"));
     }
 }

@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.RemotePathMappings;
@@ -67,6 +68,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
     private readonly HttpClient _httpClient;
     private readonly IRemotePathMappingService _remotePathMappingService;
     private readonly ICallerHostResolver _callerHostResolver;
+    private readonly ICategoryService _categoryService;
     private readonly Logger _logger;
 
     public static void RecordRemovedId(int id)
@@ -174,7 +176,8 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         ITagService tagService = null,
         HttpClient httpClient = null,
         IRemotePathMappingService remotePathMappingService = null,
-        ICallerHostResolver callerHostResolver = null)
+        ICallerHostResolver callerHostResolver = null,
+        ICategoryService categoryService = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -187,6 +190,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         _httpClient = httpClient ?? _sharedHttpClient;
         _remotePathMappingService = remotePathMappingService;
         _callerHostResolver = callerHostResolver;
+        _categoryService = categoryService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -531,10 +535,24 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                         {
                             t.TagIds = _tagService.SyncTagsFromLabels(lbls);
                         }
+
+                        if (_categoryService != null)
+                        {
+                            var matchedCat = lbls
+                                .Select(l => _categoryService.GetByName(l))
+                                .FirstOrDefault(c => c != null && !string.IsNullOrWhiteSpace(c.Name));
+
+                            t.Category = matchedCat?.Name ?? lbls[0];
+                        }
+                        else
+                        {
+                            t.Category = lbls[0];
+                        }
                     }
                     else
                     {
                         t.Label = string.Empty;
+                        t.Category = string.Empty;
                         t.TagIds = new List<int>();
                     }
                 }
@@ -753,11 +771,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             if (added != null)
             {
                 var needsUpdate = false;
-                if (!string.IsNullOrWhiteSpace(downloadDir))
-                {
-                    added.SourcePath = RemapRemoteToLocal(downloadDir);
-                    needsUpdate = true;
-                }
+                string matchingCategory = null;
 
                 if (labels != null && labels.Count > 0)
                 {
@@ -767,7 +781,41 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                         added.TagIds = _tagService.SyncTagsFromLabels(labels);
                     }
 
+                    if (_categoryService != null)
+                    {
+                        var matchedCat = labels
+                            .Select(l => _categoryService.GetByName(l))
+                            .FirstOrDefault(c => c != null && !string.IsNullOrWhiteSpace(c.Name));
+
+                        if (matchedCat != null)
+                        {
+                            matchingCategory = matchedCat.Name;
+                        }
+                    }
+
+                    if (string.IsNullOrWhiteSpace(matchingCategory))
+                    {
+                        matchingCategory = labels[0];
+                    }
+
+                    added.Category = matchingCategory;
                     needsUpdate = true;
+                }
+
+                if (!string.IsNullOrWhiteSpace(downloadDir))
+                {
+                    added.SourcePath = RemapRemoteToLocal(downloadDir);
+                    needsUpdate = true;
+                }
+                else if (_categoryService != null)
+                {
+                    var defaultPath = _configService?.WatchFolderPath ?? "/downloads";
+                    var resolvedPath = _categoryService.GetSavePathForCategory(matchingCategory ?? string.Empty, defaultPath);
+                    if (!string.IsNullOrWhiteSpace(resolvedPath))
+                    {
+                        added.SourcePath = resolvedPath;
+                        needsUpdate = true;
+                    }
                 }
 
                 if (bandwidthPriority.HasValue)
