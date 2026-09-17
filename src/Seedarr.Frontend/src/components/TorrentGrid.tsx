@@ -24,6 +24,7 @@ import { getMediaDeepLink } from "../utils/arrLinks";
 import { filterTorrents } from "../utils/filterUtils";
 import TorrentContextMenu from "./TorrentContextMenu";
 import AddTorrentModal from "./AddTorrentModal";
+import MediaArtwork from "./MediaArtwork";
 import type { Torrent } from "../api/types";
 
 export interface TorrentGridProps {
@@ -169,7 +170,6 @@ function TorrentGrid({
     >
       {filtered.map((torrent) => {
         const displayTitle = torrent.mediaTitle || torrent.name;
-        const hasPoster = Boolean(torrent.posterUrl);
         const isSelected =
           selectedTorrentId === torrent.id ||
           (selectedIds?.has(torrent.id) ?? false);
@@ -234,60 +234,19 @@ function TorrentGrid({
                 flexShrink: 0,
               }}
             >
-              {hasPoster ? (
-                <img
-                  src={torrent.posterUrl || ""}
-                  alt={displayTitle}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                  }}
-                  loading="lazy"
-                />
-              ) : (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: "100%",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "1rem",
-                    textAlign: "center",
-                    background:
-                      "linear-gradient(180deg, #2a2620 0%, #151412 100%)",
-                  }}
-                >
-                  <span style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>
-                    {torrent.source === "Radarr"
-                      ? "🎬"
-                      : torrent.source === "Sonarr"
-                        ? "📺"
-                        : torrent.source === "Lidarr"
-                          ? "🎵"
-                          : "📡"}
-                  </span>
-                  <div
-                    style={{
-                      fontSize: "0.82rem",
-                      fontWeight: 600,
-                      wordBreak: "break-word",
-                      color: "var(--text-secondary)",
-                      lineHeight: "1.25",
-                    }}
-                  >
-                    {displayTitle}
-                  </div>
-                </div>
-              )}
+              <MediaArtwork
+                src={torrent.posterUrl}
+                alt={displayTitle}
+                title={displayTitle}
+                category={torrent.source || undefined}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                }}
+              />
 
               {/* Selection Checkbox & Source Badge (Top Left) */}
               <div

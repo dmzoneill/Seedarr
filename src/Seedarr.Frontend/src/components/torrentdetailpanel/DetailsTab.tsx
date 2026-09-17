@@ -13,6 +13,7 @@ import {
 import { getTorrentBadges, calculateHnrStatus } from "../../utils/milestones";
 import PieceMap from "../PieceMap";
 import SeedingSimulator from "../SeedingSimulator";
+import MediaArtwork from "../MediaArtwork";
 import type { Torrent } from "../../api/types";
 import { InfoRow } from "./shared";
 
@@ -95,18 +96,16 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
           <div
             style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
           >
-            {posterUrl && (
-              <img
-                src={posterUrl}
-                alt=""
-                style={{
-                  width: "32px",
-                  height: "46px",
-                  objectFit: "cover",
-                  borderRadius: "3px",
-                }}
-              />
-            )}
+            <MediaArtwork
+              src={posterUrl}
+              alt={mediaTitle || torrent.name}
+              title={mediaTitle || torrent.name}
+              category={meta?.mediaType || torrent.source || undefined}
+              width="32px"
+              height="46px"
+              aspectRatio="auto"
+              borderRadius="3px"
+            />
             <div>
               <div style={{ fontWeight: 600, fontSize: "0.85rem" }}>
                 {mediaTitle} {mediaYear ? `(${mediaYear})` : ""}
