@@ -167,6 +167,14 @@ public class SeedingEngine : BackgroundService
             }
         }
 
+        var downloadingTorrents = allTorrents
+            .Where(t => t.Status == TorrentStatus.Downloading && (autoStart || t.ForceStart))
+            .ToList();
+
+        var seedingTorrents = allTorrents
+            .Where(t => t.Status == TorrentStatus.Seeding && (autoStart || t.ForceStart))
+            .ToList();
+
         var isAnyPrivate = allTorrents.Any(t => t.IsPrivate && (t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading));
 
         if (string.IsNullOrEmpty(_localPeerId))
@@ -190,7 +198,7 @@ public class SeedingEngine : BackgroundService
                 _localPeerId = prefix + new string(suffix);
             }
         }
-        else if (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled)
+        else if (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && downloadingTorrents.Count == 0 && seedingTorrents.Count == 0)
         {
             var activeProfile = _clientBehaviorSimulator.GetActiveProfile(isAnyPrivate);
             if (activeProfile != null)
@@ -198,14 +206,6 @@ public class SeedingEngine : BackgroundService
                 _localPeerId = activeProfile.GeneratePeerId();
             }
         }
-
-        var downloadingTorrents = allTorrents
-            .Where(t => t.Status == TorrentStatus.Downloading && (autoStart || t.ForceStart))
-            .ToList();
-
-        var seedingTorrents = allTorrents
-            .Where(t => t.Status == TorrentStatus.Seeding && (autoStart || t.ForceStart))
-            .ToList();
 
         if (downloadingTorrents.Count == 0 && seedingTorrents.Count == 0)
         {
@@ -342,7 +342,11 @@ public class SeedingEngine : BackgroundService
         {
             if (!string.IsNullOrEmpty(torrent.InfoHash))
             {
-                _peerDatabase.AddPeer(torrent.InfoHash, "127.0.0.1", LocalPeerPort, _localPeerId);
+                var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                    ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
+                    : null;
+                var peerId = session?.PeerId ?? _localPeerId;
+                _peerDatabase.AddPeer(torrent.InfoHash, "127.0.0.1", LocalPeerPort, peerId);
             }
         }
 
