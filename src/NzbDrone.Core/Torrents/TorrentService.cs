@@ -5,6 +5,7 @@ using System.Linq;
 using NLog;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
+using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network.Vpn;
@@ -27,13 +28,20 @@ public interface ITorrentService
     void Delete(int id, bool deleteFiles = false);
     Torrent Recheck(int id);
     void MoveQueue(int id, string position);
+    Torrent Start(int id);
+    Torrent Pause(int id, string reason = null);
 }
 
 public class TorrentService : ITorrentService,
     IHandle<VpnKillSwitchTriggeredEvent>,
     IHandle<VpnInterfaceRestoredEvent>,
-    IHandle<VpnRestoredEvent>
+    IHandle<VpnRestoredEvent>,
+    IHandle<DiskSpaceCriticalEvent>,
+    IHandle<DiskSpaceRestoredEvent>
 {
+    public const string EmergencyDiskSpacePausePrefix = "Paused: Emergency low disk space on volume ";
+    public const long EmergencyPauseFreeSpaceBufferBytes = 500L * 1024 * 1024; // 500 MB
+
     private readonly ITorrentRepository _repository;
     private readonly ITorrentFileService _torrentFileService;
     private readonly ITrackerEntryService _trackerEntryService;
@@ -41,12 +49,20 @@ public class TorrentService : ITorrentService,
     private readonly object _sortOrderLock = new();
     private readonly Logger _logger;
 
-    public TorrentService(ITorrentRepository repository, ITorrentFileService torrentFileService, ITrackerEntryService trackerEntryService, IEventAggregator eventAggregator)
+    public IDiskSpaceService DiskSpaceService { get; set; }
+
+    public TorrentService(
+        ITorrentRepository repository,
+        ITorrentFileService torrentFileService,
+        ITrackerEntryService trackerEntryService,
+        IEventAggregator eventAggregator,
+        IDiskSpaceService diskSpaceService = null)
     {
         _repository = repository;
         _torrentFileService = torrentFileService;
         _trackerEntryService = trackerEntryService;
         _eventAggregator = eventAggregator;
+        DiskSpaceService = diskSpaceService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -98,6 +114,11 @@ public class TorrentService : ITorrentService,
     public Torrent Add(Torrent torrent)
     {
         ArgumentNullException.ThrowIfNull(torrent);
+
+        if (torrent.Status == TorrentStatus.Downloading)
+        {
+            ValidateDiskSpaceForTorrent(torrent);
+        }
 
         if (!string.IsNullOrWhiteSpace(torrent.InfoHash))
         {
@@ -327,5 +348,235 @@ public class TorrentService : ITorrentService,
             _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
             _eventAggregator.PublishEvent(new TorrentUpdatedEvent(torrent));
         }
+    }
+
+    public Torrent Start(int id)
+    {
+        var torrent = _repository.Get(id);
+        if (torrent == null)
+        {
+            return null;
+        }
+
+        ValidateDiskSpaceForTorrent(torrent);
+
+        torrent.Resume();
+        if (torrent.ErrorMessage != null && torrent.ErrorMessage.StartsWith(EmergencyDiskSpacePausePrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            torrent.ErrorMessage = null;
+        }
+
+        return Update(torrent);
+    }
+
+    public Torrent Pause(int id, string reason = null)
+    {
+        var torrent = _repository.Get(id);
+        if (torrent == null)
+        {
+            return null;
+        }
+
+        torrent.Pause();
+        if (!string.IsNullOrEmpty(reason))
+        {
+            torrent.ErrorMessage = reason;
+        }
+
+        return Update(torrent);
+    }
+
+    public void ValidateDiskSpaceForTorrent(Torrent torrent)
+    {
+        if (torrent == null || DiskSpaceService == null)
+        {
+            return;
+        }
+
+        if (torrent.TotalSize <= 0)
+        {
+            return;
+        }
+
+        var remainingBytes = Math.Max(0L, torrent.TotalSize - torrent.Downloaded);
+        if (remainingBytes <= 0)
+        {
+            return;
+        }
+
+        var diskInfo = DiskSpaceService.GetDiskSpaceForPath(torrent.SavePath);
+        if (diskInfo == null)
+        {
+            return;
+        }
+
+        var requiredSpace = remainingBytes + EmergencyPauseFreeSpaceBufferBytes;
+        if (diskInfo.FreeSpace < requiredSpace)
+        {
+            _logger.Warn(
+                "Insufficient disk space on destination volume '{0}' for torrent '{1}'. Required: {2} bytes (including 500MB safety buffer), Available: {3} bytes",
+                diskInfo.Path,
+                torrent.Name,
+                requiredSpace,
+                diskInfo.FreeSpace);
+
+            throw new InsufficientDiskSpaceException("Insufficient disk space on destination volume to complete torrent download");
+        }
+    }
+
+    public void Handle(DiskSpaceCriticalEvent message)
+    {
+        if (message == null || string.IsNullOrWhiteSpace(message.DrivePath))
+        {
+            return;
+        }
+
+        var activeTorrents = _repository.All()
+            .Where(t => t.Status == TorrentStatus.Downloading)
+            .ToList();
+
+        if (activeTorrents.Count == 0)
+        {
+            return;
+        }
+
+        var matchingTorrents = activeTorrents
+            .Where(t => MatchesVolume(t.SavePath, message.DrivePath))
+            .ToList();
+
+        if (matchingTorrents.Count == 0)
+        {
+            return;
+        }
+
+        _logger.Warn("Emergency low disk space on volume {0}: pausing {1} active downloading torrents.", message.DrivePath, matchingTorrents.Count);
+        foreach (var torrent in matchingTorrents)
+        {
+            torrent.Pause();
+            torrent.ErrorMessage = EmergencyDiskSpacePausePrefix + message.DrivePath;
+        }
+
+        _repository.UpdateMany(matchingTorrents);
+        foreach (var torrent in matchingTorrents)
+        {
+            _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+            _eventAggregator.PublishEvent(new TorrentUpdatedEvent(torrent));
+        }
+    }
+
+    public void Handle(DiskSpaceRestoredEvent message)
+    {
+        if (message == null || string.IsNullOrWhiteSpace(message.DrivePath))
+        {
+            return;
+        }
+
+        var pausedTorrents = _repository.All()
+            .Where(t => t.Status == TorrentStatus.Paused &&
+                        !string.IsNullOrEmpty(t.ErrorMessage) &&
+                        t.ErrorMessage.StartsWith(EmergencyDiskSpacePausePrefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        if (pausedTorrents.Count == 0)
+        {
+            return;
+        }
+
+        var matchingTorrents = pausedTorrents
+            .Where(t => MatchesVolume(t.SavePath, message.DrivePath))
+            .ToList();
+
+        if (matchingTorrents.Count == 0)
+        {
+            return;
+        }
+
+        _logger.Info("Disk space restored on volume {0}: resuming {1} auto-paused torrents.", message.DrivePath, matchingTorrents.Count);
+        foreach (var torrent in matchingTorrents)
+        {
+            torrent.ErrorMessage = null;
+            torrent.Resume();
+        }
+
+        _repository.UpdateMany(matchingTorrents);
+        foreach (var torrent in matchingTorrents)
+        {
+            _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+            _eventAggregator.PublishEvent(new TorrentUpdatedEvent(torrent));
+        }
+    }
+
+    private bool MatchesVolume(string savePath, string volumePath)
+    {
+        if (string.IsNullOrWhiteSpace(volumePath))
+        {
+            return false;
+        }
+
+        if (DiskSpaceService != null)
+        {
+            try
+            {
+                var diskInfo = DiskSpaceService.GetDiskSpaceForPath(savePath);
+                if (diskInfo != null && !string.IsNullOrWhiteSpace(diskInfo.Path))
+                {
+                    if (string.Equals(diskInfo.Path, volumePath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Trace(ex, "Failed to match volume via DiskSpaceService for path {0}", savePath);
+            }
+        }
+
+        return IsPathPrefixOf(savePath, volumePath);
+    }
+
+    private static bool IsPathPrefixOf(string path, string volumePath)
+    {
+        if (string.IsNullOrWhiteSpace(volumePath))
+        {
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return volumePath == "/" || volumePath.StartsWith("C:", StringComparison.OrdinalIgnoreCase);
+        }
+
+        string normPath;
+        try
+        {
+            normPath = Path.GetFullPath(path).Replace('\\', '/');
+        }
+        catch
+        {
+            normPath = path.Replace('\\', '/');
+        }
+
+        string normVol;
+        try
+        {
+            normVol = Path.GetFullPath(volumePath).Replace('\\', '/');
+        }
+        catch
+        {
+            normVol = volumePath.Replace('\\', '/');
+        }
+
+        if (!normPath.EndsWith("/"))
+        {
+            normPath += "/";
+        }
+
+        if (!normVol.EndsWith("/"))
+        {
+            normVol += "/";
+        }
+
+        return normPath.StartsWith(normVol, StringComparison.OrdinalIgnoreCase);
     }
 }
