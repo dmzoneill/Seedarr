@@ -41,7 +41,19 @@ public class PeerConnection : IDisposable
     public bool AmInterested { get; set; }
     public bool PeerChoking { get; set; } = true;
     public bool PeerInterested { get; set; }
-    public DateTime ConnectedAt { get; }
+    public bool IsInterested
+    {
+        get => AmInterested;
+        set => AmInterested = value;
+    }
+
+    public bool IsPeerInterested
+    {
+        get => PeerInterested;
+        set => PeerInterested = value;
+    }
+
+    public DateTime ConnectedAt { get; set; } = DateTime.UtcNow;
     public DateTime LastActivity { get; set; }
     public int HandshakeTimeoutMs { get; set; }
     public int MessageReadTimeoutMs { get; set; }
@@ -61,6 +73,18 @@ public class PeerConnection : IDisposable
     public long BytesDownloaded { get; set; }
     public long UploadRate { get; set; }
     public long DownloadRate { get; set; }
+    public long DownloadSpeed
+    {
+        get => DownloadRate;
+        set => DownloadRate = value;
+    }
+
+    public long UploadSpeed
+    {
+        get => UploadRate;
+        set => UploadRate = value;
+    }
+
     public double Progress { get; set; }
     public bool[] PeerPieces { get; set; }
     public DateTime LastRequestReceived { get; set; } = DateTime.UtcNow;
