@@ -85,7 +85,7 @@ public class ConnectionManagerTest
         }
     }
 
-    private PeerConnection CreateTestConnection()
+    private PeerConnection CreateTestConnection(DateTime? connectedAt = null)
     {
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -98,7 +98,10 @@ public class ConnectionManagerTest
         _serverClients.Add(client);
         listener.Stop();
 
-        var conn = new PeerConnection(serverClient);
+        var conn = new PeerConnection(serverClient)
+        {
+            ConnectedAt = connectedAt ?? DateTime.UtcNow.AddMinutes(-2)
+        };
         _createdConnections.Add(conn);
         return conn;
     }
@@ -486,6 +489,94 @@ public class ConnectionManagerTest
         _manager.RotateConnections();
 
         _connectionLogService.Received(1).LogDisconnected(conn, Arg.Any<string>());
+    }
+
+    [Test]
+    public void RotateConnections_should_protect_top_performing_peers_with_high_download_upload_speeds_from_eviction()
+    {
+        _configService.ConnectionRotationPercentage.Returns(0.5);
+
+        var fastPeer1 = CreateTestConnection();
+        fastPeer1.DownloadSpeed = 1_000_000;
+
+        var fastPeer2 = CreateTestConnection();
+        fastPeer2.UploadSpeed = 500_000;
+
+        var slowPeer1 = CreateTestConnection();
+        slowPeer1.DownloadSpeed = 0;
+        slowPeer1.UploadSpeed = 0;
+
+        var slowPeer2 = CreateTestConnection();
+        slowPeer2.DownloadSpeed = 0;
+        slowPeer2.UploadSpeed = 0;
+
+        _manager.Add(fastPeer1);
+        _manager.Add(fastPeer2);
+        _manager.Add(slowPeer1);
+        _manager.Add(slowPeer2);
+
+        _manager.RotateConnections();
+
+        // 4 * 0.5 = 2 connections removed (slow peers). Top 2 fast peers must be preserved.
+        Assert.That(_manager.ActiveCount, Is.EqualTo(2));
+        var remaining = _manager.GetAllConnections();
+        Assert.That(remaining, Does.Contain(fastPeer1));
+        Assert.That(remaining, Does.Contain(fastPeer2));
+        Assert.That(remaining, Does.Not.Contain(slowPeer1));
+        Assert.That(remaining, Does.Not.Contain(slowPeer2));
+    }
+
+    [Test]
+    public void RotateConnections_should_protect_newly_connected_peers_within_grace_period_from_eviction()
+    {
+        _configService.ConnectionRotationPercentage.Returns(0.5);
+
+        // Old connection: connected 5 minutes ago (outside grace period)
+        var oldConn = CreateTestConnection(DateTime.UtcNow.AddMinutes(-5));
+
+        // New connection: connected 10 seconds ago (within grace period)
+        var newConn = CreateTestConnection(DateTime.UtcNow.AddSeconds(-10));
+
+        _manager.Add(oldConn);
+        _manager.Add(newConn);
+
+        _manager.RotateConnections();
+
+        // New connection must be protected by the 60s grace period. Old connection is evicted.
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+        var remaining = _manager.GetAllConnections();
+        Assert.That(remaining, Does.Contain(newConn));
+        Assert.That(remaining, Does.Not.Contain(oldConn));
+    }
+
+    [Test]
+    public void RotateConnections_should_prioritize_snubbed_inactive_zero_speed_peers_for_eviction()
+    {
+        _configService.ConnectionRotationPercentage.Returns(0.34);
+
+        var snubbedPeer = CreateTestConnection();
+        snubbedPeer.IsSnubbed = true;
+
+        var activePeer = CreateTestConnection();
+        activePeer.DownloadSpeed = 10_000;
+        activePeer.AmInterested = true;
+
+        var chokedPeer = CreateTestConnection();
+        chokedPeer.DownloadSpeed = 5_000;
+        chokedPeer.PeerChoking = true;
+
+        _manager.Add(snubbedPeer);
+        _manager.Add(activePeer);
+        _manager.Add(chokedPeer);
+
+        _manager.RotateConnections();
+
+        // The snubbed peer must be prioritized for eviction first
+        Assert.That(_manager.ActiveCount, Is.EqualTo(2));
+        var remaining = _manager.GetAllConnections();
+        Assert.That(remaining, Does.Not.Contain(snubbedPeer));
+        Assert.That(remaining, Does.Contain(activePeer));
+        Assert.That(remaining, Does.Contain(chokedPeer));
     }
 
     [Test]

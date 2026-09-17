@@ -347,7 +347,7 @@ public class ConnectionManager : IConnectionManager,
 
     public void RotateConnections()
     {
-        List<PeerConnection> oldest;
+        List<PeerConnection> toEvict;
         double rotationPct;
         lock (_lock)
         {
@@ -363,27 +363,88 @@ public class ConnectionManager : IConnectionManager,
 
             rotateCount = Math.Min(rotateCount, _connections.Count);
 
-            oldest = _connections
-                .OrderBy(c => c.ConnectedAt)
+            var now = DateTime.UtcNow;
+            var gracePeriod = TimeSpan.FromSeconds(60);
+
+            // 1. Grace Period Protection: Protect connections created within the last 60 seconds
+            var matureConnections = _connections
+                .Where(c => (now - c.ConnectedAt) >= gracePeriod)
+                .ToList();
+
+            if (matureConnections.Count == 0)
+            {
+                return;
+            }
+
+            // 2. Protected Top Peers: Protect top N (up to 4) fastest active peers with transfer activity
+            var protectedTopPeers = matureConnections
+                .Where(c => (c.DownloadRate + c.UploadRate) > 0)
+                .OrderByDescending(c => c.DownloadRate + c.UploadRate)
+                .Take(4)
+                .ToHashSet();
+
+            var candidates = matureConnections
+                .Where(c => !protectedTopPeers.Contains(c))
+                .ToList();
+
+            if (candidates.Count == 0)
+            {
+                return;
+            }
+
+            // 3. Efficiency / Eviction Scoring: Prioritize snubbed, idle, choked, low throughput
+            toEvict = candidates
+                .OrderByDescending(GetEvictionPriority)
+                .ThenBy(c => c.DownloadRate + c.UploadRate)
+                .ThenBy(c => c.LastActivity)
+                .ThenBy(c => c.ConnectedAt)
                 .Take(rotateCount)
                 .ToList();
 
-            foreach (var conn in oldest)
+            foreach (var conn in toEvict)
             {
                 _connections.Remove(conn);
             }
         }
 
-        foreach (var conn in oldest)
+        foreach (var conn in toEvict)
         {
             _logger.Debug(
-                "Rotating out peer {0} (oldest, rotation: {1:P0})",
+                "Rotating out peer {0} (rotation: {1:P0})",
                 conn.RemoteIp,
                 rotationPct);
             LogDisconnect(conn);
-            _fastExtensionHandler.UnregisterPeer(conn);
+            _fastExtensionHandler?.UnregisterPeer(conn);
             conn.Dispose();
         }
+    }
+
+    private static int GetEvictionPriority(PeerConnection c)
+    {
+        if (c.IsSnubbed)
+        {
+            return 100;
+        }
+
+        var isZeroSpeed = (c.DownloadRate + c.UploadRate) == 0;
+        var noMutualInterest = !c.AmInterested && !c.PeerInterested;
+
+        if (isZeroSpeed && noMutualInterest)
+        {
+            return 80;
+        }
+
+        if (isZeroSpeed)
+        {
+            return 60;
+        }
+
+        if (c.PeerChoking)
+        {
+            return 40;
+        }
+
+        return 20;
     }
 
     private Torrent ResolveTorrent(string infoHash)
