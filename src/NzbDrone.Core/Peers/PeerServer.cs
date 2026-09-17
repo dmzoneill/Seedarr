@@ -51,6 +51,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private readonly Extensions.IMagnetMetadataDownloader _magnetMetadataDownloader;
     private readonly Extensions.IPeerExchange _peerExchange;
     private readonly IPiecePicker _piecePicker;
+    private readonly IPieceStorage _pieceStorage;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
@@ -67,6 +68,90 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     public IPiecePicker PiecePicker => _piecePicker;
 
     internal bool IsOutgoingEndpointInFlight(string ip, int port) => _inFlightOutgoingEndpoints.ContainsKey($"{ip}:{port}");
+
+    internal byte[] GetLocalTorrentBitfield(Torrent torrent)
+    {
+        if (torrent == null || torrent.PieceCount <= 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        var byteCount = (torrent.PieceCount + 7) / 8;
+        var bitfield = new byte[byteCount];
+
+        bool[] verified = null;
+        if (_pieceStorage != null && !string.IsNullOrEmpty(torrent.InfoHash))
+        {
+            verified = _pieceStorage.GetVerifiedPieces(torrent.InfoHash);
+        }
+
+        if (verified != null)
+        {
+            var max = Math.Min(torrent.PieceCount, verified.Length);
+            for (var i = 0; i < max; i++)
+            {
+                if (verified[i])
+                {
+                    bitfield[i / 8] |= (byte)(0x80 >> (i % 8));
+                }
+            }
+        }
+        else if (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding)
+        {
+            for (var i = 0; i < byteCount; i++)
+            {
+                bitfield[i] = 0xFF;
+            }
+
+            var spare = (byteCount * 8) - torrent.PieceCount;
+            if (spare > 0)
+            {
+                bitfield[byteCount - 1] = (byte)(0xFF << spare);
+            }
+        }
+        else if (torrent.Progress > 0.0)
+        {
+            var verifiedCount = (int)Math.Round(torrent.Progress * torrent.PieceCount);
+            for (var i = 0; i < verifiedCount && i < torrent.PieceCount; i++)
+            {
+                bitfield[i / 8] |= (byte)(0x80 >> (i % 8));
+            }
+        }
+
+        return bitfield;
+    }
+
+    internal void SendInitialAvailability(PeerConnection connection, Torrent torrent)
+    {
+        if (torrent == null || torrent.PieceCount <= 0)
+        {
+            return;
+        }
+
+        bool[] verified = null;
+        if (_pieceStorage != null && !string.IsNullOrEmpty(torrent.InfoHash))
+        {
+            verified = _pieceStorage.GetVerifiedPieces(torrent.InfoHash);
+        }
+
+        var isComplete = (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding) ||
+                         (verified != null && verified.Length >= torrent.PieceCount && verified.Take(torrent.PieceCount).All(x => x));
+
+        var hasNoPieces = !isComplete && (
+            (verified != null && !verified.Take(torrent.PieceCount).Any(x => x)) ||
+            (verified == null && (torrent.Progress <= 0.0 || torrent.Downloaded == 0)));
+
+        var bitfield = GetLocalTorrentBitfield(torrent);
+
+        if (_fastExtensionHandler != null && (connection.SupportsFastExtension || _fastExtensionHandler.IsFastPeer(connection)))
+        {
+            _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, isComplete, hasNoPieces, bitfield);
+        }
+        else
+        {
+            connection.SendBitfield(bitfield);
+        }
+    }
 
     public PeerServer(
         IConfigService configService,
@@ -92,7 +177,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         Extensions.ISyntheticMetadataGenerator syntheticMetadataGenerator = null,
         Extensions.IMagnetMetadataDownloader magnetMetadataDownloader = null,
         Extensions.IPeerExchange peerExchange = null,
-        IPiecePicker piecePicker = null)
+        IPiecePicker piecePicker = null,
+        IPieceStorage pieceStorage = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -102,7 +188,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         _trackerEntryService = trackerEntryService;
         _eventLogService = eventLogService;
         _trackerMetricService = trackerMetricService;
-        _fastExtensionHandler = fastExtensionHandler;
+        _fastExtensionHandler = fastExtensionHandler ?? new Extensions.FastExtensionHandler();
         _extensionManager = extensionManager;
         _chokeManager = chokeManager;
         _proxySettingsProvider = proxySettingsProvider;
@@ -113,6 +199,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         _magnetMetadataDownloader = magnetMetadataDownloader;
         _peerExchange = peerExchange ?? new Extensions.PeerExchange(_configService);
         _piecePicker = piecePicker ?? new PiecePicker();
+        _pieceStorage = pieceStorage;
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -1097,16 +1184,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 connection.SendMessage(new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
             }
 
-            if (_fastExtensionHandler != null && connection.SupportsFastExtension)
-            {
-                var hasAll = torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding;
-                var hasNone = torrent.Progress <= 0.0 && torrent.Downloaded == 0;
-                _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, hasAll, hasNone);
-            }
-            else
-            {
-                connection.SendBitfield(torrent.PieceCount);
-            }
+            SendInitialAvailability(connection, torrent);
 
             _chokeManager?.PeerConnected(connection);
             if (_chokeManager != null)
@@ -1345,16 +1423,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                     connection.SendMessage(new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
                 }
 
-                if (_fastExtensionHandler != null && connection.SupportsFastExtension)
-                {
-                    var hasAll = torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding;
-                    var hasNone = torrent.Progress <= 0.0 && torrent.Downloaded == 0;
-                    _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, hasAll, hasNone);
-                }
-                else
-                {
-                    connection.SendBitfield(torrent.PieceCount);
-                }
+                SendInitialAvailability(connection, torrent);
 
                 _chokeManager?.PeerConnected(connection);
                 if (_chokeManager != null)

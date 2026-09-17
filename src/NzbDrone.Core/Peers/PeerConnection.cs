@@ -89,7 +89,7 @@ public class PeerConnection : IDisposable
     public double IdleChance { get; set; }
     public byte[] ReservedBytes { get; private set; } = new byte[8];
     public bool SupportsExtensionProtocol { get; private set; }
-    public bool SupportsFastExtension { get; private set; }
+    public bool SupportsFastExtension { get; set; }
     public bool SupportsDht { get; private set; }
     public ConcurrentDictionary<string, int> RemoteExtensions { get; } = new(StringComparer.OrdinalIgnoreCase);
     public int? MetadataSize { get; set; }
@@ -700,6 +700,21 @@ public class PeerConnection : IDisposable
         }
     }
 
+    public virtual void SendBitfield(byte[] bitfield)
+    {
+        if (bitfield == null || bitfield.Length == 0)
+        {
+            return;
+        }
+
+        SendMessage(new PeerMessage { Type = PeerMessageType.Bitfield, Payload = bitfield });
+    }
+
+    public virtual void SendBitfield(ReadOnlyMemory<byte> bitfield)
+    {
+        SendBitfield(bitfield.ToArray());
+    }
+
     public void SendBitfield(int pieceCount)
     {
         if (pieceCount <= 0)
@@ -722,7 +737,7 @@ public class PeerConnection : IDisposable
             bitfield[byteCount - 1] = (byte)(0xFF << spare);
         }
 
-        SendMessage(new PeerMessage { Type = PeerMessageType.Bitfield, Payload = bitfield });
+        SendBitfield(bitfield);
     }
 
     public static byte[] BuildHandshake(string infoHash, string peerId, bool isPrivate = false, IClientProfile clientProfile = null)

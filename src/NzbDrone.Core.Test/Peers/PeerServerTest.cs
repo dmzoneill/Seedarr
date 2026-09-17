@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -2443,5 +2444,162 @@ public class PeerServerTest
         Assert.That(serverConn.PexRateLimitViolations, Is.EqualTo(0));
         Assert.That(serverConn.LastPexReceived, Is.GreaterThan(DateTime.UtcNow.AddSeconds(-5)));
         _peerDiscovery.Received(1).AddPeers(torrent.InfoHash, Arg.Any<IEnumerable<PeerInfo>>(), "pex");
+    }
+
+    [Test]
+    public void SendInitialAvailability_should_send_have_all_to_fast_peer_when_torrent_is_complete()
+    {
+        var ms = new MemoryStream();
+        var conn = new PeerConnection(ms, "127.0.0.1", 6881)
+        {
+            SupportsFastExtension = true
+        };
+
+        var torrent = new Torrent
+        {
+            InfoHash = "1111222233334444555566667777888899990000",
+            Progress = 1.0,
+            PieceCount = 10,
+            Status = TorrentStatus.Seeding
+        };
+
+        _server.SendInitialAvailability(conn, torrent);
+
+        var data = ms.ToArray();
+        Assert.That(data.Length, Is.GreaterThanOrEqualTo(5));
+        Assert.That(data[4], Is.EqualTo((byte)PeerMessageType.HaveAll));
+    }
+
+    [Test]
+    public void SendInitialAvailability_should_send_have_none_to_fast_peer_when_torrent_is_empty()
+    {
+        var ms = new MemoryStream();
+        var conn = new PeerConnection(ms, "127.0.0.1", 6881)
+        {
+            SupportsFastExtension = true
+        };
+
+        var torrent = new Torrent
+        {
+            InfoHash = "1111222233334444555566667777888899990000",
+            Progress = 0.0,
+            Downloaded = 0,
+            PieceCount = 10,
+            Status = TorrentStatus.Downloading
+        };
+
+        _server.SendInitialAvailability(conn, torrent);
+
+        var data = ms.ToArray();
+        Assert.That(data.Length, Is.GreaterThanOrEqualTo(5));
+        Assert.That(data[4], Is.EqualTo((byte)PeerMessageType.HaveNone));
+    }
+
+    [Test]
+    public void SendInitialAvailability_should_send_dynamic_bitfield_with_only_verified_pieces_set_when_torrent_is_partial()
+    {
+        var ms = new MemoryStream();
+        var conn = new PeerConnection(ms, "127.0.0.1", 6881)
+        {
+            SupportsFastExtension = true
+        };
+
+        var pieceStorage = Substitute.For<IPieceStorage>();
+        var verified = new bool[16];
+        verified[0] = true;
+        verified[2] = true;
+        verified[8] = true;
+
+        var torrent = new Torrent
+        {
+            InfoHash = "1111222233334444555566667777888899990000",
+            Progress = 0.3,
+            Downloaded = 1000,
+            PieceCount = 16,
+            Status = TorrentStatus.Downloading
+        };
+
+        pieceStorage.GetVerifiedPieces(torrent.InfoHash).Returns(verified);
+
+        var serverWithStorage = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            pieceStorage: pieceStorage);
+
+        serverWithStorage.SendInitialAvailability(conn, torrent);
+
+        var data = ms.ToArray();
+        Assert.That(data.Length, Is.GreaterThanOrEqualTo(5));
+        Assert.That(data[4], Is.EqualTo((byte)PeerMessageType.Bitfield));
+
+        var bitfield = data[5..];
+        Assert.That(bitfield.Length, Is.EqualTo(2));
+
+        // Byte 0: piece 0 (0x80) | piece 2 (0x20) = 0xA0
+        Assert.That(bitfield[0], Is.EqualTo(0xA0));
+        // Byte 1: piece 8 (0x80) = 0x80
+        Assert.That(bitfield[1], Is.EqualTo(0x80));
+    }
+
+    [Test]
+    public void SendInitialAvailability_should_send_full_bitfield_to_non_fast_peer_when_torrent_is_complete()
+    {
+        var ms = new MemoryStream();
+        var conn = new PeerConnection(ms, "127.0.0.1", 6881)
+        {
+            SupportsFastExtension = false
+        };
+
+        var torrent = new Torrent
+        {
+            InfoHash = "1111222233334444555566667777888899990000",
+            Progress = 1.0,
+            PieceCount = 10,
+            Status = TorrentStatus.Seeding
+        };
+
+        _server.SendInitialAvailability(conn, torrent);
+
+        var data = ms.ToArray();
+        Assert.That(data.Length, Is.GreaterThanOrEqualTo(5));
+        Assert.That(data[4], Is.EqualTo((byte)PeerMessageType.Bitfield));
+
+        var bitfield = data[5..];
+        Assert.That(bitfield.Length, Is.EqualTo(2));
+        Assert.That(bitfield[0], Is.EqualTo(0xFF));
+        Assert.That(bitfield[1], Is.EqualTo(0xC0));
+    }
+
+    [Test]
+    public void SendInitialAvailability_should_send_zero_bitfield_to_non_fast_peer_when_torrent_is_empty()
+    {
+        var ms = new MemoryStream();
+        var conn = new PeerConnection(ms, "127.0.0.1", 6881)
+        {
+            SupportsFastExtension = false
+        };
+
+        var torrent = new Torrent
+        {
+            InfoHash = "1111222233334444555566667777888899990000",
+            Progress = 0.0,
+            Downloaded = 0,
+            PieceCount = 10,
+            Status = TorrentStatus.Downloading
+        };
+
+        _server.SendInitialAvailability(conn, torrent);
+
+        var data = ms.ToArray();
+        Assert.That(data.Length, Is.GreaterThanOrEqualTo(5));
+        Assert.That(data[4], Is.EqualTo((byte)PeerMessageType.Bitfield));
+
+        var bitfield = data[5..];
+        Assert.That(bitfield.Length, Is.EqualTo(2));
+        Assert.That(bitfield[0], Is.EqualTo(0x00));
+        Assert.That(bitfield[1], Is.EqualTo(0x00));
     }
 }

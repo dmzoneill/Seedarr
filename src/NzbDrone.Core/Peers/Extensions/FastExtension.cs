@@ -42,6 +42,7 @@ public interface IFastExtensionHandler
     bool IsFastPeer(PeerConnection connection);
     void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll = true);
     void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll, bool hasNone);
+    void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll, bool hasNone, byte[] bitfield);
     PeerMessage BuildRejectForRequest(byte[] payload);
     void RegisterFastPeer(PeerConnection connection, byte[] infoHash, int pieceCount, int setSize);
     void UnregisterPeer(PeerConnection connection);
@@ -383,22 +384,38 @@ public class FastExtensionHandler : IFastExtensionHandler
 
     public void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll)
     {
-        SendHaveAllOrBitfield(connection, pieceCount, hasAll, false);
+        SendHaveAllOrBitfield(connection, pieceCount, hasAll, false, null);
     }
 
     public void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll, bool hasNone)
     {
-        if (IsFastPeer(connection) && hasAll)
+        SendHaveAllOrBitfield(connection, pieceCount, hasAll, hasNone, null);
+    }
+
+    public void SendHaveAllOrBitfield(PeerConnection connection, int pieceCount, bool hasAll, bool hasNone, byte[] bitfield)
+    {
+        var isFast = IsFastPeer(connection) || (connection?.SupportsFastExtension == true);
+
+        if (isFast && hasAll)
         {
             connection.SendMessage(SerializeHaveAll());
         }
-        else if (IsFastPeer(connection) && hasNone)
+        else if (isFast && hasNone)
         {
             connection.SendMessage(SerializeHaveNone());
         }
-        else if (IsFastPeer(connection) && pieceCount > 0 && !hasAll)
+        else if (bitfield != null)
+        {
+            connection.SendBitfield(bitfield);
+        }
+        else if (hasAll)
         {
             connection.SendBitfield(pieceCount);
+        }
+        else if (hasNone)
+        {
+            var byteCount = (pieceCount + 7) / 8;
+            connection.SendBitfield(new byte[byteCount]);
         }
         else
         {
