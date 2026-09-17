@@ -58,6 +58,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
     private readonly IArrConnectionRepository _arrRepository;
     private readonly IArrConnectionFactory _connectionFactory;
     private readonly ITmdbMetadataProvider _tmdbProvider;
+    private readonly IMediaFilterService _mediaFilterService;
     private readonly HttpClient _explicitHttpClient;
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
@@ -85,6 +86,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         IArrConnectionRepository arrRepository = null,
         IArrConnectionFactory connectionFactory = null,
         ITmdbMetadataProvider tmdbProvider = null,
+        IMediaFilterService mediaFilterService = null,
         HttpClient httpClient = null)
     {
         _repository = repository;
@@ -95,6 +97,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         _arrRepository = arrRepository;
         _connectionFactory = connectionFactory;
         _tmdbProvider = tmdbProvider;
+        _mediaFilterService = mediaFilterService ?? new MediaFilterService();
         _explicitHttpClient = httpClient;
         _httpClient = httpClient ?? ArrConnectionResources.SharedClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         _logger = LogManager.GetCurrentClassLogger();
@@ -108,8 +111,21 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         IEventAggregator eventAggregator,
         IArrConnectionRepository arrRepository,
         IArrConnectionFactory connectionFactory,
+        ITmdbMetadataProvider tmdbProvider)
+        : this(repository, inspector, configService, appFolderInfo, eventAggregator, arrRepository, connectionFactory, tmdbProvider, null, null)
+    {
+    }
+
+    public MediaEnrichmentService(
+        ITorrentMediaMetadataRepository repository,
+        IMediaContainerInspector inspector,
+        IConfigService configService,
+        IAppFolderInfo appFolderInfo,
+        IEventAggregator eventAggregator,
+        IArrConnectionRepository arrRepository,
+        IArrConnectionFactory connectionFactory,
         HttpClient httpClient)
-        : this(repository, inspector, configService, appFolderInfo, eventAggregator, arrRepository, connectionFactory, null, httpClient)
+        : this(repository, inspector, configService, appFolderInfo, eventAggregator, arrRepository, connectionFactory, null, null, httpClient)
     {
     }
 
@@ -135,11 +151,15 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             var metadata = existing ?? new TorrentMediaMetadata { TorrentId = torrent.Id };
 
             // 1. Inspect container metadata if local file is available or from torrent name
-            if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+            var resolvedFilePath = !string.IsNullOrEmpty(filePath)
+                ? _mediaFilterService.SelectPrimaryMediaFile(filePath) ?? (File.Exists(filePath) ? filePath : null)
+                : null;
+
+            if (!string.IsNullOrEmpty(resolvedFilePath) && File.Exists(resolvedFilePath))
             {
                 try
                 {
-                    var containerInfo = _inspector.InspectFile(filePath);
+                    var containerInfo = _inspector.InspectFile(resolvedFilePath);
                     if (containerInfo != null)
                     {
                         metadata.MediaInfoJson = JsonSerializer.Serialize(containerInfo);
@@ -147,7 +167,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 }
                 catch (Exception ex)
                 {
-                    _logger.Warn(ex, "Failed to inspect media file: {0}", filePath);
+                    _logger.Warn(ex, "Failed to inspect media file: {0}", resolvedFilePath);
                 }
             }
 
@@ -155,6 +175,10 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
             var parsedRelease = ReleaseTitleParser.Parse(torrent.Name);
             var cleanTitle = parsedRelease.CleanTitle;
             var parsedYear = parsedRelease.Year ?? 0;
+            if (!string.IsNullOrEmpty(parsedRelease.Edition))
+            {
+                metadata.Edition = parsedRelease.Edition;
+            }
 
             // 3. Query connected Servarr APIs (Sonarr / Radarr / Lidarr) if configured
             var arrMetadata = await QueryServarrAsync(torrent, cleanTitle, cancellationToken).ConfigureAwait(false);
@@ -262,6 +286,11 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 if (arrMetadata.ReleaseDate.HasValue)
                 {
                     metadata.ReleaseDate = arrMetadata.ReleaseDate.Value;
+                }
+
+                if (!string.IsNullOrEmpty(arrMetadata.Edition))
+                {
+                    metadata.Edition = arrMetadata.Edition;
                 }
             }
             else if (_tmdbProvider != null)

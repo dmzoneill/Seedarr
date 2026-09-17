@@ -13,4 +13,6 @@ public interface IEpisodicParser
     string EscapeMarkdown(string text);
 
     string FormatEta(long seconds);
+
+    string ExtractEdition(string name);
 }

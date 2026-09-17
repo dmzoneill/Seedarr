@@ -182,4 +182,62 @@ public class EpisodicParserTest
         Assert.That(e3, Is.Null);
         Assert.That(title3, Is.Null);
     }
+
+    [Test]
+    public void ExtractEpisodicReleaseInfo_should_parse_multi_episode_ranges()
+    {
+        var res1 = _subject.ExtractEpisodicReleaseInfo("Show.Name.S02E03-E04.1080p");
+        Assert.That(res1.SeasonNumber, Is.EqualTo(2));
+        Assert.That(res1.EpisodeNumber, Is.EqualTo(3));
+        Assert.That(res1.EndingEpisodeNumber, Is.EqualTo(4));
+        Assert.That(res1.EpisodeNumbers, Is.EqualTo(new List<int> { 3, 4 }));
+        Assert.That(res1.IsSeasonPack, Is.False);
+
+        var res2 = _subject.ExtractEpisodicReleaseInfo("Show.Name.1x05-1x06.1080p");
+        Assert.That(res2.SeasonNumber, Is.EqualTo(1));
+        Assert.That(res2.EpisodeNumber, Is.EqualTo(5));
+        Assert.That(res2.EndingEpisodeNumber, Is.EqualTo(6));
+        Assert.That(res2.EpisodeNumbers, Is.EqualTo(new List<int> { 5, 6 }));
+        Assert.That(res2.IsSeasonPack, Is.False);
+
+        var res3 = _subject.ExtractEpisodicReleaseInfo("Show.Name.S02E03E04.1080p");
+        Assert.That(res3.SeasonNumber, Is.EqualTo(2));
+        Assert.That(res3.EpisodeNumber, Is.EqualTo(3));
+        Assert.That(res3.EndingEpisodeNumber, Is.EqualTo(4));
+        Assert.That(res3.EpisodeNumbers, Is.EqualTo(new List<int> { 3, 4 }));
+        Assert.That(res3.IsSeasonPack, Is.False);
+    }
+
+    [TestCase("Show.Name.S01.Complete.1080p", 1)]
+    [TestCase("S01 Complete", 1)]
+    [TestCase("Season 2", 2)]
+    [TestCase("Season 2 Complete", 2)]
+    [TestCase("Show.Name.S01", 1)]
+    public void ExtractEpisodicReleaseInfo_should_parse_season_packs(string releaseName, int expectedSeason)
+    {
+        var result = _subject.ExtractEpisodicReleaseInfo(releaseName);
+
+        Assert.That(result.SeasonNumber, Is.EqualTo(expectedSeason));
+        Assert.That(result.EpisodeNumber, Is.Null);
+        Assert.That(result.EpisodeNumbers, Is.Empty);
+        Assert.That(result.IsSeasonPack, Is.True);
+    }
+
+    [TestCase("Blade.Runner.1982.Director's.Cut.1080p.BluRay", "Director's Cut")]
+    [TestCase("Gladiator.2000.Extended.1080p.BluRay", "Extended")]
+    [TestCase("Avatar.2009.Extended.Cut.1080p", "Extended Cut")]
+    [TestCase("The.Terminator.1984.Remastered.1080p.BluRay", "Remastered")]
+    [TestCase("Star.Wars.1977.Theatrical.1080p", "Theatrical")]
+    [TestCase("Apocalypse.Now.1979.Unrated.1080p", "Unrated")]
+    [TestCase("Dune.2021.IMAX.2160p", "IMAX")]
+    [TestCase("Close.Encounters.1977.Special.Edition.1080p", "Special Edition")]
+    [TestCase("Seven.Samurai.1954.Criterion.1080p", "Criterion")]
+    public void ExtractEdition_should_extract_movie_editions(string releaseName, string expectedEdition)
+    {
+        var info = _subject.ExtractEpisodicReleaseInfo(releaseName);
+        var edition = _subject.ExtractEdition(releaseName);
+
+        Assert.That(info.Edition, Is.EqualTo(expectedEdition));
+        Assert.That(edition, Is.EqualTo(expectedEdition));
+    }
 }

@@ -517,6 +517,51 @@ public class MediaEnrichmentServiceTest
         Assert.That(File.Exists(result.PosterLocalPath), Is.True);
     }
 
+    [Test]
+    public async Task EnrichTorrentAsync_SampleFileExclusion_ChoosesPrimaryMediaFileForInspection()
+    {
+        var torrentDir = Path.Combine(_tempDirectory, "Matrix_Release");
+        Directory.CreateDirectory(torrentDir);
+
+        var mainFile = Path.Combine(torrentDir, "The.Matrix.1999.1080p.mkv");
+        var sampleFile = Path.Combine(torrentDir, "sample.mkv");
+        var nfoFile = Path.Combine(torrentDir, "matrix.nfo");
+
+        await File.WriteAllBytesAsync(mainFile, new byte[10000]);
+        await File.WriteAllBytesAsync(sampleFile, new byte[1000]);
+        await File.WriteAllBytesAsync(nfoFile, new byte[100]);
+
+        var torrent = new Torrent { Id = 201, Name = "The.Matrix.1999.1080p.BluRay.x264-GRP" };
+
+        var result = await _service.EnrichTorrentAsync(torrent, sampleFile);
+
+        Assert.That(result, Is.Not.Null);
+        _inspector.Received(1).InspectFile(mainFile);
+        _inspector.DidNotReceive().InspectFile(sampleFile);
+    }
+
+    [Test]
+    public async Task EnrichTorrentAsync_WhenDirectoryPassed_SelectsPrimaryMediaFileAndIgnoresSample()
+    {
+        var torrentDir = Path.Combine(_tempDirectory, "Gladiator_Release");
+        Directory.CreateDirectory(torrentDir);
+
+        var mainFile = Path.Combine(torrentDir, "Gladiator.2000.1080p.mkv");
+        var sampleFile = Path.Combine(torrentDir, "gladiator-sample.mkv");
+
+        await File.WriteAllBytesAsync(mainFile, new byte[10000]);
+        await File.WriteAllBytesAsync(sampleFile, new byte[1000]);
+
+        var torrent = new Torrent { Id = 202, Name = "Gladiator.2000.Extended.1080p.BluRay.x264-GRP" };
+
+        var result = await _service.EnrichTorrentAsync(torrent, torrentDir);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Edition, Is.EqualTo("Extended"));
+        _inspector.Received(1).InspectFile(mainFile);
+        _inspector.DidNotReceive().InspectFile(sampleFile);
+    }
+
     private class RepeatingStream : Stream
     {
         private readonly long _length;

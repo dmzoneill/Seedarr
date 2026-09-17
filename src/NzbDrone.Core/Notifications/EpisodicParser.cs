@@ -9,16 +9,20 @@ namespace NzbDrone.Core.Notifications;
 public class EpisodicParser : IEpisodicParser
 {
     private static readonly Regex SeasonEpisodeRangeRegex = new(
-        @"\bS(?<season>\d{1,2})E(?<ep1>\d{1,3})[-–_~](?:E|e)?(?<ep2>\d{1,3})\b",
+        @"\bS(?<season>\d{1,2})E(?<ep1>\d{1,3})\s*[-–—_~]\s*(?:E|e)?(?<ep2>\d{1,3})\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex SeasonEpisodeAltRangeRegex = new(
-        @"\b(?<season>\d{1,2})x(?<ep1>\d{1,3})[-–](?:\k<season>x|x)?(?<ep2>\d{1,3})\b",
+        @"\b(?<season>\d{1,2})x(?<ep1>\d{1,3})\s*[-–—_~]\s*(?:\k<season>x|x)?(?<ep2>\d{1,3})\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex SeasonEpisodeMultiRegex = new(
-        @"\bS(?<season>\d{1,2})(?<episodes>(?:[._-]?[eE]\d{1,3}){2,})\b",
+        @"\bS(?<season>\d{1,2})(?<episodes>(?:\s*[._-]?\s*[eE]\d{1,3}){2,})\b",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex EditionRegex = new(
+        @"(?i)\b(?<edition>director'?s?[ ._-]?cut|extended(?:[ ._-]?(?:cut|edition))?|theatrical(?:[ ._-]?(?:cut|edition))?|remastered|remaster|unrated|uncut|imax(?:[ ._-]?(?:enhanced|edition))?|special[ ._-]?edition|criterion(?:[ ._-]?collection)?)\b",
+        RegexOptions.Compiled);
 
     private static readonly Regex EpisodeSubRegex = new(
         @"[eE](?<ep>\d{1,3})",
@@ -85,6 +89,78 @@ public class EpisodicParser : IEpisodicParser
         return FormatEtaStatic(seconds);
     }
 
+    public string ExtractEdition(string name)
+    {
+        return ExtractEditionStatic(name);
+    }
+
+    public static string ExtractEditionStatic(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var match = EditionRegex.Match(name);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var val = match.Groups["edition"].Value.ToLowerInvariant().Replace('.', ' ').Replace('_', ' ').Replace('-', ' ');
+        if (val.Contains("director"))
+        {
+            return "Director's Cut";
+        }
+
+        if (val.Contains("extended"))
+        {
+            if (val.Contains("cut"))
+            {
+                return "Extended Cut";
+            }
+
+            if (val.Contains("edition"))
+            {
+                return "Extended Edition";
+            }
+
+            return "Extended";
+        }
+
+        if (val.Contains("theatrical"))
+        {
+            return val.Contains("cut") ? "Theatrical Cut" : "Theatrical";
+        }
+
+        if (val.Contains("remaster"))
+        {
+            return "Remastered";
+        }
+
+        if (val.Contains("unrated") || val.Contains("uncut"))
+        {
+            return "Unrated";
+        }
+
+        if (val.Contains("imax"))
+        {
+            return "IMAX";
+        }
+
+        if (val.Contains("special"))
+        {
+            return "Special Edition";
+        }
+
+        if (val.Contains("criterion"))
+        {
+            return "Criterion";
+        }
+
+        return match.Groups["edition"].Value;
+    }
+
     public static (int? SeasonNumber, int? EpisodeNumber, string EpisodeTitle) ExtractEpisodicInfoStatic(string name)
     {
         var info = ExtractEpisodicReleaseInfoStatic(name);
@@ -98,6 +174,8 @@ public class EpisodicParser : IEpisodicParser
         {
             return info;
         }
+
+        info.Edition = ExtractEditionStatic(name);
 
         var dailyMatch = DailyShowRegex.Match(name);
         if (dailyMatch.Success &&
