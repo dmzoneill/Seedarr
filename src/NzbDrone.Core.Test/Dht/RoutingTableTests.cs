@@ -7,7 +7,7 @@ using NzbDrone.Core.Dht;
 namespace NzbDrone.Core.Test.Dht;
 
 [TestFixture]
-public class RoutingTableTest
+public class RoutingTableTests
 {
     private byte[] _localNodeId;
 
@@ -463,6 +463,174 @@ public class RoutingTableTest
         });
 
         Assert.That(table.NodeCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void CompareDistance_should_order_by_xor_distance_accurately()
+    {
+        var target = new byte[20];
+        target[0] = 0x50;
+
+        var close = new byte[20];
+        close[0] = 0x51; // 0x50 ^ 0x51 = 0x01
+
+        var far = new byte[20];
+        far[0] = 0x5F; // 0x50 ^ 0x5F = 0x0F
+
+        Assert.That(RoutingTable.CompareDistance(close, far, target), Is.LessThan(0));
+        Assert.That(RoutingTable.CompareDistance(far, close, target), Is.GreaterThan(0));
+        Assert.That(RoutingTable.CompareDistance(close, close, target), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void CompareDistance_should_allocate_zero_heap_memory()
+    {
+        var a = new byte[20];
+        var b = new byte[20];
+        var target = new byte[20];
+        a[0] = 0x01;
+        b[0] = 0x02;
+
+        // Warm up JIT
+        RoutingTable.CompareDistance(a, b, target);
+
+        var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+        for (var i = 0; i < 1000; i++)
+        {
+            RoutingTable.CompareDistance(a, b, target);
+        }
+
+        var allocatedAfter = GC.GetAllocatedBytesForCurrentThread();
+
+        Assert.That(allocatedAfter - allocatedBefore, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void GetClosestNodes_when_target_bucket_has_enough_nodes_should_return_nodes_from_target_bucket()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 8);
+
+        // Target corresponds to bucket 0 (differs at bit 0 from local node 0x00)
+        var target = new byte[20];
+        target[0] = 0x80;
+
+        // Add 5 nodes to bucket 0 (nodeId[0] == 0x80)
+        for (var i = 1; i <= 5; i++)
+        {
+            var id = new byte[20];
+            id[0] = 0x80;
+            id[19] = (byte)i;
+            var ip = IPAddress.Parse($"11.1.{i}.1");
+            table.AddNode(CreateNode(id, ip));
+        }
+
+        // Add 3 nodes to bucket 1 (nodeId[0] == 0x40)
+        for (var i = 1; i <= 3; i++)
+        {
+            var id = new byte[20];
+            id[0] = 0x40;
+            id[19] = (byte)i;
+            var ip = IPAddress.Parse($"11.2.{i}.1");
+            table.AddNode(CreateNode(id, ip));
+        }
+
+        // Request 4 nodes (target bucket has 5 >= 4)
+        var closest = table.GetClosestNodes(target, 4);
+
+        Assert.That(closest.Count, Is.EqualTo(4));
+        Assert.That(closest.All(n => n.NodeId[0] == 0x80), Is.True);
+
+        for (var i = 0; i < closest.Count - 1; i++)
+        {
+            Assert.That(RoutingTable.CompareDistance(closest[i].NodeId, closest[i + 1].NodeId, target), Is.LessThanOrEqualTo(0));
+        }
+    }
+
+    [Test]
+    public void GetClosestNodes_when_target_bucket_has_fewer_than_count_nodes_should_expand_outward()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 8);
+
+        // Target corresponds to bucket 0 (nodeId[0] == 0x80)
+        var target = new byte[20];
+        target[0] = 0x80;
+
+        // Bucket 0 has only 2 nodes
+        for (var i = 1; i <= 2; i++)
+        {
+            var id = new byte[20];
+            id[0] = 0x80;
+            id[19] = (byte)i;
+            table.AddNode(CreateNode(id, IPAddress.Parse($"12.1.{i}.1")));
+        }
+
+        // Bucket 1 has 2 nodes
+        for (var i = 1; i <= 2; i++)
+        {
+            var id = new byte[20];
+            id[0] = 0x40;
+            id[19] = (byte)i;
+            table.AddNode(CreateNode(id, IPAddress.Parse($"12.2.{i}.1")));
+        }
+
+        // Bucket 2 has 2 nodes
+        for (var i = 1; i <= 2; i++)
+        {
+            var id = new byte[20];
+            id[0] = 0x20;
+            id[19] = (byte)i;
+            table.AddNode(CreateNode(id, IPAddress.Parse($"12.3.{i}.1")));
+        }
+
+        // Request 5 nodes: 2 from bucket 0, 2 from bucket 1, 1 from bucket 2
+        var closest = table.GetClosestNodes(target, 5);
+
+        Assert.That(closest.Count, Is.EqualTo(5));
+
+        // The 2 nodes from bucket 0 must be closest
+        Assert.That(closest[0].NodeId[0], Is.EqualTo(0x80));
+        Assert.That(closest[1].NodeId[0], Is.EqualTo(0x80));
+
+        // Next 2 nodes from bucket 1
+        Assert.That(closest[2].NodeId[0], Is.EqualTo(0x40));
+        Assert.That(closest[3].NodeId[0], Is.EqualTo(0x40));
+
+        // 5th node from bucket 2
+        Assert.That(closest[4].NodeId[0], Is.EqualTo(0x20));
+
+        // Strictly ordered by distance
+        for (var i = 0; i < closest.Count - 1; i++)
+        {
+            Assert.That(RoutingTable.CompareDistance(closest[i].NodeId, closest[i + 1].NodeId, target), Is.LessThanOrEqualTo(0));
+        }
+    }
+
+    [Test]
+    public void GetClosestNodes_should_return_strictly_ordered_nodes_across_multiple_buckets()
+    {
+        var table = new RoutingTable(_localNodeId, bucketSize: 8);
+        var target = new byte[20];
+        target[0] = 0x37;
+        target[1] = 0xAB;
+
+        for (var i = 1; i <= 30; i++)
+        {
+            var id = new byte[20];
+            id[0] = (byte)((i * 37) % 256);
+            id[1] = (byte)((i * 59) % 256);
+            id[19] = (byte)i;
+            table.AddNode(CreateNode(id, IPAddress.Parse($"13.{(i >> 8) & 0xFF}.{i & 0xFF}.1")));
+        }
+
+        var closest = table.GetClosestNodes(target, 8);
+
+        Assert.That(closest.Count, Is.GreaterThan(0));
+        Assert.That(closest.Count, Is.LessThanOrEqualTo(8));
+
+        for (var i = 0; i < closest.Count - 1; i++)
+        {
+            Assert.That(RoutingTable.CompareDistance(closest[i].NodeId, closest[i + 1].NodeId, target), Is.LessThanOrEqualTo(0));
+        }
     }
 
     private static DhtNode CreateNode(byte[] nodeId, IPAddress ip = null)
