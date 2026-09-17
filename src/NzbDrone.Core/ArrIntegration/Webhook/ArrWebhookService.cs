@@ -134,9 +134,9 @@ public class ArrWebhookService : IArrWebhookService
         }
 
         var isGrab = string.Equals(payload.EventType, "Grab", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(payload.EventType, "MovieGrab", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(payload.EventType, "AlbumGrab", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(payload.EventType, "BookGrab", StringComparison.OrdinalIgnoreCase);
+            string.Equals(payload.EventType, "MovieGrab", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "AlbumGrab", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "BookGrab", StringComparison.OrdinalIgnoreCase);
 
         if (!isGrab)
         {
@@ -326,14 +326,14 @@ public class ArrWebhookService : IArrWebhookService
     {
         if (!string.IsNullOrEmpty(payload.DownloadClientType) &&
             (payload.DownloadClientType.IndexOf("usenet", StringComparison.OrdinalIgnoreCase) >= 0 ||
-             payload.DownloadClientType.IndexOf("nzb", StringComparison.OrdinalIgnoreCase) >= 0))
+                payload.DownloadClientType.IndexOf("nzb", StringComparison.OrdinalIgnoreCase) >= 0))
         {
             return true;
         }
 
         if (!string.IsNullOrEmpty(payload.DownloadClient) &&
             (payload.DownloadClient.IndexOf("sabnzbd", StringComparison.OrdinalIgnoreCase) >= 0 ||
-             payload.DownloadClient.IndexOf("nzbget", StringComparison.OrdinalIgnoreCase) >= 0))
+                payload.DownloadClient.IndexOf("nzbget", StringComparison.OrdinalIgnoreCase) >= 0))
         {
             return true;
         }
@@ -614,7 +614,7 @@ public class ArrWebhookService : IArrWebhookService
         }
 
         var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
+            string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
         var variants = new[] { downloadId };
 
         foreach (var id in variants)
@@ -663,7 +663,7 @@ public class ArrWebhookService : IArrWebhookService
     private async Task<string> GetDownloadUrlFromHistoryAsync(ArrConnectionDefinition connection, string downloadId, CancellationToken cancellationToken)
     {
         var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ||
-                         string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
+            string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
         var variants = new[] { downloadId, downloadId.ToUpperInvariant() };
 
         for (var attempt = 0; attempt < 5; attempt++)

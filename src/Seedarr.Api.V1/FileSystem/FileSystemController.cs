@@ -268,8 +268,8 @@ public class FileSystemController : Controller
             }
 
             result.IsTruncated = hasMoreDirs || hasMoreFiles ||
-                                 (totalDirs > clampedSkip + result.Directories.Count) ||
-                                 (totalFiles > clampedSkip + result.Files.Count);
+                (totalDirs > clampedSkip + result.Directories.Count) ||
+                (totalFiles > clampedSkip + result.Files.Count);
         }
         catch (Exception ex)
         {
