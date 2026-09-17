@@ -16,6 +16,7 @@ public interface IChokeManager
     void ProcessChoking();
     void ProcessRegularUnchoke();
     void ProcessOptimisticUnchoke();
+    void ProcessOptimisticUnchokeForSwarm(string infoHash);
     void PeerConnected(PeerConnection connection);
     void PeerDisconnected(PeerConnection connection);
     void PeerInterestedChanged(PeerConnection connection);
@@ -32,9 +33,13 @@ public class ChokeManager : BackgroundService, IChokeManager
     public const int MinUnchokeDurationSeconds = 20;
     public const int MaxUnchokeLeaseSeconds = 60;
     public const double ChokeHysteresisMargin = 0.15;
+    public const int OptimisticUnchokeRounds = 3;
+    public const int NewPeerThresholdSeconds = 30;
+    public const int NewPeerSelectionWeight = 3;
+    public const int ExistingPeerSelectionWeight = 1;
 
     private const int RegularUnchokeIntervalSeconds = 10;
-    private const int OptimisticUnchokeIntervalSeconds = 30;
+    private const int OptimisticUnchokeIntervalSeconds = 10;
     private const int SnubbingThresholdSeconds = 60;
 
     private readonly IConnectionManager _connectionManager;
@@ -44,6 +49,7 @@ public class ChokeManager : BackgroundService, IChokeManager
     private readonly Logger _logger;
     private readonly object _lock = new();
     private readonly HashSet<string> _explicitSeedingTorrents = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, OptimisticSlot> _optimisticSlots = new(StringComparer.OrdinalIgnoreCase);
 
     private DateTime _lastRegularUnchoke = DateTime.MinValue;
     private DateTime _lastOptimisticUnchoke = DateTime.MinValue;
@@ -63,7 +69,7 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.Info("ChokeManager service started with 10s regular and 30s optimistic unchoke timers.");
+        _logger.Info("ChokeManager service started with 10s regular unchoke and 30s optimistic unchoke cycle (3 rounds).");
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -292,6 +298,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                     if (isOptimistic && !string.IsNullOrEmpty(conn.InfoHash))
                     {
                         promotedSwarms.Add(conn.InfoHash);
+                        ClearOptimisticSlot(conn.InfoHash, conn);
                     }
 
                     conn.IsOptimisticUnchoked = false;
@@ -311,30 +318,9 @@ public class ChokeManager : BackgroundService, IChokeManager
 
             if (maxUploadSlots > 1 && promotedSwarms.Count > 0)
             {
-                foreach (var group in byTorrent)
+                foreach (var infoHash in promotedSwarms)
                 {
-                    if (!promotedSwarms.Contains(group.Key))
-                    {
-                        continue;
-                    }
-
-                    var hasOptimisticPeer = group.Any(c => c.IsOptimisticUnchoked && !c.AmChoking);
-                    if (!hasOptimisticPeer)
-                    {
-                        var eligibleCandidates = group
-                            .Where(c => !selectedRegular.Contains(c) && c.PeerInterested && c.AmChoking)
-                            .ToList();
-
-                        if (eligibleCandidates.Count > 0)
-                        {
-                            var chosenIndex = _random.Next(0, eligibleCandidates.Count);
-                            var chosen = eligibleCandidates[chosenIndex];
-
-                            chosen.IsOptimisticUnchoked = true;
-                            _logger.Debug("Immediately elected replacement optimistic peer {0}:{1} for torrent {2}", chosen.RemoteIp, chosen.RemotePort, group.Key);
-                            Unchoke(chosen);
-                        }
-                    }
+                    ProcessOptimisticUnchokeForSwarmInternal(infoHash, connections, advanceRound: false);
                 }
             }
         }
@@ -350,55 +336,35 @@ public class ChokeManager : BackgroundService, IChokeManager
                 return;
             }
 
-            var maxUploadSlots = _connectionManager != null
-                ? _connectionManager.GetDynamicUploadSlotCount(connections.FirstOrDefault(c => !string.IsNullOrEmpty(c.InfoHash))?.InfoHash)
-                : _configService.MaxUploadSlots;
-            if (maxUploadSlots <= 0)
-            {
-                maxUploadSlots = _configService.MaxUploadSlots;
-            }
-
-            if (maxUploadSlots <= 1)
-            {
-                return;
-            }
-
             var byTorrent = connections
                 .Where(c => !string.IsNullOrEmpty(c.InfoHash))
-                .GroupBy(c => c.InfoHash, StringComparer.OrdinalIgnoreCase);
+                .GroupBy(c => c.InfoHash, StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-            // Clear previous optimistic peer flag
-            foreach (var conn in connections)
+            var activeInfoHashes = new HashSet<string>(byTorrent.Select(g => g.Key), StringComparer.OrdinalIgnoreCase);
+            var toRemove = _optimisticSlots.Keys.Where(k => !activeInfoHashes.Contains(k)).ToList();
+            foreach (var k in toRemove)
             {
-                if (conn.IsOptimisticUnchoked)
-                {
-                    conn.IsOptimisticUnchoked = false;
-
-                    // If not regular unchoked, choke it
-                    Choke(conn);
-                }
+                _optimisticSlots.Remove(k);
             }
 
             foreach (var group in byTorrent)
             {
-                // Find all interested peers that are currently choked in this torrent swarm (excluding seeds)
-                var chokedInterested = group
-                    .Where(c => c.PeerInterested && c.AmChoking && !c.IsSeed)
-                    .ToList();
-
-                if (chokedInterested.Count == 0)
-                {
-                    continue;
-                }
-
-                // Pick a random choked interested peer for optimistic unchoke in this swarm
-                var chosenIndex = _random.Next(0, chokedInterested.Count);
-                var chosen = chokedInterested[chosenIndex];
-
-                chosen.IsOptimisticUnchoked = true;
-                _logger.Debug("Optimistically unchoking peer {0}:{1} for torrent {2}", chosen.RemoteIp, chosen.RemotePort, group.Key);
-                Unchoke(chosen);
+                ProcessOptimisticUnchokeForSwarmInternal(group.Key, connections, advanceRound: true);
             }
+        }
+    }
+
+    public void ProcessOptimisticUnchokeForSwarm(string infoHash)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            ProcessOptimisticUnchokeForSwarmInternal(infoHash, null, advanceRound: false);
         }
     }
 
@@ -410,6 +376,32 @@ public class ChokeManager : BackgroundService, IChokeManager
 
     public void PeerDisconnected(PeerConnection connection)
     {
+        if (connection == null)
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            var infoHash = connection.InfoHash;
+            if (connection.IsOptimisticUnchoked)
+            {
+                connection.IsOptimisticUnchoked = false;
+                Choke(connection);
+                if (!string.IsNullOrEmpty(infoHash))
+                {
+                    ClearOptimisticSlot(infoHash, connection);
+                    ProcessOptimisticUnchokeForSwarmInternal(infoHash, null, advanceRound: false, excludedPeer: connection);
+                }
+            }
+            else if (!connection.AmChoking)
+            {
+                if (!string.IsNullOrEmpty(infoHash))
+                {
+                    PromoteNextEligibleChokedPeer(infoHash, excludedPeer: connection);
+                }
+            }
+        }
     }
 
     public void PeerInterestedChanged(PeerConnection connection)
@@ -419,32 +411,68 @@ public class ChokeManager : BackgroundService, IChokeManager
             return;
         }
 
-        if (connection.IsSeed)
+        lock (_lock)
         {
-            if (!connection.AmChoking)
+            if (connection.IsSeed)
             {
-                connection.IsOptimisticUnchoked = false;
-                Choke(connection);
-                PromoteNextEligibleChokedPeer(connection.InfoHash);
+                if (!connection.AmChoking)
+                {
+                    var wasOptimistic = connection.IsOptimisticUnchoked;
+                    connection.IsOptimisticUnchoked = false;
+                    Choke(connection);
+                    if (wasOptimistic)
+                    {
+                        if (!string.IsNullOrEmpty(connection.InfoHash))
+                        {
+                            ClearOptimisticSlot(connection.InfoHash, connection);
+                            ProcessOptimisticUnchokeForSwarmInternal(connection.InfoHash, null, advanceRound: false, excludedPeer: connection);
+                        }
+                    }
+                    else
+                    {
+                        PromoteNextEligibleChokedPeer(connection.InfoHash, excludedPeer: connection);
+                    }
+                }
+
+                return;
             }
 
-            return;
-        }
-
-        if (connection.PeerInterested)
-        {
-            if (CanUnchoke(connection))
+            if (connection.PeerInterested)
             {
-                Unchoke(connection);
+                if (CanUnchoke(connection))
+                {
+                    Unchoke(connection);
+                }
             }
-        }
-        else
-        {
-            if (!connection.AmChoking)
+            else
             {
-                connection.IsOptimisticUnchoked = false;
-                Choke(connection);
-                PromoteNextEligibleChokedPeer(connection.InfoHash);
+                if (!connection.AmChoking)
+                {
+                    var wasOptimistic = connection.IsOptimisticUnchoked;
+                    connection.IsOptimisticUnchoked = false;
+                    Choke(connection);
+                    if (wasOptimistic)
+                    {
+                        if (!string.IsNullOrEmpty(connection.InfoHash))
+                        {
+                            ClearOptimisticSlot(connection.InfoHash, connection);
+                            ProcessOptimisticUnchokeForSwarmInternal(connection.InfoHash, null, advanceRound: false, excludedPeer: connection);
+                        }
+                    }
+                    else
+                    {
+                        PromoteNextEligibleChokedPeer(connection.InfoHash, excludedPeer: connection);
+                    }
+                }
+                else if (connection.IsOptimisticUnchoked)
+                {
+                    connection.IsOptimisticUnchoked = false;
+                    if (!string.IsNullOrEmpty(connection.InfoHash))
+                    {
+                        ClearOptimisticSlot(connection.InfoHash, connection);
+                        ProcessOptimisticUnchokeForSwarmInternal(connection.InfoHash, null, advanceRound: false, excludedPeer: connection);
+                    }
+                }
             }
         }
     }
@@ -462,9 +490,21 @@ public class ChokeManager : BackgroundService, IChokeManager
         {
             if (!connection.AmChoking)
             {
+                var wasOptimistic = connection.IsOptimisticUnchoked;
                 connection.IsOptimisticUnchoked = false;
                 Choke(connection);
-                PromoteNextEligibleChokedPeer(connection.InfoHash);
+                if (wasOptimistic)
+                {
+                    if (!string.IsNullOrEmpty(connection.InfoHash))
+                    {
+                        ClearOptimisticSlot(connection.InfoHash, connection);
+                        ProcessOptimisticUnchokeForSwarmInternal(connection.InfoHash, null, advanceRound: false, excludedPeer: connection);
+                    }
+                }
+                else
+                {
+                    PromoteNextEligibleChokedPeer(connection.InfoHash, excludedPeer: connection);
+                }
             }
         }
     }
@@ -568,7 +608,7 @@ public class ChokeManager : BackgroundService, IChokeManager
         }
     }
 
-    private void PromoteNextEligibleChokedPeer(string infoHash)
+    private void PromoteNextEligibleChokedPeer(string infoHash, PeerConnection excludedPeer = null)
     {
         if (string.IsNullOrEmpty(infoHash))
         {
@@ -592,7 +632,7 @@ public class ChokeManager : BackgroundService, IChokeManager
 
             var isSeeding = IsTorrentSeeding(infoHash);
             var eligibleCandidates = torrentConnections
-                .Where(c => c.PeerInterested && c.AmChoking && !c.IsSnubbed && !c.IsSeed);
+                .Where(c => !ReferenceEquals(c, excludedPeer) && c.PeerInterested && c.AmChoking && !c.IsSnubbed && !c.IsSeed);
 
             var nextPeer = isSeeding
                 ? eligibleCandidates
@@ -613,6 +653,213 @@ public class ChokeManager : BackgroundService, IChokeManager
                 Unchoke(nextPeer);
             }
         }
+    }
+
+    private void ClearOptimisticSlot(string infoHash, PeerConnection connection)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return;
+        }
+
+        if (_optimisticSlots.TryGetValue(infoHash, out var slot) && (slot.Peer == null || ReferenceEquals(slot.Peer, connection)))
+        {
+            _optimisticSlots.Remove(infoHash);
+        }
+    }
+
+    private void ProcessOptimisticUnchokeForSwarmInternal(
+        string infoHash,
+        List<PeerConnection> allConnections,
+        bool advanceRound,
+        PeerConnection excludedPeer = null)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return;
+        }
+
+        var maxUploadSlots = _connectionManager != null
+            ? _connectionManager.GetDynamicUploadSlotCount(infoHash)
+            : _configService.MaxUploadSlots;
+        if (maxUploadSlots <= 0)
+        {
+            maxUploadSlots = _configService.MaxUploadSlots;
+        }
+
+        if (maxUploadSlots <= 1)
+        {
+            if (_optimisticSlots.TryGetValue(infoHash, out var existingSlot))
+            {
+                if (existingSlot.Peer != null && existingSlot.Peer.IsOptimisticUnchoked)
+                {
+                    existingSlot.Peer.IsOptimisticUnchoked = false;
+                    Choke(existingSlot.Peer);
+                }
+
+                _optimisticSlots.Remove(infoHash);
+            }
+
+            return;
+        }
+
+        var swarmConnections = (allConnections != null
+            ? allConnections.Where(c => string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase))
+            : (_connectionManager.GetConnections(infoHash) ?? _connectionManager.GetAllConnections().Where(c => string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase))))
+            .ToList();
+
+        OptimisticSlot slot = null;
+        if (_optimisticSlots.TryGetValue(infoHash, out var trackedSlot))
+        {
+            slot = trackedSlot;
+        }
+        else
+        {
+            var existingPeer = swarmConnections.FirstOrDefault(c =>
+                !ReferenceEquals(c, excludedPeer) &&
+                c.IsOptimisticUnchoked &&
+                !c.AmChoking &&
+                c.PeerInterested &&
+                !c.IsSeed);
+
+            if (existingPeer != null)
+            {
+                slot = new OptimisticSlot
+                {
+                    Peer = existingPeer,
+                    RoundsRemaining = OptimisticUnchokeRounds
+                };
+                _optimisticSlots[infoHash] = slot;
+            }
+        }
+
+        var isPeerValid = slot != null &&
+                          slot.Peer != null &&
+                          !ReferenceEquals(slot.Peer, excludedPeer) &&
+                          slot.Peer.IsOptimisticUnchoked &&
+                          !slot.Peer.AmChoking &&
+                          slot.Peer.PeerInterested &&
+                          !slot.Peer.IsSeed &&
+                          swarmConnections.Contains(slot.Peer);
+
+        PeerConnection previousPeer = null;
+
+        if (isPeerValid)
+        {
+            if (advanceRound)
+            {
+                slot.RoundsRemaining--;
+                if (slot.RoundsRemaining > 0)
+                {
+                    _logger.Debug(
+                        "Retaining optimistic unchoke peer {0}:{1} for swarm {2} ({3} rounds remaining)",
+                        slot.Peer.RemoteIp,
+                        slot.Peer.RemotePort,
+                        infoHash,
+                        slot.RoundsRemaining);
+                    return;
+                }
+
+                _logger.Debug(
+                    "Optimistic unchoke persistence expired (3 rounds) for peer {0}:{1} on swarm {2}. Rotating.",
+                    slot.Peer.RemoteIp,
+                    slot.Peer.RemotePort,
+                    infoHash);
+                previousPeer = slot.Peer;
+                previousPeer.IsOptimisticUnchoked = false;
+                Choke(previousPeer);
+                _optimisticSlots.Remove(infoHash);
+                slot = null;
+            }
+            else
+            {
+                return;
+            }
+        }
+        else
+        {
+            if (slot != null)
+            {
+                _optimisticSlots.Remove(infoHash);
+                slot = null;
+            }
+        }
+
+        var candidates = swarmConnections
+            .Where(c => !ReferenceEquals(c, excludedPeer) &&
+                        c.PeerInterested &&
+                        c.AmChoking &&
+                        !c.IsSeed &&
+                        !c.IsOptimisticUnchoked)
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            return;
+        }
+
+        var candidatePool = (candidates.Count > 1 && previousPeer != null)
+            ? candidates.Where(c => !ReferenceEquals(c, previousPeer)).ToList()
+            : candidates;
+
+        if (candidatePool.Count == 0)
+        {
+            candidatePool = candidates;
+        }
+
+        var chosen = SelectOptimisticCandidate(candidatePool);
+        if (chosen != null)
+        {
+            chosen.IsOptimisticUnchoked = true;
+            _optimisticSlots[infoHash] = new OptimisticSlot
+            {
+                Peer = chosen,
+                RoundsRemaining = OptimisticUnchokeRounds
+            };
+
+            _logger.Debug("Optimistically unchoking peer {0}:{1} for torrent {2}", chosen.RemoteIp, chosen.RemotePort, infoHash);
+            Unchoke(chosen);
+        }
+    }
+
+    private PeerConnection SelectOptimisticCandidate(List<PeerConnection> candidates)
+    {
+        if (candidates == null || candidates.Count == 0)
+        {
+            return null;
+        }
+
+        if (candidates.Count == 1)
+        {
+            return candidates[0];
+        }
+
+        var cutoff = DateTime.UtcNow - TimeSpan.FromSeconds(NewPeerThresholdSeconds);
+        var totalWeight = 0;
+        foreach (var c in candidates)
+        {
+            totalWeight += (c.ConnectedAt > cutoff) ? NewPeerSelectionWeight : ExistingPeerSelectionWeight;
+        }
+
+        var sample = _random.Next(0, totalWeight);
+        var running = 0;
+        foreach (var c in candidates)
+        {
+            var weight = (c.ConnectedAt > cutoff) ? NewPeerSelectionWeight : ExistingPeerSelectionWeight;
+            running += weight;
+            if (sample < running)
+            {
+                return c;
+            }
+        }
+
+        return candidates.Last();
+    }
+
+    private sealed class OptimisticSlot
+    {
+        public PeerConnection Peer { get; set; }
+        public int RoundsRemaining { get; set; }
     }
 
     private void Unchoke(PeerConnection connection)

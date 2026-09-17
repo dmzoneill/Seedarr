@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
 
@@ -538,5 +539,188 @@ public class ChokeManagerTest
         // peer2 should displace peer1 because max lease expired
         Assert.That(peer1.AmChoking, Is.True);
         Assert.That(peer2.AmChoking, Is.False);
+    }
+
+    [Test]
+    public void ProcessOptimisticUnchoke_should_preserve_optimistic_peer_across_multiple_rounds_and_rotate_after_three_rounds()
+    {
+        _configService.MaxUploadSlots.Returns(4);
+
+        var peer1 = CreatePeer("hashA", 1001);
+        var peer2 = CreatePeer("hashA", 1002);
+        var peer3 = CreatePeer("hashA", 1003);
+
+        // Round 1: first optimistic unchoke election
+        _subject.ProcessOptimisticUnchoke();
+
+        var round1Optimistic = _connections.Single(c => c.IsOptimisticUnchoked);
+        Assert.That(round1Optimistic.AmChoking, Is.False);
+
+        // Round 2: 3-round persistence preserves the optimistic peer
+        _subject.ProcessOptimisticUnchoke();
+        Assert.That(_connections.Single(c => c.IsOptimisticUnchoked), Is.SameAs(round1Optimistic));
+        Assert.That(round1Optimistic.AmChoking, Is.False);
+
+        // Round 3: 3-round persistence preserves the optimistic peer
+        _subject.ProcessOptimisticUnchoke();
+        Assert.That(_connections.Single(c => c.IsOptimisticUnchoked), Is.SameAs(round1Optimistic));
+        Assert.That(round1Optimistic.AmChoking, Is.False);
+
+        // Round 4: 3 rounds completed -> rotation occurs to a new peer
+        _subject.ProcessOptimisticUnchoke();
+        var round4Optimistic = _connections.Single(c => c.IsOptimisticUnchoked);
+        Assert.That(round4Optimistic, Is.Not.SameAs(round1Optimistic));
+        Assert.That(round4Optimistic.AmChoking, Is.False);
+        Assert.That(round1Optimistic.IsOptimisticUnchoked, Is.False);
+        Assert.That(round1Optimistic.AmChoking, Is.True);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_immediately_reallocate_optimistic_slot_when_optimistic_peer_is_promoted()
+    {
+        _configService.MaxUploadSlots.Returns(3); // 2 regular slots + 1 optimistic slot
+
+        var peer1 = CreatePeer("hashA", 1001, rate: 50);  // initial optimistic
+        var peer2 = CreatePeer("hashA", 1002, rate: 300); // regular
+        var peer3 = CreatePeer("hashA", 1003, rate: 200); // regular
+        var peer4 = CreatePeer("hashA", 1004, rate: 100); // choked candidate
+
+        peer1.IsOptimisticUnchoked = true;
+        peer1.AmChoking = false;
+        peer2.AmChoking = false;
+        peer3.AmChoking = false;
+        peer4.AmChoking = true;
+
+        // Peer 1 ramps up transfer rate and outperforms regular peers
+        peer1.UploadRate = 500;
+
+        _subject.ProcessRegularUnchoke();
+
+        // Peer 1 should now be promoted to regular unchoke (IsOptimisticUnchoked cleared to false)
+        Assert.That(peer1.AmChoking, Is.False);
+        Assert.That(peer1.IsOptimisticUnchoked, Is.False);
+
+        // An optimistic unchoke slot must have been immediately reallocated to one of the choked candidates
+        var optimisticPeers = _connections.Where(c => c.InfoHash == "hashA" && c.IsOptimisticUnchoked).ToList();
+        Assert.That(optimisticPeers.Count, Is.EqualTo(1));
+        var newOptimistic = optimisticPeers.Single();
+        Assert.That(newOptimistic.AmChoking, Is.False);
+        Assert.That(new[] { peer3, peer4 }, Does.Contain(newOptimistic));
+
+        // Total active unchoked slots must remain at maxUploadSlots (3)
+        var totalUnchoked = _connections.Where(c => c.InfoHash == "hashA" && !c.AmChoking).ToList();
+        Assert.That(totalUnchoked.Count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void PeerDisconnected_should_immediately_reallocate_optimistic_slot_when_optimistic_peer_disconnects()
+    {
+        _configService.MaxUploadSlots.Returns(3);
+
+        var peer1 = CreatePeer("hashA", 1001);
+        var peer2 = CreatePeer("hashA", 1002);
+        var peer3 = CreatePeer("hashA", 1003);
+
+        // Unchoke an optimistic peer
+        _subject.ProcessOptimisticUnchoke();
+        var optimisticPeer = _connections.Single(c => c.IsOptimisticUnchoked);
+        Assert.That(optimisticPeer.AmChoking, Is.False);
+
+        // Optimistic peer disconnects
+        _subject.PeerDisconnected(optimisticPeer);
+
+        // Disconnected peer must no longer be optimistic
+        Assert.That(optimisticPeer.IsOptimisticUnchoked, Is.False);
+
+        // A new optimistic peer must have been immediately reallocated from the remaining peers
+        var remainingOptimistic = _connections.Where(c => c.InfoHash == "hashA" && c.IsOptimisticUnchoked).ToList();
+        Assert.That(remainingOptimistic.Count, Is.EqualTo(1));
+        var replacement = remainingOptimistic.Single();
+        Assert.That(replacement, Is.Not.SameAs(optimisticPeer));
+        Assert.That(replacement.AmChoking, Is.False);
+    }
+
+    [Test]
+    public void PeerInterestedChanged_should_immediately_reallocate_optimistic_slot_when_optimistic_peer_becomes_uninterested()
+    {
+        _configService.MaxUploadSlots.Returns(3);
+
+        var peer1 = CreatePeer("hashA", 1001);
+        var peer2 = CreatePeer("hashA", 1002);
+        var peer3 = CreatePeer("hashA", 1003);
+
+        // Unchoke an optimistic peer
+        _subject.ProcessOptimisticUnchoke();
+        var optimisticPeer = _connections.Single(c => c.IsOptimisticUnchoked);
+        Assert.That(optimisticPeer.AmChoking, Is.False);
+
+        // Optimistic peer sends NotInterested
+        optimisticPeer.PeerInterested = false;
+        _subject.PeerInterestedChanged(optimisticPeer);
+
+        // The uninterested peer must be choked and lose optimistic flag
+        Assert.That(optimisticPeer.AmChoking, Is.True);
+        Assert.That(optimisticPeer.IsOptimisticUnchoked, Is.False);
+
+        // A new optimistic peer must have been immediately reallocated from interested peers
+        var remainingOptimistic = _connections.Where(c => c.InfoHash == "hashA" && c.IsOptimisticUnchoked).ToList();
+        Assert.That(remainingOptimistic.Count, Is.EqualTo(1));
+        var replacement = remainingOptimistic.Single();
+        Assert.That(replacement, Is.Not.SameAs(optimisticPeer));
+        Assert.That(replacement.AmChoking, Is.False);
+        Assert.That(replacement.PeerInterested, Is.True);
+    }
+
+    [Test]
+    public void ProcessOptimisticUnchoke_should_weight_new_peers_three_times_more_than_existing_peers()
+    {
+        var mockRandom = Substitute.For<IRandomNumberGenerator>();
+        var manager = new ChokeManager(_connectionManager, _configService, random: mockRandom);
+
+        _configService.MaxUploadSlots.Returns(2);
+
+        // 1 existing peer (connected 60s ago, weight 1)
+        var existingPeer = CreatePeer("hashA", 1001);
+        existingPeer.ConnectedAt = DateTime.UtcNow.AddSeconds(-60);
+
+        // 1 new peer (connected 10s ago, weight 3)
+        var newPeer = CreatePeer("hashA", 1002);
+        newPeer.ConnectedAt = DateTime.UtcNow.AddSeconds(-10);
+
+        // Total weight = 1 + 3 = 4.
+        // Sample 0: existingPeer (weight 1)
+        // Samples 1, 2, 3: newPeer (weight 3) -> 3x selection probability
+        mockRandom.Next(0, 4).Returns(1);
+        manager.ProcessOptimisticUnchoke();
+        Assert.That(newPeer.IsOptimisticUnchoked, Is.True);
+        Assert.That(existingPeer.IsOptimisticUnchoked, Is.False);
+
+        // Reset and test that sample 0 picks existingPeer
+        newPeer.IsOptimisticUnchoked = false;
+        newPeer.AmChoking = true;
+        mockRandom.Next(0, 4).Returns(0);
+        manager.ProcessOptimisticUnchoke();
+        Assert.That(existingPeer.IsOptimisticUnchoked, Is.True);
+        Assert.That(newPeer.IsOptimisticUnchoked, Is.False);
+    }
+
+    [Test]
+    public void ProcessOptimisticUnchoke_should_track_optimistic_slots_independently_per_swarm()
+    {
+        _configService.MaxUploadSlots.Returns(4);
+
+        for (var i = 1; i <= 3; i++)
+        {
+            CreatePeer("hashA", 1000 + i);
+            CreatePeer("hashB", 2000 + i);
+        }
+
+        _subject.ProcessOptimisticUnchoke();
+
+        var optimisticA = _connections.Single(c => c.InfoHash == "hashA" && c.IsOptimisticUnchoked);
+        var optimisticB = _connections.Single(c => c.InfoHash == "hashB" && c.IsOptimisticUnchoked);
+
+        Assert.That(optimisticA.AmChoking, Is.False);
+        Assert.That(optimisticB.AmChoking, Is.False);
     }
 }
