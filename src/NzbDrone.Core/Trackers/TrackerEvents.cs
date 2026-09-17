@@ -78,3 +78,21 @@ public class TrackerMetricUpdatedEvent : IEvent
         Status = status;
     }
 }
+
+public class TrackerWarningEvent : IEvent
+{
+    public Torrent Torrent { get; set; }
+    public string TrackerUrl { get; set; }
+    public string WarningMessage { get; set; }
+
+    public TrackerWarningEvent()
+    {
+    }
+
+    public TrackerWarningEvent(Torrent torrent, string trackerUrl, string warningMessage)
+    {
+        Torrent = torrent;
+        TrackerUrl = trackerUrl;
+        WarningMessage = warningMessage;
+    }
+}

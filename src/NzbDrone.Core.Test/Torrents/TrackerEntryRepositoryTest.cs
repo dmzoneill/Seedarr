@@ -51,7 +51,8 @@ public class TrackerEntryRepositoryTest
                 ""NextAnnounce"" TEXT,
                 ""ErrorMessage"" TEXT,
                 ""LastErrorTime"" TEXT,
-                ""WarningMessage"" TEXT
+                ""WarningMessage"" TEXT,
+                ""LastAnnouncedUploaded"" INTEGER NOT NULL DEFAULT 0
             )";
         cmd.ExecuteNonQuery();
 

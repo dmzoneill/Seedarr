@@ -743,6 +743,7 @@ export interface TrackerEntry {
   nextAnnounce: string | null;
   errorMessage: string | null;
   warningMessage: string | null;
+  lastAnnouncedUploaded: number;
 }
 
 export interface TrackerServerTorrent {

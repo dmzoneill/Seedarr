@@ -40,6 +40,8 @@ public class TrackerAnnounceResult
     public int AnnounceInterval { get; set; }
     public long ResponseTimeMs { get; set; }
     public string FailureReason { get; set; }
+    public string WarningMessage { get; set; }
+    public long LastAnnouncedUploaded { get; set; }
 }
 
 public class TrackerAnnounceService : ITrackerAnnounceService,
@@ -77,6 +79,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     public int PendingStaggeredAnnounces => _staggeredQueue.Count;
     public bool IsStaggeredAnnounceScheduled => _staggeredCts != null && !_staggeredCts.IsCancellationRequested;
     internal Func<TimeSpan, CancellationToken, Task> DelayAsync = Task.Delay;
+    internal Func<double, int, double> JitterCalculator { get; set; } = (interval, minInterval) => CalculateJitteredInterval(interval, minInterval);
 
     public TrackerAnnounceService(
         ITrackerEntryService trackerEntryService,
@@ -129,6 +132,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     {
         var results = new List<TrackerAnnounceResult>();
         if (torrent == null || string.IsNullOrWhiteSpace(torrent.InfoHash))
+        {
+            return results;
+        }
+
+        if (!force && torrent.Status == TorrentStatus.Paused && eventType != AnnounceEvent.Stopped)
         {
             return results;
         }
@@ -188,6 +196,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             var result = ExecuteAnnounce(torrent, entry, isFirstAnnounce, eventType);
             results.Add(result);
 
+            if (torrent.Status == TorrentStatus.Paused && !string.IsNullOrWhiteSpace(entry.WarningMessage))
+            {
+                break;
+            }
+
             if (torrent.IsPrivate && result.Success)
             {
                 break;
@@ -202,6 +215,16 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         if (torrent == null || entry == null || string.IsNullOrWhiteSpace(entry.Url))
         {
             return new TrackerAnnounceResult { Success = false, FailureReason = "Invalid torrent or tracker" };
+        }
+
+        if (!force && !entry.Enabled)
+        {
+            return new TrackerAnnounceResult { Success = false, FailureReason = "Tracker is disabled" };
+        }
+
+        if (!force && torrent.Status == TorrentStatus.Paused && eventType != AnnounceEvent.Stopped)
+        {
+            return new TrackerAnnounceResult { Success = false, FailureReason = "Torrent is paused" };
         }
 
         if (IsVpnBlocked(torrent))
@@ -271,10 +294,12 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         var left = announceEvent == AnnounceEvent.Completed ? 0 : Math.Max(0, torrent.TotalSize - torrent.Downloaded);
         var eventName = announceEvent != AnnounceEvent.None ? announceEvent.ToString().ToLowerInvariant() : "regular";
 
+        var uploadedBytes = Math.Max(torrent.Uploaded, entry.LastAnnouncedUploaded);
+
         _eventLogService.Info(
             torrent.Id,
             "Tracker",
-            $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {torrent.Uploaded:N0} bytes, left: {left:N0} bytes)");
+            $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {uploadedBytes:N0} bytes, left: {left:N0} bytes)");
 
         var session = (_clientBehaviorSimulator != null && !_configService.AnonymousMode)
             ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
@@ -309,7 +334,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             UserAgent = userAgent,
             Key = announceKey,
             Port = _configService.ListeningPort,
-            Uploaded = torrent.Uploaded,
+            Uploaded = uploadedBytes,
             Downloaded = torrent.Downloaded,
             Left = left,
             Event = announceEvent,
@@ -317,7 +342,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             Compact = true,
             NumWant = isStopped ? 0 : 50,
             IsPrivate = torrent.IsPrivate,
-            ClientProfile = profile
+            ClientProfile = profile,
+            LastAnnouncedUploaded = entry.LastAnnouncedUploaded
         };
 
         var announceList = new List<List<string>>
@@ -332,7 +358,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         _trackerMetricService?.RecordAnnounce(
             entry.Url,
             torrent.Id,
-            torrent.Uploaded,
+            uploadedBytes,
             torrent.Downloaded,
             left,
             sw.ElapsedMilliseconds,
@@ -354,25 +380,65 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             Seeders = response.Complete,
             Leechers = response.Incomplete,
             PeersDiscovered = response.Peers?.Count ?? 0,
-            FailureReason = response.FailureReason
+            FailureReason = response.FailureReason,
+            WarningMessage = response.WarningMessage,
+            LastAnnouncedUploaded = entry.LastAnnouncedUploaded
         };
 
-        if (response.Success)
+        if (HasWarningOrAntiCheat(response, out var warningText))
+        {
+            var oldStatus = torrent.Status;
+            torrent.Status = TorrentStatus.Paused;
+            torrent.ErrorMessage = $"Circuit breaker tripped: {warningText}";
+            _torrentService?.Update(torrent);
+
+            entry.Status = TrackerStatus.Disabled;
+            entry.Enabled = false;
+            entry.NextAnnounce = null;
+            entry.WarningMessage = warningText;
+            entry.ErrorMessage = $"Circuit breaker tripped: {warningText}";
+            entry.LastErrorTime = DateTime.UtcNow;
+            entry.LastAnnounce = DateTime.UtcNow;
+            entry.LastAnnouncedUploaded = request.Uploaded;
+            _trackerEntryService.Update(entry);
+
+            _logger.Error("Circuit breaker tripped for torrent {0} ({1}) on tracker {2}: {3}", torrent.Name, torrent.InfoHash, entry.Url, warningText);
+            _eventLogService.Error(
+                torrent.Id,
+                "Tracker",
+                $"CRITICAL: Tracker safety circuit breaker tripped for {entry.Url}: {warningText}. Pausing torrent and suspending automated announces.");
+
+            _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused, $"Circuit breaker tripped: {warningText}"));
+            _eventAggregator?.PublishEvent(new HealthIssueEvent(torrent, "TrackerSafety", $"Circuit breaker tripped on {entry.Url}: {warningText}", isResolved: false));
+            _eventAggregator?.PublishEvent(new TrackerWarningEvent(torrent, entry.Url, warningText));
+
+            result.Success = false;
+            result.FailureReason = $"Circuit breaker tripped: {warningText}";
+            result.WarningMessage = warningText;
+            result.LastAnnouncedUploaded = request.Uploaded;
+        }
+        else if (response.Success)
         {
             entry.Status = TrackerStatus.Working;
             entry.Seeders = response.Complete;
             entry.Leechers = response.Incomplete;
             entry.LastAnnounce = DateTime.UtcNow;
+            entry.LastAnnouncedUploaded = request.Uploaded;
             var interval = response.Interval > 0 ? response.Interval : (_configService.AnnounceIntervalSeconds > 0 ? _configService.AnnounceIntervalSeconds : 1800);
             entry.AnnounceInterval = interval;
             entry.MinAnnounceInterval = response.MinInterval > 0 ? response.MinInterval : 900;
-            entry.NextAnnounce = DateTime.UtcNow.AddSeconds(interval);
+            var jitteredInterval = JitterCalculator != null
+                ? JitterCalculator(interval, response.MinInterval)
+                : CalculateJitteredInterval(interval, response.MinInterval);
+            entry.NextAnnounce = DateTime.UtcNow.AddSeconds(jitteredInterval);
             entry.SuccessfulAnnounces++;
             entry.ConsecutiveFailures = 0;
             entry.ErrorMessage = null;
+            entry.WarningMessage = null;
             _trackerEntryService.Update(entry);
 
             result.AnnounceInterval = interval;
+            result.LastAnnouncedUploaded = request.Uploaded;
 
             _eventLogService.Info(
                 torrent.Id,
@@ -410,6 +476,72 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         _eventAggregator?.PublishEvent(new TrackerAnnounceEvent(torrent, entry.Url, response.Complete, response.Incomplete, response.Peers?.Count ?? 0, sw.ElapsedMilliseconds, response.Success, response.FailureReason));
 
         return result;
+    }
+
+    public static double CalculateJitteredInterval(double interval, int minInterval = 0, double? jitterFraction = null)
+    {
+        if (interval <= 0)
+        {
+            return 1.0;
+        }
+
+        // Pseudo-random jitter between -5% (-0.05) and +5% (+0.05)
+        var fraction = jitterFraction ?? ((Random.Shared.NextDouble() * 0.10) - 0.05);
+
+        // Clamp fraction to [-0.05, 0.05]
+        fraction = Math.Clamp(fraction, -0.05, 0.05);
+
+        var jittered = interval * (1.0 + fraction);
+
+        // Clamped so interval never drops below min_interval if provided by tracker
+        if (minInterval > 0 && jittered < minInterval)
+        {
+            jittered = minInterval;
+        }
+
+        // Ensure interval is positive and NextAnnounce is strictly in the future
+        return Math.Max(1.0, jittered);
+    }
+
+    public static bool HasWarningOrAntiCheat(TrackerAnnounceResponse response, out string warningText)
+    {
+        if (response != null)
+        {
+            if (!string.IsNullOrWhiteSpace(response.WarningMessage))
+            {
+                warningText = response.WarningMessage;
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(response.FailureReason) && IsAntiCheatWarning(response.FailureReason))
+            {
+                warningText = response.FailureReason;
+                return true;
+            }
+        }
+
+        warningText = null;
+        return false;
+    }
+
+    private static bool IsAntiCheatWarning(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        var text = message.ToLowerInvariant();
+        return text.Contains("unrealistic") ||
+               text.Contains("anti-cheat") ||
+               text.Contains("anticheat") ||
+               text.Contains("speed throttled") ||
+               text.Contains("throttled") ||
+               text.Contains("ratio review") ||
+               text.Contains("flagged") ||
+               text.Contains("banned") ||
+               text.Contains("blacklisted") ||
+               text.Contains("cheat");
     }
 
     public void Handle(TorrentFinishedEvent message)
