@@ -146,8 +146,7 @@ public class IndexerStatusService : IIndexerStatusService
             {
                 var now = _nowProvider();
                 DecayFailuresIfExpired(status, now);
-                return (status.LastStatusCode == 401 || status.LastStatusCode == 403) &&
-                       status.ConsecutiveFailures > 0;
+                return (status.LastStatusCode == 401 || status.LastStatusCode == 403) && status.ConsecutiveFailures > 0;
             }
         }
 
@@ -162,9 +161,7 @@ public class IndexerStatusService : IIndexerStatusService
             {
                 var now = _nowProvider();
                 DecayFailuresIfExpired(status, now);
-                return status.LastStatusCode == 429 &&
-                       status.DisabledTill.HasValue &&
-                       status.DisabledTill.Value > now;
+                return status.LastStatusCode == 429 && status.DisabledTill.HasValue && status.DisabledTill.Value > now;
             }
         }
 

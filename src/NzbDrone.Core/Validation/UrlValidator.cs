@@ -71,9 +71,7 @@ public static class UrlValidator
         }
         catch
         {
-            if (allowInternal && (trimmedHost.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
-                                  trimmedHost.EndsWith(".internal", StringComparison.OrdinalIgnoreCase) ||
-                                  trimmedHost.EndsWith(".lan", StringComparison.OrdinalIgnoreCase)))
+            if (allowInternal && (trimmedHost.EndsWith(".local", StringComparison.OrdinalIgnoreCase) || trimmedHost.EndsWith(".internal", StringComparison.OrdinalIgnoreCase) || trimmedHost.EndsWith(".lan", StringComparison.OrdinalIgnoreCase)))
             {
                 return true;
             }
