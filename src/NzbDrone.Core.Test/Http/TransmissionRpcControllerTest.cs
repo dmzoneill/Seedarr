@@ -452,4 +452,106 @@ public class TransmissionRpcControllerTest
         Assert.That(torrents.Count, Is.EqualTo(1));
         Assert.That(torrents[0]["id"], Is.EqualTo(1));
     }
+
+    [Test]
+    public async Task HandleRpc_TorrentRemove_Without_Ids_Does_Not_Delete_Any_Torrents()
+    {
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Name = "T1" },
+            new Torrent { Id = 2, Name = "T2" },
+        };
+        _torrentService.GetAll().Returns(torrents);
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-remove",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["delete-local-data"] = JsonDocument.Parse("true").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _torrentService.DidNotReceive().Delete(Arg.Any<int>(), Arg.Any<bool>());
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentStop_And_Start_Without_Ids_Does_Not_Affect_Any_Torrents()
+    {
+        var torrents = new List<Torrent>
+        {
+            new Torrent { Id = 1, Name = "T1", Status = TorrentStatus.Downloading },
+            new Torrent { Id = 2, Name = "T2", Status = TorrentStatus.Seeding },
+        };
+        _torrentService.GetAll().Returns(torrents);
+
+        var stopRequest = new TransmissionRpcRequest
+        {
+            Method = "torrent-stop",
+            Arguments = new Dictionary<string, JsonElement>(),
+        };
+
+        var stopResult = await _controller.HandleRpc(stopRequest);
+        Assert.That(stopResult, Is.InstanceOf<OkObjectResult>());
+        _torrentService.DidNotReceive().Get(Arg.Any<int>());
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+
+        var startRequest = new TransmissionRpcRequest
+        {
+            Method = "torrent-start",
+            Arguments = new Dictionary<string, JsonElement>(),
+        };
+
+        var startResult = await _controller.HandleRpc(startRequest);
+        Assert.That(startResult, Is.InstanceOf<OkObjectResult>());
+        _torrentService.DidNotReceive().Get(Arg.Any<int>());
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+    }
+
+    [Test]
+    public async Task TorrentDeletedEvent_Records_Removed_Id_So_RecentlyActive_Poll_Reports_It()
+    {
+        TransmissionRpcController.ClearRecentlyRemovedIds();
+
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        _controller.Handle(new TorrentDeletedEvent(42));
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-get",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("\"recently-active\"").RootElement,
+                ["fields"] = JsonDocument.Parse("[\"id\", \"name\"]").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+
+        var args = response.Arguments as Dictionary<string, object>;
+        Assert.That(args, Is.Not.Null);
+        var removed = args["removed"] as List<int>;
+        Assert.That(removed, Is.Not.Null);
+        Assert.That(removed, Does.Contain(42));
+    }
+
+    [Test]
+    public void TransmissionRpcTorrentDeletedEventHandler_Records_Removed_Id()
+    {
+        TransmissionRpcController.ClearRecentlyRemovedIds();
+
+        var handler = new TransmissionRpcTorrentDeletedEventHandler();
+        handler.Handle(new TorrentDeletedEvent(99));
+
+        var removed = TransmissionRpcController.GetRecentlyRemovedIds();
+        Assert.That(removed, Does.Contain(99));
+    }
 }

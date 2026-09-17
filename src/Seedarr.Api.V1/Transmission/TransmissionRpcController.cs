@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http.Security;
@@ -45,7 +46,7 @@ public class TransmissionRpcResponse
 [AllowAnonymous]
 [ApiController]
 [Route("transmission/rpc")]
-public class TransmissionRpcController : ControllerBase
+public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedEvent>
 {
     private const string SessionHeaderName = "X-Transmission-Session-Id";
     private static readonly object _removedLock = new();
@@ -68,8 +69,8 @@ public class TransmissionRpcController : ControllerBase
     {
         lock (_removedLock)
         {
+            _recentlyRemovedList.RemoveAll(x => x.Id == id || (DateTime.UtcNow - x.RemovedAt).TotalMinutes > 10);
             _recentlyRemovedList.Add((id, DateTime.UtcNow));
-            _recentlyRemovedList.RemoveAll(x => (DateTime.UtcNow - x.RemovedAt).TotalMinutes > 10);
         }
     }
 
@@ -79,6 +80,27 @@ public class TransmissionRpcController : ControllerBase
         {
             _recentlyRemovedList.RemoveAll(x => (DateTime.UtcNow - x.RemovedAt).TotalMinutes > 10);
             return _recentlyRemovedList.Select(x => x.Id).Distinct().ToList();
+        }
+    }
+
+    public static void ClearRecentlyRemovedIds()
+    {
+        lock (_removedLock)
+        {
+            _recentlyRemovedList.Clear();
+        }
+    }
+
+    [NonAction]
+    public void Handle(TorrentDeletedEvent message)
+    {
+        if (message != null)
+        {
+            var torrentId = message.TorrentId > 0 ? message.TorrentId : message.Torrent?.Id ?? 0;
+            if (torrentId > 0)
+            {
+                RecordRemovedId(torrentId);
+            }
         }
     }
 
@@ -371,7 +393,7 @@ public class TransmissionRpcController : ControllerBase
     {
         var isRecentlyActive = IsRecentlyActive(request.Arguments);
         var torrents = _torrentService.GetAll().AsEnumerable();
-        var targetIds = ExtractIds(request.Arguments);
+        var targetIds = ExtractIds(request.Arguments, false);
 
         if (targetIds.Count > 0)
         {
@@ -424,7 +446,12 @@ public class TransmissionRpcController : ControllerBase
 
     private IActionResult HandleTorrentSet(TransmissionRpcRequest request, object tag)
     {
-        var setIds = ExtractIds(request.Arguments);
+        var setIds = ExtractIds(request.Arguments, false);
+        if (setIds.Count == 0)
+        {
+            return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
+        }
+
         foreach (var id in setIds)
         {
             var t = _torrentService.Get(id);
@@ -762,7 +789,12 @@ public class TransmissionRpcController : ControllerBase
 
     private IActionResult HandleQueueMove(TransmissionRpcRequest request, object tag, string position)
     {
-        var ids = ExtractIds(request.Arguments);
+        var ids = ExtractIds(request.Arguments, false);
+        if (ids.Count == 0)
+        {
+            return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
+        }
+
         foreach (var id in ids)
         {
             _torrentService.MoveQueue(id, position);
@@ -773,7 +805,12 @@ public class TransmissionRpcController : ControllerBase
 
     private IActionResult HandleTorrentStart(TransmissionRpcRequest request, object tag)
     {
-        var ids = ExtractIds(request.Arguments);
+        var ids = ExtractIds(request.Arguments, false);
+        if (ids.Count == 0)
+        {
+            return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
+        }
+
         foreach (var id in ids)
         {
             var t = _torrentService.Get(id);
@@ -789,7 +826,12 @@ public class TransmissionRpcController : ControllerBase
 
     private IActionResult HandleTorrentStop(TransmissionRpcRequest request, object tag)
     {
-        var ids = ExtractIds(request.Arguments);
+        var ids = ExtractIds(request.Arguments, false);
+        if (ids.Count == 0)
+        {
+            return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
+        }
+
         foreach (var id in ids)
         {
             var t = _torrentService.Get(id);
@@ -805,7 +847,12 @@ public class TransmissionRpcController : ControllerBase
 
     private IActionResult HandleTorrentVerify(TransmissionRpcRequest request, object tag)
     {
-        var ids = ExtractIds(request.Arguments);
+        var ids = ExtractIds(request.Arguments, false);
+        if (ids.Count == 0)
+        {
+            return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
+        }
+
         foreach (var id in ids)
         {
             _torrentService.Recheck(id);
@@ -816,7 +863,12 @@ public class TransmissionRpcController : ControllerBase
 
     private IActionResult HandleTorrentReannounce(TransmissionRpcRequest request, object tag)
     {
-        var ids = ExtractIds(request.Arguments);
+        var ids = ExtractIds(request.Arguments, false);
+        if (ids.Count == 0)
+        {
+            return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
+        }
+
         foreach (var id in ids)
         {
             var t = _torrentService.Get(id);
@@ -832,8 +884,13 @@ public class TransmissionRpcController : ControllerBase
 
     private IActionResult HandleTorrentRemove(TransmissionRpcRequest request, object tag)
     {
+        var ids = ExtractIds(request.Arguments, false);
+        if (ids.Count == 0)
+        {
+            return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
+        }
+
         var deleteData = request.Arguments != null && request.Arguments.TryGetValue("delete-local-data", out var d) && SafeGetBoolean(d);
-        var ids = ExtractIds(request.Arguments);
 
         foreach (var id in ids)
         {
@@ -846,10 +903,15 @@ public class TransmissionRpcController : ControllerBase
 
     private IActionResult HandleTorrentRenamePath(TransmissionRpcRequest request, object tag)
     {
-        var ids = ExtractIds(request.Arguments);
+        var ids = ExtractIds(request.Arguments, false);
+        if (ids.Count == 0)
+        {
+            return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
+        }
+
         var name = request.Arguments != null && request.Arguments.TryGetValue("name", out var n) ? n.GetString() : null;
 
-        if (ids.Count > 0 && !string.IsNullOrWhiteSpace(name))
+        if (!string.IsNullOrWhiteSpace(name))
         {
             var t = _torrentService.Get(ids[0]);
             if (t != null)
