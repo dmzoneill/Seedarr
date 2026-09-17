@@ -140,4 +140,109 @@ public class NotificationPayloadBuilderTest
         var priority = NotificationPayloadBuilder.ExtractPriority(settings, 5);
         Assert.That(priority, Is.EqualTo(expectedPriority));
     }
+
+    [Test]
+    public void BuildProviderPayload_pushover_maps_priority_device_and_sound()
+    {
+        var settings = "{\"apiKey\":\"my-token\",\"userKey\":\"my-user\",\"priority\":1,\"device\":\"pixel8\",\"sound\":\"cosmic\"}";
+        var result = NotificationPayloadBuilder.BuildProviderPayload(
+            "Pushover",
+            "Grab",
+            null,
+            null,
+            new { Message = "Torrent added" },
+            settings) as Dictionary<string, object>;
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result["token"], Is.EqualTo("my-token"));
+        Assert.That(result["user"], Is.EqualTo("my-user"));
+        Assert.That(result["priority"], Is.EqualTo(1));
+        Assert.That(result["device"], Is.EqualTo("pixel8"));
+        Assert.That(result["sound"], Is.EqualTo("cosmic"));
+        Assert.That(result.ContainsKey("retry"), Is.False);
+        Assert.That(result.ContainsKey("expire"), Is.False);
+    }
+
+    [Test]
+    public void BuildProviderPayload_pushover_clamps_priority_to_minus_two_and_two()
+    {
+        var lowSettings = "{\"priority\": -5}";
+        var lowResult = NotificationPayloadBuilder.BuildProviderPayload(
+            "Pushover",
+            "Grab",
+            null,
+            null,
+            new { Message = "Low priority" },
+            lowSettings) as Dictionary<string, object>;
+
+        Assert.That(lowResult["priority"], Is.EqualTo(-2));
+
+        var highSettings = "{\"priority\": 5}";
+        var highResult = NotificationPayloadBuilder.BuildProviderPayload(
+            "Pushover",
+            "Grab",
+            null,
+            null,
+            new { Message = "High priority" },
+            highSettings) as Dictionary<string, object>;
+
+        Assert.That(highResult["priority"], Is.EqualTo(2));
+    }
+
+    [Test]
+    public void BuildProviderPayload_pushover_emergency_priority_includes_clamped_retry_and_expire()
+    {
+        var settings = "{\"priority\": 2, \"retry\": 15, \"expire\": 20000}";
+        var result = NotificationPayloadBuilder.BuildProviderPayload(
+            "Pushover",
+            "HealthIssue",
+            null,
+            null,
+            new { Message = "Emergency alert" },
+            settings) as Dictionary<string, object>;
+
+        Assert.That(result["priority"], Is.EqualTo(2));
+        Assert.That(result["retry"], Is.EqualTo(30)); // clamped to minimum 30
+        Assert.That(result["expire"], Is.EqualTo(10800)); // clamped to maximum 10800
+    }
+
+    [Test]
+    public void BuildProviderPayload_pushover_emergency_priority_uses_defaults_when_not_specified()
+    {
+        var settings = "{\"priority\": 2}";
+        var result = NotificationPayloadBuilder.BuildProviderPayload(
+            "Pushover",
+            "HealthIssue",
+            null,
+            null,
+            new { Message = "Emergency alert" },
+            settings) as Dictionary<string, object>;
+
+        Assert.That(result["priority"], Is.EqualTo(2));
+        Assert.That(result["retry"], Is.EqualTo(60));
+        Assert.That(result["expire"], Is.EqualTo(3600));
+    }
+
+    [Test]
+    public void BuildProviderPayload_pushover_truncates_title_to_250_and_message_to_1024()
+    {
+        var longEventType = new string('A', 300);
+        var longMessage = new string('B', 2000);
+
+        var result = NotificationPayloadBuilder.BuildProviderPayload(
+            "Pushover",
+            longEventType,
+            null,
+            null,
+            new { Message = longMessage },
+            null) as Dictionary<string, object>;
+
+        var title = result["title"].ToString();
+        var message = result["message"].ToString();
+
+        Assert.That(title.Length, Is.LessThanOrEqualTo(250));
+        Assert.That(message.Length, Is.LessThanOrEqualTo(1024));
+        Assert.That(title.EndsWith("..."), Is.True);
+        Assert.That(message.EndsWith("..."), Is.True);
+    }
 }
