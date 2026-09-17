@@ -20,6 +20,7 @@ public interface IConnectionManager
     int ActiveCount { get; }
     bool CanAddConnectionForTorrent(string infoHash);
     int GetUploadSlotCount();
+    int GetDynamicUploadSlotCount(string infoHash = null);
     List<PeerConnection> GetAllConnections();
     void DisconnectAll();
     void DisconnectByInfoHash(string infoHash);
@@ -279,7 +280,32 @@ public class ConnectionManager : IConnectionManager,
 
     public int GetUploadSlotCount()
     {
-        return _configService.MaxUploadSlots;
+        return GetDynamicUploadSlotCount();
+    }
+
+    public int GetDynamicUploadSlotCount(string infoHash = null)
+    {
+        var u = _configService.MaxUploadSpeedKbps;
+        if (u > 0)
+        {
+            var calculated = (int)Math.Ceiling(Math.Sqrt(2.0 * u));
+            var maxLimit = _configService.MaxUploadSlots > 0 ? _configService.MaxUploadSlots : int.MaxValue;
+            return Math.Max(4, Math.Min(maxLimit, calculated));
+        }
+
+        if (!string.IsNullOrWhiteSpace(infoHash))
+        {
+            var torrentConnections = GetConnections(infoHash);
+            var activeLeechers = torrentConnections.Count(c => !c.IsSeed);
+            if (activeLeechers > 0)
+            {
+                var leecherSlots = (int)Math.Ceiling(activeLeechers * 0.2);
+                var maxLimit = _configService.MaxUploadSlots > 0 ? _configService.MaxUploadSlots : int.MaxValue;
+                return Math.Max(4, Math.Min(maxLimit, leecherSlots));
+            }
+        }
+
+        return Math.Max(4, _configService.MaxUploadSlots);
     }
 
     public void ProcessDropouts()
