@@ -582,4 +582,239 @@ public class TorrentFileParserTest
         Assert.That(result.PieceLength, Is.EqualTo(16384));
         Assert.That(result.PieceCount, Is.EqualTo(1));
     }
+
+    [Test]
+    public void Parse_should_prioritize_name_utf8_over_legacy_name()
+    {
+        var info = new BDictionary
+        {
+            { "name", new BString("legacy-name") },
+            { "name.utf-8", new BString("進撃の巨人") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "length", new BNumber(1024) }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Name, Is.EqualTo("進撃の巨人"));
+    }
+
+    [Test]
+    public void Parse_should_prioritize_name_utf8_without_hyphen_over_legacy_name()
+    {
+        var info = new BDictionary
+        {
+            { "name", new BString("legacy-name") },
+            { "name.utf8", new BString("進撃の巨人") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "length", new BNumber(1024) }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Name, Is.EqualTo("進撃の巨人"));
+    }
+
+    [Test]
+    public void Parse_should_prioritize_name_dot_utf8_with_hyphen_over_without_hyphen()
+    {
+        var info = new BDictionary
+        {
+            { "name", new BString("legacy-name") },
+            { "name.utf8", new BString("utf8-name") },
+            { "name.utf-8", new BString("utf-8-name") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "length", new BNumber(1024) }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Name, Is.EqualTo("utf-8-name"));
+    }
+
+    [Test]
+    public void Parse_should_prioritize_path_utf8_over_legacy_path_in_multifile_torrent()
+    {
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1024) },
+                { "path", new BList { new BString("ascii_dir"), new BString("ascii_file.txt") } },
+                { "path.utf-8", new BList { new BString("日本語フォルダ"), new BString("ファイル.txt") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("my-torrent/日本語フォルダ/ファイル.txt"));
+    }
+
+    [Test]
+    public void Parse_should_prioritize_path_utf8_without_hyphen_over_legacy_path()
+    {
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1024) },
+                { "path", new BList { new BString("legacy"), new BString("file.txt") } },
+                { "path.utf8", new BList { new BString("utf8_dir"), new BString("file.txt") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("my-torrent/utf8_dir/file.txt"));
+    }
+
+    [Test]
+    public void Parse_should_fallback_to_standard_name_and_path_when_utf8_keys_absent()
+    {
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(2048) },
+                { "path", new BList { new BString("standard_folder"), new BString("standard_file.mkv") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("standard-torrent-name") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Name, Is.EqualTo("standard-torrent-name"));
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("standard-torrent-name/standard_folder/standard_file.mkv"));
+    }
+
+    [Test]
+    public void Parse_should_gracefully_decode_non_utf8_bytes_in_legacy_name()
+    {
+        // 0xE9, 0x6C, 0xE8, 0x76, 0x65 is ISO-8859-1 for "élève" (invalid UTF-8 sequence)
+        var nonUtf8Bytes = new byte[] { 0xE9, 0x6C, 0xE8, 0x76, 0x65 };
+        var info = new BDictionary
+        {
+            { "name", new BString(nonUtf8Bytes) },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "length", new BNumber(1024) }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Name, Is.EqualTo("élève"));
+    }
+
+    [Test]
+    public void Parse_should_gracefully_decode_non_utf8_bytes_in_legacy_path()
+    {
+        var nonUtf8DirBytes = new byte[] { 0xE9, 0x74, 0xE9 }; // "été" in ISO-8859-1
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1024) },
+                { "path", new BList { new BString(nonUtf8DirBytes), new BString("file.txt") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.Files, Has.Count.EqualTo(1));
+        Assert.That(result.Files[0].Path, Is.EqualTo("my-torrent/été/file.txt"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_name_and_utf8_variants_missing()
+    {
+        var info = new BDictionary
+        {
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "length", new BNumber(1024) }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("missing or invalid 'name'"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_path_and_utf8_variants_missing()
+    {
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(1024) }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("my-torrent") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("missing or invalid 'path'"));
+    }
 }

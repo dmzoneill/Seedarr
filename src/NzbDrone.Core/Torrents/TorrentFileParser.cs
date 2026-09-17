@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NLog;
@@ -44,6 +45,8 @@ public class TorrentFileParser : ITorrentFileParser
     private const int MaxRecursionDepth = 32;
     private const long MinPieceLength = 16384; // 16 KiB
     private const long MaxPieceLength = 67108864; // 64 MiB
+
+    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     private readonly Logger _logger;
 
@@ -106,7 +109,8 @@ public class TorrentFileParser : ITorrentFileParser
                 throw new InvalidTorrentFileException($"Piece count {pieceCount} exceeds maximum permitted limit of {MaxPermittedPieces}.");
             }
 
-            if (!info.ContainsKey("name") || info["name"] is not BString nameStr)
+            var torrentName = GetStringWithUtf8Fallback(info, "name");
+            if (torrentName == null)
             {
                 throw new InvalidTorrentFileException("Malformed torrent file: missing or invalid 'name'.");
             }
@@ -114,7 +118,7 @@ public class TorrentFileParser : ITorrentFileParser
             string announceUrl = null;
             if (torrent.ContainsKey("announce") && torrent["announce"] is BString mainAnnounceStr)
             {
-                var s = mainAnnounceStr.ToString().Trim();
+                var s = DecodeBString(mainAnnounceStr)?.Trim();
                 if (!string.IsNullOrEmpty(s))
                 {
                     announceUrl = s;
@@ -122,7 +126,7 @@ public class TorrentFileParser : ITorrentFileParser
             }
             else if (info.ContainsKey("announce") && info["announce"] is BString infoAnnounceStr)
             {
-                var s = infoAnnounceStr.ToString().Trim();
+                var s = DecodeBString(infoAnnounceStr)?.Trim();
                 if (!string.IsNullOrEmpty(s))
                 {
                     announceUrl = s;
@@ -149,12 +153,12 @@ public class TorrentFileParser : ITorrentFileParser
 
             var result = new ParsedTorrent
             {
-                Name = nameStr.ToString(),
+                Name = torrentName,
                 InfoHash = InfoHashCalculator.Calculate(info),
                 PieceLength = (int)pieceLengthNum.Value,
                 PieceCount = pieceCount,
-                Comment = torrent.ContainsKey("comment") ? (torrent["comment"] as BString)?.ToString() : null,
-                CreatedBy = torrent.ContainsKey("created by") ? (torrent["created by"] as BString)?.ToString() : null,
+                Comment = GetStringWithUtf8Fallback(torrent, "comment"),
+                CreatedBy = GetStringWithUtf8Fallback(torrent, "created by"),
                 IsPrivate = info.ContainsKey("private") && (info["private"] as BNumber)?.Value == 1,
                 AnnounceUrl = announceUrl,
                 AnnounceList = announceListParsed,
@@ -187,13 +191,14 @@ public class TorrentFileParser : ITorrentFileParser
                         throw new InvalidTorrentFileException($"Malformed torrent file: negative file length {fileLengthNum.Value}.");
                     }
 
-                    if (!file.ContainsKey("path") || file["path"] is not BList pathList)
+                    var pathList = GetPathListWithUtf8Fallback(file);
+                    if (pathList == null)
                     {
                         throw new InvalidTorrentFileException("Malformed torrent file: file entry missing or invalid 'path'.");
                     }
 
                     var pathParts = pathList.OfType<BString>()
-                        .Select(p => p.ToString().Replace('\\', '/').Trim('/', '\\'))
+                        .Select(p => DecodeBString(p).Replace('\\', '/').Trim('/', '\\'))
                         .Where(p => !string.IsNullOrWhiteSpace(p));
 
                     var relativePath = string.Join("/", pathParts);
@@ -250,7 +255,7 @@ public class TorrentFileParser : ITorrentFileParser
             if (item is BList tierList)
             {
                 var tierUrls = tierList.OfType<BString>()
-                    .Select(u => u.ToString().Trim())
+                    .Select(u => DecodeBString(u)?.Trim())
                     .Where(u => !string.IsNullOrEmpty(u))
                     .ToList();
                 if (tierUrls.Count > 0)
@@ -260,13 +265,101 @@ public class TorrentFileParser : ITorrentFileParser
             }
             else if (item is BString singleUrlStr)
             {
-                var u = singleUrlStr.ToString().Trim();
+                var u = DecodeBString(singleUrlStr)?.Trim();
                 if (!string.IsNullOrEmpty(u))
                 {
                     targetList.Add(new List<string> { u });
                 }
             }
         }
+    }
+
+    private static string DecodeBString(BString bString)
+    {
+        if (bString == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return StrictUtf8.GetString(bString.Value.Span);
+        }
+        catch (DecoderFallbackException)
+        {
+            return Encoding.Latin1.GetString(bString.Value.Span);
+        }
+        catch (ArgumentException)
+        {
+            return Encoding.Latin1.GetString(bString.Value.Span);
+        }
+    }
+
+    private static string GetStringWithUtf8Fallback(BDictionary dict, string primaryKey)
+    {
+        var utf8Key1 = primaryKey + ".utf-8";
+        var utf8Key2 = primaryKey + ".utf8";
+
+        if (dict.TryGetValue(utf8Key1, out var val1) && val1 is BString bs1)
+        {
+            return DecodeBString(bs1);
+        }
+
+        if (dict.TryGetValue(utf8Key2, out var val2) && val2 is BString bs2)
+        {
+            return DecodeBString(bs2);
+        }
+
+        if (dict.TryGetValue(primaryKey, out var val) && val is BString bs)
+        {
+            return DecodeBString(bs);
+        }
+
+        return null;
+    }
+
+    private static BList GetPathListWithUtf8Fallback(BDictionary dict)
+    {
+        if (dict.TryGetValue("path.utf-8", out var val1))
+        {
+            if (val1 is BList bl1)
+            {
+                return bl1;
+            }
+
+            if (val1 is BString bs1)
+            {
+                return new BList { bs1 };
+            }
+        }
+
+        if (dict.TryGetValue("path.utf8", out var val2))
+        {
+            if (val2 is BList bl2)
+            {
+                return bl2;
+            }
+
+            if (val2 is BString bs2)
+            {
+                return new BList { bs2 };
+            }
+        }
+
+        if (dict.TryGetValue("path", out var val))
+        {
+            if (val is BList bl)
+            {
+                return bl;
+            }
+
+            if (val is BString bs)
+            {
+                return new BList { bs };
+            }
+        }
+
+        return null;
     }
 
     private static void ValidateRecursionDepth(IBObject obj, int currentDepth = 0)
