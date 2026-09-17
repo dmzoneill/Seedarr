@@ -1,6 +1,8 @@
 using System;
 using System.Buffers;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NzbDrone.Core.Peers.Encryption;
 
@@ -13,15 +15,18 @@ public class EncryptedStream : Stream
 
     public EncryptedStream(Stream inner, Rc4StreamCipher encryptor, Rc4StreamCipher decryptor, bool ownsStream = true)
     {
-        _inner = inner;
-        _encryptor = encryptor;
-        _decryptor = decryptor;
+        _inner = inner ?? throw new ArgumentNullException(nameof(inner));
+        _encryptor = encryptor ?? throw new ArgumentNullException(nameof(encryptor));
+        _decryptor = decryptor ?? throw new ArgumentNullException(nameof(decryptor));
         _ownsStream = ownsStream;
     }
 
     public override bool CanRead => _inner.CanRead;
+
     public override bool CanSeek => false;
+
     public override bool CanWrite => _inner.CanWrite;
+
     public override long Length => _inner.Length;
 
     public override long Position
@@ -32,10 +37,33 @@ public class EncryptedStream : Stream
 
     public override int Read(byte[] buffer, int offset, int count)
     {
-        var bytesRead = _inner.Read(buffer, offset, count);
+        ArgumentNullException.ThrowIfNull(buffer);
+        return Read(buffer.AsSpan(offset, count));
+    }
+
+    public override int Read(Span<byte> buffer)
+    {
+        var bytesRead = _inner.Read(buffer);
         if (bytesRead > 0)
         {
-            _decryptor.ProcessInPlace(buffer, offset, bytesRead);
+            _decryptor.ProcessInPlace(buffer[..bytesRead]);
+        }
+
+        return bytesRead;
+    }
+
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+        return ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+    }
+
+    public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        var bytesRead = await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+        if (bytesRead > 0)
+        {
+            _decryptor.ProcessInPlace(buffer.Span[..bytesRead]);
         }
 
         return bytesRead;
@@ -43,21 +71,84 @@ public class EncryptedStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        var encrypted = ArrayPool<byte>.Shared.Rent(count);
+        ArgumentNullException.ThrowIfNull(buffer);
+        Write(buffer.AsSpan(offset, count));
+    }
+
+    public override void Write(ReadOnlySpan<byte> buffer)
+    {
+        if (buffer.IsEmpty)
+        {
+            return;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(buffer.Length);
         try
         {
-            _encryptor.Process(buffer, offset, count, encrypted, 0);
-            _inner.Write(encrypted, 0, count);
+            _encryptor.Process(buffer, rented.AsSpan(0, buffer.Length));
+            _inner.Write(rented.AsSpan(0, buffer.Length));
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(encrypted);
+            ArrayPool<byte>.Shared.Return(rented);
         }
+    }
+
+    public void WriteInPlace(Span<byte> buffer)
+    {
+        if (buffer.IsEmpty)
+        {
+            return;
+        }
+
+        _encryptor.ProcessInPlace(buffer);
+        _inner.Write(buffer);
+    }
+
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(buffer);
+        return WriteAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+    }
+
+    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        if (buffer.IsEmpty)
+        {
+            return;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(buffer.Length);
+        try
+        {
+            _encryptor.Process(buffer.Span, rented.AsSpan(0, buffer.Length));
+            await _inner.WriteAsync(rented.AsMemory(0, buffer.Length), cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    public async ValueTask WriteInPlaceAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        if (buffer.IsEmpty)
+        {
+            return;
+        }
+
+        _encryptor.ProcessInPlace(buffer.Span);
+        await _inner.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
     }
 
     public override void Flush()
     {
         _inner.Flush();
+    }
+
+    public override Task FlushAsync(CancellationToken cancellationToken)
+    {
+        return _inner.FlushAsync(cancellationToken);
     }
 
     public override long Seek(long offset, SeekOrigin origin)
@@ -78,5 +169,15 @@ public class EncryptedStream : Stream
         }
 
         base.Dispose(disposing);
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        if (_ownsStream)
+        {
+            await _inner.DisposeAsync().ConfigureAwait(false);
+        }
+
+        await base.DisposeAsync().ConfigureAwait(false);
     }
 }
