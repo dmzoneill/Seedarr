@@ -459,11 +459,18 @@ public class PeerConnection : IDisposable
             cancellationToken);
     }
 
-    public bool SendHandshake(string infoHash, string peerId, bool isPrivate = false, IClientProfile clientProfile = null)
+    public bool SendHandshake(
+        string infoHash,
+        string peerId,
+        bool isPrivate = false,
+        IClientProfile clientProfile = null,
+        bool supportsExtensions = true,
+        bool supportsFast = true,
+        bool supportsDht = true)
     {
         try
         {
-            var handshake = BuildHandshake(infoHash, peerId, isPrivate, clientProfile);
+            var handshake = BuildHandshake(infoHash, peerId, isPrivate, clientProfile, supportsExtensions, supportsFast, supportsDht);
             _activeStream.Write(handshake, 0, handshake.Length);
             _activeStream.Flush();
             InfoHash = infoHash;
@@ -741,20 +748,34 @@ public class PeerConnection : IDisposable
         SendBitfield(bitfield);
     }
 
-    public static byte[] BuildHandshake(string infoHash, string peerId, bool isPrivate = false, IClientProfile clientProfile = null)
+    public static byte[] BuildHandshake(
+        string infoHash,
+        string peerId,
+        bool isPrivate = false,
+        IClientProfile clientProfile = null,
+        bool supportsExtensions = true,
+        bool supportsFast = true,
+        bool supportsDht = true)
     {
         var buffer = new byte[68];
         buffer[0] = 19;
         Encoding.ASCII.GetBytes(ProtocolString, 0, 19, buffer, 1);
 
         // Advertise BEP 10 (Extension Protocol), BEP 6 (Fast Extension), BEP 5 (DHT)
-        buffer[25] |= 0x10; // BEP 10
-        buffer[27] |= 0x04; // BEP 6
-        buffer[27] |= 0x01; // BEP 5
-
-        if (isPrivate || clientProfile?.SupportsDht == false)
+        if (supportsExtensions)
         {
-            buffer[27] &= unchecked((byte)~0x01);
+            buffer[25] |= 0x10; // BEP 10
+        }
+
+        if (supportsFast)
+        {
+            buffer[27] |= 0x04; // BEP 6
+        }
+
+        var effectiveDht = supportsDht && !isPrivate && clientProfile?.SupportsDht != false;
+        if (effectiveDht)
+        {
+            buffer[27] |= 0x01; // BEP 5
         }
 
         var hashBytes = Convert.FromHexString(infoHash);

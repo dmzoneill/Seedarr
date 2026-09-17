@@ -2676,4 +2676,112 @@ public class PeerServerTest
         Assert.That(bitfield[0], Is.EqualTo(0x00));
         Assert.That(bitfield[1], Is.EqualTo(0x00));
     }
+
+    [Test]
+    [CancelAfter(5000)]
+    public async Task ProcessCandidateAsync_should_close_and_dispose_when_remote_peer_returns_different_info_hash()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        const string expectedHash = "0102030405060708091011121314151617181920";
+        const string differentHash = "9999999999999999999999999999999999999999";
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = expectedHash,
+            Name = "ExpectedTorrent",
+            PieceCount = 10,
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = port,
+            Source = "Tracker",
+        };
+
+        using var cts = new CancellationTokenSource();
+
+        var serverTask = Task.Run(async () =>
+        {
+            using var remotePeer = await listener.AcceptTcpClientAsync(cts.Token);
+            var stream = remotePeer.GetStream();
+
+            var recvBuf = new byte[68];
+            var readTotal = 0;
+            while (readTotal < 68)
+            {
+                var r = await stream.ReadAsync(recvBuf.AsMemory(readTotal, 68 - readTotal), cts.Token);
+                if (r == 0)
+                {
+                    break;
+                }
+
+                readTotal += r;
+            }
+
+            var replyHandshake = BuildBtHandshake(differentHash, "-SD0001-999999999999");
+            await stream.WriteAsync(replyHandshake, cts.Token);
+            await stream.FlushAsync(cts.Token);
+
+            var readAfterMismatch = await stream.ReadAsync(new byte[10], cts.Token);
+            Assert.That(readAfterMismatch, Is.EqualTo(0));
+        });
+
+        await InvokeConnectToPeerAsync(torrent, candidate, cts.Token);
+        await serverTask;
+
+        _peerDiscovery.Received(1).MarkAttempted(expectedHash, candidate.Ip, candidate.Port, false);
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+        _connectionManager.DidNotReceive().TryAdd(Arg.Any<PeerConnection>(), Arg.Any<IConnectionReservation>());
+    }
+
+    [Test]
+    [CancelAfter(5000)]
+    public void HandleConnection_should_drop_incoming_connection_immediately_when_info_hash_is_unknown()
+    {
+        var (clientTcp, serverTcp) = CreateRawTcpPair();
+        _clients.Add(clientTcp);
+
+        var handshake = BuildBtHandshake(
+            "0102030405060708091011121314151617181920",
+            "-SD0001-012345678901");
+        var stream = clientTcp.GetStream();
+        stream.Write(handshake, 0, handshake.Length);
+        stream.Flush();
+
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        using var cts = new CancellationTokenSource();
+        InvokeHandleConnection(serverTcp, cts.Token);
+
+        var buf = new byte[10];
+        var bytesRead = 0;
+        try
+        {
+            bytesRead = stream.Read(buf, 0, buf.Length);
+        }
+        catch (IOException)
+        {
+            bytesRead = 0;
+        }
+
+        Assert.That(bytesRead, Is.EqualTo(0));
+        _connectionManager.DidNotReceive().TryAdd(Arg.Any<PeerConnection>(), Arg.Any<IConnectionReservation>());
+    }
+
+    private Task InvokeConnectToPeerAsync(Torrent torrent, DiscoveredPeer candidate, CancellationToken ct)
+    {
+        var method = typeof(PeerServer).GetMethod(
+            "ConnectToPeerAsync",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            null,
+            new[] { typeof(Torrent), typeof(DiscoveredPeer), typeof(CancellationToken), typeof(IConnectionReservation) },
+            null)!;
+        return (Task)method.Invoke(_server, new object[] { torrent, candidate, ct, null })!;
+    }
 }
