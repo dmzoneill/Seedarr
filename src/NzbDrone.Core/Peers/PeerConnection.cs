@@ -66,8 +66,11 @@ public class PeerConnection : IDisposable
         set => _isSeed = value;
     }
 
-    public PeerConnection(TcpClient client)
+    public IDhKeyPool DhKeyPool { get; set; }
+
+    public PeerConnection(TcpClient client, IDhKeyPool dhKeyPool = null)
     {
+        DhKeyPool = dhKeyPool;
         _client = client;
         _networkStream = client.GetStream();
         _activeStream = _networkStream;
@@ -87,8 +90,9 @@ public class PeerConnection : IDisposable
         LastActivity = DateTime.UtcNow;
     }
 
-    public PeerConnection(Stream stream, string remoteIp, int remotePort)
+    public PeerConnection(Stream stream, string remoteIp, int remotePort, IDhKeyPool dhKeyPool = null)
     {
+        DhKeyPool = dhKeyPool;
         _activeStream = stream ?? throw new ArgumentNullException(nameof(stream));
         _logger = LogManager.GetCurrentClassLogger();
         RemoteIp = remoteIp;
@@ -97,8 +101,9 @@ public class PeerConnection : IDisposable
         LastActivity = DateTime.UtcNow;
     }
 
-    public PeerConnection(string host, int port, IPAddress localBindAddress = null, int dscp = 0, int tos = 0, Network.IProxySettingsProvider proxySettings = null)
+    public PeerConnection(string host, int port, IPAddress localBindAddress = null, int dscp = 0, int tos = 0, Network.IProxySettingsProvider proxySettings = null, IDhKeyPool dhKeyPool = null)
     {
+        DhKeyPool = dhKeyPool;
         if (localBindAddress != null)
         {
             var localEp = new IPEndPoint(localBindAddress, 0);
@@ -152,7 +157,7 @@ public class PeerConnection : IDisposable
         try
         {
             var infoHashBytes = Convert.FromHexString(infoHash);
-            var handshake = new MseHandshake(infoHashBytes, mode);
+            var handshake = new MseHandshake(infoHashBytes, mode, DhKeyPool);
             _activeStream = handshake.NegotiateOutgoing(_networkStream);
             EncryptionMethod = handshake.NegotiatedMethod;
             IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
@@ -204,7 +209,7 @@ public class PeerConnection : IDisposable
 
             // MSE/PE handshake - prefix the peeked byte back
             var prefixed = new PrefixedStream(peek, _networkStream, ownsStream: false);
-            var handshake = new MseHandshake(Array.Empty<byte>(), mode);
+            var handshake = new MseHandshake(Array.Empty<byte>(), mode, DhKeyPool);
             _activeStream = handshake.NegotiateIncoming(prefixed, infoHashValidator);
             EncryptionMethod = handshake.NegotiatedMethod;
             IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;

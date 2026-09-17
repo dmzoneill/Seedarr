@@ -28,17 +28,19 @@ public class MseHandshake
     private CryptoMethod _negotiatedMethod;
 
     public CryptoMethod NegotiatedMethod => _negotiatedMethod;
+    public IDhKeyPool KeyPool { get; set; }
 
-    public MseHandshake(byte[] infoHash, EncryptionMode preferredMode)
+    public MseHandshake(byte[] infoHash, EncryptionMode preferredMode, IDhKeyPool keyPool = null)
     {
         _infoHash = infoHash;
         _preferredMode = preferredMode;
+        KeyPool = keyPool;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
     public Stream NegotiateOutgoing(Stream stream)
     {
-        _keyDerivation = new MseKeyDerivation();
+        _keyDerivation = KeyPool?.Rent() ?? new MseKeyDerivation();
 
         // Step 1: A -> B: Ya + PadA
         var ya = _keyDerivation.GetPublicKeyBytes();
@@ -120,7 +122,7 @@ public class MseHandshake
 
     public Stream NegotiateIncoming(Stream stream, Func<byte[], bool> infoHashValidator)
     {
-        _keyDerivation = new MseKeyDerivation();
+        _keyDerivation = KeyPool?.Rent() ?? new MseKeyDerivation();
 
         // Step 1: B <- A: Ya (96 bytes, PadA follows but length is unknown)
         var ya = ReadExact(stream, DhKeyLength);
