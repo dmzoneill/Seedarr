@@ -169,6 +169,30 @@ public class RoutingTable
     }
 
     /// <summary>
+    /// Gets all nodes currently stored across all buckets.
+    /// </summary>
+    /// <returns>A list of all nodes.</returns>
+    public List<DhtNode> GetAllNodes()
+    {
+        lock (_lock)
+        {
+            return _buckets.SelectMany(b => b).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Gets all good nodes currently in the routing table.
+    /// </summary>
+    /// <returns>A list of good nodes.</returns>
+    public List<DhtNode> GetGoodNodes()
+    {
+        lock (_lock)
+        {
+            return _buckets.SelectMany(b => b).Where(n => n.IsGood).ToList();
+        }
+    }
+
+    /// <summary>
     /// Determines whether two IP addresses share the same subnet prefix (/24 for IPv4, /48 for IPv6).
     /// </summary>
     /// <param name="a">The first IP address.</param>
