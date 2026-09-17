@@ -20,6 +20,25 @@ public class FileSystemController : Controller
 {
     private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
+    private static readonly HashSet<string> BlockedUnixPaths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "/etc",
+        "/proc",
+        "/sys",
+        "/dev",
+        "/root",
+        "/var/run",
+        "/boot",
+    };
+
+    private static readonly HashSet<string> BlockedWindowsPaths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        @"C:\Windows",
+        @"C:\Program Files",
+        @"C:\Program Files (x86)",
+        @"C:\ProgramData",
+    };
+
     /// <summary>
     /// Browses directory contents at the specified path.
     /// </summary>
@@ -27,6 +46,7 @@ public class FileSystemController : Controller
     /// <param name="includeFiles">Whether to include files in addition to directories.</param>
     /// <param name="skip">Number of entries to skip for pagination.</param>
     /// <param name="take">Number of entries to return per page.</param>
+    /// <param name="showHidden">Whether to include hidden and system files/directories.</param>
     /// <returns>A FileSystemResource containing directories and files.</returns>
     [HttpGet]
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File browser controller intentionally accesses user-requested directories")]
@@ -37,7 +57,8 @@ public class FileSystemController : Controller
         [FromQuery] string path = null,
         [FromQuery] bool includeFiles = false,
         [FromQuery] int skip = 0,
-        [FromQuery] int take = 500)
+        [FromQuery] int take = 500,
+        [FromQuery] bool showHidden = false)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -63,6 +84,11 @@ public class FileSystemController : Controller
         catch (Exception ex)
         {
             return BadRequest($"Invalid path format: {ex.Message}");
+        }
+
+        if (IsBlockedPath(fullPath))
+        {
+            return BadRequest(new { message = "Access to system directory is restricted" });
         }
 
         if (!Directory.Exists(fullPath))
@@ -104,6 +130,11 @@ public class FileSystemController : Controller
                 var allDirs = new List<DirectoryInfo>();
                 foreach (var dir in dirInfo.EnumerateDirectories("*", enumOptions))
                 {
+                    if (!showHidden && IsHiddenOrSystem(dir))
+                    {
+                        continue;
+                    }
+
                     if (allDirs.Count >= maxLimit)
                     {
                         hasMoreDirs = true;
@@ -130,7 +161,7 @@ public class FileSystemController : Controller
                         {
                             Name = dir.Name,
                             Path = dir.FullName,
-                            Type = "folder",
+                            Type = IsSymlink(dir) ? "symlink" : "folder",
                             LastModified = dir.LastWriteTimeUtc == DateTime.MinValue ? null : dir.LastWriteTimeUtc,
                         });
                     }
@@ -160,6 +191,11 @@ public class FileSystemController : Controller
                     var allFiles = new List<FileInfo>();
                     foreach (var file in dirInfo.EnumerateFiles("*", fileEnumOptions))
                     {
+                        if (!showHidden && IsHiddenOrSystem(file))
+                        {
+                            continue;
+                        }
+
                         if (allFiles.Count >= maxLimit)
                         {
                             hasMoreFiles = true;
@@ -185,7 +221,7 @@ public class FileSystemController : Controller
                             {
                                 Name = file.Name,
                                 Path = file.FullName,
-                                Type = "file",
+                                Type = IsSymlink(file) ? "symlink" : "file",
                                 Size = file.Length,
                                 LastModified = file.LastWriteTimeUtc == DateTime.MinValue ? null : file.LastWriteTimeUtc,
                             });
@@ -377,6 +413,11 @@ public class FileSystemController : Controller
                         {
                             try
                             {
+                                if (IsHiddenOrSystem(dir) || IsBlockedPath(dir.FullName))
+                                {
+                                    continue;
+                                }
+
                                 if (!seenPaths.Add(dir.FullName))
                                 {
                                     continue;
@@ -386,7 +427,7 @@ public class FileSystemController : Controller
                                 {
                                     Name = dir.Name,
                                     Path = dir.FullName,
-                                    Type = "folder",
+                                    Type = IsSymlink(dir) ? "symlink" : "folder",
                                     LastModified = dir.LastWriteTimeUtc == DateTime.MinValue ? null : dir.LastWriteTimeUtc,
                                 });
                             }
@@ -412,6 +453,59 @@ public class FileSystemController : Controller
         result.IsTruncated = false;
 
         return result;
+    }
+
+    private static bool IsBlockedPath(string fullPath)
+    {
+        if (string.IsNullOrWhiteSpace(fullPath))
+        {
+            return false;
+        }
+
+        var normalized = fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var blockedList = OperatingSystem.IsWindows() ? BlockedWindowsPaths : BlockedUnixPaths;
+
+        foreach (var blocked in blockedList)
+        {
+            var normalizedBlocked = blocked.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (normalized.Equals(normalizedBlocked, StringComparison.OrdinalIgnoreCase) ||
+                normalized.StartsWith(normalizedBlocked + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                normalized.StartsWith(normalizedBlocked + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsHiddenOrSystem(FileSystemInfo info)
+    {
+        if (info.Name.StartsWith('.'))
+        {
+            return true;
+        }
+
+        try
+        {
+            return (info.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsSymlink(FileSystemInfo info)
+    {
+        try
+        {
+            return (info.Attributes & FileAttributes.ReparsePoint) != 0 || info.LinkTarget != null;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static string GetParentDirectory(string path)
