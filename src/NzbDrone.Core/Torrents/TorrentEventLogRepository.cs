@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using Dapper;
 using NzbDrone.Core.Datastore;
 
@@ -41,17 +42,31 @@ public class TorrentEventLogRepository : BasicRepository<TorrentEventLog>, ITorr
         RetryPolicy.Execute(() =>
         {
             using var connection = _database.OpenConnection();
-            using var transaction = connection.BeginTransaction();
-            try
-            {
-                connection.Execute(
-                    $"DELETE FROM \"{_table}\" WHERE \"TimeStamp\" < @Before",
-                    new { Before = before },
-                    transaction);
 
-                if (maxLogsPerTorrent > 0)
+            while (true)
+            {
+                var rowsAffected = connection.Execute(
+                    $@"DELETE FROM ""{_table}""
+                       WHERE ""Id"" IN (
+                           SELECT ""Id"" FROM ""{_table}""
+                           WHERE ""TimeStamp"" < @Before
+                           LIMIT 500
+                       )",
+                    new { Before = before });
+
+                if (rowsAffected == 0)
                 {
-                    connection.Execute(
+                    break;
+                }
+
+                Thread.Sleep(1);
+            }
+
+            if (maxLogsPerTorrent > 0)
+            {
+                while (true)
+                {
+                    var rowsAffected = connection.Execute(
                         $@"DELETE FROM ""{_table}""
                            WHERE ""Id"" IN (
                                SELECT ""Id"" FROM (
@@ -59,25 +74,17 @@ public class TorrentEventLogRepository : BasicRepository<TorrentEventLog>, ITorr
                                    FROM ""{_table}""
                                ) sub
                                WHERE sub.rn > @MaxLogs
+                               LIMIT 500
                            )",
-                        new { MaxLogs = maxLogsPerTorrent },
-                        transaction);
-                }
+                        new { MaxLogs = maxLogsPerTorrent });
 
-                transaction.Commit();
-            }
-            catch
-            {
-                try
-                {
-                    transaction.Rollback();
-                }
-                catch
-                {
-                    // best-effort rollback
-                }
+                    if (rowsAffected == 0)
+                    {
+                        break;
+                    }
 
-                throw;
+                    Thread.Sleep(1);
+                }
             }
         });
     }
