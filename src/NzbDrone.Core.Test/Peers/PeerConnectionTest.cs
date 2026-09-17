@@ -1326,4 +1326,76 @@ public class PeerConnectionTest
 
         Assert.That(conn.DhKeyPool, Is.SameAs(pool));
     }
+
+    [Test]
+    public void BuildHandshake_should_set_reserved_bits_matching_configured_feature_flags()
+    {
+        const string infoHash = "0102030405060708091011121314151617181920";
+        const string peerId = "-SD0001-012345678901";
+
+        var allEnabled = PeerConnection.BuildHandshake(
+            infoHash,
+            peerId,
+            isPrivate: false,
+            clientProfile: null,
+            supportsExtensions: true,
+            supportsFast: true,
+            supportsDht: true);
+
+        Assert.That(allEnabled[25] & 0x10, Is.EqualTo(0x10));
+        Assert.That(allEnabled[27] & 0x04, Is.EqualTo(0x04));
+        Assert.That(allEnabled[27] & 0x01, Is.EqualTo(0x01));
+
+        var allDisabled = PeerConnection.BuildHandshake(
+            infoHash,
+            peerId,
+            isPrivate: false,
+            clientProfile: null,
+            supportsExtensions: false,
+            supportsFast: false,
+            supportsDht: false);
+
+        Assert.That(allDisabled[25] & 0x10, Is.EqualTo(0));
+        Assert.That(allDisabled[27] & 0x04, Is.EqualTo(0));
+        Assert.That(allDisabled[27] & 0x01, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void BuildHandshake_should_disable_extension_protocol_when_supportsExtensions_is_false()
+    {
+        var handshake = PeerConnection.BuildHandshake(
+            "0102030405060708091011121314151617181920",
+            "-SD0001-012345678901",
+            supportsExtensions: false);
+
+        Assert.That(handshake[25] & 0x10, Is.EqualTo(0));
+        Assert.That(handshake[27] & 0x04, Is.EqualTo(0x04));
+        Assert.That(handshake[27] & 0x01, Is.EqualTo(0x01));
+    }
+
+    [Test]
+    public void BuildHandshake_should_disable_fast_extension_when_supportsFast_is_false()
+    {
+        var handshake = PeerConnection.BuildHandshake(
+            "0102030405060708091011121314151617181920",
+            "-SD0001-012345678901",
+            supportsFast: false);
+
+        Assert.That(handshake[25] & 0x10, Is.EqualTo(0x10));
+        Assert.That(handshake[27] & 0x04, Is.EqualTo(0));
+        Assert.That(handshake[27] & 0x01, Is.EqualTo(0x01));
+    }
+
+    [Test]
+    public void BuildHandshake_should_disable_dht_when_supportsDht_is_false()
+    {
+        var handshake = PeerConnection.BuildHandshake(
+            "0102030405060708091011121314151617181920",
+            "-SD0001-012345678901",
+            supportsDht: false);
+
+        Assert.That(handshake[25] & 0x10, Is.EqualTo(0x10));
+        Assert.That(handshake[27] & 0x04, Is.EqualTo(0x04));
+        Assert.That(handshake[27] & 0x01, Is.EqualTo(0));
+    }
 }

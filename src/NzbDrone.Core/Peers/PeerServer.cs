@@ -1184,13 +1184,28 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
                 : null);
             var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
-            connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile);
+            var supportsFast = _configService?.ExtensionFastExtension ?? true;
+            var supportsDht = _configService?.EnableDht ?? true;
+            connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile, supportsExtensions: true, supportsFast: supportsFast, supportsDht: supportsDht);
 
             if (!connection.ReceiveHandshake())
             {
                 _logger.Debug("Outgoing handshake failed from {0}:{1}", candidate.Ip, candidate.Port);
                 _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
                 _eventLogService?.Debug(torrent.Id, "Peers", $"BitTorrent handshake rejected/timed out from {candidate.Ip}:{candidate.Port}");
+                connection.Dispose();
+                return;
+            }
+
+            if (!string.Equals(connection.InfoHash, torrent.InfoHash, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.Warn(
+                    "Peer {0}:{1} returned info-hash {2}, expected {3}; closing connection",
+                    candidate.Ip,
+                    candidate.Port,
+                    connection.InfoHash,
+                    torrent.InfoHash);
+                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
                 connection.Dispose();
                 return;
             }
@@ -1390,6 +1405,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             if (torrent == null)
             {
                 _logger.Debug("Unknown info hash from {0}: {1}", connection.RemoteIp, connection.InfoHash);
+                connection.Dispose();
                 return;
             }
 
@@ -1426,7 +1442,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
                     : null);
                 var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
-                connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile);
+                var supportsFast = _configService?.ExtensionFastExtension ?? true;
+                var supportsDht = _configService?.EnableDht ?? true;
+                connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile, supportsExtensions: true, supportsFast: supportsFast, supportsDht: supportsDht);
 
                 _logger.Debug(
                     "Peer {0} connected (encrypted: {1}, method: {2})",
