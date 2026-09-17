@@ -2,7 +2,7 @@ using FluentMigrator;
 
 namespace NzbDrone.Core.Datastore.Migration;
 
-[Migration(48)]
+[Migration(49)]
 public class AddIsVpnPausedToTorrents : NzbDroneMigrationBase
 {
     public override void Up()
