@@ -25,6 +25,8 @@ public class ParsedTorrent
     public string AnnounceUrl { get; set; }
     public List<List<string>> AnnounceList { get; set; }
     public List<ParsedTorrentFile> Files { get; set; }
+    public List<string> HttpSeeds { get; set; } = new();
+    public List<string> UrlList { get; set; } = new();
 }
 
 public class ParsedTorrentFile
@@ -190,6 +192,14 @@ public class TorrentFileParser : ITorrentFileParser
                 ? InfoHashCalculator.Calculate(rawInfoBytes)
                 : InfoHashCalculator.Calculate(info);
 
+            var httpSeeds = new List<string>();
+            ExtractUrlList(torrent, "httpseeds", httpSeeds);
+            ExtractUrlList(info, "httpseeds", httpSeeds);
+
+            var urlList = new List<string>();
+            ExtractUrlList(torrent, "url-list", urlList);
+            ExtractUrlList(info, "url-list", urlList);
+
             var result = new ParsedTorrent
             {
                 Name = torrentName,
@@ -201,6 +211,8 @@ public class TorrentFileParser : ITorrentFileParser
                 IsPrivate = info.ContainsKey("private") && (info["private"] as BNumber)?.Value == 1,
                 AnnounceUrl = announceUrl,
                 AnnounceList = announceListParsed,
+                HttpSeeds = httpSeeds,
+                UrlList = urlList,
                 Files = new List<ParsedTorrentFile>()
             };
 
@@ -332,6 +344,34 @@ public class TorrentFileParser : ITorrentFileParser
                 if (!string.IsNullOrEmpty(u))
                 {
                     targetList.Add(new List<string> { u });
+                }
+            }
+        }
+    }
+
+    private static void ExtractUrlList(BDictionary dict, string key, List<string> target)
+    {
+        if (!dict.ContainsKey(key))
+        {
+            return;
+        }
+
+        if (dict[key] is BString bString)
+        {
+            var url = DecodeBString(bString)?.Trim();
+            if (!string.IsNullOrWhiteSpace(url) && !target.Contains(url, StringComparer.OrdinalIgnoreCase))
+            {
+                target.Add(url);
+            }
+        }
+        else if (dict[key] is BList bList)
+        {
+            foreach (var item in bList.OfType<BString>())
+            {
+                var url = DecodeBString(item)?.Trim();
+                if (!string.IsNullOrWhiteSpace(url) && !target.Contains(url, StringComparer.OrdinalIgnoreCase))
+                {
+                    target.Add(url);
                 }
             }
         }
