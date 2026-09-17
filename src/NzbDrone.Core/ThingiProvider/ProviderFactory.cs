@@ -39,13 +39,13 @@ public abstract class ProviderFactory<TProvider, TProviderDefinition> : IProvide
         return _providerRepository.Insert(definition);
     }
 
-    public void Update(TProviderDefinition definition)
+    public virtual void Update(TProviderDefinition definition)
     {
         _logger.Info("Updating {0} provider '{1}'", typeof(TProvider).Name, definition.Name);
         _providerRepository.Update(definition);
     }
 
-    public void Delete(int id)
+    public virtual void Delete(int id)
     {
         _logger.Info("Removing {0} provider {1}", typeof(TProvider).Name, id);
         _providerRepository.Delete(id);

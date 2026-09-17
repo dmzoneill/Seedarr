@@ -51,7 +51,12 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     public SyncResult Sync()
     {
-        _syncLock.Wait();
+        if (!_syncLock.Wait(0))
+        {
+            _logger.Warn("Download client sync is already running, skipping overlapping sync request.");
+            return new SyncResult();
+        }
+
         try
         {
             var result = new SyncResult();
@@ -693,39 +698,17 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     protected virtual IDownloadClient CreateClient(DownloadClientDefinition definition)
     {
-        return definition.ClientType switch
+        var client = _downloadClientFactory.CreateClient(definition);
+        if (client is Transmission.TransmissionClient tc && tc.RemotePathMappingService == null)
         {
-            "QBitTorrent" => new NzbDrone.Core.DownloadClients.QBitTorrent.QBitTorrentClient
-            {
-                Host = definition.Host,
-                Port = definition.Port,
-                UseSsl = definition.UseSsl,
-                Username = definition.Username,
-                Password = definition.Password,
-                Category = definition.Category,
-            },
-            "Transmission" => new NzbDrone.Core.DownloadClients.Transmission.TransmissionClient
-            {
-                Host = definition.Host,
-                Port = definition.Port,
-                UseSsl = definition.UseSsl,
-                Username = definition.Username,
-                Password = definition.Password,
-                Category = definition.Category,
-                RemotePathMappingService = _remotePathMappingService,
-            },
-            "Deluge" => new NzbDrone.Core.DownloadClients.Deluge.DelugeClient
-            {
-                Host = definition.Host,
-                Port = definition.Port,
-                UseSsl = definition.UseSsl,
-                Username = definition.Username,
-                Password = definition.Password,
-                Category = definition.Category,
-                RemotePathMappingService = _remotePathMappingService,
-            },
-            _ => null
-        };
+            tc.RemotePathMappingService = _remotePathMappingService;
+        }
+        else if (client is Deluge.DelugeClient dc && dc.RemotePathMappingService == null)
+        {
+            dc.RemotePathMappingService = _remotePathMappingService;
+        }
+
+        return client;
     }
 
     public static TorrentStatus MapClientStatus(string status, long remainingSize, long totalSize)
