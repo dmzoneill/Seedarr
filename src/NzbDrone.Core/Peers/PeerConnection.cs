@@ -114,7 +114,8 @@ public class PeerConnection : IDisposable
     public double Progress { get; set; }
     public bool[] PeerPieces { get; set; }
     public HashSet<int> SuggestedPieces { get; } = new();
-    public HashSet<int> AllowedFastPieces { get; } = new();
+    public HashSet<int> RemoteAllowedFastPieces { get; } = new();
+    public HashSet<int> AllowedFastPieces => RemoteAllowedFastPieces;
     public DateTime LastRequestReceived { get; set; } = DateTime.UtcNow;
     public DateTime LastUnchokedAt { get; set; } = DateTime.MinValue;
     public DateTime LastPexReceived { get; set; } = DateTime.MinValue;

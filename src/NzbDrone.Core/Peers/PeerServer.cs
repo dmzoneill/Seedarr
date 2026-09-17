@@ -319,6 +319,26 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _piecePicker?.OnBlockRejected(connection, pieceIndex, begin, length);
     }
 
+    public bool CanRequestBlock(PeerConnection connection, int pieceIndex)
+    {
+        if (connection == null)
+        {
+            return false;
+        }
+
+        if (connection.PendingRequestCount >= connection.MaxPipelinedRequests)
+        {
+            return false;
+        }
+
+        return !connection.PeerChoking || (connection.SupportsFastExtension && connection.RemoteAllowedFastPieces.Contains(pieceIndex));
+    }
+
+    public PieceBlock RequestBlock(PeerConnection connection, int pieceIndex = -1)
+    {
+        return _piecePicker?.RequestBlock(connection, pieceIndex);
+    }
+
     public void SetTorrentMetadata(string infoHash, byte[] metadata)
     {
         if (!string.IsNullOrWhiteSpace(infoHash) && metadata != null)
@@ -1692,8 +1712,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             case PeerMessageType.HaveAll:
             case PeerMessageType.HaveNone:
             case PeerMessageType.AllowedFast:
-                if (connection.SupportsFastExtension && _fastExtensionHandler != null)
+                if (_fastExtensionHandler != null)
                 {
+                    connection.SupportsFastExtension = true;
                     _fastExtensionHandler.HandleMessage(connection, message, torrent?.PieceCount ?? 0);
                     if (message.Type == PeerMessageType.HaveAll && torrent != null && torrent.PieceCount > 0)
                     {

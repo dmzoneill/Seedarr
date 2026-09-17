@@ -79,6 +79,8 @@ public class FastExtensionTest
 
         _handler.HandleMessage(connection, message, 100);
 
+        Assert.That(connection.RemoteAllowedFastPieces, Contains.Item(15));
+        Assert.That(connection.RemoteAllowedFastPieces.Count, Is.EqualTo(1));
         Assert.That(connection.AllowedFastPieces, Contains.Item(15));
         Assert.That(connection.AllowedFastPieces.Count, Is.EqualTo(1));
 
@@ -86,6 +88,8 @@ public class FastExtensionTest
         var message2 = _handler.SerializeAllowedFast(27);
         _handler.HandleMessage(connection, message2, 100);
 
+        Assert.That(connection.RemoteAllowedFastPieces, Contains.Item(27));
+        Assert.That(connection.RemoteAllowedFastPieces.Count, Is.EqualTo(2));
         Assert.That(connection.AllowedFastPieces, Contains.Item(27));
         Assert.That(connection.AllowedFastPieces.Count, Is.EqualTo(2));
     }
@@ -301,5 +305,57 @@ public class FastExtensionTest
         Assert.That(message.Payload[9], Is.EqualTo(0x0A));
         Assert.That(message.Payload[10], Is.EqualTo(0x0B));
         Assert.That(message.Payload[11], Is.EqualTo(0x0C));
+    }
+
+    [Test]
+    public void RequestBlock_for_piece_in_remote_allowed_fast_pieces_is_permitted_when_peer_choking()
+    {
+        using var connection = CreateConnection();
+        connection.SupportsFastExtension = true;
+        connection.PeerChoking = true;
+        connection.RemoteAllowedFastPieces.Add(3);
+
+        var picker = new PiecePicker();
+        picker.AddActivePiece(3, 32768, 16384);
+
+        Assert.That(picker.CanRequestBlock(connection, 3), Is.True);
+        var block = picker.RequestBlock(connection, 3);
+        Assert.That(block, Is.Not.Null);
+        Assert.That(block.PieceIndex, Is.EqualTo(3));
+        Assert.That(block.RequestedFrom, Is.EqualTo(connection));
+    }
+
+    [Test]
+    public void RequestBlock_for_piece_not_in_remote_allowed_fast_pieces_remains_suppressed_when_peer_choking()
+    {
+        using var connection = CreateConnection();
+        connection.SupportsFastExtension = true;
+        connection.PeerChoking = true;
+        connection.RemoteAllowedFastPieces.Add(3);
+
+        var picker = new PiecePicker();
+        picker.AddActivePiece(4, 32768, 16384);
+
+        Assert.That(picker.CanRequestBlock(connection, 4), Is.False);
+        var block = picker.RequestBlock(connection, 4);
+        Assert.That(block, Is.Null);
+    }
+
+    [Test]
+    public void RequestBlock_prioritizes_bootstrap_allowed_fast_pieces_when_choked()
+    {
+        using var connection = CreateConnection();
+        connection.SupportsFastExtension = true;
+        connection.PeerChoking = true;
+        connection.RemoteAllowedFastPieces.Add(7);
+
+        var picker = new PiecePicker();
+        picker.AddActivePiece(1, 32768, 16384);
+        picker.AddActivePiece(7, 32768, 16384);
+
+        var block = picker.RequestBlock(connection);
+        Assert.That(block, Is.Not.Null);
+        Assert.That(block.PieceIndex, Is.EqualTo(7));
+        Assert.That(block.RequestedFrom, Is.EqualTo(connection));
     }
 }

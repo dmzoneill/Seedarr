@@ -80,6 +80,7 @@ public interface IPiecePicker : IPieceBlockDownloader
     ActivePiece GetActivePiece(int pieceIndex);
     bool RemoveActivePiece(int pieceIndex);
 
+    bool CanRequestBlock(PeerConnection peer, int pieceIndex);
     PieceBlock RequestBlock(PeerConnection peer, int pieceIndex = -1);
     void MarkBlockRequested(PeerConnection peer, int pieceIndex, int begin, int length, TimeSpan? timeout = null);
     void MarkBlockCompleted(int pieceIndex, int begin, int length);
@@ -119,6 +120,21 @@ public class PiecePicker : IDownloadManager
         return _activePieces.TryRemove(pieceIndex, out _);
     }
 
+    public bool CanRequestBlock(PeerConnection peer, int pieceIndex)
+    {
+        if (peer == null)
+        {
+            return false;
+        }
+
+        if (peer.PendingRequestCount >= peer.MaxPipelinedRequests)
+        {
+            return false;
+        }
+
+        return !peer.PeerChoking || (peer.SupportsFastExtension && peer.RemoteAllowedFastPieces.Contains(pieceIndex));
+    }
+
     public PieceBlock RequestBlock(PeerConnection peer, int pieceIndex = -1)
     {
         if (peer == null)
@@ -152,6 +168,28 @@ public class PiecePicker : IDownloadManager
                     return block;
                 }
 
+                return null;
+            }
+
+            // Prioritize bootstrap block requests from RemoteAllowedFastPieces when starting connection while choked
+            if (peer.SupportsFastExtension && peer.RemoteAllowedFastPieces.Count > 0)
+            {
+                foreach (var allowedIndex in peer.RemoteAllowedFastPieces)
+                {
+                    if (_activePieces.TryGetValue(allowedIndex, out var allowedPiece) && CanPeerServePiece(peer, allowedIndex))
+                    {
+                        var block = allowedPiece.GetNextAvailableBlock();
+                        if (block != null)
+                        {
+                            AssignBlock(peer, block);
+                            return block;
+                        }
+                    }
+                }
+            }
+
+            if (peer.PeerChoking)
+            {
                 return null;
             }
 
@@ -328,9 +366,15 @@ public class PiecePicker : IDownloadManager
 
     private static bool CanPeerServePiece(PeerConnection peer, int pieceIndex)
     {
-        if (peer.PeerChoking && !peer.AllowedFastPieces.Contains(pieceIndex))
+        var canRequest = !peer.PeerChoking || (peer.SupportsFastExtension && peer.RemoteAllowedFastPieces.Contains(pieceIndex));
+        if (!canRequest)
         {
             return false;
+        }
+
+        if (peer.SupportsFastExtension && peer.RemoteAllowedFastPieces.Contains(pieceIndex))
+        {
+            return true;
         }
 
         if (peer.IsSeed)
