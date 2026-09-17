@@ -4,6 +4,8 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
@@ -1181,6 +1183,99 @@ public class PeerConnectionTest
         var result = clientConn.NegotiateEncryptionOutgoing(
             "ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ",
             NzbDrone.Core.Peers.Encryption.EncryptionMode.PreferEncrypted);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task NegotiateEncryptionIncomingAsync_should_return_false_when_stream_has_no_data()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+        rawClient.Close();
+
+        var result = await conn.NegotiateEncryptionIncomingAsync(
+            _ => true,
+            EncryptionMode.PreferEncrypted,
+            CancellationToken.None);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task NegotiateEncryptionIncomingAsync_should_return_true_for_plain_bt_in_prefer_mode()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+        rawClient.GetStream().WriteByte(0x13);
+        await rawClient.GetStream().FlushAsync();
+
+        var result = await conn.NegotiateEncryptionIncomingAsync(
+            _ => true,
+            EncryptionMode.PreferEncrypted,
+            CancellationToken.None);
+
+        Assert.That(result, Is.True);
+        Assert.That(conn.IsEncrypted, Is.False);
+        Assert.That(conn.EncryptionMethod, Is.EqualTo(CryptoMethod.PlainText));
+    }
+
+    [Test]
+    public async Task NegotiateEncryptionIncomingAsync_with_torrent_selector_should_return_true_for_plain_bt()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+        rawClient.GetStream().WriteByte(0x13);
+        await rawClient.GetStream().FlushAsync();
+
+        var dummyTorrent = new NzbDrone.Core.Torrents.Torrent { Id = 456 };
+        var result = await conn.NegotiateEncryptionIncomingAsync(
+            _ => dummyTorrent,
+            EncryptionMode.PreferEncrypted,
+            CancellationToken.None);
+
+        Assert.That(result, Is.True);
+        Assert.That(conn.IsEncrypted, Is.False);
+        Assert.That(conn.EncryptionMethod, Is.EqualTo(CryptoMethod.PlainText));
+    }
+
+    [Test]
+    public async Task NegotiateEncryptionIncomingAsync_should_return_false_when_cancelled()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var result = await conn.NegotiateEncryptionIncomingAsync(
+            _ => true,
+            EncryptionMode.PreferEncrypted,
+            cts.Token);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task NegotiateEncryptionOutgoingAsync_should_return_false_when_remote_closes_immediately()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        serverConn.Dispose();
+
+        var result = await clientConn.NegotiateEncryptionOutgoingAsync(
+            "0102030405060708091011121314151617181920",
+            EncryptionMode.PreferEncrypted,
+            CancellationToken.None);
+
+        Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public async Task NegotiateEncryptionOutgoingAsync_should_return_false_when_cancelled()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        var result = await clientConn.NegotiateEncryptionOutgoingAsync(
+            "0102030405060708091011121314151617181920",
+            EncryptionMode.PreferEncrypted,
+            cts.Token);
 
         Assert.That(result, Is.False);
     }

@@ -656,7 +656,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
             try
             {
-                HandleConnection(client, stoppingToken, ReleaseHalfOpen);
+                await HandleConnectionAsync(client, stoppingToken, ReleaseHalfOpen);
             }
             finally
             {
@@ -917,7 +917,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 ? _clientBehaviorSimulator.GetEffectiveIdleChance(_configService.PeerIdleChance)
                 : _configService.PeerIdleChance;
 
-            if (!connection.NegotiateEncryptionOutgoing(torrent.InfoHash, GetEncryptionMode()))
+            if (!await connection.NegotiateEncryptionOutgoingAsync(torrent.InfoHash, GetEncryptionMode(), stoppingToken))
             {
                 _logger.Debug("Outgoing encryption failed to {0}:{1}", candidate.Ip, candidate.Port);
                 _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
@@ -1075,6 +1075,11 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
     private void HandleConnection(TcpClient client, CancellationToken stoppingToken, Action onHandshakeSuccess)
     {
+        HandleConnectionAsync(client, stoppingToken, onHandshakeSuccess).GetAwaiter().GetResult();
+    }
+
+    private async Task HandleConnectionAsync(TcpClient client, CancellationToken stoppingToken, Action onHandshakeSuccess = null)
+    {
         using var connection = new PeerConnection(client, _dhKeyPool);
         connection.HandshakeTimeoutMs = UnauthenticatedHandshakeTimeoutMs;
         connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
@@ -1100,8 +1105,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         try
         {
             var negotiated = _mseSkeyRegistry != null
-                ? connection.NegotiateEncryptionIncoming(_mseSkeyRegistry, GetEncryptionMode())
-                : connection.NegotiateEncryptionIncoming(ValidateInfoHash, GetEncryptionMode());
+                ? await connection.NegotiateEncryptionIncomingAsync(_mseSkeyRegistry, GetEncryptionMode(), stoppingToken)
+                : await connection.NegotiateEncryptionIncomingAsync(ValidateInfoHash, GetEncryptionMode(), stoppingToken);
             if (!negotiated)
             {
                 _logger.Debug("Encryption negotiation failed from {0}", connection.RemoteIp);
