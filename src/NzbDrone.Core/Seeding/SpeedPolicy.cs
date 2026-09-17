@@ -132,6 +132,7 @@ public class SpeedPolicy : ISpeedPolicy
                 {
                     _eventLogService.Info(torrent.Id, "Download", $"Download complete ({FormatBytes(torrent.TotalSize)})");
                     _eventAggregator?.PublishEvent(new TorrentDownloadCompletedEvent(torrent));
+                    _eventAggregator?.PublishEvent(new TorrentFinishedEvent(torrent));
                 }
             }
 

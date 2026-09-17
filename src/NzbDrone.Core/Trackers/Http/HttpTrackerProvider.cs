@@ -222,6 +222,6 @@ public class HttpTrackerProvider : ITrackerProvider
             $"&left={request.Left}" +
             $"&compact={(request.Compact ? 1 : 0)}" +
             $"&numwant={request.NumWant}" +
-            (string.IsNullOrEmpty(request.Event) ? "" : $"&event={request.Event}");
+            (request.Event != AnnounceEvent.None ? $"&event={request.EventString}" : "");
     }
 }

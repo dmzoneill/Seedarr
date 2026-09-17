@@ -3,6 +3,14 @@ using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.Trackers;
 
+public enum AnnounceEvent
+{
+    None = 0,
+    Started = 1,
+    Completed = 2,
+    Stopped = 3
+}
+
 public interface ITrackerResponse
 {
     bool Success { get; }
@@ -19,7 +27,16 @@ public class TrackerAnnounceRequest
     public long Uploaded { get; set; }
     public long Downloaded { get; set; }
     public long Left { get; set; }
-    public string Event { get; set; }
+    public AnnounceEvent Event { get; set; }
+
+    public string EventString => Event switch
+    {
+        AnnounceEvent.Started => "started",
+        AnnounceEvent.Completed => "completed",
+        AnnounceEvent.Stopped => "stopped",
+        _ => null
+    };
+
     public string TrackerUrl { get; set; }
     public bool Compact { get; set; } = true;
     public int NumWant { get; set; } = 50;

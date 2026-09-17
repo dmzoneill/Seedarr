@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding;
@@ -17,8 +19,8 @@ namespace NzbDrone.Core.Trackers;
 
 public interface ITrackerAnnounceService
 {
-    List<TrackerAnnounceResult> AnnounceTorrent(Torrent torrent, bool force = false);
-    TrackerAnnounceResult AnnounceTracker(Torrent torrent, TrackerEntry entry, bool force = false);
+    List<TrackerAnnounceResult> AnnounceTorrent(Torrent torrent, bool force = false, AnnounceEvent eventType = AnnounceEvent.None);
+    TrackerAnnounceResult AnnounceTracker(Torrent torrent, TrackerEntry entry, bool force = false, AnnounceEvent eventType = AnnounceEvent.None);
 }
 
 public class TrackerAnnounceResult
@@ -37,7 +39,12 @@ public class TrackerAnnounceResult
 public class TrackerAnnounceService : ITrackerAnnounceService,
     IHandle<SeedingStoppedEvent>,
     IHandle<TorrentStatusChangedEvent>,
-    IHandle<TorrentPausedEvent>
+    IHandle<TorrentPausedEvent>,
+    IHandle<TorrentDeletedEvent>,
+    IHandle<TorrentFinishedEvent>,
+    IHandle<TorrentDownloadCompletedEvent>,
+    IHandle<TorrentHashCheckCompletedEvent>,
+    IHandle<ApplicationStartedEvent>
 {
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly IMultiTrackerManager _multiTracker;
@@ -48,6 +55,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     private readonly IEventAggregator _eventAggregator;
     private readonly ITorrentService _torrentService;
     private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
+    private readonly ConcurrentDictionary<int, bool> _completedTorrents = new();
     private readonly Logger _logger;
 
     public TrackerAnnounceService(
@@ -71,9 +79,31 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         _torrentService = torrentService;
         _clientBehaviorSimulator = clientBehaviorSimulator;
         _logger = LogManager.GetCurrentClassLogger();
+
+        if (_torrentService != null)
+        {
+            try
+            {
+                var existingTorrents = _torrentService.GetAll();
+                if (existingTorrents != null)
+                {
+                    foreach (var t in existingTorrents)
+                    {
+                        if (t.Progress >= 1.0 || t.Status == TorrentStatus.Seeding || (t.TotalSize > 0 && t.Downloaded >= t.TotalSize))
+                        {
+                            _completedTorrents.TryAdd(t.Id, true);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to load initial completed torrents");
+            }
+        }
     }
 
-    public List<TrackerAnnounceResult> AnnounceTorrent(Torrent torrent, bool force = false)
+    public List<TrackerAnnounceResult> AnnounceTorrent(Torrent torrent, bool force = false, AnnounceEvent eventType = AnnounceEvent.None)
     {
         var results = new List<TrackerAnnounceResult>();
         if (torrent == null || string.IsNullOrWhiteSpace(torrent.InfoHash))
@@ -92,7 +122,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 Status = TrackerStatus.Unknown,
                 Enabled = true
             };
-            entry = _trackerEntryService.Add(entry);
+            if (eventType != AnnounceEvent.Stopped)
+            {
+                entry = _trackerEntryService.Add(entry);
+            }
+
             trackerEntries = new List<TrackerEntry> { entry };
         }
 
@@ -123,7 +157,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 continue;
             }
 
-            var result = ExecuteAnnounce(torrent, entry, isFirstAnnounce);
+            var result = ExecuteAnnounce(torrent, entry, isFirstAnnounce, eventType);
             results.Add(result);
 
             if (torrent.IsPrivate && result.Success)
@@ -135,7 +169,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         return results;
     }
 
-    public TrackerAnnounceResult AnnounceTracker(Torrent torrent, TrackerEntry entry, bool force = false)
+    public TrackerAnnounceResult AnnounceTracker(Torrent torrent, TrackerEntry entry, bool force = false, AnnounceEvent eventType = AnnounceEvent.None)
     {
         if (torrent == null || entry == null || string.IsNullOrWhiteSpace(entry.Url))
         {
@@ -148,28 +182,38 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return new TrackerAnnounceResult { Success = false, FailureReason = "Tracker not due for announce yet" };
         }
 
-        return ExecuteAnnounce(torrent, entry, isFirstAnnounce);
+        return ExecuteAnnounce(torrent, entry, isFirstAnnounce, eventType);
     }
 
-    private TrackerAnnounceResult ExecuteAnnounce(Torrent torrent, TrackerEntry entry, bool isFirstAnnounce)
+    private TrackerAnnounceResult ExecuteAnnounce(Torrent torrent, TrackerEntry entry, bool isFirstAnnounce, AnnounceEvent eventType = AnnounceEvent.None)
     {
-        var isStopped = torrent.Status == TorrentStatus.Stopped || torrent.Status == TorrentStatus.Paused;
-        string eventVal = null;
-        if (isStopped)
+        var isStopped = torrent.Status == TorrentStatus.Stopped || torrent.Status == TorrentStatus.Paused || eventType == AnnounceEvent.Stopped;
+
+        AnnounceEvent announceEvent;
+        if (eventType != AnnounceEvent.None)
         {
-            eventVal = "stopped";
+            announceEvent = eventType;
+        }
+        else if (isStopped)
+        {
+            announceEvent = AnnounceEvent.Stopped;
         }
         else if (isFirstAnnounce)
         {
-            eventVal = "started";
+            announceEvent = AnnounceEvent.Started;
+        }
+        else
+        {
+            announceEvent = AnnounceEvent.None;
         }
 
-        var eventName = eventVal ?? "regular";
+        var left = announceEvent == AnnounceEvent.Completed ? 0 : Math.Max(0, torrent.TotalSize - torrent.Downloaded);
+        var eventName = announceEvent != AnnounceEvent.None ? announceEvent.ToString().ToLowerInvariant() : "regular";
 
         _eventLogService.Info(
             torrent.Id,
             "Tracker",
-            $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {torrent.Uploaded:N0} bytes, left: {Math.Max(0, torrent.TotalSize - torrent.Downloaded):N0} bytes)");
+            $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {torrent.Uploaded:N0} bytes, left: {left:N0} bytes)");
 
         var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
             ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
@@ -189,8 +233,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             Port = _configService.ListeningPort,
             Uploaded = torrent.Uploaded,
             Downloaded = torrent.Downloaded,
-            Left = Math.Max(0, torrent.TotalSize - torrent.Downloaded),
-            Event = eventVal,
+            Left = left,
+            Event = announceEvent,
             TrackerUrl = entry.Url,
             Compact = true,
             NumWant = isStopped ? 0 : 50,
@@ -211,7 +255,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             torrent.Id,
             torrent.Uploaded,
             torrent.Downloaded,
-            Math.Max(0, torrent.TotalSize - torrent.Downloaded),
+            left,
             sw.ElapsedMilliseconds,
             response.Success,
             response.Complete,
@@ -289,9 +333,74 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         return result;
     }
 
-    public void Handle(SeedingStoppedEvent message)
+    public void Handle(TorrentFinishedEvent message)
     {
-        _ = HandleStoppedEventAsync(message);
+        if (message?.Torrent == null)
+        {
+            return;
+        }
+
+        var torrent = message.Torrent;
+        if (!_completedTorrents.TryAdd(torrent.Id, true))
+        {
+            return;
+        }
+
+        try
+        {
+            AnnounceTorrent(torrent, force: true, eventType: AnnounceEvent.Completed);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to send completed tracker announce on finished event for torrent {0}", torrent.Id);
+        }
+    }
+
+    public void Handle(TorrentDownloadCompletedEvent message)
+    {
+        if (message?.Torrent != null)
+        {
+            Handle(new TorrentFinishedEvent(message.Torrent));
+        }
+    }
+
+    public void Handle(TorrentHashCheckCompletedEvent message)
+    {
+        if (message?.Torrent != null)
+        {
+            var t = message.Torrent;
+            if (t.Progress >= 1.0 || t.Status == TorrentStatus.Seeding || (t.TotalSize > 0 && t.Downloaded >= t.TotalSize))
+            {
+                _completedTorrents.TryAdd(t.Id, true);
+            }
+        }
+    }
+
+    public void Handle(ApplicationStartedEvent message)
+    {
+        if (_torrentService == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var existingTorrents = _torrentService.GetAll();
+            if (existingTorrents != null)
+            {
+                foreach (var t in existingTorrents)
+                {
+                    if (t.Progress >= 1.0 || t.Status == TorrentStatus.Seeding || (t.TotalSize > 0 && t.Downloaded >= t.TotalSize))
+                    {
+                        _completedTorrents.TryAdd(t.Id, true);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to load initial completed torrents on ApplicationStartedEvent");
+        }
     }
 
     public void Handle(TorrentStatusChangedEvent message)
@@ -303,17 +412,14 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
         if (message.NewStatus == TorrentStatus.Stopped || message.NewStatus == TorrentStatus.Paused)
         {
-            Task.Run(() =>
+            try
             {
-                try
-                {
-                    AnnounceTorrent(message.Torrent, force: true);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Debug(ex, "Failed to send stopped tracker announce on status change for torrent {0}", message.Torrent.Id);
-                }
-            });
+                AnnounceTorrent(message.Torrent, force: true, eventType: AnnounceEvent.Stopped);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to send stopped tracker announce on status change for torrent {0}", message.Torrent.Id);
+            }
         }
     }
 
@@ -324,17 +430,51 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return;
         }
 
-        Task.Run(() =>
+        try
+        {
+            AnnounceTorrent(message.Torrent, force: true, eventType: AnnounceEvent.Stopped);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to send stopped tracker announce on paused event for torrent {0}", message.Torrent.Id);
+        }
+    }
+
+    public void Handle(TorrentDeletedEvent message)
+    {
+        var torrent = message?.Torrent;
+        if (torrent == null && message?.TorrentId > 0)
         {
             try
             {
-                AnnounceTorrent(message.Torrent, force: true);
+                torrent = _torrentService?.Get(message.TorrentId);
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.Debug(ex, "Failed to send stopped tracker announce on paused event for torrent {0}", message.Torrent.Id);
+                // Best effort
             }
-        });
+        }
+
+        if (torrent == null)
+        {
+            return;
+        }
+
+        _completedTorrents.TryRemove(torrent.Id, out _);
+
+        try
+        {
+            AnnounceTorrent(torrent, force: true, eventType: AnnounceEvent.Stopped);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to send stopped tracker announce on deleted event for torrent {0}", torrent.Id);
+        }
+    }
+
+    public void Handle(SeedingStoppedEvent message)
+    {
+        _ = HandleStoppedEventAsync(message);
     }
 
     public async Task HandleStoppedEventAsync(SeedingStoppedEvent message)
@@ -351,7 +491,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 var torrent = _torrentService?.Get(message.TorrentId);
                 if (torrent != null)
                 {
-                    AnnounceTorrent(torrent, force: true);
+                    AnnounceTorrent(torrent, force: true, eventType: AnnounceEvent.Stopped);
                 }
             }
             catch (Exception ex)

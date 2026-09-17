@@ -156,11 +156,11 @@ public class HttpTrackerProviderTest
     }
 
     [Test]
-    public void BuildAnnounceUrl_should_include_event_when_set()
+    public void BuildAnnounceUrl_should_include_event_started()
     {
         var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
         var request = CreateRequest();
-        request.Event = "started";
+        request.Event = AnnounceEvent.Started;
 
         var result = (string)method.Invoke(null, new object[] { request });
 
@@ -168,23 +168,11 @@ public class HttpTrackerProviderTest
     }
 
     [Test]
-    public void BuildAnnounceUrl_should_exclude_event_when_empty()
+    public void BuildAnnounceUrl_should_exclude_event_when_none()
     {
         var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
         var request = CreateRequest();
-        request.Event = "";
-
-        var result = (string)method.Invoke(null, new object[] { request });
-
-        Assert.That(result, Does.Not.Contain("event="));
-    }
-
-    [Test]
-    public void BuildAnnounceUrl_should_exclude_event_when_null()
-    {
-        var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
-        var request = CreateRequest();
-        request.Event = null;
+        request.Event = AnnounceEvent.None;
 
         var result = (string)method.Invoke(null, new object[] { request });
 
@@ -273,7 +261,7 @@ public class HttpTrackerProviderTest
     {
         var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
         var request = CreateRequest();
-        request.Event = "completed";
+        request.Event = AnnounceEvent.Completed;
 
         var result = (string)method.Invoke(null, new object[] { request });
 
@@ -285,7 +273,7 @@ public class HttpTrackerProviderTest
     {
         var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
         var request = CreateRequest();
-        request.Event = "stopped";
+        request.Event = AnnounceEvent.Stopped;
 
         var result = (string)method.Invoke(null, new object[] { request });
 
@@ -297,7 +285,7 @@ public class HttpTrackerProviderTest
     {
         var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
         var request = CreateRequest();
-        request.Event = "started";
+        request.Event = AnnounceEvent.Started;
 
         var result = (string)method.Invoke(null, new object[] { request });
 
@@ -340,7 +328,7 @@ public class HttpTrackerProviderTest
             Left = 300,
             Compact = true,
             NumWant = 25,
-            Event = "started"
+            Event = AnnounceEvent.Started
         };
 
         var result = (string)method.Invoke(null, new object[] { request });

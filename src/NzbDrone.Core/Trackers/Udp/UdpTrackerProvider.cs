@@ -168,9 +168,9 @@ public class UdpTrackerProvider : ITrackerProvider
 
         var eventValue = request.Event switch
         {
-            "completed" => 1,
-            "started" => 2,
-            "stopped" => 3,
+            AnnounceEvent.Completed => 1,
+            AnnounceEvent.Started => 2,
+            AnnounceEvent.Stopped => 3,
             _ => 0
         };
         WriteInt32BigEndian(packet, 80, eventValue);

@@ -266,7 +266,7 @@ public class TrackerAnnounceServiceTest
 
         Assert.That(results.Count, Is.EqualTo(1));
         _multiTracker.Received(1).Announce(
-            Arg.Is<TrackerAnnounceRequest>(r => r.Event == "stopped" && r.NumWant == 0),
+            Arg.Is<TrackerAnnounceRequest>(r => r.Event == AnnounceEvent.Stopped && r.NumWant == 0),
             Arg.Any<List<List<string>>>());
     }
 
@@ -291,7 +291,7 @@ public class TrackerAnnounceServiceTest
         await _service.HandleStoppedEventAsync(new SeedingStoppedEvent(60));
 
         _multiTracker.Received(1).Announce(
-            Arg.Is<TrackerAnnounceRequest>(r => r.Event == "stopped" && r.NumWant == 0),
+            Arg.Is<TrackerAnnounceRequest>(r => r.Event == AnnounceEvent.Stopped && r.NumWant == 0),
             Arg.Any<List<List<string>>>());
     }
 
@@ -400,5 +400,139 @@ public class TrackerAnnounceServiceTest
 
         Assert.That(dict.ContainsKey("v"), Is.True);
         Assert.That(((BString)dict["v"]).ToString(), Is.EqualTo("qBittorrent/4.4.2"));
+    }
+
+    [Test]
+    public void Handle_TorrentFinishedEvent_should_send_completed_event_with_left_zero()
+    {
+        var torrent = new Torrent
+        {
+            Id = 55,
+            Name = "Finished.Torrent",
+            InfoHash = "1111222233334444555566667777888899990000",
+            Uploaded = 500,
+            Downloaded = 1000,
+            TotalSize = 1000,
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry { Id = 1, TorrentId = 55, Url = "http://tracker.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(55).Returns(new List<TrackerEntry> { tracker });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        _service.Handle(new TorrentFinishedEvent(torrent));
+
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.Event == AnnounceEvent.Completed && r.Left == 0),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void Handle_TorrentFinishedEvent_should_not_send_completed_if_already_complete_at_startup()
+    {
+        var startupTorrent = new Torrent
+        {
+            Id = 56,
+            Name = "Already.Complete",
+            InfoHash = "2222333344445555666677778888999900001111",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            TotalSize = 1000,
+            Downloaded = 1000
+        };
+
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.GetAll().Returns(new List<Torrent> { startupTorrent });
+
+        var tracker = new TrackerEntry { Id = 1, TorrentId = 56, Url = "http://tracker.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(56).Returns(new List<TrackerEntry> { tracker });
+
+        var service = new TrackerAnnounceService(
+            _trackerEntryService,
+            _multiTracker,
+            _peerDiscovery,
+            _eventLogService,
+            _configService,
+            _trackerMetricService,
+            eventAggregator: null,
+            torrentService: torrentService);
+
+        service.Handle(new TorrentFinishedEvent(startupTorrent));
+
+        _multiTracker.DidNotReceive().Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.Event == AnnounceEvent.Completed),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void Handle_TorrentFinishedEvent_should_not_send_completed_if_already_complete_on_hash_check()
+    {
+        var torrent = new Torrent
+        {
+            Id = 57,
+            Name = "HashCheck.Torrent",
+            InfoHash = "3333444455556666777788889999000011112222",
+            Status = TorrentStatus.Seeding,
+            Progress = 1.0,
+            TotalSize = 1000,
+            Downloaded = 1000
+        };
+
+        var tracker = new TrackerEntry { Id = 1, TorrentId = 57, Url = "http://tracker.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(57).Returns(new List<TrackerEntry> { tracker });
+
+        _service.Handle(new TorrentHashCheckCompletedEvent(torrent, true));
+        _service.Handle(new TorrentFinishedEvent(torrent));
+
+        _multiTracker.DidNotReceive().Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.Event == AnnounceEvent.Completed),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void Handle_TorrentPausedEvent_should_send_stopped_event()
+    {
+        var torrent = new Torrent
+        {
+            Id = 58,
+            Name = "Paused.Movie",
+            InfoHash = "4444555566667777888899990000111122223333",
+            Status = TorrentStatus.Paused
+        };
+
+        var tracker = new TrackerEntry { Id = 1, TorrentId = 58, Url = "http://tracker.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(58).Returns(new List<TrackerEntry> { tracker });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        _service.Handle(new TorrentPausedEvent(torrent));
+
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.Event == AnnounceEvent.Stopped && r.NumWant == 0),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void Handle_TorrentDeletedEvent_should_send_stopped_event()
+    {
+        var torrent = new Torrent
+        {
+            Id = 59,
+            Name = "Deleted.Movie",
+            InfoHash = "5555666677778888999900001111222233334444",
+            Status = TorrentStatus.Stopped
+        };
+
+        var tracker = new TrackerEntry { Id = 1, TorrentId = 59, Url = "http://tracker.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(59).Returns(new List<TrackerEntry> { tracker });
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        _service.Handle(new TorrentDeletedEvent(59, torrent));
+
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.Event == AnnounceEvent.Stopped && r.NumWant == 0),
+            Arg.Any<List<List<string>>>());
     }
 }
