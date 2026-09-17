@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.6.8](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.8) - 2026-09-17
+
+### 🐛 Bug Fixes
+- fix(indexers): prevent ArgumentNullException on null ApiKey and attach header (Closes #179)
+- fix(torrents): fix ratio calculation when Downloaded is 0 and harmonize SpeedPolicy (Closes #198)
+- fix(ui): resolve formatRelativeTime future timestamp and add running indicator (Closes #315)
+
 ## [v1.6.7](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.7) - 2026-09-17
 
 ### ✨ Features
