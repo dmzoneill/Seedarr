@@ -1219,6 +1219,9 @@ export interface FileSystemResource {
   current?: string;
   directories: FileSystemEntryResource[];
   files?: FileSystemEntryResource[];
+  totalDirectories?: number;
+  totalFiles?: number;
+  isTruncated?: boolean;
 }
 
 export interface CurrentUser {

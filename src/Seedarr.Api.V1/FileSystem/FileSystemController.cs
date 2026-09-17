@@ -25,13 +25,19 @@ public class FileSystemController : Controller
     /// </summary>
     /// <param name="path">The directory path to explore. If omitted or empty, returns drive roots or system root.</param>
     /// <param name="includeFiles">Whether to include files in addition to directories.</param>
+    /// <param name="skip">Number of entries to skip for pagination.</param>
+    /// <param name="take">Number of entries to return per page.</param>
     /// <returns>A FileSystemResource containing directories and files.</returns>
     [HttpGet]
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File browser controller intentionally accesses user-requested directories")]
     [ProducesResponseType(typeof(FileSystemResource), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<FileSystemResource> GetContents([FromQuery] string path = null, [FromQuery] bool includeFiles = false)
+    public ActionResult<FileSystemResource> GetContents(
+        [FromQuery] string path = null,
+        [FromQuery] bool includeFiles = false,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 500)
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -69,6 +75,9 @@ public class FileSystemController : Controller
             return NotFound($"Directory not found: {fullPath}");
         }
 
+        var clampedTake = Math.Clamp(take <= 0 ? 500 : take, 1, 2000);
+        var clampedSkip = Math.Max(0, skip);
+
         var result = new FileSystemResource
         {
             Current = fullPath,
@@ -80,7 +89,10 @@ public class FileSystemController : Controller
         try
         {
             var dirInfo = new DirectoryInfo(fullPath);
+            var maxLimit = Math.Clamp(clampedSkip + clampedTake + 1, 5000, 10000);
 
+            var totalDirs = 0;
+            var hasMoreDirs = false;
             try
             {
                 var enumOptions = new EnumerationOptions
@@ -89,10 +101,27 @@ public class FileSystemController : Controller
                     RecurseSubdirectories = false,
                 };
 
-                var directories = dirInfo.EnumerateDirectories("*", enumOptions)
-                    .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase);
+                var allDirs = new List<DirectoryInfo>();
+                foreach (var dir in dirInfo.EnumerateDirectories("*", enumOptions))
+                {
+                    if (allDirs.Count >= maxLimit)
+                    {
+                        hasMoreDirs = true;
+                        break;
+                    }
 
-                foreach (var dir in directories)
+                    allDirs.Add(dir);
+                }
+
+                totalDirs = allDirs.Count;
+                result.TotalDirectories = totalDirs;
+
+                var pagedDirs = allDirs
+                    .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+                    .Skip(clampedSkip)
+                    .Take(clampedTake);
+
+                foreach (var dir in pagedDirs)
                 {
                     try
                     {
@@ -116,6 +145,8 @@ public class FileSystemController : Controller
                 _logger.Warn(ex, "Failed to enumerate directories in {0}", fullPath);
             }
 
+            var totalFiles = 0;
+            var hasMoreFiles = false;
             if (includeFiles)
             {
                 try
@@ -126,10 +157,27 @@ public class FileSystemController : Controller
                         RecurseSubdirectories = false,
                     };
 
-                    var files = dirInfo.EnumerateFiles("*", fileEnumOptions)
-                        .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase);
+                    var allFiles = new List<FileInfo>();
+                    foreach (var file in dirInfo.EnumerateFiles("*", fileEnumOptions))
+                    {
+                        if (allFiles.Count >= maxLimit)
+                        {
+                            hasMoreFiles = true;
+                            break;
+                        }
 
-                    foreach (var file in files)
+                        allFiles.Add(file);
+                    }
+
+                    totalFiles = allFiles.Count;
+                    result.TotalFiles = totalFiles;
+
+                    var pagedFiles = allFiles
+                        .OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                        .Skip(clampedSkip)
+                        .Take(clampedTake);
+
+                    foreach (var file in pagedFiles)
                     {
                         try
                         {
@@ -153,6 +201,10 @@ public class FileSystemController : Controller
                     _logger.Warn(ex, "Failed to enumerate files in {0}", fullPath);
                 }
             }
+
+            result.IsTruncated = hasMoreDirs || hasMoreFiles ||
+                                 (totalDirs > clampedSkip + result.Directories.Count) ||
+                                 (totalFiles > clampedSkip + result.Files.Count);
         }
         catch (Exception ex)
         {
@@ -354,6 +406,10 @@ public class FileSystemController : Controller
         {
             // Fallback
         }
+
+        result.TotalDirectories = result.Directories.Count;
+        result.TotalFiles = result.Files.Count;
+        result.IsTruncated = false;
 
         return result;
     }

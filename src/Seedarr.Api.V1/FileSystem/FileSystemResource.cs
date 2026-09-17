@@ -27,6 +27,21 @@ public class FileSystemResource
     /// Gets or sets the list of files if requested.
     /// </summary>
     public List<FileSystemEntryResource> Files { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets the total number of directories found.
+    /// </summary>
+    public int TotalDirectories { get; set; }
+
+    /// <summary>
+    /// Gets or sets the total number of files found.
+    /// </summary>
+    public int TotalFiles { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether results were truncated due to pagination limits.
+    /// </summary>
+    public bool IsTruncated { get; set; }
 }
 
 /// <summary>
