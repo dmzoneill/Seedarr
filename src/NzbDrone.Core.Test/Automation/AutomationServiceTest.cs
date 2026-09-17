@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Automation;
+using NzbDrone.Core.Extraction;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
@@ -192,5 +194,36 @@ for (var i = 0; i < 2000; i++) {
         Assert.That(reentrantResult, Is.Not.Null);
         Assert.That(reentrantResult.Success, Is.False);
         Assert.That(reentrantResult.Error, Does.Contain("Reentrancy detected"));
+    }
+
+    [Test]
+    public void ExecuteScript_should_trigger_archive_extraction_when_script_requests_it()
+    {
+        var extractor = Substitute.For<IArchiveExtractorService>();
+        var subject = new AutomationService(
+            _scriptRepository,
+            _torrentRepository,
+            _tagService,
+            _eventAggregator,
+            archiveExtractorService: extractor);
+
+        var torrent = new Torrent { Id = 123, Name = "Scene.Release" };
+        var script = new AutomationScript
+        {
+            Id = 99,
+            Name = "Extractor Script",
+            Language = AutomationLanguage.JavaScript,
+            Code = "torrent.extractArchive('/dest', true);",
+        };
+
+        var result = subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ShouldExtractArchive, Is.True);
+        Assert.That(result.ExtractDestination, Is.EqualTo("/dest"));
+        Assert.That(result.DeleteArchiveOnExtract, Is.True);
+
+        Task.Delay(100).Wait();
+        extractor.Received(1).ExtractTorrentArchiveAsync(torrent, "/dest", true);
     }
 }
