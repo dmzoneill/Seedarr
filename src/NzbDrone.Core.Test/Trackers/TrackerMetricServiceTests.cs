@@ -40,6 +40,12 @@ public class TrackerMetricServiceTests
             _eventAggregator);
     }
 
+    [TearDown]
+    public void TearDown()
+    {
+        _service?.Dispose();
+    }
+
     [Test]
     public void Failed_announce_does_not_distort_Min_Max_Avg_response_times()
     {
