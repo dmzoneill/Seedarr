@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
@@ -29,6 +31,7 @@ public class TrackerAnnounceServiceTest
     private IConfigService _configService;
     private ITrackerMetricService _trackerMetricService;
     private ITorrentService _torrentService;
+    private IEventAggregator _eventAggregator;
     private TrackerAnnounceService _service;
 
     [SetUp]
@@ -41,6 +44,7 @@ public class TrackerAnnounceServiceTest
         _configService = Substitute.For<IConfigService>();
         _trackerMetricService = Substitute.For<ITrackerMetricService>();
         _torrentService = Substitute.For<ITorrentService>();
+        _eventAggregator = Substitute.For<IEventAggregator>();
 
         _configService.ListeningPort.Returns(51413);
         _configService.AnnounceIntervalSeconds.Returns(1800);
@@ -52,7 +56,7 @@ public class TrackerAnnounceServiceTest
             _eventLogService,
             _configService,
             _trackerMetricService,
-            eventAggregator: null,
+            eventAggregator: _eventAggregator,
             torrentService: _torrentService);
     }
 
@@ -680,5 +684,280 @@ public class TrackerAnnounceServiceTest
         }
 
         Assert.That(_service.PendingStaggeredAnnounces, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void AnnounceTracker_should_trip_circuit_breaker_when_warning_message_is_present()
+    {
+        var torrent = new Torrent
+        {
+            Id = 80,
+            Name = "Warning.Movie",
+            InfoHash = "1234567890123456789012345678901234567890",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = 80,
+            Url = "http://tracker.safety.org/announce",
+            Enabled = true,
+            Status = TrackerStatus.Working
+        };
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = true,
+                Interval = 1800,
+                WarningMessage = "Unrealistic upload rate detected - account flagged"
+            });
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.WarningMessage, Is.EqualTo("Unrealistic upload rate detected - account flagged"));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Status == TorrentStatus.Paused));
+
+        Assert.That(tracker.Enabled, Is.False);
+        Assert.That(tracker.NextAnnounce, Is.Null);
+        Assert.That(tracker.Status, Is.EqualTo(TrackerStatus.Disabled));
+        Assert.That(tracker.WarningMessage, Is.EqualTo("Unrealistic upload rate detected - account flagged"));
+        _trackerEntryService.Received(1).Update(Arg.Is<TrackerEntry>(e => !e.Enabled && e.NextAnnounce == null));
+
+        _eventLogService.Received(1).Error(
+            80,
+            "Tracker",
+            Arg.Is<string>(s => s.Contains("CRITICAL") && s.Contains("circuit breaker")));
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e =>
+            e.Torrent.Id == 80 && e.NewStatus == TorrentStatus.Paused));
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<HealthIssueEvent>(e =>
+            e.Source == "TrackerSafety" && e.Message.Contains("Unrealistic upload rate detected")));
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TrackerWarningEvent>(e =>
+            e.TrackerUrl == "http://tracker.safety.org/announce" && e.WarningMessage == "Unrealistic upload rate detected - account flagged"));
+    }
+
+    [Test]
+    public void AnnounceTracker_should_trip_circuit_breaker_when_anti_cheat_failure_reason_is_present()
+    {
+        var torrent = new Torrent
+        {
+            Id = 81,
+            Name = "AntiCheat.Movie",
+            InfoHash = "2345678901234567890123456789012345678901",
+            Status = TorrentStatus.Downloading
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 2,
+            TorrentId = 81,
+            Url = "http://tracker.anticheat.org/announce",
+            Enabled = true,
+            Status = TrackerStatus.Working
+        };
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = false,
+                FailureReason = "Account flagged: seed speed throttled (anti-cheat)"
+            });
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.WarningMessage, Is.EqualTo("Account flagged: seed speed throttled (anti-cheat)"));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Status == TorrentStatus.Paused));
+
+        Assert.That(tracker.Enabled, Is.False);
+        Assert.That(tracker.NextAnnounce, Is.Null);
+        _trackerEntryService.Received(1).Update(Arg.Is<TrackerEntry>(e => !e.Enabled && e.NextAnnounce == null));
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_halt_further_announces_when_circuit_breaker_trips()
+    {
+        var torrent = new Torrent
+        {
+            Id = 82,
+            Name = "MultiTracker.Movie",
+            InfoHash = "3456789012345678901234567890123456789012",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker1 = new TrackerEntry { Id = 1, TorrentId = 82, Url = "http://badtracker.org/announce", Enabled = true };
+        var tracker2 = new TrackerEntry { Id = 2, TorrentId = 82, Url = "http://goodtracker.org/announce", Enabled = true };
+
+        _trackerEntryService.GetByTorrentId(82).Returns(new List<TrackerEntry> { tracker1, tracker2 });
+
+        _multiTracker.Announce(
+                Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == tracker1.Url),
+                Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = true,
+                WarningMessage = "Account flagged for ratio review"
+            });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+
+        // tracker2 was never announced to because tracker1 tripped the circuit breaker
+        _multiTracker.DidNotReceive().Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.TrackerUrl == tracker2.Url),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTracker_should_maintain_monotonic_uploaded_bytes_when_torrent_uploaded_is_less()
+    {
+        var torrent = new Torrent
+        {
+            Id = 83,
+            Name = "Monotonic.Movie",
+            InfoHash = "4567890123456789012345678901234567890123",
+            Uploaded = 30000000,
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = 83,
+            Url = "http://tracker.org/announce",
+            Enabled = true,
+            LastAnnouncedUploaded = 50000000
+        };
+
+        TrackerAnnounceRequest capturedRequest = null;
+        _multiTracker.Announce(
+                Arg.Do<TrackerAnnounceRequest>(r => capturedRequest = r),
+                Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true, Interval = 1800 });
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(capturedRequest, Is.Not.Null);
+        Assert.That(capturedRequest.Uploaded, Is.EqualTo(50000000));
+        Assert.That(tracker.LastAnnouncedUploaded, Is.EqualTo(50000000));
+        Assert.That(result.LastAnnouncedUploaded, Is.EqualTo(50000000));
+    }
+
+    [Test]
+    public void AnnounceTracker_should_update_last_announced_uploaded_when_torrent_uploaded_is_greater()
+    {
+        var torrent = new Torrent
+        {
+            Id = 84,
+            Name = "MonotonicGrowth.Movie",
+            InfoHash = "5678901234567890123456789012345678901234",
+            Uploaded = 80000000,
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = 84,
+            Url = "http://tracker.org/announce",
+            Enabled = true,
+            LastAnnouncedUploaded = 50000000
+        };
+
+        TrackerAnnounceRequest capturedRequest = null;
+        _multiTracker.Announce(
+                Arg.Do<TrackerAnnounceRequest>(r => capturedRequest = r),
+                Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true, Interval = 1800 });
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(capturedRequest, Is.Not.Null);
+        Assert.That(capturedRequest.Uploaded, Is.EqualTo(80000000));
+        Assert.That(tracker.LastAnnouncedUploaded, Is.EqualTo(80000000));
+        Assert.That(result.LastAnnouncedUploaded, Is.EqualTo(80000000));
+    }
+
+    [Test]
+    public void CalculateJitteredInterval_should_apply_jitter_within_expected_range()
+    {
+        const double baseInterval = 1800.0;
+        const double minExpected = baseInterval * 0.95; // 1710
+        const double maxExpected = baseInterval * 1.05; // 1890
+
+        var results = new List<double>();
+        for (var i = 0; i < 200; i++)
+        {
+            var jittered = TrackerAnnounceService.CalculateJitteredInterval(baseInterval, 0);
+            Assert.That(jittered, Is.GreaterThanOrEqualTo(minExpected), "Interval dropped below -5% range");
+            Assert.That(jittered, Is.LessThanOrEqualTo(maxExpected), "Interval exceeded +5% range");
+            results.Add(jittered);
+        }
+
+        var distinctCount = results.Distinct().Count();
+        Assert.That(distinctCount, Is.GreaterThan(1), "Jitter did not produce variation");
+    }
+
+    [Test]
+    public void CalculateJitteredInterval_should_clamp_to_min_interval_when_jittered_drops_below()
+    {
+        const double baseInterval = 1800.0;
+        const int minInterval = 1750;
+
+        // Even with max negative jitter (-0.05 => 1710), it should clamp to 1750
+        var jittered = TrackerAnnounceService.CalculateJitteredInterval(baseInterval, minInterval, jitterFraction: -0.05);
+        Assert.That(jittered, Is.EqualTo(1750.0));
+
+        // With positive jitter (+0.05 => 1890), 1890 is above minInterval, so stays 1890
+        var jitteredPositive = TrackerAnnounceService.CalculateJitteredInterval(baseInterval, minInterval, jitterFraction: 0.05);
+        Assert.That(jitteredPositive, Is.EqualTo(1890.0));
+    }
+
+    [Test]
+    public void AnnounceTracker_should_schedule_next_announce_with_jitter_in_the_future()
+    {
+        var torrent = new Torrent
+        {
+            Id = 85,
+            Name = "Jitter.Movie",
+            InfoHash = "6789012345678901234567890123456789012345",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 1,
+            TorrentId = 85,
+            Url = "http://tracker.org/announce",
+            Enabled = true
+        };
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse
+            {
+                Success = true,
+                Interval = 1800,
+                MinInterval = 0
+            });
+
+        var beforeAnnounce = DateTime.UtcNow;
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(tracker.NextAnnounce.HasValue, Is.True);
+        Assert.That(tracker.NextAnnounce.Value, Is.GreaterThan(beforeAnnounce));
+        // 1800 * 0.95 = 1710s, with small buffer
+        Assert.That(tracker.NextAnnounce.Value, Is.GreaterThanOrEqualTo(beforeAnnounce.AddSeconds(1705)));
+        // 1800 * 1.05 = 1890s, with small buffer
+        Assert.That(tracker.NextAnnounce.Value, Is.LessThanOrEqualTo(DateTime.UtcNow.AddSeconds(1895)));
     }
 }

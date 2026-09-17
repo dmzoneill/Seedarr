@@ -43,6 +43,7 @@ public class TrackerAnnounceRequest
     public int NumWant { get; set; } = 50;
     public bool IsPrivate { get; set; }
     public IClientProfile ClientProfile { get; set; }
+    public long LastAnnouncedUploaded { get; set; }
 
     public TrackerAnnounceRequest Clone(string trackerUrl = null)
     {
@@ -61,7 +62,8 @@ public class TrackerAnnounceRequest
             Compact = Compact,
             NumWant = NumWant,
             IsPrivate = IsPrivate,
-            ClientProfile = ClientProfile
+            ClientProfile = ClientProfile,
+            LastAnnouncedUploaded = LastAnnouncedUploaded
         };
     }
 }

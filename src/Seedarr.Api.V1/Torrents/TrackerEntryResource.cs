@@ -26,4 +26,5 @@ public class TrackerEntryResource : RestResource
     public string ErrorMessage { get; set; }
     public DateTime? LastErrorTime { get; set; }
     public string WarningMessage { get; set; }
+    public long LastAnnouncedUploaded { get; set; }
 }

@@ -26,6 +26,7 @@ public class TrackerEntry : ModelBase
     public string ErrorMessage { get; set; }
     public DateTime? LastErrorTime { get; set; }
     public string WarningMessage { get; set; }
+    public long LastAnnouncedUploaded { get; set; }
 }
 
 public enum TrackerStatus

@@ -171,7 +171,8 @@ public static class TorrentResourceMapper
             NextAnnounce = model.NextAnnounce,
             ErrorMessage = model.ErrorMessage,
             LastErrorTime = model.LastErrorTime,
-            WarningMessage = model.WarningMessage
+            WarningMessage = model.WarningMessage,
+            LastAnnouncedUploaded = model.LastAnnouncedUploaded
         };
     }
 
