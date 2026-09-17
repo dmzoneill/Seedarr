@@ -23,6 +23,7 @@ public class TrackerAnnounceRequest
     public string TrackerUrl { get; set; }
     public bool Compact { get; set; } = true;
     public int NumWant { get; set; } = 50;
+    public bool IsPrivate { get; set; }
 }
 
 public class TrackerAnnounceResponse : ITrackerResponse

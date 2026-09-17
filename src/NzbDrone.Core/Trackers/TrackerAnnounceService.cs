@@ -102,8 +102,21 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return results;
         }
 
+        if (torrent.IsPrivate)
+        {
+            enabledTrackers = enabledTrackers.OrderBy(t => t.Tier).ToList();
+        }
+
+        var primaryUrl = torrent.IsPrivate ? enabledTrackers.FirstOrDefault()?.Url : null;
+
         foreach (var entry in enabledTrackers)
         {
+            if (torrent.IsPrivate && !MultiTrackerManager.IsAuthorizedPrivateTrackerDomain(primaryUrl, entry.Url))
+            {
+                _logger.Warn("Private torrent {0} skipping unauthorized tracker: {1}", torrent.Name ?? torrent.InfoHash, entry.Url);
+                continue;
+            }
+
             var isFirstAnnounce = entry.TotalAnnounces == 0 || !entry.LastAnnounce.HasValue;
             if (!force && !isFirstAnnounce && entry.NextAnnounce.HasValue && entry.NextAnnounce.Value > DateTime.UtcNow)
             {
@@ -112,6 +125,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
             var result = ExecuteAnnounce(torrent, entry, isFirstAnnounce);
             results.Add(result);
+
+            if (torrent.IsPrivate && result.Success)
+            {
+                break;
+            }
         }
 
         return results;
@@ -175,7 +193,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             Event = eventVal,
             TrackerUrl = entry.Url,
             Compact = true,
-            NumWant = isStopped ? 0 : 50
+            NumWant = isStopped ? 0 : 50,
+            IsPrivate = torrent.IsPrivate
         };
 
         var announceList = new List<List<string>>

@@ -11,6 +11,7 @@ namespace NzbDrone.Core.Trackers.MultiTracker;
 public interface IMultiTrackerManager
 {
     TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList);
+    TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList, bool isPrivate);
     TrackerScrapeResponse Scrape(string infoHash, List<List<string>> announceList);
 }
 
@@ -44,6 +45,16 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList)
     {
+        return Announce(request, announceList, request?.IsPrivate ?? false);
+    }
+
+    public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList, bool isPrivate)
+    {
+        if (request != null)
+        {
+            request.IsPrivate = isPrivate;
+        }
+
         if (!_configService.MultiTrackerEnabled)
         {
             var firstTracker = announceList.FirstOrDefault()?.FirstOrDefault();
@@ -60,7 +71,8 @@ public class MultiTrackerManager : IMultiTrackerManager
             announceList,
             trackerUrl => AnnounceToTracker(request, trackerUrl),
             () => new TrackerAnnounceResponse { Success = false, FailureReason = "All trackers failed" },
-            true);
+            true,
+            isPrivate);
     }
 
     public TrackerScrapeResponse Scrape(string infoHash, List<List<string>> announceList)
@@ -89,17 +101,30 @@ public class MultiTrackerManager : IMultiTrackerManager
         List<List<string>> announceList,
         Func<string, (TResponse Response, bool IsNetworkError)> operation,
         Func<TResponse> fallbackResponse,
-        bool logBackoffSkip)
+        bool logBackoffSkip,
+        bool isPrivate = false)
         where TResponse : class, ITrackerResponse
     {
-        var announceToAllTiers = _configService.AnnounceToAllTiers;
-        var announceToAllInTier = _configService.AnnounceToAllInTier;
+        var announceToAllTiers = !isPrivate && _configService.AnnounceToAllTiers;
+        var announceToAllInTier = !isPrivate && _configService.AnnounceToAllInTier;
         TResponse bestResponse = null;
+
+        string primaryUrl = null;
+        if (isPrivate)
+        {
+            primaryUrl = announceList.SelectMany(tier => tier).FirstOrDefault(url => !string.IsNullOrWhiteSpace(url));
+        }
 
         foreach (var tier in announceList)
         {
             foreach (var trackerUrl in tier)
             {
+                if (isPrivate && !IsAuthorizedPrivateTrackerDomain(primaryUrl, trackerUrl))
+                {
+                    _logger.Warn("Private torrent {0} skipping unauthorized tracker: {1}", infoHash ?? "unknown", trackerUrl);
+                    continue;
+                }
+
                 if (IsTrackerBackedOff(infoHash, trackerUrl))
                 {
                     if (logBackoffSkip)
@@ -342,6 +367,55 @@ public class MultiTrackerManager : IMultiTrackerManager
         }
 
         return false;
+    }
+
+    public static bool IsAuthorizedPrivateTrackerDomain(string primaryUrl, string trackerUrl)
+    {
+        if (string.IsNullOrWhiteSpace(primaryUrl) || string.IsNullOrWhiteSpace(trackerUrl))
+        {
+            return false;
+        }
+
+        if (string.Equals(primaryUrl, trackerUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!Uri.TryCreate(primaryUrl, UriKind.Absolute, out var primaryUri) ||
+            !Uri.TryCreate(trackerUrl, UriKind.Absolute, out var trackerUri))
+        {
+            return false;
+        }
+
+        var primaryHost = primaryUri.Host.ToLowerInvariant();
+        var trackerHost = trackerUri.Host.ToLowerInvariant();
+
+        if (primaryHost == trackerHost)
+        {
+            return true;
+        }
+
+        var primaryDomain = GetRootDomain(primaryHost);
+        var trackerDomain = GetRootDomain(trackerHost);
+
+        return !string.IsNullOrEmpty(primaryDomain) &&
+               string.Equals(primaryDomain, trackerDomain, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetRootDomain(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return string.Empty;
+        }
+
+        var parts = host.Split('.');
+        if (parts.Length >= 2)
+        {
+            return $"{parts[^2]}.{parts[^1]}";
+        }
+
+        return host;
     }
 
     private ITrackerProvider GetProvider(string url)
