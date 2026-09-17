@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -287,6 +291,174 @@ public class IndexerControllerTest
         Assert.That(handler.SentRequest, Is.Not.Null);
         Assert.That(handler.SentRequest.Headers.Contains("X-Api-Key"), Is.True);
         Assert.That(handler.SentRequest.Headers.GetValues("X-Api-Key").First(), Is.EqualTo("secret_api_key"));
+    }
+
+    [Test]
+    public void Search_when_indexer_returns_401_records_failure_and_does_not_call_record_success()
+    {
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                ReasonPhrase = "Unauthorized"
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 1,
+            Name = "Torznab 1",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "key",
+            Enable = true,
+            EnableSearch = true
+        };
+        _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
+
+        var result = controller.Search("ubuntu");
+
+        _indexerStatusService.Received(1).RecordFailure(1, 401, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+        _indexerStatusService.DidNotReceive().RecordSuccess(1);
+    }
+
+    [Test]
+    public void Search_when_indexer_returns_429_records_failure_with_retry_after()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+        {
+            ReasonPhrase = "Too Many Requests"
+        };
+        response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(120));
+
+        var handler = new FakeHttpMessageHandler { ResponseToReturn = response };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 2,
+            Name = "Torznab 2",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "key",
+            Enable = true,
+            EnableSearch = true
+        };
+        _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
+
+        controller.Search("ubuntu");
+
+        _indexerStatusService.Received(1).RecordFailure(
+            2,
+            429,
+            Arg.Any<string>(),
+            Arg.Any<Exception>(),
+            Arg.Is<TimeSpan?>(t => t.HasValue && t.Value.TotalSeconds == 120));
+        _indexerStatusService.DidNotReceive().RecordSuccess(2);
+    }
+
+    [Test]
+    public void Search_when_indexer_succeeds_records_success()
+    {
+        var xml = @"<?xml version=""1.0""?><rss version=""2.0""><channel></channel></rss>";
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(xml)
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 3,
+            Name = "Torznab 3",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "key",
+            Enable = true,
+            EnableSearch = true
+        };
+        _indexerFactory.All().Returns(new List<IndexerDefinition> { indexerDef });
+
+        controller.Search("ubuntu");
+
+        _indexerStatusService.Received(1).RecordSuccess(3);
+        _indexerStatusService.DidNotReceive().RecordFailure(3, Arg.Any<int?>(), Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+    }
+
+    [Test]
+    public void TestConnection_when_indexer_fails_records_failure_with_status_code()
+    {
+        var handler = new FakeHttpMessageHandler
+        {
+            ResponseToReturn = new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                ReasonPhrase = "Unauthorized"
+            }
+        };
+        var client = new HttpClient(handler);
+        var controller = new IndexerController(
+            _indexerFactory,
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentFileParser,
+            _downloadHistoryService,
+            _indexerStatusService,
+            _proxySettingsProvider,
+            _rssRuleRepository,
+            client);
+
+        var indexerDef = new IndexerDefinition
+        {
+            Id = 4,
+            Name = "Torznab 4",
+            IndexerType = "Torznab",
+            Url = "http://8.8.8.8:9696",
+            ApiKey = "key"
+        };
+        _indexerFactory.Get(4).Returns(indexerDef);
+
+        var result = controller.TestConnection(4);
+
+        _indexerStatusService.Received(1).RecordFailure(4, 401, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+        _indexerStatusService.DidNotReceive().RecordSuccess(4);
     }
 
     private class FakeHttpMessageHandler : HttpMessageHandler

@@ -125,14 +125,26 @@ public class TorznabIndexer : IIndexer
                 return new IndexerTestResult
                 {
                     Success = false,
-                    Message = "Authentication failed: Invalid API Key."
+                    Message = "Authentication failed: Invalid API Key.",
+                    StatusCode = (int)response.StatusCode
                 };
             }
 
             return new IndexerTestResult
             {
                 Success = false,
-                Message = $"Torznab returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase})."
+                Message = $"Torznab returned HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).",
+                StatusCode = (int)response.StatusCode
+            };
+        }
+        catch (HttpRequestException ex)
+        {
+            _logger.Error(ex, "Failed to test Torznab connection at {0}", definition.Url);
+            return new IndexerTestResult
+            {
+                Success = false,
+                Message = $"Unable to connect to Torznab at {definition.Url}: {ex.Message}",
+                StatusCode = (int?)ex.StatusCode
             };
         }
         catch (Exception ex)
@@ -269,12 +281,21 @@ public class TorznabIndexer : IIndexer
             if (!response.IsSuccessStatusCode)
             {
                 _logger.Warn("Torznab search returned status code {0}", response.StatusCode);
-                if ((int)response.StatusCode == 429 || (int)response.StatusCode == 503)
+                var ex = new HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
+                if (response.Headers.RetryAfter != null)
                 {
-                    throw new HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
+                    if (response.Headers.RetryAfter.Delta.HasValue)
+                    {
+                        ex.Data["RetryAfter"] = response.Headers.RetryAfter.Delta.Value;
+                    }
+                    else if (response.Headers.RetryAfter.Date.HasValue)
+                    {
+                        var diff = response.Headers.RetryAfter.Date.Value - DateTimeOffset.UtcNow;
+                        ex.Data["RetryAfter"] = diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
+                    }
                 }
 
-                return results;
+                throw ex;
             }
 
             using var reader = new System.IO.StreamReader(response.Content.ReadAsStream());
