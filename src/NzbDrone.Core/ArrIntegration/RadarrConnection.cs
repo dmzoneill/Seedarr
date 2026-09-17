@@ -39,16 +39,23 @@ public class RadarrConnection : IArrConnection
     private HttpClient Client => _explicitClient ?? ArrConnectionResources.GetClient(AcceptInvalidCertificates);
 
     public List<ArrDownloadRecord> GetDownloadHistory() =>
-        GetDownloadHistoryAsync().GetAwaiter().GetResult();
+        GetDownloadHistory(250);
 
-    public async Task<List<ArrDownloadRecord>> GetDownloadHistoryAsync(CancellationToken cancellationToken = default)
+    public List<ArrDownloadRecord> GetDownloadHistory(int pageSize) =>
+        GetDownloadHistoryAsync(pageSize).GetAwaiter().GetResult();
+
+    public Task<List<ArrDownloadRecord>> GetDownloadHistoryAsync(CancellationToken cancellationToken = default) =>
+        GetDownloadHistoryAsync(250, cancellationToken);
+
+    public async Task<List<ArrDownloadRecord>> GetDownloadHistoryAsync(int pageSize, CancellationToken cancellationToken = default)
     {
         try
         {
+            var effectivePageSize = Math.Max(1, pageSize);
             var result = await _policy.ExecuteAsync<string>(
                 async ct =>
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v3/history?pageSize=50&sortKey=date&sortDirection=descending");
+                    using var request = new HttpRequestMessage(HttpMethod.Get, $"{Url.TrimEnd('/')}/api/v3/history?pageSize={effectivePageSize}&sortKey=date&sortDirection=descending");
                     request.Headers.Add("X-Api-Key", ApiKey ?? "");
 
                     using var response = await Client.SendAsync(request, ct).ConfigureAwait(false);

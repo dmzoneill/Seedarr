@@ -137,5 +137,90 @@ namespace NzbDrone.Core.Test.ArrIntegration
 
             Assert.That(provider, Is.Null);
         }
+
+        [Test]
+        public void EnrichAll_should_only_call_GetDownloadHistory_once_per_enabled_provider()
+        {
+            var entries = new List<DownloadHistory>
+            {
+                new() { Id = 1, InfoHash = "hash1", DataJson = null },
+                new() { Id = 2, InfoHash = "hash2", DataJson = null },
+                new() { Id = 3, InfoHash = "hash3", DataJson = null },
+                new() { Id = 4, InfoHash = "hash4", DataJson = null },
+                new() { Id = 5, InfoHash = "hash5", DataJson = null }
+            };
+
+            _downloadHistoryRepository.All().Returns(entries);
+            foreach (var e in entries)
+            {
+                _downloadHistoryRepository.Get(e.Id).Returns(e);
+            }
+
+            var sonarrDef = new ArrConnectionDefinition { Id = 1, Name = "Sonarr", ArrType = "Sonarr", Enable = true };
+            var radarrDef = new ArrConnectionDefinition { Id = 2, Name = "Radarr", ArrType = "Radarr", Enable = true };
+            var disabledDef = new ArrConnectionDefinition { Id = 3, Name = "Lidarr", ArrType = "Lidarr", Enable = false };
+
+            _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { sonarrDef, radarrDef, disabledDef });
+
+            var sonarrProvider = Substitute.For<IArrConnection>();
+            sonarrProvider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>());
+
+            var radarrProvider = Substitute.For<IArrConnection>();
+            radarrProvider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>());
+
+            var lidarrProvider = Substitute.For<IArrConnection>();
+
+            var service = new ArrMetadataEnricherService(
+                _connectionFactory,
+                _downloadHistoryRepository,
+                null,
+                def => def.Id == 1 ? sonarrProvider : def.Id == 2 ? radarrProvider : lidarrProvider);
+
+            service.EnrichAll();
+
+            sonarrProvider.Received(1).GetDownloadHistory();
+            radarrProvider.Received(1).GetDownloadHistory();
+            lidarrProvider.DidNotReceive().GetDownloadHistory();
+        }
+
+        [Test]
+        public void EnrichAll_should_correlate_multiple_history_entries_efficiently()
+        {
+            var entries = new List<DownloadHistory>
+            {
+                new() { Id = 1, InfoHash = "hash1", DataJson = null },
+                new() { Id = 2, InfoHash = "hash2", DataJson = null },
+                new() { Id = 3, InfoHash = "hash3", DataJson = null }
+            };
+
+            _downloadHistoryRepository.All().Returns(entries);
+            _downloadHistoryRepository.Get(1).Returns(entries[0]);
+            _downloadHistoryRepository.Get(2).Returns(entries[1]);
+            _downloadHistoryRepository.Get(3).Returns(entries[2]);
+
+            var sonarrDef = new ArrConnectionDefinition { Id = 1, Name = "Sonarr", ArrType = "Sonarr", Enable = true };
+            _connectionFactory.All().Returns(new List<ArrConnectionDefinition> { sonarrDef });
+
+            var sonarrProvider = Substitute.For<IArrConnection>();
+            sonarrProvider.GetDownloadHistory().Returns(new List<ArrDownloadRecord>
+            {
+                new() { InfoHash = "HASH1", MediaId = 10, Title = "Show 1" },
+                new() { InfoHash = "HASH2", MediaId = 20, Title = "Show 2" }
+            });
+            sonarrProvider.GetMediaDetails(10).Returns(new MediaMetadata { Title = "Show 1", MediaId = 10 });
+            sonarrProvider.GetMediaDetails(20).Returns(new MediaMetadata { Title = "Show 2", MediaId = 20 });
+
+            var service = new ArrMetadataEnricherService(
+                _connectionFactory,
+                _downloadHistoryRepository,
+                null,
+                _ => sonarrProvider);
+
+            service.EnrichAll();
+
+            sonarrProvider.Received(1).GetDownloadHistory();
+            _downloadHistoryRepository.Received(1).Update(Arg.Is<DownloadHistory>(h => h.Id == 1 && h.DataJson.Contains("Show 1")));
+            _downloadHistoryRepository.Received(1).Update(Arg.Is<DownloadHistory>(h => h.Id == 2 && h.DataJson.Contains("Show 2")));
+        }
     }
 }

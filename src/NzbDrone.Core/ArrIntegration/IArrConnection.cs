@@ -21,8 +21,9 @@ public interface IArrConnection : IProvider
     string Url { get; set; }
     string ApiKey { get; set; }
     bool AcceptInvalidCertificates { get; set; }
-    List<ArrDownloadRecord> GetDownloadHistory();
+    List<ArrDownloadRecord> GetDownloadHistory(int pageSize = 250);
     Task<List<ArrDownloadRecord>> GetDownloadHistoryAsync(CancellationToken cancellationToken = default);
+    Task<List<ArrDownloadRecord>> GetDownloadHistoryAsync(int pageSize, CancellationToken cancellationToken = default);
     MediaMetadata GetMediaDetails(int mediaId);
     Task<MediaMetadata> GetMediaDetailsAsync(int mediaId, CancellationToken cancellationToken = default);
     MediaMetadata LookupMedia(string title);
