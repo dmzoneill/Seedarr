@@ -1,0 +1,173 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using NzbDrone.Common.EnvironmentInfo;
+
+namespace NzbDrone.Core.Peers.PiecePicker;
+
+public class RarestFirstPiecePicker : IPiecePicker
+{
+    private readonly IRandomNumberGenerator _random;
+
+    public RarestFirstPiecePicker(IRandomNumberGenerator random = null)
+    {
+        _random = random ?? new RandomNumberGenerator();
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        BitArray peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow = 20,
+        double rarestFirstRatio = 0.2)
+    {
+        return PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, null);
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        IReadOnlyList<BitArray> peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow = 20,
+        double rarestFirstRatio = 0.2)
+    {
+        return PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, null);
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        BitArray peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow,
+        double rarestFirstRatio,
+        IReadOnlyCollection<int> activePieces)
+    {
+        var list = peerPieces != null ? new[] { peerPieces } : Array.Empty<BitArray>();
+        return PickPiece(myPieces, list, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, activePieces);
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        IReadOnlyList<BitArray> peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow,
+        double rarestFirstRatio,
+        IReadOnlyCollection<int> activePieces)
+    {
+        if (myPieces == null || myPieces.Length == 0 || peerPieces == null || peerPieces.Count == 0)
+        {
+            return null;
+        }
+
+        var pieceCount = myPieces.Length;
+        var candidates = new List<int>();
+
+        for (var i = 0; i < pieceCount; i++)
+        {
+            if (myPieces[i])
+            {
+                continue;
+            }
+
+            if (PeerHasPiece(peerPieces, i))
+            {
+                candidates.Add(i);
+            }
+        }
+
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        List<int> eligibleCandidates;
+        if (activePieces != null && activePieces.Count > 0)
+        {
+            var nonActive = candidates.Where(c => !activePieces.Contains(c)).ToList();
+            eligibleCandidates = nonActive.Count > 0 ? nonActive : candidates;
+        }
+        else
+        {
+            eligibleCandidates = candidates;
+        }
+
+        return PickRarest(eligibleCandidates, pieceAvailability, peerPieces);
+    }
+
+    internal int PickRarest(List<int> candidates, IReadOnlyList<int> pieceAvailability, IReadOnlyList<BitArray> peerPieces)
+    {
+        if (candidates.Count == 0)
+        {
+            return -1;
+        }
+
+        var minAvailability = int.MaxValue;
+        var candidateAvailability = new List<(int PieceIndex, int Availability)>(candidates.Count);
+
+        foreach (var pieceIndex in candidates)
+        {
+            var avail = GetAvailability(pieceIndex, pieceAvailability, peerPieces);
+            if (avail < minAvailability)
+            {
+                minAvailability = avail;
+            }
+
+            candidateAvailability.Add((pieceIndex, avail));
+        }
+
+        var tiedCandidates = candidateAvailability
+            .Where(x => x.Availability == minAvailability)
+            .Select(x => x.PieceIndex)
+            .ToList();
+
+        if (tiedCandidates.Count == 1)
+        {
+            return tiedCandidates[0];
+        }
+
+        var selectedIndex = _random.Next(tiedCandidates.Count);
+        return tiedCandidates[selectedIndex];
+    }
+
+    internal static int GetAvailability(int pieceIndex, IReadOnlyList<int> pieceAvailability, IReadOnlyList<BitArray> peerPieces)
+    {
+        if (pieceAvailability != null && pieceIndex < pieceAvailability.Count)
+        {
+            var count = pieceAvailability[pieceIndex];
+            if (count > 0)
+            {
+                return count;
+            }
+        }
+
+        if (peerPieces != null && peerPieces.Count > 0)
+        {
+            var count = peerPieces.Count(p => p != null && pieceIndex < p.Length && p[pieceIndex]);
+            if (count > 0)
+            {
+                return count;
+            }
+        }
+
+        return 1;
+    }
+
+    private static bool PeerHasPiece(IReadOnlyList<BitArray> peerPieces, int pieceIndex)
+    {
+        for (var p = 0; p < peerPieces.Count; p++)
+        {
+            var pieces = peerPieces[p];
+            if (pieces != null && pieceIndex < pieces.Length && pieces[pieceIndex])
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}

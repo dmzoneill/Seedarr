@@ -6,6 +6,7 @@ using System.Reflection;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
+using NzbDrone.Core.Peers.PiecePicker;
 
 namespace NzbDrone.Core.Test.Peers.Extensions;
 
