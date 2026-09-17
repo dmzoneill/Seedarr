@@ -809,8 +809,8 @@ public class TorrentRelocationService : ITorrentRelocationService
 
         var msg = ex.Message;
         return msg.Contains("cross-device", StringComparison.OrdinalIgnoreCase) ||
-               msg.Contains("EXDEV", StringComparison.OrdinalIgnoreCase) ||
-               msg.Contains("different volume", StringComparison.OrdinalIgnoreCase) ||
-               msg.Contains("different device", StringComparison.OrdinalIgnoreCase);
+            msg.Contains("EXDEV", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("different volume", StringComparison.OrdinalIgnoreCase) ||
+            msg.Contains("different device", StringComparison.OrdinalIgnoreCase);
     }
 }

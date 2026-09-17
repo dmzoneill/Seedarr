@@ -51,8 +51,8 @@ public class PieceStorage : IPieceStorage, IDisposable
         lock (_stateLock)
         {
             return _verifiedPieces.TryGetValue(infoHash, out var pieces) &&
-                   pieceIndex < pieces.Length &&
-                   pieces[pieceIndex];
+                pieceIndex < pieces.Length &&
+                pieces[pieceIndex];
         }
     }
 

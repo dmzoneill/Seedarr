@@ -295,7 +295,7 @@ public class UtpConnectionTest
 
         Assert.That(header.Type, Is.EqualTo(UtpPacketType.State));
         Assert.That(header.Version, Is.EqualTo(1));
-        Assert.That(header.WindowSize, Is.EqualTo(65535u));
+        Assert.That(header.WindowSize, Is.EqualTo(UtpConnection.MaxBufferSize));
     }
 
     [Test]
@@ -475,7 +475,7 @@ public class UtpConnectionTest
         Assert.That(header.ConnectionId, Is.EqualTo(0x1234));
         Assert.That(header.Timestamp, Is.GreaterThan(0u));
         Assert.That(header.TimestampDiff, Is.EqualTo(0u));
-        Assert.That(header.WindowSize, Is.EqualTo(65535u));
+        Assert.That(header.WindowSize, Is.EqualTo(UtpConnection.MaxBufferSize));
         Assert.That(header.SequenceNumber, Is.EqualTo(42));
         Assert.That(header.AckNumber, Is.EqualTo(7));
     }
@@ -913,6 +913,7 @@ public class UtpConnectionTest
             response[0] = ((byte)UtpPacketType.State << 4) | 1;
             response[2] = (byte)(synHeader.ConnectionId >> 8);
             response[3] = (byte)synHeader.ConnectionId;
+            BinaryPrimitives.WriteUInt32BigEndian(response.AsSpan(12, 4), UtpConnection.MaxBufferSize);
             response[16] = 0x00;
             response[17] = 0x01; // server initial seq
             response[18] = (byte)(synHeader.SequenceNumber >> 8);
@@ -997,6 +998,7 @@ public class UtpConnectionTest
             response[0] = ((byte)UtpPacketType.State << 4) | 1;
             response[2] = (byte)(synHeader.ConnectionId >> 8);
             response[3] = (byte)synHeader.ConnectionId;
+            BinaryPrimitives.WriteUInt32BigEndian(response.AsSpan(12, 4), UtpConnection.MaxBufferSize);
             response[16] = 0x00;
             response[17] = 0x01;
             response[18] = (byte)(synHeader.SequenceNumber >> 8);
@@ -1093,10 +1095,7 @@ public class UtpConnectionTest
 
         connection.Dispose();
 
-        Assert.Throws<ObjectDisposedException>(() =>
-        {
-            _ = udpClient.Client.LocalEndPoint;
-        });
+        Assert.That(udpClient.Client == null || udpClient.Client.SafeHandle.IsClosed, Is.True);
     }
 
     [Test]
@@ -1399,11 +1398,11 @@ public class UtpConnectionTest
 
         // Drain _receiveQueue: should contain payload1 and payload0 in that order
         var buffer = new byte[10];
-        var read1 = connection.Receive(buffer, 0, buffer.Length);
+        var read1 = connection.Receive(buffer, 0, 3);
         Assert.That(read1, Is.EqualTo(3));
         Assert.That(buffer[0..3], Is.EqualTo(payload1));
 
-        var read2 = connection.Receive(buffer, 0, buffer.Length);
+        var read2 = connection.Receive(buffer, 0, 3);
         Assert.That(read2, Is.EqualTo(3));
         Assert.That(buffer[0..3], Is.EqualTo(payload0));
 

@@ -83,9 +83,10 @@ public class SpeedPolicy : ISpeedPolicy
         var threshold = thresholdPercent / 100.0;
         var maxDownloadSpeed = limits.MaxDownloadSpeed;
 
-        var speeds = maxDownloadSpeed == SpeedLimits.Unlimited
+        var speeds = (maxDownloadSpeed == SpeedLimits.Unlimited
             ? Enumerable.Repeat(1_000_000_000L, torrents.Count).ToArray()
-            : _distributionManager.DistributeDownloadSpeeds(torrents.Count, maxDownloadSpeed, priorityWeights);
+            : _distributionManager.DistributeDownloadSpeeds(torrents.Count, maxDownloadSpeed, priorityWeights))
+            ?? Array.Empty<long>();
 
         for (var i = 0; i < torrents.Count; i++)
         {
@@ -102,7 +103,7 @@ public class SpeedPolicy : ISpeedPolicy
                 continue;
             }
 
-            var bytesPerSecond = speeds[i];
+            var bytesPerSecond = i < speeds.Length ? speeds[i] : 0L;
 
             var effectiveDlLimit = GetDownloadLimit(torrent);
 
@@ -170,7 +171,8 @@ public class SpeedPolicy : ISpeedPolicy
             }
             else
             {
-                speeds = _distributionManager.DistributeUploadSpeeds(activeCount, limits.MaxUploadSpeed, activePriorityWeights);
+                speeds = _distributionManager.DistributeUploadSpeeds(activeCount, limits.MaxUploadSpeed, activePriorityWeights)
+                    ?? Array.Empty<long>();
             }
         }
         else
@@ -192,7 +194,7 @@ public class SpeedPolicy : ISpeedPolicy
             }
             else
             {
-                var bytesPerSecond = speeds[activeIndex++];
+                var bytesPerSecond = activeIndex < speeds.Length ? speeds[activeIndex++] : 0L;
 
                 var effectiveUlLimit = GetUploadLimit(torrent);
 

@@ -43,6 +43,27 @@ public class TrackerAnnounceRequest
     public int NumWant { get; set; } = 50;
     public bool IsPrivate { get; set; }
     public IClientProfile ClientProfile { get; set; }
+
+    public TrackerAnnounceRequest Clone(string trackerUrl = null)
+    {
+        return new TrackerAnnounceRequest
+        {
+            InfoHash = InfoHash,
+            PeerId = PeerId,
+            UserAgent = UserAgent,
+            Key = Key,
+            Port = Port,
+            Uploaded = Uploaded,
+            Downloaded = Downloaded,
+            Left = Left,
+            Event = Event,
+            TrackerUrl = trackerUrl ?? TrackerUrl,
+            Compact = Compact,
+            NumWant = NumWant,
+            IsPrivate = IsPrivate,
+            ClientProfile = ClientProfile
+        };
+    }
 }
 
 public class TrackerAnnounceResponse : ITrackerResponse

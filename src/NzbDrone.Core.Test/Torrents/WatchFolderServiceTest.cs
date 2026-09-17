@@ -345,7 +345,7 @@ public class WatchFolderServiceTest
 
         var nonExistentPath = Path.Combine(_tempDir, "nonexistent.torrent");
 
-        Assert.DoesNotThrow(() => method.Invoke(_subject, new object[] { nonExistentPath }));
+        Assert.DoesNotThrow(() => method.Invoke(_subject, new object[] { nonExistentPath, null }));
         _parser.DidNotReceive().Parse(Arg.Any<string>());
     }
 
@@ -354,13 +354,13 @@ public class WatchFolderServiceTest
     {
         _configService.WatchFolderDeleteAddedTorrents.Returns(true);
 
-        var torrentPath = Path.Combine(_tempDir, "todelete.torrent");
+        var torrentPath = Path.Combine(_tempDir, "test.torrent");
         CreateDummyTorrentFile(torrentPath);
 
         var parsed = new ParsedTorrent
         {
-            Name = "ToDelete",
-            InfoHash = "abc123",
+            Name = "TestTorrent",
+            InfoHash = "1234567890abcdef1234",
             TotalSize = 1024,
             PieceCount = 1,
             PieceLength = 1024,
@@ -371,7 +371,7 @@ public class WatchFolderServiceTest
 
         var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Invoke(_subject, new object[] { torrentPath });
+        method.Invoke(_subject, new object[] { torrentPath, null });
 
         Assert.That(File.Exists(torrentPath), Is.False);
     }
@@ -387,7 +387,7 @@ public class WatchFolderServiceTest
         var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
-        Assert.DoesNotThrow(() => method.Invoke(_subject, new object[] { torrentPath }));
+        Assert.DoesNotThrow(() => method.Invoke(_subject, new object[] { torrentPath, null }));
         _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
     }
 
@@ -502,7 +502,7 @@ public class WatchFolderServiceTest
 
         var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Invoke(_subject, new object[] { torrentPath });
+        method.Invoke(_subject, new object[] { torrentPath, null });
 
         _torrentFileService.Received(1).Add(Arg.Is<TorrentFile>(f =>
             f.TorrentId == 42 && f.Path == "folder/file1.mkv" && f.Size == 2000));
@@ -530,7 +530,7 @@ public class WatchFolderServiceTest
 
         var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Invoke(_subject, new object[] { torrentPath });
+        method.Invoke(_subject, new object[] { torrentPath, null });
 
         _torrentFileService.DidNotReceive().Add(Arg.Any<TorrentFile>());
     }
@@ -555,7 +555,7 @@ public class WatchFolderServiceTest
 
         var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
             BindingFlags.NonPublic | BindingFlags.Instance);
-        method.Invoke(_subject, new object[] { torrentPath });
+        method.Invoke(_subject, new object[] { torrentPath, null });
 
         _torrentFileService.DidNotReceive().Add(Arg.Any<TorrentFile>());
     }

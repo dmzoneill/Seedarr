@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using NLog;
@@ -23,11 +24,33 @@ public static class BuildInfo
 
     private static Version ReadVersionFile()
     {
-        var candidates = new[]
+        var candidates = new List<string>
         {
             Path.Combine(AppContext.BaseDirectory, "version"),
             Path.Combine(Directory.GetCurrentDirectory(), "version"),
         };
+
+        try
+        {
+            for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+            {
+                candidates.Add(Path.Combine(dir.FullName, "version"));
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            for (var dir = new DirectoryInfo(Directory.GetCurrentDirectory()); dir != null; dir = dir.Parent)
+            {
+                candidates.Add(Path.Combine(dir.FullName, "version"));
+            }
+        }
+        catch
+        {
+        }
 
         foreach (var path in candidates)
         {
