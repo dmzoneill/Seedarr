@@ -19,6 +19,9 @@ public class CertificateManager : ICertificateManager
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly IAppFolderInfo _appFolderInfo;
+    private readonly object _syncLock = new();
+    private X509Certificate2 _cachedCustomCert;
+    private X509Certificate2Collection _cachedCustomChain = new();
 
     public CertificateManager(IAppFolderInfo appFolderInfo)
     {
@@ -36,25 +39,65 @@ public class CertificateManager : ICertificateManager
             {
                 try
                 {
-                    var loadedCert = LoadCustomCertificate(certPath, config.SslKeyPath, config.SslCertPassword);
+                    var (loadedCert, loadedChain) = LoadCustomCertificate(certPath, config.SslKeyPath, config.SslCertPassword);
                     if (loadedCert != null)
                     {
+                        lock (_syncLock)
+                        {
+                            _cachedCustomCert = loadedCert;
+                            _cachedCustomChain = loadedChain ?? new X509Certificate2Collection();
+                        }
+
                         Logger.Info("Successfully loaded custom SSL certificate from '{0}'", certPath);
                         return loadedCert;
                     }
                 }
                 catch (Exception ex)
                 {
+                    lock (_syncLock)
+                    {
+                        if (_cachedCustomCert != null)
+                        {
+                            Logger.Warn(ex, "Failed to reload custom SSL certificate from '{0}'. Retaining previously loaded valid certificate.", certPath);
+                            return _cachedCustomCert;
+                        }
+                    }
+
                     Logger.Error(ex, "Failed to load custom SSL certificate from '{0}'. Falling back to self-signed certificate.", certPath);
                 }
             }
             else
             {
+                lock (_syncLock)
+                {
+                    if (_cachedCustomCert != null)
+                    {
+                        Logger.Warn("Configured SSL certificate path '{0}' was not found. Retaining previously loaded valid certificate.", certPath);
+                        return _cachedCustomCert;
+                    }
+                }
+
                 Logger.Warn("Configured SSL certificate path '{0}' was not found. Falling back to self-signed certificate.", certPath);
+            }
+        }
+        else
+        {
+            lock (_syncLock)
+            {
+                _cachedCustomCert = null;
+                _cachedCustomChain = new X509Certificate2Collection();
             }
         }
 
         return GetOrCreateSelfSignedCertificate(config);
+    }
+
+    public X509Certificate2Collection GetCertificateChain()
+    {
+        lock (_syncLock)
+        {
+            return new X509Certificate2Collection(_cachedCustomChain);
+        }
     }
 
     public async Task<SslCertificateValidationResult> ValidateCertificateAsync(
@@ -80,7 +123,8 @@ public class CertificateManager : ICertificateManager
                     return result;
                 }
 
-                cert = LoadCustomCertificate(trimmedPath, keyPath, password);
+                var (loadedCert, _) = LoadCustomCertificate(trimmedPath, keyPath, password);
+                cert = loadedCert;
             }
             else
             {
@@ -188,17 +232,45 @@ public class CertificateManager : ICertificateManager
         return result;
     }
 
-    private static X509Certificate2 LoadCustomCertificate(string certPath, string keyPath, string password)
+    internal static (X509Certificate2 Leaf, X509Certificate2Collection Chain) LoadCustomCertificate(string certPath, string keyPath, string password)
     {
         var ext = Path.GetExtension(certPath).ToLowerInvariant();
 
         if (ext is ".pfx" or ".p12")
         {
             var pass = string.IsNullOrEmpty(password) ? null : password;
-            return X509CertificateLoader.LoadPkcs12FromFile(
+            var loadedCollection = X509CertificateLoader.LoadPkcs12CollectionFromFile(
                 certPath,
                 pass,
                 X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+
+            if (loadedCollection.Count == 0)
+            {
+                throw new InvalidOperationException($"PKCS#12 file '{certPath}' does not contain any certificates.");
+            }
+
+            X509Certificate2 leaf = null;
+            foreach (var cert in loadedCollection)
+            {
+                if (cert.HasPrivateKey)
+                {
+                    leaf = cert;
+                    break;
+                }
+            }
+
+            leaf ??= loadedCollection[0];
+
+            var chain = new X509Certificate2Collection();
+            foreach (var cert in loadedCollection)
+            {
+                if (!cert.Thumbprint.Equals(leaf.Thumbprint, StringComparison.OrdinalIgnoreCase))
+                {
+                    chain.Add(cert);
+                }
+            }
+
+            return (leaf, chain);
         }
 
         var collection = new X509Certificate2Collection();
@@ -248,10 +320,44 @@ public class CertificateManager : ICertificateManager
         }
 
         var pfxBytes = fullCollection.Export(X509ContentType.Pkcs12, string.Empty);
-        return X509CertificateLoader.LoadPkcs12(
+        var loadedPemCollection = X509CertificateLoader.LoadPkcs12Collection(
             pfxBytes,
             string.Empty,
             X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+
+        X509Certificate2 loadedLeaf = null;
+        foreach (var cert in loadedPemCollection)
+        {
+            if (cert.HasPrivateKey)
+            {
+                loadedLeaf = cert;
+                break;
+            }
+        }
+
+        loadedLeaf ??= loadedPemCollection[0];
+
+        var intermediateChain = new X509Certificate2Collection();
+        foreach (var cert in loadedPemCollection)
+        {
+            if (!cert.Thumbprint.Equals(loadedLeaf.Thumbprint, StringComparison.OrdinalIgnoreCase))
+            {
+                intermediateChain.Add(cert);
+            }
+        }
+
+        if (intermediateChain.Count == 0 && fullCollection.Count > 1)
+        {
+            foreach (var cert in fullCollection)
+            {
+                if (!cert.Thumbprint.Equals(loadedLeaf.Thumbprint, StringComparison.OrdinalIgnoreCase))
+                {
+                    intermediateChain.Add(cert);
+                }
+            }
+        }
+
+        return (loadedLeaf, intermediateChain);
     }
 
     private X509Certificate2 GetOrCreateSelfSignedCertificate(IConfigFileProvider config)

@@ -390,6 +390,154 @@ public class CertificateManagerTest
         Assert.That(result.SubjectAlternativeNames, Does.Contain("media.home.arpa"));
     }
 
+    [Test]
+    public void LoadCustomCertificate_WhenPkcs12WithIntermediateCertificates_PreservesIntermediateChain()
+    {
+        var (fullChainPem, keyPem, leafPem, caPem) = GenerateTestChain();
+        using var caCert = X509Certificate2.CreateFromPem(caPem);
+        using var leafWithKey = X509Certificate2.CreateFromPem(leafPem, keyPem);
+        var bundle = new X509Certificate2Collection { leafWithKey, caCert };
+        var pfxBytes = bundle.Export(X509ContentType.Pkcs12, "pfxsecret");
+        var pfxPath = Path.Combine(_tempDir, "bundle.pfx");
+        File.WriteAllBytes(pfxPath, pfxBytes);
+
+        var (leaf, chain) = CertificateManager.LoadCustomCertificate(pfxPath, string.Empty, "pfxsecret");
+
+        Assert.That(leaf, Is.Not.Null);
+        Assert.That(leaf.HasPrivateKey, Is.True);
+        Assert.That(leaf.Subject, Does.Contain("seedarr-server.local"));
+        Assert.That(chain, Is.Not.Null);
+        Assert.That(chain.Count, Is.EqualTo(1));
+        Assert.That(chain[0].Subject, Does.Contain("Test Intermediate CA"));
+    }
+
+    [Test]
+    public void LoadCustomCertificate_WhenPemFullchainWithIntermediateCertificates_PreservesIntermediateChain()
+    {
+        var (fullChainPem, keyPem, _, _) = GenerateTestChain();
+        var certPemPath = Path.Combine(_tempDir, "fullchain.pem");
+        var keyPemPath = Path.Combine(_tempDir, "privkey.pem");
+
+        File.WriteAllText(certPemPath, fullChainPem);
+        File.WriteAllText(keyPemPath, keyPem);
+
+        var (leaf, chain) = CertificateManager.LoadCustomCertificate(certPemPath, keyPemPath, string.Empty);
+
+        Assert.That(leaf, Is.Not.Null);
+        Assert.That(leaf.HasPrivateKey, Is.True);
+        Assert.That(leaf.Subject, Does.Contain("seedarr-server.local"));
+        Assert.That(chain, Is.Not.Null);
+        Assert.That(chain.Count, Is.EqualTo(1));
+        Assert.That(chain[0].Subject, Does.Contain("Test Intermediate CA"));
+    }
+
+    [Test]
+    public void GetOrCreateCertificate_WhenPemFullchainLoaded_ExposesIntermediateChainViaGetCertificateChain()
+    {
+        var (fullChainPem, keyPem, _, _) = GenerateTestChain();
+        var certPemPath = Path.Combine(_tempDir, "chain-test.pem");
+        var keyPemPath = Path.Combine(_tempDir, "chain-test.key");
+
+        File.WriteAllText(certPemPath, fullChainPem);
+        File.WriteAllText(keyPemPath, keyPem);
+
+        _config.SslCertPath.Returns(certPemPath);
+        _config.SslKeyPath.Returns(keyPemPath);
+
+        var cert = _certificateManager.GetOrCreateCertificate(_config);
+        var chain = _certificateManager.GetCertificateChain();
+
+        Assert.That(cert, Is.Not.Null);
+        Assert.That(cert.HasPrivateKey, Is.True);
+        Assert.That(chain, Is.Not.Null);
+        Assert.That(chain.Count, Is.EqualTo(1));
+        Assert.That(chain[0].Subject, Does.Contain("Test Intermediate CA"));
+    }
+
+    [Test]
+    public void GetOrCreateCertificate_WhenTransientErrorReloadingCustomCertificate_RetainsCachedCertificateAndChain()
+    {
+        var (fullChainPem, keyPem, _, _) = GenerateTestChain();
+        var certPemPath = Path.Combine(_tempDir, "transient.pem");
+        var keyPemPath = Path.Combine(_tempDir, "transient.key");
+
+        File.WriteAllText(certPemPath, fullChainPem);
+        File.WriteAllText(keyPemPath, keyPem);
+
+        _config.SslCertPath.Returns(certPemPath);
+        _config.SslKeyPath.Returns(keyPemPath);
+
+        var initialCert = _certificateManager.GetOrCreateCertificate(_config);
+        var initialChain = _certificateManager.GetCertificateChain();
+
+        Assert.That(initialCert, Is.Not.Null);
+        Assert.That(initialCert.Subject, Does.Contain("seedarr-server.local"));
+        Assert.That(initialChain.Count, Is.EqualTo(1));
+
+        // Simulate transient error during Certbot renewal (e.g. file corrupted or partially written)
+        File.WriteAllText(certPemPath, "CORRUPT DATA");
+
+        var fallbackCert = _certificateManager.GetOrCreateCertificate(_config);
+        var fallbackChain = _certificateManager.GetCertificateChain();
+
+        Assert.That(fallbackCert, Is.Not.Null);
+        Assert.That(fallbackCert.Thumbprint, Is.EqualTo(initialCert.Thumbprint));
+        Assert.That(fallbackCert.Subject, Does.Contain("seedarr-server.local"));
+        Assert.That(fallbackChain.Count, Is.EqualTo(1));
+        Assert.That(fallbackChain[0].Thumbprint, Is.EqualTo(initialChain[0].Thumbprint));
+    }
+
+    [Test]
+    public void GetOrCreateCertificate_WhenFileTemporarilyMissing_RetainsCachedCertificate()
+    {
+        var (fullChainPem, keyPem, _, _) = GenerateTestChain();
+        var certPemPath = Path.Combine(_tempDir, "missing-check.pem");
+        var keyPemPath = Path.Combine(_tempDir, "missing-check.key");
+
+        File.WriteAllText(certPemPath, fullChainPem);
+        File.WriteAllText(keyPemPath, keyPem);
+
+        _config.SslCertPath.Returns(certPemPath);
+        _config.SslKeyPath.Returns(keyPemPath);
+
+        var initialCert = _certificateManager.GetOrCreateCertificate(_config);
+        Assert.That(initialCert, Is.Not.Null);
+
+        // Delete the cert file to simulate an atomic file replacement window
+        File.Delete(certPemPath);
+
+        var fallbackCert = _certificateManager.GetOrCreateCertificate(_config);
+        Assert.That(fallbackCert, Is.Not.Null);
+        Assert.That(fallbackCert.Thumbprint, Is.EqualTo(initialCert.Thumbprint));
+    }
+
+    [Test]
+    public void X509Chain_WhenValidatingWithPreservedIntermediateChain_BuildsSuccessfully()
+    {
+        var (fullChainPem, keyPem, _, caPem) = GenerateTestChain();
+        var certPemPath = Path.Combine(_tempDir, "chain-build.pem");
+        var keyPemPath = Path.Combine(_tempDir, "chain-build.key");
+
+        File.WriteAllText(certPemPath, fullChainPem);
+        File.WriteAllText(keyPemPath, keyPem);
+
+        var (leaf, chain) = CertificateManager.LoadCustomCertificate(certPemPath, keyPemPath, string.Empty);
+
+        using var caCert = X509Certificate2.CreateFromPem(caPem);
+        using var x509Chain = new X509Chain();
+        x509Chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
+        x509Chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
+        x509Chain.ChainPolicy.CustomTrustStore.Add(caCert);
+
+        foreach (var intermediate in chain)
+        {
+            x509Chain.ChainPolicy.ExtraStore.Add(intermediate);
+        }
+
+        var buildResult = x509Chain.Build(leaf);
+        Assert.That(buildResult, Is.True);
+    }
+
     private static (string FullChainPem, string KeyPem, string LeafPem, string CaPem) GenerateTestChain(
         string subjectName = "CN=seedarr-server.local",
         string caSubject = "CN=Test Intermediate CA")

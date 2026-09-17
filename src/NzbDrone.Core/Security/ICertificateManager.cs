@@ -10,6 +10,8 @@ public interface ICertificateManager
 {
     X509Certificate2 GetOrCreateCertificate(IConfigFileProvider config);
 
+    X509Certificate2Collection GetCertificateChain();
+
     Task<SslCertificateValidationResult> ValidateCertificateAsync(
         string certPath,
         string keyPath,
