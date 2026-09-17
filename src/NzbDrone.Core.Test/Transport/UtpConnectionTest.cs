@@ -1367,6 +1367,155 @@ public class UtpConnectionTest
         Assert.That(seq, Is.EqualTo((ushort)2));
     }
 
+    [Test]
+    public void HandleIncomingPacket_sequence_wrap_around_should_accept_zero_in_order_and_buffer_out_of_order()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        var sender = new IPEndPoint(IPAddress.Loopback, 12345);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, sender);
+
+        // 1. Initial packet with seqNr = 65535 arrives (first packet)
+        var payload1 = new byte[] { 1, 2, 3 };
+        var packet65535 = CreatePacket(UtpPacketType.Data, connection.ReceiveId, 65535, 0, payload1);
+        connection.HandleIncomingPacket(packet65535, sender);
+
+        Assert.That(connection.HasReceivedFirstPacket, Is.True);
+
+        // Now _expectedSeqNr has wrapped around to 0
+        // 2. Out-of-order packet with seqNr = 5 arrives ahead when _expectedSeqNr == 0
+        var payload5 = new byte[] { 50, 51 };
+        var packet5 = CreatePacket(UtpPacketType.Data, connection.ReceiveId, 5, 0, payload5);
+        connection.HandleIncomingPacket(packet5, sender);
+
+        // It should be stored in _outOfOrderBuffer, NOT in _receiveQueue
+        Assert.That(connection.OutOfOrderCount, Is.EqualTo(1));
+
+        // 3. Expected in-order packet with seqNr = 0 arrives
+        var payload0 = new byte[] { 4, 5, 6 };
+        var packet0 = CreatePacket(UtpPacketType.Data, connection.ReceiveId, 0, 0, payload0);
+        connection.HandleIncomingPacket(packet0, sender);
+
+        // Drain _receiveQueue: should contain payload1 and payload0 in that order
+        var buffer = new byte[10];
+        var read1 = connection.Receive(buffer, 0, buffer.Length);
+        Assert.That(read1, Is.EqualTo(3));
+        Assert.That(buffer[0..3], Is.EqualTo(payload1));
+
+        var read2 = connection.Receive(buffer, 0, buffer.Length);
+        Assert.That(read2, Is.EqualTo(3));
+        Assert.That(buffer[0..3], Is.EqualTo(payload0));
+
+        // Packet 5 is still in _outOfOrderBuffer waiting for packets 1..4
+        Assert.That(connection.OutOfOrderCount, Is.EqualTo(1));
+
+        // 4. Consecutive packets 1, 2, 3, 4 arrive to bridge the gap
+        for (ushort s = 1; s <= 4; s++)
+        {
+            var bridgePayload = new byte[] { (byte)s };
+            var bridgePacket = CreatePacket(UtpPacketType.Data, connection.ReceiveId, s, 0, bridgePayload);
+            connection.HandleIncomingPacket(bridgePacket, sender);
+        }
+
+        // Out-of-order buffer should now be drained (packet 5 was consumed)
+        Assert.That(connection.OutOfOrderCount, Is.EqualTo(0));
+
+        // Drain packets 1..4 and packet 5
+        for (var expectedByte = 1; expectedByte <= 4; expectedByte++)
+        {
+            var r = connection.Receive(buffer, 0, 1);
+            Assert.That(r, Is.EqualTo(1));
+            Assert.That(buffer[0], Is.EqualTo(expectedByte));
+        }
+
+        var read5 = connection.Receive(buffer, 0, 2);
+        Assert.That(read5, Is.EqualTo(2));
+        Assert.That(buffer[0..2], Is.EqualTo(payload5));
+    }
+
+    [Test]
+    public void HandleIncomingPacket_duplicate_or_older_packet_should_trigger_ack_without_corrupting_receive_queue()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        var sender = new IPEndPoint(IPAddress.Loopback, 12345);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, sender);
+
+        byte[] lastSentAck = null;
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            var type = (UtpPacketType)(data[0] >> 4);
+            if (type == UtpPacketType.State)
+            {
+                lastSentAck = data.ToArray();
+            }
+
+            return true;
+        };
+
+        // 1. Send first packet seqNr = 10
+        var payload1 = new byte[] { 10, 20, 30 };
+        var packet10 = CreatePacket(UtpPacketType.Data, connection.ReceiveId, 10, 0, payload1);
+        connection.HandleIncomingPacket(packet10, sender);
+
+        Assert.That(lastSentAck, Is.Not.Null);
+        var ackSeq1 = BinaryPrimitives.ReadUInt16BigEndian(lastSentAck.AsSpan(18, 2));
+        Assert.That(ackSeq1, Is.EqualTo((ushort)10));
+
+        // 2. Send duplicate packet with seqNr = 10 and different payload
+        lastSentAck = null;
+        var duplicatePayload = new byte[] { 99, 99, 99 };
+        var duplicatePacket = CreatePacket(UtpPacketType.Data, connection.ReceiveId, 10, 0, duplicatePayload);
+        connection.HandleIncomingPacket(duplicatePacket, sender);
+
+        // Immediate ACK should still be triggered for current ack number (10)
+        Assert.That(lastSentAck, Is.Not.Null, "Duplicate packet must trigger immediate ACK");
+        var ackSeq2 = BinaryPrimitives.ReadUInt16BigEndian(lastSentAck.AsSpan(18, 2));
+        Assert.That(ackSeq2, Is.EqualTo((ushort)10));
+
+        // 3. Also send older packet with seqNr = 9
+        lastSentAck = null;
+        var olderPayload = new byte[] { 88, 88 };
+        var olderPacket = CreatePacket(UtpPacketType.Data, connection.ReceiveId, 9, 0, olderPayload);
+        connection.HandleIncomingPacket(olderPacket, sender);
+
+        Assert.That(lastSentAck, Is.Not.Null, "Older packet must trigger immediate ACK");
+        var ackSeq3 = BinaryPrimitives.ReadUInt16BigEndian(lastSentAck.AsSpan(18, 2));
+        Assert.That(ackSeq3, Is.EqualTo((ushort)10));
+
+        // 4. Verify receive queue only contains payload1 (not the duplicate or older payloads)
+        var buffer = new byte[100];
+        var read = connection.Receive(buffer, 0, buffer.Length);
+        Assert.That(read, Is.EqualTo(3));
+        Assert.That(buffer[0..3], Is.EqualTo(payload1));
+    }
+
+    [Test]
+    public void HandleIncomingPacket_empty_payload_data_packet_should_trigger_ack()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        var sender = new IPEndPoint(IPAddress.Loopback, 12345);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, sender);
+
+        byte[] lastSentAck = null;
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            var type = (UtpPacketType)(data[0] >> 4);
+            if (type == UtpPacketType.State)
+            {
+                lastSentAck = data.ToArray();
+            }
+
+            return true;
+        };
+
+        var emptyPacket = CreatePacket(UtpPacketType.Data, connection.ReceiveId, 1, 0, Array.Empty<byte>());
+        connection.HandleIncomingPacket(emptyPacket, sender);
+
+        Assert.That(lastSentAck, Is.Not.Null, "Empty payload data packet must trigger State ACK");
+    }
+
     // ---- helpers ----
 
     private static byte[] CreatePacket(UtpPacketType type, ushort connectionId, ushort seqNr, ushort ackNr, byte[] payload = null)
