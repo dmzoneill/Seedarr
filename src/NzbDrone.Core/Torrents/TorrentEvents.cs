@@ -595,3 +595,54 @@ public class TorrentStreamPlayheadMovedEvent : IEvent
         this.HeadPiece = headPiece;
     }
 }
+
+public class TorrentRelocationProgressEvent : IEvent
+{
+    public int TorrentId { get; set; }
+
+    public long BytesTransferred { get; set; }
+
+    public long TotalBytes { get; set; }
+
+    public double Progress { get; set; }
+
+    public double BytesPerSecond { get; set; }
+
+    public string CurrentFilePath { get; set; }
+
+    public int CurrentFileIndex { get; set; }
+
+    public int TotalFiles { get; set; }
+
+    public bool IsComplete { get; set; }
+
+    public string ErrorMessage { get; set; }
+
+    public TorrentRelocationProgressEvent()
+    {
+    }
+
+    public TorrentRelocationProgressEvent(
+        int torrentId,
+        long bytesTransferred,
+        long totalBytes,
+        double progress,
+        double bytesPerSecond = 0,
+        string currentFilePath = null,
+        int currentFileIndex = 0,
+        int totalFiles = 0,
+        bool isComplete = false,
+        string errorMessage = null)
+    {
+        this.TorrentId = torrentId;
+        this.BytesTransferred = bytesTransferred;
+        this.TotalBytes = totalBytes;
+        this.Progress = progress;
+        this.BytesPerSecond = bytesPerSecond;
+        this.CurrentFilePath = currentFilePath;
+        this.CurrentFileIndex = currentFileIndex;
+        this.TotalFiles = totalFiles;
+        this.IsComplete = isComplete;
+        this.ErrorMessage = errorMessage;
+    }
+}
