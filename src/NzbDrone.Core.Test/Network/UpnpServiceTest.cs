@@ -255,6 +255,79 @@ public class UpnpServiceTest
         Assert.That(mappings[0].ErrorMessage, Does.Contain("718").And.Contain("Conflict"));
     }
 
+    [Test]
+    public async Task RemoveMappings_should_reuse_cached_device_without_invoking_deviceDiscoverer_again()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerHttpPort.Returns(9696);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+        mockDevice.DeletePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+
+        var discovererCallCount = 0;
+        Func<CancellationToken, Task<IUpnpDevice>> discoverer = _ =>
+        {
+            discovererCallCount++;
+            return Task.FromResult(mockDevice);
+        };
+
+        var service = new UpnpService(_configService, _eventAggregator, discoverer);
+        await service.CreateMappings(CancellationToken.None);
+
+        Assert.That(discovererCallCount, Is.EqualTo(1));
+
+        await service.RemoveMappings();
+
+        Assert.That(discovererCallCount, Is.EqualTo(1));
+        await mockDevice.Received().DeletePortMapAsync(Arg.Any<Mapping>());
+        Assert.That(service.IsAvailable, Is.False);
+    }
+
+    [Test]
+    public async Task RemoveMappings_should_not_attempt_device_discovery_when_no_device_discovered()
+    {
+        var discovererCalled = false;
+        Func<CancellationToken, Task<IUpnpDevice>> discoverer = _ =>
+        {
+            discovererCalled = true;
+            return Task.FromResult(Substitute.For<IUpnpDevice>());
+        };
+
+        var service = new UpnpService(_configService, _eventAggregator, discoverer);
+
+        await service.RemoveMappings();
+
+        Assert.That(discovererCalled, Is.False);
+        Assert.That(service.IsAvailable, Is.False);
+    }
+
+    [Test]
+    public async Task RemoveMappings_should_abort_gracefully_when_mapping_deletion_times_out_or_is_cancelled()
+    {
+        _configService.ListeningPort.Returns(6881);
+        _configService.TrackerHttpPort.Returns(9696);
+
+        var mockDevice = Substitute.For<IUpnpDevice>();
+        mockDevice.GetExternalIPAsync().Returns(IPAddress.Parse("203.0.113.1"));
+        mockDevice.CreatePortMapAsync(Arg.Any<Mapping>()).Returns(Task.CompletedTask);
+        mockDevice.DeletePortMapAsync(Arg.Any<Mapping>()).Returns(async _ =>
+        {
+            await Task.Delay(10000);
+        });
+
+        var service = new UpnpService(_configService, _eventAggregator, _ => Task.FromResult(mockDevice));
+        await service.CreateMappings(CancellationToken.None);
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        Assert.DoesNotThrowAsync(async () => await service.RemoveMappings());
+        sw.Stop();
+
+        Assert.That(sw.ElapsedMilliseconds, Is.LessThan(4000));
+        Assert.That(service.IsAvailable, Is.False);
+    }
+
     private static MappingException CreateMappingException(int errorCode, string errorText)
     {
         var ctor = typeof(MappingException).GetConstructor(
