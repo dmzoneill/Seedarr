@@ -2037,4 +2037,45 @@ public class PeerServerTest
         Assert.That(conn.RemoteExtensions.ContainsKey("ut_metadata"), Is.True);
         Assert.That(conn.RemoteExtensions["ut_metadata"], Is.EqualTo(3));
     }
+
+    [Test]
+    public void HandleMessage_should_serve_synthetic_metadata_when_physical_torrent_file_is_missing()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        const string infoHash = "fedcba9876543210fedcba9876543210fedcba98";
+        serverConn.InfoHash = infoHash;
+        serverConn.RemoteExtensions["ut_metadata"] = 2;
+
+        var torrent = new Torrent
+        {
+            Id = 42,
+            Name = "simulated.torrent",
+            InfoHash = infoHash,
+            TotalSize = 10000,
+            PieceLength = 16384,
+            SourcePath = "/nonexistent/path/simulated.torrent"
+        };
+
+        _torrentService.GetByInfoHash(infoHash).Returns(torrent);
+
+        var exchange = new MetadataExchange();
+        var requestBytes = exchange.BuildMetadataRequest(0);
+        var payload = new byte[1 + requestBytes.Length];
+        payload[0] = 2;
+        Array.Copy(requestBytes, 0, payload, 1, requestBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload }, torrent);
+
+        var response = clientConn.ReceiveMessage();
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Type, Is.EqualTo(PeerMessageType.Extended));
+        Assert.That(response.Payload[0], Is.EqualTo(2));
+
+        var parsed = exchange.ParseMetadataMessage(response.Payload[1..]);
+        Assert.That(parsed.MessageType, Is.EqualTo(1));
+        Assert.That(parsed.Piece, Is.EqualTo(0));
+        Assert.That(parsed.TotalSize, Is.GreaterThan(0));
+        Assert.That(parsed.Data, Is.Not.Null);
+        Assert.That(parsed.Data.Length, Is.GreaterThan(0));
+    }
 }

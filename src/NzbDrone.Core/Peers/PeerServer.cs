@@ -46,6 +46,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private readonly IDhKeyPool _dhKeyPool;
     private readonly IMseSkeyRegistry _mseSkeyRegistry;
     private readonly Extensions.IMetadataExchange _metadataExchange;
+    private readonly Extensions.ISyntheticMetadataGenerator _syntheticMetadataGenerator;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
@@ -82,7 +83,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         Network.IProxySettingsProvider proxySettingsProvider = null,
         IDhKeyPool dhKeyPool = null,
         IMseSkeyRegistry mseSkeyRegistry = null,
-        Extensions.IMetadataExchange metadataExchange = null)
+        Extensions.IMetadataExchange metadataExchange = null,
+        Extensions.ISyntheticMetadataGenerator syntheticMetadataGenerator = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -99,6 +101,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         _dhKeyPool = dhKeyPool;
         _mseSkeyRegistry = mseSkeyRegistry ?? new MseSkeyRegistry(_torrentService);
         _metadataExchange = metadataExchange ?? new Extensions.MetadataExchange();
+        _syntheticMetadataGenerator = syntheticMetadataGenerator ?? new Extensions.SyntheticMetadataGenerator();
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -231,6 +234,23 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
             catch (Exception ex)
             {
                 _logger.Debug(ex, "Failed to extract metadata from {0}", torrent.SourcePath);
+            }
+        }
+
+        if (torrent != null && _syntheticMetadataGenerator != null)
+        {
+            try
+            {
+                var synthetic = _syntheticMetadataGenerator.GenerateMetadataBytes(torrent);
+                if (synthetic != null && synthetic.Length > 0)
+                {
+                    _metadataCache[infoHash] = synthetic;
+                    return synthetic;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to generate synthetic metadata for {0}", infoHash);
             }
         }
 
