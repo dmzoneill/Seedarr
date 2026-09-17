@@ -151,6 +151,24 @@ public class SeedingEngine : BackgroundService
         }
     }
 
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        _logger.Info("Seeding engine stopping");
+        try
+        {
+            if (_connectionManager != null)
+            {
+                await _connectionManager.DisconnectAllAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Error disconnecting connections during SeedingEngine stop");
+        }
+
+        await base.StopAsync(cancellationToken);
+    }
+
     private void Tick()
     {
         var allTorrents = _torrentService.GetAll();
