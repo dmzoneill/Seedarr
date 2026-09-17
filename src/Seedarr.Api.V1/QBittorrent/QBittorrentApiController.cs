@@ -499,7 +499,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 ["eta"] = CalculateEta(t),
                 ["state"] = state,
                 ["seq_dl"] = t.SequentialDownload,
-                ["f_l_piece_prio"] = false,
+                ["f_l_piece_prio"] = t.FirstLastPiecePrio,
                 ["category"] = t.Category ?? string.Empty,
                 ["tags"] = t.Label ?? string.Empty,
                 ["save_path"] = savePath,
@@ -774,6 +774,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         if (request.IsFirstLastPiecePrio)
         {
+            added.FirstLastPiecePrio = true;
             needsUpdate = true;
         }
 
@@ -2296,9 +2297,41 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     }
 
     [HttpPost("torrents/toggleFirstLastPiecePrio")]
-    [HttpPost("torrents/setFirstLastPiecePrio")]
-    public ActionResult SetFirstLastPiecePrio([FromForm] string hashes)
+    public ActionResult ToggleFirstLastPiecePrio([FromForm] string hashes)
     {
+        if (string.IsNullOrWhiteSpace(hashes))
+        {
+            return BadRequest();
+        }
+
+        foreach (var torrent in ResolveTorrents(hashes))
+        {
+            torrent.FirstLastPiecePrio = !torrent.FirstLastPiecePrio;
+            _torrentService.Update(torrent);
+        }
+
+        return Content("Ok.", "text/plain");
+    }
+
+    [HttpPost("torrents/setFirstLastPiecePrio")]
+    public ActionResult SetFirstLastPiecePrio(
+        [FromForm] string hashes,
+        [FromForm] string value = null,
+        [FromForm] bool? enable = null)
+    {
+        if (string.IsNullOrWhiteSpace(hashes))
+        {
+            return BadRequest();
+        }
+
+        var enabled = enable ?? (bool.TryParse(value, out var b) ? b : true);
+
+        foreach (var torrent in ResolveTorrents(hashes))
+        {
+            torrent.FirstLastPiecePrio = enabled;
+            _torrentService.Update(torrent);
+        }
+
         return Content("Ok.", "text/plain");
     }
 
@@ -2637,7 +2670,7 @@ public record QBitTorrentSnapshot
             AddedOn = addedOn,
             CompletionOn = completionOn,
             SeqDl = torrent.SequentialDownload,
-            FLPiecePrio = false,
+            FLPiecePrio = torrent.FirstLastPiecePrio,
             RatioLimit = torrent.RatioLimit ?? -2.0,
             SeedingTimeLimit = torrent.SeedingTimeLimit ?? -2,
         };

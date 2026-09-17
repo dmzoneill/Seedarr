@@ -36,6 +36,7 @@ public class Torrent : ModelBase
     public string SavePath { get; set; }
     public double Progress { get; set; }
     public bool SequentialDownload { get; set; }
+    public bool FirstLastPiecePrio { get; set; }
     public int AnnounceInterval { get; set; }
     public int NextUpdate { get; set; }
     public long SessionUploaded { get; set; }

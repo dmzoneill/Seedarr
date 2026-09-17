@@ -509,12 +509,17 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     {
         var torrent = connection?.MatchedTorrent ?? GetCachedTorrent(connection?.InfoHash);
         var sequential = torrent?.SequentialDownload ?? false;
-        return _piecePicker?.RequestBlock(connection, pieceIndex, sequential);
+        var firstLast = torrent?.FirstLastPiecePrio ?? false;
+        var pieceCount = torrent?.PieceCount ?? 0;
+        return _piecePicker?.RequestBlock(connection, pieceIndex, sequential, firstLast, pieceCount);
     }
 
     public PiecePicker.PieceBlock RequestBlock(PeerConnection connection, int pieceIndex, bool sequential)
     {
-        return _piecePicker?.RequestBlock(connection, pieceIndex, sequential);
+        var torrent = connection?.MatchedTorrent ?? GetCachedTorrent(connection?.InfoHash);
+        var firstLast = torrent?.FirstLastPiecePrio ?? false;
+        var pieceCount = torrent?.PieceCount ?? 0;
+        return _piecePicker?.RequestBlock(connection, pieceIndex, sequential, firstLast, pieceCount);
     }
 
     public void SetTorrentMetadata(string infoHash, byte[] metadata)

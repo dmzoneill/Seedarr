@@ -99,6 +99,7 @@ export interface IngestionOptions {
   savePath?: string;
   paused?: boolean;
   sequentialDownload?: boolean;
+  firstLastPiecePrio?: boolean;
 }
 
 export type AddTorrentInput =
@@ -275,6 +276,11 @@ export function useAddTorrent() {
             "sequentialDownload",
             String(input.sequentialDownload),
           );
+        if (input.firstLastPiecePrio !== undefined)
+          formData.append(
+            "firstLastPiecePrio",
+            String(input.firstLastPiecePrio),
+          );
         return apiClient.postForm<AddTorrentResult>(
           "/torrent/upload",
           formData,
@@ -285,6 +291,7 @@ export function useAddTorrent() {
         category: input.category,
         savePath: input.savePath,
         sequentialDownload: input.sequentialDownload,
+        firstLastPiecePrio: input.firstLastPiecePrio,
         status: input.paused ? "Paused" : undefined,
       });
     },

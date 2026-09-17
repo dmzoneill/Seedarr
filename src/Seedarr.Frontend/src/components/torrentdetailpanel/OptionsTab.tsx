@@ -18,6 +18,9 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
   const [sequentialDownload, setSequentialDownload] = useState(
     torrent.sequentialDownload,
   );
+  const [firstLastPiecePrio, setFirstLastPiecePrio] = useState(
+    torrent.firstLastPiecePrio ?? false,
+  );
   const [active, setActive] = useState(torrent.active);
   const [label, setLabel] = useState(torrent.label ?? "");
   const [uploadSpeed, setUploadSpeed] = useState(torrent.uploadSpeed);
@@ -48,6 +51,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
     setSuperSeeding(torrent.superSeeding);
     setForceStart(torrent.forceStart);
     setSequentialDownload(torrent.sequentialDownload);
+    setFirstLastPiecePrio(torrent.firstLastPiecePrio ?? false);
     setActive(torrent.active);
     setLabel(torrent.label ?? "");
     setUploadSpeed(torrent.uploadSpeed);
@@ -72,6 +76,7 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
         superSeeding,
         forceStart,
         sequentialDownload,
+        firstLastPiecePrio,
         active,
         label: label || null,
         uploadSpeed,
@@ -201,6 +206,17 @@ export function OptionsTab({ torrent }: { torrent: Torrent }) {
               type="checkbox"
               checked={sequentialDownload}
               onChange={(e) => mark(setSequentialDownload)(e.target.checked)}
+            />
+            <span className="toggle-slider" />
+          </label>
+        </div>
+        <div className="form-group form-group-inline">
+          <label className="form-label">First & Last Piece Priority</label>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={firstLastPiecePrio}
+              onChange={(e) => mark(setFirstLastPiecePrio)(e.target.checked)}
             />
             <span className="toggle-slider" />
           </label>

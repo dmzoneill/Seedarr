@@ -46,6 +46,7 @@ export function AddTorrentForm({
   const [customSavePath, setCustomSavePath] = useState<string>("");
   const [startPaused, setStartPaused] = useState<boolean>(false);
   const [sequentialDownload, setSequentialDownload] = useState<boolean>(false);
+  const [firstLastPiecePrio, setFirstLastPiecePrio] = useState<boolean>(false);
 
   const activeCategoryObj = useMemo(
     () => categories?.find((c) => c.name === selectedCategory),
@@ -168,6 +169,7 @@ export function AddTorrentForm({
           savePath: finalSavePath,
           paused: startPaused,
           sequentialDownload,
+          firstLastPiecePrio,
         },
         {
           onSuccess: (result: AddTorrentResult) => {
@@ -195,6 +197,7 @@ export function AddTorrentForm({
           savePath: finalSavePath,
           paused: startPaused,
           sequentialDownload,
+          firstLastPiecePrio,
         },
         {
           onSuccess: () => {
@@ -1277,6 +1280,23 @@ export function AddTorrentForm({
                 onChange={(e) => setSequentialDownload(e.target.checked)}
               />
               <span>⏩ Sequential Download</span>
+            </label>
+            <label
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.4rem",
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                userSelect: "none",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={firstLastPiecePrio}
+                onChange={(e) => setFirstLastPiecePrio(e.target.checked)}
+              />
+              <span>🎯 Prioritize First & Last Pieces</span>
             </label>
           </div>
         </div>

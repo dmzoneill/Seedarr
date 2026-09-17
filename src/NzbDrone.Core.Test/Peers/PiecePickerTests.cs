@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
@@ -223,5 +224,102 @@ public class PiecePickerTests
 
         var picked = picker.PickPiece(myPieces, peerPieces, availability, sequential: true);
         Assert.That(picked, Is.Null);
+    }
+
+    [Test]
+    public void Boundary_pieces_prioritized_first_when_firstLastPiecePrio_is_enabled_in_sequential_mode()
+    {
+        var picker = new SequentialPiecePicker();
+
+        // 20 pieces total. Missing: 0..19.
+        var myPieces = new BitArray(20, false);
+        var peerPieces = new BitArray(20, true);
+        var availability = new int[20];
+        Array.Fill(availability, 2);
+
+        // Active pieces is empty. Head (0, 1) and tail (18, 19) should be picked first.
+        var picked0 = picker.PickPiece(myPieces, peerPieces, availability, sequential: true, lookaheadWindow: 5, rarestFirstRatio: 0.0, activePieces: null, firstLastPiecePrio: true);
+        Assert.That(picked0, Is.EqualTo(0));
+
+        myPieces[0] = true;
+        var picked1 = picker.PickPiece(myPieces, peerPieces, availability, sequential: true, lookaheadWindow: 5, rarestFirstRatio: 0.0, activePieces: null, firstLastPiecePrio: true);
+        Assert.That(picked1, Is.EqualTo(1));
+
+        myPieces[1] = true;
+        var pickedTail1 = picker.PickPiece(myPieces, peerPieces, availability, sequential: true, lookaheadWindow: 5, rarestFirstRatio: 0.0, activePieces: null, firstLastPiecePrio: true);
+        Assert.That(pickedTail1, Is.EqualTo(18));
+
+        myPieces[18] = true;
+        var pickedTail2 = picker.PickPiece(myPieces, peerPieces, availability, sequential: true, lookaheadWindow: 5, rarestFirstRatio: 0.0, activePieces: null, firstLastPiecePrio: true);
+        Assert.That(pickedTail2, Is.EqualTo(19));
+
+        // When boundary pieces (0, 1, 18, 19) are completed, regular sequential picking resumes at piece 2
+        myPieces[19] = true;
+        var pickedMiddle = picker.PickPiece(myPieces, peerPieces, availability, sequential: true, lookaheadWindow: 5, rarestFirstRatio: 0.0, activePieces: null, firstLastPiecePrio: true);
+        Assert.That(pickedMiddle, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Boundary_pieces_prioritized_first_when_firstLastPiecePrio_is_enabled_in_rarest_first_mode()
+    {
+        var picker = new RarestFirstPiecePicker();
+
+        // 10 pieces. Missing: 0..9.
+        var myPieces = new BitArray(10, false);
+        var peerPieces = new BitArray(10, true);
+
+        // Piece 5 is extremely rare (avail = 1), middle pieces have low availability
+        var availability = new[] { 10, 10, 5, 4, 3, 1, 3, 4, 10, 10 };
+
+        // Even though piece 5 is rarest, firstLastPiecePrio forces boundary pieces (0, 1, 8, 9) first
+        var picked0 = picker.PickPiece(myPieces, peerPieces, availability, sequential: false, lookaheadWindow: 20, rarestFirstRatio: 0.2, activePieces: null, firstLastPiecePrio: true);
+        Assert.That(picked0, Is.EqualTo(0));
+
+        myPieces[0] = true;
+        var picked1 = picker.PickPiece(myPieces, peerPieces, availability, sequential: false, lookaheadWindow: 20, rarestFirstRatio: 0.2, activePieces: null, firstLastPiecePrio: true);
+        Assert.That(picked1, Is.EqualTo(1));
+
+        myPieces[1] = true;
+        var pickedTail1 = picker.PickPiece(myPieces, peerPieces, availability, sequential: false, lookaheadWindow: 20, rarestFirstRatio: 0.2, activePieces: null, firstLastPiecePrio: true);
+        Assert.That(pickedTail1, Is.EqualTo(8));
+
+        myPieces[8] = true;
+        var pickedTail2 = picker.PickPiece(myPieces, peerPieces, availability, sequential: false, lookaheadWindow: 20, rarestFirstRatio: 0.2, activePieces: null, firstLastPiecePrio: true);
+        Assert.That(pickedTail2, Is.EqualTo(9));
+
+        // Once all boundary pieces are satisfied, rarest piece 5 is picked
+        myPieces[9] = true;
+        var pickedRarest = picker.PickPiece(myPieces, peerPieces, availability, sequential: false, lookaheadWindow: 20, rarestFirstRatio: 0.2, activePieces: null, firstLastPiecePrio: true);
+        Assert.That(pickedRarest, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void RequestBlock_prioritizes_boundary_active_pieces_when_firstLastPiecePrio_is_enabled()
+    {
+        var picker = new NzbDrone.Core.Peers.PiecePicker.PiecePicker();
+
+        // Create active pieces 0, 5, 9
+        picker.AddActivePiece(0, 16384);
+        picker.AddActivePiece(5, 16384);
+        picker.AddActivePiece(9, 16384);
+
+        using var ms = new System.IO.MemoryStream();
+        var conn = new PeerConnection(ms, "127.0.0.1", 6881)
+        {
+            PeerChoking = false,
+            PeerPieces = Enumerable.Repeat(true, 10).ToArray()
+        };
+
+        var torrent = new Torrent
+        {
+            PieceCount = 10,
+            SequentialDownload = false,
+            FirstLastPiecePrio = true
+        };
+
+        // When firstLastPiecePrio is true, piece 0 (head boundary) must be requested first
+        var block = picker.RequestBlock(conn, -1, torrent);
+        Assert.That(block, Is.Not.Null);
+        Assert.That(block.PieceIndex, Is.EqualTo(0));
     }
 }
