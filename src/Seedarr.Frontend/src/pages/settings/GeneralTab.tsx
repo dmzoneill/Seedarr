@@ -41,6 +41,7 @@ export function GeneralTab() {
     sslKeyPath: "",
     sslCertPassword: "",
     redirectHttpToHttps: false,
+    tmdbApiKey: "",
   });
   const [dirty, setDirty] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
@@ -62,6 +63,7 @@ export function GeneralTab() {
         sslKeyPath: config.sslKeyPath ?? "",
         sslCertPassword: config.sslCertPassword ?? "",
         redirectHttpToHttps: config.redirectHttpToHttps ?? false,
+        tmdbApiKey: config.tmdbApiKey ?? "",
       });
       setDirty(false);
       setRevealedApiKey(null);
@@ -690,6 +692,19 @@ export function GeneralTab() {
           checked={form.watchFolderDeleteAddedTorrents}
           onChange={(v) => set("watchFolderDeleteAddedTorrents", v)}
           hint="Remove .torrent file from the watch directory after successful import"
+        />
+      </SectionCard>
+
+      <SectionCard
+        title="Metadata & Enrichment"
+        description="Configure external metadata providers for standalone enrichment"
+      >
+        <TextInput
+          label="TMDb API Key"
+          value={form.tmdbApiKey ?? ""}
+          onChange={(v) => set("tmdbApiKey", v)}
+          placeholder="Leave empty for built-in default"
+          hint="API key used to query The Movie Database (TMDb) for posters, backdrops, genres, and cast when Arr applications are not connected"
         />
       </SectionCard>
     </div>

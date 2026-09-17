@@ -57,6 +57,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
     private readonly IEventAggregator _eventAggregator;
     private readonly IArrConnectionRepository _arrRepository;
     private readonly IArrConnectionFactory _connectionFactory;
+    private readonly ITmdbMetadataProvider _tmdbProvider;
     private readonly HttpClient _explicitHttpClient;
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
@@ -78,6 +79,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private static readonly Regex YearRegex = new(@"\b(19\d{2}|20\d{2})\b", RegexOptions.Compiled);
+    private static readonly Regex ImdbIdRegex = new(@"\b(tt\d{7,10})\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public MediaEnrichmentService(
         ITorrentMediaMetadataRepository repository,
@@ -87,6 +89,7 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         IEventAggregator eventAggregator = null,
         IArrConnectionRepository arrRepository = null,
         IArrConnectionFactory connectionFactory = null,
+        ITmdbMetadataProvider tmdbProvider = null,
         HttpClient httpClient = null)
     {
         _repository = repository;
@@ -96,9 +99,23 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         _eventAggregator = eventAggregator;
         _arrRepository = arrRepository;
         _connectionFactory = connectionFactory;
+        _tmdbProvider = tmdbProvider;
         _explicitHttpClient = httpClient;
         _httpClient = httpClient ?? ArrConnectionResources.SharedClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public MediaEnrichmentService(
+        ITorrentMediaMetadataRepository repository,
+        IMediaContainerInspector inspector,
+        IConfigService configService,
+        IAppFolderInfo appFolderInfo,
+        IEventAggregator eventAggregator,
+        IArrConnectionRepository arrRepository,
+        IArrConnectionFactory connectionFactory,
+        HttpClient httpClient)
+        : this(repository, inspector, configService, appFolderInfo, eventAggregator, arrRepository, connectionFactory, null, httpClient)
+    {
     }
 
     public async Task<TorrentMediaMetadata> EnrichTorrentAsync(Torrent torrent, string filePath = null, CancellationToken cancellationToken = default)
@@ -249,6 +266,80 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
                 if (arrMetadata.ReleaseDate.HasValue)
                 {
                     metadata.ReleaseDate = arrMetadata.ReleaseDate.Value;
+                }
+            }
+            else if (_tmdbProvider != null)
+            {
+                var imdbId = ExtractImdbId(torrent.Name, filePath) ?? metadata.ImdbId;
+                var guessedArrType = GuessArrType(torrent.Label, torrent.Name);
+                var tmdbMetadata = await _tmdbProvider.LookupMediaAsync(
+                    cleanTitle,
+                    parsedYear > 0 ? parsedYear : null,
+                    imdbId,
+                    guessedArrType,
+                    cancellationToken).ConfigureAwait(false);
+
+                if (tmdbMetadata != null)
+                {
+                    if (!string.IsNullOrEmpty(tmdbMetadata.Title))
+                    {
+                        metadata.Title = tmdbMetadata.Title;
+                    }
+
+                    if (tmdbMetadata.Year > 0)
+                    {
+                        metadata.Year = tmdbMetadata.Year;
+                    }
+
+                    if (!string.IsNullOrEmpty(tmdbMetadata.Overview))
+                    {
+                        metadata.Overview = tmdbMetadata.Overview;
+                    }
+
+                    if (!string.IsNullOrEmpty(tmdbMetadata.PosterUrl))
+                    {
+                        metadata.PosterUrl = tmdbMetadata.PosterUrl;
+                    }
+
+                    if (!string.IsNullOrEmpty(tmdbMetadata.BackdropUrl))
+                    {
+                        metadata.BackdropUrl = tmdbMetadata.BackdropUrl;
+                    }
+
+                    if (!string.IsNullOrEmpty(tmdbMetadata.Genres))
+                    {
+                        metadata.Genres = tmdbMetadata.Genres;
+                    }
+
+                    if (tmdbMetadata.Rating > 0)
+                    {
+                        metadata.Rating = tmdbMetadata.Rating;
+                    }
+
+                    if (!string.IsNullOrEmpty(tmdbMetadata.ImdbId))
+                    {
+                        metadata.ImdbId = tmdbMetadata.ImdbId;
+                    }
+
+                    if (!string.IsNullOrEmpty(tmdbMetadata.TmdbId))
+                    {
+                        metadata.TmdbId = tmdbMetadata.TmdbId;
+                    }
+
+                    if (!string.IsNullOrEmpty(tmdbMetadata.Cast))
+                    {
+                        metadata.Cast = tmdbMetadata.Cast;
+                    }
+
+                    if (!string.IsNullOrEmpty(tmdbMetadata.ArrType) && tmdbMetadata.ArrType != "Unknown")
+                    {
+                        metadata.ArrType = tmdbMetadata.ArrType;
+                    }
+
+                    if (tmdbMetadata.ReleaseDate.HasValue)
+                    {
+                        metadata.ReleaseDate = tmdbMetadata.ReleaseDate.Value;
+                    }
                 }
             }
 
@@ -1081,6 +1172,61 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         }
 
         return 0;
+    }
+
+    public static string ExtractImdbId(string releaseTitle, string filePath = null)
+    {
+        if (!string.IsNullOrWhiteSpace(releaseTitle))
+        {
+            var match = ImdbIdRegex.Match(releaseTitle);
+            if (match.Success)
+            {
+                return match.Groups[1].Value.ToLowerInvariant();
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(filePath))
+        {
+            try
+            {
+                string nfoPath = null;
+                if (File.Exists(filePath))
+                {
+                    if (filePath.EndsWith(".nfo", StringComparison.OrdinalIgnoreCase))
+                    {
+                        nfoPath = filePath;
+                    }
+                    else
+                    {
+                        var dir = Path.GetDirectoryName(filePath);
+                        if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir))
+                        {
+                            nfoPath = Directory.EnumerateFiles(dir, "*.nfo", SearchOption.TopDirectoryOnly).FirstOrDefault();
+                        }
+                    }
+                }
+                else if (Directory.Exists(filePath))
+                {
+                    nfoPath = Directory.EnumerateFiles(filePath, "*.nfo", SearchOption.TopDirectoryOnly).FirstOrDefault();
+                }
+
+                if (!string.IsNullOrWhiteSpace(nfoPath) && File.Exists(nfoPath))
+                {
+                    var text = File.ReadAllText(nfoPath);
+                    var match = ImdbIdRegex.Match(text);
+                    if (match.Success)
+                    {
+                        return match.Groups[1].Value.ToLowerInvariant();
+                    }
+                }
+            }
+            catch
+            {
+                // Suppress NFO inspection errors
+            }
+        }
+
+        return null;
     }
 
     public static string GuessArrType(string category, string name)

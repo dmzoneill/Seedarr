@@ -341,6 +341,7 @@ export interface GeneralConfig {
   sslKeyPath?: string;
   sslCertPassword?: string;
   redirectHttpToHttps?: boolean;
+  tmdbApiKey?: string;
 }
 
 export interface SslTestRequest {

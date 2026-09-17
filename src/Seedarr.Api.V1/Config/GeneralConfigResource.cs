@@ -60,6 +60,8 @@ public class GeneralConfigResource : RestResource
     public string AllowedHosts { get; set; } = string.Empty;
 
     public bool TerminalAccessEnabled { get; set; } = true;
+
+    public string TmdbApiKey { get; set; }
 }
 
 public static class GeneralConfigResourceMapper
@@ -109,6 +111,7 @@ public static class GeneralConfigResourceMapper
             HostHeaderValidationEnabled = config?.HostHeaderValidationEnabled ?? false,
             AllowedHosts = config?.AllowedHosts ?? string.Empty,
             TerminalAccessEnabled = fileProvider?.TerminalAccessEnabled ?? true,
+            TmdbApiKey = config?.TmdbApiKey,
         };
     }
 }
