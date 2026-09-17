@@ -399,7 +399,10 @@ public class NotificationEventHandler :
             progress = 1.0,
         }).ToList();
 
-        var (seasonNum, epNum, epTitle) = _episodicParser.ExtractEpisodicInfo(torrent.Name);
+        var episodicInfo = _episodicParser.ExtractEpisodicReleaseInfo(torrent.Name);
+        var seasonNum = episodicInfo?.SeasonNumber;
+        var epNum = episodicInfo?.EpisodeNumber;
+        var epTitle = episodicInfo?.EpisodeTitle;
         var (container, resolution, videoCodec, hdrFormat, audioCodec, audioChannels, audioLanguage, subtitleLanguages) = _episodicParser.ExtractStreamSpecs(meta?.MediaInfoJson);
 
         var downloadTimeSeconds = 0L;
@@ -449,6 +452,11 @@ public class NotificationEventHandler :
                 seasonNumber = seasonNum,
                 episodeNumber = epNum,
                 episodeTitle = epTitle,
+                isSeasonPack = episodicInfo?.IsSeasonPack ?? false,
+                endingEpisodeNumber = episodicInfo?.EndingEpisodeNumber,
+                airDate = episodicInfo?.AirDate,
+                episodeNumbers = episodicInfo?.EpisodeNumbers ?? new List<int>(),
+                absoluteEpisodeNumber = episodicInfo?.AbsoluteEpisodeNumber,
                 overview = meta?.Overview,
                 posterUrl = meta?.PosterUrl,
                 fanartUrl = meta?.BackdropUrl,

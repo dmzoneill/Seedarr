@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using NLog;
 using NzbDrone.Core.Validation;
@@ -165,7 +166,35 @@ public class ProwlarrIndexer : IIndexer
         }
     }
 
-    public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null, int offset = 0, int limit = 50)
+    public List<ReleaseInfo> Search(IndexerDefinition definition, SearchQuery searchQuery)
+    {
+        if (definition == null || searchQuery == null)
+        {
+            return new List<ReleaseInfo>();
+        }
+
+        var query = !string.IsNullOrWhiteSpace(searchQuery.Query) ? searchQuery.Query : searchQuery.Title;
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return new List<ReleaseInfo>();
+        }
+
+        if (searchQuery.Mode == SearchMode.TvSearch && searchQuery.Season.HasValue)
+        {
+            if (searchQuery.Episode.HasValue)
+            {
+                query = $"{query} S{searchQuery.Season.Value:D2}E{searchQuery.Episode.Value:D2}";
+            }
+            else
+            {
+                query = $"{query} S{searchQuery.Season.Value:D2}";
+            }
+        }
+
+        return Search(definition, query, searchQuery.Category, searchQuery.Offset, searchQuery.Limit);
+    }
+
+    public List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null, int offset = 0, int limit = 50)
     {
         var results = new System.Collections.Generic.List<ReleaseInfo>();
         if (definition == null || string.IsNullOrWhiteSpace(definition.Url) || string.IsNullOrWhiteSpace(query))

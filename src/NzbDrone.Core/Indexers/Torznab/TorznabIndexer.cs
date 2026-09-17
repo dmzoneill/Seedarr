@@ -230,47 +230,185 @@ public class TorznabIndexer : IIndexer
         }
     }
 
+    public string BuildSearchUrl(IndexerDefinition definition, SearchQuery searchQuery)
+    {
+        if (definition == null || string.IsNullOrWhiteSpace(definition.Url))
+        {
+            return string.Empty;
+        }
+
+        searchQuery ??= new SearchQuery();
+        var apiPath = string.IsNullOrEmpty(definition.ApiPath) ? "/api" : definition.ApiPath;
+        var baseUrl = $"{definition.Url.TrimEnd('/')}{apiPath}";
+
+        string tParam;
+        var queryParams = new System.Collections.Generic.List<string>();
+
+        switch (searchQuery.Mode)
+        {
+            case SearchMode.TvSearch:
+                tParam = "tvsearch";
+                if (!string.IsNullOrWhiteSpace(searchQuery.Query))
+                {
+                    queryParams.Add($"q={Uri.EscapeDataString(searchQuery.Query)}");
+                }
+
+                if (searchQuery.Season.HasValue)
+                {
+                    queryParams.Add($"season={searchQuery.Season.Value}");
+                }
+
+                if (searchQuery.Episode.HasValue)
+                {
+                    queryParams.Add($"ep={searchQuery.Episode.Value}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(searchQuery.TvdbId))
+                {
+                    queryParams.Add($"tvdbid={Uri.EscapeDataString(searchQuery.TvdbId)}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(searchQuery.Rid))
+                {
+                    queryParams.Add($"rid={Uri.EscapeDataString(searchQuery.Rid)}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(searchQuery.ImdbId))
+                {
+                    queryParams.Add($"imdbid={Uri.EscapeDataString(searchQuery.ImdbId)}");
+                }
+
+                break;
+
+            case SearchMode.Movie:
+                tParam = "movie";
+                if (!string.IsNullOrWhiteSpace(searchQuery.Query))
+                {
+                    queryParams.Add($"q={Uri.EscapeDataString(searchQuery.Query)}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(searchQuery.ImdbId))
+                {
+                    queryParams.Add($"imdbid={Uri.EscapeDataString(searchQuery.ImdbId)}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(searchQuery.TmdbId))
+                {
+                    queryParams.Add($"tmdbid={Uri.EscapeDataString(searchQuery.TmdbId)}");
+                }
+
+                break;
+
+            case SearchMode.Music:
+                tParam = "music";
+                if (!string.IsNullOrWhiteSpace(searchQuery.Query))
+                {
+                    queryParams.Add($"q={Uri.EscapeDataString(searchQuery.Query)}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(searchQuery.Artist))
+                {
+                    queryParams.Add($"artist={Uri.EscapeDataString(searchQuery.Artist)}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(searchQuery.Album))
+                {
+                    queryParams.Add($"album={Uri.EscapeDataString(searchQuery.Album)}");
+                }
+
+                break;
+
+            case SearchMode.Book:
+                tParam = "book";
+                if (!string.IsNullOrWhiteSpace(searchQuery.Title))
+                {
+                    queryParams.Add($"title={Uri.EscapeDataString(searchQuery.Title)}");
+                }
+                else if (!string.IsNullOrWhiteSpace(searchQuery.Query))
+                {
+                    queryParams.Add($"title={Uri.EscapeDataString(searchQuery.Query)}");
+                }
+
+                if (!string.IsNullOrWhiteSpace(searchQuery.Author))
+                {
+                    queryParams.Add($"author={Uri.EscapeDataString(searchQuery.Author)}");
+                }
+
+                break;
+
+            default:
+                tParam = "search";
+                if (!string.IsNullOrWhiteSpace(searchQuery.Query))
+                {
+                    queryParams.Add($"q={Uri.EscapeDataString(searchQuery.Query)}");
+                }
+
+                break;
+        }
+
+        var mappedCat = MapFriendlyCategory(searchQuery.Category);
+        if (!string.IsNullOrWhiteSpace(mappedCat))
+        {
+            queryParams.Add($"cat={Uri.EscapeDataString(mappedCat)}");
+        }
+        else if (!string.IsNullOrWhiteSpace(definition.Categories))
+        {
+            var defCat = MapFriendlyCategory(definition.Categories);
+            if (!string.IsNullOrWhiteSpace(defCat))
+            {
+                queryParams.Add($"cat={Uri.EscapeDataString(defCat)}");
+            }
+        }
+
+        if (searchQuery.Offset > 0)
+        {
+            queryParams.Add($"offset={searchQuery.Offset}");
+        }
+
+        if (searchQuery.Limit > 0)
+        {
+            queryParams.Add($"limit={searchQuery.Limit}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(definition.ApiKey))
+        {
+            queryParams.Add($"apikey={Uri.EscapeDataString(definition.ApiKey)}");
+        }
+
+        var queryString = string.Join("&", queryParams);
+        return string.IsNullOrEmpty(queryString) ? $"{baseUrl}?t={tParam}" : $"{baseUrl}?t={tParam}&{queryString}";
+    }
+
     public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null, int offset = 0, int limit = 50)
     {
+        return Search(definition, new SearchQuery
+        {
+            Query = query,
+            Category = category,
+            Offset = offset,
+            Limit = limit,
+        });
+    }
+
+    public System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, SearchQuery searchQuery)
+    {
         var results = new System.Collections.Generic.List<ReleaseInfo>();
-        if (definition == null || string.IsNullOrWhiteSpace(definition.Url) || string.IsNullOrWhiteSpace(query))
+        if (definition == null || string.IsNullOrWhiteSpace(definition.Url) || searchQuery == null)
+        {
+            return results;
+        }
+
+        if (searchQuery.Mode == SearchMode.Default &&
+            string.IsNullOrWhiteSpace(searchQuery.Query) &&
+            string.IsNullOrWhiteSpace(searchQuery.ImdbId) &&
+            string.IsNullOrWhiteSpace(searchQuery.TvdbId))
         {
             return results;
         }
 
         try
         {
-            var apiPath = string.IsNullOrEmpty(definition.ApiPath) ? "/api" : definition.ApiPath;
-            var mappedCat = MapFriendlyCategory(category);
-            var url = $"{definition.Url.TrimEnd('/')}{apiPath}?t=search&q={Uri.EscapeDataString(query)}";
-            if (!string.IsNullOrWhiteSpace(mappedCat))
-            {
-                url += $"&cat={Uri.EscapeDataString(mappedCat)}";
-            }
-            else if (!string.IsNullOrWhiteSpace(definition.Categories))
-            {
-                var defCat = MapFriendlyCategory(definition.Categories);
-                if (!string.IsNullOrWhiteSpace(defCat))
-                {
-                    url += $"&cat={Uri.EscapeDataString(defCat)}";
-                }
-            }
-
-            if (offset > 0)
-            {
-                url += $"&offset={offset}";
-            }
-
-            if (limit > 0)
-            {
-                url += $"&limit={limit}";
-            }
-
-            if (!string.IsNullOrWhiteSpace(definition.ApiKey))
-            {
-                url += $"&apikey={Uri.EscapeDataString(definition.ApiKey)}";
-            }
-
+            var url = BuildSearchUrl(definition, searchQuery);
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             if (!string.IsNullOrWhiteSpace(definition.ApiKey))
             {
@@ -308,7 +446,7 @@ public class TorznabIndexer : IIndexer
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Failed to search Torznab at {0} for query '{1}'", definition.Url, query);
+            _logger.Error(ex, "Failed to search Torznab at {0} for query '{1}'", definition.Url, searchQuery.Query);
         }
 
         return results;
