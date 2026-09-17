@@ -14,6 +14,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.TrackerServer.Users;
 
 namespace NzbDrone.Core.TrackerServer;
 
@@ -21,12 +22,16 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 {
     private static readonly byte[] MissingParametersResponse = Encoding.ASCII.GetBytes("d14:failure reason25:Missing required parameterse");
     private static readonly byte[] InvalidParametersResponse = Encoding.ASCII.GetBytes("d14:failure reason18:Invalid parameterse");
+    private static readonly byte[] MissingPasskeyResponse = Encoding.ASCII.GetBytes("d14:failure reason25:Missing announce passkeye");
+    private static readonly byte[] InvalidPasskeyResponse = Encoding.ASCII.GetBytes("d14:failure reason27:Invalid or revoked passkeye");
 
     private readonly IPeerDatabase _peerDatabase;
     private readonly IConfigService _configService;
     private readonly IScrapeCache _scrapeCache;
+    private readonly ITrackerUserService _trackerUserService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
+    private readonly ConcurrentDictionary<string, (long Uploaded, long Downloaded)> _peerTraffic = new();
     private readonly object _listenerLock = new();
 
     private TcpListener _listener;
@@ -34,15 +39,30 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     private bool _wasEnabled;
 
     public TrackerServer(IPeerDatabase peerDatabase, IConfigService configService)
-        : this(peerDatabase, configService, new ScrapeCache())
+        : this(peerDatabase, configService, new ScrapeCache(), null)
     {
     }
 
     public TrackerServer(IPeerDatabase peerDatabase, IConfigService configService, IScrapeCache scrapeCache)
+        : this(peerDatabase, configService, scrapeCache, null)
+    {
+    }
+
+    public TrackerServer(IPeerDatabase peerDatabase, IConfigService configService, ITrackerUserService trackerUserService)
+        : this(peerDatabase, configService, new ScrapeCache(), trackerUserService)
+    {
+    }
+
+    public TrackerServer(
+        IPeerDatabase peerDatabase,
+        IConfigService configService,
+        IScrapeCache scrapeCache,
+        ITrackerUserService trackerUserService)
     {
         _peerDatabase = peerDatabase;
         _configService = configService;
         _scrapeCache = scrapeCache ?? new ScrapeCache();
+        _trackerUserService = trackerUserService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -316,6 +336,53 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         return parameters.GetValueOrDefault("info_hash");
     }
 
+    internal static string ExtractPasskey(string path, Dictionary<string, string> parameters = null)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return null;
+        }
+
+        var queryIndex = path.IndexOf('?');
+        var pathPart = queryIndex >= 0 ? path[..queryIndex] : path;
+
+        if (pathPart.StartsWith("/announce/", StringComparison.OrdinalIgnoreCase))
+        {
+            var subPath = pathPart["/announce/".Length..];
+            var segments = subPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length > 0 && !string.IsNullOrWhiteSpace(segments[0]))
+            {
+                try
+                {
+                    return Uri.UnescapeDataString(segments[0].Trim());
+                }
+                catch (UriFormatException)
+                {
+                    return segments[0].Trim();
+                }
+            }
+        }
+
+        if (parameters != null)
+        {
+            if (parameters.TryGetValue("passkey", out var queryPasskey) && !string.IsNullOrWhiteSpace(queryPasskey))
+            {
+                return queryPasskey.Trim();
+            }
+        }
+        else if (queryIndex >= 0 && queryIndex < path.Length - 1)
+        {
+            var query = path[(queryIndex + 1)..];
+            var parsed = ParseQueryString(query);
+            if (parsed.TryGetValue("passkey", out var queryPasskey) && !string.IsNullOrWhiteSpace(queryPasskey))
+            {
+                return queryPasskey.Trim();
+            }
+        }
+
+        return null;
+    }
+
     private (Dictionary<string, string> Parameters, string Error) ParseRequest(string path)
     {
         var queryIndex = path.IndexOf('?');
@@ -450,6 +517,22 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     private byte[] HandleAnnounce(string path, IPEndPoint remoteEndpoint)
     {
         var (parameters, error) = ParseRequest(path);
+        var passkey = ExtractPasskey(path, parameters);
+
+        if (_configService.TrackerPasskeyAuthEnabled)
+        {
+            if (string.IsNullOrWhiteSpace(passkey))
+            {
+                return MissingPasskeyResponse;
+            }
+
+            var user = _trackerUserService?.GetByPasskey(passkey);
+            if (user == null || !user.IsEnabled || user.IsBanned)
+            {
+                return InvalidPasskeyResponse;
+            }
+        }
+
         if (error != null)
         {
             return Encoding.ASCII.GetBytes(error);
@@ -489,6 +572,33 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         _peerDatabase.IncrementAnnounces();
+
+        if (!string.IsNullOrWhiteSpace(passkey) && _trackerUserService != null)
+        {
+            var trafficKey = $"{passkey}:{infoHash}:{peerId}";
+            long uploadedDelta;
+            long downloadedDelta;
+
+            if (_peerTraffic.TryGetValue(trafficKey, out var prevTraffic))
+            {
+                uploadedDelta = uploaded >= prevTraffic.Uploaded ? uploaded - prevTraffic.Uploaded : uploaded;
+                downloadedDelta = downloaded >= prevTraffic.Downloaded ? downloaded - prevTraffic.Downloaded : downloaded;
+            }
+            else
+            {
+                uploadedDelta = uploaded;
+                downloadedDelta = downloaded;
+            }
+
+            _peerTraffic[trafficKey] = (uploaded, downloaded);
+
+            if (eventType == "stopped")
+            {
+                _peerTraffic.TryRemove(trafficKey, out _);
+            }
+
+            _trackerUserService.RecordAnnounce(passkey, uploadedDelta, downloadedDelta);
+        }
 
         var peers = _peerDatabase.GetPeers(infoHash);
         var interval = _configService.TrackerAnnounceInterval;
