@@ -67,6 +67,7 @@ public class UpnpService : BackgroundService, IUpnpService
     private readonly Logger _logger;
     private readonly List<PortMapping> _mappings = new();
     private readonly Func<CancellationToken, Task<IUpnpDevice>> _deviceDiscoverer;
+    private IUpnpDevice _discoveredDevice;
 
     public bool IsAvailable { get; private set; }
     public string ExternalIp { get; private set; } = "";
@@ -131,6 +132,7 @@ public class UpnpService : BackgroundService, IUpnpService
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
             cts.CancelAfter(TimeSpan.FromSeconds(10));
             var device = await _deviceDiscoverer(cts.Token);
+            _discoveredDevice = device;
 
             IsAvailable = true;
             try
@@ -163,12 +165,14 @@ public class UpnpService : BackgroundService, IUpnpService
         catch (NatDeviceNotFoundException)
         {
             _logger.Warn("No UPnP device found");
+            _discoveredDevice = null;
             IsAvailable = false;
             MarkAllMappingsInactive("No UPnP device found");
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "UPnP mapping failed");
+            _discoveredDevice = null;
             IsAvailable = false;
             MarkAllMappingsInactive(ex.Message);
         }
@@ -205,10 +209,17 @@ public class UpnpService : BackgroundService, IUpnpService
 
     public async Task RemoveMappings()
     {
+        if (_discoveredDevice == null)
+        {
+            _logger.Debug("UPnP: No discovered device available for teardown; skipping discovery");
+            IsAvailable = false;
+            return;
+        }
+
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-            var device = await _deviceDiscoverer(cts.Token);
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(1500));
+            var device = _discoveredDevice;
 
             List<PortMapping> snapshot;
             lock (_mappings)
@@ -218,16 +229,22 @@ public class UpnpService : BackgroundService, IUpnpService
 
             foreach (var portMapping in snapshot)
             {
+                cts.Token.ThrowIfCancellationRequested();
+
                 try
                 {
                     var protocol = string.Equals(portMapping.Protocol, "UDP", StringComparison.OrdinalIgnoreCase)
                         ? Protocol.Udp
                         : Protocol.Tcp;
                     var natMapping = new Mapping(protocol, portMapping.InternalPort, portMapping.ExternalPort, 0, portMapping.Description);
-                    await device.DeletePortMapAsync(natMapping).WaitAsync(TimeSpan.FromSeconds(5));
+                    await device.DeletePortMapAsync(natMapping).WaitAsync(cts.Token);
                     portMapping.IsActive = false;
                     portMapping.ErrorMessage = "Mapping removed";
                     _logger.Info("UPnP: removed {0} port {1}", portMapping.Protocol, portMapping.InternalPort);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -235,13 +252,18 @@ public class UpnpService : BackgroundService, IUpnpService
                 }
             }
         }
-        catch (NatDeviceNotFoundException)
+        catch (OperationCanceledException ex)
         {
-            _logger.Debug("UPnP: no device found during cleanup");
+            _logger.Debug(ex, "UPnP teardown timed out or was cancelled");
         }
         catch (Exception ex)
         {
             _logger.Debug(ex, "UPnP cleanup failed");
+        }
+        finally
+        {
+            _discoveredDevice = null;
+            IsAvailable = false;
         }
     }
 
