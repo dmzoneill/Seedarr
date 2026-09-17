@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 
 namespace NzbDrone.Core.RemotePathMappings;
 
@@ -9,10 +10,14 @@ public class RemotePathMappingService : IRemotePathMappingService
 {
     private readonly List<RemotePathMapping> _mappings = new();
     private readonly object _lock = new();
+    private readonly ICallerHostResolver _callerHostResolver;
     private int _nextId = 1;
 
-    public RemotePathMappingService(IEnumerable<RemotePathMapping> initialMappings = null)
+    public RemotePathMappingService(
+        IEnumerable<RemotePathMapping> initialMappings = null,
+        ICallerHostResolver callerHostResolver = null)
     {
+        _callerHostResolver = callerHostResolver ?? new CallerHostResolver();
         if (initialMappings != null)
         {
             foreach (var m in initialMappings)
@@ -82,12 +87,27 @@ public class RemotePathMappingService : IRemotePathMappingService
 
     public string Remap(string host, string remotePath)
     {
+        return RemapRemoteToLocal(host, remotePath);
+    }
+
+    public string RemapRemoteToLocal(string host, string remotePath)
+    {
         if (string.IsNullOrEmpty(remotePath) || string.IsNullOrWhiteSpace(host))
         {
             return remotePath;
         }
 
         return TestMapping(host, remotePath, "remoteToLocal").MappedPath;
+    }
+
+    public string RemapLocalToRemote(string host, string localPath)
+    {
+        if (string.IsNullOrEmpty(localPath) || string.IsNullOrWhiteSpace(host))
+        {
+            return localPath;
+        }
+
+        return TestMapping(host, localPath, "localToRemote").MappedPath;
     }
 
     private static RemotePathMapping Clone(RemotePathMapping source)
@@ -119,18 +139,7 @@ public class RemotePathMappingService : IRemotePathMappingService
         var isLocalToRemote = string.Equals(direction, "localToRemote", StringComparison.OrdinalIgnoreCase);
         var comparison = GetPathComparison(path);
 
-        List<RemotePathMapping> candidates;
-        lock (_lock)
-        {
-            candidates = _mappings
-                .Where(m => !string.IsNullOrWhiteSpace(m.Host) &&
-                            !string.IsNullOrWhiteSpace(m.RemotePath) &&
-                            !string.IsNullOrWhiteSpace(m.LocalPath) &&
-                            string.Equals(m.Host.Trim(), host.Trim(), StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(m => (isLocalToRemote ? m.LocalPath : m.RemotePath).TrimEnd('/', '\\').Length)
-                .ToList();
-        }
-
+        var candidates = GetMatchingCandidates(host, isLocalToRemote);
         if (candidates.Count == 0)
         {
             return result;
@@ -157,6 +166,229 @@ public class RemotePathMappingService : IRemotePathMappingService
         }
 
         return result;
+    }
+
+    public static string ExtractIpOrHostname(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = input.Trim();
+
+        if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed.Substring(7);
+        }
+        else if (trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed.Substring(8);
+        }
+
+        var slashIdx = trimmed.IndexOfAny(new[] { '/', '\\' });
+        if (slashIdx >= 0)
+        {
+            if (!(int.TryParse(trimmed.AsSpan(slashIdx + 1), out _) && IPAddress.TryParse(trimmed.AsSpan(0, slashIdx), out _)))
+            {
+                trimmed = trimmed.Substring(0, slashIdx);
+            }
+        }
+
+        var atIdx = trimmed.IndexOf('@');
+        if (atIdx >= 0)
+        {
+            trimmed = trimmed.Substring(atIdx + 1);
+        }
+
+        if (trimmed.StartsWith("[", StringComparison.Ordinal) && trimmed.Contains(']'))
+        {
+            var closingBracket = trimmed.IndexOf(']');
+            return trimmed.Substring(1, closingBracket - 1);
+        }
+
+        if (trimmed.Count(c => c == ':') == 1)
+        {
+            var colonIdx = trimmed.IndexOf(':');
+            trimmed = trimmed.Substring(0, colonIdx);
+        }
+
+        return trimmed.TrimEnd('.');
+    }
+
+    public static bool IsCidrNotation(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return false;
+        }
+
+        var parts = host.Trim().Split('/');
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        if (!IPAddress.TryParse(parts[0].Trim(), out var ip))
+        {
+            return false;
+        }
+
+        if (!int.TryParse(parts[1].Trim(), out var mask))
+        {
+            return false;
+        }
+
+        var maxBits = ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? 128 : 32;
+        return mask >= 0 && mask <= maxBits;
+    }
+
+    public static bool IsIpInCidr(string clientIpStr, string cidrStr)
+    {
+        if (string.IsNullOrWhiteSpace(clientIpStr) || string.IsNullOrWhiteSpace(cidrStr))
+        {
+            return false;
+        }
+
+        var cleanClientIp = ExtractIpOrHostname(clientIpStr);
+        if (!IPAddress.TryParse(cleanClientIp, out var clientIp))
+        {
+            return false;
+        }
+
+        var parts = cidrStr.Trim().Split('/');
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+
+        if (!IPAddress.TryParse(parts[0].Trim(), out var networkIp) || !int.TryParse(parts[1].Trim(), out var prefixLength))
+        {
+            return false;
+        }
+
+        if (clientIp.IsIPv4MappedToIPv6)
+        {
+            clientIp = clientIp.MapToIPv4();
+        }
+
+        if (networkIp.IsIPv4MappedToIPv6)
+        {
+            networkIp = networkIp.MapToIPv4();
+        }
+
+        if (clientIp.AddressFamily != networkIp.AddressFamily)
+        {
+            return false;
+        }
+
+        var clientBytes = clientIp.GetAddressBytes();
+        var networkBytes = networkIp.GetAddressBytes();
+
+        var maxBits = clientBytes.Length * 8;
+        if (prefixLength < 0 || prefixLength > maxBits)
+        {
+            return false;
+        }
+
+        var fullBytes = prefixLength / 8;
+        var remainingBits = prefixLength % 8;
+
+        for (var i = 0; i < fullBytes; i++)
+        {
+            if (clientBytes[i] != networkBytes[i])
+            {
+                return false;
+            }
+        }
+
+        if (remainingBits > 0)
+        {
+            var mask = (byte)(0xFF << (8 - remainingBits));
+            if ((clientBytes[fullBytes] & mask) != (networkBytes[fullBytes] & mask))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public static bool IsWildcardHost(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return false;
+        }
+
+        var trimmed = host.Trim();
+        return string.Equals(trimmed, "*", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmed, "default", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(trimmed, "all", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private List<RemotePathMapping> GetMatchingCandidates(string host, bool isLocalToRemote)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            return new List<RemotePathMapping>();
+        }
+
+        var rawHost = host.Trim();
+        var cleanHost = ExtractIpOrHostname(rawHost);
+        var resolvedHost = _callerHostResolver?.TryResolveHostname(cleanHost);
+
+        lock (_lock)
+        {
+            var scoredList = new List<(RemotePathMapping Mapping, int Priority, int PrefixLength)>();
+
+            foreach (var m in _mappings)
+            {
+                if (string.IsNullOrWhiteSpace(m.Host) ||
+                    string.IsNullOrWhiteSpace(m.RemotePath) ||
+                    string.IsNullOrWhiteSpace(m.LocalPath))
+                {
+                    continue;
+                }
+
+                var ruleHost = m.Host.Trim();
+                var ruleHostClean = ExtractIpOrHostname(ruleHost);
+                var prefixLength = (isLocalToRemote ? m.LocalPath : m.RemotePath).TrimEnd('/', '\\').Length;
+
+                // Priority 1: Exact Hostname / IP (case-insensitive)
+                if (string.Equals(ruleHost, rawHost, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(ruleHostClean, cleanHost, StringComparison.OrdinalIgnoreCase) ||
+                    (!string.IsNullOrEmpty(resolvedHost) && (
+                        string.Equals(ruleHost, resolvedHost, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(ruleHostClean, resolvedHost, StringComparison.OrdinalIgnoreCase))))
+                {
+                    scoredList.Add((m, 300, prefixLength));
+                    continue;
+                }
+
+                // Priority 2: CIDR Subnet Matching
+                if (IsCidrNotation(ruleHost) && IsIpInCidr(cleanHost, ruleHost))
+                {
+                    var parts = ruleHost.Split('/');
+                    var cidrPrefixLen = int.TryParse(parts[1], out var parsed) ? parsed : 0;
+                    scoredList.Add((m, 200 + cidrPrefixLen, prefixLength));
+                    continue;
+                }
+
+                // Priority 3: Wildcard Fallback (*, default, all)
+                if (IsWildcardHost(ruleHost))
+                {
+                    scoredList.Add((m, 100, prefixLength));
+                }
+            }
+
+            return scoredList
+                .OrderByDescending(x => x.Priority)
+                .ThenByDescending(x => x.PrefixLength)
+                .ThenBy(x => x.Mapping.Id)
+                .Select(x => x.Mapping)
+                .ToList();
+        }
     }
 
     public static bool IsPathPrefixMatch(string fullPath, string prefix, StringComparison comparison)
