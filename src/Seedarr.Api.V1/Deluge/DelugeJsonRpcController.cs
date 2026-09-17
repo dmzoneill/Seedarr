@@ -6,12 +6,14 @@ using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Http.Security;
@@ -877,14 +879,41 @@ public class DelugeJsonRpcController : ControllerBase
 
             if (!string.IsNullOrWhiteSpace(fileDumpBase64))
             {
+                byte[] bytes;
                 try
                 {
-                    var bytes = Convert.FromBase64String(fileDumpBase64);
+                    bytes = Convert.FromBase64String(fileDumpBase64);
+                }
+                catch (FormatException ex)
+                {
+                    _logger.Error(ex, "Failed to decode base64 torrent file in Deluge RPC");
+                    return DelugeResult(new { result = (object)null, error = ex.Message, id });
+                }
+
+                string infoHash = null;
+                try
+                {
+                    using var parseMs = new MemoryStream(bytes);
+                    var parsed = _torrentFileParser?.Parse(parseMs);
+                    infoHash = parsed?.InfoHash;
+                }
+                catch
+                {
+                    // Ignore parse error here; ImportFromFile will handle or throw
+                }
+
+                try
+                {
                     using var ms = new MemoryStream(bytes);
                     var added = _torrentImportService.ImportFromFile(ms, fileName);
 
                     ApplyDelugeOptions(added, optionsElem);
-                    return DelugeResult(new { result = (added.InfoHash ?? string.Empty).ToLowerInvariant(), error = (object)null, id });
+                    return DelugeResult(new { result = (added?.InfoHash ?? string.Empty).ToLowerInvariant(), error = (object)null, id });
+                }
+                catch (Exception ex) when (IsDuplicateTorrentException(ex, out var exHash))
+                {
+                    var targetHash = !string.IsNullOrWhiteSpace(exHash) ? exHash : infoHash;
+                    return HandleExistingTorrentOnDuplicate(targetHash, optionsElem, id);
                 }
                 catch (Exception ex)
                 {
@@ -907,11 +936,27 @@ public class DelugeJsonRpcController : ControllerBase
 
             if (!string.IsNullOrWhiteSpace(magnetUri))
             {
+                string infoHash = null;
+                try
+                {
+                    var parsed = MagnetLinkParser.Parse(magnetUri);
+                    infoHash = parsed?.InfoHash;
+                }
+                catch
+                {
+                    // Ignore parse exception here; let ImportFromMagnet handle or report errors
+                }
+
                 try
                 {
                     var added = _torrentImportService.ImportFromMagnet(magnetUri);
                     ApplyDelugeOptions(added, optionsElem);
-                    return DelugeResult(new { result = (added.InfoHash ?? string.Empty).ToLowerInvariant(), error = (object)null, id });
+                    return DelugeResult(new { result = (added?.InfoHash ?? string.Empty).ToLowerInvariant(), error = (object)null, id });
+                }
+                catch (Exception ex) when (IsDuplicateTorrentException(ex, out var exHash))
+                {
+                    var targetHash = !string.IsNullOrWhiteSpace(exHash) ? exHash : infoHash;
+                    return HandleExistingTorrentOnDuplicate(targetHash, optionsElem, id);
                 }
                 catch (Exception ex)
                 {
@@ -938,16 +983,51 @@ public class DelugeJsonRpcController : ControllerBase
                 {
                     if (url.StartsWith("magnet:?", StringComparison.OrdinalIgnoreCase))
                     {
-                        var added = _torrentImportService.ImportFromMagnet(url);
-                        ApplyDelugeOptions(added, optionsElem);
-                        return DelugeResult(new { result = (added.InfoHash ?? string.Empty).ToLowerInvariant(), error = (object)null, id });
+                        string infoHash = null;
+                        try
+                        {
+                            var parsed = MagnetLinkParser.Parse(url);
+                            infoHash = parsed?.InfoHash;
+                        }
+                        catch
+                        {
+                            // Ignore
+                        }
+
+                        try
+                        {
+                            var added = _torrentImportService.ImportFromMagnet(url);
+                            ApplyDelugeOptions(added, optionsElem);
+                            return DelugeResult(new { result = (added?.InfoHash ?? string.Empty).ToLowerInvariant(), error = (object)null, id });
+                        }
+                        catch (Exception ex) when (IsDuplicateTorrentException(ex, out var exHash))
+                        {
+                            var targetHash = !string.IsNullOrWhiteSpace(exHash) ? exHash : infoHash;
+                            return HandleExistingTorrentOnDuplicate(targetHash, optionsElem, id);
+                        }
                     }
 
                     var bytes = await _httpClient.GetByteArrayAsync(url);
+                    string fileInfoHash = null;
+                    try
+                    {
+                        using var parseMs = new MemoryStream(bytes);
+                        var parsed = _torrentFileParser?.Parse(parseMs);
+                        fileInfoHash = parsed?.InfoHash;
+                    }
+                    catch
+                    {
+                        // Ignore
+                    }
+
                     using var ms = new MemoryStream(bytes);
                     var addedFromFile = _torrentImportService.ImportFromFile(ms, "downloaded.torrent");
                     ApplyDelugeOptions(addedFromFile, optionsElem);
-                    return DelugeResult(new { result = (addedFromFile.InfoHash ?? string.Empty).ToLowerInvariant(), error = (object)null, id });
+                    return DelugeResult(new { result = (addedFromFile?.InfoHash ?? string.Empty).ToLowerInvariant(), error = (object)null, id });
+                }
+                catch (Exception ex) when (IsDuplicateTorrentException(ex, out var exHash))
+                {
+                    return HandleExistingTorrentOnDuplicate(exHash, optionsElem, id);
                 }
                 catch (Exception ex)
                 {
@@ -1136,24 +1216,35 @@ public class DelugeJsonRpcController : ControllerBase
 
     private IActionResult HandleCorePauseTorrents(string method, JsonElement paramsElem, object id)
     {
-        var hashes = ExtractHashesFromParams(paramsElem);
         var allTorrents = _torrentService.GetAll();
 
-        if (hashes.Count == 0 || method == "core.pause_all_torrents")
+        if (method == "core.pause_all_torrents")
         {
             foreach (var t in allTorrents)
             {
                 t.Pause();
                 _torrentService.Update(t);
             }
+
+            return DelugeResult(new { result = true, error = (object)null, id });
         }
-        else
+
+        var hashes = ExtractHashesFromParams(paramsElem);
+        if (hashes.Count == 0)
         {
-            foreach (var t in allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())))
-            {
-                t.Pause();
-                _torrentService.Update(t);
-            }
+            return DelugeResult(new { result = false, error = (object)null, id });
+        }
+
+        var matchingTorrents = allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())).ToList();
+        if (matchingTorrents.Count == 0)
+        {
+            return DelugeResult(new { result = false, error = (object)null, id });
+        }
+
+        foreach (var t in matchingTorrents)
+        {
+            t.Pause();
+            _torrentService.Update(t);
         }
 
         return DelugeResult(new { result = true, error = (object)null, id });
@@ -1161,24 +1252,35 @@ public class DelugeJsonRpcController : ControllerBase
 
     private IActionResult HandleCoreResumeTorrents(string method, JsonElement paramsElem, object id)
     {
-        var hashes = ExtractHashesFromParams(paramsElem);
         var allTorrents = _torrentService.GetAll();
 
-        if (hashes.Count == 0 || method == "core.resume_all_torrents")
+        if (method == "core.resume_all_torrents")
         {
             foreach (var t in allTorrents)
             {
                 t.Resume();
                 _torrentService.Update(t);
             }
+
+            return DelugeResult(new { result = true, error = (object)null, id });
         }
-        else
+
+        var hashes = ExtractHashesFromParams(paramsElem);
+        if (hashes.Count == 0)
         {
-            foreach (var t in allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())))
-            {
-                t.Resume();
-                _torrentService.Update(t);
-            }
+            return DelugeResult(new { result = false, error = (object)null, id });
+        }
+
+        var matchingTorrents = allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())).ToList();
+        if (matchingTorrents.Count == 0)
+        {
+            return DelugeResult(new { result = false, error = (object)null, id });
+        }
+
+        foreach (var t in matchingTorrents)
+        {
+            t.Resume();
+            _torrentService.Update(t);
         }
 
         return DelugeResult(new { result = true, error = (object)null, id });
@@ -1187,6 +1289,11 @@ public class DelugeJsonRpcController : ControllerBase
     private IActionResult HandleCoreRemoveTorrents(string method, JsonElement paramsElem, object id)
     {
         var hashes = ExtractHashesFromParams(paramsElem);
+        if (hashes.Count == 0)
+        {
+            return DelugeResult(new { result = false, error = (object)null, id });
+        }
+
         var removeData = false;
 
         if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() > 1 &&
@@ -1196,7 +1303,13 @@ public class DelugeJsonRpcController : ControllerBase
         }
 
         var allTorrents = _torrentService.GetAll();
-        foreach (var t in allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())))
+        var matchingTorrents = allTorrents.Where(t => hashes.Contains((t.InfoHash ?? string.Empty).ToLowerInvariant())).ToList();
+        if (matchingTorrents.Count == 0)
+        {
+            return DelugeResult(new { result = false, error = (object)null, id });
+        }
+
+        foreach (var t in matchingTorrents)
         {
             _torrentService.Delete(t.Id, removeData);
         }
@@ -1650,5 +1763,64 @@ public class DelugeJsonRpcController : ControllerBase
         }
 
         return null;
+    }
+
+    private static bool IsDuplicateTorrentException(Exception ex, out string infoHash)
+    {
+        infoHash = null;
+        if (ex is DuplicateTorrentException dtex)
+        {
+            infoHash = dtex.InfoHash;
+            return true;
+        }
+
+        if (ex is InvalidOperationException &&
+            ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = Regex.Match(ex.Message, @"[0-9a-fA-F]{40}");
+            if (match.Success)
+            {
+                infoHash = match.Value;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    private IActionResult HandleExistingTorrentOnDuplicate(string preferredHash, JsonElement options, object id)
+    {
+        Torrent existing = null;
+        if (!string.IsNullOrWhiteSpace(preferredHash))
+        {
+            existing = _torrentService.GetByInfoHash(preferredHash);
+        }
+
+        if (existing == null)
+        {
+            var all = _torrentService.GetAll();
+            if (!string.IsNullOrWhiteSpace(preferredHash))
+            {
+                existing = all?.FirstOrDefault(t => string.Equals(t.InfoHash, preferredHash, StringComparison.OrdinalIgnoreCase));
+            }
+            else if (all != null && all.Count == 1)
+            {
+                existing = all[0];
+            }
+        }
+
+        if (existing != null)
+        {
+            ApplyDelugeOptions(existing, options);
+            return DelugeResult(new { result = (existing.InfoHash ?? string.Empty).ToLowerInvariant(), error = (object)null, id });
+        }
+
+        if (!string.IsNullOrWhiteSpace(preferredHash))
+        {
+            return DelugeResult(new { result = preferredHash.ToLowerInvariant(), error = (object)null, id });
+        }
+
+        return DelugeResult(new { result = (object)null, error = "Torrent already exists", id });
     }
 }
