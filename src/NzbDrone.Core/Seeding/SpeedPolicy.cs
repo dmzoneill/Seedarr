@@ -143,6 +143,8 @@ public class SpeedPolicy : ISpeedPolicy,
                 }
             }
 
+            torrent.UpdateRatio();
+
             _stateMachine.CheckDownloadThreshold(torrent, threshold);
         }
     }
@@ -284,9 +286,6 @@ public class SpeedPolicy : ISpeedPolicy,
             }
 
             torrent.Uploaded += uploadBytesThisTick;
-            torrent.Ratio = torrent.TotalSize > 0
-                ? Math.Round((double)torrent.Uploaded / torrent.TotalSize, 3)
-                : 0;
 
             if (!torrent.ForceCompleted && torrent.Progress < 1.0 && torrent.TotalSize > 0)
             {
@@ -304,6 +303,8 @@ public class SpeedPolicy : ISpeedPolicy,
                     _eventLogService.Info(torrent.Id, "Download", $"Download complete ({FormatBytes(torrent.TotalSize)})");
                 }
             }
+
+            torrent.UpdateRatio();
         }
     }
 

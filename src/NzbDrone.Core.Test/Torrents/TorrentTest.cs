@@ -285,4 +285,63 @@ public class TorrentTest
         Assert.That(torrent.DownloadSpeed, Is.EqualTo(0));
         Assert.That(torrent.Active, Is.False);
     }
+
+    [Test]
+    public void UpdateRatio_when_downloaded_is_positive_calculates_ratio_against_downloaded()
+    {
+        var torrent = new Torrent
+        {
+            Downloaded = 2000,
+            Uploaded = 4000
+        };
+
+        torrent.UpdateRatio();
+
+        Assert.That(torrent.Ratio, Is.EqualTo(2.0));
+    }
+
+    [Test]
+    public void UpdateRatio_when_downloaded_is_zero_calculates_ratio_against_totalsize()
+    {
+        var torrent = new Torrent
+        {
+            Downloaded = 0,
+            Uploaded = 10485760,
+            TotalSize = 20971520
+        };
+
+        torrent.UpdateRatio();
+
+        Assert.That(torrent.Ratio, Is.EqualTo(0.5));
+    }
+
+    [Test]
+    public void UpdateRatio_when_downloaded_is_zero_and_totalsize_is_zero_returns_zero()
+    {
+        var torrent = new Torrent
+        {
+            Downloaded = 0,
+            Uploaded = 5000,
+            TotalSize = 0
+        };
+
+        torrent.UpdateRatio();
+
+        Assert.That(torrent.Ratio, Is.EqualTo(0.0));
+    }
+
+    [Test]
+    public void UpdateRatio_rounds_to_four_decimal_places()
+    {
+        var torrent = new Torrent
+        {
+            Downloaded = 0,
+            Uploaded = 1,
+            TotalSize = 3
+        };
+
+        torrent.UpdateRatio();
+
+        Assert.That(torrent.Ratio, Is.EqualTo(0.3333));
+    }
 }
