@@ -714,6 +714,60 @@ public class PeerConnectionTest
     }
 
     [Test]
+    public void ReceiveMessage_should_dispose_and_disconnect_on_timeout_after_partial_length_prefix()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+        conn.MessageReadTimeoutMs = 200;
+
+        // Send only 2 bytes of the 4-byte length prefix
+        var stream = rawClient.GetStream();
+        stream.Write(new byte[] { 0x00, 0x00 }, 0, 2);
+        stream.Flush();
+
+        var received = conn.ReceiveMessage();
+
+        Assert.That(received, Is.Null);
+        Assert.That(conn.IsConnected, Is.False);
+    }
+
+    [Test]
+    public void ReceiveMessage_should_dispose_and_disconnect_on_timeout_after_partial_payload()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+        conn.MessageReadTimeoutMs = 200;
+
+        // Send 4-byte length prefix indicating 16 bytes payload, but only send 2 bytes of payload
+        var stream = rawClient.GetStream();
+        var lengthBytes = new byte[] { 0x00, 0x00, 0x00, 0x10 };
+        stream.Write(lengthBytes, 0, 4);
+        stream.Write(new byte[] { 0x01, 0x02 }, 0, 2);
+        stream.Flush();
+
+        var received = conn.ReceiveMessage();
+
+        Assert.That(received, Is.Null);
+        Assert.That(conn.IsConnected, Is.False);
+    }
+
+    [Test]
+    public void ReceiveMessage_should_dispose_and_disconnect_on_timeout_after_length_prefix_with_zero_payload_bytes()
+    {
+        var (conn, rawClient) = CreateConnectionWithRawClient();
+        conn.MessageReadTimeoutMs = 200;
+
+        // Send 4-byte length prefix indicating 10 bytes payload, but send no payload bytes
+        var stream = rawClient.GetStream();
+        var lengthBytes = new byte[] { 0x00, 0x00, 0x00, 0x0A };
+        stream.Write(lengthBytes, 0, 4);
+        stream.Flush();
+
+        var received = conn.ReceiveMessage();
+
+        Assert.That(received, Is.Null);
+        Assert.That(conn.IsConnected, Is.False);
+    }
+
+    [Test]
     public void ReceiveMessage_should_handle_message_with_payload()
     {
         var (client, server) = CreateTestPair();
