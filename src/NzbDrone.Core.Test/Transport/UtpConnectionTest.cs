@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -139,7 +140,7 @@ public class UtpConnectionTest
         var result = (byte[])method.Invoke(connection, new object[] { UtpPacketType.Data, Array.Empty<byte>() });
 
         var windowSize = (uint)((result[12] << 24) | (result[13] << 16) | (result[14] << 8) | result[15]);
-        Assert.That(windowSize, Is.EqualTo(65535u));
+        Assert.That(windowSize, Is.EqualTo(UtpConnection.MaxBufferSize));
     }
 
     [Test]
@@ -1514,6 +1515,102 @@ public class UtpConnectionTest
         connection.HandleIncomingPacket(emptyPacket, sender);
 
         Assert.That(lastSentAck, Is.Not.Null, "Empty payload data packet must trigger State ACK");
+    }
+
+    [Test]
+    public void BuildPacket_advertised_window_should_decrease_as_receive_queue_fills()
+    {
+        using var connection = new UtpConnection();
+        var buildMethod = typeof(UtpConnection).GetMethod("BuildPacket", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var receiveQueueField = typeof(UtpConnection).GetField("_receiveQueue", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var queue = (Queue<byte>)receiveQueueField.GetValue(connection)!;
+
+        // When queue is empty, advertised window is MaxBufferSize
+        var packetEmpty = (byte[])buildMethod.Invoke(connection, new object[] { UtpPacketType.State, Array.Empty<byte>() })!;
+        var wndEmpty = BinaryPrimitives.ReadUInt32BigEndian(packetEmpty.AsSpan(12, 4));
+        Assert.That(wndEmpty, Is.EqualTo(UtpConnection.MaxBufferSize));
+
+        // Add 5000 bytes to receive queue
+        for (var i = 0; i < 5000; i++)
+        {
+            queue.Enqueue(0xAA);
+        }
+
+        var packetWithData = (byte[])buildMethod.Invoke(connection, new object[] { UtpPacketType.State, Array.Empty<byte>() })!;
+        var wndWithData = BinaryPrimitives.ReadUInt32BigEndian(packetWithData.AsSpan(12, 4));
+        Assert.That(wndWithData, Is.EqualTo(UtpConnection.MaxBufferSize - 5000));
+    }
+
+    [Test]
+    public void BuildPacket_advertised_window_should_be_zero_when_receive_queue_reaches_max_buffer_size()
+    {
+        using var connection = new UtpConnection();
+        var buildMethod = typeof(UtpConnection).GetMethod("BuildPacket", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var receiveQueueField = typeof(UtpConnection).GetField("_receiveQueue", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var queue = (Queue<byte>)receiveQueueField.GetValue(connection)!;
+
+        for (var i = 0; i < UtpConnection.MaxBufferSize; i++)
+        {
+            queue.Enqueue(0);
+        }
+
+        var packetFull = (byte[])buildMethod.Invoke(connection, new object[] { UtpPacketType.State, Array.Empty<byte>() })!;
+        var wndFull = BinaryPrimitives.ReadUInt32BigEndian(packetFull.AsSpan(12, 4));
+        Assert.That(wndFull, Is.EqualTo(0u));
+    }
+
+    [Test]
+    public void Send_should_obey_remote_advertised_window_limit_and_not_burst_beyond()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        // Constrain remote window to 1360 bytes (1 packet capacity)
+        connection.RemoteWindowSize = 1360;
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            var type = (UtpPacketType)(data[0] >> 4);
+            if (type == UtpPacketType.Data)
+            {
+                lock (sentPackets)
+                {
+                    sentPackets.Add(data.ToArray());
+                }
+            }
+
+            return true;
+        };
+
+        // Try to send 2720 bytes (2 chunks of 1360 bytes)
+        var sendData = new byte[2720];
+        var sendTask = Task.Run(() => connection.Send(sendData, 0, sendData.Length));
+
+        // Wait a short time for first packet to be transmitted
+        Thread.Sleep(50);
+
+        // While in-flight bytes (1360) >= remote window size (1360), second packet should not be sent
+        lock (sentPackets)
+        {
+            Assert.That(sentPackets.Count, Is.EqualTo(1), "Should not burst beyond remote advertised window");
+        }
+
+        // Now simulate peer ACKing the first packet (seq 1)
+        var ackPacket = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 1);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        // Send should now unblock and send the second packet
+        var completed = sendTask.Wait(TimeSpan.FromSeconds(2));
+        Assert.That(completed, Is.True, "Send should complete after ACK frees window space");
+        Assert.That(sendTask.Result, Is.EqualTo(2720));
+
+        lock (sentPackets)
+        {
+            Assert.That(sentPackets.Count, Is.EqualTo(2), "Both packets should be sent after window opened");
+        }
     }
 
     // ---- helpers ----

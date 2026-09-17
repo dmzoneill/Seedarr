@@ -3,6 +3,7 @@ using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -50,6 +51,7 @@ public interface IUtpConnection : IDisposable
 
 public class UtpConnection : IUtpConnection
 {
+    public const uint MaxBufferSize = 1024 * 1024;
     private const int HeaderSize = 20;
     private const uint DefaultWindowSize = 65535;
     private const int MaxPayloadSize = 1360;
@@ -89,6 +91,7 @@ public class UtpConnection : IUtpConnection
     public bool HasReceivedFin => _hasReceivedFin;
     public bool IsClosing => _isClosing;
     public int OutOfOrderCount => _outOfOrderBuffer.Count;
+    public uint RemoteWindowSize { get => _remoteWindowSize; internal set => _remoteWindowSize = value; }
     public IPEndPoint RemoteEndPoint => _remoteEndpoint;
     public bool OwnsUdpClient => _ownsUdpClient;
     public ushort ReceiveId { get; private set; }
@@ -243,6 +246,26 @@ public class UtpConnection : IUtpConnection
             var totalSent = 0;
             while (totalSent < length && IsConnected && !_isClosing)
             {
+                var sendWaitStart = DateTime.UtcNow;
+                var currentInFlightBytes = _inFlightPackets.Values.Sum(p => p.PayloadLength);
+                while (currentInFlightBytes >= _remoteWindowSize && IsConnected && !_isClosing)
+                {
+                    if (_connectionTimeoutSeconds > 0 && (DateTime.UtcNow - sendWaitStart).TotalSeconds >= _connectionTimeoutSeconds)
+                    {
+                        break;
+                    }
+
+                    TryReceiveUdpNonBlocking();
+                    RetransmitUnackedPackets();
+                    Thread.Sleep(2);
+                    currentInFlightBytes = _inFlightPackets.Values.Sum(p => p.PayloadLength);
+                }
+
+                if (!IsConnected || _isClosing || (currentInFlightBytes >= _remoteWindowSize && totalSent > 0))
+                {
+                    break;
+                }
+
                 var chunkSize = Math.Min(MaxPayloadSize, length - totalSent);
                 var payload = new byte[chunkSize];
                 Array.Copy(data, offset + totalSent, payload, 0, chunkSize);
@@ -451,7 +474,7 @@ public class UtpConnection : IUtpConnection
         }
 
         _remoteEndpoint ??= sender;
-        _remoteWindowSize = header.WindowSize > 0 ? header.WindowSize : DefaultWindowSize;
+        _remoteWindowSize = (header.Type == UtpPacketType.Syn && header.WindowSize == 0) ? DefaultWindowSize : header.WindowSize;
         if (header.Timestamp > 0)
         {
             _lastTimestampDiff = GetMicroseconds() - header.Timestamp;
@@ -570,10 +593,18 @@ public class UtpConnection : IUtpConnection
         packet[0] = (byte)(((byte)type << 4) | 1);
         packet[1] = 0;
 
+        uint bufferedBytes;
+        lock (_receiveLock)
+        {
+            bufferedBytes = (uint)_receiveQueue.Count;
+        }
+
+        var advertisedWnd = bufferedBytes >= MaxBufferSize ? 0 : MaxBufferSize - bufferedBytes;
+
         BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(2, 2), _connectionId);
         BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(4, 4), GetMicroseconds());
         BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(8, 4), _lastTimestampDiff);
-        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(12, 4), DefaultWindowSize);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(12, 4), advertisedWnd);
         BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(16, 2), _sequenceNumber);
         BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(18, 2), _ackNumber);
 
