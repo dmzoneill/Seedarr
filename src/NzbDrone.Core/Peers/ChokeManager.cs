@@ -29,6 +29,10 @@ public interface IChokeManager
 
 public class ChokeManager : BackgroundService, IChokeManager
 {
+    public const int MinUnchokeDurationSeconds = 20;
+    public const int MaxUnchokeLeaseSeconds = 60;
+    public const double ChokeHysteresisMargin = 0.15;
+
     private const int RegularUnchokeIntervalSeconds = 10;
     private const int OptimisticUnchokeIntervalSeconds = 30;
     private const int SnubbingThresholdSeconds = 60;
@@ -174,18 +178,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                     {
                         var isSeeding = IsTorrentSeeding(g.Key);
                         var eligible = g.Where(c => c.PeerInterested && !c.IsSnubbed && !c.IsSeed);
-
-                        var candidates = isSeeding
-                            ? eligible
-                                .OrderByDescending(c => c.UploadRate)
-                                .ThenBy(c => c.LastUnchokedAt)
-                                .ThenBy(c => c.ConnectedAt)
-                                .ToList()
-                            : eligible
-                                .OrderByDescending(c => c.UploadRate + c.DownloadRate)
-                                .ThenByDescending(c => c.BytesUploaded)
-                                .ThenBy(c => c.ConnectedAt)
-                                .ToList();
+                        var candidates = OrderCandidatesWithHysteresis(eligible, isSeeding, now);
 
                         return new
                         {
@@ -246,7 +239,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                             .ThenBy(g =>
                             {
                                 var nextPeer = g.Candidates[allocatedSlots[g.InfoHash]];
-                                return g.IsSeeding ? nextPeer.LastUnchokedAt : DateTime.MaxValue;
+                                return g.IsSeeding ? (nextPeer.LastUnchokedAt ?? DateTime.MinValue) : DateTime.MaxValue;
                             })
                             .FirstOrDefault();
 
@@ -277,7 +270,7 @@ public class ChokeManager : BackgroundService, IChokeManager
                             .SelectMany(g => g.Candidates)
                             .Where(c => !selectedRegular.Contains(c))
                             .OrderByDescending(c => IsTorrentSeeding(c.InfoHash) ? c.UploadRate : (c.UploadRate + c.DownloadRate))
-                            .ThenBy(c => IsTorrentSeeding(c.InfoHash) ? c.LastUnchokedAt : DateTime.MaxValue)
+                            .ThenBy(c => IsTorrentSeeding(c.InfoHash) ? (c.LastUnchokedAt ?? DateTime.MinValue) : DateTime.MaxValue)
                             .ThenBy(c => c.ConnectedAt)
                             .Take(regularSlotCount - selectedRegular.Count);
 
@@ -604,7 +597,7 @@ public class ChokeManager : BackgroundService, IChokeManager
             var nextPeer = isSeeding
                 ? eligibleCandidates
                     .OrderByDescending(c => c.UploadRate)
-                    .ThenBy(c => c.LastUnchokedAt)
+                    .ThenBy(c => c.LastUnchokedAt ?? DateTime.MinValue)
                     .ThenBy(c => c.ConnectedAt)
                     .FirstOrDefault()
                 : eligibleCandidates
@@ -654,6 +647,170 @@ public class ChokeManager : BackgroundService, IChokeManager
             {
                 _logger.Debug(ex, "Failed to send choke to {0}:{1}", connection.RemoteIp, connection.RemotePort);
             }
+        }
+    }
+
+    private List<PeerConnection> OrderCandidatesWithHysteresis(
+        IEnumerable<PeerConnection> eligible,
+        bool isSeeding,
+        DateTime now)
+    {
+        var eligibleList = eligible.ToList();
+        var currentUnchoked = eligibleList
+            .Where(c => !c.AmChoking && !c.IsOptimisticUnchoked)
+            .OrderBy(c => c, new PeerComparer(isSeeding))
+            .ToList();
+
+        var challengers = eligibleList
+            .Where(c => c.AmChoking || c.IsOptimisticUnchoked)
+            .OrderBy(c => c, new PeerComparer(isSeeding))
+            .ToList();
+
+        if (currentUnchoked.Count == 0)
+        {
+            return challengers;
+        }
+
+        if (challengers.Count == 0)
+        {
+            return currentUnchoked;
+        }
+
+        var result = new List<PeerConnection>(eligibleList.Count);
+        var uIndex = 0;
+        var cIndex = 0;
+
+        while (uIndex < currentUnchoked.Count && cIndex < challengers.Count)
+        {
+            var u = currentUnchoked[uIndex];
+            var c = challengers[cIndex];
+
+            if (CanChallengerPrecedeIncumbent(c, u, isSeeding, now))
+            {
+                result.Add(c);
+                cIndex++;
+            }
+            else
+            {
+                result.Add(u);
+                uIndex++;
+            }
+        }
+
+        while (uIndex < currentUnchoked.Count)
+        {
+            result.Add(currentUnchoked[uIndex++]);
+        }
+
+        while (cIndex < challengers.Count)
+        {
+            result.Add(challengers[cIndex++]);
+        }
+
+        return result;
+    }
+
+    private static bool CanChallengerPrecedeIncumbent(
+        PeerConnection challenger,
+        PeerConnection incumbent,
+        bool isSeeding,
+        DateTime now)
+    {
+        var duration = incumbent.LastUnchokedAt.HasValue
+            ? (now - incumbent.LastUnchokedAt.Value).TotalSeconds
+            : MinUnchokeDurationSeconds;
+
+        // 1. If incumbent is within minimum unchoke duration, it is protected from being displaced
+        if (incumbent.LastUnchokedAt.HasValue && duration >= 0 && duration < MinUnchokeDurationSeconds)
+        {
+            return false;
+        }
+
+        var challengerRate = isSeeding ? challenger.UploadRate : (challenger.UploadRate + challenger.DownloadRate);
+        var incumbentRate = isSeeding ? incumbent.UploadRate : (incumbent.UploadRate + incumbent.DownloadRate);
+
+        // 2. If lease has expired, standard rate comparison applies
+        if (duration >= MaxUnchokeLeaseSeconds)
+        {
+            return ComparePeersBase(challenger, incumbent, isSeeding) < 0;
+        }
+
+        // 3. Otherwise, hysteresis margin applies: challenger must exceed incumbent's combined rate by > 15%
+        if (challengerRate > incumbentRate * (1.0 + ChokeHysteresisMargin))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int ComparePeersBase(PeerConnection a, PeerConnection b, bool isSeeding)
+    {
+        if (ReferenceEquals(a, b))
+        {
+            return 0;
+        }
+
+        if (a == null)
+        {
+            return 1;
+        }
+
+        if (b == null)
+        {
+            return -1;
+        }
+
+        if (isSeeding)
+        {
+            var rateCompare = b.UploadRate.CompareTo(a.UploadRate);
+            if (rateCompare != 0)
+            {
+                return rateCompare;
+            }
+
+            var aLast = a.LastUnchokedAt ?? DateTime.MinValue;
+            var bLast = b.LastUnchokedAt ?? DateTime.MinValue;
+            var lastCompare = aLast.CompareTo(bLast);
+            if (lastCompare != 0)
+            {
+                return lastCompare;
+            }
+
+            return a.ConnectedAt.CompareTo(b.ConnectedAt);
+        }
+        else
+        {
+            var aRate = a.UploadRate + a.DownloadRate;
+            var bRate = b.UploadRate + b.DownloadRate;
+            var rateCompare = bRate.CompareTo(aRate);
+            if (rateCompare != 0)
+            {
+                return rateCompare;
+            }
+
+            var bytesCompare = b.BytesUploaded.CompareTo(a.BytesUploaded);
+            if (bytesCompare != 0)
+            {
+                return bytesCompare;
+            }
+
+            return a.ConnectedAt.CompareTo(b.ConnectedAt);
+        }
+    }
+
+    private sealed class PeerComparer : IComparer<PeerConnection>
+    {
+        private readonly bool _isSeeding;
+
+        public PeerComparer(bool isSeeding)
+        {
+            _isSeeding = isSeeding;
+        }
+
+        public int Compare(PeerConnection x, PeerConnection y)
+        {
+            return ComparePeersBase(x, y, _isSeeding);
         }
     }
 }

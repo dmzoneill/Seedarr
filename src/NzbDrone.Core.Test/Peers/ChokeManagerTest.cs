@@ -463,4 +463,80 @@ public class ChokeManagerTest
         Assert.That(unchokedTotal.Count, Is.EqualTo(6));
         Assert.That(unchokedTotal.Count(c => c.IsOptimisticUnchoked), Is.EqualTo(1));
     }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_not_displace_already_unchoked_peer_when_challenger_is_within_hysteresis_margin()
+    {
+        _configService.MaxUploadSlots.Returns(2); // 1 regular slot
+
+        var peer1 = CreatePeer("hashA", 1001, rate: 500);
+        peer1.AmChoking = false;
+        peer1.LastUnchokedAt = DateTime.UtcNow.AddSeconds(-25); // unchoked 25s ago (> 20s min duration, < 60s max lease)
+
+        var peer2 = CreatePeer("hashA", 1002, rate: 550); // 10% faster, within 15% hysteresis margin (500 * 1.15 = 575)
+        peer2.AmChoking = true;
+
+        _subject.ProcessRegularUnchoke();
+
+        // peer1 should retain its unchoke slot due to hysteresis margin
+        Assert.That(peer1.AmChoking, Is.False);
+        Assert.That(peer2.AmChoking, Is.True);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_displace_slower_peer_when_challenger_exceeds_rate_by_more_than_hysteresis_margin()
+    {
+        _configService.MaxUploadSlots.Returns(2); // 1 regular slot
+
+        var peer1 = CreatePeer("hashA", 1001, rate: 500);
+        peer1.AmChoking = false;
+        peer1.LastUnchokedAt = DateTime.UtcNow.AddSeconds(-25); // unchoked 25s ago (> 20s min duration, < 60s max lease)
+
+        var peer2 = CreatePeer("hashA", 1002, rate: 600); // 20% faster, exceeds 15% hysteresis margin (500 * 1.15 = 575)
+        peer2.AmChoking = true;
+
+        _subject.ProcessRegularUnchoke();
+
+        // peer2 should successfully displace peer1
+        Assert.That(peer1.AmChoking, Is.True);
+        Assert.That(peer2.AmChoking, Is.False);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_protect_recently_unchoked_peer_from_being_choked_within_minimum_unchoke_duration()
+    {
+        _configService.MaxUploadSlots.Returns(2); // 1 regular slot
+
+        var peer1 = CreatePeer("hashA", 1001, rate: 100);
+        peer1.AmChoking = false;
+        peer1.LastUnchokedAt = DateTime.UtcNow.AddSeconds(-10); // unchoked 10s ago (< 20s min duration)
+
+        var peer2 = CreatePeer("hashA", 1002, rate: 1000); // 10x faster challenger
+        peer2.AmChoking = true;
+
+        _subject.ProcessRegularUnchoke();
+
+        // peer1 is within the minimum unchoke duration and must not be choked
+        Assert.That(peer1.AmChoking, Is.False);
+        Assert.That(peer2.AmChoking, Is.True);
+    }
+
+    [Test]
+    public void ProcessRegularUnchoke_should_displace_peer_without_hysteresis_margin_after_max_lease_seconds()
+    {
+        _configService.MaxUploadSlots.Returns(2); // 1 regular slot
+
+        var peer1 = CreatePeer("hashA", 1001, rate: 500);
+        peer1.AmChoking = false;
+        peer1.LastUnchokedAt = DateTime.UtcNow.AddSeconds(-65); // unchoked 65s ago (>= 60s max lease)
+
+        var peer2 = CreatePeer("hashA", 1002, rate: 510); // only 2% faster (would fail hysteresis if lease hadn't expired)
+        peer2.AmChoking = true;
+
+        _subject.ProcessRegularUnchoke();
+
+        // peer2 should displace peer1 because max lease expired
+        Assert.That(peer1.AmChoking, Is.True);
+        Assert.That(peer2.AmChoking, Is.False);
+    }
 }

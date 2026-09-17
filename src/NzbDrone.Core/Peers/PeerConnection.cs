@@ -117,7 +117,7 @@ public class PeerConnection : IDisposable
     public HashSet<int> RemoteAllowedFastPieces { get; } = new();
     public HashSet<int> AllowedFastPieces => RemoteAllowedFastPieces;
     public DateTime LastRequestReceived { get; set; } = DateTime.UtcNow;
-    public DateTime LastUnchokedAt { get; set; } = DateTime.MinValue;
+    public DateTime? LastUnchokedAt { get; set; }
     public DateTime LastPexReceived { get; set; } = DateTime.MinValue;
     public int PexRateLimitViolations { get; set; }
     public PeerPexTracker PexTracker { get; } = new();
