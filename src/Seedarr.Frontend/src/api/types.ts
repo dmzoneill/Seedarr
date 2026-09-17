@@ -654,6 +654,8 @@ export interface DownloadClientRemoteItem {
   isPrivate?: boolean;
   isInLibrary: boolean;
   libraryTorrentId?: number | null;
+  downloadSpeed?: number | null;
+  uploadSpeed?: number | null;
 }
 
 export interface IndexerDefinition {
@@ -869,6 +871,7 @@ export interface TorrentEventLogEntry {
 export interface SyncResult {
   added: number;
   skipped: number;
+  updated?: number;
   failed: number;
 }
 

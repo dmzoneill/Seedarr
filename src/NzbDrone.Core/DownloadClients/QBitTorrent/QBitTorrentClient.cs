@@ -295,6 +295,8 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                     OutputPath = t.TryGetProperty("save_path", out var sp) ? sp.GetString() : "",
                     Category = t.TryGetProperty("category", out var c) ? c.GetString() : "",
                     IsPrivate = isPrivate,
+                    DownloadSpeed = t.TryGetProperty("dlspeed", out var ds) ? ds.GetInt64() : null,
+                    UploadSpeed = t.TryGetProperty("upspeed", out var us) ? us.GetInt64() : null,
                 });
             }
 

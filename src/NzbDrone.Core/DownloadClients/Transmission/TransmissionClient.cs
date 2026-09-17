@@ -153,7 +153,7 @@ public class TransmissionClient : IDownloadClient, IDisposable
         {
             var arguments = new
             {
-                fields = new[] { "hashString", "name", "totalSize", "leftUntilDone", "status", "downloadDir", "labels", "isPrivate" },
+                fields = new[] { "hashString", "name", "totalSize", "leftUntilDone", "status", "downloadDir", "labels", "isPrivate", "rateDownload", "rateUpload" },
             };
 
             using var doc = SendRequest("torrent-get", arguments);
@@ -193,6 +193,8 @@ public class TransmissionClient : IDownloadClient, IDisposable
                     OutputPath = t.TryGetProperty("downloadDir", out var dd) ? dd.GetString() : "",
                     Category = labels.Count > 0 ? labels[0] : "",
                     IsPrivate = isPrivate,
+                    DownloadSpeed = t.TryGetProperty("rateDownload", out var rd) ? rd.GetInt64() : null,
+                    UploadSpeed = t.TryGetProperty("rateUpload", out var ru) ? ru.GetInt64() : null,
                 });
             }
 
