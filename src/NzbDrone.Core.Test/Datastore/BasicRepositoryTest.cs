@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Sqlite;
 using NUnit.Framework;
@@ -223,5 +224,50 @@ public class BasicRepositoryTest
     public void UpdateMany_handles_empty_collection_gracefully()
     {
         Assert.DoesNotThrow(() => _subject.UpdateMany(Array.Empty<Tag>()));
+    }
+
+    [Test]
+    public void InsertMany_inserts_all_items_atomically_in_a_single_transaction()
+    {
+        var tags = new[]
+        {
+            new Tag { Label = "Batch1" },
+            new Tag { Label = "Batch2" },
+            new Tag { Label = "Batch3" }
+        };
+
+        _subject.InsertMany(tags);
+
+        var all = _subject.All().ToList();
+        Assert.That(all, Has.Count.EqualTo(3));
+        Assert.That(all.Select(t => t.Label), Is.EquivalentTo(new[] { "Batch1", "Batch2", "Batch3" }));
+    }
+
+    [Test]
+    public void InsertMany_rolls_back_on_error_and_leaves_table_untouched()
+    {
+        _subject.Insert(new Tag { Label = "PreExisting" });
+
+        var tags = new[]
+        {
+            new Tag { Label = "ValidTag" },
+            new Tag { Label = null }
+        };
+
+        Assert.Throws<SqliteException>(() => _subject.InsertMany(tags));
+
+        var all = _subject.All().ToList();
+        Assert.That(all, Has.Count.EqualTo(1));
+        Assert.That(all[0].Label, Is.EqualTo("PreExisting"));
+    }
+
+    [Test]
+    public void InsertMany_handles_empty_collection_gracefully()
+    {
+        Assert.DoesNotThrow(() => _subject.InsertMany(Array.Empty<Tag>()));
+        Assert.DoesNotThrow(() => _subject.InsertMany((IList<Tag>)new List<Tag>()));
+        Assert.DoesNotThrow(() => _subject.InsertMany((IEnumerable<Tag>)null));
+        Assert.DoesNotThrow(() => _subject.InsertMany((IList<Tag>)null));
+        Assert.That(_subject.All(), Is.Empty);
     }
 }

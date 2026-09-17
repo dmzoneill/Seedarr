@@ -563,10 +563,37 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
         }
     }
 
+    public void AddMany(IList<DownloadHistory> entries)
+    {
+        if (entries == null || entries.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var entry in entries)
+        {
+            EnrichDataJson(entry);
+        }
+
+        _historyRepository.InsertMany(entries);
+    }
+
+    public void AddMany(IEnumerable<DownloadHistory> entries)
+    {
+        if (entries == null)
+        {
+            return;
+        }
+
+        var list = entries as IList<DownloadHistory> ?? entries.ToList();
+        AddMany(list);
+    }
+
     public int ReconcileAllTorrents()
     {
         var allTorrents = _torrentRepository.All().ToList();
         var backfilled = 0;
+        var toInsert = new List<DownloadHistory>();
 
         foreach (var torrent in allTorrents)
         {
@@ -601,8 +628,7 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
                     IsPrivate = torrent.IsPrivate
                 };
 
-                EnrichDataJson(entry);
-                _historyRepository.Insert(entry);
+                toInsert.Add(entry);
                 backfilled++;
             }
             else if (existing.TorrentId == null || existing.TorrentId == 0)
@@ -611,6 +637,11 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
                 existing.Status = "Active";
                 _historyRepository.Update(existing);
             }
+        }
+
+        if (toInsert.Count > 0)
+        {
+            AddMany(toInsert);
         }
 
         if (backfilled > 0)

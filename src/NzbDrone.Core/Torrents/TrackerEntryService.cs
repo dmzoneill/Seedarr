@@ -10,6 +10,8 @@ public interface ITrackerEntryService
     List<TrackerEntry> All();
     List<TrackerEntry> GetByTorrentId(int torrentId);
     TrackerEntry Add(TrackerEntry trackerEntry);
+    void AddMany(IList<TrackerEntry> trackerEntries);
+    void AddMany(IEnumerable<TrackerEntry> trackerEntries);
     TrackerEntry Update(TrackerEntry trackerEntry);
     void Delete(int id);
     void DeleteByTorrentId(int torrentId);
@@ -40,6 +42,16 @@ public class TrackerEntryService : ITrackerEntryService
     {
         _logger.Debug("Adding tracker entry: {0} for torrent {1}", RedactUrl(trackerEntry.Url), trackerEntry.TorrentId);
         return _repository.Insert(trackerEntry);
+    }
+
+    public void AddMany(IList<TrackerEntry> trackerEntries)
+    {
+        _repository.InsertMany(trackerEntries);
+    }
+
+    public void AddMany(IEnumerable<TrackerEntry> trackerEntries)
+    {
+        _repository.InsertMany(trackerEntries);
     }
 
     public TrackerEntry Update(TrackerEntry trackerEntry)
