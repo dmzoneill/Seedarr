@@ -21,13 +21,13 @@ namespace NzbDrone.Core.Test.HealthCheck.Checks
         }
 
         [Test]
-        public void Check_should_return_warning_when_no_torrents()
+        public void Check_should_return_notice_when_no_torrents()
         {
             _torrentService.GetAll().Returns(new List<Torrent>());
 
             var result = _subject.Check();
 
-            Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Warning));
+            Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Notice));
         }
 
         [Test]

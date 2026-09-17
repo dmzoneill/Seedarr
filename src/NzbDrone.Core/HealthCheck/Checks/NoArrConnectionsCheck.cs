@@ -17,7 +17,7 @@ public class NoArrConnectionsCheck : IHealthCheck
         var connections = _connectionFactory.All();
         if (!connections.Any(c => c.Enable))
         {
-            return HealthCheckResult.Warning(
+            return HealthCheckResult.Notice(
                 "NoArrConnections",
                 "No *arr connections configured. Connect Sonarr, Radarr, or Lidarr in Settings > Connections to automatically import grabbed torrents.");
         }
