@@ -192,6 +192,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         return resource;
     }
 
+    [NonAction]
     public void InvalidateBroadcastCache(int torrentId, string infoHash = null)
     {
         _broadcastTrackersCache.TryRemove(torrentId, out _);
