@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -71,7 +72,7 @@ public class WatchFolderService : BackgroundService
 
         try
         {
-            _watcher = new FileSystemWatcher(watchPath, "*.torrent")
+            _watcher = new FileSystemWatcher(watchPath)
             {
                 IncludeSubdirectories = true,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime | NotifyFilters.LastWrite,
@@ -79,6 +80,7 @@ public class WatchFolderService : BackgroundService
             };
 
             _watcher.Created += OnTorrentFileCreated;
+            _watcher.Renamed += OnTorrentFileRenamed;
         }
         catch (Exception ex)
         {
@@ -128,10 +130,12 @@ public class WatchFolderService : BackgroundService
                 return;
             }
 
-            string[] torrentFiles;
+            string[] candidateFiles;
             try
             {
-                torrentFiles = Directory.GetFiles(watchPath, "*.torrent", SearchOption.AllDirectories);
+                candidateFiles = Directory.GetFiles(watchPath, "*.*", SearchOption.AllDirectories)
+                    .Where(IsCandidateFile)
+                    .ToArray();
             }
             catch (DirectoryNotFoundException)
             {
@@ -144,9 +148,9 @@ public class WatchFolderService : BackgroundService
                 return;
             }
 
-            foreach (var filePath in torrentFiles)
+            foreach (var filePath in candidateFiles)
             {
-                ProcessTorrentFile(filePath, watchPath);
+                ProcessFile(filePath, watchPath);
             }
         }
         catch (Exception ex)
@@ -157,7 +161,18 @@ public class WatchFolderService : BackgroundService
 
     private void OnTorrentFileCreated(object sender, FileSystemEventArgs e)
     {
-        _ = HandleTorrentFileCreatedAsync(e.FullPath);
+        if (IsCandidateFile(e.FullPath))
+        {
+            _ = HandleTorrentFileCreatedAsync(e.FullPath);
+        }
+    }
+
+    private void OnTorrentFileRenamed(object sender, RenamedEventArgs e)
+    {
+        if (IsCandidateFile(e.FullPath))
+        {
+            _ = HandleTorrentFileCreatedAsync(e.FullPath);
+        }
     }
 
     private async Task HandleTorrentFileCreatedAsync(string filePath)
@@ -184,7 +199,7 @@ public class WatchFolderService : BackgroundService
         {
             await Task.Delay(500, newCts.Token);
             _fileDebounceTokens.TryRemove(filePath, out _);
-            ProcessTorrentFile(filePath);
+            ProcessFile(filePath);
         }
         catch (OperationCanceledException)
         {
@@ -198,6 +213,23 @@ public class WatchFolderService : BackgroundService
         {
             newCts.Dispose();
         }
+    }
+
+    private static bool IsCandidateFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return false;
+        }
+
+        if (filePath.EndsWith(".imported", StringComparison.OrdinalIgnoreCase) ||
+            filePath.EndsWith(".failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return filePath.EndsWith(".torrent", StringComparison.OrdinalIgnoreCase) ||
+               filePath.EndsWith(".magnet", StringComparison.OrdinalIgnoreCase);
     }
 
     internal bool WaitForFileReady(string filePath, int maxAttempts = 5, int initialDelayMs = 100, int stabilityDelayMs = 25)
@@ -330,7 +362,19 @@ public class WatchFolderService : BackgroundService
         }
     }
 
-    private void ProcessTorrentFile(string filePath, string watchPath = null)
+    private void ProcessFile(string filePath, string watchPath = null)
+    {
+        if (filePath.EndsWith(".magnet", StringComparison.OrdinalIgnoreCase))
+        {
+            ProcessMagnetFile(filePath, watchPath);
+        }
+        else
+        {
+            ProcessTorrentFile(filePath, watchPath);
+        }
+    }
+
+    internal void ProcessTorrentFile(string filePath, string watchPath = null)
     {
         var fileName = Path.GetFileName(filePath);
 
@@ -352,7 +396,18 @@ public class WatchFolderService : BackgroundService
             var autoStart = _configService.WatchFolderAutoStartTorrents;
             var deleteAfterAdd = _configService.WatchFolderDeleteAddedTorrents;
 
-            var parsed = _parser.Parse(filePath);
+            ParsedTorrent parsed;
+            try
+            {
+                parsed = _parser.Parse(filePath);
+            }
+            catch (Exception parseEx)
+            {
+                _logger.Error(parseEx, "Error parsing torrent file: {0}", fileName);
+                MarkFileFailed(filePath);
+                return;
+            }
+
             var torrent = new Torrent
             {
                 Name = parsed.Name,
@@ -407,6 +462,7 @@ public class WatchFolderService : BackgroundService
             if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
             {
                 _logger.Debug("Torrent already exists, skipping: {0}", fileName);
+                HandlePostImport(filePath, deleteAfterAdd);
                 return;
             }
 
@@ -415,22 +471,202 @@ public class WatchFolderService : BackgroundService
             CreateTrackerEntries(added.Id, parsed);
             SaveTorrentFiles(added.Id, parsed);
 
-            if (deleteAfterAdd)
-            {
-                try
-                {
-                    File.Delete(filePath);
-                    _logger.Info("Deleted torrent file after adding: {0}", fileName);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Warn(ex, "Failed to delete torrent file after adding: {0}", fileName);
-                }
-            }
+            HandlePostImport(filePath, deleteAfterAdd);
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Error processing torrent file: {0}", fileName);
+        }
+    }
+
+    internal void ProcessMagnetFile(string filePath, string watchPath = null)
+    {
+        var fileName = Path.GetFileName(filePath);
+
+        try
+        {
+            if (!File.Exists(filePath))
+            {
+                return;
+            }
+
+            if (!WaitForFileReady(filePath))
+            {
+                _logger.Warn("Magnet file is locked or incomplete, skipping: {0}", fileName);
+                return;
+            }
+
+            _logger.Info("Processing magnet file: {0}", fileName);
+
+            ParsedMagnetLink parsed;
+            string magnetUri;
+            try
+            {
+                var text = File.ReadAllText(filePath);
+                magnetUri = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(l => l.Trim())
+                    .FirstOrDefault(l => l.StartsWith("magnet:?", StringComparison.OrdinalIgnoreCase));
+
+                if (string.IsNullOrWhiteSpace(magnetUri))
+                {
+                    throw new FormatException("File does not contain a valid magnet URI starting with 'magnet:?'");
+                }
+
+                parsed = MagnetLinkParser.Parse(magnetUri);
+            }
+            catch (Exception parseEx)
+            {
+                _logger.Error(parseEx, "Error parsing magnet file: {0}", fileName);
+                MarkFileFailed(filePath);
+                return;
+            }
+
+            var autoStart = _configService.WatchFolderAutoStartTorrents;
+            var deleteAfterAdd = _configService.WatchFolderDeleteAddedTorrents;
+
+            if (_torrentService.ExistsByInfoHash(parsed.InfoHash))
+            {
+                _logger.Debug("Torrent already exists, skipping: {0}", fileName);
+                HandlePostImport(filePath, deleteAfterAdd);
+                return;
+            }
+
+            var torrent = new Torrent
+            {
+                Name = parsed.Name,
+                InfoHash = parsed.InfoHash,
+                TrackerUrl = parsed.Trackers != null && parsed.Trackers.Length > 0 ? parsed.Trackers[0] : null,
+                MagnetUrl = magnetUri,
+                SourcePath = deleteAfterAdd ? null : filePath,
+                DateAdded = DateTime.UtcNow,
+                Progress = 0.0
+            };
+
+            watchPath ??= GetWatchPath();
+            var category = ResolveCategory(filePath, watchPath);
+            if (category != null && !string.IsNullOrWhiteSpace(category.Name))
+            {
+                torrent.Category = category.Name;
+            }
+
+            var defaultPath = !string.IsNullOrWhiteSpace(_configService?.TorrentSaveDirectory)
+                ? _configService.TorrentSaveDirectory
+                : (!string.IsNullOrWhiteSpace(watchPath) ? watchPath : Path.Combine(_appFolderInfo?.AppDataFolder ?? string.Empty, "downloads"));
+
+            string resolvedSavePath = null;
+            if (_categoryService != null)
+            {
+                resolvedSavePath = _categoryService.GetSavePathForCategory(torrent.Category, defaultPath);
+            }
+
+            if (string.IsNullOrWhiteSpace(resolvedSavePath))
+            {
+                resolvedSavePath = defaultPath;
+            }
+
+            torrent.SavePath = resolvedSavePath;
+
+            var initialStatus = TorrentStatus.Stopped;
+            if (autoStart)
+            {
+                initialStatus = (torrent.Progress >= 1.0 || torrent.ForceCompleted)
+                    ? TorrentStatus.Seeding
+                    : TorrentStatus.Downloading;
+            }
+
+            torrent.Status = initialStatus;
+
+            var added = _torrentService.Add(torrent);
+
+            CreateTrackerEntriesFromMagnet(added.Id, parsed.Trackers);
+
+            HandlePostImport(filePath, deleteAfterAdd);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Error processing magnet file: {0}", fileName);
+        }
+    }
+
+    private void HandlePostImport(string filePath, bool deleteAfterAdd)
+    {
+        var fileName = Path.GetFileName(filePath);
+        if (deleteAfterAdd)
+        {
+            try
+            {
+                if (File.Exists(filePath))
+                {
+                    File.Delete(filePath);
+                    _logger.Info("Deleted file after adding: {0}", fileName);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to delete file after adding: {0}", fileName);
+            }
+        }
+        else
+        {
+            try
+            {
+                if (File.Exists(filePath))
+                {
+                    var importedPath = $"{filePath}.imported";
+                    File.Move(filePath, importedPath, overwrite: true);
+                    _logger.Info("Marked file as imported: {0}", Path.GetFileName(importedPath));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to rename file to .imported: {0}", fileName);
+            }
+        }
+    }
+
+    private void MarkFileFailed(string filePath)
+    {
+        try
+        {
+            if (File.Exists(filePath))
+            {
+                var failedPath = $"{filePath}.failed";
+                File.Move(filePath, failedPath, overwrite: true);
+                _logger.Warn("Marked unparseable or corrupted file as failed: {0}", Path.GetFileName(failedPath));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to rename file to .failed: {0}", filePath);
+        }
+    }
+
+    private void CreateTrackerEntriesFromMagnet(int torrentId, string[] trackers)
+    {
+        if (_trackerEntryService == null || trackers == null || trackers.Length == 0)
+        {
+            return;
+        }
+
+        var tier = 0;
+        var urls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var url in trackers)
+        {
+            if (string.IsNullOrWhiteSpace(url) || !urls.Add(url))
+            {
+                continue;
+            }
+
+            _trackerEntryService.Add(new TrackerEntry
+            {
+                TorrentId = torrentId,
+                Url = url,
+                Tier = tier++,
+                Status = TrackerStatus.Unknown,
+                Enabled = true,
+                AnnounceInterval = _configService.AnnounceIntervalSeconds,
+                MinAnnounceInterval = _configService.MinAnnounceIntervalSeconds
+            });
         }
     }
 
