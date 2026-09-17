@@ -322,8 +322,8 @@ public class SpeedDistributionManagerTest
 
         Assert.That(speeds[0], Is.GreaterThanOrEqualTo(0L));
         Assert.That(speeds[1], Is.GreaterThanOrEqualTo(0L));
-        Assert.That(speeds[0], Is.EqualTo(50_000L));
-        Assert.That(speeds[1], Is.EqualTo(150_000L));
+        Assert.That(speeds[0], Is.EqualTo(52_560L));
+        Assert.That(speeds[1], Is.EqualTo(147_440L));
         Assert.That(speeds[0] + speeds[1], Is.EqualTo(200_000L));
     }
 
@@ -531,5 +531,117 @@ public class SpeedDistributionManagerTest
         _manager.DistributeDownloadSpeeds(3, 500_000L);
 
         _equalDistributor.Received(4).Distribute(Arg.Any<long>(), 3);
+    }
+
+    [Test]
+    public void ApplyPriorityWeights_low_priority_torrents_receive_at_least_guaranteed_minimum_floor()
+    {
+        _equalDistributor.Distribute(Arg.Any<long>(), 3)
+            .Returns(new long[] { 10_000, 10_000, 10_000 });
+
+        // Total bandwidth = 30,000 bytes/s across 3 torrents.
+        // Torrent 0 has massive weight (100.0), Torrent 1 and 2 have minimal weights (0.01, 0.01).
+        var weights = new double[] { 100.0, 0.01, 0.01 };
+        var speeds = _manager.DistributeUploadSpeeds(3, 30_000L, weights);
+
+        Assert.That(speeds, Has.Length.EqualTo(3));
+        Assert.That(speeds[0], Is.GreaterThan(speeds[1]));
+        Assert.That(speeds[1], Is.GreaterThanOrEqualTo(SpeedDistributionManager.MinimumFloorBytesPerSec));
+        Assert.That(speeds[2], Is.GreaterThanOrEqualTo(SpeedDistributionManager.MinimumFloorBytesPerSec));
+        Assert.That(speeds.Sum(), Is.EqualTo(30_000L));
+    }
+
+    [Test]
+    public void ApplyPriorityWeights_high_priority_torrents_receive_proportional_remainder_above_floor()
+    {
+        _equalDistributor.Distribute(Arg.Any<long>(), 2)
+            .Returns(new long[] { 50_000, 50_000 });
+
+        var total = 100_000L;
+        var floor = SpeedDistributionManager.MinimumFloorBytesPerSec;
+        var totalFloor = 2 * floor;
+        var remainder = total - totalFloor;
+
+        // Weights ratio 3:1 (sum = 4.0)
+        var weights = new double[] { 3.0, 1.0 };
+        var speeds = _manager.DistributeUploadSpeeds(2, total, weights);
+
+        var expectedTorrent0Remainder = (long)(remainder * (3.0 / 4.0));
+        var expectedTorrent1Remainder = (long)(remainder * (1.0 / 4.0));
+
+        Assert.That(speeds[0] - floor, Is.EqualTo(expectedTorrent0Remainder));
+        Assert.That(speeds[1] - floor, Is.EqualTo(expectedTorrent1Remainder));
+        Assert.That(speeds[0] + speeds[1], Is.EqualTo(total));
+    }
+
+    [Test]
+    public void ApplyPriorityWeights_surplus_bandwidth_reallocated_when_high_priority_hits_quota_cap()
+    {
+        _equalDistributor.Distribute(Arg.Any<long>(), 2)
+            .Returns(new long[] { 50_000, 50_000 });
+
+        var total = 100_000L;
+        // High priority torrent (weight 4.0) has a cap of 20,000 bytes/s.
+        // Its uncapped share would be floor (5,120) + (100,000 - 10,240) * (4/5) = 5,120 + 71,808 = 76,928 B/s.
+        // Because it is capped at 20,000 B/s, its surplus (~56,928 B/s) must cascade to Torrent 1.
+        var weights = new double[] { 4.0, 1.0 };
+        var caps = new long[] { 20_000L, 0L };
+
+        var speeds = _manager.DistributeUploadSpeeds(2, total, weights, caps);
+
+        Assert.That(speeds[0], Is.EqualTo(20_000L));
+        Assert.That(speeds[1], Is.EqualTo(80_000L));
+        Assert.That(speeds.Sum(), Is.EqualTo(total));
+    }
+
+    [Test]
+    public void ApplyPriorityWeights_when_total_less_than_total_floor_divides_equally()
+    {
+        _equalDistributor.Distribute(Arg.Any<long>(), 3)
+            .Returns(new long[] { 3_000, 3_000, 3_000 });
+
+        // Total 9,000 is less than 3 * 5,120 = 15,360
+        var weights = new double[] { 10.0, 2.0, 1.0 };
+        var speeds = _manager.DistributeUploadSpeeds(3, 9_000L, weights);
+
+        Assert.That(speeds[0], Is.EqualTo(3_000L));
+        Assert.That(speeds[1], Is.EqualTo(3_000L));
+        Assert.That(speeds[2], Is.EqualTo(3_000L));
+        Assert.That(speeds.Sum(), Is.EqualTo(9_000L));
+    }
+
+    [Test]
+    public void ApplyPriorityWeights_cascading_surplus_reallocates_across_multiple_capped_tiers()
+    {
+        _equalDistributor.Distribute(Arg.Any<long>(), 3)
+            .Returns(new long[] { 50_000, 50_000, 50_000 });
+
+        var total = 150_000L;
+        // Torrent 0 (highest weight 10.0) capped at 25,000
+        // Torrent 1 (weight 2.0) capped at 50,000
+        // Torrent 2 (lowest weight 1.0) uncapped (0)
+        var weights = new double[] { 10.0, 2.0, 1.0 };
+        var caps = new long[] { 25_000L, 50_000L, 0L };
+
+        var speeds = _manager.DistributeUploadSpeeds(3, total, weights, caps);
+
+        Assert.That(speeds[0], Is.EqualTo(25_000L));
+        Assert.That(speeds[1], Is.EqualTo(50_000L));
+        Assert.That(speeds[2], Is.EqualTo(75_000L));
+        Assert.That(speeds.Sum(), Is.EqualTo(total));
+    }
+
+    [Test]
+    public void DistributeDownloadSpeeds_with_priority_weights_and_caps_reallocates_surplus()
+    {
+        _equalDistributor.Distribute(Arg.Any<long>(), 2)
+            .Returns(new long[] { 50_000, 50_000 });
+
+        var weights = new double[] { 2.0, 1.0 };
+        var caps = new long[] { 20_000L, 0L };
+        var speeds = _manager.DistributeDownloadSpeeds(2, 100_000L, weights, caps);
+
+        Assert.That(speeds[0], Is.EqualTo(20_000L));
+        Assert.That(speeds[1], Is.EqualTo(80_000L));
     }
 }
