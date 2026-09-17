@@ -62,6 +62,8 @@ public class MediaMetadataResource : RestResource
     public string SceneCode { get; set; }
 
     public DateTime? ReleaseDate { get; set; }
+
+    public string Edition { get; set; }
 }
 
 public static class MediaMetadataResourceMapper
@@ -114,6 +116,7 @@ public static class MediaMetadataResourceMapper
                 : model.Performers.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0).ToList(),
             SceneCode = model.SceneCode,
             ReleaseDate = model.ReleaseDate,
+            Edition = model.Edition,
         };
     }
 }

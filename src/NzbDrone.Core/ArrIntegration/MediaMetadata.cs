@@ -26,6 +26,7 @@ namespace NzbDrone.Core.ArrIntegration
         public string Performers { get; set; }
         public string SceneCode { get; set; }
         public DateTime? ReleaseDate { get; set; }
+        public string Edition { get; set; }
     }
 
     public class MediaActor

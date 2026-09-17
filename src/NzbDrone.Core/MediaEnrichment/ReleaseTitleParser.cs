@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using NzbDrone.Core.Notifications;
 
 namespace NzbDrone.Core.MediaEnrichment;
 
@@ -27,6 +28,8 @@ public class ParsedReleaseInfo
     public string ReleaseGroup { get; set; }
 
     public string ReleaseType { get; set; }
+
+    public string Edition { get; set; }
 }
 
 public static class ReleaseTitleParser
@@ -96,7 +99,7 @@ public static class ReleaseTitleParser
         RegexOptions.Compiled);
 
     private static readonly Regex SceneDelimiterRegex = new(
-        @"(?i)\b(2160p|4k|uhd|1080p|1080i|720p|576p|480p|bluray|blu-ray|bdrip|brrip|remux|web-dl|webrip|webdl|hdtv|dvdrip|x264|x265|h264|h265|hevc|av1|xvid|repack|proper|extended|unrated|criterion|remastered)\b",
+        @"(?i)\b(2160p|4k|uhd|1080p|1080i|720p|576p|480p|bluray|blu-ray|bdrip|brrip|remux|web-dl|webrip|webdl|hdtv|dvdrip|x264|x265|h264|h265|hevc|av1|xvid|repack|proper|extended|unrated|criterion|remastered|director'?s?[ ._-]?cut|special[ ._-]?edition|theatrical)\b",
         RegexOptions.Compiled);
 
     public static ParsedReleaseInfo Parse(string rawTitle)
@@ -393,5 +396,7 @@ public static class ReleaseTitleParser
                 _ => audioMatch.Groups["audio"].Value,
             };
         }
+
+        info.Edition = EpisodicParser.ExtractEditionStatic(text);
     }
 }

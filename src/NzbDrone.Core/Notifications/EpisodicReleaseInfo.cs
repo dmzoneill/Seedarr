@@ -19,4 +19,6 @@ public class EpisodicReleaseInfo
     public string AirDate { get; set; }
 
     public int? AbsoluteEpisodeNumber { get; set; }
+
+    public string Edition { get; set; }
 }
