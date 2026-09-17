@@ -581,7 +581,7 @@ public static class NotificationPayloadBuilder
         }
 
         var prop = payload.GetType().GetProperty("ErrorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                   ?? payload.GetType().GetProperty("errorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            ?? payload.GetType().GetProperty("errorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
         var value = prop?.GetValue(payload)?.ToString();
         if (!string.IsNullOrWhiteSpace(value))
         {
@@ -589,14 +589,14 @@ public static class NotificationPayloadBuilder
         }
 
         var torrentProp = payload.GetType().GetProperty("Torrent", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                          ?? payload.GetType().GetProperty("torrent", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            ?? payload.GetType().GetProperty("torrent", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
         if (torrentProp != null)
         {
             var torrentObj = torrentProp.GetValue(payload);
             if (torrentObj != null)
             {
                 var tErrProp = torrentObj.GetType().GetProperty("ErrorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                               ?? torrentObj.GetType().GetProperty("errorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+                    ?? torrentObj.GetType().GetProperty("errorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
                 var tErrVal = tErrProp?.GetValue(torrentObj)?.ToString();
                 if (!string.IsNullOrWhiteSpace(tErrVal))
                 {
@@ -645,7 +645,7 @@ public static class NotificationPayloadBuilder
 
         var prop = payload.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
             .FirstOrDefault(p => string.Equals(p.Name, "ErrorMessage", StringComparison.OrdinalIgnoreCase) ||
-                                 string.Equals(p.Name, "Message", StringComparison.OrdinalIgnoreCase));
+                string.Equals(p.Name, "Message", StringComparison.OrdinalIgnoreCase));
         var value = prop?.GetValue(payload)?.ToString();
 
         return string.IsNullOrWhiteSpace(value) ? fallback : value;
