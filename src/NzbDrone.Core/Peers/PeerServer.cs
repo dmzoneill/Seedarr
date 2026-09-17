@@ -23,7 +23,7 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
-public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRestoredEvent>, IHandle<VpnRestoredEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>, IHandle<PeerRequestRejectedEvent>
+public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRestoredEvent>, IHandle<VpnRestoredEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>, IHandle<PeerRequestRejectedEvent>, IHandle<TorrentDownloadCompletedEvent>, IHandle<TorrentFinishedEvent>, IHandle<TorrentStatusChangedEvent>
 {
     private const int OutgoingConnectTimeoutMs = 5000;
     private const int UnauthenticatedHandshakeTimeoutMs = 5000;
@@ -283,7 +283,156 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         {
             _torrentCache[message.Torrent.InfoHash] = message.Torrent;
             _mseSkeyRegistry?.RegisterTorrent(message.Torrent);
+
+            if (message.Torrent.Progress >= 1.0 || message.Torrent.Status == TorrentStatus.Seeding)
+            {
+                OnTorrentCompleted(message.Torrent);
+            }
         }
+    }
+
+    public void Handle(TorrentDownloadCompletedEvent message)
+    {
+        OnTorrentCompleted(message?.Torrent);
+    }
+
+    public void Handle(TorrentFinishedEvent message)
+    {
+        OnTorrentCompleted(message?.Torrent);
+    }
+
+    public void Handle(TorrentStatusChangedEvent message)
+    {
+        if (message?.NewStatus == TorrentStatus.Seeding)
+        {
+            OnTorrentCompleted(message.Torrent);
+        }
+    }
+
+    public void OnTorrentCompleted(Torrent torrent)
+    {
+        torrent ??= GetCachedTorrent(torrent?.InfoHash);
+        if (torrent == null || string.IsNullOrEmpty(torrent.InfoHash))
+        {
+            return;
+        }
+
+        var connections = _connectionManager?.GetConnections(torrent.InfoHash);
+        if (connections == null)
+        {
+            return;
+        }
+
+        foreach (var connection in connections)
+        {
+            if (connection != null && connection.AmInterested)
+            {
+                connection.AmInterested = false;
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.NotInterested });
+                _logger.Trace("Torrent {0} completed: sent NOT_INTERESTED to {1}:{2}", torrent.Name, connection.RemoteIp, connection.RemotePort);
+            }
+        }
+    }
+
+    public void UpdateLocalInterest(PeerConnection connection, Torrent torrent)
+    {
+        torrent ??= connection?.MatchedTorrent ?? GetCachedTorrent(connection?.InfoHash);
+        if (connection == null || torrent == null)
+        {
+            return;
+        }
+
+        bool[] verified = null;
+        if (_pieceStorage != null && !string.IsNullOrEmpty(torrent.InfoHash))
+        {
+            verified = _pieceStorage.GetVerifiedPieces(torrent.InfoHash);
+        }
+
+        var isComplete = torrent.Progress >= 1.0 ||
+                         torrent.Status == TorrentStatus.Seeding ||
+                         (verified != null && torrent.PieceCount > 0 && verified.Length >= torrent.PieceCount && verified.Take(torrent.PieceCount).All(x => x));
+
+        if (isComplete)
+        {
+            if (connection.AmInterested)
+            {
+                connection.AmInterested = false;
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.NotInterested });
+                _logger.Trace("Torrent {0} is complete: sent NOT_INTERESTED to {1}:{2}", torrent.Name, connection.RemoteIp, connection.RemotePort);
+            }
+
+            return;
+        }
+
+        if (connection.PeerPieces == null || torrent.PieceCount <= 0)
+        {
+            if (connection.AmInterested)
+            {
+                connection.AmInterested = false;
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.NotInterested });
+                _logger.Trace("Remote peer {0}:{1} has no pieces: sent NOT_INTERESTED", connection.RemoteIp, connection.RemotePort);
+            }
+
+            return;
+        }
+
+        var peerHasMissingPiece = false;
+        var pieceCount = Math.Min(torrent.PieceCount, connection.PeerPieces.Length);
+
+        for (var i = 0; i < pieceCount; i++)
+        {
+            if (!connection.PeerPieces[i])
+            {
+                continue;
+            }
+
+            var localHasPiece = LocalHasPiece(torrent, verified, i);
+            if (!localHasPiece)
+            {
+                peerHasMissingPiece = true;
+                break;
+            }
+        }
+
+        if (peerHasMissingPiece)
+        {
+            if (!connection.AmInterested)
+            {
+                connection.AmInterested = true;
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Interested });
+                _logger.Trace("Sent INTERESTED to {0}:{1}", connection.RemoteIp, connection.RemotePort);
+            }
+        }
+        else
+        {
+            if (connection.AmInterested)
+            {
+                connection.AmInterested = false;
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.NotInterested });
+                _logger.Trace("Sent NOT_INTERESTED to {0}:{1}", connection.RemoteIp, connection.RemotePort);
+            }
+        }
+    }
+
+    private static bool LocalHasPiece(Torrent torrent, bool[] verified, int pieceIndex)
+    {
+        if (verified != null && pieceIndex < verified.Length)
+        {
+            return verified[pieceIndex];
+        }
+
+        if (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding)
+        {
+            return true;
+        }
+
+        if (torrent.Progress > 0.0 && torrent.PieceCount > 0)
+        {
+            var verifiedCount = (int)Math.Round(torrent.Progress * torrent.PieceCount);
+            return pieceIndex < verifiedCount;
+        }
+
+        return false;
     }
 
     public void Handle(TorrentDeletedEvent message)
@@ -1605,7 +1754,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     private void HandleMessage(PeerConnection connection, PeerMessage message, Torrent torrent = null)
     {
-        torrent ??= GetCachedTorrent(connection?.InfoHash);
+        torrent ??= connection?.MatchedTorrent ?? GetCachedTorrent(connection?.InfoHash);
 
         switch (message.Type)
         {
@@ -1658,6 +1807,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                                 _chokeManager?.PeerBecameSeed(connection);
                             }
                         }
+
+                        UpdateLocalInterest(connection, torrent);
                     }
                 }
 
@@ -1687,6 +1838,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     {
                         _chokeManager?.PeerBecameSeed(connection);
                     }
+
+                    UpdateLocalInterest(connection, torrent);
                 }
 
                 break;
@@ -1760,18 +1913,21 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 {
                     connection.SupportsFastExtension = true;
                     _fastExtensionHandler.HandleMessage(connection, message, torrent?.PieceCount ?? 0);
-                    if (message.Type == PeerMessageType.HaveAll && torrent != null && torrent.PieceCount > 0)
-                    {
-                        connection.PeerPieces = new bool[torrent.PieceCount];
-                        Array.Fill(connection.PeerPieces, true);
-                        connection.Progress = 1.0;
-                        _chokeManager?.PeerBecameSeed(connection);
-                    }
-                    else if (message.Type == PeerMessageType.HaveNone && torrent != null && torrent.PieceCount > 0)
-                    {
-                        connection.PeerPieces = new bool[torrent.PieceCount];
-                        connection.Progress = 0.0;
-                    }
+                }
+
+                if (message.Type == PeerMessageType.HaveAll && torrent != null && torrent.PieceCount > 0)
+                {
+                    connection.PeerPieces = new bool[torrent.PieceCount];
+                    Array.Fill(connection.PeerPieces, true);
+                    connection.Progress = 1.0;
+                    _chokeManager?.PeerBecameSeed(connection);
+                    UpdateLocalInterest(connection, torrent);
+                }
+                else if (message.Type == PeerMessageType.HaveNone && torrent != null && torrent.PieceCount > 0)
+                {
+                    connection.PeerPieces = new bool[torrent.PieceCount];
+                    connection.Progress = 0.0;
+                    UpdateLocalInterest(connection, torrent);
                 }
 
                 break;

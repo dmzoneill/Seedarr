@@ -1,3 +1,5 @@
+using NzbDrone.Core.Torrents;
+
 namespace NzbDrone.Core.Peers;
 
 public interface IPeerServer
@@ -11,4 +13,8 @@ public interface IPeerServer
     string BindErrorMessage { get; }
 
     void StopListening();
+
+    void UpdateLocalInterest(PeerConnection connection, Torrent torrent);
+
+    void OnTorrentCompleted(Torrent torrent);
 }

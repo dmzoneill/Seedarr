@@ -2812,4 +2812,179 @@ public class PeerServerTest
             null)!;
         return (Task)method.Invoke(_server, new object[] { torrent, candidate, ct, null })!;
     }
+
+    [Test]
+    public void HandleMessage_Have_should_send_interested_when_remote_peer_has_missing_piece()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        var torrent = new Torrent
+        {
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 4,
+            Progress = 0.0,
+            Status = TorrentStatus.Downloading
+        };
+
+        var havePayload = new byte[] { 0, 0, 0, 1 };
+        var haveMsg = new PeerMessage { Type = PeerMessageType.Have, Payload = havePayload };
+
+        InvokeHandleMessage(serverConn, haveMsg, torrent);
+
+        Assert.That(serverConn.AmInterested, Is.True);
+        clientConn.MessageReadTimeoutMs = 1000;
+        var msg = clientConn.ReceiveMessage();
+        Assert.That(msg, Is.Not.Null);
+        Assert.That(msg.Type, Is.EqualTo(PeerMessageType.Interested));
+    }
+
+    [Test]
+    public void HandleMessage_Have_should_send_not_interested_when_local_already_has_piece()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        var torrent = new Torrent
+        {
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 4,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+
+        serverConn.AmInterested = true;
+        var havePayload = new byte[] { 0, 0, 0, 1 };
+        var haveMsg = new PeerMessage { Type = PeerMessageType.Have, Payload = havePayload };
+
+        InvokeHandleMessage(serverConn, haveMsg, torrent);
+
+        Assert.That(serverConn.AmInterested, Is.False);
+        clientConn.MessageReadTimeoutMs = 1000;
+        var msg = clientConn.ReceiveMessage();
+        Assert.That(msg, Is.Not.Null);
+        Assert.That(msg.Type, Is.EqualTo(PeerMessageType.NotInterested));
+    }
+
+    [Test]
+    public void HandleMessage_Bitfield_should_send_interested_when_remote_peer_has_missing_pieces()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        var torrent = new Torrent
+        {
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 8,
+            Progress = 0.0,
+            Status = TorrentStatus.Downloading
+        };
+
+        var bitfieldPayload = new byte[] { 0b10000000 };
+        var bitfieldMsg = new PeerMessage { Type = PeerMessageType.Bitfield, Payload = bitfieldPayload };
+
+        InvokeHandleMessage(serverConn, bitfieldMsg, torrent);
+
+        Assert.That(serverConn.AmInterested, Is.True);
+        clientConn.MessageReadTimeoutMs = 1000;
+        var msg = clientConn.ReceiveMessage();
+        Assert.That(msg, Is.Not.Null);
+        Assert.That(msg.Type, Is.EqualTo(PeerMessageType.Interested));
+    }
+
+    [Test]
+    public void HandleMessage_HaveAll_should_send_interested_when_local_has_missing_pieces()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        var torrent = new Torrent
+        {
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 4,
+            Progress = 0.0,
+            Status = TorrentStatus.Downloading
+        };
+
+        var haveAllMsg = new PeerMessage { Type = PeerMessageType.HaveAll };
+
+        InvokeHandleMessage(serverConn, haveAllMsg, torrent);
+
+        Assert.That(serverConn.AmInterested, Is.True);
+        clientConn.MessageReadTimeoutMs = 1000;
+        var msg = clientConn.ReceiveMessage();
+        Assert.That(msg, Is.Not.Null);
+        Assert.That(msg.Type, Is.EqualTo(PeerMessageType.Interested));
+    }
+
+    [Test]
+    public void HandleMessage_HaveNone_should_send_not_interested_when_previously_interested()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        var torrent = new Torrent
+        {
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 4,
+            Progress = 0.0,
+            Status = TorrentStatus.Downloading
+        };
+
+        serverConn.AmInterested = true;
+        var haveNoneMsg = new PeerMessage { Type = PeerMessageType.HaveNone };
+
+        InvokeHandleMessage(serverConn, haveNoneMsg, torrent);
+
+        Assert.That(serverConn.AmInterested, Is.False);
+        clientConn.MessageReadTimeoutMs = 1000;
+        var msg = clientConn.ReceiveMessage();
+        Assert.That(msg, Is.Not.Null);
+        Assert.That(msg.Type, Is.EqualTo(PeerMessageType.NotInterested));
+    }
+
+    [Test]
+    public void OnTorrentCompleted_should_send_not_interested_to_all_interested_connections()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        var torrent = new Torrent
+        {
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 4,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+
+        serverConn.AmInterested = true;
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { serverConn });
+
+        _server.OnTorrentCompleted(torrent);
+
+        Assert.That(serverConn.AmInterested, Is.False);
+        clientConn.MessageReadTimeoutMs = 1000;
+        var msg = clientConn.ReceiveMessage();
+        Assert.That(msg, Is.Not.Null);
+        Assert.That(msg.Type, Is.EqualTo(PeerMessageType.NotInterested));
+    }
+
+    [Test]
+    public void TorrentDownloadCompletedEvent_should_send_not_interested_to_interested_connections()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        var torrent = new Torrent
+        {
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "TestTorrent",
+            PieceCount = 4,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+
+        serverConn.AmInterested = true;
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { serverConn });
+
+        _server.Handle(new TorrentDownloadCompletedEvent(torrent));
+
+        Assert.That(serverConn.AmInterested, Is.False);
+        clientConn.MessageReadTimeoutMs = 1000;
+        var msg = clientConn.ReceiveMessage();
+        Assert.That(msg, Is.Not.Null);
+        Assert.That(msg.Type, Is.EqualTo(PeerMessageType.NotInterested));
+    }
 }
