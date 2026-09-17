@@ -57,6 +57,14 @@ public class PeerServerTest
         _configService.PeerContactIntervalSeconds.Returns(300);
 
         _server = new PeerServer(_configService, _torrentService, _connectionManager, _peerDiscovery, _multiTracker, mseSkeyRegistry: _mseSkeyRegistry);
+        _connectionManager.TryReserveSlot(Arg.Any<string>(), Arg.Any<bool>(), out Arg.Any<IConnectionReservation>())
+            .Returns(x =>
+            {
+                x[2] = Substitute.For<IConnectionReservation>();
+                return true;
+            });
+        _connectionManager.TryAdd(Arg.Any<PeerConnection>(), Arg.Any<IConnectionReservation>())
+            .Returns(true);
         _connections = new List<PeerConnection>();
         _listeners = new List<TcpListener>();
         _clients = new List<TcpClient>();
@@ -935,6 +943,44 @@ public class PeerServerTest
 
         using var cts = new CancellationTokenSource();
         Assert.DoesNotThrow(() => InvokeHandleConnection(serverTcp, cts.Token));
+    }
+
+    [Test]
+    [CancelAfter(5000)]
+    public void HandleConnection_should_reject_inbound_connection_cleanly_when_quota_exceeded()
+    {
+        var (clientTcp, serverTcp) = CreateRawTcpPair();
+        _clients.Add(clientTcp);
+
+        var infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = infoHash,
+            PieceCount = 10,
+            PieceLength = 16384,
+            Name = "Test"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        _connectionManager.TryReserveSlot(infoHash, true, out Arg.Any<IConnectionReservation>())
+            .Returns(x =>
+            {
+                x[2] = null;
+                return false;
+            });
+
+        var handshake = BuildBtHandshake(infoHash, "-SD0001-012345678901");
+        var stream = clientTcp.GetStream();
+        stream.Write(handshake, 0, handshake.Length);
+        stream.Flush();
+
+        using var cts = new CancellationTokenSource();
+        Assert.DoesNotThrow(() => InvokeHandleConnection(serverTcp, cts.Token));
+
+        _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
+        _connectionManager.DidNotReceive().TryAdd(Arg.Any<PeerConnection>(), Arg.Any<IConnectionReservation>());
+        _connectionManager.DidNotReceive().Remove(Arg.Any<PeerConnection>());
     }
 
     [Test]

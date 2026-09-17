@@ -758,4 +758,115 @@ public class ConnectionManagerTest
         _torrentService.DidNotReceive().GetAll();
         _connectionLogService.Received(1).LogConnected(conn, "UniqueTorrent");
     }
+
+    [Test]
+    public void TryReserveSlot_should_enforce_MaxPerTorrentConnections_limit()
+    {
+        _configService.MaxPerTorrentConnections.Returns(2);
+        _configService.MaxGlobalConnections.Returns(10);
+
+        Assert.That(_manager.TryReserveSlot("hashA", false, out var res1), Is.True);
+        Assert.That(res1, Is.Not.Null);
+        Assert.That(res1.InfoHash, Is.EqualTo("hashA"));
+        Assert.That(res1.IsInbound, Is.False);
+
+        Assert.That(_manager.TryReserveSlot("hashA", true, out var res2), Is.True);
+        Assert.That(res2, Is.Not.Null);
+
+        // 3rd attempt should fail because limit is 2
+        Assert.That(_manager.TryReserveSlot("hashA", false, out var res3), Is.False);
+        Assert.That(res3, Is.Null);
+
+        // Another torrent should still be able to reserve slots
+        Assert.That(_manager.TryReserveSlot("hashB", false, out var resB), Is.True);
+        Assert.That(resB, Is.Not.Null);
+    }
+
+    [Test]
+    public void TryReserveSlot_should_enforce_MaxGlobalConnections_limit()
+    {
+        _configService.MaxPerTorrentConnections.Returns(10);
+        _configService.MaxGlobalConnections.Returns(2);
+
+        Assert.That(_manager.TryReserveSlot("hashA", false, out var res1), Is.True);
+        Assert.That(_manager.TryReserveSlot("hashB", false, out var res2), Is.True);
+
+        // 3rd attempt globally should fail
+        Assert.That(_manager.TryReserveSlot("hashC", false, out var res3), Is.False);
+        Assert.That(res3, Is.Null);
+    }
+
+    [Test]
+    public void TryReserveSlot_should_automatically_release_slots_when_reservation_expires()
+    {
+        _configService.MaxPerTorrentConnections.Returns(1);
+        _configService.MaxGlobalConnections.Returns(10);
+
+        // Reserve with expired TTL
+        Assert.That(_manager.TryReserveSlot("hashA", false, TimeSpan.FromMilliseconds(-1), out var res1), Is.True);
+
+        // Subsequent reservation should succeed because the expired reservation is pruned
+        Assert.That(_manager.TryReserveSlot("hashA", false, out var res2), Is.True);
+        Assert.That(res2, Is.Not.Null);
+    }
+
+    [Test]
+    public void TryReserveSlot_disposing_reservation_should_release_slot()
+    {
+        _configService.MaxPerTorrentConnections.Returns(1);
+        _configService.MaxGlobalConnections.Returns(10);
+
+        Assert.That(_manager.TryReserveSlot("hashA", false, out var res), Is.True);
+        Assert.That(_manager.TryReserveSlot("hashA", false, out _), Is.False);
+
+        res.Dispose();
+
+        Assert.That(_manager.TryReserveSlot("hashA", false, out var res2), Is.True);
+        Assert.That(res2, Is.Not.Null);
+    }
+
+    [Test]
+    public void TryAdd_should_fulfill_reservation_and_add_connection()
+    {
+        _configService.MaxPerTorrentConnections.Returns(1);
+        _configService.MaxGlobalConnections.Returns(10);
+
+        Assert.That(_manager.TryReserveSlot("hashA", false, out var res), Is.True);
+        Assert.That(_manager.TryReserveSlot("hashA", false, out _), Is.False);
+
+        var conn = CreateTestConnection();
+        SetInfoHash(conn, "hashA");
+
+        Assert.That(_manager.TryAdd(conn, res), Is.True);
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+
+        // Slot is now occupied by active connection, so another reservation still fails
+        Assert.That(_manager.TryReserveSlot("hashA", false, out _), Is.False);
+
+        // And disposing the fulfilled reservation does not remove the active connection
+        res.Dispose();
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Add_should_evict_lowest_scoring_peer_from_same_torrent_when_MaxPerTorrentConnections_reached()
+    {
+        _configService.MaxPerTorrentConnections.Returns(2);
+        _configService.MaxGlobalConnections.Returns(10);
+
+        var conn1 = CreateTestConnection();
+        var conn2 = CreateTestConnection();
+        var conn3 = CreateTestConnection();
+        SetInfoHash(conn1, "hashA");
+        SetInfoHash(conn2, "hashA");
+        SetInfoHash(conn3, "hashA");
+
+        _manager.Add(conn1);
+        _manager.Add(conn2);
+        Assert.That(_manager.ActiveCount, Is.EqualTo(2));
+
+        _manager.Add(conn3);
+        Assert.That(_manager.ActiveCount, Is.EqualTo(2));
+        Assert.That(_manager.GetConnections("hashA").Count, Is.EqualTo(2));
+    }
 }
