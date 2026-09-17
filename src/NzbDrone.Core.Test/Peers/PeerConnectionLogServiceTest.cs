@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
@@ -16,6 +18,7 @@ public class PeerConnectionLogServiceTest
     private List<PeerConnection> _createdConnections;
     private List<TcpListener> _listeners;
     private List<TcpClient> _clients;
+    private List<PeerConnectionLog> _capturedLogs;
 
     [SetUp]
     public void Setup()
@@ -25,6 +28,12 @@ public class PeerConnectionLogServiceTest
         _createdConnections = new List<PeerConnection>();
         _listeners = new List<TcpListener>();
         _clients = new List<TcpClient>();
+        _capturedLogs = new List<PeerConnectionLog>();
+
+        _repository.When(r => r.InsertMany(Arg.Any<IList<PeerConnectionLog>>()))
+            .Do(callInfo => _capturedLogs.AddRange(callInfo.Arg<IList<PeerConnectionLog>>()));
+        _repository.When(r => r.InsertMany(Arg.Any<IEnumerable<PeerConnectionLog>>()))
+            .Do(callInfo => _capturedLogs.AddRange(callInfo.Arg<IEnumerable<PeerConnectionLog>>()));
     }
 
     [TearDown]
@@ -90,38 +99,36 @@ public class PeerConnectionLogServiceTest
     public void LogConnected_should_insert_log_with_connected_event_type()
     {
         var conn = CreateTestConnection();
-        PeerConnectionLog capturedLog = null;
-        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
 
         _service.LogConnected(conn, "test.torrent");
+        _service.Flush();
 
-        Assert.That(capturedLog, Is.Not.Null);
-        Assert.That(capturedLog.EventType, Is.EqualTo("Connected"));
+        Assert.That(_capturedLogs, Has.Count.EqualTo(1));
+        Assert.That(_capturedLogs[0].EventType, Is.EqualTo("Connected"));
     }
 
     [Test]
     public void LogDisconnected_should_insert_log_with_disconnected_event_type()
     {
         var conn = CreateTestConnection();
-        PeerConnectionLog capturedLog = null;
-        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
 
         _service.LogDisconnected(conn, "test.torrent");
+        _service.Flush();
 
-        Assert.That(capturedLog, Is.Not.Null);
-        Assert.That(capturedLog.EventType, Is.EqualTo("Disconnected"));
+        Assert.That(_capturedLogs, Has.Count.EqualTo(1));
+        Assert.That(_capturedLogs[0].EventType, Is.EqualTo("Disconnected"));
     }
 
     [Test]
     public void LogConnected_should_use_empty_string_for_null_info_hash()
     {
         var conn = CreateTestConnection();
-        PeerConnectionLog capturedLog = null;
-        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
 
         _service.LogConnected(conn, "test.torrent");
+        _service.Flush();
 
-        Assert.That(capturedLog.InfoHash, Is.EqualTo(string.Empty));
+        Assert.That(_capturedLogs, Has.Count.EqualTo(1));
+        Assert.That(_capturedLogs[0].InfoHash, Is.EqualTo(string.Empty));
     }
 
     [Test]
@@ -129,76 +136,76 @@ public class PeerConnectionLogServiceTest
     {
         var conn = CreateTestConnection();
         typeof(PeerConnection).GetProperty("InfoHash")?.SetValue(conn, "AABBCCDD11223344");
-        PeerConnectionLog capturedLog = null;
-        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
 
         _service.LogConnected(conn, "test.torrent");
+        _service.Flush();
 
-        Assert.That(capturedLog.InfoHash, Is.EqualTo("aabbccdd11223344"));
+        Assert.That(_capturedLogs, Has.Count.EqualTo(1));
+        Assert.That(_capturedLogs[0].InfoHash, Is.EqualTo("aabbccdd11223344"));
     }
 
     [Test]
     public void LogConnected_should_include_remote_ip_and_port()
     {
         var conn = CreateTestConnection();
-        PeerConnectionLog capturedLog = null;
-        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
 
         _service.LogConnected(conn, "test.torrent");
+        _service.Flush();
 
-        Assert.That(capturedLog.RemoteIp, Is.EqualTo("127.0.0.1"));
-        Assert.That(capturedLog.RemotePort, Is.GreaterThan(0));
+        Assert.That(_capturedLogs, Has.Count.EqualTo(1));
+        Assert.That(_capturedLogs[0].RemoteIp, Is.EqualTo("127.0.0.1"));
+        Assert.That(_capturedLogs[0].RemotePort, Is.GreaterThan(0));
     }
 
     [Test]
     public void LogConnected_should_include_torrent_name()
     {
         var conn = CreateTestConnection();
-        PeerConnectionLog capturedLog = null;
-        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
 
         _service.LogConnected(conn, "my-file.torrent");
+        _service.Flush();
 
-        Assert.That(capturedLog.TorrentName, Is.EqualTo("my-file.torrent"));
+        Assert.That(_capturedLogs, Has.Count.EqualTo(1));
+        Assert.That(_capturedLogs[0].TorrentName, Is.EqualTo("my-file.torrent"));
     }
 
     [Test]
     public void LogConnected_should_include_encryption_status()
     {
         var conn = CreateTestConnection();
-        PeerConnectionLog capturedLog = null;
-        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
 
         _service.LogConnected(conn, "test.torrent");
+        _service.Flush();
 
-        Assert.That(capturedLog.IsEncrypted, Is.False);
+        Assert.That(_capturedLogs, Has.Count.EqualTo(1));
+        Assert.That(_capturedLogs[0].IsEncrypted, Is.False);
     }
 
     [Test]
     public void LogConnected_should_set_timestamp_close_to_utc_now()
     {
         var conn = CreateTestConnection();
-        PeerConnectionLog capturedLog = null;
-        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
         var before = DateTime.UtcNow;
 
         _service.LogConnected(conn, "test.torrent");
+        _service.Flush();
 
         var after = DateTime.UtcNow;
-        Assert.That(capturedLog.Timestamp, Is.GreaterThanOrEqualTo(before));
-        Assert.That(capturedLog.Timestamp, Is.LessThanOrEqualTo(after));
+        Assert.That(_capturedLogs, Has.Count.EqualTo(1));
+        Assert.That(_capturedLogs[0].Timestamp, Is.GreaterThanOrEqualTo(before));
+        Assert.That(_capturedLogs[0].Timestamp, Is.LessThanOrEqualTo(after));
     }
 
     [Test]
     public void LogConnected_should_include_peer_id()
     {
         var conn = CreateTestConnection();
-        PeerConnectionLog capturedLog = null;
-        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
 
         _service.LogConnected(conn, "test.torrent");
+        _service.Flush();
 
-        Assert.That(capturedLog.PeerId, Is.Null);
+        Assert.That(_capturedLogs, Has.Count.EqualTo(1));
+        Assert.That(_capturedLogs[0].PeerId, Is.Null);
     }
 
     [Test]
@@ -236,7 +243,17 @@ public class PeerConnectionLogServiceTest
 
         _service.Purge(before);
 
-        _repository.Received(1).Purge(before);
+        _repository.Received(1).Purge(before, 50000);
+    }
+
+    [Test]
+    public void Purge_with_custom_cap_should_delegate_to_repository()
+    {
+        var before = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        _service.Purge(before, 10000);
+
+        _repository.Received(1).Purge(before, 10000);
     }
 
     [Test]
@@ -246,25 +263,94 @@ public class PeerConnectionLogServiceTest
     }
 
     [Test]
-    public void LogConnected_should_call_repository_insert_exactly_once()
+    public void LogConnected_and_LogDisconnected_writes_to_channel_and_batches_inserts_via_InsertMany()
     {
         var conn = CreateTestConnection();
 
-        _service.LogConnected(conn, "test.torrent");
+        _service.LogConnected(conn, "test1.torrent");
+        _service.LogDisconnected(conn, "test2.torrent");
 
-        _repository.Received(1).Insert(Arg.Any<PeerConnectionLog>());
+        _repository.DidNotReceiveWithAnyArgs().Insert(Arg.Any<PeerConnectionLog>());
+
+        _service.Flush();
+
+        _repository.Received().InsertMany(Arg.Is<IList<PeerConnectionLog>>(list =>
+            list.Count == 2 &&
+            list.Any(l => l.EventType == "Connected" && l.TorrentName == "test1.torrent") &&
+            list.Any(l => l.EventType == "Disconnected" && l.TorrentName == "test2.torrent")));
+    }
+
+    [Test]
+    public void Batch_draining_chunks_large_volume_into_batches_of_100()
+    {
+        var conn = CreateTestConnection();
+        var capturedBatches = new List<List<PeerConnectionLog>>();
+        _repository.When(r => r.InsertMany(Arg.Any<IList<PeerConnectionLog>>()))
+            .Do(callInfo => capturedBatches.Add(callInfo.Arg<IList<PeerConnectionLog>>().ToList()));
+
+        for (var i = 1; i <= 150; i++)
+        {
+            _service.LogConnected(conn, $"torrent-{i}.torrent");
+        }
+
+        _service.Flush();
+
+        Assert.That(capturedBatches.Sum(b => b.Count), Is.EqualTo(150));
+        Assert.That(capturedBatches.All(b => b.Count <= 100), Is.True);
+    }
+
+    [Test]
+    public void Flush_drains_all_pending_connection_logs()
+    {
+        var conn = CreateTestConnection();
+        for (var i = 1; i <= 5; i++)
+        {
+            _service.LogConnected(conn, $"pending-{i}.torrent");
+        }
+
+        _service.Flush();
+
+        Assert.That(_capturedLogs, Has.Count.EqualTo(5));
+    }
+
+    [Test]
+    public void Dispose_drains_all_pending_connection_logs_before_completing()
+    {
+        var conn = CreateTestConnection();
+        for (var i = 1; i <= 5; i++)
+        {
+            _service.LogConnected(conn, $"dispose-{i}.torrent");
+        }
+
+        _service.Dispose();
+
+        Assert.That(_capturedLogs, Has.Count.EqualTo(5));
+    }
+
+    [Test]
+    public async Task DisposeAsync_drains_all_pending_connection_logs_before_completing()
+    {
+        var conn = CreateTestConnection();
+        for (var i = 1; i <= 10; i++)
+        {
+            _service.LogConnected(conn, $"async-dispose-{i}.torrent");
+        }
+
+        await _service.DisposeAsync();
+
+        Assert.That(_capturedLogs, Has.Count.EqualTo(10));
     }
 
     [Test]
     public void LogDisconnected_should_include_torrent_name()
     {
         var conn = CreateTestConnection();
-        PeerConnectionLog capturedLog = null;
-        _repository.Insert(Arg.Do<PeerConnectionLog>(log => capturedLog = log));
 
         _service.LogDisconnected(conn, "another.torrent");
+        _service.Flush();
 
-        Assert.That(capturedLog.TorrentName, Is.EqualTo("another.torrent"));
+        Assert.That(_capturedLogs, Has.Count.EqualTo(1));
+        Assert.That(_capturedLogs[0].TorrentName, Is.EqualTo("another.torrent"));
     }
 
     [Test]

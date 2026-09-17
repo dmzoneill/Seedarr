@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Data.Sqlite;
 using NUnit.Framework;
 using NzbDrone.Core.Datastore;
@@ -297,5 +299,61 @@ public class PeerConnectionLogRepositoryTest
 
         Assert.That(encrypted, Is.EqualTo(2));
         Assert.That(plaintext, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Purge_should_enforce_max_rows_retention_limit()
+    {
+        var now = DateTime.UtcNow;
+
+        for (var i = 1; i <= 10; i++)
+        {
+            InsertLog($"hash-{i}", now.AddMinutes(i));
+        }
+
+        // Keep at most 4 newest rows
+        _subject.Purge(now.AddDays(-1), 4);
+
+        var remaining = _subject.All().ToList();
+        Assert.That(remaining, Has.Count.EqualTo(4));
+        Assert.That(remaining.Select(l => l.InfoHash), Does.Contain("hash-10"));
+        Assert.That(remaining.Select(l => l.InfoHash), Does.Contain("hash-9"));
+        Assert.That(remaining.Select(l => l.InfoHash), Does.Contain("hash-8"));
+        Assert.That(remaining.Select(l => l.InfoHash), Does.Contain("hash-7"));
+        Assert.That(remaining.Select(l => l.InfoHash), Does.Not.Contain("hash-1"));
+    }
+
+    [Test]
+    public void Purge_should_delete_large_sets_of_records_in_chunks()
+    {
+        var now = DateTime.UtcNow;
+        var oldDate = now.AddDays(-30);
+        var oldLogs = new List<PeerConnectionLog>(1100);
+
+        for (var i = 0; i < 1100; i++)
+        {
+            oldLogs.Add(new PeerConnectionLog
+            {
+                InfoHash = $"old-{i}",
+                TorrentName = "test.torrent",
+                RemoteIp = "127.0.0.1",
+                RemotePort = 6881,
+                IsEncrypted = false,
+                EventType = "Connected",
+                Timestamp = oldDate.AddMinutes(i)
+            });
+        }
+
+        _subject.InsertMany(oldLogs);
+
+        for (var i = 0; i < 5; i++)
+        {
+            InsertLog($"recent-{i}", now.AddMinutes(i));
+        }
+
+        _subject.Purge(now.AddDays(-1), 50000);
+
+        var remaining = _subject.All().ToList();
+        Assert.That(remaining, Has.Count.EqualTo(5));
     }
 }
