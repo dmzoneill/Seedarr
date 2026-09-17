@@ -118,6 +118,38 @@ public class MediaCoverController : RestController<MediaMetadataResource>
         return ServeArtwork(torrentId, type);
     }
 
+    [HttpGet("placeholder.svg")]
+    [HttpGet("placeholder")]
+    [AllowAnonymous]
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Placeholder is dynamically generated in memory")]
+    public ActionResult GetPlaceholder(
+        [FromQuery] string title = null,
+        [FromQuery] string category = null,
+        [FromQuery] int width = 300,
+        [FromQuery] int height = 450)
+    {
+        if (width <= 0)
+        {
+            width = 300;
+        }
+
+        if (height <= 0)
+        {
+            height = 450;
+        }
+
+        var svg = GeneratePlaceholderSvg(title, category, width, height);
+
+        if (Response != null)
+        {
+            Response.Headers["Cache-Control"] = "public, max-age=2592000, immutable";
+            Response.Headers["X-Content-Type-Options"] = "nosniff";
+            Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+        }
+
+        return Content(svg, "image/svg+xml", Encoding.UTF8);
+    }
+
     [HttpGet("{torrentId:int}/placeholder.svg")]
     [HttpGet("{torrentId:int}/placeholder")]
     [AllowAnonymous]
@@ -135,6 +167,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
 
         if (Response != null)
         {
+            Response.Headers["Cache-Control"] = "public, max-age=2592000, immutable";
             Response.Headers["X-Content-Type-Options"] = "nosniff";
             Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
         }
@@ -144,14 +177,143 @@ public class MediaCoverController : RestController<MediaMetadataResource>
 
     public static string GeneratePlaceholderSvg(string title, string category = null)
     {
-        var safeTitle = !string.IsNullOrEmpty(title) ? SecurityElement.Escape(title) : string.Empty;
-        var safeCategory = !string.IsNullOrEmpty(category) ? SecurityElement.Escape(category) : string.Empty;
+        return GeneratePlaceholderSvg(title, category, 300, 450);
+    }
 
-        return $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"300\" height=\"450\" viewBox=\"0 0 300 450\">" +
-               $"<rect width=\"100%\" height=\"100%\" fill=\"#1e1e1e\"/>" +
-               $"<text x=\"50%\" y=\"48%\" font-family=\"sans-serif\" font-size=\"18\" fill=\"#ffffff\" text-anchor=\"middle\" dominant-baseline=\"middle\">{safeTitle}</text>" +
-               $"{(!string.IsNullOrEmpty(safeCategory) ? $"<text x=\"50%\" y=\"56%\" font-family=\"sans-serif\" font-size=\"14\" fill=\"#aaaaaa\" text-anchor=\"middle\">{safeCategory}</text>" : string.Empty)}" +
-               $"</svg>";
+    public static string GeneratePlaceholderSvg(string title, string category, int width, int height)
+    {
+        if (width <= 0)
+        {
+            width = 300;
+        }
+
+        if (height <= 0)
+        {
+            height = 450;
+        }
+
+        var safeTitle = !string.IsNullOrWhiteSpace(title) ? SecurityElement.Escape(title.Trim()) : string.Empty;
+        var safeCategory = !string.IsNullOrWhiteSpace(category) ? SecurityElement.Escape(category.Trim()) : string.Empty;
+        var icon = GetCategoryIcon(category);
+        var initials = GetInitials(title);
+
+        var sb = new StringBuilder();
+        sb.Append($"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"{height}\" viewBox=\"0 0 {width} {height}\">");
+        sb.Append("<defs>");
+        sb.Append("<linearGradient id=\"bgGrad\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">");
+        sb.Append("<stop offset=\"0%\" stop-color=\"#2e2a24\"/>");
+        sb.Append("<stop offset=\"50%\" stop-color=\"#1c1a17\"/>");
+        sb.Append("<stop offset=\"100%\" stop-color=\"#121110\"/>");
+        sb.Append("</linearGradient>");
+        sb.Append("<radialGradient id=\"accentGlow\" cx=\"50%\" cy=\"35%\" r=\"50%\">");
+        sb.Append("<stop offset=\"0%\" stop-color=\"#c8a84e\" stop-opacity=\"0.18\"/>");
+        sb.Append("<stop offset=\"100%\" stop-color=\"#c8a84e\" stop-opacity=\"0\"/>");
+        sb.Append("</radialGradient>");
+        sb.Append("</defs>");
+        sb.Append("<rect width=\"100%\" height=\"100%\" fill=\"url(#bgGrad)\"/>");
+        sb.Append("<rect width=\"100%\" height=\"100%\" fill=\"url(#accentGlow)\"/>");
+        sb.Append($"<rect x=\"10\" y=\"10\" width=\"{width - 20}\" height=\"{height - 20}\" rx=\"8\" fill=\"none\" stroke=\"#38332b\" stroke-width=\"1.5\" stroke-dasharray=\"4 4\" opacity=\"0.6\"/>");
+        sb.Append($"<text x=\"50%\" y=\"38%\" font-size=\"48\" text-anchor=\"middle\" dominant-baseline=\"central\">{icon}</text>");
+
+        if (!string.IsNullOrEmpty(initials))
+        {
+            sb.Append("<circle cx=\"50%\" cy=\"52%\" r=\"18\" fill=\"#2a2620\" stroke=\"#c8a84e\" stroke-width=\"1.5\" stroke-opacity=\"0.6\"/>");
+            sb.Append($"<text x=\"50%\" y=\"52%\" font-family=\"system-ui, -apple-system, sans-serif\" font-size=\"13\" font-weight=\"bold\" fill=\"#c8a84e\" text-anchor=\"middle\" dominant-baseline=\"central\">{initials}</text>");
+        }
+
+        if (!string.IsNullOrEmpty(safeTitle))
+        {
+            var titleY = string.IsNullOrEmpty(initials) ? "55%" : "64%";
+            sb.Append($"<text x=\"50%\" y=\"{titleY}\" font-family=\"system-ui, -apple-system, sans-serif\" font-size=\"14\" font-weight=\"600\" fill=\"#ede8de\" text-anchor=\"middle\" dominant-baseline=\"central\">{safeTitle}</text>");
+        }
+
+        if (!string.IsNullOrEmpty(safeCategory))
+        {
+            var catY = string.IsNullOrEmpty(initials) && string.IsNullOrEmpty(safeTitle) ? "50%" : "72%";
+            sb.Append($"<text x=\"50%\" y=\"{catY}\" font-family=\"system-ui, -apple-system, sans-serif\" font-size=\"11\" font-weight=\"500\" fill=\"#9c9484\" text-anchor=\"middle\" dominant-baseline=\"central\" letter-spacing=\"1\">{safeCategory}</text>");
+        }
+
+        sb.Append("</svg>");
+        return sb.ToString();
+    }
+
+    private static string GetCategoryIcon(string category)
+    {
+        if (string.IsNullOrWhiteSpace(category))
+        {
+            return "📦";
+        }
+
+        var cat = category.Trim().ToLowerInvariant();
+        if (cat.Contains("movie") || cat.Contains("radarr") || cat.Contains("film") || cat.Contains("cinema"))
+        {
+            return "🎬";
+        }
+
+        if (cat.Contains("tv") || cat.Contains("sonarr") || cat.Contains("series") || cat.Contains("show") || cat.Contains("episode"))
+        {
+            return "📺";
+        }
+
+        if (cat.Contains("music") || cat.Contains("audio") || cat.Contains("lidarr") || cat.Contains("song") || cat.Contains("album"))
+        {
+            return "🎵";
+        }
+
+        return "📦";
+    }
+
+    private static string GetInitials(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return string.Empty;
+        }
+
+        var parts = title.Split(new[] { ' ', '.', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+        var initials = new StringBuilder();
+        foreach (var p in parts)
+        {
+            if (char.IsLetterOrDigit(p[0]))
+            {
+                initials.Append(char.ToUpperInvariant(p[0]));
+                if (initials.Length >= 3)
+                {
+                    break;
+                }
+            }
+        }
+
+        return initials.ToString();
+    }
+
+    private ActionResult ServeMissingArtworkFallback(int torrentId, TorrentMediaMetadata meta, string type)
+    {
+        var title = meta?.Title ?? $"Torrent #{torrentId}";
+        var category = meta?.ArrType;
+        var width = string.Equals(type, "backdrop", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(type, "fanart", StringComparison.OrdinalIgnoreCase)
+            ? 800
+            : string.Equals(type, "banner", StringComparison.OrdinalIgnoreCase)
+                ? 750
+                : 300;
+        var height = string.Equals(type, "backdrop", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(type, "fanart", StringComparison.OrdinalIgnoreCase)
+            ? 450
+            : string.Equals(type, "banner", StringComparison.OrdinalIgnoreCase)
+                ? 140
+                : 450;
+
+        var svg = GeneratePlaceholderSvg(title, category, width, height);
+
+        if (Response != null)
+        {
+            Response.Headers["Cache-Control"] = "public, max-age=2592000, immutable";
+            Response.Headers["X-Content-Type-Options"] = "nosniff";
+            Response.Headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+        }
+
+        return Content(svg, "image/svg+xml", Encoding.UTF8);
     }
 
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Path is resolved internally from server metadata storage")]
@@ -183,7 +345,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
 
         if (string.IsNullOrEmpty(path) || path.Contains("..") || !global::System.IO.File.Exists(path))
         {
-            return NotFound();
+            return ServeMissingArtworkFallback(torrentId, meta, type);
         }
 
         var fullPath = Path.GetFullPath(path);
@@ -198,7 +360,7 @@ public class MediaCoverController : RestController<MediaMetadataResource>
             if (!fullPath.StartsWith(mediaCoverRoot, StringComparison.OrdinalIgnoreCase) &&
                 !fullPath.StartsWith(mediaCacheRoot, StringComparison.OrdinalIgnoreCase))
             {
-                return NotFound();
+                return ServeMissingArtworkFallback(torrentId, meta, type);
             }
         }
 
