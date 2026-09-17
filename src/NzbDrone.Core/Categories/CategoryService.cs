@@ -456,9 +456,9 @@ public class CategoryService : ICategoryService
 
         var delimiter = label.Contains(';') && !label.Contains(',') ? ';' : ',';
         var tokens = label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                          .Select(t => t.Trim())
-                          .Where(t => !string.IsNullOrEmpty(t))
-                          .ToList();
+            .Select(t => t.Trim())
+            .Where(t => !string.IsNullOrEmpty(t))
+            .ToList();
 
         var changed = false;
         for (var i = 0; i < tokens.Count; i++)
@@ -501,9 +501,9 @@ public class CategoryService : ICategoryService
 
         var delimiter = label.Contains(';') && !label.Contains(',') ? ';' : ',';
         var tokens = label.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
-                          .Select(t => t.Trim())
-                          .Where(t => !string.IsNullOrEmpty(t))
-                          .ToList();
+            .Select(t => t.Trim())
+            .Where(t => !string.IsNullOrEmpty(t))
+            .ToList();
 
         var remaining = tokens.Where(t => !string.Equals(t, trimmedCategory, StringComparison.OrdinalIgnoreCase)).ToList();
 
