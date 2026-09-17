@@ -408,6 +408,7 @@ export interface NetworkConfig {
   enableIPv6: boolean;
   bindInterface: string;
   enableVpnKillSwitch: boolean;
+  vpnStabilizationDelaySeconds?: number;
   maxGlobalConnections: number;
   maxPerTorrentConnections: number;
   maxUploadSlots: number;

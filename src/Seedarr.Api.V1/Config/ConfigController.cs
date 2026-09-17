@@ -347,6 +347,9 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
 
         SharedValidator.RuleFor(c => c.ProxyPort)
             .InclusiveBetween(1, 65535);
+
+        SharedValidator.RuleFor(c => c.VpnStabilizationDelaySeconds)
+            .GreaterThanOrEqualTo(0);
     }
 
     protected override NetworkConfigResource ToResource(IConfigService model)

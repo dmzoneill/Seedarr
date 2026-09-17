@@ -5,6 +5,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Threading;
 using NLog;
+using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 
@@ -14,12 +15,14 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
 {
     private readonly IConfigService _configService;
     private readonly IEventAggregator _eventAggregator;
+    private readonly ISystemClock _clock;
     private readonly Logger _logger;
     private readonly object _stateLock = new();
 
     private Timer _heartbeatTimer;
     private bool _isFailClosedActive;
     private bool _lastKnownInterfaceUp = true;
+    private DateTime? _interfaceUpSince;
     private bool _disposed;
 
     public event Action<string> VpnDropped;
@@ -27,17 +30,23 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
 
     public Func<string, bool> InterfaceStatusCheck { get; set; }
     public Func<string, AddressFamily, IPAddress> InterfaceIpResolver { get; set; }
+    public Func<string, bool> InterfaceEgressCheck { get; set; }
+    public Func<DateTime> UtcNowProvider { get; set; }
 
     public VpnKillSwitchService(
         IConfigService configService,
-        IEventAggregator eventAggregator = null)
+        IEventAggregator eventAggregator = null,
+        ISystemClock clock = null)
     {
         _configService = configService;
         _eventAggregator = eventAggregator;
+        _clock = clock ?? new SystemClock();
         _logger = LogManager.GetCurrentClassLogger();
 
         InterfaceStatusCheck = CheckInterfaceStatusDefault;
         InterfaceIpResolver = ResolveInterfaceIpDefault;
+        InterfaceEgressCheck = CheckInterfaceEgressDefault;
+        UtcNowProvider = () => _clock.UtcNow;
 
         try
         {
@@ -99,6 +108,46 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
         }
     }
 
+    public bool IsStabilizing
+    {
+        get
+        {
+            lock (_stateLock)
+            {
+                return _isFailClosedActive && _interfaceUpSince != null;
+            }
+        }
+    }
+
+    public VpnState State
+    {
+        get
+        {
+            lock (_stateLock)
+            {
+                var enabled = _configService.EnableVpnKillSwitch;
+                var iface = _configService.BindInterface?.Trim();
+
+                if (!enabled || string.IsNullOrWhiteSpace(iface) ||
+                    string.Equals(iface, "Any", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(iface, "all", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(iface, "0.0.0.0", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(iface, "::", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(iface, "*", StringComparison.OrdinalIgnoreCase))
+                {
+                    return VpnState.Disabled;
+                }
+
+                if (!_isFailClosedActive)
+                {
+                    return VpnState.Up;
+                }
+
+                return _interfaceUpSince != null ? VpnState.Stabilizing : VpnState.Down;
+            }
+        }
+    }
+
     public bool CheckVpnState()
     {
         if (_disposed)
@@ -121,6 +170,7 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
                 if (_isFailClosedActive)
                 {
                     _isFailClosedActive = false;
+                    _interfaceUpSince = null;
                     _logger.Info("VPN Kill switch disabled or binding unconfigured. Disengaging fail-closed state.");
 
                     try
@@ -137,6 +187,7 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
                 }
 
                 _lastKnownInterfaceUp = true;
+                _interfaceUpSince = null;
                 return false;
             }
 
@@ -144,6 +195,8 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
 
             if (!isUp)
             {
+                _interfaceUpSince = null;
+
                 if (!_isFailClosedActive || _lastKnownInterfaceUp)
                 {
                     _isFailClosedActive = true;
@@ -168,9 +221,45 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
             {
                 if (_isFailClosedActive || !_lastKnownInterfaceUp)
                 {
+                    var now = UtcNowProvider();
+                    var delayConfig = _configService?.VpnStabilizationDelaySeconds ?? 8;
+                    var stabilizationDelay = delayConfig > 0 ? delayConfig : 8;
+
+                    if (_interfaceUpSince == null)
+                    {
+                        _interfaceUpSince = now;
+                        _logger.Info("VPN interface '{0}' detected Up. Entering stabilization hold-down period ({1}s).", iface, stabilizationDelay);
+                        return true;
+                    }
+
+                    var elapsed = (now - _interfaceUpSince.Value).TotalSeconds;
+                    if (elapsed < stabilizationDelay)
+                    {
+                        _logger.Debug("VPN interface '{0}' stabilizing ({1:0.0}s / {2}s elapsed). Fail-closed remains active.", iface, elapsed, stabilizationDelay);
+                        return true;
+                    }
+
+                    var egressHealthy = false;
+                    try
+                    {
+                        egressHealthy = InterfaceEgressCheck(iface);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Exception during egress health check for interface '{0}'", iface);
+                        egressHealthy = false;
+                    }
+
+                    if (!egressHealthy)
+                    {
+                        _logger.Warn("VPN interface '{0}' hold-down timer elapsed, but egress health check failed. Fail-closed remains active.", iface);
+                        return true;
+                    }
+
                     _isFailClosedActive = false;
                     _lastKnownInterfaceUp = true;
-                    _logger.Info("VPN interface '{0}' verified online and operational. Disengaging fail-closed state.", iface);
+                    _interfaceUpSince = null;
+                    _logger.Info("VPN interface '{0}' verified online, stable, and operational. Disengaging fail-closed state.", iface);
 
                     try
                     {
@@ -351,6 +440,48 @@ public class VpnKillSwitchService : IVpnKillSwitchService, IHandle<ConfigSavedEv
         {
             _logger.Warn(ex, "Failed to resolve IP for interface '{0}'", interfaceName);
             return null;
+        }
+    }
+
+    private bool CheckInterfaceEgressDefault(string interfaceName)
+    {
+        if (string.IsNullOrWhiteSpace(interfaceName))
+        {
+            return true;
+        }
+
+        try
+        {
+            var ip = ResolveInterfaceIpDefault(interfaceName, AddressFamily.InterNetwork) ??
+                     ResolveInterfaceIpDefault(interfaceName, AddressFamily.InterNetworkV6);
+
+            if (ip == null)
+            {
+                _logger.Debug("Egress check failed: No valid IP address found for interface '{0}'", interfaceName);
+                return false;
+            }
+
+            var nic = NetworkInterface.GetAllNetworkInterfaces()
+                .FirstOrDefault(n => string.Equals(n.Name, interfaceName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(n.Id, interfaceName, StringComparison.OrdinalIgnoreCase));
+
+            if (nic != null && nic.OperationalStatus != OperationalStatus.Up)
+            {
+                _logger.Debug("Egress check failed: Interface '{0}' OperationalStatus is {1}", interfaceName, nic.OperationalStatus);
+                return false;
+            }
+
+            using (var socket = new Socket(ip.AddressFamily, SocketType.Dgram, ProtocolType.Udp))
+            {
+                socket.Bind(new IPEndPoint(ip, 0));
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed egress health check for interface '{0}'", interfaceName);
+            return false;
         }
     }
 }

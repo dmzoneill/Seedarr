@@ -47,6 +47,7 @@ public interface IConfigService
     bool EnableIPv6 { get; }
     string BindInterface { get; }
     bool EnableVpnKillSwitch { get; }
+    int VpnStabilizationDelaySeconds { get; }
     int MaxGlobalConnections { get; }
     int MaxPerTorrentConnections { get; }
     int MaxUploadSlots { get; }
@@ -379,6 +380,7 @@ public class ConfigService : IConfigService
     public bool EnableIPv6 => GetValueBoolean("EnableIPv6", true);
     public string BindInterface => GetValue("BindInterface", string.Empty);
     public bool EnableVpnKillSwitch => GetValueBoolean("EnableVpnKillSwitch", false);
+    public int VpnStabilizationDelaySeconds => GetValueInt("VpnStabilizationDelaySeconds", 8);
     public int MaxGlobalConnections => GetValueInt("MaxGlobalConnections", 200);
     public int MaxPerTorrentConnections => GetValueInt("MaxPerTorrentConnections", 50);
     public int MaxUploadSlots => GetValueInt("MaxUploadSlots", 4);

@@ -10,6 +10,7 @@ public class NetworkConfigResource : RestResource
     public bool EnableIPv6 { get; set; } = true;
     public string BindInterface { get; set; }
     public bool EnableVpnKillSwitch { get; set; }
+    public int VpnStabilizationDelaySeconds { get; set; } = 8;
     public int MaxGlobalConnections { get; set; }
     public int MaxPerTorrentConnections { get; set; }
     public int MaxUploadSlots { get; set; }
@@ -40,6 +41,7 @@ public static class NetworkConfigResourceMapper
             EnableIPv6 = model.EnableIPv6,
             BindInterface = model.BindInterface,
             EnableVpnKillSwitch = model.EnableVpnKillSwitch,
+            VpnStabilizationDelaySeconds = model.VpnStabilizationDelaySeconds,
             MaxGlobalConnections = model.MaxGlobalConnections,
             MaxPerTorrentConnections = model.MaxPerTorrentConnections,
             MaxUploadSlots = model.MaxUploadSlots,
