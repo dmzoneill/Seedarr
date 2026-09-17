@@ -153,6 +153,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         if (!string.IsNullOrEmpty(infoHash))
         {
             _torrentCache.TryRemove(infoHash, out _);
+            _peerDiscovery?.RemoveTorrent(infoHash);
         }
         else if (message?.TorrentId > 0)
         {
@@ -161,6 +162,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 if (kvp.Value?.Id == message.TorrentId)
                 {
                     _torrentCache.TryRemove(kvp.Key, out _);
+                    _peerDiscovery?.RemoveTorrent(kvp.Key);
                     break;
                 }
             }
@@ -702,6 +704,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                     DiscoverPeersFromTracker(torrent);
                     ConnectToDiscoveredPeers(torrent, stoppingToken);
                 }
+
+                _peerDiscovery?.PruneStalePeers();
 
                 await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), stoppingToken);
             }
