@@ -8,6 +8,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Seeding.Distribution;
 using NzbDrone.Core.Seeding.Scheduling;
+using NzbDrone.Core.Simulation.Swarm;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Seeding;
@@ -305,5 +306,95 @@ public class SpeedPolicyTest
         Assert.That(SpeedPolicy.GetPriorityWeight(0), Is.EqualTo(0.5));
         Assert.That(SpeedPolicy.GetPriorityWeight(1), Is.EqualTo(1.0));
         Assert.That(SpeedPolicy.GetPriorityWeight(99), Is.EqualTo(1.0));
+    }
+
+    [Test]
+    public void ProcessSeeding_when_recommendation_is_pause_allocates_zero_bytes()
+    {
+        var swarmAnalyzer = Substitute.For<ISwarmAnalyzer>();
+        _configService.SwarmIntelligenceEnabled.Returns(true);
+
+        swarmAnalyzer.Analyze(Arg.Any<SwarmSnapshot>()).Returns(new SwarmRecommendation
+        {
+            Recommendation = SeedingRecommendation.Pause,
+            Confidence = 1.0,
+            Reason = "No active leeches"
+        });
+
+        var subject = new SpeedPolicy(
+            _distributionManager,
+            _speedScheduler,
+            _configService,
+            _eventLogService,
+            _stateMachine,
+            _stopPolicy,
+            new RandomNumberGenerator(42),
+            swarmAnalyzer: swarmAnalyzer,
+            categoryService: _categoryService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Seeders = 1,
+            Leechers = 0
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Uploaded, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessSeeding_when_leech_count_is_zero_allocates_zero_bytes()
+    {
+        var swarmAnalyzer = Substitute.For<ISwarmAnalyzer>();
+        _configService.SwarmIntelligenceEnabled.Returns(true);
+
+        swarmAnalyzer.Analyze(Arg.Any<SwarmSnapshot>()).Returns(new SwarmRecommendation
+        {
+            Recommendation = SeedingRecommendation.Maintain,
+            Confidence = 0.8,
+            Reason = "Maintain"
+        });
+
+        var subject = new SpeedPolicy(
+            _distributionManager,
+            _speedScheduler,
+            _configService,
+            _eventLogService,
+            _stateMachine,
+            _stopPolicy,
+            new RandomNumberGenerator(42),
+            swarmAnalyzer: swarmAnalyzer,
+            categoryService: _categoryService);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Seeders = 5,
+            Leechers = 0
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Uploaded, Is.EqualTo(0));
     }
 }

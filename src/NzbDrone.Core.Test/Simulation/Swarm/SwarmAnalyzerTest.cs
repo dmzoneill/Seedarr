@@ -286,4 +286,36 @@ public class SwarmAnalyzerTest
 
         Assert.That(result2.Confidence, Is.GreaterThanOrEqualTo(result1.Confidence));
     }
+
+    [Test]
+    public void Analyze_dead_swarm_with_zero_seeds_and_zero_leeches_should_return_pause_not_boost()
+    {
+        var snapshot = new SwarmSnapshot { SeedCount = 0, LeechCount = 0, PieceAvailability = 0.0 };
+        var result = _analyzer.Analyze(snapshot);
+
+        Assert.That(result.Recommendation, Is.EqualTo(SeedingRecommendation.Pause));
+        Assert.That(result.Reason, Does.Contain("No active leeches"));
+        Assert.That(result.Metrics.IsRareContent, Is.False);
+    }
+
+    [Test]
+    public void Analyze_rare_content_with_active_leeches_should_return_boost()
+    {
+        var snapshot = new SwarmSnapshot { SeedCount = 2, LeechCount = 3, PieceAvailability = 1.0 };
+        var result = _analyzer.Analyze(snapshot);
+
+        Assert.That(result.Recommendation, Is.EqualTo(SeedingRecommendation.Boost));
+        Assert.That(result.Metrics.IsRareContent, Is.True);
+    }
+
+    [Test]
+    public void Analyze_swarm_with_zero_leeches_should_return_pause_with_full_confidence()
+    {
+        var snapshot = new SwarmSnapshot { SeedCount = 5, LeechCount = 0, PieceAvailability = 2.0 };
+        var result = _analyzer.Analyze(snapshot);
+
+        Assert.That(result.Recommendation, Is.EqualTo(SeedingRecommendation.Pause));
+        Assert.That(result.Confidence, Is.EqualTo(1.0));
+        Assert.That(result.Reason, Is.EqualTo("No active leeches requesting data; pausing upload allocation"));
+    }
 }
