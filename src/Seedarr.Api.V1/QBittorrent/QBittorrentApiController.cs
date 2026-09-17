@@ -1210,6 +1210,95 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         return Content("Ok.", "text/plain");
     }
 
+    [HttpPost("torrents/renameFile")]
+    public ActionResult RenameFile(
+        [FromForm] string hash = null,
+        [FromForm] string oldPath = null,
+        [FromForm] string newPath = null,
+        [FromQuery] string hashQuery = null,
+        [FromQuery] string oldPathQuery = null,
+        [FromQuery] string newPathQuery = null)
+    {
+        var targetHash = !string.IsNullOrWhiteSpace(hash) ? hash : hashQuery;
+        var targetOldPath = !string.IsNullOrWhiteSpace(oldPath) ? oldPath : oldPathQuery;
+        var targetNewPath = !string.IsNullOrWhiteSpace(newPath) ? newPath : newPathQuery;
+
+        if (string.IsNullOrWhiteSpace(targetHash) || string.IsNullOrWhiteSpace(targetOldPath) || string.IsNullOrWhiteSpace(targetNewPath))
+        {
+            return BadRequest();
+        }
+
+        var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, targetHash, StringComparison.OrdinalIgnoreCase));
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var files = _torrentFileService.GetByTorrentId(torrent.Id);
+        var normalizedOldPath = targetOldPath.Replace('\\', '/').Trim('/');
+        var file = files.FirstOrDefault(f => string.Equals(f.Path?.Replace('\\', '/').Trim('/'), normalizedOldPath, StringComparison.OrdinalIgnoreCase));
+        if (file == null)
+        {
+            return NotFound();
+        }
+
+        file.Path = targetNewPath.Trim().Replace('\\', '/');
+        _torrentFileService.Update(file);
+        _torrentService.Recheck(torrent.Id);
+
+        return Content("Ok.", "text/plain");
+    }
+
+    [HttpPost("torrents/renameFolder")]
+    public ActionResult RenameFolder(
+        [FromForm] string hash = null,
+        [FromForm] string oldPath = null,
+        [FromForm] string newPath = null,
+        [FromQuery] string hashQuery = null,
+        [FromQuery] string oldPathQuery = null,
+        [FromQuery] string newPathQuery = null)
+    {
+        var targetHash = !string.IsNullOrWhiteSpace(hash) ? hash : hashQuery;
+        var targetOldPath = !string.IsNullOrWhiteSpace(oldPath) ? oldPath : oldPathQuery;
+        var targetNewPath = !string.IsNullOrWhiteSpace(newPath) ? newPath : newPathQuery;
+
+        if (string.IsNullOrWhiteSpace(targetHash) || string.IsNullOrWhiteSpace(targetOldPath) || string.IsNullOrWhiteSpace(targetNewPath))
+        {
+            return BadRequest();
+        }
+
+        var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, targetHash, StringComparison.OrdinalIgnoreCase));
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var files = _torrentFileService.GetByTorrentId(torrent.Id);
+        var normalizedOldPath = targetOldPath.Replace('\\', '/').Trim('/');
+        var normalizedNewPath = targetNewPath.Replace('\\', '/').Trim('/');
+        var prefix = normalizedOldPath + "/";
+
+        var matchedAny = false;
+        foreach (var file in files)
+        {
+            var normalizedFilePath = file.Path?.Replace('\\', '/').TrimStart('/') ?? string.Empty;
+            if (normalizedFilePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                var remainder = normalizedFilePath.Substring(prefix.Length);
+                file.Path = $"{normalizedNewPath}/{remainder}";
+                _torrentFileService.Update(file);
+                matchedAny = true;
+            }
+        }
+
+        if (matchedAny)
+        {
+            _torrentService.Recheck(torrent.Id);
+        }
+
+        return Content("Ok.", "text/plain");
+    }
+
     [HttpPost("torrents/setSuperSeeding")]
     public ActionResult SetSuperSeeding([FromForm] string hashes, [FromForm] bool value)
     {
