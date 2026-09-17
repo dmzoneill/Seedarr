@@ -320,6 +320,12 @@ public class AutomationEventService :
 
     private void DispatchTrigger(AutomationTrigger trigger, Torrent? torrent = null)
     {
+        if (AutomationService.CurrentExecutionDepth >= AutomationService.MaxExecutionDepth)
+        {
+            _logger.Warn("Suppressed automation dispatch for trigger {0} due to recursion depth limit ({1})", trigger, AutomationService.MaxExecutionDepth);
+            return;
+        }
+
         try
         {
             var allScripts = _automationService.GetAll();

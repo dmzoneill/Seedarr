@@ -72,6 +72,8 @@ export interface VisualStep {
   conditionLeft: string;
   conditionOp: ">" | "<" | ">=" | "<=" | "==" | "!=";
   conditionRight: string;
+  continueOnError?: boolean;
+  retries?: number;
   hasHttp: boolean;
   http: {
     method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH";
@@ -536,6 +538,14 @@ function visualStepsToYaml(pipelineName: string, trigger: string, steps: VisualS
       yaml += `    condition: '${step.conditionLeft} ${step.conditionOp} ${step.conditionRight}'\n`;
     }
 
+    if (step.continueOnError) {
+      yaml += `    continueOnError: true\n`;
+    }
+
+    if (step.retries && step.retries > 0) {
+      yaml += `    retries: ${step.retries}\n`;
+    }
+
     if (step.hasHttp && step.http.url.trim()) {
       yaml += `    http:\n`;
       yaml += `      method: '${step.http.method}'\n`;
@@ -732,6 +742,11 @@ function yamlToVisualSteps(code: string): VisualStep[] {
           }
         }
       }
+    } else if (currentStep && trimmed.startsWith("continueOnError:")) {
+      currentStep.continueOnError = trimmed.includes("true");
+    } else if (currentStep && trimmed.startsWith("retries:")) {
+      const rm = trimmed.match(/retries:\s*(\d+)/);
+      if (rm) currentStep.retries = parseInt(rm[1], 10);
     } else if (currentStep && trimmed.startsWith("http:")) {
       currentStep.hasHttp = true;
       inHttp = true;
@@ -927,6 +942,47 @@ function tCommand(t: any, name: string, defaultDesc: string) {
   return t("automation.commands." + name, { defaultValue: defaultDesc });
 }
 
+export function detectPotentialLoops(trigger: string | undefined, steps: VisualStep[]): string[] {
+  const warnings: string[] = [];
+  if (!trigger) return warnings;
+
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const stepLabel = step.name || `Step ${i + 1}`;
+    const hasCondition = step.conditionEnabled && !!step.conditionLeft && !!step.conditionRight;
+
+    for (const action of step.actions) {
+      if (trigger === "TorrentStatusChanged" && (action.type === "pause" || action.type === "resume")) {
+        if (!hasCondition) {
+          warnings.push(
+            `Potential recursion loop: "${stepLabel}" executes "${action.type}" on trigger "TorrentStatusChanged" without a qualifying condition. This may cause an infinite event cascade.`
+          );
+        }
+      } else if (trigger === "TorrentPaused" && action.type === "resume") {
+        if (!hasCondition) {
+          warnings.push(
+            `Potential recursion loop: "${stepLabel}" executes "resume" on trigger "TorrentPaused" without a qualifying condition.`
+          );
+        }
+      } else if (trigger === "TorrentStarted" && action.type === "pause") {
+        if (!hasCondition) {
+          warnings.push(
+            `Potential recursion loop: "${stepLabel}" executes "pause" on trigger "TorrentStarted" without a qualifying condition.`
+          );
+        }
+      } else if (trigger === "CategoryChanged" && action.type === "setCategory") {
+        if (!hasCondition) {
+          warnings.push(
+            `Potential recursion loop: "${stepLabel}" executes "setCategory" on trigger "CategoryChanged" without a qualifying condition.`
+          );
+        }
+      }
+    }
+  }
+
+  return warnings;
+}
+
 export function AutomationPage() {
   const { t } = useTranslation();
 
@@ -953,6 +1009,11 @@ export function AutomationPage() {
   const [editingScript, setEditingScript] = useState<Partial<AutomationScript> | null>(null);
   const [editorMode, setEditorMode] = useState<"visual" | "code">("visual");
   const [visualSteps, setVisualSteps] = useState<VisualStep[]>([]);
+
+  const loopWarnings = useMemo(
+    () => detectPotentialLoops(editingScript?.trigger?.toString(), visualSteps),
+    [editingScript?.trigger, visualSteps]
+  );
 
   const [logModalOpen, setLogModalOpen] = useState(false);
   const [viewingLog, setViewingLog] = useState<{
@@ -1735,6 +1796,31 @@ if (torrent) {
               {/* EDITOR MODE 1: VISUAL PIPELINE BUILDER */}
               {editorMode === "visual" && (
                 <div style={{ marginBottom: "1rem" }}>
+                  {loopWarnings.length > 0 && (
+                    <div
+                      role="alert"
+                      style={{
+                        backgroundColor: "rgba(231, 76, 60, 0.12)",
+                        border: "1px solid rgba(231, 76, 60, 0.5)",
+                        borderRadius: "6px",
+                        padding: "0.75rem 1rem",
+                        marginBottom: "1rem",
+                        color: "#ff6b6b",
+                        fontSize: "0.85rem",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, marginBottom: "0.35rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        <span>⚠️</span>
+                        <span>Warning: Potential Self-Triggering Automation Loop Detected</span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", paddingLeft: "1.25rem" }}>
+                        {loopWarnings.map((warn, wIdx) => (
+                          <div key={wIdx}>• {warn}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
                     <label style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--accent)" }}>
                       {t("automation.ui.pipelineSteps")}{visualSteps.length})
@@ -2182,6 +2268,56 @@ if (torrent) {
                             </div>
                           );
                         })()}
+                      </div>
+
+                      {/* Step Fault Tolerance & Retries */}
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "1.5rem",
+                          alignItems: "center",
+                          backgroundColor: "var(--bg-secondary, #2a2620)",
+                          border: "1px solid var(--border-light, #3a352e)",
+                          padding: "0.6rem 1rem",
+                          borderRadius: "6px",
+                          marginBottom: "1rem",
+                          fontSize: "0.85rem",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", color: "var(--text-primary)" }}>
+                          <input
+                            type="checkbox"
+                            checked={step.continueOnError || false}
+                            onChange={(e) => {
+                              const copy = [...visualSteps];
+                              copy[stepIdx].continueOnError = e.target.checked;
+                              updateVisualSteps(copy);
+                            }}
+                          />
+                          Continue on Error
+                        </label>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <label style={{ color: "var(--text-muted, #9c9484)", fontSize: "0.8rem" }}>Retries:</label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={10}
+                            value={step.retries || 0}
+                            onChange={(e) => {
+                              const copy = [...visualSteps];
+                              copy[stepIdx].retries = Math.max(0, parseInt(e.target.value, 10) || 0);
+                              updateVisualSteps(copy);
+                            }}
+                            className="form-control form-control-sm"
+                            style={{ width: "70px", padding: "0.2rem 0.4rem" }}
+                          />
+                        </div>
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted, #9c9484)" }}>
+                          {step.continueOnError
+                            ? "Step failure will record a warning and continue subsequent steps."
+                            : "Step failure will abort workflow execution."}
+                        </span>
                       </div>
 
                       {/* Actions List */}

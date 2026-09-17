@@ -7,6 +7,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Torrents;
@@ -163,711 +164,760 @@ public class YamlScriptRunner : IScriptRunner
                     }
                 }
 
-                // Execute HTTP step
-                if (step.Http != null)
+                var maxAttempts = Math.Max(1, 1 + step.Retries);
+                Exception? lastException = null;
+
+                for (var attempt = 1; attempt <= maxAttempts; attempt++)
                 {
-                    var url = SubstituteVariables(step.Http.Url ?? string.Empty, variableContext);
-                    var method = (step.Http.Method ?? "GET").ToUpperInvariant();
-
-                    var options = new Dictionary<string, object>();
-                    if (step.Http.Headers != null && step.Http.Headers.Count > 0)
+                    try
                     {
-                        var headers = new Dictionary<string, object>();
-                        foreach (var kvp in step.Http.Headers)
+                        // Execute HTTP step
+                        if (step.Http != null)
                         {
-                            headers[kvp.Key] = SubstituteVariables(kvp.Value?.ToString() ?? string.Empty, variableContext);
-                        }
+                            var url = SubstituteVariables(step.Http.Url ?? string.Empty, variableContext);
+                            var method = (step.Http.Method ?? "GET").ToUpperInvariant();
 
-                        options["headers"] = headers;
-                    }
-
-                    if (step.Http.Cookies != null)
-                    {
-                        if (step.Http.Cookies is string cookieStr)
-                        {
-                            options["cookies"] = SubstituteVariables(cookieStr, variableContext);
-                        }
-                        else if (step.Http.Cookies is Dictionary<object, object> cookieDict)
-                        {
-                            var cMap = new Dictionary<string, object>();
-                            foreach (var kvp in cookieDict)
+                            var options = new Dictionary<string, object>();
+                            if (step.Http.Headers != null && step.Http.Headers.Count > 0)
                             {
-                                cMap[kvp.Key.ToString()!] = SubstituteVariables(kvp.Value?.ToString() ?? string.Empty, variableContext);
+                                var headers = new Dictionary<string, object>();
+                                foreach (var kvp in step.Http.Headers)
+                                {
+                                    headers[kvp.Key] = SubstituteVariables(kvp.Value?.ToString() ?? string.Empty, variableContext);
+                                }
+
+                                options["headers"] = headers;
                             }
 
-                            options["cookies"] = cMap;
-                        }
-                    }
-
-                    if (step.Http.Json == true)
-                    {
-                        options["json"] = true;
-                    }
-
-                    object? body = null;
-                    if (step.Http.Body != null)
-                    {
-                        if (step.Http.Body is string bodyStr)
-                        {
-                            body = SubstituteVariables(bodyStr, variableContext);
-                        }
-                        else if (step.Http.Body is Dictionary<object, object> dictBody)
-                        {
-                            var bMap = new Dictionary<string, object>();
-                            foreach (var kvp in dictBody)
+                            if (step.Http.Cookies != null)
                             {
-                                var valStr = kvp.Value?.ToString() ?? string.Empty;
-                                bMap[kvp.Key.ToString()!] = SubstituteVariables(valStr, variableContext);
+                                if (step.Http.Cookies is string cookieStr)
+                                {
+                                    options["cookies"] = SubstituteVariables(cookieStr, variableContext);
+                                }
+                                else if (step.Http.Cookies is Dictionary<object, object> cookieDict)
+                                {
+                                    var cMap = new Dictionary<string, object>();
+                                    foreach (var kvp in cookieDict)
+                                    {
+                                        cMap[kvp.Key.ToString()!] = SubstituteVariables(kvp.Value?.ToString() ?? string.Empty, variableContext);
+                                    }
+
+                                    options["cookies"] = cMap;
+                                }
                             }
 
-                            body = bMap;
+                            if (step.Http.Json == true)
+                            {
+                                options["json"] = true;
+                            }
+
+                            object? body = null;
+                            if (step.Http.Body != null)
+                            {
+                                if (step.Http.Body is string bodyStr)
+                                {
+                                    body = SubstituteVariables(bodyStr, variableContext);
+                                }
+                                else if (step.Http.Body is Dictionary<object, object> dictBody)
+                                {
+                                    var bMap = new Dictionary<string, object>();
+                                    foreach (var kvp in dictBody)
+                                    {
+                                        var valStr = kvp.Value?.ToString() ?? string.Empty;
+                                        bMap[kvp.Key.ToString()!] = SubstituteVariables(valStr, variableContext);
+                                    }
+
+                                    body = bMap;
+                                }
+                            }
+
+                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [HTTP] {method} {url}");
+
+                            object response;
+                            switch (method)
+                            {
+                                case "POST":
+                                    response = httpClient.post(url, body, options);
+                                    break;
+                                case "PUT":
+                                    response = httpClient.put(url, body, options);
+                                    break;
+                                case "DELETE":
+                                    response = httpClient.delete(url, options);
+                                    break;
+                                default:
+                                    response = httpClient.get(url, options);
+                                    break;
+                            }
+
+                            if (!string.IsNullOrWhiteSpace(step.Register) && response is Dictionary<string, object?> respDict)
+                            {
+                                var regKey = step.Register.Trim();
+                                foreach (var kvp in respDict)
+                                {
+                                    variableContext[$"{regKey}.{kvp.Key}"] = kvp.Value;
+                                }
+
+                                variableContext[regKey] = respDict;
+                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [REGISTER] Saved response to '${{{regKey}}}' (status: {respDict.GetValueOrDefault("status")})");
+                            }
                         }
-                    }
 
-                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [HTTP] {method} {url}");
-
-                    object response;
-                    switch (method)
-                    {
-                        case "POST":
-                            response = httpClient.post(url, body, options);
-                            break;
-                        case "PUT":
-                            response = httpClient.put(url, body, options);
-                            break;
-                        case "DELETE":
-                            response = httpClient.delete(url, options);
-                            break;
-                        default:
-                            response = httpClient.get(url, options);
-                            break;
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(step.Register) && response is Dictionary<string, object?> respDict)
-                    {
-                        var regKey = step.Register.Trim();
-                        foreach (var kvp in respDict)
+                        // Execute actions
+                        if (step.Actions != null)
                         {
-                            variableContext[$"{regKey}.{kvp.Key}"] = kvp.Value;
+                            foreach (var action in step.Actions)
+                            {
+                                if (action.TryGetValue("command", out var cmdName) && cmdName != null)
+                                {
+                                    var cmd = SubstituteVariables(cmdName.ToString()!, variableContext);
+                                    systemContext.runCommand(cmd);
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] runCommand: {cmd}");
+                                }
+
+                                if (action.TryGetValue("sendNotification", out var notifObj) && notifObj != null)
+                                {
+                                    if (notifObj is Dictionary<object, object> nDict)
+                                    {
+                                        var nTitle = SubstituteVariables(nDict.TryGetValue("title", out var tVal) ? tVal?.ToString() ?? string.Empty : "Automation Alert", variableContext);
+                                        var nMsg = SubstituteVariables(nDict.TryGetValue("message", out var mVal) ? mVal?.ToString() ?? string.Empty : string.Empty, variableContext);
+                                        var nProv = nDict.TryGetValue("provider", out var pVal) ? SubstituteVariables(pVal?.ToString() ?? string.Empty, variableContext) : null;
+                                        systemContext.sendNotification(nTitle, nMsg, nProv);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendNotification: {nTitle} (provider: {nProv ?? "all"})");
+                                    }
+                                    else
+                                    {
+                                        var nMsg = SubstituteVariables(notifObj.ToString()!, variableContext);
+                                        systemContext.sendNotification("Automation Alert", nMsg);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendNotification: {nMsg}");
+                                    }
+                                }
+
+                                if (action.TryGetValue("notifyArr", out var arrObj) || action.TryGetValue("syncArr", out arrObj))
+                                {
+                                    if (arrObj is Dictionary<object, object> aDict)
+                                    {
+                                        var appType = aDict.TryGetValue("appType", out var atVal) ? SubstituteVariables(atVal?.ToString() ?? string.Empty, variableContext) : null;
+                                        int? instId = null;
+                                        if (aDict.TryGetValue("instanceId", out var idVal) && int.TryParse(idVal?.ToString(), out var parsedId))
+                                        {
+                                            instId = parsedId;
+                                        }
+
+                                        systemContext.notifyArr(appType, instId);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] notifyArr: appType={appType ?? "all"}, instanceId={instId?.ToString() ?? "all"}");
+                                    }
+                                    else if (arrObj is string arrStr && !string.IsNullOrWhiteSpace(arrStr) && !arrStr.Equals("true", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        var appType = SubstituteVariables(arrStr, variableContext);
+                                        systemContext.notifyArr(appType);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] notifyArr: {appType}");
+                                    }
+                                    else
+                                    {
+                                        systemContext.notifyArr();
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] notifyArr: all");
+                                    }
+                                }
+
+                                if (action.TryGetValue("runScript", out var scriptObj) && scriptObj != null)
+                                {
+                                    if (scriptObj is Dictionary<object, object> sDict)
+                                    {
+                                        var path = SubstituteVariables(sDict.TryGetValue("path", out var pVal) ? pVal?.ToString() ?? string.Empty : string.Empty, variableContext);
+                                        var timeout = sDict.TryGetValue("timeout", out var toVal) && int.TryParse(toVal?.ToString(), out var toParsed) ? toParsed : 60;
+                                        var argsObj = sDict.TryGetValue("args", out var aVal) ? aVal : null;
+                                        systemContext.runScript(path, argsObj, timeout);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] runScript: {path} (timeout={timeout}s)");
+                                    }
+                                    else
+                                    {
+                                        var path = SubstituteVariables(scriptObj.ToString()!, variableContext);
+                                        systemContext.runScript(path);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] runScript: {path}");
+                                    }
+                                }
+
+                                if (action.TryGetValue("delay", out var delayVal) || action.TryGetValue("sleep", out delayVal))
+                                {
+                                    var dStr = SubstituteVariables(delayVal?.ToString() ?? "1", variableContext);
+                                    if (int.TryParse(dStr, out var dSec))
+                                    {
+                                        systemContext.delay(dSec);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] delay: {dSec}s");
+                                    }
+                                }
+
+                                if (action.TryGetValue("log", out var logVal) && logVal != null)
+                                {
+                                    if (logVal is Dictionary<object, object> lDict)
+                                    {
+                                        var msg = SubstituteVariables(lDict.TryGetValue("message", out var mVal) ? mVal?.ToString() ?? string.Empty : string.Empty, variableContext);
+                                        var lvl = lDict.TryGetValue("level", out var lvlVal) ? lvlVal?.ToString() ?? "info" : "info";
+                                        systemContext.log(msg, lvl);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] log ({lvl}): {msg}");
+                                    }
+                                    else
+                                    {
+                                        var msg = SubstituteVariables(logVal.ToString()!, variableContext);
+                                        systemContext.log(msg);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] log: {msg}");
+                                    }
+                                }
+
+                                if (action.TryGetValue("setVariable", out var setVarObj) && setVarObj is Dictionary<object, object> svDict)
+                                {
+                                    var vKey = svDict.TryGetValue("key", out var kVal) ? kVal?.ToString() : null;
+                                    var vVal = svDict.TryGetValue("value", out var valVal) ? SubstituteVariables(valVal?.ToString() ?? string.Empty, variableContext) : string.Empty;
+                                    if (!string.IsNullOrWhiteSpace(vKey))
+                                    {
+                                        variableContext[vKey] = vVal;
+                                        variableContext[$"variables.{vKey}"] = vVal;
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setVariable: {vKey} = {vVal}");
+                                    }
+                                }
+
+                                if (action.TryGetValue("stopPipeline", out var stopVal))
+                                {
+                                    var reason = stopVal != null ? SubstituteVariables(stopVal.ToString()!, variableContext) : "Condition matched stop";
+                                    systemContext.stopPipeline(reason);
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] stopPipeline: {reason}");
+                                }
+
+                                if (action.TryGetValue("fail", out var failVal))
+                                {
+                                    var failMsg = failVal != null ? SubstituteVariables(failVal.ToString()!, variableContext) : "Explicit step failure";
+                                    throw new InvalidOperationException(failMsg);
+                                }
+
+                                if (action.TryGetValue("evalMath", out var evalObj) && evalObj is Dictionary<object, object> evDict)
+                                {
+                                    var expr = evDict.TryGetValue("expression", out var eVal) ? SubstituteVariables(eVal?.ToString() ?? string.Empty, variableContext) : string.Empty;
+                                    var tKey = evDict.TryGetValue("targetVariable", out var tkVal) ? tkVal?.ToString() : null;
+                                    if (!string.IsNullOrWhiteSpace(expr) && !string.IsNullOrWhiteSpace(tKey))
+                                    {
+                                        try
+                                        {
+                                            var dt = new System.Data.DataTable();
+                                            var computed = dt.Compute(expr, string.Empty);
+                                            variableContext[tKey] = computed;
+                                            variableContext[$"variables.{tKey}"] = computed;
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] evalMath: {tKey} = {computed}");
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] evalMath error: {ex.Message}");
+                                        }
+                                    }
+                                }
+
+                                if (action.TryGetValue("retryStep", out var retryObj))
+                                {
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] retryStep configured");
+                                }
+
+                                if (action.TryGetValue("invokePipeline", out var invokeVal) && invokeVal != null)
+                                {
+                                    var pipeline = SubstituteVariables(invokeVal.ToString()!, variableContext);
+                                    systemContext.invokePipeline(pipeline);
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] invokePipeline: {pipeline}");
+                                }
+
+                                if (action.TryGetValue("createHardlink", out var hardlinkVal) && hardlinkVal is Dictionary<object, object> hlDict)
+                                {
+                                    var src = hlDict.TryGetValue("source", out var srcVal) ? SubstituteVariables(srcVal?.ToString() ?? "", variableContext) : "";
+                                    var dest = hlDict.TryGetValue("destination", out var destVal) ? SubstituteVariables(destVal?.ToString() ?? "", variableContext) : "";
+                                    systemContext.createHardlink(src, dest);
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] createHardlink: {src} -> {dest}");
+                                }
+
+                                if (action.TryGetValue("createSymlink", out var symlinkVal) && symlinkVal is Dictionary<object, object> slDict)
+                                {
+                                    var src = slDict.TryGetValue("source", out var srcVal) ? SubstituteVariables(srcVal?.ToString() ?? "", variableContext) : "";
+                                    var dest = slDict.TryGetValue("destination", out var destVal) ? SubstituteVariables(destVal?.ToString() ?? "", variableContext) : "";
+                                    systemContext.createSymlink(src, dest);
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] createSymlink: {src} -> {dest}");
+                                }
+
+                                if (action.TryGetValue("setFilePermissions", out var permVal) && permVal is Dictionary<object, object> pDict)
+                                {
+                                    var path = pDict.TryGetValue("path", out var pathVal) ? SubstituteVariables(pathVal?.ToString() ?? "", variableContext) : "";
+                                    var mode = pDict.TryGetValue("mode", out var modeVal) ? SubstituteVariables(modeVal?.ToString() ?? "", variableContext) : "";
+                                    var recurse = pDict.TryGetValue("recurse", out var recVal) && (recVal is true || recVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true);
+                                    systemContext.setFilePermissions(path, mode, recurse);
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setFilePermissions: {path} ({mode})");
+                                }
+
+                                if (action.TryGetValue("calculateChecksum", out var csVal) && csVal is Dictionary<object, object> csDict)
+                                {
+                                    var path = csDict.TryGetValue("path", out var pathVal) ? SubstituteVariables(pathVal?.ToString() ?? "", variableContext) : "";
+                                    var algo = csDict.TryGetValue("algorithm", out var algoVal) ? SubstituteVariables(algoVal?.ToString() ?? "SHA256", variableContext) : "SHA256";
+                                    var tKey = csDict.TryGetValue("targetVariable", out var tkVal) ? tkVal?.ToString() : null;
+                                    var checksum = systemContext.calculateChecksum(path, algo);
+                                    if (checksum != null && !string.IsNullOrWhiteSpace(tKey))
+                                    {
+                                        variableContext[tKey] = checksum;
+                                        variableContext[$"variables.{tKey}"] = checksum;
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] calculateChecksum: {tKey} = {checksum}");
+                                    }
+                                }
+
+                                if (action.TryGetValue("sendDiscordWebhook", out var discordVal) && discordVal is Dictionary<object, object> dDict)
+                                {
+                                    var url = dDict.TryGetValue("url", out var urlVal) ? SubstituteVariables(urlVal?.ToString() ?? "", variableContext) : "";
+                                    var title = dDict.TryGetValue("title", out var titleVal) ? SubstituteVariables(titleVal?.ToString() ?? "", variableContext) : "";
+                                    var desc = dDict.TryGetValue("description", out var descVal) ? SubstituteVariables(descVal?.ToString() ?? "", variableContext) : "";
+                                    var color = dDict.TryGetValue("color", out var colorVal) ? SubstituteVariables(colorVal?.ToString() ?? "", variableContext) : "";
+                                    var fields = new Dictionary<string, string>();
+                                    if (dDict.TryGetValue("fields", out var fVal) && fVal is Dictionary<object, object> fieldsDict)
+                                    {
+                                        foreach (var kvp in fieldsDict)
+                                        {
+                                            fields[kvp.Key.ToString()!] = SubstituteVariables(kvp.Value?.ToString() ?? "", variableContext);
+                                        }
+                                    }
+
+                                    systemContext.sendDiscordWebhook(url, title, desc, color, fields);
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendDiscordWebhook: {title}");
+                                }
+
+                                if (action.TryGetValue("sendTelegramMessage", out var tgVal) && tgVal is Dictionary<object, object> tgDict)
+                                {
+                                    var token = tgDict.TryGetValue("token", out var tokVal) ? SubstituteVariables(tokVal?.ToString() ?? "", variableContext) : "";
+                                    var chatId = tgDict.TryGetValue("chatId", out var cidVal) ? SubstituteVariables(cidVal?.ToString() ?? "", variableContext) : "";
+                                    var msg = tgDict.TryGetValue("message", out var msgVal) ? SubstituteVariables(msgVal?.ToString() ?? "", variableContext) : "";
+                                    var pm = tgDict.TryGetValue("parseMode", out var pmVal) ? SubstituteVariables(pmVal?.ToString() ?? "Markdown", variableContext) : "Markdown";
+                                    systemContext.sendTelegramMessage(token, chatId, msg, pm);
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendTelegramMessage: {chatId}");
+                                }
+
+                                if (action.TryGetValue("sendNtfy", out var ntfyVal) && ntfyVal is Dictionary<object, object> nfDict)
+                                {
+                                    var topic = nfDict.TryGetValue("topic", out var topVal) ? SubstituteVariables(topVal?.ToString() ?? "", variableContext) : "";
+                                    var msg = nfDict.TryGetValue("message", out var mVal) ? SubstituteVariables(mVal?.ToString() ?? "", variableContext) : "";
+                                    var title = nfDict.TryGetValue("title", out var tVal) ? SubstituteVariables(tVal?.ToString() ?? "", variableContext) : "";
+                                    var prio = nfDict.TryGetValue("priority", out var pVal) ? SubstituteVariables(pVal?.ToString() ?? "", variableContext) : "";
+                                    var tags = nfDict.TryGetValue("tags", out var tagVal) ? SubstituteVariables(tagVal?.ToString() ?? "", variableContext) : "";
+                                    var click = nfDict.TryGetValue("click", out var cVal) ? SubstituteVariables(cVal?.ToString() ?? "", variableContext) : "";
+                                    var srv = nfDict.TryGetValue("server", out var srvVal) ? SubstituteVariables(srvVal?.ToString() ?? "https://ntfy.sh", variableContext) : "https://ntfy.sh";
+                                    systemContext.sendNtfy(topic, msg, title, prio, tags, click, srv);
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendNtfy: {topic}");
+                                }
+
+                                if (action.TryGetValue("sendPushover", out var poVal) && poVal is Dictionary<object, object> poDict)
+                                {
+                                    var token = poDict.TryGetValue("token", out var tokVal) ? SubstituteVariables(tokVal?.ToString() ?? "", variableContext) : "";
+                                    var user = poDict.TryGetValue("user", out var uVal) ? SubstituteVariables(uVal?.ToString() ?? "", variableContext) : "";
+                                    var msg = poDict.TryGetValue("message", out var mVal) ? SubstituteVariables(mVal?.ToString() ?? "", variableContext) : "";
+                                    var prio = poDict.TryGetValue("priority", out var pVal) ? SubstituteVariables(pVal?.ToString() ?? "", variableContext) : "";
+                                    var snd = poDict.TryGetValue("sound", out var sVal) ? SubstituteVariables(sVal?.ToString() ?? "", variableContext) : "";
+                                    systemContext.sendPushover(token, user, msg, prio, snd);
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendPushover: {user}");
+                                }
+
+                                if (action.TryGetValue("reannounceAll", out _))
+                                {
+                                    systemContext.reannounceAll();
+                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] reannounceAll");
+                                }
+
+                                if (action.TryGetValue("http", out var actHttpVal) && actHttpVal != null)
+                                {
+                                    var hUrl = "";
+                                    var hMethod = "POST";
+                                    var hOptions = new Dictionary<string, object>();
+                                    object? hBody = null;
+                                    var hReg = "";
+                                    var hCont = false;
+
+                                    if (actHttpVal is string sHttp)
+                                    {
+                                        hUrl = SubstituteVariables(sHttp, variableContext);
+                                        hOptions["json"] = true;
+                                    }
+                                    else if (actHttpVal is Dictionary<object, object> hDict)
+                                    {
+                                        hUrl = hDict.TryGetValue("url", out var u) ? SubstituteVariables(u?.ToString() ?? "", variableContext) : "";
+                                        hMethod = hDict.TryGetValue("method", out var m) ? SubstituteVariables(m?.ToString() ?? "POST", variableContext).ToUpperInvariant() : "POST";
+                                        hReg = hDict.TryGetValue("register", out var r) ? r?.ToString() ?? "" : "";
+
+                                        if (hDict.TryGetValue("continueOnError", out var cVal) && (cVal is true || cVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true))
+                                        {
+                                            hCont = true;
+                                        }
+
+                                        if (hDict.TryGetValue("timeoutSeconds", out var tsVal) && int.TryParse(tsVal?.ToString(), out var ts))
+                                        {
+                                            hOptions["timeoutSeconds"] = ts;
+                                        }
+
+                                        if (hDict.TryGetValue("allowInsecure", out var aiVal) && (aiVal is true || aiVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true))
+                                        {
+                                            hOptions["allowInsecure"] = true;
+                                        }
+
+                                        if (hDict.TryGetValue("json", out var jVal) && (jVal is true || jVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true))
+                                        {
+                                            hOptions["json"] = true;
+                                        }
+
+                                        if (hDict.TryGetValue("headers", out var hdrVal) && hdrVal is Dictionary<object, object> hdrDict)
+                                        {
+                                            var hdrs = new Dictionary<string, object>();
+                                            foreach (var kvp in hdrDict)
+                                            {
+                                                hdrs[kvp.Key.ToString()!] = SubstituteVariables(kvp.Value?.ToString() ?? "", variableContext);
+                                            }
+
+                                            hOptions["headers"] = hdrs;
+                                        }
+
+                                        if (hDict.TryGetValue("body", out var bVal) && bVal != null)
+                                        {
+                                            if (bVal is string bStr)
+                                            {
+                                                hBody = SubstituteVariables(bStr, variableContext);
+                                            }
+                                            else if (bVal is Dictionary<object, object> bDict)
+                                            {
+                                                var bMap = new Dictionary<string, object>();
+                                                foreach (var kvp in bDict)
+                                                {
+                                                    bMap[kvp.Key.ToString()!] = SubstituteVariables(kvp.Value?.ToString() ?? "", variableContext);
+                                                }
+
+                                                hBody = bMap;
+                                            }
+                                        }
+                                    }
+
+                                    try
+                                    {
+                                        object hResp;
+                                        switch (hMethod)
+                                        {
+                                            case "GET":
+                                                hResp = httpClient.get(hUrl, hOptions);
+                                                break;
+                                            case "PUT":
+                                                hResp = httpClient.put(hUrl, hBody, hOptions);
+                                                break;
+                                            case "DELETE":
+                                                hResp = httpClient.delete(hUrl, hOptions);
+                                                break;
+                                            case "PATCH":
+                                                hResp = httpClient.post(hUrl, hBody, hOptions); // Using post for patch as simple fallback if no patch method
+                                                break;
+                                            default:
+                                                hResp = httpClient.post(hUrl, hBody, hOptions);
+                                                break;
+                                        }
+
+                                        if (!string.IsNullOrWhiteSpace(hReg) && hResp is Dictionary<string, object?> rDict)
+                                        {
+                                            foreach (var kvp in rDict)
+                                            {
+                                                variableContext[$"{hReg.Trim()}.{kvp.Key}"] = kvp.Value;
+                                            }
+
+                                            variableContext[hReg.Trim()] = rDict;
+                                            variableContext[$"variables.{hReg.Trim()}"] = rDict;
+                                        }
+
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] http {hMethod} {hUrl}");
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] http {hMethod} {hUrl} failed: {ex.Message}");
+                                        if (!hCont)
+                                        {
+                                            throw;
+                                        }
+                                    }
+                                }
+
+                                if (torrentCtx != null)
+                                {
+                                    if (action.TryGetValue("addTag", out var tagToAdd) && tagToAdd != null)
+                                    {
+                                        var tag = SubstituteVariables(tagToAdd.ToString()!, variableContext);
+                                        torrentCtx.addTag(tag);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] addTag: {tag}");
+                                    }
+
+                                    if (action.TryGetValue("removeTag", out var tagToRemove) && tagToRemove != null)
+                                    {
+                                        var tag = SubstituteVariables(tagToRemove.ToString()!, variableContext);
+                                        torrentCtx.removeTag(tag);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] removeTag: {tag}");
+                                    }
+
+                                    if (action.TryGetValue("setCategory", out var newCat) && newCat != null)
+                                    {
+                                        var cat = SubstituteVariables(newCat.ToString()!, variableContext);
+                                        torrentCtx.setCategory(cat);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setCategory: {cat}");
+                                    }
+
+                                    if (action.TryGetValue("setUploadLimit", out var upLimitVal) && upLimitVal != null)
+                                    {
+                                        var upStr = SubstituteVariables(upLimitVal.ToString()!, variableContext);
+                                        if (int.TryParse(upStr, out var upLimit))
+                                        {
+                                            torrentCtx.setUploadLimit(upLimit);
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setUploadLimit: {upLimit} KB/s");
+                                        }
+                                    }
+
+                                    if (action.TryGetValue("setDownloadLimit", out var dlLimitVal) && dlLimitVal != null)
+                                    {
+                                        var dlStr = SubstituteVariables(dlLimitVal.ToString()!, variableContext);
+                                        if (int.TryParse(dlStr, out var dlLimit))
+                                        {
+                                            torrentCtx.setDownloadLimit(dlLimit);
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setDownloadLimit: {dlLimit} KB/s");
+                                        }
+                                    }
+
+                                    if (action.TryGetValue("setRatioLimit", out var ratioVal) && ratioVal != null)
+                                    {
+                                        var rStr = SubstituteVariables(ratioVal.ToString()!, variableContext);
+                                        if (double.TryParse(rStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var rLimit))
+                                        {
+                                            torrentCtx.setRatioLimit(rLimit);
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setRatioLimit: {rLimit:F2}");
+                                        }
+                                    }
+
+                                    if (action.TryGetValue("setSeedingTimeLimit", out var seedTimeVal) && seedTimeVal != null)
+                                    {
+                                        var stStr = SubstituteVariables(seedTimeVal.ToString()!, variableContext);
+                                        if (int.TryParse(stStr, out var stMinutes))
+                                        {
+                                            torrentCtx.setSeedingTimeLimit(stMinutes);
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setSeedingTimeLimit: {stMinutes} min");
+                                        }
+                                    }
+
+                                    if (action.TryGetValue("setPriority", out var prioVal) && prioVal != null)
+                                    {
+                                        var prioStr = SubstituteVariables(prioVal.ToString()!, variableContext);
+                                        torrentCtx.setPriority(prioStr);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setPriority: {prioStr}");
+                                    }
+
+                                    if (action.TryGetValue("setSequentialDownload", out var seqVal) || action.TryGetValue("setSequential", out seqVal))
+                                    {
+                                        var isSeq = seqVal is true || seqVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+                                        torrentCtx.setSequential(isSeq);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setSequentialDownload: {isSeq}");
+                                    }
+
+                                    if (action.TryGetValue("setSuperSeeding", out var ssVal))
+                                    {
+                                        var isSs = ssVal is true || ssVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+                                        torrentCtx.setSuperSeeding(isSs);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setSuperSeeding: {isSs}");
+                                    }
+
+                                    if (action.TryGetValue("moveFiles", out var moveDest) || action.TryGetValue("setSavePath", out moveDest))
+                                    {
+                                        if (moveDest != null)
+                                        {
+                                            var dest = SubstituteVariables(moveDest.ToString()!, variableContext);
+                                            torrentCtx.moveFiles(dest);
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] moveFiles: {dest}");
+                                        }
+                                    }
+
+                                    if (action.TryGetValue("addTracker", out var trkToAdd) && trkToAdd != null)
+                                    {
+                                        var trk = SubstituteVariables(trkToAdd.ToString()!, variableContext);
+                                        torrentCtx.addTracker(trk);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] addTracker: {trk}");
+                                    }
+
+                                    if (action.TryGetValue("removeTracker", out var trkToRemove) && trkToRemove != null)
+                                    {
+                                        var trk = SubstituteVariables(trkToRemove.ToString()!, variableContext);
+                                        torrentCtx.removeTracker(trk);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] removeTracker: {trk}");
+                                    }
+
+                                    if (action.ContainsKey("boostTracker"))
+                                    {
+                                        torrentCtx.boostTracker();
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] boostTracker");
+                                    }
+
+                                    if (action.TryGetValue("banPeer", out var peerIp) && peerIp != null)
+                                    {
+                                        var ip = SubstituteVariables(peerIp.ToString()!, variableContext);
+                                        torrentCtx.banPeer(ip);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] banPeer: {ip}");
+                                    }
+
+                                    if (action.TryGetValue("setShareLimitAction", out var slaVal) && slaVal != null)
+                                    {
+                                        var limitAction = SubstituteVariables(slaVal.ToString()!, variableContext);
+                                        torrentCtx.setShareLimitAction(limitAction);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setShareLimitAction: {limitAction}");
+                                    }
+
+                                    if (action.TryGetValue("setFilePriority", out var fpVal) && fpVal is Dictionary<object, object> fpDict)
+                                    {
+                                        var fpPattern = fpDict.TryGetValue("pattern", out var pattVal) ? SubstituteVariables(pattVal?.ToString() ?? "", variableContext) : "";
+                                        var fpPrioStr = fpDict.TryGetValue("priority", out var priVal) ? SubstituteVariables(priVal?.ToString() ?? "0", variableContext) : "0";
+                                        if (int.TryParse(fpPrioStr, out var fpPrio))
+                                        {
+                                            torrentCtx.setFilePriority(fpPattern, fpPrio);
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setFilePriority: {fpPattern} = {fpPrio}");
+                                        }
+                                    }
+
+                                    if (action.TryGetValue("replaceTracker", out var rtVal) && rtVal is Dictionary<object, object> rtDict)
+                                    {
+                                        var rtOld = rtDict.TryGetValue("oldTracker", out var otVal) ? SubstituteVariables(otVal?.ToString() ?? "", variableContext) : "";
+                                        var rtNew = rtDict.TryGetValue("newTracker", out var ntVal) ? SubstituteVariables(ntVal?.ToString() ?? "", variableContext) : "";
+                                        torrentCtx.replaceTracker(rtOld, rtNew);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] replaceTracker: {rtOld} -> {rtNew}");
+                                    }
+
+                                    if (action.TryGetValue("exportTorrent", out var etVal) && etVal != null)
+                                    {
+                                        var etDest = SubstituteVariables(etVal.ToString()!, variableContext);
+                                        torrentCtx.exportTorrent(etDest);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] exportTorrent: {etDest}");
+                                    }
+
+                                    if (action.TryGetValue("cleanExtensions", out var ceVal) && ceVal != null)
+                                    {
+                                        var ceExts = ceVal is IEnumerable<object> ceList ? string.Join(",", ceList) : ceVal.ToString();
+                                        var exts = SubstituteVariables(ceExts ?? "", variableContext);
+                                        torrentCtx.cleanFiles(exts);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] cleanExtensions: {exts}");
+                                    }
+
+                                    if (action.TryGetValue("extractArchive", out var extractVal))
+                                    {
+                                        if (extractVal is Dictionary<object, object> extDict)
+                                        {
+                                            var dest = extDict.TryGetValue("destination", out var dVal) ? SubstituteVariables(dVal?.ToString() ?? string.Empty, variableContext) : null;
+                                            var del = extDict.TryGetValue("deleteArchive", out var daVal) && (daVal is true || daVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true);
+                                            torrentCtx.extractArchive(dest, del);
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] extractArchive (dest: {dest ?? "default"}, delete: {del})");
+                                        }
+                                        else
+                                        {
+                                            torrentCtx.extractArchive();
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] extractArchive");
+                                        }
+                                    }
+
+                                    if (action.TryGetValue("cleanUnwantedFiles", out var cleanVal) && cleanVal != null)
+                                    {
+                                        if (cleanVal is IEnumerable<object> cleanList)
+                                        {
+                                            var patterns = new List<string>();
+                                            foreach (var c in cleanList)
+                                            {
+                                                if (c != null)
+                                                {
+                                                    patterns.Add(SubstituteVariables(c.ToString()!, variableContext));
+                                                }
+                                            }
+
+                                            torrentCtx.cleanUnwantedFiles(patterns.ToArray());
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] cleanUnwantedFiles: {string.Join(", ", patterns)}");
+                                        }
+                                        else
+                                        {
+                                            var cleanStr = SubstituteVariables(cleanVal.ToString()!, variableContext);
+                                            torrentCtx.cleanFiles(cleanStr);
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] cleanUnwantedFiles: {cleanStr}");
+                                        }
+                                    }
+
+                                    if (action.ContainsKey("pause"))
+                                    {
+                                        torrentCtx.pause();
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] pause");
+                                    }
+
+                                    if (action.ContainsKey("resume"))
+                                    {
+                                        torrentCtx.resume();
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] resume");
+                                    }
+
+                                    if (action.ContainsKey("recheck"))
+                                    {
+                                        torrentCtx.recheck();
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] recheck");
+                                    }
+
+                                    if (action.ContainsKey("reannounce"))
+                                    {
+                                        torrentCtx.reannounce();
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] reannounce");
+                                    }
+
+                                    if (action.ContainsKey("remove"))
+                                    {
+                                        var deleteData = action.TryGetValue("deleteData", out var dd) && (dd is true || dd?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true);
+                                        torrentCtx.remove(deleteData);
+                                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] remove (deleteData: {deleteData})");
+                                    }
+                                }
+
+                                if (result.ShouldStopPipeline)
+                                {
+                                    break;
+                                }
+                            }
+
+                            if (result.ShouldStopPipeline)
+                            {
+                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [STOP] Pipeline halted: {result.StopReason ?? "Stop requested"}");
+                                break;
+                            }
                         }
 
-                        variableContext[regKey] = respDict;
-                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [REGISTER] Saved response to '${{{regKey}}}' (status: {respDict.GetValueOrDefault("status")})");
+                        lastException = null;
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        if (attempt < maxAttempts)
+                        {
+                            var delayMs = Math.Min(50 * (int)Math.Pow(2, attempt - 1), 1000);
+                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [WARN] Step '{stepName}' failed on attempt {attempt}/{maxAttempts}: {ex.Message}. Retrying in {delayMs}ms...");
+                            Thread.Sleep(delayMs);
+                        }
                     }
                 }
 
-                // Execute actions
-                if (step.Actions != null)
+                if (lastException != null)
                 {
-                    foreach (var action in step.Actions)
+                    if (step.ContinueOnError)
                     {
-                        if (action.TryGetValue("command", out var cmdName) && cmdName != null)
-                        {
-                            var cmd = SubstituteVariables(cmdName.ToString()!, variableContext);
-                            systemContext.runCommand(cmd);
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] runCommand: {cmd}");
-                        }
-
-                        if (action.TryGetValue("sendNotification", out var notifObj) && notifObj != null)
-                        {
-                            if (notifObj is Dictionary<object, object> nDict)
-                            {
-                                var nTitle = SubstituteVariables(nDict.TryGetValue("title", out var tVal) ? tVal?.ToString() ?? string.Empty : "Automation Alert", variableContext);
-                                var nMsg = SubstituteVariables(nDict.TryGetValue("message", out var mVal) ? mVal?.ToString() ?? string.Empty : string.Empty, variableContext);
-                                var nProv = nDict.TryGetValue("provider", out var pVal) ? SubstituteVariables(pVal?.ToString() ?? string.Empty, variableContext) : null;
-                                systemContext.sendNotification(nTitle, nMsg, nProv);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendNotification: {nTitle} (provider: {nProv ?? "all"})");
-                            }
-                            else
-                            {
-                                var nMsg = SubstituteVariables(notifObj.ToString()!, variableContext);
-                                systemContext.sendNotification("Automation Alert", nMsg);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendNotification: {nMsg}");
-                            }
-                        }
-
-                        if (action.TryGetValue("notifyArr", out var arrObj) || action.TryGetValue("syncArr", out arrObj))
-                        {
-                            if (arrObj is Dictionary<object, object> aDict)
-                            {
-                                var appType = aDict.TryGetValue("appType", out var atVal) ? SubstituteVariables(atVal?.ToString() ?? string.Empty, variableContext) : null;
-                                int? instId = null;
-                                if (aDict.TryGetValue("instanceId", out var idVal) && int.TryParse(idVal?.ToString(), out var parsedId))
-                                {
-                                    instId = parsedId;
-                                }
-
-                                systemContext.notifyArr(appType, instId);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] notifyArr: appType={appType ?? "all"}, instanceId={instId?.ToString() ?? "all"}");
-                            }
-                            else if (arrObj is string arrStr && !string.IsNullOrWhiteSpace(arrStr) && !arrStr.Equals("true", StringComparison.OrdinalIgnoreCase))
-                            {
-                                var appType = SubstituteVariables(arrStr, variableContext);
-                                systemContext.notifyArr(appType);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] notifyArr: {appType}");
-                            }
-                            else
-                            {
-                                systemContext.notifyArr();
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] notifyArr: all");
-                            }
-                        }
-
-                        if (action.TryGetValue("runScript", out var scriptObj) && scriptObj != null)
-                        {
-                            if (scriptObj is Dictionary<object, object> sDict)
-                            {
-                                var path = SubstituteVariables(sDict.TryGetValue("path", out var pVal) ? pVal?.ToString() ?? string.Empty : string.Empty, variableContext);
-                                var timeout = sDict.TryGetValue("timeout", out var toVal) && int.TryParse(toVal?.ToString(), out var toParsed) ? toParsed : 60;
-                                var argsObj = sDict.TryGetValue("args", out var aVal) ? aVal : null;
-                                systemContext.runScript(path, argsObj, timeout);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] runScript: {path} (timeout={timeout}s)");
-                            }
-                            else
-                            {
-                                var path = SubstituteVariables(scriptObj.ToString()!, variableContext);
-                                systemContext.runScript(path);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] runScript: {path}");
-                            }
-                        }
-
-                        if (action.TryGetValue("delay", out var delayVal) || action.TryGetValue("sleep", out delayVal))
-                        {
-                            var dStr = SubstituteVariables(delayVal?.ToString() ?? "1", variableContext);
-                            if (int.TryParse(dStr, out var dSec))
-                            {
-                                systemContext.delay(dSec);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] delay: {dSec}s");
-                            }
-                        }
-
-                        if (action.TryGetValue("log", out var logVal) && logVal != null)
-                        {
-                            if (logVal is Dictionary<object, object> lDict)
-                            {
-                                var msg = SubstituteVariables(lDict.TryGetValue("message", out var mVal) ? mVal?.ToString() ?? string.Empty : string.Empty, variableContext);
-                                var lvl = lDict.TryGetValue("level", out var lvlVal) ? lvlVal?.ToString() ?? "info" : "info";
-                                systemContext.log(msg, lvl);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] log ({lvl}): {msg}");
-                            }
-                            else
-                            {
-                                var msg = SubstituteVariables(logVal.ToString()!, variableContext);
-                                systemContext.log(msg);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] log: {msg}");
-                            }
-                        }
-
-                        if (action.TryGetValue("setVariable", out var setVarObj) && setVarObj is Dictionary<object, object> svDict)
-                        {
-                            var vKey = svDict.TryGetValue("key", out var kVal) ? kVal?.ToString() : null;
-                            var vVal = svDict.TryGetValue("value", out var valVal) ? SubstituteVariables(valVal?.ToString() ?? string.Empty, variableContext) : string.Empty;
-                            if (!string.IsNullOrWhiteSpace(vKey))
-                            {
-                                variableContext[vKey] = vVal;
-                                variableContext[$"variables.{vKey}"] = vVal;
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setVariable: {vKey} = {vVal}");
-                            }
-                        }
-
-                        if (action.TryGetValue("stopPipeline", out var stopVal))
-                        {
-                            var reason = stopVal != null ? SubstituteVariables(stopVal.ToString()!, variableContext) : "Condition matched stop";
-                            systemContext.stopPipeline(reason);
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] stopPipeline: {reason}");
-                        }
-
-                        if (action.TryGetValue("evalMath", out var evalObj) && evalObj is Dictionary<object, object> evDict)
-                        {
-                            var expr = evDict.TryGetValue("expression", out var eVal) ? SubstituteVariables(eVal?.ToString() ?? string.Empty, variableContext) : string.Empty;
-                            var tKey = evDict.TryGetValue("targetVariable", out var tkVal) ? tkVal?.ToString() : null;
-                            if (!string.IsNullOrWhiteSpace(expr) && !string.IsNullOrWhiteSpace(tKey))
-                            {
-                                try
-                                {
-                                    var dt = new System.Data.DataTable();
-                                    var computed = dt.Compute(expr, string.Empty);
-                                    variableContext[tKey] = computed;
-                                    variableContext[$"variables.{tKey}"] = computed;
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] evalMath: {tKey} = {computed}");
-                                }
-                                catch (Exception ex)
-                                {
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] evalMath error: {ex.Message}");
-                                }
-                            }
-                        }
-
-                        if (action.TryGetValue("retryStep", out var retryObj))
-                        {
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] retryStep configured");
-                        }
-
-                        if (action.TryGetValue("invokePipeline", out var invokeVal) && invokeVal != null)
-                        {
-                            var pipeline = SubstituteVariables(invokeVal.ToString()!, variableContext);
-                            systemContext.invokePipeline(pipeline);
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] invokePipeline: {pipeline}");
-                        }
-
-                        if (action.TryGetValue("createHardlink", out var hardlinkVal) && hardlinkVal is Dictionary<object, object> hlDict)
-                        {
-                            var src = hlDict.TryGetValue("source", out var srcVal) ? SubstituteVariables(srcVal?.ToString() ?? "", variableContext) : "";
-                            var dest = hlDict.TryGetValue("destination", out var destVal) ? SubstituteVariables(destVal?.ToString() ?? "", variableContext) : "";
-                            systemContext.createHardlink(src, dest);
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] createHardlink: {src} -> {dest}");
-                        }
-
-                        if (action.TryGetValue("createSymlink", out var symlinkVal) && symlinkVal is Dictionary<object, object> slDict)
-                        {
-                            var src = slDict.TryGetValue("source", out var srcVal) ? SubstituteVariables(srcVal?.ToString() ?? "", variableContext) : "";
-                            var dest = slDict.TryGetValue("destination", out var destVal) ? SubstituteVariables(destVal?.ToString() ?? "", variableContext) : "";
-                            systemContext.createSymlink(src, dest);
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] createSymlink: {src} -> {dest}");
-                        }
-
-                        if (action.TryGetValue("setFilePermissions", out var permVal) && permVal is Dictionary<object, object> pDict)
-                        {
-                            var path = pDict.TryGetValue("path", out var pathVal) ? SubstituteVariables(pathVal?.ToString() ?? "", variableContext) : "";
-                            var mode = pDict.TryGetValue("mode", out var modeVal) ? SubstituteVariables(modeVal?.ToString() ?? "", variableContext) : "";
-                            var recurse = pDict.TryGetValue("recurse", out var recVal) && (recVal is true || recVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true);
-                            systemContext.setFilePermissions(path, mode, recurse);
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setFilePermissions: {path} ({mode})");
-                        }
-
-                        if (action.TryGetValue("calculateChecksum", out var csVal) && csVal is Dictionary<object, object> csDict)
-                        {
-                            var path = csDict.TryGetValue("path", out var pathVal) ? SubstituteVariables(pathVal?.ToString() ?? "", variableContext) : "";
-                            var algo = csDict.TryGetValue("algorithm", out var algoVal) ? SubstituteVariables(algoVal?.ToString() ?? "SHA256", variableContext) : "SHA256";
-                            var tKey = csDict.TryGetValue("targetVariable", out var tkVal) ? tkVal?.ToString() : null;
-                            var checksum = systemContext.calculateChecksum(path, algo);
-                            if (checksum != null && !string.IsNullOrWhiteSpace(tKey))
-                            {
-                                variableContext[tKey] = checksum;
-                                variableContext[$"variables.{tKey}"] = checksum;
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] calculateChecksum: {tKey} = {checksum}");
-                            }
-                        }
-
-                        if (action.TryGetValue("sendDiscordWebhook", out var discordVal) && discordVal is Dictionary<object, object> dDict)
-                        {
-                            var url = dDict.TryGetValue("url", out var urlVal) ? SubstituteVariables(urlVal?.ToString() ?? "", variableContext) : "";
-                            var title = dDict.TryGetValue("title", out var titleVal) ? SubstituteVariables(titleVal?.ToString() ?? "", variableContext) : "";
-                            var desc = dDict.TryGetValue("description", out var descVal) ? SubstituteVariables(descVal?.ToString() ?? "", variableContext) : "";
-                            var color = dDict.TryGetValue("color", out var colorVal) ? SubstituteVariables(colorVal?.ToString() ?? "", variableContext) : "";
-                            var fields = new Dictionary<string, string>();
-                            if (dDict.TryGetValue("fields", out var fVal) && fVal is Dictionary<object, object> fieldsDict)
-                            {
-                                foreach (var kvp in fieldsDict)
-                                {
-                                    fields[kvp.Key.ToString()!] = SubstituteVariables(kvp.Value?.ToString() ?? "", variableContext);
-                                }
-                            }
-
-                            systemContext.sendDiscordWebhook(url, title, desc, color, fields);
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendDiscordWebhook: {title}");
-                        }
-
-                        if (action.TryGetValue("sendTelegramMessage", out var tgVal) && tgVal is Dictionary<object, object> tgDict)
-                        {
-                            var token = tgDict.TryGetValue("token", out var tokVal) ? SubstituteVariables(tokVal?.ToString() ?? "", variableContext) : "";
-                            var chatId = tgDict.TryGetValue("chatId", out var cidVal) ? SubstituteVariables(cidVal?.ToString() ?? "", variableContext) : "";
-                            var msg = tgDict.TryGetValue("message", out var msgVal) ? SubstituteVariables(msgVal?.ToString() ?? "", variableContext) : "";
-                            var pm = tgDict.TryGetValue("parseMode", out var pmVal) ? SubstituteVariables(pmVal?.ToString() ?? "Markdown", variableContext) : "Markdown";
-                            systemContext.sendTelegramMessage(token, chatId, msg, pm);
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendTelegramMessage: {chatId}");
-                        }
-
-                        if (action.TryGetValue("sendNtfy", out var ntfyVal) && ntfyVal is Dictionary<object, object> nfDict)
-                        {
-                            var topic = nfDict.TryGetValue("topic", out var topVal) ? SubstituteVariables(topVal?.ToString() ?? "", variableContext) : "";
-                            var msg = nfDict.TryGetValue("message", out var mVal) ? SubstituteVariables(mVal?.ToString() ?? "", variableContext) : "";
-                            var title = nfDict.TryGetValue("title", out var tVal) ? SubstituteVariables(tVal?.ToString() ?? "", variableContext) : "";
-                            var prio = nfDict.TryGetValue("priority", out var pVal) ? SubstituteVariables(pVal?.ToString() ?? "", variableContext) : "";
-                            var tags = nfDict.TryGetValue("tags", out var tagVal) ? SubstituteVariables(tagVal?.ToString() ?? "", variableContext) : "";
-                            var click = nfDict.TryGetValue("click", out var cVal) ? SubstituteVariables(cVal?.ToString() ?? "", variableContext) : "";
-                            var srv = nfDict.TryGetValue("server", out var srvVal) ? SubstituteVariables(srvVal?.ToString() ?? "https://ntfy.sh", variableContext) : "https://ntfy.sh";
-                            systemContext.sendNtfy(topic, msg, title, prio, tags, click, srv);
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendNtfy: {topic}");
-                        }
-
-                        if (action.TryGetValue("sendPushover", out var poVal) && poVal is Dictionary<object, object> poDict)
-                        {
-                            var token = poDict.TryGetValue("token", out var tokVal) ? SubstituteVariables(tokVal?.ToString() ?? "", variableContext) : "";
-                            var user = poDict.TryGetValue("user", out var uVal) ? SubstituteVariables(uVal?.ToString() ?? "", variableContext) : "";
-                            var msg = poDict.TryGetValue("message", out var mVal) ? SubstituteVariables(mVal?.ToString() ?? "", variableContext) : "";
-                            var prio = poDict.TryGetValue("priority", out var pVal) ? SubstituteVariables(pVal?.ToString() ?? "", variableContext) : "";
-                            var snd = poDict.TryGetValue("sound", out var sVal) ? SubstituteVariables(sVal?.ToString() ?? "", variableContext) : "";
-                            systemContext.sendPushover(token, user, msg, prio, snd);
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] sendPushover: {user}");
-                        }
-
-                        if (action.TryGetValue("reannounceAll", out _))
-                        {
-                            systemContext.reannounceAll();
-                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] reannounceAll");
-                        }
-
-                        if (action.TryGetValue("http", out var actHttpVal) && actHttpVal != null)
-                        {
-                            var hUrl = "";
-                            var hMethod = "POST";
-                            var hOptions = new Dictionary<string, object>();
-                            object? hBody = null;
-                            var hReg = "";
-                            var hCont = false;
-
-                            if (actHttpVal is string sHttp)
-                            {
-                                hUrl = SubstituteVariables(sHttp, variableContext);
-                                hOptions["json"] = true;
-                            }
-                            else if (actHttpVal is Dictionary<object, object> hDict)
-                            {
-                                hUrl = hDict.TryGetValue("url", out var u) ? SubstituteVariables(u?.ToString() ?? "", variableContext) : "";
-                                hMethod = hDict.TryGetValue("method", out var m) ? SubstituteVariables(m?.ToString() ?? "POST", variableContext).ToUpperInvariant() : "POST";
-                                hReg = hDict.TryGetValue("register", out var r) ? r?.ToString() ?? "" : "";
-
-                                if (hDict.TryGetValue("continueOnError", out var cVal) && (cVal is true || cVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true))
-                                {
-                                    hCont = true;
-                                }
-
-                                if (hDict.TryGetValue("timeoutSeconds", out var tsVal) && int.TryParse(tsVal?.ToString(), out var ts))
-                                {
-                                    hOptions["timeoutSeconds"] = ts;
-                                }
-
-                                if (hDict.TryGetValue("allowInsecure", out var aiVal) && (aiVal is true || aiVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true))
-                                {
-                                    hOptions["allowInsecure"] = true;
-                                }
-
-                                if (hDict.TryGetValue("json", out var jVal) && (jVal is true || jVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true))
-                                {
-                                    hOptions["json"] = true;
-                                }
-
-                                if (hDict.TryGetValue("headers", out var hdrVal) && hdrVal is Dictionary<object, object> hdrDict)
-                                {
-                                    var hdrs = new Dictionary<string, object>();
-                                    foreach (var kvp in hdrDict)
-                                    {
-                                        hdrs[kvp.Key.ToString()!] = SubstituteVariables(kvp.Value?.ToString() ?? "", variableContext);
-                                    }
-
-                                    hOptions["headers"] = hdrs;
-                                }
-
-                                if (hDict.TryGetValue("body", out var bVal) && bVal != null)
-                                {
-                                    if (bVal is string bStr)
-                                    {
-                                        hBody = SubstituteVariables(bStr, variableContext);
-                                    }
-                                    else if (bVal is Dictionary<object, object> bDict)
-                                    {
-                                        var bMap = new Dictionary<string, object>();
-                                        foreach (var kvp in bDict)
-                                        {
-                                            bMap[kvp.Key.ToString()!] = SubstituteVariables(kvp.Value?.ToString() ?? "", variableContext);
-                                        }
-
-                                        hBody = bMap;
-                                    }
-                                }
-                            }
-
-                            try
-                            {
-                                object hResp;
-                                switch (hMethod)
-                                {
-                                    case "GET":
-                                        hResp = httpClient.get(hUrl, hOptions);
-                                        break;
-                                    case "PUT":
-                                        hResp = httpClient.put(hUrl, hBody, hOptions);
-                                        break;
-                                    case "DELETE":
-                                        hResp = httpClient.delete(hUrl, hOptions);
-                                        break;
-                                    case "PATCH":
-                                        hResp = httpClient.post(hUrl, hBody, hOptions); // Using post for patch as simple fallback if no patch method
-                                        break;
-                                    default:
-                                        hResp = httpClient.post(hUrl, hBody, hOptions);
-                                        break;
-                                }
-
-                                if (!string.IsNullOrWhiteSpace(hReg) && hResp is Dictionary<string, object?> rDict)
-                                {
-                                    foreach (var kvp in rDict)
-                                    {
-                                        variableContext[$"{hReg.Trim()}.{kvp.Key}"] = kvp.Value;
-                                    }
-
-                                    variableContext[hReg.Trim()] = rDict;
-                                    variableContext[$"variables.{hReg.Trim()}"] = rDict;
-                                }
-
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] http {hMethod} {hUrl}");
-                            }
-                            catch (Exception ex)
-                            {
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] http {hMethod} {hUrl} failed: {ex.Message}");
-                                if (!hCont)
-                                {
-                                    throw;
-                                }
-                            }
-                        }
-
-                        if (torrentCtx != null)
-                        {
-                            if (action.TryGetValue("addTag", out var tagToAdd) && tagToAdd != null)
-                            {
-                                var tag = SubstituteVariables(tagToAdd.ToString()!, variableContext);
-                                torrentCtx.addTag(tag);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] addTag: {tag}");
-                            }
-
-                            if (action.TryGetValue("removeTag", out var tagToRemove) && tagToRemove != null)
-                            {
-                                var tag = SubstituteVariables(tagToRemove.ToString()!, variableContext);
-                                torrentCtx.removeTag(tag);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] removeTag: {tag}");
-                            }
-
-                            if (action.TryGetValue("setCategory", out var newCat) && newCat != null)
-                            {
-                                var cat = SubstituteVariables(newCat.ToString()!, variableContext);
-                                torrentCtx.setCategory(cat);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setCategory: {cat}");
-                            }
-
-                            if (action.TryGetValue("setUploadLimit", out var upLimitVal) && upLimitVal != null)
-                            {
-                                var upStr = SubstituteVariables(upLimitVal.ToString()!, variableContext);
-                                if (int.TryParse(upStr, out var upLimit))
-                                {
-                                    torrentCtx.setUploadLimit(upLimit);
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setUploadLimit: {upLimit} KB/s");
-                                }
-                            }
-
-                            if (action.TryGetValue("setDownloadLimit", out var dlLimitVal) && dlLimitVal != null)
-                            {
-                                var dlStr = SubstituteVariables(dlLimitVal.ToString()!, variableContext);
-                                if (int.TryParse(dlStr, out var dlLimit))
-                                {
-                                    torrentCtx.setDownloadLimit(dlLimit);
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setDownloadLimit: {dlLimit} KB/s");
-                                }
-                            }
-
-                            if (action.TryGetValue("setRatioLimit", out var ratioVal) && ratioVal != null)
-                            {
-                                var rStr = SubstituteVariables(ratioVal.ToString()!, variableContext);
-                                if (double.TryParse(rStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var rLimit))
-                                {
-                                    torrentCtx.setRatioLimit(rLimit);
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setRatioLimit: {rLimit:F2}");
-                                }
-                            }
-
-                            if (action.TryGetValue("setSeedingTimeLimit", out var seedTimeVal) && seedTimeVal != null)
-                            {
-                                var stStr = SubstituteVariables(seedTimeVal.ToString()!, variableContext);
-                                if (int.TryParse(stStr, out var stMinutes))
-                                {
-                                    torrentCtx.setSeedingTimeLimit(stMinutes);
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setSeedingTimeLimit: {stMinutes} min");
-                                }
-                            }
-
-                            if (action.TryGetValue("setPriority", out var prioVal) && prioVal != null)
-                            {
-                                var prioStr = SubstituteVariables(prioVal.ToString()!, variableContext);
-                                torrentCtx.setPriority(prioStr);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setPriority: {prioStr}");
-                            }
-
-                            if (action.TryGetValue("setSequentialDownload", out var seqVal) || action.TryGetValue("setSequential", out seqVal))
-                            {
-                                var isSeq = seqVal is true || seqVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
-                                torrentCtx.setSequential(isSeq);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setSequentialDownload: {isSeq}");
-                            }
-
-                            if (action.TryGetValue("setSuperSeeding", out var ssVal))
-                            {
-                                var isSs = ssVal is true || ssVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
-                                torrentCtx.setSuperSeeding(isSs);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setSuperSeeding: {isSs}");
-                            }
-
-                            if (action.TryGetValue("moveFiles", out var moveDest) || action.TryGetValue("setSavePath", out moveDest))
-                            {
-                                if (moveDest != null)
-                                {
-                                    var dest = SubstituteVariables(moveDest.ToString()!, variableContext);
-                                    torrentCtx.moveFiles(dest);
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] moveFiles: {dest}");
-                                }
-                            }
-
-                            if (action.TryGetValue("addTracker", out var trkToAdd) && trkToAdd != null)
-                            {
-                                var trk = SubstituteVariables(trkToAdd.ToString()!, variableContext);
-                                torrentCtx.addTracker(trk);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] addTracker: {trk}");
-                            }
-
-                            if (action.TryGetValue("removeTracker", out var trkToRemove) && trkToRemove != null)
-                            {
-                                var trk = SubstituteVariables(trkToRemove.ToString()!, variableContext);
-                                torrentCtx.removeTracker(trk);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] removeTracker: {trk}");
-                            }
-
-                            if (action.ContainsKey("boostTracker"))
-                            {
-                                torrentCtx.boostTracker();
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] boostTracker");
-                            }
-
-                            if (action.TryGetValue("banPeer", out var peerIp) && peerIp != null)
-                            {
-                                var ip = SubstituteVariables(peerIp.ToString()!, variableContext);
-                                torrentCtx.banPeer(ip);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] banPeer: {ip}");
-                            }
-
-                            if (action.TryGetValue("setShareLimitAction", out var slaVal) && slaVal != null)
-                            {
-                                var limitAction = SubstituteVariables(slaVal.ToString()!, variableContext);
-                                torrentCtx.setShareLimitAction(limitAction);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setShareLimitAction: {limitAction}");
-                            }
-
-                            if (action.TryGetValue("setFilePriority", out var fpVal) && fpVal is Dictionary<object, object> fpDict)
-                            {
-                                var fpPattern = fpDict.TryGetValue("pattern", out var pattVal) ? SubstituteVariables(pattVal?.ToString() ?? "", variableContext) : "";
-                                var fpPrioStr = fpDict.TryGetValue("priority", out var priVal) ? SubstituteVariables(priVal?.ToString() ?? "0", variableContext) : "0";
-                                if (int.TryParse(fpPrioStr, out var fpPrio))
-                                {
-                                    torrentCtx.setFilePriority(fpPattern, fpPrio);
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] setFilePriority: {fpPattern} = {fpPrio}");
-                                }
-                            }
-
-                            if (action.TryGetValue("replaceTracker", out var rtVal) && rtVal is Dictionary<object, object> rtDict)
-                            {
-                                var rtOld = rtDict.TryGetValue("oldTracker", out var otVal) ? SubstituteVariables(otVal?.ToString() ?? "", variableContext) : "";
-                                var rtNew = rtDict.TryGetValue("newTracker", out var ntVal) ? SubstituteVariables(ntVal?.ToString() ?? "", variableContext) : "";
-                                torrentCtx.replaceTracker(rtOld, rtNew);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] replaceTracker: {rtOld} -> {rtNew}");
-                            }
-
-                            if (action.TryGetValue("exportTorrent", out var etVal) && etVal != null)
-                            {
-                                var etDest = SubstituteVariables(etVal.ToString()!, variableContext);
-                                torrentCtx.exportTorrent(etDest);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] exportTorrent: {etDest}");
-                            }
-
-                            if (action.TryGetValue("cleanExtensions", out var ceVal) && ceVal != null)
-                            {
-                                var ceExts = ceVal is IEnumerable<object> ceList ? string.Join(",", ceList) : ceVal.ToString();
-                                var exts = SubstituteVariables(ceExts ?? "", variableContext);
-                                torrentCtx.cleanFiles(exts);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] cleanExtensions: {exts}");
-                            }
-
-                            if (action.TryGetValue("extractArchive", out var extractVal))
-                            {
-                                if (extractVal is Dictionary<object, object> extDict)
-                                {
-                                    var dest = extDict.TryGetValue("destination", out var dVal) ? SubstituteVariables(dVal?.ToString() ?? string.Empty, variableContext) : null;
-                                    var del = extDict.TryGetValue("deleteArchive", out var daVal) && (daVal is true || daVal?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true);
-                                    torrentCtx.extractArchive(dest, del);
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] extractArchive (dest: {dest ?? "default"}, delete: {del})");
-                                }
-                                else
-                                {
-                                    torrentCtx.extractArchive();
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] extractArchive");
-                                }
-                            }
-
-                            if (action.TryGetValue("cleanUnwantedFiles", out var cleanVal) && cleanVal != null)
-                            {
-                                if (cleanVal is IEnumerable<object> cleanList)
-                                {
-                                    var patterns = new List<string>();
-                                    foreach (var c in cleanList)
-                                    {
-                                        if (c != null)
-                                        {
-                                            patterns.Add(SubstituteVariables(c.ToString()!, variableContext));
-                                        }
-                                    }
-
-                                    torrentCtx.cleanUnwantedFiles(patterns.ToArray());
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] cleanUnwantedFiles: {string.Join(", ", patterns)}");
-                                }
-                                else
-                                {
-                                    var cleanStr = SubstituteVariables(cleanVal.ToString()!, variableContext);
-                                    torrentCtx.cleanFiles(cleanStr);
-                                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] cleanUnwantedFiles: {cleanStr}");
-                                }
-                            }
-
-                            if (action.ContainsKey("pause"))
-                            {
-                                torrentCtx.pause();
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] pause");
-                            }
-
-                            if (action.ContainsKey("resume"))
-                            {
-                                torrentCtx.resume();
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] resume");
-                            }
-
-                            if (action.ContainsKey("recheck"))
-                            {
-                                torrentCtx.recheck();
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] recheck");
-                            }
-
-                            if (action.ContainsKey("reannounce"))
-                            {
-                                torrentCtx.reannounce();
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] reannounce");
-                            }
-
-                            if (action.ContainsKey("remove"))
-                            {
-                                var deleteData = action.TryGetValue("deleteData", out var dd) && (dd is true || dd?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true);
-                                torrentCtx.remove(deleteData);
-                                logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] remove (deleteData: {deleteData})");
-                            }
-                        }
-
-                        if (result.ShouldStopPipeline)
-                        {
-                            break;
-                        }
+                        var warnMsg = $"Step '{stepName}' failed after {maxAttempts} attempt(s): {lastException.Message} (continuing due to continueOnError)";
+                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [WARN] {warnMsg}");
+                        result.Warnings.Add(warnMsg);
                     }
-
-                    if (result.ShouldStopPipeline)
+                    else
                     {
-                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [STOP] Pipeline halted: {result.StopReason ?? "Stop requested"}");
-                        break;
+                        logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ERROR] Step '{stepName}' failed: {lastException.Message}");
+                        throw lastException;
                     }
+                }
+
+                if (result.ShouldStopPipeline)
+                {
+                    logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [STOP] Pipeline halted: {result.StopReason ?? "Stop requested"}");
+                    break;
                 }
             }
 
@@ -1151,6 +1201,10 @@ public class YamlStepModel
     public string? Name { get; set; }
 
     public string? Condition { get; set; }
+
+    public bool ContinueOnError { get; set; }
+
+    public int Retries { get; set; }
 
     public YamlHttpStepModel? Http { get; set; }
 

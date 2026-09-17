@@ -123,4 +123,74 @@ for (var i = 0; i < 2000; i++) {
         Assert.That(torrent.Label, Is.EqualTo("Action, Comedy"));
         _torrentRepository.Received(1).Update(torrent);
     }
+
+    [Test]
+    public void ExecuteScript_should_abort_when_recursion_depth_limit_exceeded()
+    {
+        var torrent = new Torrent { Id = 10, Name = "Recursive Torrent" };
+        var script2 = new AutomationScript { Id = 2, Name = "Script 2", Language = AutomationLanguage.Yaml, Code = "steps:\n  - name: S2\n    actions:\n      - pause: true\n" };
+        var script3 = new AutomationScript { Id = 3, Name = "Script 3", Language = AutomationLanguage.Yaml, Code = "steps:\n  - name: S3\n    actions:\n      - pause: true\n" };
+        var script4 = new AutomationScript { Id = 4, Name = "Script 4", Language = AutomationLanguage.Yaml, Code = "steps:\n  - name: S4\n    actions:\n      - pause: true\n" };
+
+        AutomationExecutionResult level4Result = null;
+
+        _eventAggregator.When(e => e.PublishEvent(Arg.Any<TorrentPausedEvent>())).Do(_ =>
+        {
+            if (AutomationService.CurrentExecutionDepth == 1)
+            {
+                _subject.ExecuteScript(script2, torrent);
+            }
+            else if (AutomationService.CurrentExecutionDepth == 2)
+            {
+                _subject.ExecuteScript(script3, torrent);
+            }
+            else if (AutomationService.CurrentExecutionDepth == 3)
+            {
+                level4Result = _subject.ExecuteScript(script4, torrent);
+            }
+        });
+
+        var pausingScript = new AutomationScript
+        {
+            Id = 1,
+            Name = "Pauser",
+            Language = AutomationLanguage.Yaml,
+            Code = "steps:\n  - name: Pause\n    actions:\n      - pause: true\n",
+        };
+
+        var result = _subject.ExecuteScript(pausingScript, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(level4Result, Is.Not.Null);
+        Assert.That(level4Result.Success, Is.False);
+        Assert.That(level4Result.Error, Does.Contain("Recursion depth limit"));
+    }
+
+    [Test]
+    public void ExecuteScript_should_abort_when_reentrancy_detected_for_same_entity()
+    {
+        var torrent = new Torrent { Id = 20, Name = "Reentrant Torrent" };
+        var script = new AutomationScript
+        {
+            Id = 42,
+            Name = "Self Triggering Script",
+            Language = AutomationLanguage.Yaml,
+            Code = "steps:\n  - name: Pause\n    actions:\n      - pause: true\n",
+        };
+
+        AutomationExecutionResult reentrantResult = null;
+
+        _eventAggregator.When(e => e.PublishEvent(Arg.Any<TorrentPausedEvent>())).Do(_ =>
+        {
+            // Simulate AutomationEventService re-dispatching the exact same script on the same torrent
+            reentrantResult = _subject.ExecuteScript(script, torrent);
+        });
+
+        var result = _subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(reentrantResult, Is.Not.Null);
+        Assert.That(reentrantResult.Success, Is.False);
+        Assert.That(reentrantResult.Error, Does.Contain("Reentrancy detected"));
+    }
 }
