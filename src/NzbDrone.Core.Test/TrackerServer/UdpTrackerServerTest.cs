@@ -12,6 +12,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerServer;
 
 namespace NzbDrone.Core.Test.TrackerServer;
@@ -24,12 +25,14 @@ public class UdpTrackerServerTest
     private UdpTrackerServer _udpTrackerServer;
     private IPeerDatabase _peerDatabase;
     private IConfigService _configService;
+    private ITorrentService _torrentService;
 
     [SetUp]
     public void Setup()
     {
         _peerDatabase = Substitute.For<IPeerDatabase>();
         _configService = Substitute.For<IConfigService>();
+        _torrentService = Substitute.For<ITorrentService>();
 
         _configService.TrackerServerEnabled.Returns(true);
         _configService.TrackerUdpEnabled.Returns(true);
@@ -38,8 +41,9 @@ public class UdpTrackerServerTest
         _configService.TrackerLogAnnounces.Returns(false);
         _configService.TrackerEnableScrape.Returns(true);
         _configService.TrackerRateLimitPerMinute.Returns(60);
+        _configService.TrackerPrivateMode.Returns(false);
 
-        _udpTrackerServer = new UdpTrackerServer(_peerDatabase, _configService);
+        _udpTrackerServer = new UdpTrackerServer(_peerDatabase, _configService, _torrentService);
     }
 
     private byte[] InvokeHandleConnect(long connectionId, int transactionId, IPEndPoint remote = null)
@@ -394,6 +398,80 @@ public class UdpTrackerServerTest
         Assert.That(txId, Is.EqualTo(42));
         var interval = BinaryPrimitives.ReadInt32BigEndian(result.AsSpan(8, 4));
         Assert.That(interval, Is.EqualTo(1800));
+    }
+
+    [Test]
+    public void HandleAnnounce_should_reject_when_private_mode_and_torrent_not_registered()
+    {
+        var connId = RegisterValidConnectionId();
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xEE);
+        var peerId = new byte[20];
+        Array.Fill(peerId, (byte)0x41);
+
+        var hex = Convert.ToHexString(infoHash).ToLowerInvariant();
+        _configService.TrackerPrivateMode.Returns(true);
+        _torrentService.ExistsByInfoHash(hex).Returns(false);
+
+        var data = BuildAnnounceRequest(connId, 42, infoHash, peerId, 2, 50, 6881);
+        var result = InvokeHandleAnnounce(connId, 42, data, new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881));
+
+        Assert.That(result, Is.Not.Null);
+        var action = BinaryPrimitives.ReadInt32BigEndian(result.AsSpan(0, 4));
+        Assert.That(action, Is.EqualTo(3)); // Error action
+        var txId = BinaryPrimitives.ReadInt32BigEndian(result.AsSpan(4, 4));
+        Assert.That(txId, Is.EqualTo(42));
+        var message = Encoding.UTF8.GetString(result, 8, result.Length - 8);
+        Assert.That(message, Does.Contain("torrent not registered with tracker"));
+        _peerDatabase.DidNotReceiveWithAnyArgs().AddPeer(default, default, default, default);
+    }
+
+    [Test]
+    public void HandleAnnounce_should_accept_registered_torrent_in_private_mode()
+    {
+        var connId = RegisterValidConnectionId();
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xEE);
+        var peerId = new byte[20];
+        Array.Fill(peerId, (byte)0x41);
+
+        var hex = Convert.ToHexString(infoHash).ToLowerInvariant();
+        _configService.TrackerPrivateMode.Returns(true);
+        _torrentService.ExistsByInfoHash(hex).Returns(true);
+        _peerDatabase.GetPeers(hex).Returns(new List<TrackerPeerEntry>());
+        _peerDatabase.GetStats(hex).Returns(new ScrapeStats { Complete = 1, Incomplete = 0, Downloaded = 1 });
+
+        var data = BuildAnnounceRequest(connId, 42, infoHash, peerId, 2, 50, 6881);
+        var result = InvokeHandleAnnounce(connId, 42, data, new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881));
+
+        Assert.That(result, Is.Not.Null);
+        var action = BinaryPrimitives.ReadInt32BigEndian(result.AsSpan(0, 4));
+        Assert.That(action, Is.EqualTo(1)); // Announce action
+        _peerDatabase.Received(1).AddPeer(hex, "10.0.0.1", 6881, Encoding.Latin1.GetString(peerId));
+    }
+
+    [Test]
+    public void HandleAnnounce_should_accept_unregistered_torrent_when_private_mode_is_disabled()
+    {
+        var connId = RegisterValidConnectionId();
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xEE);
+        var peerId = new byte[20];
+        Array.Fill(peerId, (byte)0x41);
+
+        var hex = Convert.ToHexString(infoHash).ToLowerInvariant();
+        _configService.TrackerPrivateMode.Returns(false);
+        _torrentService.ExistsByInfoHash(hex).Returns(false);
+        _peerDatabase.GetPeers(hex).Returns(new List<TrackerPeerEntry>());
+        _peerDatabase.GetStats(hex).Returns(new ScrapeStats { Complete = 1, Incomplete = 0, Downloaded = 1 });
+
+        var data = BuildAnnounceRequest(connId, 42, infoHash, peerId, 2, 50, 6881);
+        var result = InvokeHandleAnnounce(connId, 42, data, new IPEndPoint(IPAddress.Parse("10.0.0.1"), 6881));
+
+        Assert.That(result, Is.Not.Null);
+        var action = BinaryPrimitives.ReadInt32BigEndian(result.AsSpan(0, 4));
+        Assert.That(action, Is.EqualTo(1)); // Announce action
+        _peerDatabase.Received(1).AddPeer(hex, "10.0.0.1", 6881, Encoding.Latin1.GetString(peerId));
     }
 
     [Test]

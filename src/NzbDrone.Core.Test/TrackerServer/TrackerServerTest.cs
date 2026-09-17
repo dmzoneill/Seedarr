@@ -14,6 +14,7 @@ using BencodeNET.Parsing;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerServer;
 
 namespace NzbDrone.Core.Test.TrackerServer;
@@ -26,12 +27,15 @@ public class TrackerServerTest
     private Core.TrackerServer.TrackerServer _trackerServer;
     private IPeerDatabase _peerDatabase;
     private IConfigService _configService;
+    private ITorrentService _torrentService;
 
     [SetUp]
     public void Setup()
     {
         _peerDatabase = Substitute.For<IPeerDatabase>();
         _configService = Substitute.For<IConfigService>();
+        _torrentService = Substitute.For<ITorrentService>();
+        _torrentService.ExistsByInfoHash(DefaultInfoHash).Returns(true);
 
         _configService.TrackerServerEnabled.Returns(true);
         _configService.TrackerHttpEnabled.Returns(true);
@@ -46,7 +50,7 @@ public class TrackerServerTest
         _configService.TrackerHttpPort.Returns(0);
         _configService.TrackerBindAddress.Returns("127.0.0.1");
 
-        _trackerServer = new Core.TrackerServer.TrackerServer(_peerDatabase, _configService);
+        _trackerServer = new Core.TrackerServer.TrackerServer(_peerDatabase, _configService, _torrentService);
     }
 
     private static Dictionary<string, string> InvokeParseQueryString(string query)
@@ -836,6 +840,50 @@ public class TrackerServerTest
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Not.Contain("7:privatei1e"));
+    }
+
+    [Test]
+    public void HandleAnnounce_should_reject_when_private_mode_and_torrent_not_registered()
+    {
+        _configService.TrackerPrivateMode.Returns(true);
+        _torrentService.ExistsByInfoHash("ffffffffffffffffffffffffffffffffffffffff").Returns(false);
+
+        var result = InvokeHandleAnnounceText(
+            $"/announce?info_hash=ffffffffffffffffffffffffffffffffffffffff&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        Assert.That(result, Does.Contain("14:failure reason35:torrent not registered with tracker"));
+        _peerDatabase.DidNotReceiveWithAnyArgs().AddPeer(default, default, default, default);
+    }
+
+    [Test]
+    public void HandleAnnounce_should_accept_registered_torrent_in_private_mode()
+    {
+        _configService.TrackerPrivateMode.Returns(true);
+        _torrentService.ExistsByInfoHash(DefaultInfoHash).Returns(true);
+        _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
+
+        var result = InvokeHandleAnnounceText(
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        Assert.That(result, Does.Not.Contain("failure reason"));
+        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, DefaultPeerId);
+    }
+
+    [Test]
+    public void HandleAnnounce_should_accept_unregistered_torrent_when_private_mode_is_disabled()
+    {
+        _configService.TrackerPrivateMode.Returns(false);
+        _torrentService.ExistsByInfoHash("ffffffffffffffffffffffffffffffffffffffff").Returns(false);
+        _peerDatabase.GetPeers("ffffffffffffffffffffffffffffffffffffffff").Returns(new List<TrackerPeerEntry>());
+
+        var result = InvokeHandleAnnounceText(
+            $"/announce?info_hash=ffffffffffffffffffffffffffffffffffffffff&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        Assert.That(result, Does.Not.Contain("failure reason"));
+        _peerDatabase.Received(1).AddPeer("ffffffffffffffffffffffffffffffffffffffff", "192.168.1.1", 6881, DefaultPeerId);
     }
 
     [Test]
