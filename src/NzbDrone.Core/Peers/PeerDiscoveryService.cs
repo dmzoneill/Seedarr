@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Peers;
@@ -22,19 +24,29 @@ public interface IPeerDiscoveryService
     List<DiscoveredPeer> GetPeers(string infoHash, int maxCount = 10);
     void MarkAttempted(string infoHash, string ip, int port, bool success);
     int PeerCount(string infoHash);
+    void RemoveTorrent(string infoHash);
+    void PruneStalePeers();
 }
 
-public class PeerDiscoveryService : IPeerDiscoveryService
+public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDeletedEvent>
 {
     private const int MaxPeersPerTorrent = 200;
     private const int MaxFailCount = 3;
     private const int RetryDelayMinutes = 10;
     private const int LocalRetryDelayMinutes = 1;
 
+    private static readonly TimeSpan PruneInterval = TimeSpan.FromMinutes(15);
+    private static readonly TimeSpan StaleFailedCandidateAge = TimeSpan.FromHours(24);
+    private static readonly TimeSpan StaleCandidateAge = TimeSpan.FromHours(48);
+
     private readonly ConcurrentDictionary<string, List<DiscoveredPeer>> _peers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _pruneLock = new();
+    private DateTime _lastPruneTime = DateTime.UtcNow;
 
     public void AddPeers(string infoHash, IEnumerable<TrackerPeer> peers, string source)
     {
+        PruneIfDue();
+
         var list = _peers.GetOrAdd(infoHash, _ => new List<DiscoveredPeer>());
 
         lock (list)
@@ -150,6 +162,63 @@ public class PeerDiscoveryService : IPeerDiscoveryService
         lock (list)
         {
             return list.Count(p => p.FailCount < MaxFailCount);
+        }
+    }
+
+    public void RemoveTorrent(string infoHash)
+    {
+        if (!string.IsNullOrWhiteSpace(infoHash))
+        {
+            _peers.TryRemove(infoHash, out _);
+        }
+    }
+
+    public void PruneStalePeers()
+    {
+        var now = DateTime.UtcNow;
+        var cutoff24H = now - StaleFailedCandidateAge;
+        var cutoff48H = now - StaleCandidateAge;
+
+        foreach (var (infoHash, list) in _peers)
+        {
+            lock (list)
+            {
+                list.RemoveAll(p =>
+                    (p.FailCount >= MaxFailCount && (p.LastAttempt ?? p.DiscoveredAt) < cutoff24H) ||
+                    (p.DiscoveredAt < cutoff48H && (p.FailCount > 0 || !p.LastAttempt.HasValue)));
+
+                if (list.Count == 0)
+                {
+                    _peers.TryRemove(infoHash, out _);
+                }
+            }
+        }
+    }
+
+    public void Handle(TorrentDeletedEvent message)
+    {
+        if (message?.Torrent?.InfoHash != null)
+        {
+            RemoveTorrent(message.Torrent.InfoHash);
+        }
+    }
+
+    private void PruneIfDue()
+    {
+        if (DateTime.UtcNow - _lastPruneTime < PruneInterval)
+        {
+            return;
+        }
+
+        lock (_pruneLock)
+        {
+            if (DateTime.UtcNow - _lastPruneTime < PruneInterval)
+            {
+                return;
+            }
+
+            _lastPruneTime = DateTime.UtcNow;
+            PruneStalePeers();
         }
     }
 

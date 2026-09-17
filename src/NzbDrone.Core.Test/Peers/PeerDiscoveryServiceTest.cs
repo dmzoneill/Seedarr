@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Test.Peers;
@@ -247,5 +250,146 @@ public class PeerDiscoveryServiceTest
         Assert.That(candidate.FailCount, Is.EqualTo(0));
         Assert.That(candidate.LastAttempt.HasValue, Is.True);
         Assert.That(candidate.LastAttempt.Value, Is.GreaterThanOrEqualTo(timeBeforeSuccess));
+    }
+
+    [Test]
+    public void RemoveTorrent_should_remove_all_stored_peers_for_that_infohash()
+    {
+        const string otherInfoHash = "fedcba9876543210fedcba9876543210fedcba98";
+        var peer1 = new TrackerPeer { Ip = "1.1.1.1", Port = 5000 };
+        var peer2 = new TrackerPeer { Ip = "2.2.2.2", Port = 6000 };
+
+        _service.AddPeers(InfoHash, new[] { peer1 }, "tracker");
+        _service.AddPeers(otherInfoHash, new[] { peer2 }, "tracker");
+
+        Assert.That(_service.PeerCount(InfoHash), Is.EqualTo(1));
+        Assert.That(_service.PeerCount(otherInfoHash), Is.EqualTo(1));
+
+        _service.RemoveTorrent(InfoHash);
+
+        Assert.That(_service.PeerCount(InfoHash), Is.EqualTo(0));
+        Assert.That(_service.GetPeers(InfoHash), Is.Empty);
+        Assert.That(_service.PeerCount(otherInfoHash), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void TorrentDeletedEvent_should_evict_torrent_from_PeerDiscoveryService()
+    {
+        var peer = new TrackerPeer { Ip = "3.3.3.3", Port = 7000 };
+        _service.AddPeers(InfoHash, new[] { peer }, "tracker");
+
+        Assert.That(_service.PeerCount(InfoHash), Is.EqualTo(1));
+
+        var deleteEvent = new TorrentDeletedEvent(100, new Torrent { InfoHash = InfoHash });
+        _service.Handle(deleteEvent);
+
+        Assert.That(_service.PeerCount(InfoHash), Is.EqualTo(0));
+        Assert.That(_service.GetPeers(InfoHash), Is.Empty);
+    }
+
+    [Test]
+    public void PruneStalePeers_should_purge_stale_failed_and_expired_candidates_while_preserving_active_recent_peers()
+    {
+        var now = DateTime.UtcNow;
+
+        var peersField = typeof(PeerDiscoveryService).GetField("_peers", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var peersDict = (ConcurrentDictionary<string, List<DiscoveredPeer>>)peersField.GetValue(_service)!;
+
+        var list = new List<DiscoveredPeer>
+        {
+            // Active recent peer: keep
+            new DiscoveredPeer
+            {
+                Ip = "10.0.0.1",
+                Port = 5001,
+                Source = "tracker",
+                DiscoveredAt = now.AddHours(-1),
+                FailCount = 0,
+                LastAttempt = null
+            },
+
+            // Stale failed peer (failed >= 3 and last attempt > 24h ago): purge
+            new DiscoveredPeer
+            {
+                Ip = "10.0.0.2",
+                Port = 5002,
+                Source = "tracker",
+                DiscoveredAt = now.AddHours(-30),
+                FailCount = 3,
+                LastAttempt = now.AddHours(-25)
+            },
+
+            // Recent failed peer (failed >= 3 but last attempt within 24h): keep
+            new DiscoveredPeer
+            {
+                Ip = "10.0.0.3",
+                Port = 5003,
+                Source = "tracker",
+                DiscoveredAt = now.AddHours(-5),
+                FailCount = 3,
+                LastAttempt = now.AddHours(-2)
+            },
+
+            // Expired candidate (> 48h old and never attempted/connected): purge
+            new DiscoveredPeer
+            {
+                Ip = "10.0.0.4",
+                Port = 5004,
+                Source = "tracker",
+                DiscoveredAt = now.AddHours(-50),
+                FailCount = 0,
+                LastAttempt = null
+            },
+
+            // Expired candidate (> 48h old and has FailCount > 0): purge
+            new DiscoveredPeer
+            {
+                Ip = "10.0.0.5",
+                Port = 5005,
+                Source = "tracker",
+                DiscoveredAt = now.AddHours(-50),
+                FailCount = 1,
+                LastAttempt = now.AddHours(-10)
+            }
+        };
+
+        peersDict[InfoHash] = list;
+
+        _service.PruneStalePeers();
+
+        Assert.That(list.Count, Is.EqualTo(2));
+        Assert.That(list.Any(p => p.Ip == "10.0.0.1"), Is.True);
+        Assert.That(list.Any(p => p.Ip == "10.0.0.3"), Is.True);
+        Assert.That(list.Any(p => p.Ip == "10.0.0.2"), Is.False);
+        Assert.That(list.Any(p => p.Ip == "10.0.0.4"), Is.False);
+        Assert.That(list.Any(p => p.Ip == "10.0.0.5"), Is.False);
+    }
+
+    [Test]
+    public void PruneStalePeers_should_remove_empty_dictionary_entry_when_all_peers_pruned()
+    {
+        var now = DateTime.UtcNow;
+
+        var peersField = typeof(PeerDiscoveryService).GetField("_peers", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var peersDict = (ConcurrentDictionary<string, List<DiscoveredPeer>>)peersField.GetValue(_service)!;
+
+        var list = new List<DiscoveredPeer>
+        {
+            new DiscoveredPeer
+            {
+                Ip = "10.0.0.2",
+                Port = 5002,
+                Source = "tracker",
+                DiscoveredAt = now.AddHours(-30),
+                FailCount = 3,
+                LastAttempt = now.AddHours(-25)
+            }
+        };
+
+        peersDict[InfoHash] = list;
+
+        _service.PruneStalePeers();
+
+        Assert.That(peersDict.ContainsKey(InfoHash), Is.False);
     }
 }
