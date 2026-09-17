@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -168,5 +170,81 @@ public class CustomScriptServiceTest
         var (jsonPath, jsonArgs) = CustomScriptService.ParseSettings("{\"path\": \"/usr/bin/script.sh\", \"arguments\": \"--foo bar\"}");
         Assert.That(jsonPath, Is.EqualTo("/usr/bin/script.sh"));
         Assert.That(jsonArgs, Is.EqualTo("--foo bar"));
+    }
+
+    [Test]
+    public async Task TestScriptAsync_should_return_success_and_stdout_for_valid_script()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "test.bat" : "test.sh");
+            var scriptContent = isWindows
+                ? "@echo off\necho Hello from Seedarr script"
+                : "#!/bin/sh\necho \"Hello from Seedarr script\"\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            var service = new CustomScriptService();
+            var result = await service.TestScriptAsync(scriptFile);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Success, Is.True);
+            Assert.That(result.ExitCode, Is.EqualTo(0));
+            Assert.That(result.Stdout, Does.Contain("Hello from Seedarr script"));
+            Assert.That(result.ExecutionTimeMs, Is.GreaterThan(0));
+            Assert.That(result.TimedOut, Is.False);
+            Assert.That(result.ResolvedInterpreter, Is.Not.Empty);
+            Assert.That(result.WorkingDirectory, Is.Not.Empty);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task TestScriptAsync_should_capture_stderr_and_failure_on_non_zero_exit_code()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "fail.bat" : "fail.sh");
+            var scriptContent = isWindows
+                ? "@echo off\n>&2 echo Test failure message\nexit /b 42"
+                : "#!/bin/sh\necho \"Test failure message\" >&2\nexit 42\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            var service = new CustomScriptService();
+            var result = await service.TestScriptAsync(scriptFile);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.ExitCode, Is.EqualTo(42));
+            Assert.That(result.Stderr, Does.Contain("Test failure message"));
+            Assert.That(result.TimedOut, Is.False);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task TestScriptAsync_should_return_graceful_error_for_missing_file()
+    {
+        var missingPath = Path.Combine(Path.GetTempPath(), "seedarr-nonexistent-" + Guid.NewGuid().ToString("N") + ".sh");
+
+        var service = new CustomScriptService();
+        var result = await service.TestScriptAsync(missingPath);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.ExitCode, Is.Not.EqualTo(0));
+        Assert.That(result.Stderr, Does.Contain("does not exist"));
+        Assert.That(result.TimedOut, Is.False);
     }
 }
