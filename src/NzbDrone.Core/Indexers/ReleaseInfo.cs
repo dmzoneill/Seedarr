@@ -23,4 +23,6 @@ public class ReleaseInfo
     public bool IsFreeleech => DownloadVolumeFactor <= 0.001;
     public int? ResponseOffset { get; set; }
     public int? ResponseTotal { get; set; }
+    public int CustomFormatScore { get; set; }
+    public List<string> MatchedCustomFormats { get; set; } = new List<string>();
 }
