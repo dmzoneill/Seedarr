@@ -74,6 +74,7 @@ export function IndexersTab() {
     categoryId: 0,
     indexerIds: [],
     tags: [],
+    priority: 0,
   };
 
   const categoryOptions = useMemo(() => {
@@ -172,16 +173,33 @@ export function IndexersTab() {
   const handleSaveRule = () => {
     if (!editingRule) return;
     const name = editingRule.name?.trim() || "RSS Rule";
+    const minSeeders = Number(editingRule.minSeeders) || 0;
+    const minSizeBytes = Number(editingRule.minSizeBytes) || 0;
+    const maxSizeBytes = Number(editingRule.maxSizeBytes) || 0;
+    const maxAgeDays = Number(editingRule.maxAgeDays) || 0;
+    const priority = Number(editingRule.priority) || 0;
+
+    if (minSeeders < 0 || minSizeBytes < 0 || maxSizeBytes < 0 || maxAgeDays < 0 || priority < 0) {
+      showToast("Numerical constraints cannot be negative", "error");
+      return;
+    }
+
+    if (maxSizeBytes > 0 && minSizeBytes > maxSizeBytes) {
+      showToast("Minimum size cannot be greater than maximum size", "error");
+      return;
+    }
+
     const payload: Partial<RssRule> = {
       ...editingRule,
       name,
       isEnabled: editingRule.isEnabled ?? true,
       mustContain: editingRule.mustContain?.trim() || "",
       mustNotContain: editingRule.mustNotContain?.trim() || "",
-      minSeeders: Number(editingRule.minSeeders) || 0,
-      minSizeBytes: Number(editingRule.minSizeBytes) || 0,
-      maxSizeBytes: Number(editingRule.maxSizeBytes) || 0,
-      maxAgeDays: Number(editingRule.maxAgeDays) || 0,
+      minSeeders,
+      minSizeBytes,
+      maxSizeBytes,
+      maxAgeDays,
+      priority,
       freeleechOnly: Boolean(editingRule.freeleechOnly),
       categoryId: Number(editingRule.categoryId) || 0,
       indexerIds: editingRule.indexerIds || [],
@@ -361,7 +379,9 @@ export function IndexersTab() {
         </div>
 
         <div className="provider-cards">
-          {rssRules?.map((rule) => (
+          {[...(rssRules || [])]
+            .sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0) || a.id - b.id)
+            .map((rule) => (
             <div
               key={rule.id}
               className="provider-card"
@@ -394,6 +414,9 @@ export function IndexersTab() {
                   }`}
                 >
                   {rule.isEnabled ? "Enabled" : "Disabled"}
+                </span>
+                <span className="provider-card-badge provider-card-badge-blue">
+                  Priority {rule.priority ?? 0}
                 </span>
                 {rule.minSeeders > 0 && (
                   <span className="provider-card-badge provider-card-badge-blue">
@@ -858,6 +881,13 @@ export function IndexersTab() {
               onChange={(v) => setEditingRule({ ...editingRule, mustNotContain: v })}
               placeholder="e.g. CAM|TS|HDCAM"
               hint="Regex pattern or keyword releases must NOT match"
+            />
+            <NumberInput
+              label="Priority"
+              value={editingRule.priority ?? 0}
+              onChange={(v) => setEditingRule({ ...editingRule, priority: v })}
+              min={0}
+              hint="Evaluation priority (lower numbers evaluate first, e.g. 0 before 10)"
             />
             <NumberInput
               label="Minimum Seeders"

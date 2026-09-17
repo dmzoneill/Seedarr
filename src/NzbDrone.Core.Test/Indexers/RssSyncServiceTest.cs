@@ -148,5 +148,61 @@ namespace NzbDrone.Core.Test.Indexers
             Assert.That(_subject.MatchesRule(rule, freeleech), Is.True);
             Assert.That(_subject.MatchesRule(rule, freeleechTooLarge), Is.False);
         }
+
+        [Test]
+        public void GetFirstMatchingRule_should_return_highest_priority_rule_first()
+        {
+            var lowPriorityRule = new RssRule
+            {
+                Id = 1,
+                Name = "Low Priority Rule",
+                IsEnabled = true,
+                Priority = 10,
+                MustContain = "1080p"
+            };
+
+            var highPriorityRule = new RssRule
+            {
+                Id = 2,
+                Name = "High Priority Rule",
+                IsEnabled = true,
+                Priority = 1,
+                MustContain = "1080p"
+            };
+
+            var release = new ReleaseInfo
+            {
+                Title = "Test.Movie.2026.1080p"
+            };
+
+            var matched = _subject.GetFirstMatchingRule(new[] { lowPriorityRule, highPriorityRule }, release);
+
+            Assert.That(matched, Is.Not.Null);
+            Assert.That(matched.Id, Is.EqualTo(2));
+            Assert.That(matched.Name, Is.EqualTo("High Priority Rule"));
+        }
+
+        [Test]
+        public void MatchesRule_catastrophic_backtracking_regex_times_out_safely()
+        {
+            var rule = new RssRule
+            {
+                Name = "ReDoS Rule",
+                IsEnabled = true,
+                MustContain = "(a+)+$"
+            };
+
+            var release = new ReleaseInfo
+            {
+                Title = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!"
+            };
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var result = _subject.MatchesRule(rule, release);
+            sw.Stop();
+
+            Assert.That(result, Is.False);
+            Assert.That(sw.ElapsedMilliseconds, Is.LessThan(2000));
+        }
     }
 }
