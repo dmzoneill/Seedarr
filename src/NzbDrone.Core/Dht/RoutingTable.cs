@@ -89,9 +89,9 @@ public class RoutingTable
                 return;
             }
 
-            if (node.EndPoint != null)
+            if (node.EndPoint != null && !AllowLocal)
             {
-                if (!AllowLocal && IsLocalOrLinkLocal(node.EndPoint.Address))
+                if (IsLocalOrLinkLocal(node.EndPoint.Address))
                 {
                     return;
                 }

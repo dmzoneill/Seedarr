@@ -251,6 +251,10 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         if (_configService.EnableDht)
         {
             StartDht();
+            if (_udpClient == null)
+            {
+                return;
+            }
         }
         else
         {

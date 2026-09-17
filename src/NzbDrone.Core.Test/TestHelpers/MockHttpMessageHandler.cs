@@ -61,6 +61,8 @@ internal class MockHttpMessageHandler : HttpMessageHandler
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        PreserveContent(request);
         LastRequest = request;
         Requests.Add(request);
         return Task.FromResult(GetNext());
@@ -69,9 +71,39 @@ internal class MockHttpMessageHandler : HttpMessageHandler
     protected override HttpResponseMessage Send(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        PreserveContent(request);
         LastRequest = request;
         Requests.Add(request);
         return GetNext();
+    }
+
+    private static void PreserveContent(HttpRequestMessage request)
+    {
+        if (request?.Content != null && request.Content is not NonDisposingByteArrayContent)
+        {
+            var bytes = request.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+            var nonDisposing = new NonDisposingByteArrayContent(bytes);
+            foreach (var header in request.Content.Headers)
+            {
+                nonDisposing.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            request.Content = nonDisposing;
+        }
+    }
+
+    private sealed class NonDisposingByteArrayContent : ByteArrayContent
+    {
+        public NonDisposingByteArrayContent(byte[] content)
+            : base(content)
+        {
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            // Do not dispose so that test assertions can read Content after the caller disposes HttpRequestMessage
+        }
     }
 
     private HttpResponseMessage GetNext()

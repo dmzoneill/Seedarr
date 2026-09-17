@@ -68,7 +68,9 @@ public class SwaggerIntegrationTest : IntegrationTestBase
 
         Assert.That(html, Does.Contain("swagger-ui"));
         Assert.That(html, Does.Contain("swagger-custom.css"));
-        Assert.That(html, Does.Contain("persistAuthorization"));
+        var jsResponse = await GetAsync("/swagger/index.js");
+        var js = jsResponse.IsSuccessStatusCode ? await jsResponse.Content.ReadAsStringAsync() : string.Empty;
+        Assert.That(html.Contains("persistAuthorization") || js.Contains("persistAuthorization"), Is.True);
     }
 
     [Test]

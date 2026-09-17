@@ -555,9 +555,11 @@ public class ArrWebhookService : IArrWebhookService
             if (Uri.TryCreate(payload.ApplicationUrl, UriKind.Absolute, out var payloadUri))
             {
                 var hostMatch = enabled.FirstOrDefault(d =>
-                    Uri.TryCreate(d.Url, UriKind.Absolute, out var connUri) &&
-                    string.Equals(payloadUri.Host, connUri.Host, StringComparison.OrdinalIgnoreCase) &&
-                    payloadUri.Port == connUri.Port);
+                    (Uri.TryCreate(d.Url, UriKind.Absolute, out var connUri) &&
+                        string.Equals(payloadUri.Host, connUri.Host, StringComparison.OrdinalIgnoreCase) &&
+                        payloadUri.Port == connUri.Port) ||
+                    (!string.IsNullOrEmpty(d.ArrType) && string.Equals(payloadUri.Host, d.ArrType, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(d.Name) && string.Equals(payloadUri.Host, d.Name, StringComparison.OrdinalIgnoreCase)));
 
                 if (hostMatch != null)
                 {
@@ -613,7 +615,7 @@ public class ArrWebhookService : IArrWebhookService
 
         var apiVersion = string.Equals(connection.ArrType, "Lidarr", StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(connection.ArrType, "Readarr", StringComparison.OrdinalIgnoreCase) ? "v1" : "v3";
-        var variants = new[] { downloadId, downloadId.ToUpperInvariant() };
+        var variants = new[] { downloadId };
 
         foreach (var id in variants)
         {

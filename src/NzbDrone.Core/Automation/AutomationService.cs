@@ -169,15 +169,18 @@ public class AutomationService : IAutomationService
             _logger.Info("Executing automation script '{0}' (Trigger: {1}, Language: {2})", script.Name, script.Trigger, script.Language);
 
             var torrentTags = new List<string>();
-            if (torrent != null && torrent.TagIds != null && torrent.TagIds.Count > 0)
+            if (torrent != null && torrent.TagIds != null && torrent.TagIds.Count > 0 && _tagService != null)
             {
                 var allTags = _tagService.GetAll();
-                var tagMap = allTags.ToDictionary(t => t.Id, t => t.Label);
-                foreach (var tid in torrent.TagIds)
+                if (allTags != null)
                 {
-                    if (tagMap.TryGetValue(tid, out var label))
+                    var tagMap = allTags.ToDictionary(t => t.Id, t => t.Label);
+                    foreach (var tid in torrent.TagIds)
                     {
-                        torrentTags.Add(label);
+                        if (tagMap.TryGetValue(tid, out var label))
+                        {
+                            torrentTags.Add(label);
+                        }
                     }
                 }
             }
@@ -377,25 +380,28 @@ public class AutomationService : IAutomationService
         }
 
         // Tags to remove
-        if (result.TagsToRemove.Count > 0 && torrent.TagIds != null && torrent.TagIds.Count > 0)
+        if (result.TagsToRemove.Count > 0 && torrent.TagIds != null && torrent.TagIds.Count > 0 && _tagService != null)
         {
             var allTags = _tagService.GetAll();
-            var tagLookup = allTags.ToDictionary(t => t.Label, t => t.Id, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var tagLabel in result.TagsToRemove)
+            if (allTags != null)
             {
-                if (tagLookup.TryGetValue(tagLabel, out var tagId))
+                var tagLookup = allTags.ToDictionary(t => t.Label, t => t.Id, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var tagLabel in result.TagsToRemove)
                 {
-                    if (torrent.TagIds.Remove(tagId))
+                    if (tagLookup.TryGetValue(tagLabel, out var tagId))
                     {
-                        changed = true;
-                        tagsModified = true;
+                        if (torrent.TagIds.Remove(tagId))
+                        {
+                            changed = true;
+                            tagsModified = true;
+                        }
                     }
                 }
             }
         }
 
-        if (tagsModified)
+        if (tagsModified && _tagService != null && torrent.TagIds != null)
         {
             torrent.Label = string.Join(", ", _tagService.GetLabelsForTagIds(torrent.TagIds));
         }
@@ -466,13 +472,16 @@ public class AutomationService : IAutomationService
             return;
         }
 
-        if (result.ShouldPause && torrent.Status != TorrentStatus.Paused)
+        if (result.ShouldPause)
         {
             var oldStatus = torrent.Status;
             torrent.Status = TorrentStatus.Paused;
             _eventAggregator.PublishEvent(new TorrentPausedEvent(torrent));
-            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused));
-            changed = true;
+            if (oldStatus != TorrentStatus.Paused)
+            {
+                _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused));
+                changed = true;
+            }
         }
         else if (result.ShouldResume && torrent.Status == TorrentStatus.Paused)
         {

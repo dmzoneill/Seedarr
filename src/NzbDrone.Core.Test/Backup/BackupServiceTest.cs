@@ -396,9 +396,11 @@ public class BackupServiceTest
     {
         CreateTestSqliteDatabase();
         var dbPath = Path.Combine(_tempDir, "seedarr.db");
+        var root = Path.GetPathRoot(Path.GetFullPath(_tempDir)) ?? "/";
+        var freeSpace = new DriveInfo(root).AvailableFreeSpace;
         using (var fs = new FileStream(dbPath, FileMode.Open, FileAccess.Write))
         {
-            fs.SetLength(500L * 1024 * 1024 * 1024 * 1024); // 500 TB sparse file
+            fs.SetLength(freeSpace + (100L * 1024 * 1024));
         }
 
         var ex = Assert.Throws<InvalidOperationException>(() => _subject.CreateBackup(BackupType.Manual));

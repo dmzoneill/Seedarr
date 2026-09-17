@@ -270,19 +270,13 @@ public class SystemController : ControllerBase
     [HttpPost("task/{id:int}/abort")]
     public ActionResult AbortTask(int id)
     {
-        var task = _taskManager.GetAll().FirstOrDefault(t => t.Id == id);
-        if (task == null)
-        {
-            return NotFound(new { message = $"Task with ID {id} not found" });
-        }
-
         var cancelled = _taskManager.CancelTask(id);
         if (!cancelled)
         {
-            return NotFound(new { message = $"Task {task.TypeName} is not currently running" });
+            return NotFound(new { message = $"Task with ID {id} not found or not currently running" });
         }
 
-        return Ok(new { message = $"Task {task.TypeName} abort requested" });
+        return Ok(new { message = $"Task with ID {id} abort requested" });
     }
 
     /// <summary>

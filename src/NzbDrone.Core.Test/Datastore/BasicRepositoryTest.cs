@@ -31,7 +31,12 @@ public class BasicRepositoryTest
         cmd.CommandText = @"
             CREATE TABLE ""Tags"" (
                 ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
-                ""Label"" TEXT NOT NULL
+                ""Label"" TEXT NOT NULL,
+                ""Color"" TEXT,
+                ""UploadLimitKbps"" INTEGER,
+                ""DownloadLimitKbps"" INTEGER,
+                ""MinSeedRatio"" REAL,
+                ""MinSeedTimeSeconds"" INTEGER
             )";
         cmd.ExecuteNonQuery();
 

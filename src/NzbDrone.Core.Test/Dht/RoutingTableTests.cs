@@ -591,12 +591,12 @@ public class RoutingTableTests
         Assert.That(closest[0].NodeId[0], Is.EqualTo(0x80));
         Assert.That(closest[1].NodeId[0], Is.EqualTo(0x80));
 
-        // Next 2 nodes from bucket 1
-        Assert.That(closest[2].NodeId[0], Is.EqualTo(0x40));
-        Assert.That(closest[3].NodeId[0], Is.EqualTo(0x40));
+        // Next 2 nodes (0x80 ^ 0x20 = 160 < 0x80 ^ 0x40 = 192)
+        Assert.That(closest[2].NodeId[0], Is.EqualTo(0x20));
+        Assert.That(closest[3].NodeId[0], Is.EqualTo(0x20));
 
-        // 5th node from bucket 2
-        Assert.That(closest[4].NodeId[0], Is.EqualTo(0x20));
+        // 5th node
+        Assert.That(closest[4].NodeId[0], Is.EqualTo(0x40));
 
         // Strictly ordered by distance
         for (var i = 0; i < closest.Count - 1; i++)

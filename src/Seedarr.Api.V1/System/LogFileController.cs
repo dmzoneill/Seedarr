@@ -82,6 +82,14 @@ public class LogFileController : ControllerBase
     [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Filename is sanitized via Path.GetFileName and validated against the log directory")]
     public ActionResult GetLogFile(string filename, [FromQuery] bool download = false)
     {
+        if (string.IsNullOrWhiteSpace(filename) ||
+            filename.Contains('/') ||
+            filename.Contains('\\') ||
+            filename.Contains(".."))
+        {
+            return BadRequest("Invalid filename");
+        }
+
         var sanitized = Path.GetFileName(filename);
 
         if (string.IsNullOrWhiteSpace(sanitized) || sanitized != filename)
@@ -107,7 +115,11 @@ public class LogFileController : ControllerBase
         }
 
         var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        return File(stream, "text/plain", fileDownloadName: download ? sanitized : null, enableRangeProcessing: true);
+        return new FileStreamResult(stream, "text/plain")
+        {
+            FileDownloadName = download ? sanitized : null,
+            EnableRangeProcessing = true,
+        };
     }
 
     [HttpDelete]

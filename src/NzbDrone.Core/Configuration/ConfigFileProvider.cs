@@ -34,9 +34,35 @@ public class ConfigFileProvider : IConfigFileProvider
 
         LoadFromFile();
 
-        if (string.IsNullOrEmpty(ApiKey))
+        lock (Mutex)
         {
-            SetValue("ApiKey", GenerateApiKey());
+            var needsSave = false;
+            if (!_config.ContainsKey("Port"))
+            {
+                _config["Port"] = "9898";
+                needsSave = true;
+            }
+
+            if (!_config.ContainsKey("UrlBase"))
+            {
+                _config["UrlBase"] = string.Empty;
+            }
+
+            if (!_config.ContainsKey("BindAddress"))
+            {
+                _config["BindAddress"] = "*";
+            }
+
+            if (string.IsNullOrEmpty(ApiKey))
+            {
+                _config["ApiKey"] = GenerateApiKey();
+                needsSave = true;
+            }
+
+            if (needsSave)
+            {
+                SaveToFile();
+            }
         }
     }
 

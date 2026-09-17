@@ -208,12 +208,6 @@ public class CategoryService : ICategoryService
             throw new InvalidOperationException($"A category with the name '{trimmedName}' already exists.");
         }
 
-        var existingFromDb = _repository.GetByName(trimmedName);
-        if (existingFromDb != null)
-        {
-            throw new InvalidOperationException($"A category with the name '{trimmedName}' already exists.");
-        }
-
         _logger.Info("Adding category: {0}", category.Name);
 
         if (!string.IsNullOrWhiteSpace(category.SavePath))
@@ -255,13 +249,14 @@ public class CategoryService : ICategoryService
         var trimmedName = category.Name.Trim();
         category.Name = trimmedName;
 
+        EnsureCacheInitialized();
         _logger.Info("Updating category: {0}", category.Name);
         var existing = _repository.Get(category.Id);
 
         if (existing != null && !string.Equals(existing.Name, trimmedName, StringComparison.OrdinalIgnoreCase))
         {
-            var duplicate = _repository.GetByName(trimmedName);
-            if (duplicate != null && duplicate.Id != category.Id)
+            if (_nameCache.TryGetValue(trimmedName.ToLowerInvariant(), out var duplicate) &&
+                !ReferenceEquals(duplicate, NotFoundCategory) && duplicate.Id != category.Id)
             {
                 throw new InvalidOperationException($"A category with the name '{trimmedName}' already exists.");
             }

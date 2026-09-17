@@ -34,7 +34,11 @@ namespace NzbDrone.Core.ArrIntegration
         public Dictionary<string, ArrHistoryRecord> PreFetchDownloadHistories()
         {
             var cache = new Dictionary<string, ArrHistoryRecord>(StringComparer.OrdinalIgnoreCase);
-            var definitions = _connectionFactory.All();
+            var definitions = _connectionFactory?.All();
+            if (definitions == null)
+            {
+                return cache;
+            }
 
             foreach (var def in definitions)
             {

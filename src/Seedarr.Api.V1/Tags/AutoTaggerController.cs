@@ -7,7 +7,7 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.Tags;
 
 [V1ApiController("autotag")]
-public class AutoTaggerController : Controller
+public class AutoTaggerController : ControllerBase
 {
     private readonly IAutoTaggerService _autoTaggerService;
     private readonly ITagService _tagService;
