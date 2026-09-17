@@ -53,15 +53,13 @@ public class Torrent : ModelBase
     public double? RatioLimit { get; set; }
     public int? SeedingTimeLimit { get; set; }
     public bool IsVpnPaused { get; set; }
+    public int? DownloadClientId { get; set; }
 
     [Ignore]
     public string MagnetUrl { get; set; }
 
     [Ignore]
     public string DownloadUrl { get; set; }
-
-    [Ignore]
-    public int? DownloadClientId { get; set; }
 
     [Ignore]
     public List<TorrentFile> Files { get; set; }
@@ -103,6 +101,11 @@ public class Torrent : ModelBase
         if (updates.TagIds != null)
         {
             TagIds = updates.TagIds;
+        }
+
+        if (updates.DownloadClientId.HasValue)
+        {
+            DownloadClientId = updates.DownloadClientId;
         }
 
         Priority = updates.Priority;

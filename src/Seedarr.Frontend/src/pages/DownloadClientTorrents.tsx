@@ -12,6 +12,7 @@ import {
 import { useToast } from "../context/ToastContext";
 import { formatBytes } from "../utils/formatters";
 import { getMediaDeepLink, getDownloadClientUrl } from "../utils/arrLinks";
+import type { BatchImportItemResult } from "../api/types";
 
 export default function DownloadClientTorrents() {
   const { id } = useParams<{ id: string }>();
@@ -75,11 +76,13 @@ export default function DownloadClientTorrents() {
   const [importingHash, setImportingHash] = useState<string | null>(null);
   const [selectedHashes, setSelectedHashes] = useState<Set<string>>(new Set());
   const [importingSelected, setImportingSelected] = useState(false);
+  const [failedImportItems, setFailedImportItems] = useState<BatchImportItemResult[] | null>(null);
 
   useEffect(() => {
     setSearchTerm("");
     setFilterMode("all");
     setSelectedHashes(new Set());
+    setFailedImportItems(null);
   }, [id]);
 
   const totalCount = items?.length || 0;
@@ -194,6 +197,12 @@ export default function DownloadClientTorrents() {
           `Import Complete: ${res.added} added, ${res.skipped} skipped, ${res.failed} failed.`,
           res.failed > 0 ? "error" : "success",
         );
+        if (res.failed > 0 && res.items) {
+          const failures = res.items.filter((i) => !i.success);
+          if (failures.length > 0) {
+            setFailedImportItems(failures);
+          }
+        }
       },
       onError: (err) => {
         setImportingSelected(false);
@@ -226,6 +235,12 @@ export default function DownloadClientTorrents() {
           `Import Complete: ${res.added} added, ${res.skipped} skipped, ${res.failed} failed.`,
           res.failed > 0 ? "error" : "success",
         );
+        if (res.failed > 0 && res.items) {
+          const failures = res.items.filter((i) => !i.success);
+          if (failures.length > 0) {
+            setFailedImportItems(failures);
+          }
+        }
       },
       onError: (err) => {
         showToast(
@@ -1435,6 +1450,112 @@ export default function DownloadClientTorrents() {
             </div>
           </div>
         )}
+
+      {/* Batch Import Failure Diagnostic Modal */}
+      {failedImportItems && failedImportItems.length > 0 && (
+        <div
+          className="modal-overlay"
+          onClick={() => setFailedImportItems(null)}
+          style={{ zIndex: 1100 }}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 720,
+              width: "90%",
+              maxHeight: "85vh",
+              display: "flex",
+              flexDirection: "column",
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid var(--border-light)",
+              backgroundColor: "var(--bg-secondary)",
+              padding: "1.5rem",
+            }}
+          >
+            <h3
+              className="modal-title"
+              style={{
+                fontSize: "1.2rem",
+                marginBottom: "0.5rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                color: "var(--danger, #e74c3c)",
+              }}
+            >
+              <span>⚠️</span> Batch Import Failures ({failedImportItems.length})
+            </h3>
+            <p
+              style={{
+                fontSize: "0.875rem",
+                color: "var(--text-secondary)",
+                marginBottom: "1.25rem",
+                lineHeight: 1.5,
+              }}
+            >
+              The following torrents failed to import from {client.name}. Diagnostic details and retry actions are listed below:
+            </p>
+
+            <div
+              style={{
+                overflowY: "auto",
+                flex: "1 1 auto",
+                maxHeight: "50vh",
+                marginBottom: "1.25rem",
+                border: "1px solid var(--border-light)",
+                borderRadius: "6px",
+                backgroundColor: "var(--bg-primary)",
+              }}
+            >
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                <thead>
+                  <tr style={{ borderBottom: "1px solid var(--border-light)", backgroundColor: "var(--bg-secondary)" }}>
+                    <th style={{ textAlign: "left", padding: "0.6rem 0.75rem" }}>Torrent</th>
+                    <th style={{ textAlign: "left", padding: "0.6rem 0.75rem" }}>Failure Reason</th>
+                    <th style={{ textAlign: "right", padding: "0.6rem 0.75rem", width: "80px" }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {failedImportItems.map((item) => (
+                    <tr key={item.infoHash} style={{ borderBottom: "1px solid var(--border-light)" }}>
+                      <td style={{ padding: "0.6rem 0.75rem" }}>
+                        <div style={{ fontWeight: 600, wordBreak: "break-word" }}>{item.title || item.infoHash}</div>
+                        <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", fontFamily: "monospace" }}>
+                          {item.infoHash}
+                        </div>
+                      </td>
+                      <td style={{ padding: "0.6rem 0.75rem", color: "var(--danger, #e74c3c)", wordBreak: "break-word" }}>
+                        {item.errorMessage || "Unknown error occurred during import."}
+                      </td>
+                      <td style={{ padding: "0.6rem 0.75rem", textAlign: "right" }}>
+                        <button
+                          className="btn btn-outline btn-small"
+                          style={{ fontSize: "0.75rem", padding: "0.25rem 0.55rem" }}
+                          disabled={importOneMutation.isPending && importingHash === item.infoHash}
+                          onClick={() => {
+                            handleImportOne(item.infoHash, item.title || item.infoHash);
+                            setFailedImportItems((prev) => (prev ? prev.filter((f) => f.infoHash !== item.infoHash) : null));
+                          }}
+                        >
+                          {importOneMutation.isPending && importingHash === item.infoHash ? "..." : "Retry"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+              <button className="btn btn-primary" onClick={() => setFailedImportItems(null)}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

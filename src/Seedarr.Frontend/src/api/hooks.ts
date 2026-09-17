@@ -32,6 +32,7 @@ import type {
   DownloadClientTestResult,
   IndexerTestResult,
   SyncResult,
+  BatchImportResponse,
   IndexerDefinition,
   DownloadClientDefinition,
   DownloadClientRemoteItem,
@@ -785,9 +786,9 @@ export function useImportDownloadClientTorrent(clientId: number) {
 
 export function useImportDownloadClientTorrents(clientId: number) {
   const queryClient = useQueryClient();
-  return useMutation<SyncResult, Error, string[]>({
+  return useMutation<BatchImportResponse, Error, string[]>({
     mutationFn: (infoHashes) =>
-      apiClient.post(`/downloadclients/${clientId}/import`, { infoHashes }),
+      apiClient.post(`/downloadclients/${clientId}/import-torrents`, { infoHashes }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ["downloadclients", clientId, "items"],

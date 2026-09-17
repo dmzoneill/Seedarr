@@ -15,7 +15,7 @@ public interface IDownloadClientSyncService
     SyncResult Sync();
     List<DownloadClientRemoteItem> GetClientItems(int clientId);
     Torrent ImportTorrent(int clientId, string infoHash);
-    SyncResult ImportTorrents(int clientId, List<string> infoHashes);
+    BatchImportResponse ImportTorrents(int clientId, List<string> infoHashes);
 }
 
 public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
@@ -137,6 +137,16 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                                 }
                             }
 
+                            if (!torrent.DownloadClientId.HasValue && definition.Id > 0)
+                            {
+                                torrent.DownloadClientId = definition.Id;
+                            }
+
+                            if (string.IsNullOrEmpty(torrent.Category) && !string.IsNullOrWhiteSpace(definition.Category))
+                            {
+                                torrent.Category = definition.Category;
+                            }
+
                             torrent.UpdateRatio();
                             _torrentService.Update(torrent);
                             result.Updated++;
@@ -185,10 +195,11 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                                 TrackerUrl = parsed.AnnounceUrl,
                                 DateAdded = DateTime.UtcNow,
                                 Status = MapClientStatus(item.Status, remaining, total),
-                                Category = item.Category,
+                                Category = !string.IsNullOrWhiteSpace(item.Category) ? item.Category : definition.Category,
                                 SavePath = remappedPath,
                                 SourcePath = remappedPath,
                                 Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
+                                DownloadClientId = definition.Id,
                             };
 
                             if (item.DownloadSpeed.HasValue)
@@ -236,10 +247,11 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                                 TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
                                 DateAdded = DateTime.UtcNow,
                                 Status = MapClientStatus(item.Status, remaining, total),
-                                Category = item.Category,
+                                Category = !string.IsNullOrWhiteSpace(item.Category) ? item.Category : definition.Category,
                                 SavePath = remappedPath,
                                 SourcePath = remappedPath,
                                 Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
+                                DownloadClientId = definition.Id,
                             };
 
                             if (item.DownloadSpeed.HasValue)
@@ -316,8 +328,11 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         foreach (var item in items)
         {
             var hash = item.InfoHash?.ToLowerInvariant() ?? "";
-            var isInLibrary = !string.IsNullOrEmpty(hash) && existingTorrents.ContainsKey(hash);
-            var libraryId = isInLibrary ? (int?)existingTorrents[hash].Id : null;
+            Torrent existing = null;
+            var isInLibrary = !string.IsNullOrEmpty(hash) &&
+                existingTorrents.TryGetValue(hash, out existing) &&
+                (!existing.DownloadClientId.HasValue || existing.DownloadClientId.Value == clientId);
+            var libraryId = isInLibrary && existing != null ? (int?)existing.Id : null;
 
             double progress = 0;
             if (item.TotalSize > 0)
@@ -448,10 +463,11 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 TrackerUrl = parsed.AnnounceUrl,
                 DateAdded = DateTime.UtcNow,
                 Status = MapClientStatus(matchingItem?.Status, remaining, total),
-                Category = matchingItem?.Category,
+                Category = !string.IsNullOrWhiteSpace(matchingItem?.Category) ? matchingItem.Category : definition?.Category,
                 SavePath = remappedPath,
                 SourcePath = remappedPath,
                 Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
+                DownloadClientId = definition?.Id,
             };
 
             if (matchingItem?.DownloadSpeed.HasValue == true)
@@ -495,10 +511,11 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
                 DateAdded = DateTime.UtcNow,
                 Status = MapClientStatus(matchingItem.Status, remaining, total),
-                Category = matchingItem.Category,
+                Category = !string.IsNullOrWhiteSpace(matchingItem.Category) ? matchingItem.Category : definition?.Category,
                 SavePath = remappedPath,
                 SourcePath = remappedPath,
                 Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
+                DownloadClientId = definition?.Id,
             };
 
             if (matchingItem.DownloadSpeed.HasValue)
@@ -640,9 +657,9 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
         }
     }
 
-    public SyncResult ImportTorrents(int clientId, List<string> infoHashes)
+    public BatchImportResponse ImportTorrents(int clientId, List<string> infoHashes)
     {
-        var result = new SyncResult();
+        var result = new BatchImportResponse();
         if (infoHashes == null || infoHashes.Count == 0)
         {
             return result;
@@ -693,27 +710,57 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 if (string.IsNullOrWhiteSpace(rawHash))
                 {
                     result.Failed++;
+                    result.Items.Add(new BatchImportItemResult
+                    {
+                        InfoHash = rawHash ?? string.Empty,
+                        Title = string.Empty,
+                        Success = false,
+                        ErrorMessage = "InfoHash cannot be empty."
+                    });
                     continue;
                 }
 
                 var hash = rawHash.Trim().ToLowerInvariant();
+                clientItems.TryGetValue(hash, out var matchingItem);
+                var title = matchingItem?.Title ?? hash;
+
                 if (existingHashes.Contains(hash))
                 {
                     result.Skipped++;
+                    result.Items.Add(new BatchImportItemResult
+                    {
+                        InfoHash = hash,
+                        Title = title,
+                        Success = true,
+                        ErrorMessage = null
+                    });
                     continue;
                 }
 
                 try
                 {
-                    clientItems.TryGetValue(hash, out var matchingItem);
                     ImportTorrentInternal(definition, provider, hash, matchingItem);
                     existingHashes.Add(hash);
                     result.Added++;
+                    result.Items.Add(new BatchImportItemResult
+                    {
+                        InfoHash = hash,
+                        Title = title,
+                        Success = true,
+                        ErrorMessage = null
+                    });
                 }
                 catch (Exception ex)
                 {
                     _logger.Warn(ex, "Failed to import torrent {0} from client {1}", hash, clientId);
                     result.Failed++;
+                    result.Items.Add(new BatchImportItemResult
+                    {
+                        InfoHash = hash,
+                        Title = title,
+                        Success = false,
+                        ErrorMessage = ex.Message
+                    });
                 }
             }
 
