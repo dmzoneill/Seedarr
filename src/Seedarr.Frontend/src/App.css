@@ -3324,6 +3324,31 @@ body {
   background-color: var(--accent-bg) !important;
 }
 
+.torrent-table-row:focus-visible,
+.torrent-table-row-focused:focus {
+  outline: 2px solid var(--accent, #5c6bc0);
+  outline-offset: -2px;
+}
+
+.torrent-table-row:focus-visible td,
+.torrent-table-row-focused:focus td {
+  box-shadow: inset 0 2px 0 var(--accent, #5c6bc0), inset 0 -2px 0 var(--accent, #5c6bc0);
+}
+
+.torrent-table-row:focus-visible td:first-child,
+.torrent-table-row-focused:focus td:first-child {
+  box-shadow: inset 2px 2px 0 var(--accent, #5c6bc0), inset 0 -2px 0 var(--accent, #5c6bc0);
+}
+
+.torrent-table-row:focus-visible td:last-child,
+.torrent-table-row-focused:focus td:last-child {
+  box-shadow: inset -2px 2px 0 var(--accent, #5c6bc0), inset 0 -2px 0 var(--accent, #5c6bc0);
+}
+
+.torrent-table-wrapper:focus-visible {
+  outline: 1px solid var(--accent, #5c6bc0);
+}
+
 .detail-panel {
   border-top: 2px solid var(--accent);
   background-color: var(--bg-primary);

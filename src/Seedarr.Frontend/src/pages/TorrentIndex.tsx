@@ -137,19 +137,24 @@ function TorrentIndex() {
 
   const handleBulkDelete = useCallback(
     async (deleteFilesOpt?: boolean | unknown) => {
-      if (selectedIds.size === 0) return;
+      const targetIds =
+        selectedIds.size > 0
+          ? Array.from(selectedIds)
+          : selectedTorrentId != null
+            ? [selectedTorrentId]
+            : [];
+      if (targetIds.length === 0) return;
       const deleteFiles =
         typeof deleteFilesOpt === "boolean" ? deleteFilesOpt : false;
       const promptText = deleteFiles
-        ? `Delete ${selectedIds.size} torrent(s) AND their files from disk?`
-        : `Delete ${selectedIds.size} torrent(s)?`;
+        ? `Delete ${targetIds.length} torrent(s) AND their files from disk?`
+        : `Delete ${targetIds.length} torrent(s)?`;
       if (!confirm(promptText)) return;
 
       setBulkPending(true);
-      const ids = [...selectedIds];
       try {
         const res = await bulkAction.mutateAsync({
-          torrentIds: ids,
+          torrentIds: targetIds,
           action: "delete",
           deleteFiles,
         });
@@ -160,6 +165,10 @@ function TorrentIndex() {
           succeeded.forEach((id) => next.delete(id));
           return next;
         });
+
+        if (selectedTorrentId != null && succeeded.includes(selectedTorrentId)) {
+          setSelectedTorrentId(null);
+        }
 
         if (res.failedCount === 0) {
           showToast(
@@ -179,8 +188,50 @@ function TorrentIndex() {
         setBulkPending(false);
       }
     },
-    [selectedIds, bulkAction, setSelectedIds, showToast],
+    [
+      selectedIds,
+      selectedTorrentId,
+      bulkAction,
+      setSelectedIds,
+      setSelectedTorrentId,
+      showToast,
+    ],
   );
+
+  const handleToggleActiveSelected = useCallback(() => {
+    if (selectedIds.size > 0) {
+      const selectedTorrents = (torrents ?? []).filter((t) =>
+        selectedIds.has(t.id),
+      );
+      const anyActive = selectedTorrents.some(
+        (t) => t.status === "Seeding" || t.active,
+      );
+      if (anyActive) {
+        handleBulkStop();
+      } else {
+        handleBulkStart();
+      }
+      return;
+    }
+
+    if (selectedTorrentId != null) {
+      const targetTorrent = torrents?.find((t) => t.id === selectedTorrentId);
+      if (targetTorrent?.status === "Seeding" || targetTorrent?.active) {
+        stopSeeding.mutate(selectedTorrentId);
+      } else {
+        startSeeding.mutate(selectedTorrentId);
+      }
+      return;
+    }
+  }, [
+    selectedIds,
+    torrents,
+    handleBulkStop,
+    handleBulkStart,
+    selectedTorrentId,
+    stopSeeding,
+    startSeeding,
+  ]);
 
   // Keyboard Shortcuts Listener for Torrent Operations, Navigation & Modals
   useEffect(() => {
@@ -252,32 +303,8 @@ function TorrentIndex() {
       // Space or p / P: pause / resume (supporting single & multi-selection)
       if (e.key === " " || e.key === "p" || e.key === "P") {
         e.preventDefault();
-        if (selectedIds.size > 0) {
-          const selectedTorrents = (torrents ?? []).filter((t) =>
-            selectedIds.has(t.id),
-          );
-          const anyActive = selectedTorrents.some(
-            (t) => t.status === "Seeding" || t.active,
-          );
-          if (anyActive) {
-            handleBulkStop();
-          } else {
-            handleBulkStart();
-          }
-          return;
-        }
-
-        if (selectedTorrentId != null) {
-          const targetTorrent = torrents?.find(
-            (t) => t.id === selectedTorrentId,
-          );
-          if (targetTorrent?.status === "Seeding" || targetTorrent?.active) {
-            stopSeeding.mutate(selectedTorrentId);
-          } else {
-            startSeeding.mutate(selectedTorrentId);
-          }
-          return;
-        }
+        handleToggleActiveSelected();
+        return;
       }
 
       // a / A: force announce to all trackers (single selected)
@@ -298,27 +325,11 @@ function TorrentIndex() {
         }
       }
 
-      // Delete: delete torrent (supporting single & multi-selection)
-      if (e.key === "Delete") {
+      // Delete / Backspace: delete torrent (supporting single & multi-selection)
+      if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
-        if (selectedIds.size > 0) {
-          handleBulkDelete();
-          return;
-        }
-        if (selectedTorrentId != null) {
-          const targetTorrent = torrents?.find(
-            (t) => t.id === selectedTorrentId,
-          );
-          if (
-            confirm(
-              `Delete torrent "${targetTorrent?.name || selectedTorrentId}"?`,
-            )
-          ) {
-            deleteTorrent.mutate({ id: selectedTorrentId });
-            setSelectedTorrentId(null);
-          }
-          return;
-        }
+        handleBulkDelete();
+        return;
       }
     }
 
@@ -330,16 +341,10 @@ function TorrentIndex() {
     isQuickControlsOpen,
     selectedTorrentId,
     setSelectedTorrentId,
-    selectedIds,
-    torrents,
     filteredTorrents,
-    startSeeding,
-    stopSeeding,
     announceTorrent,
     recheckTorrent,
-    deleteTorrent,
-    handleBulkStart,
-    handleBulkStop,
+    handleToggleActiveSelected,
     handleBulkDelete,
     handleSelectAll,
     handleSelectRange,
@@ -412,6 +417,9 @@ function TorrentIndex() {
                   onToggleSelect={handleToggleSelect}
                   onSelectAll={handleSelectAll}
                   onSelectRange={handleSelectRange}
+                  onSelectMultiple={setSelectedIds}
+                  onDeleteSelected={handleBulkDelete}
+                  onToggleActive={handleToggleActiveSelected}
                 />
               ) : (
                 <TorrentGrid
