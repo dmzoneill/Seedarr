@@ -52,6 +52,7 @@ public class Torrent : ModelBase
     public long SeedingTime { get; set; }
     public double? RatioLimit { get; set; }
     public int? SeedingTimeLimit { get; set; }
+    public bool IsVpnPaused { get; set; }
 
     [Ignore]
     public string MagnetUrl { get; set; }

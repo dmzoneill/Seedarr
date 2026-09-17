@@ -446,6 +446,13 @@ function TorrentTable({
         );
       }
       case "status":
+        if (torrent.isVpnPaused) {
+          return (
+            <span className="badge badge-vpn-paused">
+              {t("torrents.pausedVpnKillSwitch", undefined, "Paused (VPN Kill Switch)")}
+            </span>
+          );
+        }
         return (
           <span className={`badge badge-${torrent.status.toLowerCase()}`}>
             {t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status === "QueuedForChecking" ? "Queued for Recheck" : torrent.status)}

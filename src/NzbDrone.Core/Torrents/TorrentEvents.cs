@@ -198,20 +198,6 @@ public class ArchiveExtractionFailedEvent : IEvent
     }
 }
 
-public class VpnKillSwitchTriggeredEvent : IEvent
-{
-    public string InterfaceName { get; set; }
-
-    public VpnKillSwitchTriggeredEvent()
-    {
-    }
-
-    public VpnKillSwitchTriggeredEvent(string interfaceName)
-    {
-        this.InterfaceName = interfaceName;
-    }
-}
-
 public class ApplicationUpdatedEvent : IEvent
 {
     public string PreviousVersion { get; set; }

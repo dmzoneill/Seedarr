@@ -9,6 +9,7 @@ using NzbDrone.Core.Backup;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Notifications;

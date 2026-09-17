@@ -7,6 +7,7 @@ using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Events;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Network.Vpn;
 
 namespace NzbDrone.Core.Torrents;
 
@@ -28,7 +29,10 @@ public interface ITorrentService
     void MoveQueue(int id, string position);
 }
 
-public class TorrentService : ITorrentService
+public class TorrentService : ITorrentService,
+    IHandle<VpnKillSwitchTriggeredEvent>,
+    IHandle<VpnInterfaceRestoredEvent>,
+    IHandle<VpnRestoredEvent>
 {
     private readonly ITorrentRepository _repository;
     private readonly ITorrentFileService _torrentFileService;
@@ -262,6 +266,66 @@ public class TorrentService : ITorrentService
                 all[i].SortOrder = i;
                 _repository.Update(all[i]);
             }
+        }
+    }
+
+    public void Handle(VpnKillSwitchTriggeredEvent message)
+    {
+        var activeTorrents = _repository.All()
+            .Where(t => (t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.Seeding) && !t.IsVpnPaused)
+            .ToList();
+
+        if (activeTorrents.Count == 0)
+        {
+            return;
+        }
+
+        _logger.Info("VPN kill switch triggered: pausing {0} active torrents.", activeTorrents.Count);
+        foreach (var torrent in activeTorrents)
+        {
+            torrent.IsVpnPaused = true;
+        }
+
+        _repository.UpdateMany(activeTorrents);
+        foreach (var torrent in activeTorrents)
+        {
+            _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+            _eventAggregator.PublishEvent(new TorrentUpdatedEvent(torrent));
+        }
+    }
+
+    public void Handle(VpnInterfaceRestoredEvent message)
+    {
+        ResumeVpnPausedTorrents();
+    }
+
+    public void Handle(VpnRestoredEvent message)
+    {
+        ResumeVpnPausedTorrents();
+    }
+
+    private void ResumeVpnPausedTorrents()
+    {
+        var pausedTorrents = _repository.All()
+            .Where(t => t.IsVpnPaused)
+            .ToList();
+
+        if (pausedTorrents.Count == 0)
+        {
+            return;
+        }
+
+        _logger.Info("VPN restored: unpausing {0} VPN-paused torrents.", pausedTorrents.Count);
+        foreach (var torrent in pausedTorrents)
+        {
+            torrent.IsVpnPaused = false;
+        }
+
+        _repository.UpdateMany(pausedTorrents);
+        foreach (var torrent in pausedTorrents)
+        {
+            _eventAggregator.PublishEvent(new ModelEvent<Torrent>(torrent, ModelAction.Updated));
+            _eventAggregator.PublishEvent(new TorrentUpdatedEvent(torrent));
         }
     }
 }

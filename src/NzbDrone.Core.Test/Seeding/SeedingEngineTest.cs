@@ -1806,4 +1806,44 @@ public class SeedingEngineTest
         // TickInterval is 5 seconds
         Assert.That(torrent.SeedingTime, Is.EqualTo(105));
     }
+
+    [Test]
+    public void Tick_should_not_publish_stalled_event_when_torrent_is_vpn_paused()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Progress = 0.5,
+            DownloadSpeed = 0,
+            DateAdded = DateTime.UtcNow.AddMinutes(-10),
+            IsVpnPaused = true
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        CallTick();
+
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentStalledEvent>());
+    }
+
+    [Test]
+    public void Tick_should_publish_stalled_event_when_torrent_is_not_vpn_paused()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Progress = 0.5,
+            DownloadSpeed = 0,
+            DateAdded = DateTime.UtcNow.AddMinutes(-10),
+            IsVpnPaused = false
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        CallTick();
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStalledEvent>(e => e.Torrent.Id == 1));
+    }
 }

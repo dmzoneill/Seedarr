@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network.Vpn;
 
 namespace NzbDrone.Core.Trackers.MultiTracker;
 
@@ -20,13 +21,15 @@ public class MultiTrackerManager : IMultiTrackerManager
     private readonly ITrackerProvider _httpTracker;
     private readonly ITrackerProvider _udpTracker;
     private readonly IConfigService _configService;
+    private readonly IVpnKillSwitchService _vpnKillSwitchService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, TrackerFailureState> _failureStates = new();
 
     public MultiTrackerManager(
         IEnumerable<ITrackerProvider> trackerProviders,
         IConfigService configService,
-        ITrackerProviderFactory trackerProviderFactory = null)
+        ITrackerProviderFactory trackerProviderFactory = null,
+        IVpnKillSwitchService vpnKillSwitchService = null)
     {
         var providers = trackerProviders?.ToList() ?? new List<ITrackerProvider>();
         _httpTracker = providers.FirstOrDefault(p => p.Name == "HTTP");
@@ -40,6 +43,7 @@ public class MultiTrackerManager : IMultiTrackerManager
         }
 
         _configService = configService;
+        _vpnKillSwitchService = vpnKillSwitchService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -50,6 +54,12 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request, List<List<string>> announceList, bool isPrivate)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch active; deferring tracker announce for {0}", request?.InfoHash);
+            return new TrackerAnnounceResponse { Success = false, FailureReason = "VPN outage: announce deferred" };
+        }
+
         if (request != null)
         {
             request.IsPrivate = isPrivate;
@@ -77,6 +87,12 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     public TrackerScrapeResponse Scrape(string infoHash, List<List<string>> announceList)
     {
+        if (_vpnKillSwitchService?.IsFailClosedActive == true)
+        {
+            _logger.Debug("VPN kill switch active; deferring tracker scrape for {0}", infoHash);
+            return new TrackerScrapeResponse { Success = false, FailureReason = "VPN outage: scrape deferred" };
+        }
+
         if (!_configService.MultiTrackerEnabled)
         {
             var firstTracker = announceList.FirstOrDefault()?.FirstOrDefault();
