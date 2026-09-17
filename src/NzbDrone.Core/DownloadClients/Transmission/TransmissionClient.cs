@@ -194,8 +194,8 @@ public class TransmissionClient : IDownloadClient, IDisposable
                 var status = t.TryGetProperty("status", out var st) ? st.GetInt32() : 0;
                 var isPrivate = t.TryGetProperty("isPrivate", out var ip) &&
                     (ip.ValueKind == JsonValueKind.True ||
-                     (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
-                     (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
+                        (ip.ValueKind == JsonValueKind.Number && ip.GetInt64() != 0) ||
+                        (ip.ValueKind == JsonValueKind.String && bool.TryParse(ip.GetString(), out var pb) && pb));
 
                 items.Add(new DownloadClientItem
                 {
