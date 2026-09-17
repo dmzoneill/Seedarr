@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -260,5 +261,195 @@ public class TransmissionRpcControllerTest
         Assert.That(torrent.Label, Is.EqualTo(string.Empty));
         Assert.That(torrent.TagIds, Is.Empty);
         _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentGet_With_Standard_Fields_Does_Not_Invoke_File_Or_Tracker_Services()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Transmission Standard Poll",
+            InfoHash = "1122334455667788990011223344556677889900",
+            TotalSize = 1000000,
+            Progress = 0.5,
+            Status = TorrentStatus.Downloading,
+            DownloadSpeed = 100000,
+            UploadSpeed = 50000,
+            DateAdded = DateTime.UtcNow,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-get",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["fields"] = JsonDocument.Parse("[\"id\", \"name\", \"status\", \"percentDone\", \"rateDownload\", \"rateUpload\", \"eta\"]").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _torrentFileService.DidNotReceive().GetByTorrentId(Arg.Any<int>());
+        _trackerEntryService.DidNotReceive().GetByTorrentId(Arg.Any<int>());
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentGet_With_Files_Or_Trackers_Invokes_File_Or_Tracker_Services()
+    {
+        var torrent = new Torrent
+        {
+            Id = 2,
+            Name = "Transmission Files/Trackers Poll",
+            InfoHash = "2233445566778899001122334455667788990011",
+            TotalSize = 2000000,
+            Progress = 0.8,
+            Status = TorrentStatus.Downloading,
+            DateAdded = DateTime.UtcNow,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentFileService.GetByTorrentId(2).Returns(new List<TorrentFile>
+        {
+            new TorrentFile { Path = "test.mkv", Size = 2000000 },
+        });
+        _trackerEntryService.GetByTorrentId(2).Returns(new List<TrackerEntry>
+        {
+            new TrackerEntry { Id = 1, Url = "http://tracker.example.com/announce", Tier = 0 },
+        });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-get",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["fields"] = JsonDocument.Parse("[\"id\", \"files\", \"trackers\"]").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _torrentFileService.Received(1).GetByTorrentId(2);
+        _trackerEntryService.Received(1).GetByTorrentId(2);
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentAdd_With_Valid_Local_Filesystem_Path_Accepts_Path()
+    {
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllBytesAsync(tempFile, new byte[] { 0x64, 0x31, 0x3a, 0x61 });
+
+            var created = new Torrent
+            {
+                Id = 10,
+                Name = "LocalTorrent",
+                InfoHash = "aabbccddeeff00112233445566778899aabbccdd",
+            };
+
+            _torrentImportService.ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>()).Returns(created);
+
+            var request = new TransmissionRpcRequest
+            {
+                Method = "torrent-add",
+                Arguments = new Dictionary<string, JsonElement>
+                {
+                    ["filename"] = JsonDocument.Parse(JsonSerializer.Serialize(tempFile)).RootElement,
+                },
+            };
+
+            var result = await _controller.HandleRpc(request);
+
+            Assert.That(result, Is.InstanceOf<OkObjectResult>());
+            var ok = (OkObjectResult)result;
+            var response = ok.Value as TransmissionRpcResponse;
+            Assert.That(response, Is.Not.Null);
+            Assert.That(response.Result, Is.EqualTo("success"));
+
+            var args = response.Arguments as Dictionary<string, object>;
+            Assert.That(args, Is.Not.Null);
+            var addedObj = args["torrent-added"] as Dictionary<string, object>;
+            Assert.That(addedObj, Is.Not.Null);
+            Assert.That(addedObj["id"], Is.EqualTo(10));
+
+            _torrentImportService.Received(1).ImportFromFile(Arg.Any<Stream>(), Path.GetFileName(tempFile));
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
+    }
+
+    [Test]
+    public void ExtractIds_Resolves_Hashes_Efficiently_Without_Repeated_Queries()
+    {
+        var torrent1 = new Torrent { Id = 1, InfoHash = "hash1" };
+        var torrent2 = new Torrent { Id = 2, InfoHash = "hash2" };
+        var torrent3 = new Torrent { Id = 3, InfoHash = "hash3" };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent1, torrent2, torrent3 });
+
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["ids"] = JsonDocument.Parse("[\"hash1\", \"hash2\", \"hash3\"]").RootElement,
+        };
+
+        var ids = _controller.ExtractIds(arguments);
+
+        Assert.That(ids, Is.EqualTo(new List<int> { 1, 2, 3 }));
+        _torrentService.Received(1).GetAll();
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentGet_With_RecentlyActive_Includes_Recently_Changed_Torrents()
+    {
+        var completedRecently = new Torrent
+        {
+            Id = 1,
+            Name = "Completed Recently",
+            Status = TorrentStatus.Stopped,
+            LastActive = DateTime.UtcNow.AddMinutes(-2),
+            Progress = 1.0,
+        };
+        var stoppedLongAgo = new Torrent
+        {
+            Id = 2,
+            Name = "Stopped Long Ago",
+            Status = TorrentStatus.Stopped,
+            LastActive = DateTime.UtcNow.AddMinutes(-30),
+            Progress = 1.0,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { completedRecently, stoppedLongAgo });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-get",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("\"recently-active\"").RootElement,
+                ["fields"] = JsonDocument.Parse("[\"id\", \"name\"]").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+
+        var args = response.Arguments as Dictionary<string, object>;
+        var torrents = args["torrents"] as List<Dictionary<string, object>>;
+        Assert.That(torrents, Is.Not.Null);
+        Assert.That(torrents.Count, Is.EqualTo(1));
+        Assert.That(torrents[0]["id"], Is.EqualTo(1));
     }
 }
