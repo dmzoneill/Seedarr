@@ -1,7 +1,9 @@
 using System;
 using System.IO;
 using BencodeNET.Objects;
+using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Torrents;
@@ -23,7 +25,7 @@ public class TorrentFileParserTest
         return new MemoryStream(bytes);
     }
 
-    private static BDictionary CreateMinimalTorrent(string name = "test-file.txt", long fileSize = 1024, int pieceLength = 512)
+    private static BDictionary CreateMinimalTorrent(string name = "test-file.txt", long fileSize = 1024, int pieceLength = 16384)
     {
         var pieces = new byte[20];
         new Random(42).NextBytes(pieces);
@@ -84,7 +86,7 @@ public class TorrentFileParserTest
         var info = new BDictionary
         {
             { "name", new BString("test") },
-            { "piece length", new BNumber(512) },
+            { "piece length", new BNumber(16384) },
             { "pieces", new BString(pieces) },
             { "length", new BNumber(1024) }
         };
@@ -281,7 +283,7 @@ public class TorrentFileParserTest
         var info = new BDictionary
         {
             { "name", new BString("my-torrent") },
-            { "piece length", new BNumber(512) },
+            { "piece length", new BNumber(16384) },
             { "pieces", new BString(pieces) },
             { "files", files }
         };
@@ -321,7 +323,7 @@ public class TorrentFileParserTest
         var info = new BDictionary
         {
             { "name", new BString(@"\AlbumXYZ/") },
-            { "piece length", new BNumber(512) },
+            { "piece length", new BNumber(16384) },
             { "pieces", new BString(pieces) },
             { "files", files }
         };
@@ -361,7 +363,7 @@ public class TorrentFileParserTest
         var info = new BDictionary
         {
             { "name", new BString("multi") },
-            { "piece length", new BNumber(512) },
+            { "piece length", new BNumber(16384) },
             { "pieces", new BString(pieces) },
             { "files", files }
         };
@@ -443,5 +445,141 @@ public class TorrentFileParserTest
         var result = _subject.Parse(stream);
 
         Assert.That(result.AnnounceUrl, Is.EqualTo("udp://tracker-primary.example.com:1337/announce"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_stream_exceeds_10_mib()
+    {
+        var mockStream = Substitute.For<Stream>();
+        mockStream.CanSeek.Returns(true);
+        mockStream.Length.Returns((10 * 1024 * 1024) + 1);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(mockStream));
+        Assert.That(ex.Message, Does.Contain("10 MiB"));
+    }
+
+    [TestCase(1337)]
+    [TestCase(50000)]
+    [TestCase(512)]
+    [TestCase(8192)]
+    [TestCase(0)]
+    [TestCase(-16384)]
+    [TestCase(134217728)] // > 64 MiB
+    public void Parse_should_throw_when_piece_length_is_not_valid_power_of_two(int invalidPieceLength)
+    {
+        var torrentDict = CreateMinimalTorrent(pieceLength: invalidPieceLength);
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("Invalid piece length"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_piece_count_exceeds_500000()
+    {
+        var info = new BDictionary
+        {
+            { "name", new BString("test") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[500001 * 20]) },
+            { "length", new BNumber(1024) }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("Piece count 500001 exceeds maximum permitted limit"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_piece_count_is_zero()
+    {
+        var info = new BDictionary
+        {
+            { "name", new BString("test") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(Array.Empty<byte>()) },
+            { "length", new BNumber(1024) }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("Piece count 0 exceeds maximum permitted limit"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_single_file_length_is_negative()
+    {
+        var info = new BDictionary
+        {
+            { "name", new BString("test") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "length", new BNumber(-100) }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("negative file length"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_multi_file_length_is_negative()
+    {
+        var files = new BList
+        {
+            new BDictionary
+            {
+                { "length", new BNumber(-500) },
+                { "path", new BList { new BString("file.txt") } }
+            }
+        };
+
+        var info = new BDictionary
+        {
+            { "name", new BString("test") },
+            { "piece length", new BNumber(16384) },
+            { "pieces", new BString(new byte[20]) },
+            { "files", files }
+        };
+        var torrentDict = new BDictionary { { "info", info } };
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("negative file length"));
+    }
+
+    [Test]
+    public void Parse_should_throw_when_recursion_depth_exceeds_limit()
+    {
+        var current = new BDictionary();
+        var root = current;
+        for (var i = 0; i < 35; i++)
+        {
+            var next = new BDictionary();
+            current.Add($"key{i}", next);
+            current = next;
+        }
+
+        using var stream = CreateTorrentStream(root);
+        var ex = Assert.Throws<InvalidTorrentFileException>(() => _subject.Parse(stream));
+        Assert.That(ex.Message, Does.Contain("recursion depth"));
+    }
+
+    [Test]
+    public void Parse_should_succeed_for_valid_torrent()
+    {
+        var torrentDict = CreateMinimalTorrent("valid-torrent.bin", 65536, 16384);
+        using var stream = CreateTorrentStream(torrentDict);
+
+        var result = _subject.Parse(stream);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Name, Is.EqualTo("valid-torrent.bin"));
+        Assert.That(result.TotalSize, Is.EqualTo(65536));
+        Assert.That(result.PieceLength, Is.EqualTo(16384));
+        Assert.That(result.PieceCount, Is.EqualTo(1));
     }
 }
