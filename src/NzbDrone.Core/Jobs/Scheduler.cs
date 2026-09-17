@@ -12,18 +12,69 @@ public class Scheduler : BackgroundService
 {
     private readonly ITaskManager _taskManager;
     private readonly IEnumerable<IScheduledTask> _scheduledTasks;
+    private readonly TimeSpan _startupDelay;
+    private readonly TimeSpan _minJitter;
+    private readonly TimeSpan _maxJitter;
+    private readonly Random _random = new();
     private readonly Logger _logger;
 
+    public TimeSpan StartupDelay => _startupDelay;
+    public TimeSpan MinJitter => _minJitter;
+    public TimeSpan MaxJitter => _maxJitter;
+
     public Scheduler(ITaskManager taskManager, IEnumerable<IScheduledTask> scheduledTasks)
+        : this(taskManager, scheduledTasks, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15))
+    {
+    }
+
+    public Scheduler(
+        ITaskManager taskManager,
+        IEnumerable<IScheduledTask> scheduledTasks,
+        TimeSpan startupDelay,
+        TimeSpan minJitter,
+        TimeSpan maxJitter)
     {
         _taskManager = taskManager;
         _scheduledTasks = scheduledTasks;
+        _startupDelay = startupDelay;
+        _minJitter = minJitter;
+        _maxJitter = maxJitter;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public virtual TimeSpan GetJitter()
+    {
+        if (_maxJitter <= TimeSpan.Zero || _maxJitter < _minJitter)
+        {
+            return _minJitter > TimeSpan.Zero ? _minJitter : TimeSpan.Zero;
+        }
+
+        var minMs = (int)Math.Max(0, _minJitter.TotalMilliseconds);
+        var maxMs = (int)Math.Max(minMs, _maxJitter.TotalMilliseconds);
+        if (minMs == maxMs)
+        {
+            return TimeSpan.FromMilliseconds(minMs);
+        }
+
+        return TimeSpan.FromMilliseconds(_random.Next(minMs, maxMs + 1));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.Info("Scheduler started");
+
+        if (_startupDelay > TimeSpan.Zero)
+        {
+            _logger.Info("Scheduler startup grace delay of {0:N0}s before dispatching tasks", _startupDelay.TotalSeconds);
+            try
+            {
+                await Task.Delay(_startupDelay, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+        }
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -33,7 +84,10 @@ public class Scheduler : BackgroundService
 
                 if (next != null)
                 {
-                    var dueAt = next.LastExecution.AddMinutes(next.Interval);
+                    var isUninitialized = next.LastExecution == DateTime.MinValue || next.LastExecution <= DateTime.MinValue.AddDays(1);
+                    var dueAt = isUninitialized
+                        ? DateTime.UtcNow
+                        : next.LastExecution.AddMinutes(next.Interval);
 
                     if (dueAt <= DateTime.UtcNow)
                     {
@@ -79,8 +133,28 @@ public class Scheduler : BackgroundService
                             _taskManager.UpdateLastExecution(next.TypeName);
                             _taskManager.RecordTaskFinished(next.TypeName, startTime);
                         }
+
+                        // Stagger consecutive/overdue task runs with jitter to prevent CPU/IO spikes
+                        var nextPending = _taskManager.GetNextScheduled();
+                        var isNextOverdue = nextPending != null &&
+                            (nextPending.LastExecution == DateTime.MinValue ||
+                             nextPending.LastExecution.AddMinutes(nextPending.Interval) <= DateTime.UtcNow);
+
+                        if (isNextOverdue)
+                        {
+                            var jitter = GetJitter();
+                            if (jitter > TimeSpan.Zero)
+                            {
+                                _logger.Debug("Applying scheduler jitter delay of {0:N1}s before next overdue task", jitter.TotalSeconds);
+                                await Task.Delay(jitter, stoppingToken);
+                            }
+                        }
                     }
                 }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
             }
             catch (Exception ex)
             {

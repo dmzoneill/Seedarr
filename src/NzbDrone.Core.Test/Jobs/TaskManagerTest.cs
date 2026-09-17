@@ -348,4 +348,23 @@ public class TaskManagerTest
         Assert.That(_subject.IsCanceled("TestTask"), Is.True);
         Assert.That(_subject.GetTaskStatus("TestTask"), Is.EqualTo("Canceled"));
     }
+
+    [Test]
+    public void GetNextExecution_should_return_utc_next_execution()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-5)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>());
+
+        var next = _subject.GetNextExecution("TestTask");
+
+        Assert.That(next.Kind, Is.EqualTo(DateTimeKind.Utc));
+        Assert.That(next, Is.GreaterThan(DateTime.UtcNow));
+    }
 }

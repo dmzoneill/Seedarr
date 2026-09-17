@@ -166,7 +166,7 @@ public class SystemController : ControllerBase
                 }
             }
 
-            var nextExecution = t.LastExecution.AddMinutes(t.Interval);
+            var nextExecution = t.NextExecution;
 
             return new ScheduledTaskResource
             {
