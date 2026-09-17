@@ -16,7 +16,6 @@ public class SwarmAnalyzer : ISwarmAnalyzer
     private const double RareContentAvailabilityThreshold = 2.0;
     private const double HighRatioThreshold = 2.0;
     private const double HealthyAvailabilityThreshold = 3.0;
-    private const double SaturationThreshold = 0.8;
     private const double AvailabilityNormalizationCeiling = 5.0;
     private const double RatioNormalizationCeiling = 5.0;
     private const double SaturationAvailabilityCeiling = 3.0;
@@ -92,8 +91,10 @@ public class SwarmAnalyzer : ISwarmAnalyzer
         var seedLeechRatio = ComputeSeedLeechRatio(seedCount, leechCount);
         var availabilityScore = NormalizePieceAvailability(availability);
         var saturationScore = ComputeSwarmSaturation(seedLeechRatio, availability);
-        var isRare = seedCount <= RareContentSeedThreshold
-                && availability < RareContentAvailabilityThreshold;
+        var isRare = seedCount > 0
+            && seedCount <= RareContentSeedThreshold
+            && availability < RareContentAvailabilityThreshold
+            && leechCount > 0;
         var isHealthy = availabilityScore > HealthyAvailabilityScoreFloor
                         && seedLeechRatio >= HealthyRatioFloor;
 
@@ -130,14 +131,9 @@ public class SwarmAnalyzer : ISwarmAnalyzer
         SwarmSnapshot snapshot,
         SwarmMetrics metrics)
     {
-        if (snapshot.LeechCount <= 0 && metrics.SwarmSaturationScore > SaturationThreshold)
+        if (snapshot.LeechCount <= 0)
         {
-            var confidence = Math.Clamp(0.7 + (metrics.SwarmSaturationScore - SaturationThreshold), 0.0, 1.0);
-            return (SeedingRecommendation.Pause,
-                string.Format(
-                    "No active leeches and swarm saturation is high ({0:F2}); seeding resources can be freed",
-                    metrics.SwarmSaturationScore),
-                confidence);
+            return (SeedingRecommendation.Pause, "No active leeches requesting data; pausing upload allocation", 1.0);
         }
 
         if (metrics.IsRareContent)
@@ -163,13 +159,6 @@ public class SwarmAnalyzer : ISwarmAnalyzer
                     snapshot.SeedCount,
                     snapshot.LeechCount),
                 confidence);
-        }
-
-        if (snapshot.LeechCount <= 0)
-        {
-            return (SeedingRecommendation.Pause,
-                "No active leeches requesting data; pausing until demand resumes",
-                0.6);
         }
 
         var maintainConfidence = metrics.IsSwarmHealthy ? 0.8 : 0.5;

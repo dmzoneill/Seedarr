@@ -187,6 +187,7 @@ public class SpeedPolicy : ISpeedPolicy
         {
             var torrent = torrents[i];
             long uploadBytesThisTick;
+            var isPausedOrZeroLeechers = false;
 
             if (stoppedIndices.Contains(i))
             {
@@ -241,19 +242,25 @@ public class SpeedPolicy : ISpeedPolicy
                             bytesPerSecond = (long)(bytesPerSecond * Math.Max(0.1, 1.0 - (0.5 * rec.Confidence)));
                             break;
                         case SeedingRecommendation.Pause:
-                            bytesPerSecond = (long)(bytesPerSecond * Math.Max(0.0, 1.0 - rec.Confidence));
+                            bytesPerSecond = 0;
                             break;
                         case SeedingRecommendation.Maintain:
                         default:
                             break;
                     }
+
+                    if (rec.Recommendation == SeedingRecommendation.Pause || torrent.Leechers <= 0)
+                    {
+                        bytesPerSecond = 0;
+                        isPausedOrZeroLeechers = true;
+                    }
                 }
 
                 var variationFactor = variationMin + (_random.NextDouble() * (variationMax - variationMin));
-                uploadBytesThisTick = (long)(bytesPerSecond * variationFactor * tickInterval.TotalSeconds);
+                uploadBytesThisTick = isPausedOrZeroLeechers ? 0 : (long)(bytesPerSecond * variationFactor * tickInterval.TotalSeconds);
             }
 
-            if (!seederActive)
+            if (!seederActive || isPausedOrZeroLeechers)
             {
                 uploadBytesThisTick = 0;
             }
