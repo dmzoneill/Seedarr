@@ -49,6 +49,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private readonly Extensions.IMetadataExchange _metadataExchange;
     private readonly Extensions.ISyntheticMetadataGenerator _syntheticMetadataGenerator;
     private readonly Extensions.IMagnetMetadataDownloader _magnetMetadataDownloader;
+    private readonly Extensions.IPeerExchange _peerExchange;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
@@ -87,7 +88,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         IMseSkeyRegistry mseSkeyRegistry = null,
         Extensions.IMetadataExchange metadataExchange = null,
         Extensions.ISyntheticMetadataGenerator syntheticMetadataGenerator = null,
-        Extensions.IMagnetMetadataDownloader magnetMetadataDownloader = null)
+        Extensions.IMagnetMetadataDownloader magnetMetadataDownloader = null,
+        Extensions.IPeerExchange peerExchange = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -106,6 +108,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         _metadataExchange = metadataExchange ?? new Extensions.MetadataExchange();
         _syntheticMetadataGenerator = syntheticMetadataGenerator ?? new Extensions.SyntheticMetadataGenerator();
         _magnetMetadataDownloader = magnetMetadataDownloader;
+        _peerExchange = peerExchange ?? new Extensions.PeerExchange(_configService);
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -1659,6 +1662,30 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         return false;
     }
 
+    private bool IsUtPexExtension(PeerConnection connection, byte extId, Torrent torrent)
+    {
+        if (torrent?.IsPrivate == true)
+        {
+            return false;
+        }
+
+        if (_extensionManager != null)
+        {
+            var localExts = _extensionManager.GetSupportedExtensions(torrent?.IsPrivate ?? false);
+            if (localExts.TryGetValue("ut_pex", out var localId) && extId == localId)
+            {
+                return true;
+            }
+        }
+
+        if (connection.RemoteExtensions.TryGetValue("ut_pex", out var remoteId) && extId == remoteId)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     private void HandleExtendedMessage(PeerConnection connection, PeerMessage message, Torrent torrent)
     {
         if (message.Payload == null || message.Payload.Length < 2)
@@ -1708,6 +1735,54 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         if (IsUtMetadataExtension(connection, extId, torrent))
         {
             HandleUtMetadataMessage(connection, extId, extendedPayload, torrent);
+            return;
+        }
+
+        if (IsUtPexExtension(connection, extId, torrent))
+        {
+            HandleUtPexMessage(connection, extendedPayload, torrent);
+        }
+    }
+
+    private void HandleUtPexMessage(PeerConnection connection, byte[] extendedPayload, Torrent torrent)
+    {
+        var currentTorrent = torrent ?? (!string.IsNullOrEmpty(connection.InfoHash) ? _torrentService.GetByInfoHash(connection.InfoHash) : null);
+        if (currentTorrent?.IsPrivate == true)
+        {
+            return;
+        }
+
+        var pexData = _peerExchange.ParsePexMessage(extendedPayload, currentTorrent?.IsPrivate ?? false);
+        if (pexData == null || pexData.Added == null || pexData.Added.Count == 0)
+        {
+            return;
+        }
+
+        var isLocalSeeder = currentTorrent != null && currentTorrent.Progress >= 1.0;
+        var candidatePeers = pexData.Added;
+
+        if (isLocalSeeder)
+        {
+            // Filter out seeders to avoid useless seed-to-seed connections
+            candidatePeers = candidatePeers.Where(p => !p.IsSeeder).ToList();
+            _logger.Debug(
+                "Filtered {0} seeders from PEX payload for completed torrent {1}",
+                pexData.Added.Count - candidatePeers.Count,
+                currentTorrent?.Name ?? currentTorrent?.InfoHash ?? connection.InfoHash);
+        }
+        else
+        {
+            // Prioritize seeders (IsSeeder == true)
+            candidatePeers = candidatePeers.OrderByDescending(p => p.IsSeeder ? 1 : 0).ToList();
+        }
+
+        if (candidatePeers.Count > 0)
+        {
+            var infoHash = !string.IsNullOrEmpty(connection.InfoHash) ? connection.InfoHash : currentTorrent?.InfoHash;
+            if (!string.IsNullOrEmpty(infoHash))
+            {
+                _peerDiscovery?.AddPeers(infoHash, candidatePeers, "pex");
+            }
         }
     }
 

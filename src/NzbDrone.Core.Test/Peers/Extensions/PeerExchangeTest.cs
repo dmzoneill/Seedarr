@@ -408,4 +408,74 @@ public class PeerExchangeTest
         Assert.That(parsed.Dropped[0].Ip, Is.EqualTo("2606:4700:4700::1111"));
         Assert.That(parsed.Dropped[0].Port, Is.EqualTo(8080));
     }
+
+    [Test]
+    public void ParsePexMessage_should_correctly_set_flags_seeder_encryption_and_utp_properties()
+    {
+        var dict = new BDictionary
+        {
+            ["added"] = new BString(new byte[]
+            {
+                93, 184, 216, 34, 0x1A, 0xE1, // 93.184.216.34:6881
+                93, 184, 216, 35, 0x1A, 0xE2, // 93.184.216.35:6882
+                93, 184, 216, 36, 0x1A, 0xE3, // 93.184.216.36:6883
+                93, 184, 216, 37, 0x1A, 0xE4  // 93.184.216.37:6884
+            }),
+            ["added.f"] = new BString(new byte[]
+            {
+                0x01, // PrefersEncryption only
+                0x02, // IsSeeder only
+                0x04, // SupportsUtp only
+                0x07  // All three (0x01 | 0x02 | 0x04)
+            })
+        };
+
+        var parsed = _peerExchange.ParsePexMessage(dict.EncodeAsBytes());
+
+        Assert.That(parsed.Added.Count, Is.EqualTo(4));
+
+        Assert.That(parsed.Added[0].Flags, Is.EqualTo(0x01));
+        Assert.That(parsed.Added[0].PrefersEncryption, Is.True);
+        Assert.That(parsed.Added[0].IsSeeder, Is.False);
+        Assert.That(parsed.Added[0].SupportsUtp, Is.False);
+
+        Assert.That(parsed.Added[1].Flags, Is.EqualTo(0x02));
+        Assert.That(parsed.Added[1].PrefersEncryption, Is.False);
+        Assert.That(parsed.Added[1].IsSeeder, Is.True);
+        Assert.That(parsed.Added[1].SupportsUtp, Is.False);
+
+        Assert.That(parsed.Added[2].Flags, Is.EqualTo(0x04));
+        Assert.That(parsed.Added[2].PrefersEncryption, Is.False);
+        Assert.That(parsed.Added[2].IsSeeder, Is.False);
+        Assert.That(parsed.Added[2].SupportsUtp, Is.True);
+
+        Assert.That(parsed.Added[3].Flags, Is.EqualTo(0x07));
+        Assert.That(parsed.Added[3].PrefersEncryption, Is.True);
+        Assert.That(parsed.Added[3].IsSeeder, Is.True);
+        Assert.That(parsed.Added[3].SupportsUtp, Is.True);
+    }
+
+    [Test]
+    public void BuildPexMessage_should_encode_added_flags_bytes_correctly()
+    {
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x02 },
+            new PeerInfo { Ip = "93.184.216.35", Port = 6882, Flags = 0x05 }
+        };
+
+        var encoded = _peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var parsed = _peerExchange.ParsePexMessage(encoded);
+
+        Assert.That(parsed.Added.Count, Is.EqualTo(2));
+        Assert.That(parsed.Added[0].Flags, Is.EqualTo(0x02));
+        Assert.That(parsed.Added[0].IsSeeder, Is.True);
+        Assert.That(parsed.Added[0].PrefersEncryption, Is.False);
+        Assert.That(parsed.Added[0].SupportsUtp, Is.False);
+
+        Assert.That(parsed.Added[1].Flags, Is.EqualTo(0x05));
+        Assert.That(parsed.Added[1].PrefersEncryption, Is.True);
+        Assert.That(parsed.Added[1].SupportsUtp, Is.True);
+        Assert.That(parsed.Added[1].IsSeeder, Is.False);
+    }
 }

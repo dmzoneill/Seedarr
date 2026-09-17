@@ -60,6 +60,7 @@ public class TrackerPeer
     public string Ip { get; set; }
     public int Port { get; set; }
     public string PeerId { get; set; }
+    public bool IsSeeder { get; set; }
 }
 
 public class TrackerScrapeResponse : ITrackerResponse

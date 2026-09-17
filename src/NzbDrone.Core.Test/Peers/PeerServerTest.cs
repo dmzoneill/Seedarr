@@ -2199,4 +2199,84 @@ public class PeerServerTest
         _connectionManager.DidNotReceive().Add(Arg.Any<PeerConnection>());
         _peerDiscovery.Received().MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
     }
+
+    [Test]
+    public void HandleExtendedMessage_should_filter_seeders_when_torrent_is_seeding()
+    {
+        _configService.EnablePex.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "SeedingTorrent",
+            Progress = 1.0
+        };
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var (_, serverConn) = CreateTestPair();
+        serverConn.InfoHash = torrent.InfoHash;
+        serverConn.RemoteExtensions["ut_pex"] = 1;
+
+        var peerExchange = new PeerExchange(_configService);
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x02 }, // Seeder
+            new PeerInfo { Ip = "93.184.216.35", Port = 6882, Flags = 0x00 }  // Leecher
+        };
+
+        var pexBytes = peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var payload = new byte[1 + pexBytes.Length];
+        payload[0] = 1; // ut_pex extension ID
+        Array.Copy(pexBytes, 0, payload, 1, pexBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload }, torrent);
+
+        _peerDiscovery.Received(1).AddPeers(
+            torrent.InfoHash,
+            Arg.Is<IEnumerable<PeerInfo>>(p => p.Count() == 1 && p.First().Ip == "93.184.216.35" && !p.First().IsSeeder),
+            "pex");
+    }
+
+    [Test]
+    public void HandleExtendedMessage_should_retain_and_prioritize_seeders_when_torrent_is_downloading()
+    {
+        _configService.EnablePex.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 2,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "DownloadingTorrent",
+            Progress = 0.4
+        };
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var (_, serverConn) = CreateTestPair();
+        serverConn.InfoHash = torrent.InfoHash;
+        serverConn.RemoteExtensions["ut_pex"] = 1;
+
+        var peerExchange = new PeerExchange(_configService);
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.35", Port = 6882, Flags = 0x00 }, // Leecher first
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x02 }  // Seeder second
+        };
+
+        var pexBytes = peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var payload = new byte[1 + pexBytes.Length];
+        payload[0] = 1; // ut_pex extension ID
+        Array.Copy(pexBytes, 0, payload, 1, pexBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload }, torrent);
+
+        _peerDiscovery.Received(1).AddPeers(
+            torrent.InfoHash,
+            Arg.Is<IEnumerable<PeerInfo>>(p => p.Count() == 2 &&
+                p.First().Ip == "93.184.216.34" && p.First().IsSeeder &&
+                p.Last().Ip == "93.184.216.35" && !p.Last().IsSeeder),
+            "pex");
+    }
 }
