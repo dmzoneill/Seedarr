@@ -1053,6 +1053,30 @@ export function useDeleteTag() {
   });
 }
 
+export function useBulkAssignTags() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { tagIds: number[]; torrentIds: number[] }) =>
+      apiClient.post("/tag/bulk-assign", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
+export function useBulkRemoveTags() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { tagIds: number[]; torrentIds: number[] }) =>
+      apiClient.post("/tag/bulk-remove", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      queryClient.invalidateQueries({ queryKey: ["torrents"] });
+    },
+  });
+}
+
 export function usePeerConnectionLog(params?: {
   start?: string;
   end?: string;
