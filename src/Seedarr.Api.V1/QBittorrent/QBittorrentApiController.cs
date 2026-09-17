@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using NLog;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.RemotePathMappings;
@@ -43,6 +44,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     private readonly HttpClient _httpClient;
     private readonly IRemotePathMappingService _remotePathMappingService;
     private readonly ICallerHostResolver _callerHostResolver;
+    private readonly ICategoryService _categoryService;
     private readonly Logger _logger;
 
     public QBittorrentApiController(
@@ -58,7 +60,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         IRpcSessionStore sessionStore = null,
         IHttpClientFactory httpClientFactory = null,
         IRemotePathMappingService remotePathMappingService = null,
-        ICallerHostResolver callerHostResolver = null)
+        ICallerHostResolver callerHostResolver = null,
+        ICategoryService categoryService = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -72,6 +75,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         _sessionStore = sessionStore ?? RpcSessionStore.SharedSessionStore;
         _remotePathMappingService = remotePathMappingService;
         _callerHostResolver = callerHostResolver;
+        _categoryService = categoryService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -743,6 +747,16 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             added.SourcePath = RemapRemoteToLocal(request.EffectiveSavePath);
             needsUpdate = true;
         }
+        else if (_categoryService != null && !string.IsNullOrWhiteSpace(added.Category))
+        {
+            var defaultPath = _configService?.WatchFolderPath ?? "/downloads";
+            var categoryPath = _categoryService.GetSavePathForCategory(added.Category, defaultPath);
+            if (!string.IsNullOrWhiteSpace(categoryPath))
+            {
+                added.SourcePath = categoryPath;
+                needsUpdate = true;
+            }
+        }
 
         if (request.IsSequential)
         {
@@ -1253,37 +1267,142 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     [HttpGet("torrents/categories")]
     public ActionResult<Dictionary<string, object>> GetCategories()
     {
-        var torrents = _torrentService.GetAll();
         var defaultPath = RemapLocalToRemote(_configService?.WatchFolderPath ?? "/downloads");
-        var distinctCategories = torrents
-            .Select(t => !string.IsNullOrWhiteSpace(t.Category) ? t.Category : t.Label)
-            .Where(l => !string.IsNullOrWhiteSpace(l))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var result = distinctCategories.ToDictionary(
-            c => c,
-            c => (object)new { name = c, savePath = Path.Combine(defaultPath, c) });
-
+        var result = BuildCategoriesDictionary(defaultPath);
         return Ok(result);
     }
 
     [HttpPost("torrents/createCategory")]
     public ActionResult CreateCategory([FromForm] string category, [FromForm] string savePath)
     {
+        if (string.IsNullOrWhiteSpace(category))
+        {
+            return BadRequest("Category name cannot be empty");
+        }
+
+        if (_categoryService != null)
+        {
+            var trimmedCategory = category.Trim();
+            var resolvedSavePath = RemapRemoteToLocal(savePath ?? string.Empty);
+            var existing = _categoryService.GetByName(trimmedCategory);
+            if (existing != null)
+            {
+                existing.SavePath = resolvedSavePath;
+                _categoryService.Update(existing);
+            }
+            else
+            {
+                _categoryService.Add(new Category
+                {
+                    Name = trimmedCategory,
+                    SavePath = resolvedSavePath,
+                });
+            }
+        }
+
         return Content("Ok.", "text/plain");
     }
 
     [HttpPost("torrents/editCategory")]
     public ActionResult EditCategory([FromForm] string category, [FromForm] string savePath)
     {
+        if (string.IsNullOrWhiteSpace(category))
+        {
+            return BadRequest("Category name cannot be empty");
+        }
+
+        if (_categoryService != null)
+        {
+            var trimmedCategory = category.Trim();
+            var resolvedSavePath = RemapRemoteToLocal(savePath ?? string.Empty);
+            var existing = _categoryService.GetByName(trimmedCategory);
+            if (existing != null)
+            {
+                existing.SavePath = resolvedSavePath;
+                _categoryService.Update(existing);
+            }
+            else
+            {
+                _categoryService.Add(new Category
+                {
+                    Name = trimmedCategory,
+                    SavePath = resolvedSavePath,
+                });
+            }
+        }
+
         return Content("Ok.", "text/plain");
     }
 
     [HttpPost("torrents/removeCategories")]
     public ActionResult RemoveCategories([FromForm] string categories)
     {
+        if (string.IsNullOrWhiteSpace(categories))
+        {
+            return Content("Ok.", "text/plain");
+        }
+
+        if (_categoryService != null)
+        {
+            var names = categories.Split(new[] { '\n', '\r', ',', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                  .Select(n => n.Trim())
+                                  .Where(n => !string.IsNullOrWhiteSpace(n))
+                                  .Distinct(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var name in names)
+            {
+                var existing = _categoryService.GetByName(name);
+                if (existing != null)
+                {
+                    try
+                    {
+                        _categoryService.Delete(existing.Id);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warn(ex, "Failed to delete category: {0}", name);
+                    }
+                }
+            }
+        }
+
         return Content("Ok.", "text/plain");
+    }
+
+    private Dictionary<string, object> BuildCategoriesDictionary(string defaultPath)
+    {
+        var result = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+
+        if (_categoryService != null)
+        {
+            foreach (var cat in _categoryService.GetAll())
+            {
+                if (!string.IsNullOrWhiteSpace(cat?.Name))
+                {
+                    var catSavePath = !string.IsNullOrWhiteSpace(cat.SavePath)
+                        ? RemapLocalToRemote(cat.SavePath)
+                        : Path.Combine(defaultPath, cat.Name);
+
+                    result[cat.Name] = new { name = cat.Name, savePath = catSavePath };
+                }
+            }
+        }
+
+        var torrents = _torrentService.GetAll();
+        foreach (var t in torrents)
+        {
+            var catName = !string.IsNullOrWhiteSpace(t.Category) ? t.Category : t.Label;
+            if (!string.IsNullOrWhiteSpace(catName))
+            {
+                var trimmed = catName.Trim();
+                if (!result.ContainsKey(trimmed))
+                {
+                    result[trimmed] = new { name = trimmed, savePath = Path.Combine(defaultPath, trimmed) };
+                }
+            }
+        }
+
+        return result;
     }
 
     [HttpGet("torrents/tags")]
@@ -1548,13 +1667,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             var localDefaultPath = _configService?.WatchFolderPath ?? "/downloads";
             var defaultPath = RemapLocalToRemote(localDefaultPath);
 
-            var categories = torrents
-                .Select(t => t.Label)
-                .Where(l => !string.IsNullOrWhiteSpace(l))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    c => c,
-                    c => (object)new { name = c, savePath = Path.Combine(defaultPath, c) });
+            var categories = BuildCategoriesDictionary(defaultPath);
 
             var dlLimit = ((_configService?.AlternativeSpeedEnabled == true ? _configService?.AltDownloadSpeedKbps : _configService?.MaxDownloadSpeedKbps) ?? 1250) * 1024;
             var upLimit = ((_configService?.AlternativeSpeedEnabled == true ? _configService?.AltUploadSpeedKbps : _configService?.MaxUploadSpeedKbps) ?? 625) * 1024;

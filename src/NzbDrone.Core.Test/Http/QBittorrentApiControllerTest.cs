@@ -6,8 +6,10 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Tags;
@@ -27,6 +29,7 @@ public class QBittorrentApiControllerTest
     private IConfigService _configService;
     private ITagService _tagService;
     private IConfigFileProvider _configFileProvider;
+    private ICategoryService _categoryService;
     private QBittorrentApiController _controller;
 
     [SetUp]
@@ -40,6 +43,7 @@ public class QBittorrentApiControllerTest
         _configService = Substitute.For<IConfigService>();
         _tagService = Substitute.For<ITagService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
+        _categoryService = Substitute.For<ICategoryService>();
 
         _configFileProvider.AuthenticationEnabled.Returns(false);
 
@@ -51,7 +55,8 @@ public class QBittorrentApiControllerTest
             _trackerEntryService,
             _configService,
             _tagService,
-            _configFileProvider);
+            _configFileProvider,
+            categoryService: _categoryService);
     }
 
     [Test]
@@ -634,5 +639,63 @@ public class QBittorrentApiControllerTest
                 Directory.Delete(tempDir, true);
             }
         }
+    }
+
+    [Test]
+    public void CreateCategory_Invokes_CategoryService_Add()
+    {
+        var result = _controller.CreateCategory("tv-sonarr", "/data/media/tv");
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        _categoryService.Received(1).Add(Arg.Is<Category>(c => c.Name == "tv-sonarr" && c.SavePath == "/data/media/tv"));
+    }
+
+    [Test]
+    public void EditCategory_Invokes_CategoryService_Update()
+    {
+        var existing = new Category { Id = 10, Name = "tv-sonarr", SavePath = "/old/path" };
+        _categoryService.GetByName("tv-sonarr").Returns(existing);
+
+        var result = _controller.EditCategory("tv-sonarr", "/new/path");
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        _categoryService.Received(1).Update(Arg.Is<Category>(c => c.Id == 10 && c.Name == "tv-sonarr" && c.SavePath == "/new/path"));
+    }
+
+    [Test]
+    public void RemoveCategories_Invokes_CategoryService_Delete_For_Each()
+    {
+        var cat1 = new Category { Id = 1, Name = "cat1" };
+        var cat2 = new Category { Id = 2, Name = "cat2" };
+        _categoryService.GetByName("cat1").Returns(cat1);
+        _categoryService.GetByName("cat2").Returns(cat2);
+
+        var result = _controller.RemoveCategories("cat1\ncat2");
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        _categoryService.Received(1).Delete(1);
+        _categoryService.Received(1).Delete(2);
+    }
+
+    [Test]
+    public void GetCategories_Returns_Categories_Configured_In_CategoryService()
+    {
+        var category = new Category { Id = 1, Name = "tv-sonarr", SavePath = "/data/media/tv" };
+        _categoryService.GetAll().Returns(new List<Category> { category });
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var result = _controller.GetCategories();
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result.Result;
+        var dict = ok.Value as Dictionary<string, object>;
+        Assert.That(dict, Is.Not.Null);
+        Assert.That(dict.ContainsKey("tv-sonarr"), Is.True);
+
+        var catObj = dict["tv-sonarr"];
+        var nameProp = catObj.GetType().GetProperty("name")?.GetValue(catObj);
+        var savePathProp = catObj.GetType().GetProperty("savePath")?.GetValue(catObj);
+        Assert.That(nameProp, Is.EqualTo("tv-sonarr"));
+        Assert.That(savePathProp, Is.EqualTo("/data/media/tv"));
     }
 }

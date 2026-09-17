@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.RemotePathMappings;
@@ -47,6 +48,7 @@ public class DelugeJsonRpcController : ControllerBase
     private readonly HttpClient _httpClient;
     private readonly IRemotePathMappingService _remotePathMappingService;
     private readonly ICallerHostResolver _callerHostResolver;
+    private readonly ICategoryService _categoryService;
     private readonly Logger _logger;
 
     public static bool IsWebConnected
@@ -66,7 +68,8 @@ public class DelugeJsonRpcController : ControllerBase
         HttpClient httpClient = null,
         IRpcSessionStore sessionStore = null,
         IRemotePathMappingService remotePathMappingService = null,
-        ICallerHostResolver callerHostResolver = null)
+        ICallerHostResolver callerHostResolver = null,
+        ICategoryService categoryService = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -79,6 +82,7 @@ public class DelugeJsonRpcController : ControllerBase
         _sessionStore = sessionStore ?? RpcSessionStore.SharedSessionStore;
         _remotePathMappingService = remotePathMappingService;
         _callerHostResolver = callerHostResolver;
+        _categoryService = categoryService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -518,6 +522,17 @@ public class DelugeJsonRpcController : ControllerBase
     {
         var labelSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        if (_categoryService != null)
+        {
+            foreach (var cat in _categoryService.GetAll())
+            {
+                if (!string.IsNullOrWhiteSpace(cat?.Name))
+                {
+                    labelSet.Add(cat.Name.Trim());
+                }
+            }
+        }
+
         if (_tagService != null)
         {
             foreach (var tag in _tagService.GetAll())
@@ -630,6 +645,20 @@ public class DelugeJsonRpcController : ControllerBase
 
     private IActionResult HandleLabelGetOptions(JsonElement paramsElem, object id)
     {
+        var labelName = paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() > 0 && paramsElem[0].ValueKind == JsonValueKind.String
+            ? paramsElem[0].GetString()
+            : null;
+
+        var savePath = string.Empty;
+        if (!string.IsNullOrWhiteSpace(labelName) && _categoryService != null)
+        {
+            var cat = _categoryService.GetByName(labelName);
+            if (cat != null && !string.IsNullOrWhiteSpace(cat.SavePath))
+            {
+                savePath = RemapLocalToRemote(cat.SavePath);
+            }
+        }
+
         var labelOpts = new Dictionary<string, object>
         {
             ["apply_max"] = false,
@@ -642,8 +671,8 @@ public class DelugeJsonRpcController : ControllerBase
             ["stop_at_ratio"] = false,
             ["stop_ratio"] = 2.0,
             ["remove_at_ratio"] = false,
-            ["move_completed"] = false,
-            ["move_completed_path"] = string.Empty
+            ["move_completed"] = !string.IsNullOrEmpty(savePath),
+            ["move_completed_path"] = savePath,
         };
 
         return DelugeResult(new { result = labelOpts, error = (object)null, id });
@@ -651,6 +680,44 @@ public class DelugeJsonRpcController : ControllerBase
 
     private IActionResult HandleLabelSetOptions(JsonElement paramsElem, object id)
     {
+        if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() >= 2)
+        {
+            var labelName = paramsElem[0].ValueKind == JsonValueKind.String ? paramsElem[0].GetString() : null;
+            var options = paramsElem[1];
+
+            if (!string.IsNullOrWhiteSpace(labelName) && options.ValueKind == JsonValueKind.Object && _categoryService != null)
+            {
+                string savePath = null;
+                if (options.TryGetProperty("move_completed_path", out var mcpProp) && mcpProp.ValueKind == JsonValueKind.String)
+                {
+                    savePath = mcpProp.GetString();
+                }
+                else if (options.TryGetProperty("download_location", out var dlProp) && dlProp.ValueKind == JsonValueKind.String)
+                {
+                    savePath = dlProp.GetString();
+                }
+
+                if (!string.IsNullOrWhiteSpace(savePath))
+                {
+                    var resolvedSavePath = RemapRemoteToLocal(savePath);
+                    var existing = _categoryService.GetByName(labelName);
+                    if (existing != null)
+                    {
+                        existing.SavePath = resolvedSavePath;
+                        _categoryService.Update(existing);
+                    }
+                    else
+                    {
+                        _categoryService.Add(new Category
+                        {
+                            Name = labelName.Trim(),
+                            SavePath = resolvedSavePath,
+                        });
+                    }
+                }
+            }
+        }
+
         return DelugeResult(new { result = true, error = (object)null, id });
     }
 
@@ -666,6 +733,7 @@ public class DelugeJsonRpcController : ControllerBase
                 if (torrent != null)
                 {
                     torrent.Label = labelName;
+                    torrent.Category = labelName ?? string.Empty;
                     if (_tagService != null)
                     {
                         torrent.TagIds = !string.IsNullOrWhiteSpace(labelName)
@@ -1216,10 +1284,29 @@ public class DelugeJsonRpcController : ControllerBase
         }
 
         var needsUpdate = false;
+        string explicitDownloadLocation = null;
+
         if (options.TryGetProperty("download_location", out var dlProp) && dlProp.ValueKind == JsonValueKind.String)
         {
-            added.SourcePath = RemapRemoteToLocal(dlProp.GetString());
-            needsUpdate = true;
+            var rawDl = dlProp.GetString();
+            if (!string.IsNullOrWhiteSpace(rawDl))
+            {
+                explicitDownloadLocation = RemapRemoteToLocal(rawDl);
+                added.SourcePath = explicitDownloadLocation;
+                needsUpdate = true;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(explicitDownloadLocation) &&
+            options.TryGetProperty("move_completed_path", out var mcpProp) && mcpProp.ValueKind == JsonValueKind.String)
+        {
+            var rawMcp = mcpProp.GetString();
+            if (!string.IsNullOrWhiteSpace(rawMcp))
+            {
+                explicitDownloadLocation = RemapRemoteToLocal(rawMcp);
+                added.SourcePath = explicitDownloadLocation;
+                needsUpdate = true;
+            }
         }
 
         if (options.TryGetProperty("add_paused", out var apProp) && apProp.ValueKind == JsonValueKind.True)
@@ -1232,12 +1319,24 @@ public class DelugeJsonRpcController : ControllerBase
         {
             var lblStr = lblProp.GetString();
             added.Label = lblStr;
+            added.Category = lblStr ?? string.Empty;
             if (_tagService != null && !string.IsNullOrWhiteSpace(lblStr))
             {
                 added.TagIds = _tagService.SyncTagsFromLabels(new[] { lblStr });
             }
 
             needsUpdate = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(explicitDownloadLocation) && _categoryService != null && !string.IsNullOrWhiteSpace(added.Category))
+        {
+            var defaultPath = _configService?.WatchFolderPath ?? "/downloads";
+            var categoryPath = _categoryService.GetSavePathForCategory(added.Category, defaultPath);
+            if (!string.IsNullOrWhiteSpace(categoryPath))
+            {
+                added.SourcePath = categoryPath;
+                needsUpdate = true;
+            }
         }
 
         if (needsUpdate)

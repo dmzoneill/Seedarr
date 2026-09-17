@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
@@ -23,6 +24,7 @@ public class DelugeJsonRpcControllerTest
     private IConfigService _configService;
     private ITagService _tagService;
     private IConfigFileProvider _configFileProvider;
+    private ICategoryService _categoryService;
     private DelugeJsonRpcController _controller;
 
     [SetUp]
@@ -35,6 +37,7 @@ public class DelugeJsonRpcControllerTest
         _configService = Substitute.For<IConfigService>();
         _tagService = Substitute.For<ITagService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
+        _categoryService = Substitute.For<ICategoryService>();
 
         _configFileProvider.AuthenticationEnabled.Returns(false);
 
@@ -45,7 +48,8 @@ public class DelugeJsonRpcControllerTest
             _torrentImportService,
             _configService,
             _tagService,
-            _configFileProvider);
+            _configFileProvider,
+            categoryService: _categoryService);
     }
 
     [Test]
@@ -525,5 +529,44 @@ public class DelugeJsonRpcControllerTest
         Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.False);
 
         _torrentService.DidNotReceive().Delete(Arg.Any<int>(), Arg.Any<bool>());
+    }
+
+    [Test]
+    public async Task HandleRpc_AddTorrentMagnet_With_Label_Uses_Category_SavePath()
+    {
+        var category = new Category { Id = 1, Name = "tv-sonarr", SavePath = "/data/media/tv" };
+        _categoryService.GetByName("tv-sonarr").Returns(category);
+        _categoryService.GetSavePathForCategory("tv-sonarr", Arg.Any<string>()).Returns("/data/media/tv");
+
+        var imported = new Torrent
+        {
+            Id = 7,
+            Name = "DelugeTest",
+            InfoHash = "2222222222222222222222222222222222222222",
+        };
+        _torrentImportService.ImportFromMagnet(Arg.Any<string>()).Returns(imported);
+
+        var json = "{\"method\": \"core.add_torrent_magnet\", \"params\": [\"magnet:?xt=urn:btih:2222222222222222222222222222222222222222\", {\"label\": \"tv-sonarr\"}], \"id\": 500}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+
+        _torrentService.Received().Update(Arg.Is<Torrent>(t => t.Id == 7 && t.Category == "tv-sonarr" && t.SourcePath == "/data/media/tv"));
+    }
+
+    [Test]
+    public async Task HandleRpc_LabelSetOptions_Updates_Category_SavePath()
+    {
+        var existing = new Category { Id = 3, Name = "tv-sonarr", SavePath = "/old/path" };
+        _categoryService.GetByName("tv-sonarr").Returns(existing);
+
+        var json = "{\"method\": \"label.set_options\", \"params\": [\"tv-sonarr\", {\"move_completed_path\": \"/data/media/tv\"}], \"id\": 501}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+
+        _categoryService.Received(1).Update(Arg.Is<Category>(c => c.Id == 3 && c.SavePath == "/data/media/tv"));
     }
 }
