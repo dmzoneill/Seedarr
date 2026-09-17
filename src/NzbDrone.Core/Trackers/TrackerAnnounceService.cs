@@ -2,7 +2,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
@@ -13,6 +15,7 @@ using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Simulation.ClientBehavior;
+using NzbDrone.Core.Simulation.ClientBehavior.Profiles;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers.Metrics;
 using NzbDrone.Core.Trackers.MultiTracker;
@@ -273,21 +276,38 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             "Tracker",
             $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {torrent.Uploaded:N0} bytes, left: {left:N0} bytes)");
 
-        var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+        var session = (_clientBehaviorSimulator != null && !_configService.AnonymousMode)
             ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
             : null;
-        var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+        var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && !_configService.AnonymousMode)
             ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
             : null);
-        var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
-        var userAgent = profile?.UserAgent ?? _configService.BitTorrentUserAgent;
+
+        if (profile == null)
+        {
+            var primary = _configService.PrimaryClient?.Trim().ToLowerInvariant() ?? "";
+            profile = primary switch
+            {
+                "transmission" => new TransmissionProfile(),
+                "deluge" => new DelugeProfile(),
+                "utorrent" => new UTorrentProfile(),
+                "biglybt" => new BiglyBTProfile(),
+                _ => new QBittorrentProfile()
+            };
+        }
+
+        var peerId = session?.PeerId ?? profile.GeneratePeerId();
+        var userAgent = !_configService.ClientBehaviorEngineEnabled && !string.IsNullOrWhiteSpace(_configService.BitTorrentUserAgent)
+            ? _configService.BitTorrentUserAgent
+            : (session?.Profile?.UserAgent ?? profile.UserAgent ?? _configService.BitTorrentUserAgent);
+        var announceKey = session?.AnnounceKey ?? RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue).ToString("X8", CultureInfo.InvariantCulture);
 
         var request = new TrackerAnnounceRequest
         {
             InfoHash = torrent.InfoHash,
             PeerId = peerId,
             UserAgent = userAgent,
-            Key = session?.AnnounceKey,
+            Key = announceKey,
             Port = _configService.ListeningPort,
             Uploaded = torrent.Uploaded,
             Downloaded = torrent.Downloaded,
@@ -296,7 +316,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             TrackerUrl = entry.Url,
             Compact = true,
             NumWant = isStopped ? 0 : 50,
-            IsPrivate = torrent.IsPrivate
+            IsPrivate = torrent.IsPrivate,
+            ClientProfile = profile
         };
 
         var announceList = new List<List<string>>

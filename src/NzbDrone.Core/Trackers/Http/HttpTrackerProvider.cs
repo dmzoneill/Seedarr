@@ -1,15 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Web;
+using System.Security.Cryptography;
+using System.Text;
 using BencodeNET.Objects;
 using BencodeNET.Parsing;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Http;
 using NzbDrone.Core.Network;
+using NzbDrone.Core.Simulation.ClientBehavior;
+using NzbDrone.Core.Simulation.ClientBehavior.Profiles;
 using Polly;
 
 namespace NzbDrone.Core.Trackers.Http;
@@ -205,23 +209,214 @@ public class HttpTrackerProvider : ITrackerProvider
             UriFormat.UriEscaped);
     }
 
+    private static readonly string[] DefaultParameterOrder =
+    {
+        "info_hash", "peer_id", "port", "uploaded", "downloaded", "left",
+        "compact", "numwant", "event", "key"
+    };
+
     private static string BuildAnnounceUrl(TrackerAnnounceRequest request)
     {
-        var hashBytes = Convert.FromHexString(request.InfoHash);
-        var escapedHash = string.Join("", hashBytes.Select(b => $"%{b:X2}"));
-        var escapedPeerId = HttpUtility.UrlEncode(request.PeerId);
-        var sep = request.TrackerUrl.Contains('?') ? "&" : "?";
+        if (string.IsNullOrEmpty(request.Key))
+        {
+            request.Key = Generate32BitKey();
+        }
 
-        return $"{request.TrackerUrl}" +
-            $"{sep}info_hash={escapedHash}" +
-            $"&peer_id={escapedPeerId}" +
-            (string.IsNullOrEmpty(request.Key) ? "" : $"&key={HttpUtility.UrlEncode(request.Key)}") +
-            $"&port={request.Port}" +
-            $"&uploaded={request.Uploaded}" +
-            $"&downloaded={request.Downloaded}" +
-            $"&left={request.Left}" +
-            $"&compact={(request.Compact ? 1 : 0)}" +
-            $"&numwant={request.NumWant}" +
-            (request.Event != AnnounceEvent.None ? $"&event={request.EventString}" : "");
+        var profile = request.ClientProfile ?? DetectProfile(request);
+        var order = profile?.AnnounceParameterOrder ?? DefaultParameterOrder;
+        var extras = profile?.ExtraAnnounceParameters ?? new Dictionary<string, string>();
+
+        var escapedHash = EscapeInfoHash(request.InfoHash);
+        var escapedPeerId = EscapePeerId(request.PeerId);
+
+        var paramValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["info_hash"] = escapedHash,
+            ["peer_id"] = escapedPeerId,
+            ["port"] = request.Port.ToString(CultureInfo.InvariantCulture),
+            ["uploaded"] = request.Uploaded.ToString(CultureInfo.InvariantCulture),
+            ["downloaded"] = request.Downloaded.ToString(CultureInfo.InvariantCulture),
+            ["left"] = request.Left.ToString(CultureInfo.InvariantCulture),
+            ["compact"] = request.Compact ? "1" : "0",
+            ["numwant"] = request.NumWant.ToString(CultureInfo.InvariantCulture),
+            ["key"] = request.Key
+        };
+
+        if (request.Event != AnnounceEvent.None && !string.IsNullOrEmpty(request.EventString))
+        {
+            paramValues["event"] = request.EventString;
+        }
+
+        foreach (var extra in extras)
+        {
+            if (!paramValues.ContainsKey(extra.Key))
+            {
+                paramValues[extra.Key] = extra.Value;
+            }
+        }
+
+        var sb = new StringBuilder();
+        sb.Append(request.TrackerUrl);
+        var hasQuery = request.TrackerUrl.Contains('?');
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var paramName in order)
+        {
+            if (paramValues.TryGetValue(paramName, out var paramValue))
+            {
+                visited.Add(paramName);
+                sb.Append(hasQuery ? '&' : '?');
+                hasQuery = true;
+                sb.Append(paramName);
+                sb.Append('=');
+                sb.Append(paramValue);
+            }
+        }
+
+        foreach (var kvp in paramValues)
+        {
+            if (!visited.Contains(kvp.Key))
+            {
+                sb.Append(hasQuery ? '&' : '?');
+                hasQuery = true;
+                sb.Append(kvp.Key);
+                sb.Append('=');
+                sb.Append(kvp.Value);
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static IClientProfile DetectProfile(TrackerAnnounceRequest request)
+    {
+        if (request == null)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrEmpty(request.PeerId))
+        {
+            if (request.PeerId.StartsWith("-qB", StringComparison.OrdinalIgnoreCase))
+            {
+                return new QBittorrentProfile();
+            }
+
+            if (request.PeerId.StartsWith("-TR", StringComparison.OrdinalIgnoreCase))
+            {
+                return new TransmissionProfile();
+            }
+
+            if (request.PeerId.StartsWith("-DE", StringComparison.OrdinalIgnoreCase))
+            {
+                return new DelugeProfile();
+            }
+
+            if (request.PeerId.StartsWith("-UT", StringComparison.OrdinalIgnoreCase))
+            {
+                return new UTorrentProfile();
+            }
+
+            if (request.PeerId.StartsWith("-BI", StringComparison.OrdinalIgnoreCase))
+            {
+                return new BiglyBTProfile();
+            }
+        }
+
+        if (!string.IsNullOrEmpty(request.UserAgent))
+        {
+            if (request.UserAgent.Contains("qBittorrent", StringComparison.OrdinalIgnoreCase))
+            {
+                return new QBittorrentProfile();
+            }
+
+            if (request.UserAgent.Contains("Transmission", StringComparison.OrdinalIgnoreCase))
+            {
+                return new TransmissionProfile();
+            }
+
+            if (request.UserAgent.Contains("Deluge", StringComparison.OrdinalIgnoreCase))
+            {
+                return new DelugeProfile();
+            }
+
+            if (request.UserAgent.Contains("uTorrent", StringComparison.OrdinalIgnoreCase))
+            {
+                return new UTorrentProfile();
+            }
+
+            if (request.UserAgent.Contains("BiglyBT", StringComparison.OrdinalIgnoreCase))
+            {
+                return new BiglyBTProfile();
+            }
+        }
+
+        return null;
+    }
+
+    private static string EscapePeerId(string peerId)
+    {
+        if (string.IsNullOrEmpty(peerId))
+        {
+            return string.Empty;
+        }
+
+        var sb = new StringBuilder();
+        var bytes = Encoding.Latin1.GetBytes(peerId);
+        foreach (var b in bytes)
+        {
+            if ((b >= 'a' && b <= 'z') ||
+                (b >= 'A' && b <= 'Z') ||
+                (b >= '0' && b <= '9') ||
+                b == '-' || b == '_' || b == '.' || b == '~')
+            {
+                sb.Append((char)b);
+            }
+            else
+            {
+                sb.Append($"%{b:X2}");
+            }
+        }
+
+        return sb.ToString();
+    }
+
+    private static string EscapeInfoHash(string infoHash)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return string.Empty;
+        }
+
+        byte[] hashBytes;
+        if (infoHash.Length == 40 && IsHexString(infoHash))
+        {
+            hashBytes = Convert.FromHexString(infoHash);
+        }
+        else
+        {
+            hashBytes = Encoding.Latin1.GetBytes(infoHash);
+        }
+
+        return string.Concat(hashBytes.Select(b => $"%{b:X2}"));
+    }
+
+    private static bool IsHexString(string s)
+    {
+        foreach (var c in s)
+        {
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static string Generate32BitKey()
+    {
+        var keyVal = RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue);
+        return keyVal.ToString("X8", CultureInfo.InvariantCulture);
     }
 }

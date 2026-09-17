@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.Trackers;
@@ -41,6 +42,7 @@ public class TrackerAnnounceRequest
     public bool Compact { get; set; } = true;
     public int NumWant { get; set; } = 50;
     public bool IsPrivate { get; set; }
+    public IClientProfile ClientProfile { get; set; }
 }
 
 public class TrackerAnnounceResponse : ITrackerResponse

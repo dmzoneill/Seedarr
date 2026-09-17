@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace NzbDrone.Core.Simulation.ClientBehavior.Profiles;
 
 public class TransmissionProfile : IClientProfile
@@ -12,6 +14,17 @@ public class TransmissionProfile : IClientProfile
     public bool SupportsEncryption => true;
     public bool SupportsDht => true;
     public bool SupportsPex => true;
+
+    public IReadOnlyList<string> AnnounceParameterOrder => new[]
+    {
+        "info_hash", "peer_id", "port", "uploaded", "downloaded", "left",
+        "numwant", "key", "compact", "supportcrypto", "event"
+    };
+
+    public IDictionary<string, string> ExtraAnnounceParameters => new Dictionary<string, string>
+    {
+        { "supportcrypto", "1" }
+    };
 
     public string GeneratePeerId()
     {

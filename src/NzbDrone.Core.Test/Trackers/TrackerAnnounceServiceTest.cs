@@ -386,6 +386,41 @@ public class TrackerAnnounceServiceTest
     }
 
     [Test]
+    public void AnnounceTorrent_should_generate_dynamic_peer_id_and_key_without_hardcoded_default()
+    {
+        var torrent = new Torrent
+        {
+            Id = 42,
+            Name = "Test.Movie.2024",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Uploaded = 1000,
+            Downloaded = 500,
+            TotalSize = 2000,
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry { Id = 1, TorrentId = 42, Url = "http://tracker1.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(42).Returns(new List<TrackerEntry> { tracker });
+        _configService.ClientBehaviorEngineEnabled.Returns(false);
+        _configService.PrimaryClient.Returns("qBittorrent");
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r =>
+                r.PeerId != "-SD1000-000000000000" &&
+                r.PeerId.Length == 20 &&
+                r.PeerId.StartsWith("-qB4420-") &&
+                r.Key != null &&
+                r.Key.Length == 8),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
     public void BEP10_extension_handshake_dictionary_should_include_client_version_v()
     {
         var configService = Substitute.For<IConfigService>();

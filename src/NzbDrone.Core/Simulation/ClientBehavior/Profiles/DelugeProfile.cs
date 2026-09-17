@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace NzbDrone.Core.Simulation.ClientBehavior.Profiles;
 
 public class DelugeProfile : IClientProfile
@@ -12,6 +14,21 @@ public class DelugeProfile : IClientProfile
     public bool SupportsEncryption => true;
     public bool SupportsDht => true;
     public bool SupportsPex => true;
+
+    public IReadOnlyList<string> AnnounceParameterOrder => new[]
+    {
+        "info_hash", "peer_id", "port", "uploaded", "downloaded", "left",
+        "corrupt", "key", "event", "numwant", "compact", "no_peer_id",
+        "supportcrypto", "redundant"
+    };
+
+    public IDictionary<string, string> ExtraAnnounceParameters => new Dictionary<string, string>
+    {
+        { "corrupt", "0" },
+        { "no_peer_id", "1" },
+        { "supportcrypto", "1" },
+        { "redundant", "0" }
+    };
 
     public string GeneratePeerId()
     {
