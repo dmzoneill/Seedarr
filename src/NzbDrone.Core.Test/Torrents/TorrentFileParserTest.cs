@@ -1175,4 +1175,66 @@ public class TorrentFileParserTest
         Assert.That(result.Name.IsNormalized(System.Text.NormalizationForm.FormC), Is.True);
         Assert.That(result.Files[0].Path.IsNormalized(System.Text.NormalizationForm.FormC), Is.True);
     }
+
+    [Test]
+    public void Parse_should_extract_single_httpseeds_from_root()
+    {
+        var torrentDict = CreateMinimalTorrent("test.iso");
+        torrentDict["httpseeds"] = new BString("http://seed.example.com/endpoint");
+
+        using var stream = CreateTorrentStream(torrentDict);
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.HttpSeeds, Is.Not.Null);
+        Assert.That(result.HttpSeeds, Has.Count.EqualTo(1));
+        Assert.That(result.HttpSeeds[0], Is.EqualTo("http://seed.example.com/endpoint"));
+    }
+
+    [Test]
+    public void Parse_should_extract_list_httpseeds_from_root_and_info()
+    {
+        var torrentDict = CreateMinimalTorrent("test.iso");
+        torrentDict["httpseeds"] = new BList
+        {
+            new BString("http://seed1.example.com/endpoint"),
+            new BString("http://seed2.example.com/endpoint")
+        };
+
+        var info = torrentDict["info"] as BDictionary;
+        info["httpseeds"] = new BList
+        {
+            new BString("http://seed3.example.com/endpoint"),
+            new BString("http://seed1.example.com/endpoint") // Duplicate, should be deduplicated
+        };
+
+        using var stream = CreateTorrentStream(torrentDict);
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.HttpSeeds, Is.Not.Null);
+        Assert.That(result.HttpSeeds, Has.Count.EqualTo(3));
+        Assert.That(result.HttpSeeds, Does.Contain("http://seed1.example.com/endpoint"));
+        Assert.That(result.HttpSeeds, Does.Contain("http://seed2.example.com/endpoint"));
+        Assert.That(result.HttpSeeds, Does.Contain("http://seed3.example.com/endpoint"));
+    }
+
+    [Test]
+    public void Parse_should_extract_url_list_from_root_and_info()
+    {
+        var torrentDict = CreateMinimalTorrent("test.iso");
+        torrentDict["url-list"] = new BString("http://webseed1.example.com/files/");
+
+        var info = torrentDict["info"] as BDictionary;
+        info["url-list"] = new BList
+        {
+            new BString("http://webseed2.example.com/files/")
+        };
+
+        using var stream = CreateTorrentStream(torrentDict);
+        var result = _subject.Parse(stream);
+
+        Assert.That(result.UrlList, Is.Not.Null);
+        Assert.That(result.UrlList, Has.Count.EqualTo(2));
+        Assert.That(result.UrlList[0], Is.EqualTo("http://webseed1.example.com/files/"));
+        Assert.That(result.UrlList[1], Is.EqualTo("http://webseed2.example.com/files/"));
+    }
 }
