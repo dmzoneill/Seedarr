@@ -100,12 +100,29 @@ public class EmailNotification : INotificationService
             message.IsBodyHtml = false;
 
             var recipients = Settings.ToAddresses
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Where(a => !string.IsNullOrWhiteSpace(a));
 
             foreach (var recipient in recipients)
             {
-                message.To.Add(new MailAddress(recipient));
+                var trimmed = recipient.Trim();
+                if (string.IsNullOrWhiteSpace(trimmed))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    message.To.Add(new MailAddress(trimmed));
+                }
+                catch (FormatException ex)
+                {
+                    _logger.Warn(ex, "Invalid recipient email address format '{0}' skipped", trimmed);
+                }
+                catch (ArgumentException ex)
+                {
+                    _logger.Warn(ex, "Invalid recipient email address '{0}' skipped", trimmed);
+                }
             }
 
             if (message.To.Count == 0)
@@ -125,14 +142,18 @@ public class EmailNotification : INotificationService
 
     protected virtual void SmtpSend(MailMessage message)
     {
-        using var client = new SmtpClient(Settings.SmtpHost, Settings.SmtpPort);
-        client.EnableSsl = Settings.UseTls;
-
-        if (!string.IsNullOrWhiteSpace(Settings.Username))
+        var retryPipeline = EmailNotificationSender.CreateSmtpRetryPipeline();
+        retryPipeline.Execute(() =>
         {
-            client.Credentials = new NetworkCredential(Settings.Username, Settings.Password);
-        }
+            using var client = new SmtpClient(Settings.SmtpHost, Settings.SmtpPort);
+            client.EnableSsl = Settings.UseTls;
 
-        client.Send(message);
+            if (!string.IsNullOrWhiteSpace(Settings.Username))
+            {
+                client.Credentials = new NetworkCredential(Settings.Username, Settings.Password);
+            }
+
+            client.Send(message);
+        });
     }
 }

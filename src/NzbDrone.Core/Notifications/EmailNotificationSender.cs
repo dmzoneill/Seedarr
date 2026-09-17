@@ -1,16 +1,29 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Mail;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using NLog;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
+using Polly;
+using Polly.Retry;
 
 namespace NzbDrone.Core.Notifications;
 
 public static class EmailNotificationSender
 {
     private static readonly int[] AllowedSmtpPorts = { 25, 465, 587, 2525 };
+    private static readonly TimeSpan[] DefaultRetryDelays =
+    {
+        TimeSpan.FromSeconds(2),
+        TimeSpan.FromSeconds(10),
+        TimeSpan.FromSeconds(30)
+    };
+    private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
 
     public static void SendEmailNotification(
         string settings,
@@ -18,7 +31,37 @@ public static class EmailNotificationSender
         Torrent torrent,
         dynamic meta,
         object genericPayload,
-        Action<SmtpClient, MailMessage> smtpSender = null)
+        Action<SmtpClient, MailMessage> smtpSender = null,
+        IReadOnlyList<TimeSpan> retryDelays = null)
+    {
+        Func<SmtpClient, MailMessage, CancellationToken, Task> asyncSender = smtpSender != null
+            ? (client, mail, _) =>
+            {
+                smtpSender(client, mail);
+                return Task.CompletedTask;
+            }
+            : null;
+
+        SendEmailNotificationAsync(
+            settings,
+            eventType,
+            torrent,
+            meta,
+            genericPayload,
+            asyncSender,
+            retryDelays,
+            CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    public static async Task SendEmailNotificationAsync(
+        string settings,
+        string eventType,
+        Torrent torrent,
+        dynamic meta,
+        object genericPayload,
+        Func<SmtpClient, MailMessage, CancellationToken, Task> asyncSmtpSender = null,
+        IReadOnlyList<TimeSpan> retryDelays = null,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(settings))
         {
@@ -169,25 +212,138 @@ public static class EmailNotificationSender
             ? $"{torrentDetails}\n\n{overview}"
             : torrentDetails;
 
-        using var mail = new MailMessage(from, to, subject, body);
-        using var client = new SmtpClient(host, port)
+        using var mail = new MailMessage
         {
-            EnableSsl = ssl,
-            Timeout = 10000,
+            From = new MailAddress(string.IsNullOrWhiteSpace(from) ? "seedarr@localhost" : from),
+            Subject = subject,
+            Body = body
         };
 
-        if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(pass))
+        var recipients = to.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var recipient in recipients)
         {
-            client.Credentials = new NetworkCredential(user, pass);
+            var trimmed = recipient.Trim();
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                continue;
+            }
+
+            try
+            {
+                mail.To.Add(new MailAddress(trimmed));
+            }
+            catch (FormatException ex)
+            {
+                Logger.Warn(ex, "Invalid recipient email address format '{0}' skipped.", trimmed);
+            }
+            catch (ArgumentException ex)
+            {
+                Logger.Warn(ex, "Invalid recipient email address '{0}' skipped.", trimmed);
+            }
         }
 
-        if (smtpSender != null)
+        if (mail.To.Count == 0)
         {
-            smtpSender(client, mail);
+            Logger.Warn("No valid recipient email addresses found in '{0}'.", to);
+            throw new FormatException($"No valid recipient email addresses found in '{to}'.");
         }
-        else
+
+        var pipeline = CreateSmtpRetryPipeline(retryDelays);
+
+        try
         {
-            client.Send(mail);
+            await pipeline.ExecuteAsync(
+                async ct =>
+                {
+                    using var client = new SmtpClient(host, port)
+                    {
+                        EnableSsl = ssl,
+                        Timeout = 10000,
+                    };
+
+                    if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(pass))
+                    {
+                        client.Credentials = new NetworkCredential(user, pass);
+                    }
+
+                    if (asyncSmtpSender != null)
+                    {
+                        await asyncSmtpSender(client, mail, ct).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                        cts.CancelAfter(TimeSpan.FromSeconds(10));
+                        await client.SendMailAsync(mail, cts.Token).ConfigureAwait(false);
+                    }
+                },
+                cancellationToken).ConfigureAwait(false);
         }
+        catch (SmtpException ex) when (IsTransientSmtpError(ex))
+        {
+            Logger.Error(ex, "Failed to send email notification to '{0}' after transient retries were exhausted.", to);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Failed to send email notification to '{0}'.", to);
+            throw;
+        }
+    }
+
+    public static ResiliencePipeline CreateSmtpRetryPipeline(
+        IReadOnlyList<TimeSpan> retryDelays = null,
+        Action<SmtpException, TimeSpan, int> onRetry = null)
+    {
+        var delays = (retryDelays != null && retryDelays.Count > 0) ? retryDelays : DefaultRetryDelays;
+        var maxAttempts = delays.Count;
+
+        return new ResiliencePipelineBuilder()
+            .AddRetry(new RetryStrategyOptions
+            {
+                MaxRetryAttempts = maxAttempts,
+                DelayGenerator = args =>
+                {
+                    var index = Math.Min(args.AttemptNumber, delays.Count - 1);
+                    return new ValueTask<TimeSpan?>(delays[index]);
+                },
+                ShouldHandle = new PredicateBuilder().Handle<SmtpException>(ex => IsTransientSmtpError(ex)),
+                OnRetry = args =>
+                {
+                    var ex = args.Outcome.Exception as SmtpException ?? args.Outcome.Exception?.InnerException as SmtpException;
+                    Logger.Warn(
+                        "SMTP delivery failed with transient error ({0}): {1}. Retrying in {2} (attempt {3}/{4})...",
+                        ex?.StatusCode.ToString() ?? "Unknown",
+                        args.Outcome.Exception?.Message,
+                        args.RetryDelay,
+                        args.AttemptNumber + 1,
+                        maxAttempts);
+
+                    if (ex != null && onRetry != null)
+                    {
+                        onRetry(ex, args.RetryDelay, args.AttemptNumber + 1);
+                    }
+
+                    return ValueTask.CompletedTask;
+                }
+            })
+            .Build();
+    }
+
+    public static bool IsTransientSmtpError(SmtpException ex)
+    {
+        if (ex == null)
+        {
+            return false;
+        }
+
+        return ex.StatusCode switch
+        {
+            SmtpStatusCode.ServiceNotAvailable => true,    // 421
+            SmtpStatusCode.MailboxBusy => true,            // 450
+            SmtpStatusCode.LocalErrorInProcessing => true, // 451
+            SmtpStatusCode.InsufficientStorage => true,    // 452
+            _ => (int)ex.StatusCode is 421 or 450 or 451 or 452
+        };
     }
 }
