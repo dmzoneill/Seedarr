@@ -60,8 +60,13 @@ export function PeersTab({ torrentId }: { torrentId: number }) {
                   }}
                 >
                   <div
+                    role="progressbar"
+                    aria-valuenow={Math.round(Math.min(100, Math.max(0, p.progress * 100)))}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuetext={`${(p.progress * 100).toFixed(1)}%`}
                     style={{
-                      width: "45px",
+                      width: "80px",
                       height: "6px",
                       backgroundColor: "rgba(255,255,255,0.1)",
                       borderRadius: "3px",

@@ -13,9 +13,11 @@ import {
 } from "../api/hooks";
 import {
   formatBytes,
+  formatSpeed,
   formatRatio,
   formatDate,
   formatDuration,
+  formatEta,
   extractTrackerDomain,
 } from "../utils/formatters";
 import { getMediaDeepLink } from "../utils/arrLinks";
@@ -172,6 +174,7 @@ function TorrentGrid({
           selectedTorrentId === torrent.id ||
           (selectedIds?.has(torrent.id) ?? false);
         const isSeeding = torrent.status === "Seeding";
+        const pct = Math.min((torrent.progress ?? 0) * 100, 100);
         const arrLink = getMediaDeepLink(
           {
             source: torrent.source,
@@ -428,6 +431,7 @@ function TorrentGrid({
                     padding: "0.15rem 0.45rem",
                     borderRadius: "3px",
                   }}
+                  aria-label={`${torrent.status}: ${pct.toFixed(1)}% complete, Down: ${formatSpeed(torrent.downloadSpeed)}, Up: ${formatSpeed(torrent.uploadSpeed)}, ETA: ${formatEta(torrent.eta)}`}
                 >
                   {torrent.isVpnPaused
                     ? t("torrents.pausedVpnKillSwitch", undefined, "Paused (VPN Kill Switch)")
@@ -475,6 +479,7 @@ function TorrentGrid({
                       WebkitLineClamp: 2,
                       WebkitBoxOrient: "vertical",
                       overflow: "hidden",
+                      wordBreak: "break-word",
                       textOverflow: "ellipsis",
                       lineHeight: 1.35,
                     }}
@@ -483,6 +488,24 @@ function TorrentGrid({
                     {torrent.overview}
                   </p>
                 )}
+              </div>
+
+              {/* Progress Bar */}
+              <div
+                className="torrent-progress"
+                role="progressbar"
+                aria-valuenow={Math.round(pct)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuetext={`${pct.toFixed(1)}% downloaded, ratio ${formatRatio(torrent.ratio)}`}
+              >
+                <div
+                  className="torrent-progress-fill"
+                  style={{ width: `${pct}%` }}
+                />
+                <span className="torrent-progress-text">
+                  {pct.toFixed(1)}% ({formatRatio(torrent.ratio)})
+                </span>
               </div>
 
               {/* Metrics Grid */}

@@ -18,6 +18,7 @@ import {
   formatRatio,
   formatDate,
   formatSeconds,
+  formatEta,
   extractTrackerDomain,
 } from "../utils/formatters";
 import { getMediaDeepLink } from "../utils/arrLinks";
@@ -662,19 +663,25 @@ function TorrentTable({
           </div>
         );
       }
-      case "status":
+      case "status": {
+        const pct = Math.min((torrent.progress ?? 0) * 100, 100);
+        const ariaLabel = `${torrent.status}: ${pct.toFixed(1)}% complete, Down: ${formatSpeed(torrent.downloadSpeed)}, Up: ${formatSpeed(torrent.uploadSpeed)}, ETA: ${formatEta(torrent.eta)}`;
         if (torrent.isVpnPaused) {
           return (
-            <span className="badge badge-vpn-paused">
+            <span className="badge badge-vpn-paused" aria-label={ariaLabel}>
               {t("torrents.pausedVpnKillSwitch", undefined, "Paused (VPN Kill Switch)")}
             </span>
           );
         }
         return (
-          <span className={`badge badge-${torrent.status.toLowerCase()}`}>
+          <span
+            className={`badge badge-${torrent.status.toLowerCase()}`}
+            aria-label={ariaLabel}
+          >
             {t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status === "QueuedForChecking" ? "Queued for Recheck" : torrent.status)}
           </span>
         );
+      }
       case "totalSize":
         return formatBytes(torrent.totalSize);
       case "uploaded":
@@ -700,7 +707,14 @@ function TorrentTable({
       case "progress": {
         const pct = Math.min(torrent.progress * 100, 100);
         return (
-          <div className="torrent-progress">
+          <div
+            className="torrent-progress"
+            role="progressbar"
+            aria-valuenow={Math.round(pct)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuetext={`${pct.toFixed(1)}% downloaded, ratio ${formatRatio(torrent.ratio)}`}
+          >
             <div
               className="torrent-progress-fill"
               style={{ width: `${pct}%` }}

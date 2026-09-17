@@ -170,7 +170,14 @@ function PeerList({ torrentId }: PeerListProps) {
                       </span>
                     </td>
                     <td>
-                      <div className="peer-progress">
+                      <div
+                        className="peer-progress"
+                        role="progressbar"
+                        aria-valuenow={Math.round(peer.progress * 100)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuetext={`${(peer.progress * 100).toFixed(1)}%`}
+                      >
                         <div
                           className="peer-progress-bar"
                           style={{
