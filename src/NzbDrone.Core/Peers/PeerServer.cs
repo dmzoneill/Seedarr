@@ -47,6 +47,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private readonly IMseSkeyRegistry _mseSkeyRegistry;
     private readonly Extensions.IMetadataExchange _metadataExchange;
     private readonly Extensions.ISyntheticMetadataGenerator _syntheticMetadataGenerator;
+    private readonly Extensions.IMagnetMetadataDownloader _magnetMetadataDownloader;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
@@ -84,7 +85,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         IDhKeyPool dhKeyPool = null,
         IMseSkeyRegistry mseSkeyRegistry = null,
         Extensions.IMetadataExchange metadataExchange = null,
-        Extensions.ISyntheticMetadataGenerator syntheticMetadataGenerator = null)
+        Extensions.ISyntheticMetadataGenerator syntheticMetadataGenerator = null,
+        Extensions.IMagnetMetadataDownloader magnetMetadataDownloader = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -102,6 +104,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         _mseSkeyRegistry = mseSkeyRegistry ?? new MseSkeyRegistry(_torrentService);
         _metadataExchange = metadataExchange ?? new Extensions.MetadataExchange();
         _syntheticMetadataGenerator = syntheticMetadataGenerator ?? new Extensions.SyntheticMetadataGenerator();
+        _magnetMetadataDownloader = magnetMetadataDownloader;
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -1606,10 +1609,20 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                         }
                     }
                 }
+
+                if (dict.TryGetValue("metadata_size", out var metaSizeObj) && metaSizeObj is BNumber metaSizeNum)
+                {
+                    connection.MetadataSize = (int)metaSizeNum.Value;
+                }
             }
             catch (Exception ex)
             {
                 _logger.Debug(ex, "Failed to parse extension handshake from {0}", connection.RemoteIp);
+            }
+
+            if (_magnetMetadataDownloader != null && torrent != null && torrent.PieceCount == 0)
+            {
+                _magnetMetadataDownloader.OnPeerHandshake(connection, torrent);
             }
 
             return;
@@ -1626,6 +1639,11 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         var metaMsg = _metadataExchange.ParseMetadataMessage(extendedPayload);
         if (metaMsg.MessageType != 0)
         {
+            if (_magnetMetadataDownloader != null && (metaMsg.MessageType == 1 || metaMsg.MessageType == 2))
+            {
+                _magnetMetadataDownloader.HandleMetadataMessage(connection, metaMsg, torrent);
+            }
+
             return;
         }
 
