@@ -796,6 +796,8 @@ public class CertificateManager : ICertificateManager, IDisposable
 
         public bool EnableVpnKillSwitch => false;
 
+        public int VpnStabilizationDelaySeconds => 8;
+
         public bool ForceProxy => false;
 
         public bool AnonymousMode => false;

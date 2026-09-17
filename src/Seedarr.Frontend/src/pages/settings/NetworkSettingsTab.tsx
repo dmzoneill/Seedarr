@@ -23,6 +23,7 @@ export function NetworkSettingsTab() {
     enableIPv6: true,
     bindInterface: "",
     enableVpnKillSwitch: false,
+    vpnStabilizationDelaySeconds: 8,
     maxGlobalConnections: 300,
     maxPerTorrentConnections: 50,
     maxUploadSlots: 8,
@@ -41,6 +42,7 @@ export function NetworkSettingsTab() {
         enableIPv6: config.enableIPv6 ?? true,
         bindInterface: config.bindInterface || "",
         enableVpnKillSwitch: config.enableVpnKillSwitch ?? false,
+        vpnStabilizationDelaySeconds: config.vpnStabilizationDelaySeconds ?? 8,
         maxGlobalConnections: config.maxGlobalConnections ?? 300,
         maxPerTorrentConnections: config.maxPerTorrentConnections ?? 50,
         maxUploadSlots: config.maxUploadSlots ?? 8,
@@ -79,6 +81,7 @@ export function NetworkSettingsTab() {
         enableIPv6: form.enableIPv6,
         bindInterface: form.bindInterface,
         enableVpnKillSwitch: form.enableVpnKillSwitch,
+        vpnStabilizationDelaySeconds: form.vpnStabilizationDelaySeconds,
         maxGlobalConnections: form.maxGlobalConnections,
         maxPerTorrentConnections: form.maxPerTorrentConnections,
         maxUploadSlots: form.maxUploadSlots,
@@ -437,6 +440,17 @@ export function NetworkSettingsTab() {
             onChange={(v) => update("enableVpnKillSwitch", v)}
             hint="Immediately drop all BitTorrent socket transfers in fail-closed mode if the bound VPN adapter drops"
           />
+
+          {form.enableVpnKillSwitch && (
+            <NumberInput
+              label="VPN Stabilization Delay (Seconds)"
+              value={form.vpnStabilizationDelaySeconds}
+              onChange={(v) => update("vpnStabilizationDelaySeconds", v)}
+              min={0}
+              max={300}
+              hint="Hold-down hysteresis delay to prevent reconnect storms during VPN flapping"
+            />
+          )}
         </div>
       </SectionCard>
 

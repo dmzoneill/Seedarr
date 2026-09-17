@@ -80,6 +80,8 @@ public class ConfigFileProvider : IConfigFileProvider
 
     public bool EnableVpnKillSwitch => GetValueBool("EnableVpnKillSwitch", false);
 
+    public int VpnStabilizationDelaySeconds => GetValueInt("VpnStabilizationDelaySeconds", 8);
+
     public bool ForceProxy => GetValueBool("ForceProxy", false);
 
     public bool AnonymousMode => GetValueBool("AnonymousMode", false);

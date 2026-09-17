@@ -46,6 +46,8 @@ public interface IConfigFileProvider
 
     bool EnableVpnKillSwitch { get; }
 
+    int VpnStabilizationDelaySeconds { get; }
+
     bool ForceProxy { get; }
 
     bool AnonymousMode { get; }

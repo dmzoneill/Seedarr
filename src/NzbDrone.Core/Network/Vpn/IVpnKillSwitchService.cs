@@ -14,6 +14,10 @@ public interface IVpnKillSwitchService : IDisposable
 
     bool IsFailClosedActive { get; }
 
+    bool IsStabilizing { get; }
+
+    VpnState State { get; }
+
     event Action<string> VpnDropped;
 
     event Action<string> VpnRestored;
