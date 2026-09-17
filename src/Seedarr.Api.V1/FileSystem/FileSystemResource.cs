@@ -55,6 +55,11 @@ public class FileSystemEntryResource
     public long? Size { get; set; }
 
     /// <summary>
+    /// Gets or sets the available free space in bytes if applicable.
+    /// </summary>
+    public long? FreeSpace { get; set; }
+
+    /// <summary>
     /// Gets or sets the last modified timestamp in UTC.
     /// </summary>
     public DateTime? LastModified { get; set; }
