@@ -514,8 +514,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
 
         if (!Uri.TryCreate(resource.Url.Trim(), UriKind.Absolute, out var uri) ||
             (!uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) &&
-             !uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) &&
-             !uri.Scheme.Equals("udp", StringComparison.OrdinalIgnoreCase)))
+            !uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase) &&
+            !uri.Scheme.Equals("udp", StringComparison.OrdinalIgnoreCase)))
         {
             return BadRequest("Invalid tracker URL. Must be an HTTP, HTTPS, or UDP URL.");
         }
@@ -1232,182 +1232,182 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         {
             case "start":
             case "resume":
-            {
-                var torrent = _torrentService.Get(id);
-                if (torrent == null)
                 {
-                    throw new KeyNotFoundException($"Torrent {id} not found");
-                }
+                    var torrent = _torrentService.Get(id);
+                    if (torrent == null)
+                    {
+                        throw new KeyNotFoundException($"Torrent {id} not found");
+                    }
 
-                _torrentService.Start(id);
-                _eventLogService?.Info(id, "Bulk", "Started torrent");
-                break;
-            }
+                    _torrentService.Start(id);
+                    _eventLogService?.Info(id, "Bulk", "Started torrent");
+                    break;
+                }
 
             case "stop":
             case "pause":
-            {
-                var torrent = _torrentService.Get(id);
-                if (torrent == null)
                 {
-                    throw new KeyNotFoundException($"Torrent {id} not found");
-                }
+                    var torrent = _torrentService.Get(id);
+                    if (torrent == null)
+                    {
+                        throw new KeyNotFoundException($"Torrent {id} not found");
+                    }
 
-                _torrentService.Pause(id);
-                _eventLogService?.Info(id, "Bulk", "Stopped torrent");
-                break;
-            }
+                    _torrentService.Pause(id);
+                    _eventLogService?.Info(id, "Bulk", "Stopped torrent");
+                    break;
+                }
 
             case "delete":
             case "remove":
-            {
-                var torrent = _torrentService.Get(id);
-                if (torrent == null)
                 {
-                    throw new KeyNotFoundException($"Torrent {id} not found");
-                }
+                    var torrent = _torrentService.Get(id);
+                    if (torrent == null)
+                    {
+                        throw new KeyNotFoundException($"Torrent {id} not found");
+                    }
 
-                _torrentService.Delete(id, resource.DeleteFiles);
-                _eventLogService?.Info(id, "Bulk", $"Deleted torrent (deleteFiles={resource.DeleteFiles})");
-                break;
-            }
+                    _torrentService.Delete(id, resource.DeleteFiles);
+                    _eventLogService?.Info(id, "Bulk", $"Deleted torrent (deleteFiles={resource.DeleteFiles})");
+                    break;
+                }
 
             case "recheck":
             case "forcerecheck":
-            {
-                var torrent = _torrentService.Recheck(id);
-                if (torrent == null)
                 {
-                    throw new KeyNotFoundException($"Torrent {id} not found");
-                }
+                    var torrent = _torrentService.Recheck(id);
+                    if (torrent == null)
+                    {
+                        throw new KeyNotFoundException($"Torrent {id} not found");
+                    }
 
-                _eventLogService?.Info(id, "Recheck", $"Recheck complete: progress {torrent.Progress:P0}");
-                break;
-            }
+                    _eventLogService?.Info(id, "Recheck", $"Recheck complete: progress {torrent.Progress:P0}");
+                    break;
+                }
 
             case "announce":
             case "forceannounce":
-            {
-                var torrent = _torrentService.Get(id);
-                if (torrent == null)
                 {
-                    throw new KeyNotFoundException($"Torrent {id} not found");
-                }
+                    var torrent = _torrentService.Get(id);
+                    if (torrent == null)
+                    {
+                        throw new KeyNotFoundException($"Torrent {id} not found");
+                    }
 
-                TriggerAnnounceInternal(torrent);
-                _eventLogService?.Info(id, "Announce", "Triggered tracker announce");
-                break;
-            }
+                    TriggerAnnounceInternal(torrent);
+                    _eventLogService?.Info(id, "Announce", "Triggered tracker announce");
+                    break;
+                }
 
             case "setcategory":
-            {
-                var torrent = _torrentService.Get(id);
-                if (torrent == null)
                 {
-                    throw new KeyNotFoundException($"Torrent {id} not found");
-                }
+                    var torrent = _torrentService.Get(id);
+                    if (torrent == null)
+                    {
+                        throw new KeyNotFoundException($"Torrent {id} not found");
+                    }
 
-                var category = resolvedCategory;
-                var categoryName = resolvedCategoryName;
-                if (category == null && resource.CategoryId.HasValue && resource.CategoryId.Value > 0 && _categoryService != null)
-                {
-                    category = _categoryService.Get(resource.CategoryId.Value);
-                    categoryName = category?.Name;
-                }
-                else if (category == null && !string.IsNullOrWhiteSpace(categoryName) && _categoryService != null)
-                {
-                    category = _categoryService.GetByName(categoryName);
-                }
+                    var category = resolvedCategory;
+                    var categoryName = resolvedCategoryName;
+                    if (category == null && resource.CategoryId.HasValue && resource.CategoryId.Value > 0 && _categoryService != null)
+                    {
+                        category = _categoryService.Get(resource.CategoryId.Value);
+                        categoryName = category?.Name;
+                    }
+                    else if (category == null && !string.IsNullOrWhiteSpace(categoryName) && _categoryService != null)
+                    {
+                        category = _categoryService.GetByName(categoryName);
+                    }
 
-                torrent.Category = category?.Name ?? categoryName;
+                    torrent.Category = category?.Name ?? categoryName;
 
-                if (category != null)
-                {
-                    ApplyCategoryLimits(torrent, category);
+                    if (category != null)
+                    {
+                        ApplyCategoryLimits(torrent, category);
+                    }
+
+                    _torrentService.Update(torrent);
+                    _eventLogService?.Info(id, "Category", $"Category set to '{torrent.Category ?? "None"}'");
+                    break;
                 }
-
-                _torrentService.Update(torrent);
-                _eventLogService?.Info(id, "Category", $"Category set to '{torrent.Category ?? "None"}'");
-                break;
-            }
 
             case "addtags":
-            {
-                var torrent = _torrentService.Get(id);
-                if (torrent == null)
                 {
-                    throw new KeyNotFoundException($"Torrent {id} not found");
-                }
+                    var torrent = _torrentService.Get(id);
+                    if (torrent == null)
+                    {
+                        throw new KeyNotFoundException($"Torrent {id} not found");
+                    }
 
-                if (resource.TagIds != null && resource.TagIds.Count > 0)
-                {
-                    torrent.TagIds ??= new List<int>();
-                    torrent.TagIds = torrent.TagIds.Union(resource.TagIds).Distinct().ToList();
-                    _torrentService.Update(torrent);
-                    _eventLogService?.Info(id, "Tags", $"Added tags: {string.Join(", ", resource.TagIds)}");
-                }
+                    if (resource.TagIds != null && resource.TagIds.Count > 0)
+                    {
+                        torrent.TagIds ??= new List<int>();
+                        torrent.TagIds = torrent.TagIds.Union(resource.TagIds).Distinct().ToList();
+                        _torrentService.Update(torrent);
+                        _eventLogService?.Info(id, "Tags", $"Added tags: {string.Join(", ", resource.TagIds)}");
+                    }
 
-                break;
-            }
+                    break;
+                }
 
             case "removetags":
-            {
-                var torrent = _torrentService.Get(id);
-                if (torrent == null)
                 {
-                    throw new KeyNotFoundException($"Torrent {id} not found");
-                }
+                    var torrent = _torrentService.Get(id);
+                    if (torrent == null)
+                    {
+                        throw new KeyNotFoundException($"Torrent {id} not found");
+                    }
 
-                if (resource.TagIds != null && resource.TagIds.Count > 0 && torrent.TagIds != null)
-                {
-                    torrent.TagIds = torrent.TagIds.Except(resource.TagIds).ToList();
-                    _torrentService.Update(torrent);
-                    _eventLogService?.Info(id, "Tags", $"Removed tags: {string.Join(", ", resource.TagIds)}");
-                }
+                    if (resource.TagIds != null && resource.TagIds.Count > 0 && torrent.TagIds != null)
+                    {
+                        torrent.TagIds = torrent.TagIds.Except(resource.TagIds).ToList();
+                        _torrentService.Update(torrent);
+                        _eventLogService?.Info(id, "Tags", $"Removed tags: {string.Join(", ", resource.TagIds)}");
+                    }
 
-                break;
-            }
+                    break;
+                }
 
             case "setpriority":
-            {
-                var torrent = _torrentService.Get(id);
-                if (torrent == null)
                 {
-                    throw new KeyNotFoundException($"Torrent {id} not found");
-                }
+                    var torrent = _torrentService.Get(id);
+                    if (torrent == null)
+                    {
+                        throw new KeyNotFoundException($"Torrent {id} not found");
+                    }
 
-                if (resource.Priority.HasValue)
-                {
-                    torrent.Priority = resource.Priority.Value;
-                    _torrentService.Update(torrent);
-                    _eventLogService?.Info(id, "Priority", $"Priority set to {resource.Priority.Value}");
-                }
+                    if (resource.Priority.HasValue)
+                    {
+                        torrent.Priority = resource.Priority.Value;
+                        _torrentService.Update(torrent);
+                        _eventLogService?.Info(id, "Priority", $"Priority set to {resource.Priority.Value}");
+                    }
 
-                break;
-            }
+                    break;
+                }
 
             case "setspeedlimits":
-            {
-                var torrent = _torrentService.Get(id);
-                if (torrent == null)
                 {
-                    throw new KeyNotFoundException($"Torrent {id} not found");
-                }
+                    var torrent = _torrentService.Get(id);
+                    if (torrent == null)
+                    {
+                        throw new KeyNotFoundException($"Torrent {id} not found");
+                    }
 
-                if (resource.UploadLimit.HasValue)
-                {
-                    torrent.UploadLimit = resource.UploadLimit.Value;
-                }
+                    if (resource.UploadLimit.HasValue)
+                    {
+                        torrent.UploadLimit = resource.UploadLimit.Value;
+                    }
 
-                if (resource.DownloadLimit.HasValue)
-                {
-                    torrent.DownloadLimit = resource.DownloadLimit.Value;
-                }
+                    if (resource.DownloadLimit.HasValue)
+                    {
+                        torrent.DownloadLimit = resource.DownloadLimit.Value;
+                    }
 
-                _torrentService.Update(torrent);
-                _eventLogService?.Info(id, "Limits", $"Limits updated: Upload={torrent.UploadLimit} KB/s, Download={torrent.DownloadLimit} KB/s");
-                break;
-            }
+                    _torrentService.Update(torrent);
+                    _eventLogService?.Info(id, "Limits", $"Limits updated: Upload={torrent.UploadLimit} KB/s, Download={torrent.DownloadLimit} KB/s");
+                    break;
+                }
 
             default:
                 throw new ArgumentException($"Unknown action: {resource.Action}");

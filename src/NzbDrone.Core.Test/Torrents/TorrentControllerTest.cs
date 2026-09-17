@@ -117,7 +117,7 @@ public class TorrentControllerTest
 
         var result = _controller.AddTracker(torrentId, resource);
 
-        Assert.That(result.Result, Is.InstanceOf<CreatedAtActionResult>());
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == torrentId && t.Url == resource.Url));
     }
 
@@ -273,7 +273,7 @@ public class TorrentControllerTest
 
         var result = _controller.AddTracker(torrentId, resource);
 
-        Assert.That(result.Result, Is.InstanceOf<CreatedAtActionResult>());
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
         _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(t => t.TorrentId == torrentId && t.Url == url));
     }
 

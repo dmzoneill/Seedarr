@@ -27,12 +27,12 @@ public class DownloadHistoryControllerTest
         _controller = new DownloadHistoryController(_historyService, _metadataEnricherService);
     }
 
-    [TestCase("=1+1", "\"'=1+1'\"")]
-    [TestCase("+cmd", "\"'+cmd'\"")]
-    [TestCase("-calc", "\"'-calc'\"")]
-    [TestCase("@SUM(A1)", "\"'@SUM(A1)'\"")]
-    [TestCase("\tTab", "\"'\tTab'\"")]
-    [TestCase("\rReturn", "\"'\rReturn'\"")]
+    [TestCase("=1+1", "\"'=1+1\"")]
+    [TestCase("+cmd", "\"'+cmd\"")]
+    [TestCase("-calc", "\"'-calc\"")]
+    [TestCase("@SUM(A1)", "\"'@SUM(A1)\"")]
+    [TestCase("\tTab", "\"'\tTab\"")]
+    [TestCase("\rReturn", "\"'\rReturn\"")]
     public void EscapeCsvField_prefixes_formula_trigger_characters_with_single_quote(string input, string expected)
     {
         var result = DownloadHistoryController.EscapeCsvField(input);

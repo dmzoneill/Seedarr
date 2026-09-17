@@ -153,7 +153,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         }
 
         var isComplete = (torrent.Progress >= 1.0 || torrent.Status == TorrentStatus.Seeding) ||
-                         (verified != null && verified.Length >= torrent.PieceCount && verified.Take(torrent.PieceCount).All(x => x));
+            (verified != null && verified.Length >= torrent.PieceCount && verified.Take(torrent.PieceCount).All(x => x));
 
         var hasNoPieces = !isComplete && (
             (verified != null && !verified.Take(torrent.PieceCount).Any(x => x)) ||
@@ -365,8 +365,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         }
 
         var isComplete = torrent.Progress >= 1.0 ||
-                         torrent.Status == TorrentStatus.Seeding ||
-                         (verified != null && torrent.PieceCount > 0 && verified.Length >= torrent.PieceCount && verified.Take(torrent.PieceCount).All(x => x));
+            torrent.Status == TorrentStatus.Seeding ||
+            (verified != null && torrent.PieceCount > 0 && verified.Length >= torrent.PieceCount && verified.Take(torrent.PieceCount).All(x => x));
 
         if (isComplete)
         {
@@ -666,11 +666,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     {
         var bindIface = _configService.BindInterface?.Trim();
         return !string.IsNullOrWhiteSpace(bindIface) &&
-               !bindIface.Equals("Any", StringComparison.OrdinalIgnoreCase) &&
-               !bindIface.Equals("all", StringComparison.OrdinalIgnoreCase) &&
-               !bindIface.Equals("*", StringComparison.OrdinalIgnoreCase) &&
-               !bindIface.Equals("0.0.0.0", StringComparison.OrdinalIgnoreCase) &&
-               !bindIface.Equals("::", StringComparison.OrdinalIgnoreCase);
+            !bindIface.Equals("Any", StringComparison.OrdinalIgnoreCase) &&
+            !bindIface.Equals("all", StringComparison.OrdinalIgnoreCase) &&
+            !bindIface.Equals("*", StringComparison.OrdinalIgnoreCase) &&
+            !bindIface.Equals("0.0.0.0", StringComparison.OrdinalIgnoreCase) &&
+            !bindIface.Equals("::", StringComparison.OrdinalIgnoreCase);
     }
 
     private IPAddress ResolveDedicatedBindIp()

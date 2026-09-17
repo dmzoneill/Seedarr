@@ -12,7 +12,8 @@ public static class ContainerExtensions
         return rules
             .WithAutoConcreteTypeResolution()
             .WithDefaultReuse(Reuse.Singleton)
-            .With(Made.Of(FactoryMethod.ConstructorWithResolvableArguments));
+            .With(Made.Of(FactoryMethod.ConstructorWithResolvableArguments))
+            .WithoutThrowOnRegisteringDisposableTransient();
     }
 
     public static void AutoAddServices(this IContainer container, List<string> assemblyNames)
@@ -30,7 +31,7 @@ public static class ContainerExtensions
 
         foreach (var type in typeList)
         {
-            if (type.IsInterface || type.IsAbstract || type.IsEnum || type.IsSubclassOf(typeof(Attribute)))
+            if (type.IsInterface || type.IsAbstract || type.IsEnum || type.IsValueType || type.IsSubclassOf(typeof(Attribute)) || type.GetConstructors().Length == 0)
             {
                 continue;
             }

@@ -41,7 +41,7 @@ public static class EmailNotificationSender
                 smtpSender(client, mail);
                 return Task.CompletedTask;
             }
-            : null;
+        : null;
 
         SendEmailNotificationAsync(
             settings,

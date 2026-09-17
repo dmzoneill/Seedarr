@@ -313,12 +313,12 @@ public class MediaEnrichmentServiceTest
             "tt1375666",
             Arg.Any<string>(),
             Arg.Any<CancellationToken>()).Returns(new TorrentMediaMetadata
-        {
-            Title = "Inception",
-            Year = 2010,
-            ImdbId = "tt1375666",
-            TmdbId = "27205",
-        });
+            {
+                Title = "Inception",
+                Year = 2010,
+                ImdbId = "tt1375666",
+                TmdbId = "27205",
+            });
 
         var torrent = new Torrent
         {
