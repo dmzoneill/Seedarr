@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.Peers.Encryption;
 
@@ -8,6 +9,26 @@ namespace NzbDrone.Core.Test.Peers.Encryption;
 [TestFixture]
 public class PrefixedStreamTest
 {
+    private class NonSeekableStream : MemoryStream
+    {
+        public NonSeekableStream(byte[] data)
+            : base(data)
+        {
+        }
+
+        public NonSeekableStream()
+        {
+        }
+
+        public override bool CanSeek => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+    }
+
     [Test]
     public void Read_should_return_prefix_bytes_first()
     {
@@ -134,12 +155,15 @@ public class PrefixedStreamTest
     }
 
     [Test]
-    public void CanSeek_should_return_false()
+    public void CanSeek_should_reflect_inner_stream()
     {
-        using var inner = new MemoryStream();
-        using var stream = new PrefixedStream(Array.Empty<byte>(), inner);
+        using var innerSeekable = new MemoryStream();
+        using var streamSeekable = new PrefixedStream(Array.Empty<byte>(), innerSeekable);
+        Assert.That(streamSeekable.CanSeek, Is.True);
 
-        Assert.That(stream.CanSeek, Is.False);
+        using var innerNonSeekable = new NonSeekableStream();
+        using var streamNonSeekable = new PrefixedStream(Array.Empty<byte>(), innerNonSeekable);
+        Assert.That(streamNonSeekable.CanSeek, Is.False);
     }
 
     [Test]
@@ -190,12 +214,119 @@ public class PrefixedStreamTest
     }
 
     [Test]
-    public void Dispose_should_dispose_inner_stream()
+    public void Length_and_Position_should_behave_safely_on_seekable_streams()
+    {
+        using var inner = new MemoryStream(new byte[] { 0x01, 0x02 });
+        using var stream = new PrefixedStream(new byte[] { 0xAA }, inner);
+
+        Assert.That(stream.Length, Is.EqualTo(3));
+        Assert.That(stream.Position, Is.EqualTo(0));
+
+        var buffer = new byte[1];
+        stream.Read(buffer, 0, 1);
+        Assert.That(stream.Position, Is.EqualTo(0));
+
+        stream.Read(buffer, 0, 1);
+        Assert.That(stream.Position, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void Length_and_Position_should_throw_on_non_seekable_streams()
+    {
+        using var inner = new NonSeekableStream(new byte[] { 0x01, 0x02 });
+        using var stream = new PrefixedStream(new byte[] { 0xAA }, inner);
+
+        Assert.Throws<NotSupportedException>(() => _ = stream.Length);
+        Assert.Throws<NotSupportedException>(() => _ = stream.Position);
+    }
+
+    [Test]
+    public async Task ReadAsync_Memory_should_drain_prefix_before_reading_from_inner_stream()
+    {
+        var prefix = new byte[] { 0xAA, 0xBB };
+        var innerData = new byte[] { 0x01, 0x02, 0x03 };
+        using var inner = new MemoryStream(innerData);
+        using var stream = new PrefixedStream(prefix, inner);
+
+        var buffer = new byte[5];
+        var read = await stream.ReadAsync(buffer.AsMemory(0, 5));
+
+        Assert.That(read, Is.EqualTo(5));
+        Assert.That(buffer, Is.EqualTo(new byte[] { 0xAA, 0xBB, 0x01, 0x02, 0x03 }));
+    }
+
+    [Test]
+    public async Task ReadAsync_Memory_should_drain_prefix_partially()
+    {
+        var prefix = new byte[] { 0xAA, 0xBB, 0xCC };
+        using var inner = new MemoryStream(new byte[] { 0x01 });
+        using var stream = new PrefixedStream(prefix, inner);
+
+        var buffer = new byte[2];
+        var read = await stream.ReadAsync(buffer.AsMemory());
+
+        Assert.That(read, Is.EqualTo(2));
+        Assert.That(buffer, Is.EqualTo(new byte[] { 0xAA, 0xBB }));
+
+        var secondBuffer = new byte[2];
+        var read2 = await stream.ReadAsync(secondBuffer.AsMemory());
+
+        Assert.That(read2, Is.EqualTo(2));
+        Assert.That(secondBuffer, Is.EqualTo(new byte[] { 0xCC, 0x01 }));
+    }
+
+    [Test]
+    public async Task WriteAsync_Memory_should_pass_through_to_inner_stream()
+    {
+        using var inner = new MemoryStream();
+        using var stream = new PrefixedStream(new byte[] { 0xAA }, inner);
+
+        var data = new byte[] { 0x10, 0x20, 0x30 };
+        await stream.WriteAsync(data.AsMemory());
+
+        Assert.That(inner.ToArray(), Is.EqualTo(data));
+    }
+
+    [Test]
+    public void Dispose_should_not_dispose_inner_stream_when_ownsStream_is_false()
     {
         var inner = new MemoryStream();
-        var stream = new PrefixedStream(Array.Empty<byte>(), inner);
+        var stream = new PrefixedStream(Array.Empty<byte>(), inner, ownsStream: false);
 
         stream.Dispose();
+
+        Assert.DoesNotThrow(() => inner.Read(new byte[1], 0, 1));
+    }
+
+    [Test]
+    public void Dispose_should_dispose_inner_stream_when_ownsStream_is_true()
+    {
+        var inner = new MemoryStream();
+        var stream = new PrefixedStream(Array.Empty<byte>(), inner, ownsStream: true);
+
+        stream.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => inner.Read(new byte[1], 0, 1));
+    }
+
+    [Test]
+    public async Task DisposeAsync_should_not_dispose_inner_stream_when_ownsStream_is_false()
+    {
+        var inner = new MemoryStream();
+        var stream = new PrefixedStream(Array.Empty<byte>(), inner, ownsStream: false);
+
+        await stream.DisposeAsync();
+
+        Assert.DoesNotThrow(() => inner.Read(new byte[1], 0, 1));
+    }
+
+    [Test]
+    public async Task DisposeAsync_should_dispose_inner_stream_when_ownsStream_is_true()
+    {
+        var inner = new MemoryStream();
+        var stream = new PrefixedStream(Array.Empty<byte>(), inner, ownsStream: true);
+
+        await stream.DisposeAsync();
 
         Assert.Throws<ObjectDisposedException>(() => inner.Read(new byte[1], 0, 1));
     }

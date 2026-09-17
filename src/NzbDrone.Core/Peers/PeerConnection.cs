@@ -196,14 +196,14 @@ public class PeerConnection : IDisposable
             if (peek[0] == 19 && mode != EncryptionMode.RequireEncrypted)
             {
                 // Plain BitTorrent handshake - feed the peeked byte back through a PrefixedStream
-                _activeStream = new PrefixedStream(peek, _networkStream);
+                _activeStream = new PrefixedStream(peek, _networkStream, ownsStream: false);
                 EncryptionMethod = CryptoMethod.PlainText;
                 IsEncrypted = false;
                 return true;
             }
 
             // MSE/PE handshake - prefix the peeked byte back
-            var prefixed = new PrefixedStream(peek, _networkStream);
+            var prefixed = new PrefixedStream(peek, _networkStream, ownsStream: false);
             var handshake = new MseHandshake(Array.Empty<byte>(), mode);
             _activeStream = handshake.NegotiateIncoming(prefixed, infoHashValidator);
             EncryptionMethod = handshake.NegotiatedMethod;
