@@ -1017,19 +1017,65 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
         }
 
-        var name = request.Arguments != null && request.Arguments.TryGetValue("name", out var n) ? n.GetString() : null;
-
-        if (!string.IsNullOrWhiteSpace(name))
+        string path = null;
+        if (request.Arguments != null && request.Arguments.TryGetValue("path", out var p))
         {
-            var t = _torrentService.Get(ids[0]);
-            if (t != null)
-            {
-                t.Name = name;
-                _torrentService.Update(t);
-            }
+            path = p.ValueKind == JsonValueKind.String ? p.GetString() : p.ToString();
         }
 
-        return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
+        string name = null;
+        if (request.Arguments != null && request.Arguments.TryGetValue("name", out var n))
+        {
+            name = n.ValueKind == JsonValueKind.String ? n.GetString() : n.ToString();
+        }
+
+        var t = _torrentService.Get(ids[0]);
+        if (t != null && !string.IsNullOrWhiteSpace(path) && !string.IsNullOrWhiteSpace(name))
+        {
+            var normalizedPath = path.Replace('\\', '/').Trim('/');
+            var cleanName = name.Replace('\\', '/').Trim('/');
+            var files = _torrentFileService.GetByTorrentId(t.Id);
+
+            var exactMatch = files.FirstOrDefault(f => string.Equals(f.Path?.Replace('\\', '/').Trim('/'), normalizedPath, StringComparison.OrdinalIgnoreCase));
+            if (exactMatch != null)
+            {
+                var lastSlash = normalizedPath.LastIndexOf('/');
+                exactMatch.Path = lastSlash >= 0 ? $"{normalizedPath.Substring(0, lastSlash)}/{cleanName}" : cleanName;
+                _torrentFileService.Update(exactMatch);
+            }
+            else
+            {
+                var folderPrefix = normalizedPath + "/";
+                var lastSlash = normalizedPath.LastIndexOf('/');
+                var parentDir = lastSlash >= 0 ? normalizedPath.Substring(0, lastSlash) : null;
+                var newFolderPath = parentDir != null ? $"{parentDir}/{cleanName}" : cleanName;
+
+                foreach (var file in files)
+                {
+                    var normalizedFilePath = file.Path?.Replace('\\', '/').Trim('/') ?? string.Empty;
+                    if (normalizedFilePath.StartsWith(folderPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var relativePart = normalizedFilePath.Substring(folderPrefix.Length);
+                        file.Path = $"{newFolderPath}/{relativePart}";
+                        _torrentFileService.Update(file);
+                    }
+                }
+            }
+
+            _torrentService.Recheck(t.Id);
+        }
+
+        return Ok(new TransmissionRpcResponse
+        {
+            Result = "success",
+            Arguments = new Dictionary<string, object>
+            {
+                ["path"] = path,
+                ["name"] = name,
+                ["id"] = t?.Id ?? ids[0],
+            },
+            Tag = tag,
+        });
     }
 
     private IActionResult HandlePortTest(object tag)
