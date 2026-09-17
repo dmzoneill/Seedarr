@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Common.Disk;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
@@ -398,5 +399,142 @@ public class TorrentRelocationServiceTests
         Assert.That(TorrentRelocationService.IsCrossDeviceException(regularEx), Is.False);
 
         Assert.That(TorrentRelocationService.IsCrossDeviceException(null), Is.False);
+    }
+
+    [Test]
+    public async Task Multi_file_relocation_rollback_when_file_fails_midway_cleans_up_destination_and_preserves_source()
+    {
+        _subject.ForceFallbackCopy = true;
+
+        var subDir = Path.Combine(_sourceDir, "RollbackTorrent");
+        Directory.CreateDirectory(subDir);
+        var file1 = Path.Combine(subDir, "file1.dat");
+        var file2 = Path.Combine(subDir, "file2.dat");
+        var file3 = Path.Combine(subDir, "file3.dat");
+        var data1 = new byte[] { 1, 2, 3, 4, 5 };
+        var data2 = new byte[] { 6, 7, 8, 9, 10 };
+        var data3 = new byte[] { 11, 12, 13, 14, 15 };
+        await File.WriteAllBytesAsync(file1, data1);
+        await File.WriteAllBytesAsync(file2, data2);
+        await File.WriteAllBytesAsync(file3, data3);
+
+        var torrent = new Torrent
+        {
+            Id = 800,
+            Name = "RollbackTorrent",
+            SavePath = _sourceDir,
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Seeding,
+        };
+        _torrentService.Get(800).Returns(torrent);
+
+        // Fail midway on file index 1 (file2)
+        _subject.SimulateFailureOnFileIndex = 1;
+
+        var result = await _subject.RelocateTorrentAsync(800, _destDir);
+
+        Assert.That(result, Is.False);
+
+        // All source files must be intact
+        Assert.That(Directory.Exists(subDir), Is.True);
+        Assert.That(File.Exists(file1), Is.True);
+        Assert.That(File.Exists(file2), Is.True);
+        Assert.That(File.Exists(file3), Is.True);
+        Assert.That(await File.ReadAllBytesAsync(file1), Is.EqualTo(data1));
+        Assert.That(await File.ReadAllBytesAsync(file2), Is.EqualTo(data2));
+        Assert.That(await File.ReadAllBytesAsync(file3), Is.EqualTo(data3));
+
+        // Destination must be completely cleaned up (no destination files or empty directory left)
+        var destSubDir = Path.Combine(_destDir, "RollbackTorrent");
+        var destFile1 = Path.Combine(destSubDir, "file1.dat");
+        var destFile2 = Path.Combine(destSubDir, "file2.dat");
+        var destFile3 = Path.Combine(destSubDir, "file3.dat");
+        Assert.That(File.Exists(destFile1), Is.False);
+        Assert.That(File.Exists(destFile2), Is.False);
+        Assert.That(File.Exists(destFile3), Is.False);
+        Assert.That(Directory.Exists(destSubDir), Is.False);
+
+        // Torrent status and save path must be restored
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(torrent.SavePath, Is.EqualTo(_sourceDir));
+        _eventAggregator.Received().PublishEvent(Arg.Is<FileMoveFailedEvent>(e => e.Torrent.Id == 800));
+    }
+
+    [Test]
+    public async Task Preflight_disk_space_check_aborts_early_when_insufficient_free_space()
+    {
+        var fileName = "space_test.bin";
+        var sourceFilePath = Path.Combine(_sourceDir, fileName);
+        var testData = new byte[1024];
+        await File.WriteAllBytesAsync(sourceFilePath, testData);
+
+        var torrent = new Torrent
+        {
+            Id = 801,
+            Name = fileName,
+            SavePath = _sourceDir,
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Downloading,
+        };
+        _torrentService.Get(801).Returns(torrent);
+
+        var diskProvider = Substitute.For<IDiskProvider>();
+        diskProvider.GetAvailableFreeSpace(Arg.Any<string>()).Returns(100L); // 100 bytes available < 1024 bytes required
+        diskProvider.CheckFolderWritable(Arg.Any<string>()).Returns(true);
+        _subject.DiskProvider = diskProvider;
+
+        var result = await _subject.RelocateTorrentAsync(801, _destDir);
+
+        Assert.That(result, Is.False);
+
+        // Source file must be intact
+        Assert.That(File.Exists(sourceFilePath), Is.True);
+
+        // Destination file must never have been touched or created
+        var destFilePath = Path.Combine(_destDir, fileName);
+        Assert.That(File.Exists(destFilePath), Is.False);
+
+        // Failure event published and status preserved
+        _eventAggregator.Received().PublishEvent(Arg.Is<FileMoveFailedEvent>(e => e.ErrorMessage.Contains("Insufficient free space")));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
+    }
+
+    [Test]
+    public async Task Preflight_write_permission_check_aborts_early_when_directory_is_readonly()
+    {
+        var fileName = "perm_test.bin";
+        var sourceFilePath = Path.Combine(_sourceDir, fileName);
+        var testData = new byte[512];
+        await File.WriteAllBytesAsync(sourceFilePath, testData);
+
+        var torrent = new Torrent
+        {
+            Id = 802,
+            Name = fileName,
+            SavePath = _sourceDir,
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Downloading,
+        };
+        _torrentService.Get(802).Returns(torrent);
+
+        var diskProvider = Substitute.For<IDiskProvider>();
+        diskProvider.GetAvailableFreeSpace(Arg.Any<string>()).Returns(10_000_000L);
+        diskProvider.CheckFolderWritable(Arg.Any<string>()).Returns(false); // read-only directory
+        _subject.DiskProvider = diskProvider;
+
+        var result = await _subject.RelocateTorrentAsync(802, _destDir);
+
+        Assert.That(result, Is.False);
+
+        // Source file must be intact
+        Assert.That(File.Exists(sourceFilePath), Is.True);
+
+        // Destination file must never have been created
+        var destFilePath = Path.Combine(_destDir, fileName);
+        Assert.That(File.Exists(destFilePath), Is.False);
+
+        // Failure event published and status preserved
+        _eventAggregator.Received().PublishEvent(Arg.Is<FileMoveFailedEvent>(e => e.ErrorMessage.Contains("not writable") || e.ErrorMessage.Contains("access is denied")));
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Downloading));
     }
 }

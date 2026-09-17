@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Filters;
 using NLog;
+using NzbDrone.Common.Disk;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Exceptions;
@@ -1259,6 +1260,11 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             return BadRequest();
         }
 
+        if (PathSanitizer.ContainsPathTraversal(name) || !PathSanitizer.IsValidFileName(name))
+        {
+            return BadRequest();
+        }
+
         var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, hash, StringComparison.OrdinalIgnoreCase));
         if (torrent == null)
         {
@@ -1284,6 +1290,11 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         var targetNewPath = !string.IsNullOrWhiteSpace(newPath) ? newPath : newPathQuery;
 
         if (string.IsNullOrWhiteSpace(targetHash) || string.IsNullOrWhiteSpace(targetOldPath) || string.IsNullOrWhiteSpace(targetNewPath))
+        {
+            return BadRequest();
+        }
+
+        if (PathSanitizer.ContainsPathTraversal(targetNewPath) || !PathSanitizer.IsValidPath(targetNewPath))
         {
             return BadRequest();
         }
@@ -1323,6 +1334,11 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         var targetNewPath = !string.IsNullOrWhiteSpace(newPath) ? newPath : newPathQuery;
 
         if (string.IsNullOrWhiteSpace(targetHash) || string.IsNullOrWhiteSpace(targetOldPath) || string.IsNullOrWhiteSpace(targetNewPath))
+        {
+            return BadRequest();
+        }
+
+        if (PathSanitizer.ContainsPathTraversal(targetNewPath) || !PathSanitizer.IsValidPath(targetNewPath))
         {
             return BadRequest();
         }
@@ -2200,7 +2216,17 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     {
         if (!string.IsNullOrWhiteSpace(hashes) && !string.IsNullOrWhiteSpace(location))
         {
+            if (PathSanitizer.ContainsPathTraversal(location) || !PathSanitizer.IsValidPath(location))
+            {
+                return BadRequest();
+            }
+
             var remappedLocation = RemapRemoteToLocal(location);
+            if (PathSanitizer.ContainsPathTraversal(remappedLocation) || !PathSanitizer.IsValidPath(remappedLocation))
+            {
+                return BadRequest();
+            }
+
             foreach (var t in ResolveTorrents(hashes))
             {
                 if (_relocationService != null)
