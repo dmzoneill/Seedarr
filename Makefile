@@ -134,7 +134,7 @@ stack-healthy:
 		fi; \
 		sleep 1; \
 	done; \
-	echo "Timeout waiting for Seedarr"; exit 1
+	echo "Timeout waiting for Seedarr"; podman logs --tail 100 seedarr 2>&1 || true; exit 1
 
 stack-configure:
 	@$(COMPOSE) rm -f configure 2>/dev/null || true

@@ -25,14 +25,13 @@ public class StreamingPiecePicker : IPiecePicker
     public event Action<int, int> PlayheadMoved;
 
     public StreamingPiecePicker(
-        IPiecePicker fallbackPicker = null,
         IRandomNumberGenerator random = null,
         int urgentWindowSize = DefaultUrgentWindowSize,
         int lookaheadWindowSize = DefaultLookaheadWindowSize,
         int tailWindowSize = DefaultTailWindowSize)
     {
         _random = random ?? new RandomNumberGenerator();
-        _fallbackPicker = fallbackPicker ?? new SequentialPiecePicker(new RarestFirstPiecePicker(_random), _random);
+        _fallbackPicker = new SequentialPiecePicker(new RarestFirstPiecePicker(_random), _random);
         UrgentWindowSize = urgentWindowSize > 0 ? urgentWindowSize : DefaultUrgentWindowSize;
         LookaheadWindowSize = lookaheadWindowSize > 0 ? lookaheadWindowSize : DefaultLookaheadWindowSize;
         TailWindowSize = tailWindowSize > 0 ? tailWindowSize : DefaultTailWindowSize;
