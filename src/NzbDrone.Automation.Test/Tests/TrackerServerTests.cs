@@ -93,11 +93,11 @@ public class TrackerServerTests : ApiTestBase
 
         // Register peer 1
         await http.GetAsync(
-            $"{trackerBase}/announce?info_hash={Uri.EscapeDataString(infoHash)}&port={peer1Port}&peer_id=peer1binary0000000000");
+            $"{trackerBase}/announce?info_hash={Uri.EscapeDataString(infoHash)}&port={peer1Port}&peer_id=peer1binary0000000000&uploaded=0&downloaded=0&left=0");
 
         // Register peer 2; its response should contain peer 1 in compact format
         var response = await http.GetAsync(
-            $"{trackerBase}/announce?info_hash={Uri.EscapeDataString(infoHash)}&port={peer2Port}&peer_id=peer2binary0000000000");
+            $"{trackerBase}/announce?info_hash={Uri.EscapeDataString(infoHash)}&port={peer2Port}&peer_id=peer2binary0000000000&uploaded=0&downloaded=0&left=0");
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadAsByteArrayAsync();
@@ -143,7 +143,7 @@ public class TrackerServerTests : ApiTestBase
 
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         var response = await http.GetAsync(
-            $"http://localhost:{trackerPort}/announce?info_hash={Uri.EscapeDataString(infoHash)}&port=55001&peer_id=solopeerzerotest0000");
+            $"http://localhost:{trackerPort}/announce?info_hash={Uri.EscapeDataString(infoHash)}&port=55001&peer_id=solopeerzerotest0000&uploaded=0&downloaded=0&left=0");
         response.EnsureSuccessStatusCode();
 
         var body = await response.Content.ReadAsByteArrayAsync();

@@ -9,6 +9,8 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using BencodeNET.Objects;
+using BencodeNET.Parsing;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -20,6 +22,7 @@ namespace NzbDrone.Core.Test.TrackerServer;
 public class TrackerServerTest
 {
     private const string DefaultInfoHash = "0123456789abcdef0123456789abcdef01234567";
+    private const string DefaultPeerId = "01234567890123456789";
     private Core.TrackerServer.TrackerServer _trackerServer;
     private IPeerDatabase _peerDatabase;
     private IConfigService _configService;
@@ -60,6 +63,14 @@ public class TrackerServerTest
             "BuildCompactPeers",
             BindingFlags.NonPublic | BindingFlags.Static);
         return (byte[])method.Invoke(null, new object[] { peers, excludeIp, excludePort, maxPeers });
+    }
+
+    private static BList InvokeBuildDictionaryPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
+    {
+        var method = typeof(Core.TrackerServer.TrackerServer).GetMethod(
+            "BuildDictionaryPeers",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        return (BList)method.Invoke(null, new object[] { peers, excludeIp, excludePort, maxPeers });
     }
 
     private byte[] InvokeHandleAnnounce(string path, IPEndPoint remoteEndpoint)
@@ -150,6 +161,23 @@ public class TrackerServerTest
         Assert.That(result["info_hash"], Is.EqualTo("0123456789abcdef0123456789abcdef01234567"));
         Assert.That(result["port"], Is.EqualTo("6881"));
         Assert.That(result["peer_id"], Is.EqualTo("test"));
+    }
+
+    [Test]
+    public void ParseQueryString_should_decode_binary_percent_encoded_peer_id_accurately()
+    {
+        var rawPeerId = new byte[]
+        {
+            0x80, 0xFF, 0xFE, 0xC0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
+            0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x10
+        };
+        var encoded = string.Concat(rawPeerId.Select(b => $"%{b:X2}"));
+        var result = InvokeParseQueryString($"peer_id={encoded}");
+
+        var expectedPeerId = Encoding.Latin1.GetString(rawPeerId);
+        Assert.That(result["peer_id"], Is.EqualTo(expectedPeerId));
+        Assert.That(result["peer_id"], Does.Not.Contain("\uFFFD"));
+        Assert.That(result["peer_id"], Does.Not.Contain("%"));
     }
 
     [Test]
@@ -512,33 +540,226 @@ public class TrackerServerTest
     [Test]
     public void HandleAnnounce_should_return_error_when_port_is_zero()
     {
-        var result = InvokeHandleAnnounceText($"/announce?info_hash={DefaultInfoHash}&port=0", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText(
+            $"/announce?info_hash={DefaultInfoHash}&port=0&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        Assert.That(result, Does.Contain("invalid port"));
+        Assert.That(result, Does.Contain("Invalid parameters"));
     }
 
     [Test]
     public void HandleAnnounce_should_return_error_when_port_is_negative()
     {
-        var result = InvokeHandleAnnounceText($"/announce?info_hash={DefaultInfoHash}&port=-1", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText(
+            $"/announce?info_hash={DefaultInfoHash}&port=-1&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        Assert.That(result, Does.Contain("invalid port"));
+        Assert.That(result, Does.Contain("Invalid parameters"));
     }
 
     [Test]
     public void HandleAnnounce_should_return_error_when_port_exceeds_65535()
     {
-        var result = InvokeHandleAnnounceText($"/announce?info_hash={DefaultInfoHash}&port=65536", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText(
+            $"/announce?info_hash={DefaultInfoHash}&port=65536&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        Assert.That(result, Does.Contain("invalid port"));
+        Assert.That(result, Does.Contain("Invalid parameters"));
     }
 
     [Test]
     public void HandleAnnounce_should_return_error_when_port_is_not_numeric()
     {
-        var result = InvokeHandleAnnounceText($"/announce?info_hash={DefaultInfoHash}&port=notanumber", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+        var result = InvokeHandleAnnounceText(
+            $"/announce?info_hash={DefaultInfoHash}&port=notanumber&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        Assert.That(result, Does.Contain("invalid port"));
+        Assert.That(result, Does.Contain("Invalid parameters"));
+    }
+
+    [Test]
+    [TestCase("peer_id")]
+    [TestCase("uploaded")]
+    [TestCase("downloaded")]
+    [TestCase("left")]
+    public void HandleAnnounce_should_reject_when_mandatory_parameter_is_missing(string paramName)
+    {
+        var parameters = new Dictionary<string, string>
+        {
+            ["info_hash"] = DefaultInfoHash,
+            ["port"] = "6881",
+            ["peer_id"] = DefaultPeerId,
+            ["uploaded"] = "0",
+            ["downloaded"] = "0",
+            ["left"] = "0"
+        };
+        parameters.Remove(paramName);
+
+        var query = string.Join("&", parameters.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+        var result = InvokeHandleAnnounceText($"/announce?{query}", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        Assert.That(result, Does.Contain("Missing required parameters"));
+        _peerDatabase.DidNotReceive().AddPeer(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>());
+    }
+
+    [Test]
+    [TestCase("uploaded")]
+    [TestCase("downloaded")]
+    [TestCase("left")]
+    public void HandleAnnounce_should_reject_when_numeric_parameter_is_negative(string paramName)
+    {
+        var parameters = new Dictionary<string, string>
+        {
+            ["info_hash"] = DefaultInfoHash,
+            ["port"] = "6881",
+            ["peer_id"] = DefaultPeerId,
+            ["uploaded"] = "0",
+            ["downloaded"] = "0",
+            ["left"] = "0"
+        };
+        parameters[paramName] = "-1";
+
+        var query = string.Join("&", parameters.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+        var result = InvokeHandleAnnounceText($"/announce?{query}", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        Assert.That(result, Does.Contain("Invalid parameters"));
+        _peerDatabase.DidNotReceive().AddPeer(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>());
+    }
+
+    [Test]
+    [TestCase("uploaded")]
+    [TestCase("downloaded")]
+    [TestCase("left")]
+    public void HandleAnnounce_should_reject_when_numeric_parameter_is_not_a_number(string paramName)
+    {
+        var parameters = new Dictionary<string, string>
+        {
+            ["info_hash"] = DefaultInfoHash,
+            ["port"] = "6881",
+            ["peer_id"] = DefaultPeerId,
+            ["uploaded"] = "0",
+            ["downloaded"] = "0",
+            ["left"] = "0"
+        };
+        parameters[paramName] = "notanumber";
+
+        var query = string.Join("&", parameters.Select(kvp => $"{kvp.Key}={kvp.Value}"));
+        var result = InvokeHandleAnnounceText($"/announce?{query}", new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        Assert.That(result, Does.Contain("Invalid parameters"));
+        _peerDatabase.DidNotReceive().AddPeer(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void HandleAnnounce_should_reject_when_peer_id_is_not_20_bytes()
+    {
+        var result = InvokeHandleAnnounceText(
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id=tooshort&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        Assert.That(result, Does.Contain("Invalid parameters"));
+        _peerDatabase.DidNotReceive().AddPeer(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void HandleAnnounce_should_decode_binary_peer_id_without_replacement_chars()
+    {
+        var rawPeerId = new byte[]
+        {
+            (byte)'-', (byte)'A', (byte)'Z', (byte)'2', (byte)'0', (byte)'6', (byte)'0', (byte)'-',
+            0x80, 0xFF, 0xFE, 0xC0, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08
+        };
+        var encodedPeerId = string.Concat(rawPeerId.Select(b => b > 127 || b == '%' ? $"%{b:X2}" : ((char)b).ToString()));
+        var expectedPeerId = Encoding.Latin1.GetString(rawPeerId);
+
+        _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
+
+        InvokeHandleAnnounce(
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={encodedPeerId}&uploaded=0&downloaded=0&left=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
+
+        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, Arg.Is<string>(id =>
+            id == expectedPeerId &&
+            !id.Contains('\uFFFD') &&
+            !id.Contains('%') &&
+            id.Length == 20));
+    }
+
+    [Test]
+    public void HandleAnnounce_should_serialize_peers_as_dictionary_list_when_compact_is_0()
+    {
+        var rawPeerId = new byte[]
+        {
+            (byte)'p', (byte)'e', (byte)'e', (byte)'r', (byte)'1', (byte)'-', 0x80, 0xFF,
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C
+        };
+        var peerIdStr = Encoding.Latin1.GetString(rawPeerId);
+
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry
+            {
+                Ip = "10.0.0.1",
+                Port = 6881,
+                PeerId = peerIdStr
+            }
+        };
+        _peerDatabase.GetPeers(DefaultInfoHash).Returns(peers);
+
+        var bytes = InvokeHandleAnnounce(
+            $"/announce?info_hash={DefaultInfoHash}&port=9999&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0&compact=0",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 9999));
+
+        var parser = new BencodeParser();
+        var responseDict = parser.Parse<BDictionary>(bytes);
+
+        Assert.That(responseDict.ContainsKey("peers"), Is.True);
+        Assert.That(responseDict["peers"], Is.InstanceOf<BList>());
+
+        var peerList = (BList)responseDict["peers"];
+        Assert.That(peerList.Count, Is.EqualTo(1));
+
+        var peerDict = (BDictionary)peerList[0];
+        Assert.That(peerDict.ContainsKey("ip"), Is.True);
+        Assert.That(((BString)peerDict["ip"]).ToString(), Is.EqualTo("10.0.0.1"));
+        Assert.That(peerDict.ContainsKey("port"), Is.True);
+        Assert.That(((BNumber)peerDict["port"]).Value, Is.EqualTo(6881));
+        Assert.That(peerDict.ContainsKey("peer id"), Is.True);
+        Assert.That(((BString)peerDict["peer id"]).Value.ToArray(), Is.EqualTo(rawPeerId));
+    }
+
+    [Test]
+    public void HandleAnnounce_should_serialize_peers_as_compact_binary_when_compact_is_1()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry
+            {
+                Ip = "10.0.0.1",
+                Port = 6881,
+                PeerId = DefaultPeerId
+            }
+        };
+        _peerDatabase.GetPeers(DefaultInfoHash).Returns(peers);
+
+        var bytes = InvokeHandleAnnounce(
+            $"/announce?info_hash={DefaultInfoHash}&port=9999&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0&compact=1",
+            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 9999));
+
+        var parser = new BencodeParser();
+        var responseDict = parser.Parse<BDictionary>(bytes);
+
+        Assert.That(responseDict.ContainsKey("peers"), Is.True);
+        Assert.That(responseDict["peers"], Is.InstanceOf<BString>());
+
+        var compactPeers = ((BString)responseDict["peers"]).Value.ToArray();
+        Assert.That(compactPeers.Length, Is.EqualTo(6));
+        Assert.That(compactPeers[0], Is.EqualTo(10));
+        Assert.That(compactPeers[1], Is.EqualTo(0));
+        Assert.That(compactPeers[2], Is.EqualTo(0));
+        Assert.That(compactPeers[3], Is.EqualTo(1));
+        Assert.That(compactPeers[4], Is.EqualTo(6881 >> 8));
+        Assert.That(compactPeers[5], Is.EqualTo(6881 & 0xFF));
     }
 
     [Test]
@@ -547,22 +768,10 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         InvokeHandleAnnounce(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id=testpeer",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, "testpeer");
-    }
-
-    [Test]
-    public void HandleAnnounce_should_add_peer_with_empty_peer_id_when_not_provided()
-    {
-        _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
-
-        InvokeHandleAnnounce(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881",
-            new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
-
-        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, "");
+        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, DefaultPeerId);
     }
 
     [Test]
@@ -571,7 +780,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         InvokeHandleAnnounce(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881&event=stopped",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0&event=stopped",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         _peerDatabase.Received(1).RemovePeer(DefaultInfoHash, "192.168.1.1", 6881);
@@ -584,10 +793,10 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         InvokeHandleAnnounce(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881&event=started",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0&event=started",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, "");
+        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, DefaultPeerId);
     }
 
     [Test]
@@ -596,7 +805,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("8:intervali1800e"));
@@ -610,7 +819,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("7:privatei1e"));
@@ -623,7 +832,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Not.Contain("7:privatei1e"));
@@ -635,10 +844,10 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         InvokeHandleAnnounce(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881&event=completed",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0&event=completed",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, "");
+        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 6881, DefaultPeerId);
         _peerDatabase.DidNotReceive().RemovePeer(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<int>());
     }
 
@@ -649,7 +858,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881&event=started",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0&event=started",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         // Should still return valid bencoded response even with logging enabled
@@ -663,12 +872,12 @@ public class TrackerServerTest
     {
         var peers = new List<TrackerPeerEntry>
         {
-            new TrackerPeerEntry { Ip = "10.0.0.1", Port = 6881 }
+            new TrackerPeerEntry { Ip = "10.0.0.1", Port = 6881, PeerId = DefaultPeerId }
         };
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(peers);
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=6882",
+            $"/announce?info_hash={DefaultInfoHash}&port=6882&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6882));
 
         Assert.That(result, Does.Contain("5:peers"));
@@ -682,7 +891,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("8:intervali3600e"));
@@ -693,7 +902,7 @@ public class TrackerServerTest
     public void HandleAnnounce_should_return_error_when_only_info_hash_no_port()
     {
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&peer_id=test",
+            $"/announce?info_hash={DefaultInfoHash}&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.Contain("Missing required parameters"));
@@ -705,10 +914,10 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         InvokeHandleAnnounce(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("10.20.30.40"), 12345));
 
-        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "10.20.30.40", 6881, "");
+        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "10.20.30.40", 6881, DefaultPeerId);
     }
 
     [Test]
@@ -717,10 +926,10 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         InvokeHandleAnnounce(
-            $"/announce?info_hash={DefaultInfoHash}&port=9999",
+            $"/announce?info_hash={DefaultInfoHash}&port=9999&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 12345));
 
-        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 9999, "");
+        _peerDatabase.Received(1).AddPeer(DefaultInfoHash, "192.168.1.1", 9999, DefaultPeerId);
     }
 
     // ---- HandleScrape tests ----
@@ -827,10 +1036,10 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(expectedHex).Returns(new List<TrackerPeerEntry>());
 
         InvokeHandleAnnounce(
-            $"/announce?info_hash={encoded}&port=6881&peer_id=testpeer",
+            $"/announce?info_hash={encoded}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        _peerDatabase.Received(1).AddPeer(expectedHex, "192.168.1.1", 6881, "testpeer");
+        _peerDatabase.Received(1).AddPeer(expectedHex, "192.168.1.1", 6881, DefaultPeerId);
     }
 
     [Test]
@@ -871,10 +1080,10 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(expectedHex).Returns(new List<TrackerPeerEntry>());
 
         InvokeHandleAnnounce(
-            $"/announce?info_hash={encoded}&port=6881&peer_id=http_peer",
+            $"/announce?info_hash={encoded}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        _peerDatabase.Received(1).AddPeer(expectedHex, "192.168.1.1", 6881, "http_peer");
+        _peerDatabase.Received(1).AddPeer(expectedHex, "192.168.1.1", 6881, DefaultPeerId);
     }
 
     // ---- IsRateLimited tests ----
@@ -1067,10 +1276,10 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=1",
+            $"/announce?info_hash={DefaultInfoHash}&port=1&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        Assert.That(result, Does.Not.Contain("invalid port"));
+        Assert.That(result, Does.Not.Contain("Invalid parameters"));
     }
 
     [Test]
@@ -1079,10 +1288,10 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=65535",
+            $"/announce?info_hash={DefaultInfoHash}&port=65535&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
-        Assert.That(result, Does.Not.Contain("invalid port"));
+        Assert.That(result, Does.Not.Contain("Invalid parameters"));
     }
 
     [Test]
@@ -1091,7 +1300,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         Assert.That(result, Does.StartWith("d"));
@@ -1104,7 +1313,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(new List<TrackerPeerEntry>());
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=6881",
+            $"/announce?info_hash={DefaultInfoHash}&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 6881));
 
         // Empty peers list -> 0 bytes -> "5:peers0:"
@@ -1116,12 +1325,12 @@ public class TrackerServerTest
     {
         var peers = new List<TrackerPeerEntry>
         {
-            new TrackerPeerEntry { Ip = "10.0.0.1", Port = 6881 }
+            new TrackerPeerEntry { Ip = "10.0.0.1", Port = 6881, PeerId = DefaultPeerId }
         };
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(peers);
 
         var result = InvokeHandleAnnounceText(
-            $"/announce?info_hash={DefaultInfoHash}&port=9999",
+            $"/announce?info_hash={DefaultInfoHash}&port=9999&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 9999));
 
         Assert.That(result, Does.Contain("5:peers6:"));
@@ -1135,12 +1344,12 @@ public class TrackerServerTest
         // a 7-byte peers field. The fixed path uses new BString(byte[]) directly.
         var peers = new List<TrackerPeerEntry>
         {
-            new TrackerPeerEntry { Ip = "1.2.3.4", Port = 6881 }
+            new TrackerPeerEntry { Ip = "1.2.3.4", Port = 6881, PeerId = DefaultPeerId }
         };
         _peerDatabase.GetPeers(DefaultInfoHash).Returns(peers);
 
         var result = InvokeHandleAnnounce(
-            $"/announce?info_hash={DefaultInfoHash}&port=9999",
+            $"/announce?info_hash={DefaultInfoHash}&port=9999&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0",
             new IPEndPoint(IPAddress.Parse("192.168.1.1"), 9999));
 
         var marker = Encoding.ASCII.GetBytes("5:peers");
@@ -1369,7 +1578,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(Arg.Any<string>()).Returns(new List<TrackerPeerEntry>());
 
         var (response, _) = SendHttpRequestViaHandleRequest(
-            "GET /announce?info_hash=test&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            $"GET /announce?info_hash=test&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0 HTTP/1.1\r\nHost: localhost\r\n\r\n");
 
         Assert.That(response, Does.StartWith("HTTP/1.1 200 OK"));
     }
@@ -1466,7 +1675,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(Arg.Any<string>()).Returns(new List<TrackerPeerEntry>());
 
         var (response, _) = SendHttpRequestViaHandleRequest(
-            "GET /announce?info_hash=test&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            $"GET /announce?info_hash=test&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0 HTTP/1.1\r\nHost: localhost\r\n\r\n");
 
         Assert.That(response, Does.Contain("Content-Length:"));
     }
@@ -1477,7 +1686,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(Arg.Any<string>()).Returns(new List<TrackerPeerEntry>());
 
         var (response, _) = SendHttpRequestViaHandleRequest(
-            "GET /announce?info_hash=test&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            $"GET /announce?info_hash=test&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0 HTTP/1.1\r\nHost: localhost\r\n\r\n");
 
         Assert.That(response, Does.Contain("Connection: close"));
     }
@@ -1488,7 +1697,7 @@ public class TrackerServerTest
         _peerDatabase.GetPeers(Arg.Any<string>()).Returns(new List<TrackerPeerEntry>());
 
         var (response, _) = SendHttpRequestViaHandleRequest(
-            "GET /announce?info_hash=test&port=6881 HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            $"GET /announce?info_hash=test&port=6881&peer_id={DefaultPeerId}&uploaded=0&downloaded=0&left=0 HTTP/1.1\r\nHost: localhost\r\n\r\n");
 
         Assert.That(response, Does.Contain("Content-Type: text/plain"));
     }
