@@ -17,7 +17,7 @@ public class NoDownloadClientsCheck : IHealthCheck
         var clients = _downloadClientFactory.All();
         if (!clients.Any(c => c.Enable))
         {
-            return HealthCheckResult.Warning(
+            return HealthCheckResult.Notice(
                 "NoDownloadClients",
                 "No download clients configured. Add a download client (Deluge, qBittorrent, Transmission) in Settings > Download Clients.");
         }

@@ -3,7 +3,26 @@ import { useHealthChecks } from "../api/hooks";
 
 function HealthAlerts() {
   const { data: checks } = useHealthChecks();
-  const [dismissed, setDismissed] = useState<string[]>([]);
+  const [dismissed, setDismissed] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("seedarr_dismissed_health_alerts") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const handleDismiss = (source: string) => {
+    setDismissed((prev) => {
+      if (prev.includes(source)) return prev;
+      const updated = [...prev, source];
+      try {
+        localStorage.setItem("seedarr_dismissed_health_alerts", JSON.stringify(updated));
+      } catch {
+        // ignore quota errors
+      }
+      return updated;
+    });
+  };
 
   const alerts = (checks ?? []).filter((c) => {
     if (dismissed.includes(c.source)) return false;
@@ -59,7 +78,7 @@ function HealthAlerts() {
             </div>
             <button
               className="health-alert-dismiss"
-              onClick={() => setDismissed((d) => [...d, alert.source])}
+              onClick={() => handleDismiss(alert.source)}
               style={{
                 cursor: "pointer",
                 background: "none",
