@@ -1,4 +1,6 @@
 using System;
+using System.Buffers.Binary;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -1240,7 +1242,152 @@ public class UtpConnectionTest
         Assert.That(flushed, Is.True, "Flush should complete promptly once ACK is processed");
     }
 
+    [Test]
+    public void Receive_after_data_packet_followed_by_fin_should_drain_queue_before_returning_zero()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        var sender = new IPEndPoint(IPAddress.Loopback, 12345);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, sender);
+
+        var dataPayload = new byte[] { 10, 20, 30, 40, 50 };
+        var dataPacket = CreatePacket(UtpPacketType.Data, connection.ReceiveId, 1, 0, dataPayload);
+        var finPacket = CreatePacket(UtpPacketType.Fin, connection.ReceiveId, 2, 0);
+
+        connection.HandleIncomingPacket(dataPacket, sender);
+        connection.HandleIncomingPacket(finPacket, sender);
+
+        Assert.That(connection.HasReceivedFin, Is.True);
+
+        // Drain first 3 bytes
+        var buffer = new byte[3];
+        var bytesRead1 = connection.Receive(buffer, 0, buffer.Length);
+        Assert.That(bytesRead1, Is.EqualTo(3));
+        Assert.That(buffer, Is.EqualTo(new byte[] { 10, 20, 30 }));
+
+        // Drain remaining 2 bytes
+        var buffer2 = new byte[10];
+        var bytesRead2 = connection.Receive(buffer2, 0, buffer2.Length);
+        Assert.That(bytesRead2, Is.EqualTo(2));
+        Assert.That(buffer2[0], Is.EqualTo(40));
+        Assert.That(buffer2[1], Is.EqualTo(50));
+
+        // Queue is now empty, receive should return 0 (clean EOF)
+        var buffer3 = new byte[10];
+        var bytesRead3 = connection.Receive(buffer3, 0, buffer3.Length);
+        Assert.That(bytesRead3, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Receive_when_fin_received_with_empty_queue_should_return_zero()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        var sender = new IPEndPoint(IPAddress.Loopback, 12345);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, sender);
+
+        var finPacket = CreatePacket(UtpPacketType.Fin, connection.ReceiveId, 1, 0);
+        connection.HandleIncomingPacket(finPacket, sender);
+
+        Assert.That(connection.HasReceivedFin, Is.True);
+
+        var buffer = new byte[100];
+        var bytesRead = connection.Receive(buffer, 0, buffer.Length);
+
+        Assert.That(bytesRead, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Outbound_fin_should_send_st_fin_with_appropriate_sequence_number()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var seqField = typeof(UtpConnection).GetField("_sequenceNumber", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        seqField.SetValue(connection, (ushort)42);
+
+        byte[] sentFinPacket = null;
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            var type = (UtpPacketType)(data[0] >> 4);
+            if (type == UtpPacketType.Fin)
+            {
+                sentFinPacket = data.ToArray();
+                var finSeq = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(16, 2));
+                var ackPacket = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, finSeq);
+                Task.Run(() => connection.HandleIncomingPacket(ackPacket, remoteEp));
+            }
+
+            return true;
+        };
+
+        connection.Dispose();
+
+        Assert.That(sentFinPacket, Is.Not.Null, "Outbound FIN packet should have been sent");
+        var packetType = (UtpPacketType)(sentFinPacket[0] >> 4);
+        Assert.That(packetType, Is.EqualTo(UtpPacketType.Fin));
+        var seq = BinaryPrimitives.ReadUInt16BigEndian(sentFinPacket.AsSpan(16, 2));
+        Assert.That(seq, Is.EqualTo((ushort)42));
+    }
+
+    [Test]
+    public void Outbound_fin_after_sending_data_should_send_st_fin_with_incremented_sequence_number()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        connection.PacketDropFilter = (data, ep) => true;
+        connection.Send(new byte[] { 1, 2, 3 }, 0, 3);
+
+        byte[] sentFinPacket = null;
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            var type = (UtpPacketType)(data[0] >> 4);
+            if (type == UtpPacketType.Fin)
+            {
+                sentFinPacket = data.ToArray();
+                var finSeq = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(16, 2));
+                var ackPacket = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, finSeq);
+                Task.Run(() => connection.HandleIncomingPacket(ackPacket, remoteEp));
+            }
+
+            return true;
+        };
+
+        connection.Dispose();
+
+        Assert.That(sentFinPacket, Is.Not.Null);
+        var packetType = (UtpPacketType)(sentFinPacket[0] >> 4);
+        Assert.That(packetType, Is.EqualTo(UtpPacketType.Fin));
+        var seq = BinaryPrimitives.ReadUInt16BigEndian(sentFinPacket.AsSpan(16, 2));
+        Assert.That(seq, Is.EqualTo((ushort)2));
+    }
+
     // ---- helpers ----
+
+    private static byte[] CreatePacket(UtpPacketType type, ushort connectionId, ushort seqNr, ushort ackNr, byte[] payload = null)
+    {
+        var payloadLen = payload?.Length ?? 0;
+        var packet = new byte[20 + payloadLen];
+        packet[0] = (byte)(((byte)type << 4) | 1);
+        packet[1] = 0;
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(2, 2), connectionId);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(4, 4), 1000);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(8, 4), 0);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(12, 4), 65535);
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(16, 2), seqNr);
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(18, 2), ackNr);
+        if (payloadLen > 0)
+        {
+            Array.Copy(payload, 0, packet, 20, payloadLen);
+        }
+
+        return packet;
+    }
 
     private static void SetConnected(UtpConnection connection, bool value)
     {
