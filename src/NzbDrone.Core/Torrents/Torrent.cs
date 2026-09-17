@@ -68,6 +68,30 @@ public class Torrent : ModelBase
     [Ignore]
     public string ErrorMessage { get; set; }
 
+    [Ignore]
+    public string Title
+    {
+        get => Name;
+        set => Name = value;
+    }
+
+    [Ignore]
+    public long Size
+    {
+        get => TotalSize;
+        set => TotalSize = value;
+    }
+
+    [Ignore]
+    public List<int> Tags
+    {
+        get => TagIds;
+        set => TagIds = value;
+    }
+
+    [Ignore]
+    public string Quality { get; set; }
+
     /// <summary>
     /// Applies user-controllable updates while preserving engine-managed state invariants
     /// (such as Uploaded, Downloaded, Ratio, Speeds, Peer counts, and Session stats).

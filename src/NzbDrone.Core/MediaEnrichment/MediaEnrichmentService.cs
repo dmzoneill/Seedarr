@@ -24,6 +24,8 @@ public class MediaEnrichedEvent : IEvent
 {
     public int TorrentId { get; set; }
 
+    public Torrent Torrent { get; set; }
+
     public TorrentMediaMetadata Metadata { get; set; }
 }
 
