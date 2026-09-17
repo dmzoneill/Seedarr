@@ -76,7 +76,10 @@ public class BitTorrentConfigControllerTest
     [TestCase(0)]
     [TestCase(-1)]
     [TestCase(-60)]
-    public void SaveConfig_should_return_bad_request_when_CustomScriptTimeoutSeconds_is_less_than_1(int invalidTimeout)
+    [TestCase(4)]
+    [TestCase(3601)]
+    [TestCase(100000)]
+    public void SaveConfig_should_return_bad_request_when_CustomScriptTimeoutSeconds_is_out_of_range(int invalidTimeout)
     {
         var resource = new BitTorrentConfigResource
         {
@@ -97,7 +100,8 @@ public class BitTorrentConfigControllerTest
         var errors = (IList<ValidationFailure>)badRequest.Value;
 
         Assert.That(errors, Has.Some.Matches<ValidationFailure>(e =>
-            e.PropertyName == nameof(BitTorrentConfigResource.CustomScriptTimeoutSeconds)));
+            e.PropertyName == nameof(BitTorrentConfigResource.CustomScriptTimeoutSeconds) &&
+            e.ErrorMessage.Contains("between 5 and 3600 seconds")));
     }
 
     [TestCase("1234567890123")]
