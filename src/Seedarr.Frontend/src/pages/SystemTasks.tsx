@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment, type CSSProperties } from "react";
+import { useState, useEffect, useRef, Fragment, type CSSProperties } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { useToast } from "../context/ToastContext";
@@ -82,8 +82,7 @@ function formatRelativeTime(dateStr: string | null, isNextExecution = false): st
 
   let text: string;
   if (seconds < 60) {
-    text = "just now";
-    return isFuture ? "in < 1 min" : text;
+    return isFuture ? "in less than a minute" : "just now";
   } else if (minutes < 60) {
     text = `${minutes} minute${minutes !== 1 ? "s" : ""}`;
   } else if (hours < 24) {
@@ -545,17 +544,15 @@ function SystemTasks() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [selectedHistoryTask, setSelectedHistoryTask] = useState<ScheduledTask | null>(null);
+  const [executingTasks, setExecutingTasks] = useState<Set<string>>(new Set());
+  const timeoutIdsRef = useRef<number[]>([]);
 
-  const {
-    data: tasks,
-    isLoading: tasksLoading,
-    isError: tasksError,
-  } = useQuery<ScheduledTask[]>({
-    queryKey: ["system", "tasks"],
-    queryFn: () => apiClient.get("/system/task"),
-    retry: false,
-    refetchInterval: 30000,
-  });
+  useEffect(() => {
+    const timeouts = timeoutIdsRef.current;
+    return () => {
+      timeouts.forEach((id) => clearTimeout(id));
+    };
+  }, []);
 
   const {
     data: commands,
@@ -568,6 +565,25 @@ function SystemTasks() {
     refetchInterval: 5000,
   });
 
+  const {
+    data: tasks,
+    isLoading: tasksLoading,
+    isError: tasksError,
+  } = useQuery<ScheduledTask[]>({
+    queryKey: ["system", "tasks"],
+    queryFn: () => apiClient.get("/system/task"),
+    retry: false,
+    refetchInterval: (query) => {
+      const data = query.state.data as ScheduledTask[] | undefined;
+      const hasActiveCmd = commands?.some((c) => c.status === "queued" || c.status === "started");
+      const hasRunning =
+        (data && data.some((t) => t.isRunning)) ||
+        executingTasks.size > 0 ||
+        Boolean(hasActiveCmd);
+      return hasRunning ? 3000 : 30000;
+    },
+  });
+
   const executeMutation = useMutation({
     mutationFn: (task: ScheduledTask) => {
       const endpoint = task.id
@@ -575,12 +591,41 @@ function SystemTasks() {
         : `/system/task/${encodeURIComponent(task.typeName)}/execute`;
       return apiClient.post(endpoint, {});
     },
+    onMutate: (task) => {
+      setExecutingTasks((prev) => {
+        const next = new Set(prev);
+        next.add(task.typeName);
+        if (task.id !== undefined) {
+          next.add(String(task.id));
+        }
+        return next;
+      });
+    },
     onSuccess: (_, task) => {
       showToast(`Started execution of ${formatTaskName(task.typeName)}`, "success");
       queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
       queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
+      const timer = window.setTimeout(() => {
+        setExecutingTasks((prev) => {
+          const next = new Set(prev);
+          next.delete(task.typeName);
+          if (task.id !== undefined) {
+            next.delete(String(task.id));
+          }
+          return next;
+        });
+      }, 3000);
+      timeoutIdsRef.current.push(timer);
     },
-    onError: (err: Error) => {
+    onError: (err: Error, task) => {
+      setExecutingTasks((prev) => {
+        const next = new Set(prev);
+        next.delete(task.typeName);
+        if (task.id !== undefined) {
+          next.delete(String(task.id));
+        }
+        return next;
+      });
       showToast(`Failed to execute task: ${err.message}`, "error");
     },
   });
@@ -607,6 +652,14 @@ function SystemTasks() {
     },
     onSuccess: (_, task) => {
       showToast(`Aborted execution of ${formatTaskName(task.typeName)}`, "success");
+      setExecutingTasks((prev) => {
+        const next = new Set(prev);
+        next.delete(task.typeName);
+        if (task.id !== undefined) {
+          next.delete(String(task.id));
+        }
+        return next;
+      });
       queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
       queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
     },
@@ -614,6 +667,47 @@ function SystemTasks() {
       showToast(`Failed to abort task: ${err.message}`, "error");
     },
   });
+
+  const isTaskRunning = (task: ScheduledTask): boolean => {
+    if (
+      executingTasks.has(task.typeName) ||
+      (task.id !== undefined && executingTasks.has(String(task.id)))
+    ) {
+      return true;
+    }
+    if (
+      executeMutation.isPending &&
+      (executeMutation.variables?.typeName === task.typeName ||
+        (task.id !== undefined && executeMutation.variables?.id === task.id))
+    ) {
+      return true;
+    }
+    if (task.isRunning) {
+      return true;
+    }
+    if (task.lastStartTime) {
+      if (!task.lastExecution) return true;
+      const start = new Date(task.lastStartTime).getTime();
+      const end = new Date(task.lastExecution).getTime();
+      if (!isNaN(start) && !isNaN(end) && start > end) {
+        return true;
+      }
+    }
+    if (commands && commands.length > 0) {
+      const shortName = task.typeName.includes(".")
+        ? task.typeName.split(".").pop() || task.typeName
+        : task.typeName;
+      const hasActiveCommand = commands.some((cmd) => {
+        const match =
+          cmd.name === task.typeName ||
+          cmd.name === shortName ||
+          (task.name && cmd.name === task.name);
+        return match && (cmd.status === "queued" || cmd.status === "started");
+      });
+      if (hasActiveCommand) return true;
+    }
+    return false;
+  };
 
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
@@ -719,6 +813,7 @@ function SystemTasks() {
               <thead>
                 <tr>
                   <th className="torrent-table-th">Task Name</th>
+                  <th className="torrent-table-th">Status</th>
                   <th className="torrent-table-th">Execution Interval</th>
                   <th className="torrent-table-th">Last Execution</th>
                   <th className="torrent-table-th">Last Duration</th>
@@ -727,109 +822,123 @@ function SystemTasks() {
                 </tr>
               </thead>
               <tbody>
-                {tasks.map((task) => (
-                  <tr key={task.typeName} className="torrent-table-row">
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                {tasks.map((task) => {
+                  const running = isTaskRunning(task);
+                  const isAborting =
+                    abortTaskMutation.isPending &&
+                    (abortTaskMutation.variables?.typeName === task.typeName ||
+                      (task.id !== undefined && abortTaskMutation.variables?.id === task.id));
+                  return (
+                    <tr key={task.typeName} className="torrent-table-row">
+                      <td>
                         <strong style={{ color: "var(--text-primary)" }}>
                           {formatTaskName(task.typeName)}
                         </strong>
-                        {task.isRunning && (
+                      </td>
+                      <td>
+                        {running ? (
                           <span
                             className="badge badge-seeding"
-                            style={{ fontSize: "0.7rem", padding: "0.15rem 0.4rem" }}
+                            style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
                           >
                             ⏳ Running
                           </span>
+                        ) : (
+                          <span
+                            className="badge badge-secondary"
+                            style={{ fontSize: "0.75rem", padding: "0.2rem 0.5rem" }}
+                          >
+                            ● Idle
+                          </span>
                         )}
-                      </div>
-                    </td>
-                    <td>
-                      <span className="badge badge-secondary">
-                        ⏱️ {formatInterval(task.interval)}
-                      </span>
-                    </td>
-                    <td title={formatDateTime(task.lastExecution)}>
-                      {formatRelativeTime(task.lastExecution)}
-                    </td>
-                    <td>
-                      <code style={{ fontSize: "0.8rem" }}>
-                        {formatDuration(task.lastDuration)}
-                      </code>
-                      {task.isRunning && (
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            color: "var(--text-muted)",
-                            marginLeft: "0.3rem",
-                          }}
-                        >
-                          (elapsed)
+                      </td>
+                      <td>
+                        <span className="badge badge-secondary">
+                          ⏱️ {formatInterval(task.interval)}
                         </span>
-                      )}
-                    </td>
-                    <td
-                      title={formatDateTime(task.nextExecution)}
-                      style={{
-                        color: "var(--accent, #c8a84e)",
-                        fontWeight: 500,
-                      }}
-                    >
-                      {formatRelativeTime(task.nextExecution, true)}
-                    </td>
-                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button
-                        type="button"
-                        className="btn btn-outline"
+                      </td>
+                      <td title={formatDateTime(task.lastExecution)}>
+                        {formatRelativeTime(task.lastExecution)}
+                      </td>
+                      <td>
+                        <code style={{ fontSize: "0.8rem" }}>
+                          {formatDuration(task.lastDuration)}
+                        </code>
+                        {running && (
+                          <span
+                            style={{
+                              fontSize: "0.75rem",
+                              color: "var(--text-muted)",
+                              marginLeft: "0.3rem",
+                            }}
+                          >
+                            (elapsed)
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        title={formatDateTime(task.nextExecution)}
                         style={{
-                          fontSize: "0.75rem",
-                          padding: "0.25rem 0.6rem",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.3rem",
-                          marginRight: "0.5rem",
+                          color: "var(--accent, #c8a84e)",
+                          fontWeight: 500,
                         }}
-                        onClick={() => setSelectedHistoryTask(task)}
-                        title="View task execution history"
                       >
-                        📜 History
-                      </button>
-                      <button
-                        className="btn btn-outline"
-                        style={{
-                          fontSize: "0.75rem",
-                          padding: "0.25rem 0.6rem",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.3rem",
-                        }}
-                        onClick={() => executeMutation.mutate(task)}
-                        disabled={task.isRunning || executeMutation.isPending}
-                        title={task.isRunning ? "Task is currently running" : "Execute task now"}
-                      >
-                        {task.isRunning ? "⏳ Running..." : "⚡ Run Now"}
-                      </button>
-                      {task.isRunning && (
+                        {formatRelativeTime(task.nextExecution, true)}
+                      </td>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         <button
-                          className="btn btn-danger"
+                          type="button"
+                          className="btn btn-outline"
                           style={{
                             fontSize: "0.75rem",
                             padding: "0.25rem 0.6rem",
                             display: "inline-flex",
                             alignItems: "center",
                             gap: "0.3rem",
-                            marginLeft: "0.5rem",
+                            marginRight: "0.5rem",
                           }}
-                          onClick={() => abortTaskMutation.mutate(task)}
-                          disabled={abortTaskMutation.isPending}
-                          title="Abort running task"
+                          onClick={() => setSelectedHistoryTask(task)}
+                          title="View task execution history"
                         >
-                          🛑 Abort
+                          📜 History
                         </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                        <button
+                          className="btn btn-outline"
+                          style={{
+                            fontSize: "0.75rem",
+                            padding: "0.25rem 0.6rem",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "0.3rem",
+                          }}
+                          onClick={() => executeMutation.mutate(task)}
+                          disabled={running}
+                          title={running ? "Task is currently running" : "Execute task now"}
+                        >
+                          {running ? "⏳ Running..." : "⚡ Run Now"}
+                        </button>
+                        {running && (
+                          <button
+                            className="btn btn-danger"
+                            style={{
+                              fontSize: "0.75rem",
+                              padding: "0.25rem 0.6rem",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: "0.3rem",
+                              marginLeft: "0.5rem",
+                            }}
+                            onClick={() => abortTaskMutation.mutate(task)}
+                            disabled={isAborting}
+                            title="Abort running task"
+                          >
+                            {isAborting ? "🛑 Aborting..." : "🛑 Abort"}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
