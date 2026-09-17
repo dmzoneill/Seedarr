@@ -41,6 +41,7 @@ public interface IConfigService
     bool WatchFolderAutoStartTorrents { get; }
     bool WatchFolderDeleteAddedTorrents { get; }
     string TorrentSaveDirectory { get; }
+    string DefaultSavePath { get; }
 
     // Connection & Network
     int ListeningPort { get; }
@@ -407,6 +408,7 @@ public class ConfigService : IConfigService
     public bool WatchFolderAutoStartTorrents => GetValueBoolean("WatchFolderAutoStartTorrents", true);
     public bool WatchFolderDeleteAddedTorrents => GetValueBoolean("WatchFolderDeleteAddedTorrents", false);
     public string TorrentSaveDirectory => GetValue("TorrentSaveDirectory", "");
+    public string DefaultSavePath => GetValue("DefaultSavePath", TorrentSaveDirectory);
 
     // Connection & Network
     public int ListeningPort => GetValueInt("ListeningPort", 6881);
