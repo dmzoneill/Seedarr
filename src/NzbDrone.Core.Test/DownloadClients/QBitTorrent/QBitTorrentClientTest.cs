@@ -590,4 +590,49 @@ public class QBitTorrentClientTest
 
         Assert.That(handler.Requests, Has.Count.EqualTo(3)); // login + setUploadLimit + setDownloadLimit
     }
+
+    [Test]
+    public void GetItems_should_cache_session_and_not_relogin_on_subsequent_queries()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "Ok."); // Login on first query
+        handler.Enqueue(HttpStatusCode.OK, @"[{""hash"":""h1"",""name"":""T1""}]"); // Torrents query 1
+        handler.Enqueue(HttpStatusCode.OK, @"[{""hash"":""h2"",""name"":""T2""}]"); // Torrents query 2 (no login)
+        InjectMockClient(handler);
+
+        var result1 = _client.GetItems();
+        var result2 = _client.GetItems();
+
+        Assert.That(result1, Has.Count.EqualTo(1));
+        Assert.That(result2, Has.Count.EqualTo(1));
+        Assert.That(handler.Requests, Has.Count.EqualTo(3)); // 1 auth login + 2 info requests
+        Assert.That(handler.Requests[0].RequestUri.AbsolutePath, Does.Contain("auth/login"));
+        Assert.That(handler.Requests[1].RequestUri.AbsolutePath, Does.Contain("torrents/info"));
+        Assert.That(handler.Requests[2].RequestUri.AbsolutePath, Does.Contain("torrents/info"));
+    }
+
+    [Test]
+    public void GetItems_should_reauthenticate_reactively_on_403_forbidden()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "Ok."); // Initial login
+        handler.Enqueue(HttpStatusCode.OK, @"[{""hash"":""h1"",""name"":""T1""}]"); // First query succeeds
+        handler.Enqueue(HttpStatusCode.Forbidden, "Forbidden"); // Second query: session expired
+        handler.Enqueue(HttpStatusCode.OK, "Ok."); // Reactive re-auth login
+        handler.Enqueue(HttpStatusCode.OK, @"[{""hash"":""h1"",""name"":""T1-refreshed""}]"); // Retried query succeeds
+        InjectMockClient(handler);
+
+        var result1 = _client.GetItems();
+        var result2 = _client.GetItems();
+
+        Assert.That(result1, Has.Count.EqualTo(1));
+        Assert.That(result2, Has.Count.EqualTo(1));
+        Assert.That(result2[0].Title, Is.EqualTo("T1-refreshed"));
+        Assert.That(handler.Requests, Has.Count.EqualTo(5));
+        Assert.That(handler.Requests[0].RequestUri.AbsolutePath, Does.Contain("auth/login"));
+        Assert.That(handler.Requests[1].RequestUri.AbsolutePath, Does.Contain("torrents/info"));
+        Assert.That(handler.Requests[2].RequestUri.AbsolutePath, Does.Contain("torrents/info"));
+        Assert.That(handler.Requests[3].RequestUri.AbsolutePath, Does.Contain("auth/login"));
+        Assert.That(handler.Requests[4].RequestUri.AbsolutePath, Does.Contain("torrents/info"));
+    }
 }

@@ -14,16 +14,91 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 {
     private readonly Logger _logger;
     private readonly CookieContainer _cookies = new();
+    private readonly SemaphoreSlim _authLock = new(1, 1);
     private HttpClient _client;
+    private volatile bool _isAuthenticated;
+    private bool _disposed;
+
+    private string _host = "localhost";
+    private int _port = 8080;
+    private bool _useSsl;
+    private string _username = "admin";
+    private string _password = "adminadmin";
+    private string _category = "";
 
     public string Name => "qBittorrent";
     public string ClientType => "QBitTorrent";
-    public string Host { get; set; } = "localhost";
-    public int Port { get; set; } = 8080;
-    public bool UseSsl { get; set; }
-    public string Username { get; set; } = "admin";
-    public string Password { get; set; } = "adminadmin";
-    public string Category { get; set; } = "";
+
+    public string Host
+    {
+        get => _host;
+        set
+        {
+            if (_host != value)
+            {
+                _host = value;
+                _isAuthenticated = false;
+            }
+        }
+    }
+
+    public int Port
+    {
+        get => _port;
+        set
+        {
+            if (_port != value)
+            {
+                _port = value;
+                _isAuthenticated = false;
+            }
+        }
+    }
+
+    public bool UseSsl
+    {
+        get => _useSsl;
+        set
+        {
+            if (_useSsl != value)
+            {
+                _useSsl = value;
+                _isAuthenticated = false;
+            }
+        }
+    }
+
+    public string Username
+    {
+        get => _username;
+        set
+        {
+            if (_username != value)
+            {
+                _username = value;
+                _isAuthenticated = false;
+            }
+        }
+    }
+
+    public string Password
+    {
+        get => _password;
+        set
+        {
+            if (_password != value)
+            {
+                _password = value;
+                _isAuthenticated = false;
+            }
+        }
+    }
+
+    public string Category
+    {
+        get => _category;
+        set => _category = value;
+    }
 
     public QBitTorrentClient(HttpClient client = null)
     {
@@ -46,10 +121,27 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
     private string BaseUrl => $"{(UseSsl ? "https" : "http")}://{Host}:{Port}";
 
-    private bool Authenticate()
+    private bool Authenticate(bool force = false)
     {
+        return EnsureAuthenticated(force);
+    }
+
+    private bool EnsureAuthenticated(bool force = false)
+    {
+        if (_isAuthenticated && !force)
+        {
+            return true;
+        }
+
+        _authLock.Wait();
         try
         {
+            if (_isAuthenticated && !force)
+            {
+                return true;
+            }
+
+            _isAuthenticated = false;
             using var content = new FormUrlEncodedContent(new[]
             {
                 new KeyValuePair<string, string>("username", Username),
@@ -60,23 +152,112 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             using var response = _client.Send(request);
             using var reader = new StreamReader(response.Content.ReadAsStream());
             var body = reader.ReadToEnd();
-            return response.IsSuccessStatusCode && body.Contains("Ok");
+            var success = response.IsSuccessStatusCode && body.Contains("Ok");
+            _isAuthenticated = success;
+            return success;
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "qBittorrent auth failed");
+            _isAuthenticated = false;
             return false;
         }
+        finally
+        {
+            _authLock.Release();
+        }
+    }
+
+    private async Task<bool> EnsureAuthenticatedAsync(bool force = false, CancellationToken cancellationToken = default)
+    {
+        if (_isAuthenticated && !force)
+        {
+            return true;
+        }
+
+        await _authLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (_isAuthenticated && !force)
+            {
+                return true;
+            }
+
+            _isAuthenticated = false;
+            using var content = new FormUrlEncodedContent(new[]
+            {
+                new KeyValuePair<string, string>("username", Username),
+                new KeyValuePair<string, string>("password", Password),
+            });
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/auth/login") { Content = content };
+            using var response = await _client.SendAsync(request, cancellationToken);
+            using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var reader = new StreamReader(stream);
+            var body = await reader.ReadToEndAsync(cancellationToken);
+            var success = response.IsSuccessStatusCode && body.Contains("Ok");
+            _isAuthenticated = success;
+            return success;
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "qBittorrent auth failed");
+            _isAuthenticated = false;
+            return false;
+        }
+        finally
+        {
+            _authLock.Release();
+        }
+    }
+
+    private HttpResponseMessage SendWithAuth(Func<HttpRequestMessage> requestFactory)
+    {
+        if (!EnsureAuthenticated())
+        {
+            return null;
+        }
+
+        var response = _client.Send(requestFactory());
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            response.Dispose();
+            if (EnsureAuthenticated(force: true))
+            {
+                return _client.Send(requestFactory());
+            }
+
+            return null;
+        }
+
+        return response;
+    }
+
+    private async Task<HttpResponseMessage> SendWithAuthAsync(Func<HttpRequestMessage> requestFactory, CancellationToken cancellationToken = default)
+    {
+        if (!await EnsureAuthenticatedAsync(cancellationToken: cancellationToken))
+        {
+            return null;
+        }
+
+        var response = await _client.SendAsync(requestFactory(), cancellationToken);
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            response.Dispose();
+            if (await EnsureAuthenticatedAsync(force: true, cancellationToken: cancellationToken))
+            {
+                return await _client.SendAsync(requestFactory(), cancellationToken);
+            }
+
+            return null;
+        }
+
+        return response;
     }
 
     public List<DownloadClientItem> GetItems()
     {
         var items = new List<DownloadClientItem>();
-
-        if (!Authenticate())
-        {
-            return items;
-        }
 
         try
         {
@@ -86,9 +267,8 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
                 url += $"?category={Uri.EscapeDataString(Category)}";
             }
 
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            using var response = _client.Send(request);
-            if (!response.IsSuccessStatusCode)
+            using var response = SendWithAuth(() => new HttpRequestMessage(HttpMethod.Get, url));
+            if (response == null || !response.IsSuccessStatusCode)
             {
                 return items;
             }
@@ -130,18 +310,17 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
     public byte[] GetTorrentFile(string infoHash)
     {
-        if (!Authenticate())
+        if (string.IsNullOrWhiteSpace(infoHash))
         {
             return null;
         }
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/torrents/export?hash={infoHash}");
-            using var response = _client.Send(request);
-            if (!response.IsSuccessStatusCode)
+            using var response = SendWithAuth(() => new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/torrents/export?hash={infoHash}"));
+            if (response == null || !response.IsSuccessStatusCode)
             {
-                _logger.Warn("qBittorrent export failed for {0}: {1}", infoHash, response.StatusCode);
+                _logger.Warn("qBittorrent export failed for {0}: {1}", infoHash, response?.StatusCode);
                 return null;
             }
 
@@ -159,16 +338,15 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
     public List<string> GetTrackers(string infoHash)
     {
         var trackers = new List<string>();
-        if (string.IsNullOrWhiteSpace(infoHash) || !Authenticate())
+        if (string.IsNullOrWhiteSpace(infoHash))
         {
             return trackers;
         }
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/torrents/trackers?hash={infoHash}");
-            using var response = _client.Send(request);
-            if (!response.IsSuccessStatusCode)
+            using var response = SendWithAuth(() => new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/torrents/trackers?hash={infoHash}"));
+            if (response == null || !response.IsSuccessStatusCode)
             {
                 return trackers;
             }
@@ -202,23 +380,20 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             return false;
         }
 
-        if (!Authenticate())
-        {
-            return false;
-        }
-
         try
         {
             var trackerList = string.Join("\n", trackers);
-            using var content = new FormUrlEncodedContent(new[]
+            using var response = SendWithAuth(() =>
             {
-                new KeyValuePair<string, string>("hash", infoHash),
-                new KeyValuePair<string, string>("urls", trackerList)
+                var content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("hash", infoHash),
+                    new KeyValuePair<string, string>("urls", trackerList),
+                });
+                return new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/addTrackers") { Content = content };
             });
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/addTrackers") { Content = content };
-            using var response = _client.Send(request);
-            return response.IsSuccessStatusCode;
+            return response != null && response.IsSuccessStatusCode;
         }
         catch (Exception ex)
         {
@@ -234,21 +409,18 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             return false;
         }
 
-        if (!Authenticate())
-        {
-            return false;
-        }
-
         try
         {
-            using var content = new FormUrlEncodedContent(new[]
+            using var response = SendWithAuth(() =>
             {
-                new KeyValuePair<string, string>("hashes", infoHash)
+                var content = new FormUrlEncodedContent(new[]
+                {
+                    new KeyValuePair<string, string>("hashes", infoHash),
+                });
+                return new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/reannounce") { Content = content };
             });
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/reannounce") { Content = content };
-            using var response = _client.Send(request);
-            return response.IsSuccessStatusCode;
+            return response != null && response.IsSuccessStatusCode;
         }
         catch (Exception ex)
         {
@@ -291,6 +463,7 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             using var response = _client.Send(authReq);
             if (response.StatusCode == HttpStatusCode.Forbidden || response.StatusCode == HttpStatusCode.Unauthorized)
             {
+                _isAuthenticated = false;
                 return DownloadClientTestResult.Fail($"Authentication failed (HTTP {(int)response.StatusCode} {response.ReasonPhrase}). Please check username and password.");
             }
 
@@ -298,9 +471,11 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
             var body = bodyReader.ReadToEnd();
             if (response.IsSuccessStatusCode && body.Contains("Ok"))
             {
+                _isAuthenticated = true;
                 return DownloadClientTestResult.Ok($"Successfully connected to qBittorrent at {BaseUrl}");
             }
 
+            _isAuthenticated = false;
             if (body.Contains("Fails"))
             {
                 return DownloadClientTestResult.Fail("Authentication failed. Invalid username or password.");
@@ -321,22 +496,24 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
         _client?.Dispose();
+        _authLock.Dispose();
     }
 
     public async Task<DownloadClientSpeedLimits> GetSpeedLimitsAsync(CancellationToken cancellationToken = default)
     {
         var result = new DownloadClientSpeedLimits();
-        if (!Authenticate())
-        {
-            return result;
-        }
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/transfer/info");
-            using var response = await _client.SendAsync(request, cancellationToken);
-            if (!response.IsSuccessStatusCode)
+            using var response = await SendWithAuthAsync(() => new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/api/v2/transfer/info"), cancellationToken);
+            if (response == null || !response.IsSuccessStatusCode)
             {
                 return result;
             }
@@ -375,31 +552,34 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
     public async Task SetSpeedLimitsAsync(long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default)
     {
-        if (!Authenticate())
-        {
-            return;
-        }
-
         try
         {
             if (uploadBps.HasValue)
             {
-                using var content = new FormUrlEncodedContent(new[]
-                {
-                    new KeyValuePair<string, string>("limit", Math.Max(0, uploadBps.Value).ToString())
-                });
-                using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/transfer/setUploadLimit") { Content = content };
-                using var response = await _client.SendAsync(request, cancellationToken);
+                using var response = await SendWithAuthAsync(
+                    () =>
+                    {
+                        var content = new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("limit", Math.Max(0, uploadBps.Value).ToString()),
+                        });
+                        return new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/transfer/setUploadLimit") { Content = content };
+                    },
+                    cancellationToken);
             }
 
             if (downloadBps.HasValue)
             {
-                using var content = new FormUrlEncodedContent(new[]
-                {
-                    new KeyValuePair<string, string>("limit", Math.Max(0, downloadBps.Value).ToString())
-                });
-                using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/transfer/setDownloadLimit") { Content = content };
-                using var response = await _client.SendAsync(request, cancellationToken);
+                using var response = await SendWithAuthAsync(
+                    () =>
+                    {
+                        var content = new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("limit", Math.Max(0, downloadBps.Value).ToString()),
+                        });
+                        return new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/transfer/setDownloadLimit") { Content = content };
+                    },
+                    cancellationToken);
             }
         }
         catch (Exception ex)
@@ -410,7 +590,7 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
 
     public async Task SetTorrentLimitsAsync(string infoHash, long? uploadBps, long? downloadBps, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(infoHash) || !Authenticate())
+        if (string.IsNullOrWhiteSpace(infoHash))
         {
             return;
         }
@@ -419,24 +599,32 @@ public class QBitTorrentClient : IDownloadClient, IDisposable
         {
             if (uploadBps.HasValue)
             {
-                using var content = new FormUrlEncodedContent(new[]
-                {
-                    new KeyValuePair<string, string>("hashes", infoHash),
-                    new KeyValuePair<string, string>("limit", (uploadBps.Value > 0 ? uploadBps.Value : 0).ToString())
-                });
-                using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/setUploadLimit") { Content = content };
-                using var response = await _client.SendAsync(request, cancellationToken);
+                using var response = await SendWithAuthAsync(
+                    () =>
+                    {
+                        var content = new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("hashes", infoHash),
+                            new KeyValuePair<string, string>("limit", (uploadBps.Value > 0 ? uploadBps.Value : 0).ToString()),
+                        });
+                        return new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/setUploadLimit") { Content = content };
+                    },
+                    cancellationToken);
             }
 
             if (downloadBps.HasValue)
             {
-                using var content = new FormUrlEncodedContent(new[]
-                {
-                    new KeyValuePair<string, string>("hashes", infoHash),
-                    new KeyValuePair<string, string>("limit", (downloadBps.Value > 0 ? downloadBps.Value : 0).ToString())
-                });
-                using var request = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/setDownloadLimit") { Content = content };
-                using var response = await _client.SendAsync(request, cancellationToken);
+                using var response = await SendWithAuthAsync(
+                    () =>
+                    {
+                        var content = new FormUrlEncodedContent(new[]
+                        {
+                            new KeyValuePair<string, string>("hashes", infoHash),
+                            new KeyValuePair<string, string>("limit", (downloadBps.Value > 0 ? downloadBps.Value : 0).ToString()),
+                        });
+                        return new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/api/v2/torrents/setDownloadLimit") { Content = content };
+                    },
+                    cancellationToken);
             }
         }
         catch (Exception ex)

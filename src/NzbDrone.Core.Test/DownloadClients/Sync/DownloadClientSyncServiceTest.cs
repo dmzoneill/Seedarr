@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Threading;
 using NLog;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
@@ -946,5 +947,39 @@ public class DownloadClientSyncServiceTest
         Assert.That(torrent, Is.Not.Null);
         Assert.That(torrent.SavePath, Is.EqualTo("/data/torrents/Imported"));
         Assert.That(torrent.SourcePath, Is.EqualTo("/data/torrents/Imported"));
+    }
+
+    [Test]
+    public void Sync_should_prevent_overlapping_sync_sweeps()
+    {
+        var sync1Started = new ManualResetEventSlim(false);
+        var allowSync1ToFinish = new ManualResetEventSlim(false);
+
+        _torrentService.GetAll().Returns(x =>
+        {
+            sync1Started.Set();
+            allowSync1ToFinish.Wait(5000);
+            return new List<Torrent>();
+        });
+
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "qBit", ClientType = "QBitTorrent", Enable = true }
+        });
+
+        var task1 = System.Threading.Tasks.Task.Run(() => _service.Sync());
+
+        Assert.That(sync1Started.Wait(5000), Is.True);
+
+        var result2 = _service.Sync();
+
+        allowSync1ToFinish.Set();
+        task1.GetAwaiter().GetResult();
+
+        Assert.That(result2.Added, Is.EqualTo(0));
+        Assert.That(result2.Skipped, Is.EqualTo(0));
+        Assert.That(result2.Failed, Is.EqualTo(0));
+
+        _downloadClientFactory.Received(1).All();
     }
 }
