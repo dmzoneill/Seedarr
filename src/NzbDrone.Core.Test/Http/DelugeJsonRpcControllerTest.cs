@@ -387,4 +387,143 @@ public class DelugeJsonRpcControllerTest
             Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.True);
         }
     }
+
+    [Test]
+    public async Task HandleRpc_CorePauseTorrent_With_Empty_Hashes_Does_Not_Pause_All_Torrents()
+    {
+        var torrent1 = new Torrent { Id = 1, Name = "T1", InfoHash = "1111111111111111111111111111111111111111", Status = TorrentStatus.Downloading };
+        var torrent2 = new Torrent { Id = 2, Name = "T2", InfoHash = "2222222222222222222222222222222222222222", Status = TorrentStatus.Downloading };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent1, torrent2 });
+
+        var json = "{\"method\": \"core.pause_torrent\", \"params\": [[]], \"id\": 401}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)result;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.False);
+
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+        Assert.That(torrent1.Status, Is.EqualTo(TorrentStatus.Downloading));
+        Assert.That(torrent2.Status, Is.EqualTo(TorrentStatus.Downloading));
+    }
+
+    [Test]
+    public async Task HandleRpc_CorePauseAllTorrents_Pauses_All_Torrents()
+    {
+        var torrent1 = new Torrent { Id = 1, Name = "T1", InfoHash = "1111111111111111111111111111111111111111", Status = TorrentStatus.Downloading };
+        var torrent2 = new Torrent { Id = 2, Name = "T2", InfoHash = "2222222222222222222222222222222222222222", Status = TorrentStatus.Downloading };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent1, torrent2 });
+
+        var json = "{\"method\": \"core.pause_all_torrents\", \"params\": [], \"id\": 402}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)result;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.True);
+
+        _torrentService.Received(1).Update(torrent1);
+        _torrentService.Received(1).Update(torrent2);
+        Assert.That(torrent1.Status, Is.EqualTo(TorrentStatus.Paused));
+        Assert.That(torrent2.Status, Is.EqualTo(TorrentStatus.Paused));
+    }
+
+    [Test]
+    public async Task HandleRpc_CoreAddTorrentMagnet_OnDuplicate_Returns_Existing_Torrent_InfoHash()
+    {
+        var infoHash = "aabbccddeeff00112233445566778899aabbccdd";
+        var magnet = $"magnet:?xt=urn:btih:{infoHash}&dn=DuplicateMagnet";
+        var existingTorrent = new Torrent
+        {
+            Id = 5,
+            Name = "DuplicateMagnet",
+            InfoHash = infoHash,
+        };
+
+        _torrentImportService.ImportFromMagnet(magnet)
+            .Returns(_ => throw new InvalidOperationException("Torrent with this info hash already exists"));
+        _torrentService.GetByInfoHash(infoHash).Returns(existingTorrent);
+
+        var json = $"{{\"method\": \"core.add_torrent_magnet\", \"params\": [\"{magnet}\", {{\"label\": \"tv\"}}], \"id\": 403}}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)result;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        Assert.That(resDoc.RootElement.GetProperty("result").GetString(), Is.EqualTo(infoHash));
+        Assert.That(resDoc.RootElement.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        _torrentService.Received().Update(Arg.Is<Torrent>(t => t.Id == 5 && t.Label == "tv"));
+    }
+
+    [Test]
+    public async Task HandleRpc_CoreAddTorrentFile_OnDuplicate_Returns_Existing_Torrent_InfoHash()
+    {
+        var infoHash = "aabbccddeeff00112233445566778899aabbccdd";
+        var existingTorrent = new Torrent
+        {
+            Id = 6,
+            Name = "DuplicateFileTorrent",
+            InfoHash = infoHash,
+        };
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "DuplicateFileTorrent",
+            InfoHash = infoHash,
+        };
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(parsed);
+        _torrentImportService.ImportFromFile(Arg.Any<Stream>(), Arg.Any<string>())
+            .Returns(_ => throw new InvalidOperationException("Torrent with this info hash already exists"));
+        _torrentService.GetByInfoHash(infoHash).Returns(existingTorrent);
+
+        var base64 = Convert.ToBase64String(new byte[] { 1, 2, 3, 4 });
+        var json = $"{{\"method\": \"core.add_torrent_file\", \"params\": [\"test.torrent\", \"{base64}\", {{\"label\": \"movies\"}}], \"id\": 404}}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)result;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        Assert.That(resDoc.RootElement.GetProperty("result").GetString(), Is.EqualTo(infoHash));
+        Assert.That(resDoc.RootElement.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        _torrentService.Received().Update(Arg.Is<Torrent>(t => t.Id == 6 && t.Label == "movies"));
+    }
+
+    [Test]
+    public async Task HandleRpc_CoreRemoveTorrent_Returns_False_When_Target_Hash_Does_Not_Exist()
+    {
+        var existingTorrent = new Torrent
+        {
+            Id = 1,
+            Name = "Existing",
+            InfoHash = "1111111111111111111111111111111111111111",
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+
+        var json = "{\"method\": \"core.remove_torrent\", \"params\": [\"nonexistenthash\"], \"id\": 405}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)result;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.False);
+
+        _torrentService.DidNotReceive().Delete(Arg.Any<int>(), Arg.Any<bool>());
+    }
 }
