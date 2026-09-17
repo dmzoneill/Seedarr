@@ -123,7 +123,7 @@ public class AppLifetime : IHostedService, IDisposable
             try
             {
                 // Rely on DiskSpaceService stateful tracking and edge-triggered event transitions
-                _diskSpaceService.GetDiskSpace();
+                _diskSpaceService.CheckDiskSpaceThresholds();
             }
             catch (Exception ex)
             {
