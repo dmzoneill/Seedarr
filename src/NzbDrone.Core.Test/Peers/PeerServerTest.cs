@@ -8,12 +8,14 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using BencodeNET.Objects;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Encryption;
+using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers.MultiTracker;
 using NzbDrone.Core.Transport;
@@ -1924,5 +1926,115 @@ public class PeerServerTest
         InvokeConnectToDiscoveredPeers(_server, torrent, CancellationToken.None);
 
         Assert.That(_server.IsOutgoingEndpointInFlight("1.2.3.4", 5000), Is.True);
+    }
+
+    [Test]
+    public void HandleMessage_should_respond_with_metadata_chunk_when_metadata_is_available()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        const string infoHash = "0123456789abcdef0123456789abcdef01234567";
+        serverConn.InfoHash = infoHash;
+        serverConn.RemoteExtensions["ut_metadata"] = 2;
+
+        var metadata = new byte[20000];
+        new Random(42).NextBytes(metadata);
+        _server.SetTorrentMetadata(infoHash, metadata);
+
+        var exchange = new MetadataExchange();
+        var requestBytes = exchange.BuildMetadataRequest(0);
+        var payload = new byte[1 + requestBytes.Length];
+        payload[0] = 2; // remote ut_metadata ID
+        Array.Copy(requestBytes, 0, payload, 1, requestBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
+
+        var response = clientConn.ReceiveMessage();
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Type, Is.EqualTo(PeerMessageType.Extended));
+        Assert.That(response.Payload[0], Is.EqualTo(2));
+
+        var parsed = exchange.ParseMetadataMessage(response.Payload[1..]);
+        Assert.That(parsed.MessageType, Is.EqualTo(1));
+        Assert.That(parsed.Piece, Is.EqualTo(0));
+        Assert.That(parsed.TotalSize, Is.EqualTo(20000));
+        Assert.That(parsed.Data, Is.Not.Null);
+        Assert.That(parsed.Data.Length, Is.EqualTo(MetadataExchange.MetadataBlockSize));
+    }
+
+    [Test]
+    public void HandleMessage_should_respond_with_reject_when_metadata_is_unavailable()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        const string infoHash = "0123456789abcdef0123456789abcdef01234567";
+        serverConn.InfoHash = infoHash;
+        serverConn.RemoteExtensions["ut_metadata"] = 2;
+
+        var exchange = new MetadataExchange();
+        var requestBytes = exchange.BuildMetadataRequest(0);
+        var payload = new byte[1 + requestBytes.Length];
+        payload[0] = 2;
+        Array.Copy(requestBytes, 0, payload, 1, requestBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
+
+        var response = clientConn.ReceiveMessage();
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Type, Is.EqualTo(PeerMessageType.Extended));
+        Assert.That(response.Payload[0], Is.EqualTo(2));
+
+        var parsed = exchange.ParseMetadataMessage(response.Payload[1..]);
+        Assert.That(parsed.MessageType, Is.EqualTo(2));
+        Assert.That(parsed.Piece, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleMessage_should_respond_with_reject_when_requested_piece_is_out_of_bounds()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        const string infoHash = "0123456789abcdef0123456789abcdef01234567";
+        serverConn.InfoHash = infoHash;
+        serverConn.RemoteExtensions["ut_metadata"] = 2;
+
+        var metadata = new byte[20000]; // 2 pieces: 0 and 1
+        _server.SetTorrentMetadata(infoHash, metadata);
+
+        var exchange = new MetadataExchange();
+        var requestBytes = exchange.BuildMetadataRequest(5); // Piece 5 is out of bounds
+        var payload = new byte[1 + requestBytes.Length];
+        payload[0] = 2;
+        Array.Copy(requestBytes, 0, payload, 1, requestBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
+
+        var response = clientConn.ReceiveMessage();
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Type, Is.EqualTo(PeerMessageType.Extended));
+        Assert.That(response.Payload[0], Is.EqualTo(2));
+
+        var parsed = exchange.ParseMetadataMessage(response.Payload[1..]);
+        Assert.That(parsed.MessageType, Is.EqualTo(2));
+        Assert.That(parsed.Piece, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void HandleMessage_should_parse_extension_handshake_and_record_remote_extensions()
+    {
+        var conn = CreateTestConnection();
+        var dict = new BDictionary
+        {
+            ["m"] = new BDictionary
+            {
+                ["ut_metadata"] = new BNumber(3)
+            }
+        };
+        var handshakeBytes = dict.EncodeAsBytes();
+        var payload = new byte[1 + handshakeBytes.Length];
+        payload[0] = 0; // Handshake id
+        Array.Copy(handshakeBytes, 0, payload, 1, handshakeBytes.Length);
+
+        InvokeHandleMessage(conn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
+
+        Assert.That(conn.RemoteExtensions.ContainsKey("ut_metadata"), Is.True);
+        Assert.That(conn.RemoteExtensions["ut_metadata"], Is.EqualTo(3));
     }
 }

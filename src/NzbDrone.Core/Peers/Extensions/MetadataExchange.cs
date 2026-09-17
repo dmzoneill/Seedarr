@@ -103,7 +103,7 @@ public class MetadataExchange : IMetadataExchange
                 ? (int)pieceNum.Value
                 : 0;
 
-            if (piece < 0)
+            if (messageType == 1 && piece < 0)
             {
                 _logger.Warn("Peer reported invalid metadata piece index: {0}", piece);
                 return new MetadataMessage
