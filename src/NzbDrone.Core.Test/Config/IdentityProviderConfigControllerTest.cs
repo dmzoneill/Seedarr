@@ -219,6 +219,70 @@ public class IdentityProviderConfigControllerTest
     }
 
     [Test]
+    public async Task Update_WhenSecretIsNull_PreservesExistingSecret()
+    {
+        var existing = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "authentik",
+            Name = "Authentik",
+            ClientSecretEncrypted = "existing-encrypted-secret-abc",
+            IsEnabled = true,
+        };
+
+        _providerService.GetById(1).Returns(existing);
+        _providerService.Update(Arg.Any<IdentityProviderDefinition>()).Returns(x => x.Arg<IdentityProviderDefinition>());
+
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "authentik",
+            Name = "Authentik Updated",
+            IsEnabled = true,
+            ClientSecret = null,
+        };
+
+        var result = await _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        _providerService.Received(1).Update(Arg.Is<IdentityProviderDefinition>(p =>
+            p.Id == 1 &&
+            p.ClientSecretEncrypted == "existing-encrypted-secret-abc" &&
+            p.Name == "Authentik Updated"));
+    }
+
+    [Test]
+    public async Task Update_WhenSecretIsEmptyString_PreservesExistingSecret()
+    {
+        var existing = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "authentik",
+            Name = "Authentik",
+            ClientSecretEncrypted = "existing-encrypted-secret-abc",
+            IsEnabled = true,
+        };
+
+        _providerService.GetById(1).Returns(existing);
+        _providerService.Update(Arg.Any<IdentityProviderDefinition>()).Returns(x => x.Arg<IdentityProviderDefinition>());
+
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "authentik",
+            Name = "Authentik Updated",
+            IsEnabled = true,
+            ClientSecret = "",
+        };
+
+        var result = await _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
+        _providerService.Received(1).Update(Arg.Is<IdentityProviderDefinition>(p =>
+            p.Id == 1 &&
+            p.ClientSecretEncrypted == "existing-encrypted-secret-abc" &&
+            p.Name == "Authentik Updated"));
+    }
+
+    [Test]
     public async Task Update_WhenDisabled_RemovesProviderScheme()
     {
         var existing = new IdentityProviderDefinition

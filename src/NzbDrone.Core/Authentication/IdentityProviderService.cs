@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.DataProtection;
 using NLog;
 using NzbDrone.Core.Validation;
 
@@ -11,17 +12,22 @@ namespace NzbDrone.Core.Authentication;
 
 public class IdentityProviderService : IIdentityProviderService
 {
+    public const string DataProtectionPurpose = "Seedarr.IdentityProvider.ClientSecret";
+
     private static readonly HttpClient DefaultHttpClient = new();
     private readonly IIdentityProviderRepository _repository;
     private readonly HttpClient _httpClient;
+    private readonly IDataProtector _protector;
     private readonly Logger _logger;
 
     public IdentityProviderService(
         IIdentityProviderRepository repository,
-        HttpClient httpClient = null)
+        HttpClient httpClient = null,
+        IDataProtectionProvider dataProtectionProvider = null)
     {
         _repository = repository;
         _httpClient = httpClient ?? DefaultHttpClient;
+        _protector = dataProtectionProvider?.CreateProtector(DataProtectionPurpose);
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -49,12 +55,24 @@ public class IdentityProviderService : IIdentityProviderService
     {
         provider.CreatedAt = DateTime.UtcNow;
         provider.UpdatedAt = DateTime.UtcNow;
+
+        if (!string.IsNullOrEmpty(provider.ClientSecretEncrypted))
+        {
+            provider.ClientSecretEncrypted = EncryptClientSecret(provider.ClientSecretEncrypted);
+        }
+
         return _repository.Insert(provider);
     }
 
     public IdentityProviderDefinition Update(IdentityProviderDefinition provider)
     {
         provider.UpdatedAt = DateTime.UtcNow;
+
+        if (!string.IsNullOrEmpty(provider.ClientSecretEncrypted))
+        {
+            provider.ClientSecretEncrypted = EncryptClientSecret(provider.ClientSecretEncrypted);
+        }
+
         _repository.Update(provider);
         return provider;
     }
@@ -62,6 +80,65 @@ public class IdentityProviderService : IIdentityProviderService
     public void Delete(int id)
     {
         _repository.Delete(id);
+    }
+
+    public string EncryptClientSecret(string secret)
+    {
+        if (string.IsNullOrEmpty(secret) || _protector == null)
+        {
+            return secret;
+        }
+
+        if (IsEncrypted(secret))
+        {
+            return secret;
+        }
+
+        try
+        {
+            return _protector.Protect(secret);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to encrypt identity provider client secret");
+            return secret;
+        }
+    }
+
+    public string DecryptClientSecret(string encryptedSecret)
+    {
+        if (string.IsNullOrEmpty(encryptedSecret) || _protector == null)
+        {
+            return encryptedSecret;
+        }
+
+        try
+        {
+            return _protector.Unprotect(encryptedSecret);
+        }
+        catch (Exception ex)
+        {
+            _logger.Trace(ex, "Failed to unprotect client secret, falling back to plaintext");
+            return encryptedSecret;
+        }
+    }
+
+    private bool IsEncrypted(string value)
+    {
+        if (string.IsNullOrEmpty(value) || _protector == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            _protector.Unprotect(value);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public async Task<bool> TestConnectionAsync(IdentityProviderDefinition provider)

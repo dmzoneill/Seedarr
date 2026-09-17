@@ -140,7 +140,7 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
             SignInScheme = "Cookies",
             Authority = provider.IssuerUrl.TrimEnd('/'),
             ClientId = provider.ClientId,
-            ClientSecret = provider.ClientSecretEncrypted ?? string.Empty,
+            ClientSecret = DecryptClientSecret(provider.ClientSecretEncrypted, dataProtection),
             ResponseType = OpenIdConnectResponseType.Code,
             ResponseMode = OpenIdConnectResponseMode.Query,
             GetClaimsFromUserInfoEndpoint = true,
@@ -279,6 +279,36 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
         {
             _logger.Trace(ex, "Failed to invalidate handler cache for scheme {0}", schemeName);
         }
+    }
+
+    private string DecryptClientSecret(string encryptedSecret, IDataProtectionProvider dataProtection)
+    {
+        if (string.IsNullOrEmpty(encryptedSecret))
+        {
+            return string.Empty;
+        }
+
+        var providerService = _serviceProvider.GetService<IIdentityProviderService>();
+        if (providerService != null)
+        {
+            return providerService.DecryptClientSecret(encryptedSecret) ?? string.Empty;
+        }
+
+        if (dataProtection != null)
+        {
+            try
+            {
+                var protector = dataProtection.CreateProtector(IdentityProviderService.DataProtectionPurpose);
+                return protector.Unprotect(encryptedSecret);
+            }
+            catch (Exception ex)
+            {
+                _logger.Trace(ex, "Failed to unprotect client secret, falling back to plaintext");
+                return encryptedSecret;
+            }
+        }
+
+        return encryptedSecret;
     }
 
     private static readonly HashSet<string> RoleClaimTypeNames = new(StringComparer.OrdinalIgnoreCase)

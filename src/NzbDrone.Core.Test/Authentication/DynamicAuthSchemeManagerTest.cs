@@ -5,6 +5,7 @@ using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -500,5 +501,71 @@ public class DynamicAuthSchemeManagerTest
         await manager.RemoveProviderSchemeAsync("test_remove");
 
         Assert.That(await schemeProvider.GetSchemeAsync("Oidc_test_remove"), Is.Null);
+    }
+
+    [Test]
+    public async Task RegisterOrUpdateOidcProviderAsync_decrypts_encrypted_client_secret()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        services.AddDataProtection();
+        var sp = services.BuildServiceProvider();
+
+        var dataProtection = sp.GetRequiredService<IDataProtectionProvider>();
+        var protector = dataProtection.CreateProtector(IdentityProviderService.DataProtectionPurpose);
+        var encryptedSecret = protector.Protect("super-secret-client-password");
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "secret_provider",
+            Name = "Secret Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "client-id",
+            ClientSecretEncrypted = encryptedSecret,
+            IsEnabled = true,
+        };
+
+        await manager.RegisterOrUpdateOidcProviderAsync(provider);
+
+        var cache = sp.GetRequiredService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+        var options = cache.GetOrAdd("Oidc_secret_provider", () => new OpenIdConnectOptions());
+
+        Assert.That(options.ClientSecret, Is.EqualTo("super-secret-client-password"));
+    }
+
+    [Test]
+    public async Task RegisterOrUpdateOidcProviderAsync_preserves_legacy_plaintext_client_secret()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        services.AddDataProtection();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "plaintext_provider",
+            Name = "Plaintext Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "client-id",
+            ClientSecretEncrypted = "legacy-plaintext-secret",
+            IsEnabled = true,
+        };
+
+        await manager.RegisterOrUpdateOidcProviderAsync(provider);
+
+        var cache = sp.GetRequiredService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+        var options = cache.GetOrAdd("Oidc_plaintext_provider", () => new OpenIdConnectOptions());
+
+        Assert.That(options.ClientSecret, Is.EqualTo("legacy-plaintext-secret"));
     }
 }
