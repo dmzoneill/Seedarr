@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Torrents;
@@ -19,6 +20,7 @@ public class WatchFolderService : BackgroundService
     private readonly ITorrentFileService _torrentFileService;
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IConfigService _configService;
+    private readonly ICategoryService _categoryService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _fileDebounceTokens = new(StringComparer.OrdinalIgnoreCase);
     private FileSystemWatcher _watcher;
@@ -29,7 +31,8 @@ public class WatchFolderService : BackgroundService
         ITrackerEntryService trackerEntryService,
         ITorrentFileService torrentFileService,
         IAppFolderInfo appFolderInfo,
-        IConfigService configService)
+        IConfigService configService,
+        ICategoryService categoryService = null)
     {
         _parser = parser;
         _torrentService = torrentService;
@@ -37,6 +40,7 @@ public class WatchFolderService : BackgroundService
         _torrentFileService = torrentFileService;
         _appFolderInfo = appFolderInfo;
         _configService = configService;
+        _categoryService = categoryService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -48,10 +52,7 @@ public class WatchFolderService : BackgroundService
             return;
         }
 
-        var configuredPath = _configService.WatchFolderPath;
-        var watchPath = string.IsNullOrWhiteSpace(configuredPath)
-            ? Path.Combine(_appFolderInfo.AppDataFolder, "watch")
-            : configuredPath;
+        var watchPath = GetWatchPath();
 
         try
         {
@@ -68,20 +69,35 @@ public class WatchFolderService : BackgroundService
 
         _logger.Info("Watching folder: {0}", watchPath);
 
-        _watcher = new FileSystemWatcher(watchPath, "*.torrent")
+        try
         {
-            NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime,
-            EnableRaisingEvents = true
-        };
+            _watcher = new FileSystemWatcher(watchPath, "*.torrent")
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.CreationTime | NotifyFilters.LastWrite,
+                EnableRaisingEvents = true
+            };
 
-        _watcher.Created += OnTorrentFileCreated;
+            _watcher.Created += OnTorrentFileCreated;
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Unable to initialize FileSystemWatcher for {0}. Falling back to periodic scan only.", watchPath);
+            _watcher = null;
+        }
 
         stoppingToken.Register(() =>
         {
             if (_watcher != null)
             {
-                _watcher.EnableRaisingEvents = false;
-                _watcher.Dispose();
+                try
+                {
+                    _watcher.EnableRaisingEvents = false;
+                    _watcher.Dispose();
+                }
+                catch
+                {
+                }
             }
         });
 
@@ -112,11 +128,25 @@ public class WatchFolderService : BackgroundService
                 return;
             }
 
-            var torrentFiles = Directory.GetFiles(watchPath, "*.torrent");
+            string[] torrentFiles;
+            try
+            {
+                torrentFiles = Directory.GetFiles(watchPath, "*.torrent", SearchOption.AllDirectories);
+            }
+            catch (DirectoryNotFoundException)
+            {
+                _logger.Debug("Watch folder directory not found during scan: {0}", watchPath);
+                return;
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.Warn(ex, "Access denied scanning watch folder at {0}", watchPath);
+                return;
+            }
 
             foreach (var filePath in torrentFiles)
             {
-                ProcessTorrentFile(filePath);
+                ProcessTorrentFile(filePath, watchPath);
             }
         }
         catch (Exception ex)
@@ -170,7 +200,137 @@ public class WatchFolderService : BackgroundService
         }
     }
 
-    private void ProcessTorrentFile(string filePath)
+    internal bool WaitForFileReady(string filePath, int maxAttempts = 5, int initialDelayMs = 100, int stabilityDelayMs = 25)
+    {
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                if (!File.Exists(filePath))
+                {
+                    return false;
+                }
+
+                long initialLength;
+                using (var fs1 = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.None))
+                {
+                    initialLength = fs1.Length;
+                }
+
+                if (initialLength > 0)
+                {
+                    Thread.Sleep(stabilityDelayMs);
+
+                    if (!File.Exists(filePath))
+                    {
+                        return false;
+                    }
+
+                    long secondLength;
+                    using (var fs2 = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.None))
+                    {
+                        secondLength = fs2.Length;
+                    }
+
+                    if (initialLength == secondLength)
+                    {
+                        return true;
+                    }
+
+                    _logger.Debug("File {0} length changed from {1} to {2}, retrying...", filePath, initialLength, secondLength);
+                }
+                else
+                {
+                    _logger.Debug("File {0} has zero length on attempt {1}, retrying...", filePath, attempt);
+                }
+            }
+            catch (IOException ex)
+            {
+                _logger.Debug(ex, "File {0} is locked or being written to on attempt {1}/{2}", filePath, attempt, maxAttempts);
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                _logger.Warn(ex, "Access denied checking readiness for {0}", filePath);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error while checking readiness for {0} on attempt {1}", filePath, attempt);
+            }
+
+            if (attempt < maxAttempts)
+            {
+                var delayMs = initialDelayMs * attempt;
+                Thread.Sleep(delayMs);
+            }
+        }
+
+        _logger.Warn("File {0} did not stabilize or unlock within {1} attempts", filePath, maxAttempts);
+        return false;
+    }
+
+    private string GetWatchPath()
+    {
+        var configuredPath = _configService?.WatchFolderPath;
+        return string.IsNullOrWhiteSpace(configuredPath)
+            ? Path.Combine(_appFolderInfo?.AppDataFolder ?? string.Empty, "watch")
+            : configuredPath;
+    }
+
+    private Category ResolveCategory(string filePath, string watchPath)
+    {
+        if (_categoryService == null || string.IsNullOrWhiteSpace(watchPath) || string.IsNullOrWhiteSpace(filePath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var fileDir = Path.GetDirectoryName(filePath);
+            if (string.IsNullOrWhiteSpace(fileDir))
+            {
+                return null;
+            }
+
+            var relDir = Path.GetRelativePath(watchPath, fileDir);
+            if (string.IsNullOrWhiteSpace(relDir) || relDir == "." || relDir.StartsWith(".."))
+            {
+                return null;
+            }
+
+            var parts = relDir.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+            {
+                return null;
+            }
+
+            var firstComponent = parts[0];
+            var cat = _categoryService.GetByName(firstComponent);
+            if (cat != null && !string.IsNullOrWhiteSpace(cat.Name))
+            {
+                return cat;
+            }
+
+            if (parts.Length > 1)
+            {
+                var fullRel = string.Join("/", parts);
+                cat = _categoryService.GetByName(fullRel);
+                if (cat != null && !string.IsNullOrWhiteSpace(cat.Name))
+                {
+                    return cat;
+                }
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Error resolving category for file {0}", filePath);
+            return null;
+        }
+    }
+
+    private void ProcessTorrentFile(string filePath, string watchPath = null)
     {
         var fileName = Path.GetFileName(filePath);
 
@@ -178,6 +338,12 @@ public class WatchFolderService : BackgroundService
         {
             if (!File.Exists(filePath))
             {
+                return;
+            }
+
+            if (!WaitForFileReady(filePath))
+            {
+                _logger.Warn("Torrent file is locked or incomplete, skipping: {0}", fileName);
                 return;
             }
 
@@ -199,10 +365,34 @@ public class WatchFolderService : BackgroundService
                 CreationDate = parsed.CreationDate,
                 IsPrivate = parsed.IsPrivate,
                 TrackerUrl = parsed.AnnounceUrl,
-                SourcePath = filePath,
+                SourcePath = deleteAfterAdd ? null : filePath,
                 DateAdded = DateTime.UtcNow,
                 Progress = 0.0
             };
+
+            watchPath ??= GetWatchPath();
+            var category = ResolveCategory(filePath, watchPath);
+            if (category != null && !string.IsNullOrWhiteSpace(category.Name))
+            {
+                torrent.Category = category.Name;
+            }
+
+            var defaultPath = !string.IsNullOrWhiteSpace(_configService?.TorrentSaveDirectory)
+                ? _configService.TorrentSaveDirectory
+                : (!string.IsNullOrWhiteSpace(watchPath) ? watchPath : Path.Combine(_appFolderInfo?.AppDataFolder ?? string.Empty, "downloads"));
+
+            string resolvedSavePath = null;
+            if (_categoryService != null)
+            {
+                resolvedSavePath = _categoryService.GetSavePathForCategory(torrent.Category, defaultPath);
+            }
+
+            if (string.IsNullOrWhiteSpace(resolvedSavePath))
+            {
+                resolvedSavePath = defaultPath;
+            }
+
+            torrent.SavePath = resolvedSavePath;
 
             var initialStatus = TorrentStatus.Stopped;
             if (autoStart)

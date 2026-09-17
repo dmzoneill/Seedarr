@@ -39,6 +39,7 @@ public interface IConfigService
     int WatchFolderScanIntervalSeconds { get; }
     bool WatchFolderAutoStartTorrents { get; }
     bool WatchFolderDeleteAddedTorrents { get; }
+    string TorrentSaveDirectory { get; }
 
     // Connection & Network
     int ListeningPort { get; }
@@ -370,6 +371,7 @@ public class ConfigService : IConfigService
     public int WatchFolderScanIntervalSeconds => GetValueInt("WatchFolderScanIntervalSeconds", 10);
     public bool WatchFolderAutoStartTorrents => GetValueBoolean("WatchFolderAutoStartTorrents", true);
     public bool WatchFolderDeleteAddedTorrents => GetValueBoolean("WatchFolderDeleteAddedTorrents", false);
+    public string TorrentSaveDirectory => GetValue("TorrentSaveDirectory", "");
 
     // Connection & Network
     public int ListeningPort => GetValueInt("ListeningPort", 6881);
