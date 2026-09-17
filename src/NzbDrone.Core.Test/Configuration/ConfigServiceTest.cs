@@ -896,11 +896,35 @@ namespace NzbDrone.Core.Test.Configuration
         }
 
         [Test]
+        public void SpeedLimitDownEnabled_should_default_to_false()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.SpeedLimitDownEnabled, Is.False);
+        }
+
+        [Test]
+        public void SpeedLimitUpEnabled_should_default_to_false()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.SpeedLimitUpEnabled, Is.False);
+        }
+
+        [Test]
         public void GlobalSeedRatioLimit_should_default_to_zero()
         {
             _repository.All().Returns(new List<ConfigModel>().AsQueryable());
 
             Assert.That(_subject.GlobalSeedRatioLimit, Is.EqualTo(0.0));
+        }
+
+        [Test]
+        public void SeedRatioLimited_should_default_to_false()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.SeedRatioLimited, Is.False);
         }
 
         [Test]
@@ -1735,6 +1759,30 @@ namespace NzbDrone.Core.Test.Configuration
         }
 
         [Test]
+        public void SpeedLimitDownEnabled_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "SpeedLimitDownEnabled", Value = "True" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.SpeedLimitDownEnabled, Is.True);
+        }
+
+        [Test]
+        public void SpeedLimitUpEnabled_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "SpeedLimitUpEnabled", Value = "True" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.SpeedLimitUpEnabled, Is.True);
+        }
+
+        [Test]
         public void GlobalSeedRatioLimit_should_return_stored_value_when_set()
         {
             var configs = new List<ConfigModel>
@@ -1744,6 +1792,18 @@ namespace NzbDrone.Core.Test.Configuration
             _repository.All().Returns(configs.AsQueryable());
 
             Assert.That(_subject.GlobalSeedRatioLimit, Is.EqualTo(2.5));
+        }
+
+        [Test]
+        public void SeedRatioLimited_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "SeedRatioLimited", Value = "True" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.SeedRatioLimited, Is.True);
         }
 
         [Test]

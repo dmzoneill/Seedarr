@@ -118,7 +118,7 @@ public class AlternateSpeedModeSyncTest
             categoryService: _categoryService);
 
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers["X-Transmission-Session-Id"] = "test-session";
+        httpContext.Request.Headers["X-Transmission-Session-Id"] = TransmissionRpcController.CurrentSessionId;
         _transmissionController.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
         _delugeController = new DelugeJsonRpcController(

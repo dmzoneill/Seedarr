@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -51,7 +52,15 @@ public class TransmissionRpcResponse
 [Route("transmission/rpc")]
 public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedEvent>
 {
-    private const string SessionHeaderName = "X-Transmission-Session-Id";
+    public const string SessionHeaderName = "X-Transmission-Session-Id";
+    private static string _currentSessionId = Guid.NewGuid().ToString("N");
+
+    public static string CurrentSessionId
+    {
+        get => _currentSessionId;
+        set => _currentSessionId = value;
+    }
+
     private static readonly object _removedLock = new();
     private static readonly List<(int Id, DateTime RemovedAt)> _recentlyRemovedList = new();
     private static readonly DateTime _serviceStartTime = DateTime.UtcNow;
@@ -219,6 +228,21 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         return _remotePathMappingService.RemapLocalToRemote(GetCallerHost(), path);
     }
 
+    private IActionResult CreateSessionConflictResult()
+    {
+        Response.Headers[SessionHeaderName] = _currentSessionId;
+        var result = Content("<h1>409: Conflict</h1><p>Your request had an invalid session-id header. Use the \"X-Transmission-Session-Id: " + _currentSessionId + "\" header to authenticate your request.</p>", "text/html");
+        result.StatusCode = 409;
+        return result;
+    }
+
+    private bool IsValidSessionId()
+    {
+        return Request.Headers.TryGetValue(SessionHeaderName, out var sessionVal) &&
+               !string.IsNullOrEmpty(sessionVal) &&
+               string.Equals(sessionVal, _currentSessionId, StringComparison.Ordinal);
+    }
+
     [HttpGet]
     public IActionResult HandleGet()
     {
@@ -228,11 +252,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             return Unauthorized();
         }
 
-        if (!Request.Headers.TryGetValue(SessionHeaderName, out var sessionVal) || string.IsNullOrEmpty(sessionVal))
+        if (!IsValidSessionId())
         {
-            var newSessionId = Guid.NewGuid().ToString("N");
-            Response.Headers[SessionHeaderName] = newSessionId;
-            return StatusCode(409, "Conflict: Session ID generated.");
+            return CreateSessionConflictResult();
         }
 
         return Ok(new TransmissionRpcResponse
@@ -256,11 +278,9 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             return Unauthorized();
         }
 
-        if (!Request.Headers.TryGetValue(SessionHeaderName, out var sessionVal) || string.IsNullOrEmpty(sessionVal))
+        if (!IsValidSessionId())
         {
-            var newSessionId = Guid.NewGuid().ToString("N");
-            Response.Headers[SessionHeaderName] = newSessionId;
-            return StatusCode(409, "Conflict: Session ID generated.");
+            return CreateSessionConflictResult();
         }
 
         if (request == null || string.IsNullOrWhiteSpace(request.Method))
@@ -336,10 +356,10 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 { "incomplete-dir-enabled", false },
                 { "speed-limit-down", _configService?.MaxDownloadSpeedKbps ?? 1250 },
                 { "speed-limit-up", _configService?.MaxUploadSpeedKbps ?? 625 },
-                { "speed-limit-down-enabled", (_configService?.MaxDownloadSpeedKbps ?? 0) > 0 },
-                { "speed-limit-up-enabled", (_configService?.MaxUploadSpeedKbps ?? 0) > 0 },
+                { "speed-limit-down-enabled", _configService?.SpeedLimitDownEnabled ?? false },
+                { "speed-limit-up-enabled", _configService?.SpeedLimitUpEnabled ?? false },
                 { "seedRatioLimit", _configService?.GlobalSeedRatioLimit ?? 0.0 },
-                { "seedRatioLimited", (_configService?.GlobalSeedRatioLimit ?? 0.0) > 0 },
+                { "seedRatioLimited", _configService?.SeedRatioLimited ?? false },
                 { "alt-speed-enabled", _configService?.AlternativeSpeedEnabled ?? false },
                 { "alt-speed-down", _configService?.AltDownloadSpeedKbps ?? 100 },
                 { "alt-speed-up", _configService?.AltUploadSpeedKbps ?? 50 },
@@ -377,6 +397,35 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             if (request.Arguments.TryGetValue("speed-limit-up", out var upLimit) && upLimit.ValueKind == JsonValueKind.Number)
             {
                 updates["MaxUploadSpeedKbps"] = upLimit.GetInt32();
+            }
+
+            if (request.Arguments.TryGetValue("speed-limit-down-enabled", out var dlLimitEnabled))
+            {
+                updates["SpeedLimitDownEnabled"] = SafeGetBoolean(dlLimitEnabled);
+            }
+
+            if (request.Arguments.TryGetValue("speed-limit-up-enabled", out var upLimitEnabled))
+            {
+                updates["SpeedLimitUpEnabled"] = SafeGetBoolean(upLimitEnabled);
+            }
+
+            if (request.Arguments.TryGetValue("seedRatioLimit", out var ratioLimit))
+            {
+                if (ratioLimit.ValueKind == JsonValueKind.Number && ratioLimit.TryGetDouble(out var rl))
+                {
+                    updates["GlobalSeedRatioLimit"] = rl;
+                }
+                else if (ratioLimit.ValueKind == JsonValueKind.String && double.TryParse(ratioLimit.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedRl))
+                {
+                    updates["GlobalSeedRatioLimit"] = parsedRl;
+                }
+            }
+
+            if (request.Arguments.TryGetValue("seedRatioLimited", out var ratioLimited))
+            {
+                var isLimited = SafeGetBoolean(ratioLimited);
+                updates["SeedRatioLimited"] = isLimited;
+                updates["GlobalSeedRatioLimited"] = isLimited;
             }
 
             if (request.Arguments.TryGetValue("alt-speed-down", out var altDl) && altDl.ValueKind == JsonValueKind.Number)

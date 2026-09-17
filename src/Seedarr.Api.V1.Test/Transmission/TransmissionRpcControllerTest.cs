@@ -52,7 +52,7 @@ public class TransmissionRpcControllerTest
             categoryService: _categoryService);
 
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers["X-Transmission-Session-Id"] = "test-session-id";
+        httpContext.Request.Headers[TransmissionRpcController.SessionHeaderName] = TransmissionRpcController.CurrentSessionId;
         _controller.ControllerContext = new ControllerContext
         {
             HttpContext = httpContext,
@@ -346,5 +346,117 @@ public class TransmissionRpcControllerTest
         Assert.That(args, Is.Not.Null);
         Assert.That(args["path"], Is.EqualTo("/"));
         Assert.That((long)args["size-bytes"], Is.GreaterThan(0L));
+    }
+
+    [Test]
+    public async Task HandleRpc_Missing_Session_Header_Returns_409_Conflict_With_Html_Content_And_Header()
+    {
+        _controller.ControllerContext.HttpContext.Request.Headers.Remove(TransmissionRpcController.SessionHeaderName);
+
+        var request = new TransmissionRpcRequest { Method = "session-get" };
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var content = (ContentResult)result;
+        Assert.That(content.StatusCode, Is.EqualTo(409));
+        Assert.That(content.ContentType, Is.EqualTo("text/html"));
+        Assert.That(content.Content, Does.Contain("<h1>409: Conflict</h1>"));
+        Assert.That(content.Content, Does.Contain(TransmissionRpcController.CurrentSessionId));
+        Assert.That(_controller.Response.Headers.ContainsKey(TransmissionRpcController.SessionHeaderName), Is.True);
+        Assert.That((string)_controller.Response.Headers[TransmissionRpcController.SessionHeaderName], Is.EqualTo(TransmissionRpcController.CurrentSessionId));
+    }
+
+    [Test]
+    public async Task HandleRpc_Invalid_Session_Header_Returns_409_Conflict_With_Html_Content_And_Header()
+    {
+        _controller.ControllerContext.HttpContext.Request.Headers[TransmissionRpcController.SessionHeaderName] = "invalid-session-token-123";
+
+        var request = new TransmissionRpcRequest { Method = "session-get" };
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var content = (ContentResult)result;
+        Assert.That(content.StatusCode, Is.EqualTo(409));
+        Assert.That(content.ContentType, Is.EqualTo("text/html"));
+        Assert.That(content.Content, Does.Contain("<h1>409: Conflict</h1>"));
+        Assert.That(content.Content, Does.Contain(TransmissionRpcController.CurrentSessionId));
+        Assert.That(_controller.Response.Headers.ContainsKey(TransmissionRpcController.SessionHeaderName), Is.True);
+        Assert.That((string)_controller.Response.Headers[TransmissionRpcController.SessionHeaderName], Is.EqualTo(TransmissionRpcController.CurrentSessionId));
+    }
+
+    [Test]
+    public async Task HandleRpc_Valid_Session_Header_Succeeds()
+    {
+        _controller.ControllerContext.HttpContext.Request.Headers[TransmissionRpcController.SessionHeaderName] = TransmissionRpcController.CurrentSessionId;
+
+        var request = new TransmissionRpcRequest { Method = "session-get" };
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+    }
+
+    [Test]
+    public async Task HandleRpc_SessionSet_Updates_Speed_Limits_And_Ratio_Limits_In_Config()
+    {
+        Dictionary<string, object> savedDict = null;
+        _configService.When(c => c.SaveConfigDictionary(Arg.Any<Dictionary<string, object>>()))
+            .Do(call => savedDict = call.Arg<Dictionary<string, object>>());
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "session-set",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["speed-limit-down"] = JsonDocument.Parse("2500").RootElement,
+                ["speed-limit-up"] = JsonDocument.Parse("1500").RootElement,
+                ["speed-limit-down-enabled"] = JsonDocument.Parse("true").RootElement,
+                ["speed-limit-up-enabled"] = JsonDocument.Parse("false").RootElement,
+                ["seedRatioLimit"] = JsonDocument.Parse("2.75").RootElement,
+                ["seedRatioLimited"] = JsonDocument.Parse("true").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+
+        Assert.That(savedDict, Is.Not.Null);
+        Assert.That(savedDict["MaxDownloadSpeedKbps"], Is.EqualTo(2500));
+        Assert.That(savedDict["MaxUploadSpeedKbps"], Is.EqualTo(1500));
+        Assert.That(savedDict["SpeedLimitDownEnabled"], Is.EqualTo(true));
+        Assert.That(savedDict["SpeedLimitUpEnabled"], Is.EqualTo(false));
+        Assert.That(savedDict["GlobalSeedRatioLimit"], Is.EqualTo(2.75));
+        Assert.That(savedDict["SeedRatioLimited"], Is.EqualTo(true));
+    }
+
+    [Test]
+    public async Task HandleRpc_SessionGet_Returns_Accurate_Speed_And_Ratio_Limits()
+    {
+        _configService.SpeedLimitDownEnabled.Returns(true);
+        _configService.SpeedLimitUpEnabled.Returns(false);
+        _configService.GlobalSeedRatioLimit.Returns(3.25);
+        _configService.SeedRatioLimited.Returns(true);
+
+        var request = new TransmissionRpcRequest { Method = "session-get" };
+        var result = await _controller.HandleRpc(request);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        var args = response.Arguments as Dictionary<string, object>;
+        Assert.That(args, Is.Not.Null);
+        Assert.That(args["speed-limit-down-enabled"], Is.EqualTo(true));
+        Assert.That(args["speed-limit-up-enabled"], Is.EqualTo(false));
+        Assert.That(args["seedRatioLimit"], Is.EqualTo(3.25));
+        Assert.That(args["seedRatioLimited"], Is.EqualTo(true));
     }
 }
