@@ -1477,6 +1477,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             TorrentStatus.Queued => progress >= 1.0 ? 5 : 3,
             TorrentStatus.Downloading => 4,
             TorrentStatus.Seeding => 6,
+            TorrentStatus.Moving => 0,
             TorrentStatus.Error => 0,
             _ => 0,
         };

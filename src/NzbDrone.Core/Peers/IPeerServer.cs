@@ -17,4 +17,8 @@ public interface IPeerServer
     void UpdateLocalInterest(PeerConnection connection, Torrent torrent);
 
     void OnTorrentCompleted(Torrent torrent);
+
+    void ChokePeers(string infoHash);
+
+    void UnchokePeers(string infoHash);
 }
