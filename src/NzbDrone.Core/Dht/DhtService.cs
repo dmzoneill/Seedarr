@@ -98,6 +98,7 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         SaveRoutingTableState();
         StopDht();
         _querySemaphore?.Dispose();
+        _peerStore?.Dispose();
         base.Dispose();
     }
 
@@ -679,6 +680,22 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
             }
         }
 
+        if (response.ContainsKey("values6"))
+        {
+            var values6 = (BList)response["values6"];
+            foreach (var value in values6)
+            {
+                var peerData = ((BString)value).Value;
+                if (peerData.Length == 18)
+                {
+                    var ip = new IPAddress(peerData.Slice(0, 16).Span);
+                    var port = (peerData.Span[16] << 8) | peerData.Span[17];
+                    discoveredPeers.Add(new TrackerPeer { Ip = ip.ToString(), Port = port });
+                    _logger.Debug("DHT get_peers response (IPv6): peer {0}:{1}", ip, port);
+                }
+            }
+        }
+
         if (discoveredPeers.Count > 0)
         {
             var infoHashHex = pending.InfoHash != null ? Convert.ToHexString(pending.InfoHash) : null;
@@ -727,16 +744,32 @@ public class DhtService : BackgroundService, IDhtService, IHandle<ConfigSavedEve
         };
 
         var peers = _peerStore.GetPeers(infoHash);
-        if (peers.Count > 0)
+        var peers6 = _peerStore.GetPeers6(infoHash);
+        if (peers.Count > 0 || peers6.Count > 0)
         {
-            var values = new BList();
-            foreach (var peer in peers.Take(50))
+            if (peers.Count > 0)
             {
-                values.Add(new BString(peer));
+                var values = new BList();
+                foreach (var peer in peers.Take(50))
+                {
+                    values.Add(new BString(peer));
+                }
+
+                responseDict["values"] = values;
             }
 
-            responseDict["values"] = values;
-            _logger.Debug("DHT get_peers from {0}: returning {1} peers for {2}", sender, values.Count, Convert.ToHexString(infoHash));
+            if (peers6.Count > 0)
+            {
+                var values6 = new BList();
+                foreach (var peer in peers6.Take(50))
+                {
+                    values6.Add(new BString(peer));
+                }
+
+                responseDict["values6"] = values6;
+            }
+
+            _logger.Debug("DHT get_peers from {0}: returning {1} IPv4 peers, {2} IPv6 peers for {3}", sender, peers.Count, peers6.Count, Convert.ToHexString(infoHash));
         }
         else
         {
