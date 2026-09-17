@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
@@ -10,6 +12,7 @@ namespace NzbDrone.Core.HealthCheck;
 public interface IHealthCheckService
 {
     List<HealthCheckResult> PerformChecks();
+    void ExpireCache();
 }
 
 public class HealthCheckService : IHealthCheckService
@@ -18,6 +21,12 @@ public class HealthCheckService : IHealthCheckService
     private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, HealthCheckResultType> _previousResults = new(StringComparer.OrdinalIgnoreCase);
+
+    private readonly object _cacheLock = new();
+    private List<HealthCheckResult> _cachedResults;
+    private DateTime _lastRunTimeUtc = DateTime.MinValue;
+    private TimeSpan _cacheDuration = TimeSpan.FromSeconds(15);
+    private TimeSpan _checkTimeout = TimeSpan.FromSeconds(5);
 
     public HealthCheckService(IEnumerable<IHealthCheck> healthChecks)
         : this(healthChecks, null)
@@ -31,59 +40,117 @@ public class HealthCheckService : IHealthCheckService
         _logger = LogManager.GetCurrentClassLogger();
     }
 
+    public TimeSpan CacheDuration
+    {
+        get => _cacheDuration;
+        set => _cacheDuration = value;
+    }
+
+    public TimeSpan CheckTimeout
+    {
+        get => _checkTimeout;
+        set => _checkTimeout = value;
+    }
+
+    public void ExpireCache()
+    {
+        lock (_cacheLock)
+        {
+            _lastRunTimeUtc = DateTime.MinValue;
+            _cachedResults = null;
+        }
+    }
+
     public List<HealthCheckResult> PerformChecks()
     {
-        var results = new List<HealthCheckResult>();
-        foreach (var check in _healthChecks)
+        lock (_cacheLock)
         {
-            try
+            if (_cachedResults != null && DateTime.UtcNow - _lastRunTimeUtc < _cacheDuration)
             {
-                var result = check.Check();
-                if (result.Type != HealthCheckResultType.Ok)
-                {
-                    _logger.Warn("Health check {0}: {1}", result.Source, result.Message);
-                }
-
-                results.Add(result);
+                return _cachedResults.ToList();
             }
-            catch (Exception ex)
+
+            var results = new List<HealthCheckResult>();
+            foreach (var check in _healthChecks)
             {
                 var checkName = check.GetType().Name;
-                _logger.Error(ex, "Health check {0} threw an unhandled exception", checkName);
-                results.Add(HealthCheckResult.Error(checkName, $"Health check failed with exception: {ex.Message}"));
+                try
+                {
+                    var task = Task.Run(() => check.Check());
+                    if (task.Wait(_checkTimeout))
+                    {
+                        results.Add(task.Result);
+                    }
+                    else
+                    {
+                        results.Add(HealthCheckResult.Error(checkName, "Health check timed out"));
+                    }
+                }
+                catch (AggregateException aex)
+                {
+                    var inner = aex.InnerExceptions.Count == 1 ? aex.InnerExceptions[0] : aex;
+                    _logger.Debug(inner, "Health check {0} threw an exception", checkName);
+                    results.Add(HealthCheckResult.Error(checkName, $"Health check failed with exception: {inner.Message}"));
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Health check {0} threw an unhandled exception", checkName);
+                    results.Add(HealthCheckResult.Error(checkName, $"Health check failed with exception: {ex.Message}"));
+                }
             }
-        }
 
-        foreach (var result in results)
+            foreach (var result in results)
+            {
+                var source = result.Source ?? string.Empty;
+                var isDegraded = IsDegraded(result.Type);
+
+                if (_previousResults.TryGetValue(source, out var previousType))
+                {
+                    var wasDegraded = IsDegraded(previousType);
+
+                    if (previousType != result.Type)
+                    {
+                        LogStatus(result);
+                    }
+
+                    if (!wasDegraded && isDegraded)
+                    {
+                        _eventAggregator?.PublishEvent(new HealthIssueEvent((Torrent)null, result.Source, result.Message, isResolved: false));
+                    }
+                    else if (wasDegraded && !isDegraded)
+                    {
+                        _eventAggregator?.PublishEvent(new HealthIssueEvent((Torrent)null, result.Source, result.Message, isResolved: true));
+                    }
+                }
+                else
+                {
+                    LogStatus(result);
+
+                    if (isDegraded)
+                    {
+                        _eventAggregator?.PublishEvent(new HealthIssueEvent((Torrent)null, result.Source, result.Message, isResolved: false));
+                    }
+                }
+
+                _previousResults[source] = result.Type;
+            }
+
+            _cachedResults = results.ToList();
+            _lastRunTimeUtc = DateTime.UtcNow;
+            return results;
+        }
+    }
+
+    private void LogStatus(HealthCheckResult result)
+    {
+        if (result.Type == HealthCheckResultType.Warning)
         {
-            var source = result.Source ?? string.Empty;
-            var isDegraded = IsDegraded(result.Type);
-
-            if (_previousResults.TryGetValue(source, out var previousType))
-            {
-                var wasDegraded = IsDegraded(previousType);
-
-                if (!wasDegraded && isDegraded)
-                {
-                    _eventAggregator?.PublishEvent(new HealthIssueEvent((Torrent)null, result.Source, result.Message, isResolved: false));
-                }
-                else if (wasDegraded && !isDegraded)
-                {
-                    _eventAggregator?.PublishEvent(new HealthIssueEvent((Torrent)null, result.Source, result.Message, isResolved: true));
-                }
-            }
-            else
-            {
-                if (isDegraded)
-                {
-                    _eventAggregator?.PublishEvent(new HealthIssueEvent((Torrent)null, result.Source, result.Message, isResolved: false));
-                }
-            }
-
-            _previousResults[source] = result.Type;
+            _logger.Warn("Health check {0}: {1}", result.Source, result.Message);
         }
-
-        return results;
+        else if (result.Type == HealthCheckResultType.Error)
+        {
+            _logger.Error("Health check {0}: {1}", result.Source, result.Message);
+        }
     }
 
     private static bool IsDegraded(HealthCheckResultType type) =>
