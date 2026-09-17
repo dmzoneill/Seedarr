@@ -1680,6 +1680,14 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
             using (reservation)
             {
+                if (!_connectionManager.TryAdd(connection, reservation))
+                {
+                    _logger.Debug("Failed to add inbound connection for {0}", connection.InfoHash);
+                    return;
+                }
+
+                addedToConnectionManager = true;
+
                 if (!string.IsNullOrEmpty(torrent.InfoHash))
                 {
                     _torrentCache[torrent.InfoHash] = torrent;
@@ -1738,14 +1746,6 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
                     connection.AmChoking = false;
                 }
-
-                if (!_connectionManager.TryAdd(connection, reservation))
-                {
-                    _logger.Debug("Failed to add inbound connection for {0}", connection.InfoHash);
-                    return;
-                }
-
-                addedToConnectionManager = true;
 
                 while (connection.IsConnected && !stoppingToken.IsCancellationRequested)
                 {

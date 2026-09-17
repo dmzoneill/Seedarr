@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -642,10 +643,9 @@ public static class NotificationPayloadBuilder
             }
         }
 
-        var prop = payload.GetType().GetProperty("ErrorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                   ?? payload.GetType().GetProperty("errorMessage", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                   ?? payload.GetType().GetProperty("Message", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase)
-                   ?? payload.GetType().GetProperty("message", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        var prop = payload.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .FirstOrDefault(p => string.Equals(p.Name, "ErrorMessage", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(p.Name, "Message", StringComparison.OrdinalIgnoreCase));
         var value = prop?.GetValue(payload)?.ToString();
 
         return string.IsNullOrWhiteSpace(value) ? fallback : value;

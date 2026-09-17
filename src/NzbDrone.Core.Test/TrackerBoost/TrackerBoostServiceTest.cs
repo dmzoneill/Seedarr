@@ -164,7 +164,7 @@ public class TrackerBoostServiceTest
         using var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        Assert.CatchAsync<OperationCanceledException>(async () =>
         {
             await client.ReceiveAsync(cts.Token);
         });

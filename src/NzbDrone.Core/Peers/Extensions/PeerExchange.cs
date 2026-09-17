@@ -203,7 +203,7 @@ public class PeerExchange : IPeerExchange
             return Array.Empty<byte>();
         }
 
-        var maxPeers = _configService.PexMaxPeersPerMessage;
+        var maxPeers = _configService != null && _configService.PexMaxPeersPerMessage > 0 ? _configService.PexMaxPeersPerMessage : 50;
         var cappedAdded = added.Count > maxPeers ? added.Take(maxPeers).ToList() : added;
         var cappedDropped = dropped.Count > maxPeers ? dropped.Take(maxPeers).ToList() : dropped;
 

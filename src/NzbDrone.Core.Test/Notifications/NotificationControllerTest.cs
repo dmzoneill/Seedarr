@@ -623,7 +623,7 @@ public class NotificationControllerTest
             Id = 5,
             Name = "Webhook",
             Implementation = "Webhook",
-            Settings = "{\"url\":\"https://webhook.example.com/api?token=REAL_SECRET_TOKEN\"}"
+            Settings = "{\"url\":\"https://93.184.216.34/api?token=REAL_SECRET_TOKEN\"}"
         };
         _repository.Get(5).Returns(existing);
 
@@ -637,7 +637,7 @@ public class NotificationControllerTest
             OnSeedGoalReached = true,
             Categories = new List<string> { "Anime", "Documentary" },
             Tags = new List<int> { 5 },
-            Settings = "{\"url\":\"https://webhook.example.com/api?token=********\"}"
+            Settings = "{\"url\":\"https://93.184.216.34/api?token=********\"}"
         };
 
         var result = await _controller.TestDirect(testResource);

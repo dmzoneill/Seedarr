@@ -314,7 +314,7 @@ public class StreamingPiecePicker : IPiecePicker
         }
 
         // 2. Lookahead buffer window: [urgentEnd, head + LookaheadWindowSize)
-        var lookaheadLength = lookaheadWindow > 0 ? lookaheadWindow : LookaheadWindowSize;
+        var lookaheadLength = LookaheadWindowSize;
         var lookaheadEnd = Math.Min(head + lookaheadLength, pieceCount);
         var lookaheadCandidates = new List<int>();
         for (var i = urgentEnd; i < lookaheadEnd; i++)

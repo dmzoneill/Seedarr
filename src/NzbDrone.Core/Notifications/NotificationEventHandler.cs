@@ -185,7 +185,6 @@ public class NotificationEventHandler :
             Source = message.Source,
             Message = message.Message,
             ErrorMessage = message.Message,
-            errorMessage = message.Message,
             IsResolved = message.IsResolved,
             Timestamp = DateTime.UtcNow,
         };
@@ -259,7 +258,6 @@ public class NotificationEventHandler :
             BackupType = message.Type.ToString(),
             Message = $"Seedarr backup failed: {errorMsg}",
             ErrorMessage = errorMsg,
-            errorMessage = errorMsg,
             Timestamp = DateTime.UtcNow,
         };
 

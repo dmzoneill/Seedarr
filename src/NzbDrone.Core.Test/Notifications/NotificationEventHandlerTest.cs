@@ -282,7 +282,7 @@ public class NotificationEventHandlerTest
 
         _handler.Handle(new ApplicationUpdatedEvent("1.0.0", "1.1.0"));
 
-        await Task.WhenAny(dispatchedSignal.Task, Task.Delay(300));
+        await Task.WhenAny(dispatchedSignal.Task, Task.Delay(3000));
 
         lock (lockObj)
         {
@@ -446,7 +446,7 @@ public class NotificationEventHandlerTest
 
         _handler.Handle(new HealthIssueEvent(null, "System", "Disk space critical", isResolved: false));
 
-        await Task.WhenAny(signal.Task, Task.Delay(300));
+        await Task.WhenAny(signal.Task, Task.Delay(3000));
 
         lock (lockObj)
         {

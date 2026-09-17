@@ -316,33 +316,36 @@ public class PeerConnectionLogController : Controller
                     });
                 }
 
-                var trackerPeers = _peerDatabase.GetPeers(unnormalizedHash);
-                foreach (var peer in trackerPeers)
+                var trackerPeers = _peerDatabase.GetPeers(unnormalizedHash) ?? _peerDatabase.GetPeers(hash);
+                if (trackerPeers != null)
                 {
-                    var peerKey = $"{peer.Ip}:{peer.Port}:{hash}";
-                    if (disconnectedPeers.Contains(peerKey))
+                    foreach (var peer in trackerPeers)
                     {
-                        continue;
-                    }
-
-                    if (seenPeers.Add(peerKey))
-                    {
-                        nodes.Add(new PeerGraphNode
+                        var peerKey = $"{peer.Ip}:{peer.Port}:{hash}";
+                        if (disconnectedPeers.Contains(peerKey))
                         {
-                            Id = $"peer:{peer.Ip}:{peer.Port}:{hash}",
-                            Label = peer.Ip,
-                            Type = "peer",
-                            InfoHash = hash,
-                            IsEncrypted = false,
-                            IsActive = true,
-                        });
+                            continue;
+                        }
 
-                        links.Add(new PeerGraphLink
+                        if (seenPeers.Add(peerKey))
                         {
-                            Source = $"torrent:{hash}",
-                            Target = $"peer:{peer.Ip}:{peer.Port}:{hash}",
-                            Type = "plain",
-                        });
+                            nodes.Add(new PeerGraphNode
+                            {
+                                Id = $"peer:{peer.Ip}:{peer.Port}:{hash}",
+                                Label = peer.Ip,
+                                Type = "peer",
+                                InfoHash = hash,
+                                IsEncrypted = false,
+                                IsActive = true,
+                            });
+
+                            links.Add(new PeerGraphLink
+                            {
+                                Source = $"torrent:{hash}",
+                                Target = $"peer:{peer.Ip}:{peer.Port}:{hash}",
+                                Type = "plain",
+                            });
+                        }
                     }
                 }
             }
