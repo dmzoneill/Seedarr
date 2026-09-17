@@ -87,6 +87,8 @@ public class AutomationExecutionResult
 
     public string? Error { get; set; }
 
+    public List<string> Warnings { get; set; } = new();
+
     public long ExecutionTimeMs { get; set; }
 
     public List<string> TagsToAdd { get; set; } = new();

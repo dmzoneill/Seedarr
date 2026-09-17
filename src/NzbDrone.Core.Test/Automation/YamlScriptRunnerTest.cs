@@ -78,4 +78,103 @@ public class YamlScriptRunnerTest
         Assert.That(result.ShouldRecheck, Is.True);
         Assert.That(result.ShouldReannounce, Is.True);
     }
+
+    [Test]
+    public void ShouldContinueExecutingSubsequentStepsWhenContinueOnErrorIsTrue()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Test Torrent",
+        };
+
+        var yaml = "name: 'Fault Tolerant Pipeline'\n" +
+                   "steps:\n" +
+                   "  - name: 'Failing Step'\n" +
+                   "    continueOnError: true\n" +
+                   "    actions:\n" +
+                   "      - fail: 'Transient error'\n" +
+                   "  - name: 'Recovery Step'\n" +
+                   "    actions:\n" +
+                   "      - addTag: 'Recovered'\n";
+
+        var script = new AutomationScript
+        {
+            Name = "Fault Tolerant Script",
+            Code = yaml,
+            Language = AutomationLanguage.Yaml,
+        };
+
+        var result = _runner.Execute(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.TagsToAdd, Contains.Item("Recovered"));
+        Assert.That(result.Warnings.Count, Is.GreaterThan(0));
+        Assert.That(result.Warnings[0], Does.Contain("Transient error"));
+    }
+
+    [Test]
+    public void ShouldAbortWorkflowWhenStepFailsAndContinueOnErrorIsFalse()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Test Torrent",
+        };
+
+        var yaml = "name: 'Strict Pipeline'\n" +
+                   "steps:\n" +
+                   "  - name: 'Failing Step'\n" +
+                   "    continueOnError: false\n" +
+                   "    actions:\n" +
+                   "      - fail: 'Critical error'\n" +
+                   "  - name: 'Unreachable Step'\n" +
+                   "    actions:\n" +
+                   "      - addTag: 'NeverAdded'\n";
+
+        var script = new AutomationScript
+        {
+            Name = "Strict Script",
+            Code = yaml,
+            Language = AutomationLanguage.Yaml,
+        };
+
+        var result = _runner.Execute(script, torrent);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.TagsToAdd, Does.Not.Contain("NeverAdded"));
+        Assert.That(result.Error, Does.Contain("Critical error"));
+    }
+
+    [Test]
+    public void ShouldRetryStepUpToRetriesCount()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Test Torrent",
+        };
+
+        var yaml = "name: 'Retry Pipeline'\n" +
+                   "steps:\n" +
+                   "  - name: 'Retryable Step'\n" +
+                   "    continueOnError: true\n" +
+                   "    retries: 2\n" +
+                   "    actions:\n" +
+                   "      - fail: 'Intermittent failure'\n";
+
+        var script = new AutomationScript
+        {
+            Name = "Retry Script",
+            Code = yaml,
+            Language = AutomationLanguage.Yaml,
+        };
+
+        var result = _runner.Execute(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.OutputLog, Does.Contain("attempt 1/3"));
+        Assert.That(result.OutputLog, Does.Contain("attempt 2/3"));
+        Assert.That(result.OutputLog, Does.Contain("failed after 3 attempt(s)"));
+    }
 }

@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Configuration;
@@ -18,6 +19,12 @@ namespace NzbDrone.Core.Automation;
 public class AutomationService : IAutomationService
 {
     public const int MaxPersistedLogCharacters = 32768;
+    public const int MaxExecutionDepth = 3;
+
+    private static readonly AsyncLocal<int> _executionDepth = new();
+    private static readonly AsyncLocal<HashSet<string>?> _activeCallChain = new();
+
+    public static int CurrentExecutionDepth => _executionDepth.Value;
 
     private readonly IAutomationScriptRepository _scriptRepository;
     private readonly ITorrentRepository _torrentRepository;
@@ -113,113 +120,161 @@ public class AutomationService : IAutomationService
 
     public AutomationExecutionResult ExecuteScript(AutomationScript script, Torrent? torrent = null, Dictionary<string, object>? customInputs = null)
     {
-        _logger.Info("Executing automation script '{0}' (Trigger: {1}, Language: {2})", script.Name, script.Trigger, script.Language);
-
-        var torrentTags = new List<string>();
-        if (torrent != null && torrent.TagIds != null && torrent.TagIds.Count > 0)
+        var currentDepth = _executionDepth.Value;
+        if (currentDepth >= MaxExecutionDepth)
         {
-            var allTags = _tagService.GetAll();
-            var tagMap = allTags.ToDictionary(t => t.Id, t => t.Label);
-            foreach (var tid in torrent.TagIds)
+            _logger.Warn("Automation execution recursion depth limit ({0}) exceeded for script '{1}'. Aborting execution to prevent infinite cascade.", MaxExecutionDepth, script.Name);
+            return new AutomationExecutionResult
             {
-                if (tagMap.TryGetValue(tid, out var label))
+                Success = false,
+                Error = $"Recursion depth limit ({MaxExecutionDepth}) exceeded for script '{script.Name}'.",
+                OutputLog = $"[WARN] Recursion depth limit ({MaxExecutionDepth}) exceeded. Execution aborted.",
+            };
+        }
+
+        var parentChain = _activeCallChain.Value;
+        var chain = parentChain != null
+            ? new HashSet<string>(parentChain, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var scriptKey = script.Id > 0 ? script.Id.ToString() : (script.Name ?? "unnamed");
+        var callKey = torrent != null ? $"{scriptKey}:torrent_{torrent.Id}" : $"{scriptKey}:global";
+
+        if (chain.Contains(callKey))
+        {
+            _logger.Warn(
+                "Reentrancy detected: Script '{0}' (ID: {1}) is already executing for {2} in active call chain. Aborting execution.",
+                script.Name,
+                script.Id,
+                torrent != null ? $"torrent {torrent.Id}" : "global entity");
+
+            return new AutomationExecutionResult
+            {
+                Success = false,
+                Error = $"Reentrancy detected: Script '{script.Name}' is already executing in active call chain.",
+                OutputLog = $"[WARN] Reentrancy detected for script '{script.Name}'. Execution aborted.",
+            };
+        }
+
+        chain.Add(callKey);
+        _activeCallChain.Value = chain;
+        _executionDepth.Value = currentDepth + 1;
+
+        try
+        {
+            _logger.Info("Executing automation script '{0}' (Trigger: {1}, Language: {2})", script.Name, script.Trigger, script.Language);
+
+            var torrentTags = new List<string>();
+            if (torrent != null && torrent.TagIds != null && torrent.TagIds.Count > 0)
+            {
+                var allTags = _tagService.GetAll();
+                var tagMap = allTags.ToDictionary(t => t.Id, t => t.Label);
+                foreach (var tid in torrent.TagIds)
                 {
-                    torrentTags.Add(label);
+                    if (tagMap.TryGetValue(tid, out var label))
+                    {
+                        torrentTags.Add(label);
+                    }
                 }
             }
-        }
 
-        IScriptRunner runner = script.Language == AutomationLanguage.Yaml ? _yamlRunner : _jintRunner;
-        var result = runner.Execute(script, torrent, torrentTags, customInputs);
+            IScriptRunner runner = script.Language == AutomationLanguage.Yaml ? _yamlRunner : _jintRunner;
+            var result = runner.Execute(script, torrent, torrentTags, customInputs);
 
-        // Apply mutations if torrent is present and execution was successful
-        if (result.Success && torrent != null)
-        {
-            ApplyTorrentMutations(torrent, result);
-        }
-
-        // Side-effects: Servarr Sync
-        if (result.Success && result.ArrSyncsToSend.Count > 0 && _commandQueue != null)
-        {
-            foreach (var sync in result.ArrSyncsToSend)
+            // Apply mutations if torrent is present and execution was successful
+            if (result.Success && torrent != null)
             {
-                _commandQueue.PushRaw("SyncArr", "{}", CommandTrigger.Manual);
+                ApplyTorrentMutations(torrent, result);
             }
-        }
 
-        // Side-effects: Custom scripts to run
-        if (result.Success && result.ScriptsToRun.Count > 0 && _customScriptService != null)
-        {
-            foreach (var scriptToRun in result.ScriptsToRun)
+            // Side-effects: Servarr Sync
+            if (result.Success && result.ArrSyncsToSend.Count > 0 && _commandQueue != null)
             {
-                var argsStr = scriptToRun.Arguments != null && scriptToRun.Arguments.Count > 0
-                    ? string.Join(" ", scriptToRun.Arguments)
-                    : null;
-                Task.Run(async () =>
+                foreach (var sync in result.ArrSyncsToSend)
                 {
-                    try
-                    {
-                        await _customScriptService.ExecuteScriptAsync(scriptToRun.Path, torrent, "Automation", argsStr).ConfigureAwait(false);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.Error(ex, "Failed to execute custom script from automation: {0}", scriptToRun.Path);
-                    }
-                });
+                    _commandQueue.PushRaw("SyncArr", "{}", CommandTrigger.Manual);
+                }
             }
-        }
 
-        // Side-effects: Notifications to send
-        if (result.Success && result.NotificationsToSend.Count > 0 && _notificationRepository != null && _webhookDispatcher != null)
-        {
-            var activeNotifications = _notificationRepository.GetEnabled();
-            foreach (var notif in result.NotificationsToSend)
+            // Side-effects: Custom scripts to run
+            if (result.Success && result.ScriptsToRun.Count > 0 && _customScriptService != null)
             {
-                var matching = string.IsNullOrWhiteSpace(notif.Provider)
-                    ? activeNotifications
-                    : activeNotifications.Where(n =>
-                        string.Equals(n.Implementation, notif.Provider, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(n.Name, notif.Provider, StringComparison.OrdinalIgnoreCase)).ToList();
-
-                foreach (var n in matching)
+                foreach (var scriptToRun in result.ScriptsToRun)
                 {
-                    var targetUrl = NotificationPayloadBuilder.ResolveTargetUrl(n.Implementation, n.Settings);
-                    var customHeaders = NotificationPayloadBuilder.ResolveCustomHeaders(n.Implementation, n.Settings);
-                    var payload = NotificationPayloadBuilder.BuildProviderPayload(n.Implementation, "Automation", torrent, null, new { title = notif.Title, message = notif.Message }, n.Settings);
-
+                    var argsStr = scriptToRun.Arguments != null && scriptToRun.Arguments.Count > 0
+                        ? string.Join(" ", scriptToRun.Arguments)
+                        : null;
                     Task.Run(async () =>
                     {
                         try
                         {
-                            await _webhookDispatcher.DispatchAsync(targetUrl, payload, customHeaders).ConfigureAwait(false);
+                            await _customScriptService.ExecuteScriptAsync(scriptToRun.Path, torrent, "Automation", argsStr).ConfigureAwait(false);
                         }
                         catch (Exception ex)
                         {
-                            _logger.Error(ex, "Failed to dispatch automation notification via {0}", n.Implementation);
+                            _logger.Error(ex, "Failed to execute custom script from automation: {0}", scriptToRun.Path);
                         }
                     });
                 }
             }
+
+            // Side-effects: Notifications to send
+            if (result.Success && result.NotificationsToSend.Count > 0 && _notificationRepository != null && _webhookDispatcher != null)
+            {
+                var activeNotifications = _notificationRepository.GetEnabled();
+                foreach (var notif in result.NotificationsToSend)
+                {
+                    var matching = string.IsNullOrWhiteSpace(notif.Provider)
+                        ? activeNotifications
+                        : activeNotifications.Where(n =>
+                            string.Equals(n.Implementation, notif.Provider, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(n.Name, notif.Provider, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                    foreach (var n in matching)
+                    {
+                        var targetUrl = NotificationPayloadBuilder.ResolveTargetUrl(n.Implementation, n.Settings);
+                        var customHeaders = NotificationPayloadBuilder.ResolveCustomHeaders(n.Implementation, n.Settings);
+                        var payload = NotificationPayloadBuilder.BuildProviderPayload(n.Implementation, "Automation", torrent, null, new { title = notif.Title, message = notif.Message }, n.Settings);
+
+                        Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _webhookDispatcher.DispatchAsync(targetUrl, payload, customHeaders).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(ex, "Failed to dispatch automation notification via {0}", n.Implementation);
+                            }
+                        });
+                    }
+                }
+            }
+
+            // Record execution stats on script
+            script.LastExecutedAt = DateTime.UtcNow;
+            script.LastExecutionStatus = result.Success ? "Success" : "Failed";
+            script.LastExecutionLog = TruncateExecutionLog(result.OutputLog ?? result.Error);
+
+            if (script.Id > 0)
+            {
+                try
+                {
+                    _scriptRepository.Update(script);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Warn(ex, "Failed to update last execution stats for script {0}", script.Name);
+                }
+            }
+
+            return result;
         }
-
-        // Record execution stats on script
-        script.LastExecutedAt = DateTime.UtcNow;
-        script.LastExecutionStatus = result.Success ? "Success" : "Failed";
-        script.LastExecutionLog = TruncateExecutionLog(result.OutputLog ?? result.Error);
-
-        if (script.Id > 0)
+        finally
         {
-            try
-            {
-                _scriptRepository.Update(script);
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn(ex, "Failed to update last execution stats for script {0}", script.Name);
-            }
+            _executionDepth.Value = currentDepth;
+            _activeCallChain.Value = parentChain;
         }
-
-        return result;
     }
 
     public AutomationExecutionResult TestScript(AutomationScript script, int? torrentId = null, Dictionary<string, object>? customInputs = null)
