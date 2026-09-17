@@ -153,7 +153,9 @@ public class SimulationIntegrationTest
             Status = TorrentStatus.Seeding,
             TotalSize = 10_000_000,
             Uploaded = 0,
-            Priority = 1
+            Priority = 1,
+            Leechers = 10,
+            SeedingTime = 300
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
@@ -174,7 +176,9 @@ public class SimulationIntegrationTest
             Status = TorrentStatus.Seeding,
             TotalSize = 10_000_000,
             Uploaded = 0,
-            Priority = 1
+            Priority = 1,
+            Leechers = 10,
+            SeedingTime = 300
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
@@ -195,7 +199,9 @@ public class SimulationIntegrationTest
             Status = TorrentStatus.Seeding,
             TotalSize = 10_000_000,
             Uploaded = 0,
-            Priority = 1
+            Priority = 1,
+            Leechers = 10,
+            SeedingTime = 300
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
@@ -216,7 +222,8 @@ public class SimulationIntegrationTest
             TotalSize = 10_000_000,
             Uploaded = 0,
             Priority = 1,
-            Availability = 0.5
+            Availability = 0.5,
+            SeedingTime = 300
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
         _peerDatabase.GetStats("rarehash").Returns(new global::NzbDrone.Core.TrackerServer.ScrapeStats { Complete = 1, Incomplete = 10 });
@@ -241,7 +248,8 @@ public class SimulationIntegrationTest
             TotalSize = 10_000_000,
             Uploaded = 0,
             Priority = 1,
-            Availability = 4.0
+            Availability = 4.0,
+            SeedingTime = 300
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
         _peerDatabase.GetStats("oversaturated").Returns(new global::NzbDrone.Core.TrackerServer.ScrapeStats { Complete = 50, Incomplete = 2 });
@@ -266,7 +274,8 @@ public class SimulationIntegrationTest
             TotalSize = 10_000_000,
             Uploaded = 0,
             Priority = 1,
-            Availability = 0.5
+            Availability = 0.5,
+            SeedingTime = 300
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
         _peerDatabase.GetStats("rarehash").Returns(new global::NzbDrone.Core.TrackerServer.ScrapeStats { Complete = 1, Incomplete = 10 });
@@ -287,7 +296,9 @@ public class SimulationIntegrationTest
             InfoHash = "abc1234",
             Status = TorrentStatus.Seeding,
             TotalSize = 10_000_000,
-            Uploaded = 0
+            Uploaded = 0,
+            Leechers = 10,
+            SeedingTime = 300
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
@@ -311,7 +322,9 @@ public class SimulationIntegrationTest
             InfoHash = "abc1234",
             Status = TorrentStatus.Seeding,
             TotalSize = 10_000_000,
-            Uploaded = 0
+            Uploaded = 0,
+            Leechers = 10,
+            SeedingTime = 300
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
@@ -336,7 +349,9 @@ public class SimulationIntegrationTest
             Status = TorrentStatus.Seeding,
             TotalSize = 10_000_000,
             Uploaded = 0,
-            Priority = 1
+            Priority = 1,
+            Leechers = 10,
+            SeedingTime = 300
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
@@ -359,7 +374,9 @@ public class SimulationIntegrationTest
             Status = TorrentStatus.Seeding,
             TotalSize = 10_000_000,
             Uploaded = 0,
-            Priority = 1
+            Priority = 1,
+            Leechers = 10,
+            SeedingTime = 300
         };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 

@@ -198,7 +198,9 @@ public class SpeedPolicyTest
             Status = TorrentStatus.Seeding,
             Uploaded = 0,
             TotalSize = 1000,
-            Progress = 1.0
+            Progress = 1.0,
+            Leechers = 10,
+            SeedingTime = 300
         };
         var torrents = new List<Torrent> { torrent };
 
@@ -223,7 +225,9 @@ public class SpeedPolicyTest
             UploadLimit = 0, // Unconfigured, inherits category
             Uploaded = 0,
             TotalSize = 10_000_000,
-            Progress = 1.0
+            Progress = 1.0,
+            Leechers = 10,
+            SeedingTime = 300
         };
         var torrents = new List<Torrent> { torrent };
 
@@ -253,7 +257,9 @@ public class SpeedPolicyTest
             UploadLimit = -1, // Explicitly unlimited override
             Uploaded = 0,
             TotalSize = 10_000_000,
-            Progress = 1.0
+            Progress = 1.0,
+            Leechers = 100,
+            SeedingTime = 300
         };
         var torrents = new List<Torrent> { torrent };
 
@@ -284,7 +290,9 @@ public class SpeedPolicyTest
             UploadLimit = 20, // 20 KB/s override
             Uploaded = 0,
             TotalSize = 10_000_000,
-            Progress = 1.0
+            Progress = 1.0,
+            Leechers = 10,
+            SeedingTime = 300
         };
         var torrents = new List<Torrent> { torrent };
 
@@ -531,6 +539,7 @@ public class SpeedPolicyTest
             Progress = 1.0,
             Seeders = 5,
             Leechers = 2,
+            SeedingTime = 300,
             TagIds = new List<int> { 1 }
         };
         var torrents = new List<Torrent> { torrent };
@@ -543,5 +552,146 @@ public class SpeedPolicyTest
         _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
 
         Assert.That(torrent.Uploaded, Is.EqualTo(75 * 1024));
+    }
+
+    [Test]
+    public void CalculateEffectiveUploadSpeed_when_torrent_has_zero_leechers_returns_zero()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Leechers = 0,
+            SeedingTime = 300
+        };
+
+        var speed = _subject.CalculateEffectiveUploadSpeed(torrent, 50_000_000);
+
+        Assert.That(speed, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void CalculateEffectiveUploadSpeed_when_torrent_has_one_leecher_clamps_to_per_leecher_ceiling()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Leechers = 1,
+            SeedingTime = 300
+        };
+
+        var speed = _subject.CalculateEffectiveUploadSpeed(torrent, 50_000_000);
+
+        Assert.That(speed, Is.EqualTo(SpeedPolicy.DefaultMaxUploadPerLeecherBps));
+    }
+
+    [Test]
+    public void CalculateEffectiveUploadSpeed_during_warmup_phase_scales_speed_and_reaches_full_speed_after_window()
+    {
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Leechers = 10,
+            SeedingTime = 0
+        };
+
+        // At 30 seconds after start:
+        // rampFactor = Math.Clamp(30.0 / 180.0, 0.05, 1.0) = 1.0 / 6.0
+        // targetSpeed = 6_000_000 (well within 10 * 2.5MB/s = 25MB/s ceiling)
+        _subject.SetSeedingStartTime(torrent.Id, now.AddSeconds(-30));
+        var speedAt30s = _subject.CalculateEffectiveUploadSpeed(torrent, 6_000_000, now);
+        Assert.That(speedAt30s, Is.EqualTo(1_000_000));
+
+        // At 180 seconds after start:
+        // rampFactor = 1.0 (100%)
+        _subject.SetSeedingStartTime(torrent.Id, now.AddSeconds(-180));
+        var speedAt180s = _subject.CalculateEffectiveUploadSpeed(torrent, 6_000_000, now);
+        Assert.That(speedAt180s, Is.EqualTo(6_000_000));
+    }
+
+    [Test]
+    public void ComputeUploadSpeed_is_alias_for_CalculateEffectiveUploadSpeed()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Leechers = 0
+        };
+
+        Assert.That(_subject.ComputeUploadSpeed(torrent, 10_000), Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ResetSeedingStartTime_clears_tracked_start_time()
+    {
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Leechers = 10,
+            SeedingTime = 0
+        };
+
+        _subject.SetSeedingStartTime(torrent.Id, now.AddSeconds(-30));
+        var speedWarmUp = _subject.CalculateEffectiveUploadSpeed(torrent, 6_000_000, now);
+        Assert.That(speedWarmUp, Is.EqualTo(1_000_000));
+
+        _subject.ResetSeedingStartTime(torrent.Id);
+
+        // When not tracked and SeedingTime == 0, returns unscaled clamped ceiling
+        var speedAfterReset = _subject.CalculateEffectiveUploadSpeed(torrent, 6_000_000, now);
+        Assert.That(speedAfterReset, Is.EqualTo(6_000_000));
+    }
+
+    [Test]
+    public void EventHandlers_reset_seeding_start_time_on_status_change_paused_or_deleted()
+    {
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Paused,
+            Leechers = 10,
+            SeedingTime = 0
+        };
+
+        _subject.SetSeedingStartTime(torrent.Id, now.AddSeconds(-30));
+        _subject.Handle(new TorrentPausedEvent(torrent));
+        Assert.That(_subject.CalculateEffectiveUploadSpeed(torrent, 6_000_000, now), Is.EqualTo(6_000_000));
+
+        _subject.SetSeedingStartTime(torrent.Id, now.AddSeconds(-30));
+        _subject.Handle(new TorrentStatusChangedEvent(torrent, TorrentStatus.Seeding, TorrentStatus.Stopped));
+        Assert.That(_subject.CalculateEffectiveUploadSpeed(torrent, 6_000_000, now), Is.EqualTo(6_000_000));
+
+        _subject.SetSeedingStartTime(torrent.Id, now.AddSeconds(-30));
+        _subject.Handle(new TorrentDeletedEvent(torrent.Id, torrent));
+        Assert.That(_subject.CalculateEffectiveUploadSpeed(torrent, 6_000_000, now), Is.EqualTo(6_000_000));
+    }
+
+    [Test]
+    public void ProcessSeeding_when_zero_leechers_without_swarm_intelligence_accumulates_zero_bytes()
+    {
+        _configService.SwarmIntelligenceEnabled.Returns(false);
+
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Seeders = 5,
+            Leechers = 0,
+            SeedingTime = 300
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Uploaded, Is.EqualTo(0));
     }
 }
