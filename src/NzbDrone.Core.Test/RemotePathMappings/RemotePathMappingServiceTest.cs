@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using NzbDrone.Core.RemotePathMappings;
@@ -269,5 +270,147 @@ public class RemotePathMappingServiceTest
         Assert.That(result.RuleApplied, Is.True);
         Assert.That(result.MappedPath, Is.EqualTo("/remote/torrents/sub/file.mkv"));
         Assert.That(result.MatchedRuleId, Is.EqualTo(mapping.Id));
+    }
+
+    [Test]
+    public void IsPathPrefixMatch_enforces_segment_boundary_correctly()
+    {
+        // Boundary non-matches
+        Assert.That(RemotePathMappingService.IsPathPrefixMatch("/downloads_movies/Avatar.mkv", "/downloads", StringComparison.Ordinal), Is.False);
+        Assert.That(RemotePathMappingService.IsPathPrefixMatch(@"D:\Downloads_Extra\Avatar.mkv", @"D:\Downloads", StringComparison.OrdinalIgnoreCase), Is.False);
+
+        // Boundary matches
+        Assert.That(RemotePathMappingService.IsPathPrefixMatch("/downloads/Avatar.mkv", "/downloads", StringComparison.Ordinal), Is.True);
+        Assert.That(RemotePathMappingService.IsPathPrefixMatch("/downloads", "/downloads", StringComparison.Ordinal), Is.True);
+        Assert.That(RemotePathMappingService.IsPathPrefixMatch("/downloads/", "/downloads", StringComparison.Ordinal), Is.True);
+        Assert.That(RemotePathMappingService.IsPathPrefixMatch("/downloads/Avatar.mkv", "/downloads/", StringComparison.Ordinal), Is.True);
+        Assert.That(RemotePathMappingService.IsPathPrefixMatch(@"D:\Downloads\Avatar.mkv", @"D:\Downloads", StringComparison.OrdinalIgnoreCase), Is.True);
+    }
+
+    [Test]
+    public void Remap_preserves_unc_paths_in_both_directions()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "nas.local",
+            RemotePath = @"\\nas\share\downloads",
+            LocalPath = "/mnt/storage/downloads"
+        });
+
+        // Windows UNC to Linux POSIX
+        var toLinux = _service.Remap("nas.local", @"\\nas\share\downloads\movies\avatar.mkv");
+        Assert.That(toLinux, Is.EqualTo("/mnt/storage/downloads/movies/avatar.mkv"));
+
+        _service.Add(new RemotePathMapping
+        {
+            Host = "seedbox",
+            RemotePath = "/home/seedbox/downloads",
+            LocalPath = @"\\nas\share\seedbox"
+        });
+
+        // Linux POSIX to Windows UNC - must preserve leading double backslash
+        var toUnc = _service.Remap("seedbox", "/home/seedbox/downloads/linux/iso.img");
+        Assert.That(toUnc, Is.EqualTo(@"\\nas\share\seedbox\linux\iso.img"));
+    }
+
+    [Test]
+    public void Remap_normalizes_cross_platform_separators_without_hybrid_slashes()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "win-client",
+            RemotePath = @"D:\Torrents",
+            LocalPath = "/data/torrents"
+        });
+
+        // Windows to Linux: all slashes in tail should be forward slashes
+        var linuxResult = _service.Remap("win-client", @"D:\Torrents\Season 1\Episode 01\video.mkv");
+        Assert.That(linuxResult, Is.EqualTo("/data/torrents/Season 1/Episode 01/video.mkv"));
+        Assert.That(linuxResult.Contains('\\'), Is.False);
+
+        _service.Add(new RemotePathMapping
+        {
+            Host = "linux-client",
+            RemotePath = "/data/torrents",
+            LocalPath = @"C:\Media\Torrents"
+        });
+
+        // Linux to Windows: all slashes in tail should be backslashes
+        var winResult = _service.Remap("linux-client", "/data/torrents/Season 1/Episode 01/video.mkv");
+        Assert.That(winResult, Is.EqualTo(@"C:\Media\Torrents\Season 1\Episode 01\video.mkv"));
+        Assert.That(winResult.Contains('/'), Is.False);
+    }
+
+    [Test]
+    public void Remap_trailing_slash_invariance_produces_identical_results()
+    {
+        var serviceWithTrailing = new RemotePathMappingService();
+        serviceWithTrailing.Add(new RemotePathMapping
+        {
+            Host = "seedbox",
+            RemotePath = "/remote/downloads/",
+            LocalPath = "/local/downloads/"
+        });
+
+        var serviceWithoutTrailing = new RemotePathMappingService();
+        serviceWithoutTrailing.Add(new RemotePathMapping
+        {
+            Host = "seedbox",
+            RemotePath = "/remote/downloads",
+            LocalPath = "/local/downloads"
+        });
+
+        // Subpath without trailing slash
+        Assert.That(serviceWithTrailing.Remap("seedbox", "/remote/downloads/subfolder/file.mkv"),
+            Is.EqualTo(serviceWithoutTrailing.Remap("seedbox", "/remote/downloads/subfolder/file.mkv")));
+        Assert.That(serviceWithTrailing.Remap("seedbox", "/remote/downloads/subfolder/file.mkv"),
+            Is.EqualTo("/local/downloads/subfolder/file.mkv"));
+
+        // Subpath with trailing slash
+        Assert.That(serviceWithTrailing.Remap("seedbox", "/remote/downloads/subfolder/"),
+            Is.EqualTo(serviceWithoutTrailing.Remap("seedbox", "/remote/downloads/subfolder/")));
+        Assert.That(serviceWithTrailing.Remap("seedbox", "/remote/downloads/subfolder/"),
+            Is.EqualTo("/local/downloads/subfolder/"));
+
+        // Exact match without trailing slash
+        Assert.That(serviceWithTrailing.Remap("seedbox", "/remote/downloads"),
+            Is.EqualTo(serviceWithoutTrailing.Remap("seedbox", "/remote/downloads")));
+        Assert.That(serviceWithTrailing.Remap("seedbox", "/remote/downloads"),
+            Is.EqualTo("/local/downloads"));
+
+        // Exact match with trailing slash
+        Assert.That(serviceWithTrailing.Remap("seedbox", "/remote/downloads/"),
+            Is.EqualTo(serviceWithoutTrailing.Remap("seedbox", "/remote/downloads/")));
+        Assert.That(serviceWithTrailing.Remap("seedbox", "/remote/downloads/"),
+            Is.EqualTo("/local/downloads/"));
+    }
+
+    [Test]
+    public void Remap_respects_cross_platform_case_sensitivity()
+    {
+        // POSIX path input: case sensitive
+        _service.Add(new RemotePathMapping
+        {
+            Host = "posix-host",
+            RemotePath = "/media/downloads",
+            LocalPath = "/local/downloads"
+        });
+
+        var posixMatch = _service.Remap("posix-host", "/media/downloads/file.mkv");
+        Assert.That(posixMatch, Is.EqualTo("/local/downloads/file.mkv"));
+
+        var posixMismatch = _service.Remap("posix-host", "/Media/Downloads/file.mkv");
+        Assert.That(posixMismatch, Is.EqualTo("/Media/Downloads/file.mkv"));
+
+        // Windows path input: case insensitive
+        _service.Add(new RemotePathMapping
+        {
+            Host = "win-host",
+            RemotePath = @"D:\Media\Downloads",
+            LocalPath = "/local/downloads"
+        });
+
+        var winMatch = _service.Remap("win-host", @"d:\media\downloads\file.mkv");
+        Assert.That(winMatch, Is.EqualTo("/local/downloads/file.mkv"));
     }
 }
