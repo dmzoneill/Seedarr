@@ -8,6 +8,7 @@ using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding;
+using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers.Metrics;
 using NzbDrone.Core.Trackers.MultiTracker;
@@ -46,6 +47,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     private readonly ITrackerMetricService _trackerMetricService;
     private readonly IEventAggregator _eventAggregator;
     private readonly ITorrentService _torrentService;
+    private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
     private readonly Logger _logger;
 
     public TrackerAnnounceService(
@@ -56,7 +58,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         IConfigService configService,
         ITrackerMetricService trackerMetricService = null,
         IEventAggregator eventAggregator = null,
-        ITorrentService torrentService = null)
+        ITorrentService torrentService = null,
+        IClientBehaviorSimulator clientBehaviorSimulator = null)
     {
         _trackerEntryService = trackerEntryService;
         _multiTracker = multiTracker;
@@ -66,6 +69,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         _trackerMetricService = trackerMetricService;
         _eventAggregator = eventAggregator;
         _torrentService = torrentService;
+        _clientBehaviorSimulator = clientBehaviorSimulator;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -149,10 +153,16 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             "Tracker",
             $"Announcing to tracker: {entry.Url} (event: {eventName}, uploaded: {torrent.Uploaded:N0} bytes, left: {Math.Max(0, torrent.TotalSize - torrent.Downloaded):N0} bytes)");
 
+        var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+            ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
+            : null;
+        var peerId = session?.PeerId ?? "-SD1000-000000000000";
+
         var request = new TrackerAnnounceRequest
         {
             InfoHash = torrent.InfoHash,
-            PeerId = "-SD1000-000000000000",
+            PeerId = peerId,
+            Key = session?.AnnounceKey,
             Port = _configService.ListeningPort,
             Uploaded = torrent.Uploaded,
             Downloaded = torrent.Downloaded,

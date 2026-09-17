@@ -233,6 +233,7 @@ public class ConnectionManager : IConnectionManager,
         if (message?.Torrent != null && !string.IsNullOrWhiteSpace(message.Torrent.InfoHash))
         {
             DisconnectByInfoHash(message.Torrent.InfoHash);
+            _clientBehaviorSimulator?.ReleaseSession(message.Torrent.InfoHash);
         }
     }
 
@@ -255,6 +256,7 @@ public class ConnectionManager : IConnectionManager,
         if (!string.IsNullOrWhiteSpace(infoHash))
         {
             DisconnectByInfoHash(infoHash);
+            _clientBehaviorSimulator?.ReleaseSession(infoHash);
         }
     }
 

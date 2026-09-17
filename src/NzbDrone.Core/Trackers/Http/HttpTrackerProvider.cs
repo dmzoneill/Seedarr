@@ -211,6 +211,7 @@ public class HttpTrackerProvider : ITrackerProvider
         return $"{request.TrackerUrl}" +
             $"{sep}info_hash={escapedHash}" +
             $"&peer_id={escapedPeerId}" +
+            (string.IsNullOrEmpty(request.Key) ? "" : $"&key={HttpUtility.UrlEncode(request.Key)}") +
             $"&port={request.Port}" +
             $"&uploaded={request.Uploaded}" +
             $"&downloaded={request.Downloaded}" +

@@ -909,10 +909,13 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 return;
             }
 
-            var profile = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                ? _clientBehaviorSimulator.GetActiveProfile(torrent.IsPrivate)
+            var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
                 : null;
-            var peerId = profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+            var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
+                : null);
+            var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
             connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile);
 
             if (!connection.ReceiveHandshake())
@@ -1113,10 +1116,13 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 }
             }
 
-            var profile = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                ? _clientBehaviorSimulator.GetActiveProfile(torrent.IsPrivate)
+            var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
                 : null;
-            var peerId = profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+            var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
+                : null);
+            var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
             connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile);
 
             _logger.Debug(

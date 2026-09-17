@@ -13,6 +13,7 @@ public class TrackerAnnounceRequest
 {
     public string InfoHash { get; set; }
     public string PeerId { get; set; }
+    public string Key { get; set; }
     public int Port { get; set; }
     public long Uploaded { get; set; }
     public long Downloaded { get; set; }

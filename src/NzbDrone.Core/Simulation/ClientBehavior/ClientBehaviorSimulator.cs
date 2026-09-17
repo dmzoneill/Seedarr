@@ -1,22 +1,34 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Simulation.ClientBehavior.Profiles;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Simulation.ClientBehavior;
 
 public interface IClientBehaviorSimulator
 {
     IClientProfile GetActiveProfile(bool isPrivateTorrent = false);
+    TorrentClientSession GetOrCreateSession(string infoHash, bool isPrivateTorrent = false);
+    IClientProfile GetProfileForTorrent(string infoHash, bool isPrivateTorrent = false);
+    TorrentClientSession GetSession(string infoHash);
+    bool ReleaseSession(string infoHash);
+    void ReleaseAllSessions();
     bool IsEnabled { get; }
     double GetEffectiveDropoutProbability(double baseProbability);
     double GetEffectiveRotationPercentage(double basePercentage);
     double GetEffectiveIdleChance(double baseIdleChance);
 }
 
-public class ClientBehaviorSimulator : IClientBehaviorSimulator
+public class ClientBehaviorSimulator : IClientBehaviorSimulator,
+    IHandle<TorrentPausedEvent>,
+    IHandle<TorrentDeletedEvent>,
+    IHandle<TorrentStatusChangedEvent>
 {
     private static readonly IClientProfile FallbackProfile = new QBittorrentProfile();
 
@@ -25,6 +37,7 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator
     private readonly Logger _logger;
     private readonly IRandomNumberGenerator _random;
     private readonly object _lock = new object();
+    private readonly Dictionary<string, TorrentClientSession> _sessions = new(StringComparer.OrdinalIgnoreCase);
 
     private IClientProfile _currentProfile;
 
@@ -80,6 +93,139 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator
             }
 
             return _currentProfile ?? FallbackProfile;
+        }
+    }
+
+    public TorrentClientSession GetOrCreateSession(string infoHash, bool isPrivateTorrent = false)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            var fallbackProfile = GetActiveProfile(isPrivateTorrent);
+            return new TorrentClientSession
+            {
+                ProfileName = fallbackProfile?.Name ?? string.Empty,
+                PeerId = fallbackProfile?.GeneratePeerId() ?? "-SD1000-000000000000",
+                AnnounceKey = GenerateAnnounceKey(),
+                CreatedAt = DateTime.UtcNow,
+                Profile = fallbackProfile,
+            };
+        }
+
+        lock (_lock)
+        {
+            if (_sessions.TryGetValue(infoHash, out var existingSession))
+            {
+                return existingSession;
+            }
+
+            IClientProfile profile;
+
+            if (isPrivateTorrent)
+            {
+                _logger.Trace("Private torrent detected for session {0}: suppressing client identity rotation and locking to primary client", infoHash);
+                profile = GetDefaultProfile();
+            }
+            else if (!_configService.ClientBehaviorEngineEnabled)
+            {
+                _logger.Trace("Client behavior engine disabled for session {0}, returning default profile", infoHash);
+                profile = GetDefaultProfile();
+            }
+            else
+            {
+                if (_currentProfile == null)
+                {
+                    _currentProfile = ResolveProfileByName(_configService.PrimaryClient) ?? FallbackProfile;
+                    _logger.Debug("Initialized client profile: {0}", _currentProfile.Name);
+                }
+
+                if (_configService.ClientProfileSwitching)
+                {
+                    var switchProbability = _configService.SwitchClientProbability;
+
+                    if (_random.NextDouble() < switchProbability)
+                    {
+                        var previous = _currentProfile;
+                        _currentProfile = SelectRandomAlternateProfile(_currentProfile) ?? _currentProfile;
+                        _logger.Debug("Switched client profile from {0} to {1} for new session {2}", previous?.Name, _currentProfile?.Name, infoHash);
+                    }
+                }
+
+                profile = _currentProfile ?? FallbackProfile;
+            }
+
+            var peerId = profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+            var announceKey = GenerateAnnounceKey();
+
+            var session = new TorrentClientSession
+            {
+                ProfileName = profile?.Name ?? string.Empty,
+                PeerId = peerId,
+                AnnounceKey = announceKey,
+                CreatedAt = DateTime.UtcNow,
+                Profile = profile,
+            };
+
+            _sessions[infoHash] = session;
+            _logger.Debug(
+                "Created client identity session for torrent {0} using profile {1} (PeerId: {2}, AnnounceKey: {3})",
+                infoHash,
+                session.ProfileName,
+                session.PeerId,
+                session.AnnounceKey);
+
+            return session;
+        }
+    }
+
+    public IClientProfile GetProfileForTorrent(string infoHash, bool isPrivateTorrent = false)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return GetActiveProfile(isPrivateTorrent);
+        }
+
+        var session = GetOrCreateSession(infoHash, isPrivateTorrent);
+        return session.Profile ?? ResolveProfileByName(session.ProfileName) ?? FallbackProfile;
+    }
+
+    public TorrentClientSession GetSession(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return null;
+        }
+
+        lock (_lock)
+        {
+            return _sessions.TryGetValue(infoHash, out var session) ? session : null;
+        }
+    }
+
+    public bool ReleaseSession(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return false;
+        }
+
+        lock (_lock)
+        {
+            if (_sessions.Remove(infoHash, out var session))
+            {
+                _logger.Debug("Released client identity session for torrent {0} (Profile: {1})", infoHash, session.ProfileName);
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    public void ReleaseAllSessions()
+    {
+        lock (_lock)
+        {
+            _sessions.Clear();
+            _logger.Debug("Released all client identity sessions");
         }
     }
 
@@ -279,5 +425,41 @@ public class ClientBehaviorSimulator : IClientBehaviorSimulator
         }
 
         return alternatives[_random.Next(alternatives.Count)];
+    }
+
+    public void Handle(TorrentPausedEvent message)
+    {
+        if (message?.Torrent != null && !string.IsNullOrWhiteSpace(message.Torrent.InfoHash))
+        {
+            ReleaseSession(message.Torrent.InfoHash);
+        }
+    }
+
+    public void Handle(TorrentDeletedEvent message)
+    {
+        var infoHash = message?.Torrent?.InfoHash;
+        if (!string.IsNullOrWhiteSpace(infoHash))
+        {
+            ReleaseSession(infoHash);
+        }
+    }
+
+    public void Handle(TorrentStatusChangedEvent message)
+    {
+        if (message?.Torrent != null && !string.IsNullOrWhiteSpace(message.Torrent.InfoHash))
+        {
+            if (message.NewStatus == TorrentStatus.Stopped || message.NewStatus == TorrentStatus.Paused)
+            {
+                ReleaseSession(message.Torrent.InfoHash);
+            }
+        }
+    }
+
+    private string GenerateAnnounceKey()
+    {
+        lock (_lock)
+        {
+            return _random.Next().ToString("X8", CultureInfo.InvariantCulture);
+        }
     }
 }
