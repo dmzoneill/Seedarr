@@ -256,4 +256,54 @@ public class EmailNotificationSenderTest
 
         Assert.That(callCount, Is.EqualTo(2));
     }
+
+    [Test]
+    public void SendEmailNotification_should_add_plain_text_and_html_alternate_views()
+    {
+        var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":587,\"to\":\"recipient@example.com\",\"from\":\"test@example.com\"}}";
+        MailMessage capturedMessage = null;
+
+        EmailNotificationSender.SendEmailNotification(
+            settings,
+            "Torrent Complete",
+            null,
+            null,
+            "Download finished",
+            (client, message) =>
+            {
+                capturedMessage = message;
+            });
+
+        Assert.That(capturedMessage, Is.Not.Null);
+        Assert.That(capturedMessage.AlternateViews.Count, Is.EqualTo(2));
+
+        var plainTextView = capturedMessage.AlternateViews[0];
+        Assert.That(plainTextView.ContentType.MediaType, Is.EqualTo("text/plain"));
+
+        var htmlView = capturedMessage.AlternateViews[1];
+        Assert.That(htmlView.ContentType.MediaType, Is.EqualTo("text/html"));
+    }
+
+    [Test]
+    public void SendEmailNotification_should_add_anti_spam_and_automated_rfc_headers()
+    {
+        var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":587,\"to\":\"recipient@example.com\",\"from\":\"test@example.com\"}}";
+        MailMessage capturedMessage = null;
+
+        EmailNotificationSender.SendEmailNotification(
+            settings,
+            "Test",
+            null,
+            null,
+            "Test message",
+            (client, message) =>
+            {
+                capturedMessage = message;
+            });
+
+        Assert.That(capturedMessage, Is.Not.Null);
+        Assert.That(capturedMessage.Headers["Auto-Submitted"], Is.EqualTo("auto-generated"));
+        Assert.That(capturedMessage.Headers["X-Auto-Response-Suppress"], Is.EqualTo("All"));
+        Assert.That(capturedMessage.Headers["Precedence"], Is.EqualTo("bulk"));
+    }
 }
