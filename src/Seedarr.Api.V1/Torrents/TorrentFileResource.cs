@@ -10,4 +10,7 @@ public class TorrentFileResource : RestResource
     public int PieceOffset { get; set; }
     public int PieceCount { get; set; }
     public bool IsPaddingFile { get; set; }
+    public bool Wanted { get; set; } = true;
+    public int Priority { get; set; }
+    public long BytesCompleted { get; set; }
 }

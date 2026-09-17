@@ -34,7 +34,10 @@ public class TorrentFileRepositoryTest
                 ""Size"" INTEGER NOT NULL DEFAULT 0,
                 ""PieceOffset"" INTEGER NOT NULL DEFAULT 0,
                 ""PieceCount"" INTEGER NOT NULL DEFAULT 0,
-                ""IsPaddingFile"" INTEGER NOT NULL DEFAULT 0
+                ""IsPaddingFile"" INTEGER NOT NULL DEFAULT 0,
+                ""Wanted"" INTEGER NOT NULL DEFAULT 1,
+                ""Priority"" INTEGER NOT NULL DEFAULT 0,
+                ""BytesCompleted"" INTEGER NOT NULL DEFAULT 0
             )";
         cmd.ExecuteNonQuery();
 
