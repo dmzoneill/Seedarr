@@ -323,4 +323,42 @@ public class LidarrConnectionTest
 
         Assert.That(result, Is.False);
     }
+
+    [Test]
+    public void GetMediaDetails_extracts_musicbrainz_id_and_rewrites_mediacover_url()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"{""id"":42,""title"":""Test Album"",""foreignAlbumId"":""mb-album-123"",""images"":[{""coverType"":""cover"",""url"":""/MediaCover/42/cover.jpg""}]}");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8686";
+        connection.ApiKey = "test-key";
+        connection.ConnectionId = 7;
+
+        var result = connection.GetMediaDetails(42);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MusicBrainzId, Is.EqualTo("mb-album-123"));
+        Assert.That(result.PosterUrl, Is.EqualTo("/api/v1/arr/image-proxy?connectionId=7&path=%2FMediaCover%2F42%2Fcover.jpg"));
+    }
+
+    [Test]
+    public void LookupMedia_extracts_musicbrainz_id_and_rewrites_mediacover_url()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(
+            HttpStatusCode.OK,
+            @"[{""id"":42,""title"":""Test Album"",""foreignAlbumId"":""mb-album-123"",""images"":[{""coverType"":""cover"",""url"":""/MediaCover/42/cover.jpg""}]}]");
+        var connection = CreateWithMockClient(handler);
+        connection.Url = "http://localhost:8686";
+        connection.ApiKey = "test-key";
+        connection.ConnectionId = 7;
+
+        var result = connection.LookupMedia("Test Album");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MusicBrainzId, Is.EqualTo("mb-album-123"));
+        Assert.That(result.PosterUrl, Is.EqualTo("/api/v1/arr/image-proxy?connectionId=7&path=%2FMediaCover%2F42%2Fcover.jpg"));
+    }
 }

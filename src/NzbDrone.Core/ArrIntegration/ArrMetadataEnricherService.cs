@@ -287,6 +287,7 @@ namespace NzbDrone.Core.ArrIntegration
             provider.Url = ArrConnectionResources.NormalizeUrl(definition.Url);
             provider.ApiKey = definition.ApiKey;
             provider.AcceptInvalidCertificates = definition.AcceptInvalidCertificates;
+            provider.ConnectionId = definition.Id;
             return provider;
         }
     }

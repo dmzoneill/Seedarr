@@ -1,8 +1,12 @@
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.ArrIntegration.Webhook;
+using NzbDrone.Core.Test.TestHelpers;
 using Seedarr.Api.V1.ArrIntegration;
 
 namespace NzbDrone.Core.Test.ArrIntegration;
@@ -202,5 +206,84 @@ public class ArrConnectionControllerTest
         Assert.That(result, Is.InstanceOf<OkResult>());
         _webhookRegistration.Received(1).UnregisterWebhook(existing);
         _connectionFactory.Received(1).Delete(1);
+    }
+
+    [Test]
+    public async Task GetImageProxy_returns_bad_request_when_connection_id_invalid()
+    {
+        var result = await _controller.GetImageProxy(0, "/MediaCover/1/poster.jpg");
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public async Task GetImageProxy_returns_bad_request_when_path_is_empty()
+    {
+        var result = await _controller.GetImageProxy(1, "");
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public async Task GetImageProxy_returns_not_found_when_connection_not_found()
+    {
+        _connectionFactory.Get(99).Returns((ArrConnectionDefinition)null);
+
+        var result = await _controller.GetImageProxy(99, "/MediaCover/1/poster.jpg");
+
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+    }
+
+    [Test]
+    public async Task GetImageProxy_proxies_image_successfully()
+    {
+        var handler = new MockHttpMessageHandler();
+        var imageBytes = new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 };
+        var responseMsg = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ByteArrayContent(imageBytes)
+        };
+        responseMsg.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+        handler.EnqueueResponse(responseMsg);
+
+        var httpClient = new HttpClient(handler);
+        var controller = new ArrConnectionController(_connectionFactory, _arrSyncService, _webhookRegistration, httpClient);
+
+        _connectionFactory.Get(1).Returns(new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "my-key"
+        });
+
+        var result = await controller.GetImageProxy(1, "/MediaCover/1/poster.jpg");
+
+        Assert.That(result, Is.InstanceOf<FileStreamResult>());
+        var fileResult = (FileStreamResult)result;
+        Assert.That(fileResult.ContentType, Is.EqualTo("image/jpeg"));
+    }
+
+    [Test]
+    public async Task GetImageProxy_returns_status_code_when_remote_call_fails()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.NotFound, "Not found");
+        var httpClient = new HttpClient(handler);
+        var controller = new ArrConnectionController(_connectionFactory, _arrSyncService, _webhookRegistration, httpClient);
+
+        _connectionFactory.Get(1).Returns(new ArrConnectionDefinition
+        {
+            Id = 1,
+            Name = "Sonarr",
+            Url = "http://sonarr:8989",
+            ApiKey = "my-key"
+        });
+
+        var result = await controller.GetImageProxy(1, "/MediaCover/999/poster.jpg");
+
+        Assert.That(result, Is.InstanceOf<StatusCodeResult>());
+        var statusResult = (StatusCodeResult)result;
+        Assert.That(statusResult.StatusCode, Is.EqualTo(404));
     }
 }

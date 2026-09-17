@@ -16,6 +16,7 @@ public class ArrTestResult
 
 public interface IArrConnection : IProvider
 {
+    int ConnectionId { get; set; }
     string ArrType { get; }
     string Url { get; set; }
     string ApiKey { get; set; }

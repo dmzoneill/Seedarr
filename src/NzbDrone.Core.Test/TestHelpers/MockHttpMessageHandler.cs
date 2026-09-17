@@ -50,6 +50,11 @@ internal class MockHttpMessageHandler : HttpMessageHandler
         });
     }
 
+    public void EnqueueResponse(HttpResponseMessage response)
+    {
+        _responses.Enqueue(response);
+    }
+
     public HttpRequestMessage LastRequest { get; private set; }
     public List<HttpRequestMessage> Requests { get; } = new();
 

@@ -25,6 +25,7 @@ public class LidarrConnection : IArrConnection
 
     public string Name => "Lidarr";
     public string ArrType => "Lidarr";
+    public int ConnectionId { get; set; }
 
     public string Url
     {
@@ -176,7 +177,7 @@ public class LidarrConnection : IArrConnection
         }
     }
 
-    private static MediaMetadata ParseMediaDetails(string json, int mediaId)
+    private MediaMetadata ParseMediaDetails(string json, int mediaId)
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -187,6 +188,15 @@ public class LidarrConnection : IArrConnection
             Title = root.TryGetProperty("title", out var title) ? title.GetString() : null,
             Overview = root.TryGetProperty("overview", out var ov) ? ov.GetString() : null
         };
+
+        if (root.TryGetProperty("foreignAlbumId", out var mbProp))
+        {
+            metadata.MusicBrainzId = mbProp.GetString();
+        }
+        else if (root.TryGetProperty("musicBrainzId", out var mbIdProp))
+        {
+            metadata.MusicBrainzId = mbIdProp.GetString();
+        }
 
         if (root.TryGetProperty("artist", out var artistElem))
         {
@@ -219,17 +229,24 @@ public class LidarrConnection : IArrConnection
                 var localUrl = img.TryGetProperty("url", out var lu) ? lu.GetString() : null;
                 var imgUrl = !string.IsNullOrEmpty(remoteUrl) ? remoteUrl : localUrl;
 
+                if (string.IsNullOrEmpty(imgUrl))
+                {
+                    continue;
+                }
+
+                var normalizedUrl = ArrConnectionResources.NormalizeCoverUrl(imgUrl, ConnectionId);
+
                 if (coverType.Equals("cover", StringComparison.OrdinalIgnoreCase) || coverType.Equals("poster", StringComparison.OrdinalIgnoreCase))
                 {
-                    metadata.PosterUrl = imgUrl;
+                    metadata.PosterUrl = normalizedUrl;
                 }
                 else if (coverType.Equals("fanart", StringComparison.OrdinalIgnoreCase))
                 {
-                    metadata.FanartUrl = imgUrl;
+                    metadata.FanartUrl = normalizedUrl;
                 }
                 else if (coverType.Equals("banner", StringComparison.OrdinalIgnoreCase))
                 {
-                    metadata.BannerUrl = imgUrl;
+                    metadata.BannerUrl = normalizedUrl;
                 }
             }
         }
@@ -283,7 +300,7 @@ public class LidarrConnection : IArrConnection
         }
     }
 
-    private static MediaMetadata ParseLookupMedia(string json, string title)
+    private MediaMetadata ParseLookupMedia(string json, string title)
     {
         using var doc = JsonDocument.Parse(json);
         if (doc.RootElement.ValueKind != JsonValueKind.Array)
@@ -307,6 +324,19 @@ public class LidarrConnection : IArrConnection
                 StudioOrNetwork = foreignElem.TryGetProperty("artist", out var art) && art.TryGetProperty("artistName", out var an) ? an.GetString() : null
             };
 
+            if (foreignElem.TryGetProperty("foreignAlbumId", out var mbProp))
+            {
+                metadata.MusicBrainzId = mbProp.GetString();
+            }
+            else if (foreignElem.TryGetProperty("musicBrainzId", out var mbIdProp))
+            {
+                metadata.MusicBrainzId = mbIdProp.GetString();
+            }
+            else if (item.TryGetProperty("foreignAlbumId", out var itemMbProp))
+            {
+                metadata.MusicBrainzId = itemMbProp.GetString();
+            }
+
             if (foreignElem.TryGetProperty("images", out var imagesArray))
             {
                 foreach (var imgElem in imagesArray.EnumerateArray())
@@ -319,13 +349,19 @@ public class LidarrConnection : IArrConnection
                         continue;
                     }
 
+                    var normalizedUrl = ArrConnectionResources.NormalizeCoverUrl(imgUrl, ConnectionId);
+
                     if (coverType.Equals("cover", StringComparison.OrdinalIgnoreCase) || coverType.Equals("poster", StringComparison.OrdinalIgnoreCase))
                     {
-                        metadata.PosterUrl = imgUrl;
+                        metadata.PosterUrl = normalizedUrl;
                     }
                     else if (coverType.Equals("fanart", StringComparison.OrdinalIgnoreCase))
                     {
-                        metadata.FanartUrl = imgUrl;
+                        metadata.FanartUrl = normalizedUrl;
+                    }
+                    else if (coverType.Equals("banner", StringComparison.OrdinalIgnoreCase))
+                    {
+                        metadata.BannerUrl = normalizedUrl;
                     }
                 }
             }
