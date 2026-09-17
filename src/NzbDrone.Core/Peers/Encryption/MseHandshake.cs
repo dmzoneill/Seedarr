@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Security;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -96,10 +97,7 @@ public class MseHandshake
         _inCipher.ProcessInPlace(cryptoSelectBytes, 0, 4);
         var cryptoSelect = (CryptoMethod)ReadUint32(cryptoSelectBytes);
 
-        if ((cryptoSelect & GetSupportedMethods()) == CryptoMethod.None)
-        {
-            throw new InvalidOperationException("Peer selected unsupported crypto method");
-        }
+        ValidateCryptoSelect(cryptoSelect);
 
         _negotiatedMethod = cryptoSelect;
 
@@ -287,10 +285,7 @@ public class MseHandshake
         _inCipher.ProcessInPlace(cryptoSelectBytes, 0, 4);
         var cryptoSelect = (CryptoMethod)ReadUint32(cryptoSelectBytes);
 
-        if ((cryptoSelect & GetSupportedMethods()) == CryptoMethod.None)
-        {
-            throw new InvalidOperationException("Peer selected unsupported crypto method");
-        }
+        ValidateCryptoSelect(cryptoSelect);
 
         _negotiatedMethod = cryptoSelect;
 
@@ -455,8 +450,32 @@ public class MseHandshake
         };
     }
 
-    private CryptoMethod SelectCryptoMethod(CryptoMethod peerProvides)
+    internal void ValidateCryptoSelect(CryptoMethod cryptoSelect)
     {
+        var value = (uint)cryptoSelect;
+        if (value == 0 || (value & (value - 1)) != 0)
+        {
+            throw new InvalidOperationException($"Invalid crypto_select: multiple or zero bits set (0x{value:X8})");
+        }
+
+        if (_preferredMode == EncryptionMode.RequireEncrypted && cryptoSelect != CryptoMethod.Rc4)
+        {
+            throw new SecurityException($"Encryption is required but peer selected downgrade method: {cryptoSelect}");
+        }
+
+        if ((cryptoSelect & GetSupportedMethods()) == CryptoMethod.None)
+        {
+            throw new InvalidOperationException("Peer selected unsupported crypto method");
+        }
+    }
+
+    internal CryptoMethod SelectCryptoMethod(CryptoMethod peerProvides)
+    {
+        if (_preferredMode == EncryptionMode.RequireEncrypted && (peerProvides & CryptoMethod.Rc4) == CryptoMethod.None)
+        {
+            throw new SecurityException("Remote peer does not offer required RC4 encryption");
+        }
+
         var supported = GetSupportedMethods();
         var common = peerProvides & supported;
 
@@ -465,20 +484,42 @@ public class MseHandshake
             throw new InvalidOperationException("No common crypto method available");
         }
 
+        CryptoMethod selected;
         if (_preferredMode == EncryptionMode.RequireEncrypted || _preferredMode == EncryptionMode.PreferEncrypted)
         {
             if ((common & CryptoMethod.Rc4) != CryptoMethod.None)
             {
-                return CryptoMethod.Rc4;
+                selected = CryptoMethod.Rc4;
+            }
+            else if ((common & CryptoMethod.PlainText) != CryptoMethod.None)
+            {
+                selected = CryptoMethod.PlainText;
+            }
+            else
+            {
+                selected = CryptoMethod.Rc4;
             }
         }
-
-        if ((common & CryptoMethod.PlainText) != CryptoMethod.None)
+        else if ((common & CryptoMethod.PlainText) != CryptoMethod.None)
         {
-            return CryptoMethod.PlainText;
+            selected = CryptoMethod.PlainText;
+        }
+        else if ((common & CryptoMethod.Rc4) != CryptoMethod.None)
+        {
+            selected = CryptoMethod.Rc4;
+        }
+        else
+        {
+            throw new InvalidOperationException("No common crypto method available");
         }
 
-        return CryptoMethod.Rc4;
+        var val = (uint)selected;
+        if (val == 0 || (val & (val - 1)) != 0)
+        {
+            throw new InvalidOperationException($"Invalid selected crypto method: {selected}");
+        }
+
+        return selected;
     }
 
     private byte[] BuildEncryptedPayload()
