@@ -5,4 +5,5 @@ namespace NzbDrone.Core.Jobs;
 public class ScheduledTaskCommand : Command
 {
     public string TaskName { get; set; } = string.Empty;
+    public ScheduledTaskTriggerSource TriggerSource { get; set; } = ScheduledTaskTriggerSource.Manual;
 }

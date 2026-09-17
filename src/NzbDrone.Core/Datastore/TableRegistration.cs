@@ -48,5 +48,6 @@ public static class TableRegistration
         TableMapping.Register<Category>("Categories");
         TableMapping.Register<AutomationScript>("AutomationScripts");
         TableMapping.Register<TorrentEventLog>("TorrentEventLogs");
+        TableMapping.Register<ScheduledTaskHistory>("ScheduledTaskHistory");
     }
 }

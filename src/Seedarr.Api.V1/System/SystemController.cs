@@ -31,6 +31,7 @@ public class SystemController : ControllerBase
     private readonly IHostApplicationLifetime _lifetime;
     private readonly IConfigService _configService;
     private readonly IMainDatabase _mainDatabase;
+    private readonly IScheduledTaskHistoryRepository _taskHistoryRepository;
 
     public SystemController(
         ITaskManager taskManager,
@@ -39,7 +40,8 @@ public class SystemController : ControllerBase
         IAppFolderInfo appFolderInfo,
         IHostApplicationLifetime lifetime,
         IConfigService configService = null,
-        IMainDatabase mainDatabase = null)
+        IMainDatabase mainDatabase = null,
+        IScheduledTaskHistoryRepository taskHistoryRepository = null)
     {
         _taskManager = taskManager;
         _scheduledTasks = scheduledTasks ?? Enumerable.Empty<IScheduledTask>();
@@ -48,6 +50,7 @@ public class SystemController : ControllerBase
         _lifetime = lifetime;
         _configService = configService;
         _mainDatabase = mainDatabase;
+        _taskHistoryRepository = taskHistoryRepository;
     }
 
     /// <summary>
@@ -248,7 +251,13 @@ public class SystemController : ControllerBase
             return Conflict(new { message = $"Task {task.TypeName} is already running" });
         }
 
-        var command = _commandQueueManager.Push(new ScheduledTaskCommand { TaskName = task.TypeName }, CommandTrigger.Manual);
+        var command = _commandQueueManager.Push(
+            new ScheduledTaskCommand
+            {
+                TaskName = task.TypeName,
+                TriggerSource = ScheduledTaskTriggerSource.Manual
+            },
+            CommandTrigger.Manual);
 
         return Ok(new { message = $"Task {task.TypeName} execution started", commandId = command.Id });
     }
@@ -296,6 +305,65 @@ public class SystemController : ControllerBase
         }
 
         return Ok(new { message = $"Task '{targetName}' abort requested" });
+    }
+
+    /// <summary>
+    /// Gets execution history for a scheduled task by ID.
+    /// </summary>
+    /// <param name="id">The scheduled task ID.</param>
+    /// <param name="limit">The maximum number of history records to return (default 50).</param>
+    /// <returns>A list of scheduled task history resources.</returns>
+    [HttpGet("task/{id:int}/history")]
+    public ActionResult<List<ScheduledTaskHistoryResource>> GetTaskHistoryById(int id, [FromQuery] int limit = 50)
+    {
+        if (limit <= 0)
+        {
+            limit = 50;
+        }
+
+        var history = _taskHistoryRepository != null
+            ? _taskHistoryRepository.GetByTaskId(id, limit)
+            : _taskManager.GetTaskHistory(id, limit);
+
+        return Ok(history.Select(MapToHistoryResource).ToList());
+    }
+
+    /// <summary>
+    /// Gets execution history for a scheduled task by name or type name.
+    /// </summary>
+    /// <param name="name">The task type name or short name.</param>
+    /// <param name="limit">The maximum number of history records to return (default 50).</param>
+    /// <returns>A list of scheduled task history resources.</returns>
+    [HttpGet("task/{name}/history")]
+    public ActionResult<List<ScheduledTaskHistoryResource>> GetTaskHistoryByName(string name, [FromQuery] int limit = 50)
+    {
+        if (limit <= 0)
+        {
+            limit = 50;
+        }
+
+        var history = _taskHistoryRepository != null
+            ? _taskHistoryRepository.GetByTypeName(name, limit)
+            : _taskManager.GetTaskHistory(name, limit);
+
+        return Ok(history.Select(MapToHistoryResource).ToList());
+    }
+
+    private static ScheduledTaskHistoryResource MapToHistoryResource(ScheduledTaskHistory h)
+    {
+        return new ScheduledTaskHistoryResource
+        {
+            Id = h.Id,
+            TaskId = h.TaskId,
+            TypeName = h.TypeName,
+            StartedAt = h.StartedAt,
+            FinishedAt = h.FinishedAt,
+            DurationMs = h.DurationMs,
+            Status = h.Status.ToString(),
+            TriggerSource = h.TriggerSource.ToString(),
+            ErrorMessage = h.ErrorMessage,
+            ExceptionDetails = h.ExceptionDetails
+        };
     }
 
     /// <summary>

@@ -353,4 +353,71 @@ public class SystemControllerTasksTest
         Assert.That(resource.Name, Is.EqualTo("SyncArr"));
         Assert.That(resource.Status, Is.EqualTo("queued"));
     }
+
+    [Test]
+    public void GetTaskHistoryById_returns_ok_with_history_items()
+    {
+        var historyItems = new List<ScheduledTaskHistory>
+        {
+            new()
+            {
+                Id = 1,
+                TaskId = 5,
+                TypeName = "SampleScheduledTask",
+                StartedAt = DateTime.UtcNow.AddMinutes(-5),
+                FinishedAt = DateTime.UtcNow.AddMinutes(-4),
+                DurationMs = 60000,
+                Status = ScheduledTaskHistoryStatus.Success,
+                TriggerSource = ScheduledTaskTriggerSource.Scheduler
+            }
+        };
+        _taskManager.GetTaskHistory(5, 50).Returns(historyItems);
+
+        var actionResult = _controller.GetTaskHistoryById(5);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var resources = okResult.Value as List<ScheduledTaskHistoryResource>;
+        Assert.That(resources, Has.Count.EqualTo(1));
+        Assert.That(resources[0].Id, Is.EqualTo(1));
+        Assert.That(resources[0].TaskId, Is.EqualTo(5));
+        Assert.That(resources[0].Status, Is.EqualTo("Success"));
+        Assert.That(resources[0].TriggerSource, Is.EqualTo("Scheduler"));
+        Assert.That(resources[0].DurationMs, Is.EqualTo(60000));
+    }
+
+    [Test]
+    public void GetTaskHistoryByName_returns_ok_with_history_items()
+    {
+        var historyItems = new List<ScheduledTaskHistory>
+        {
+            new()
+            {
+                Id = 2,
+                TaskId = 5,
+                TypeName = "SampleScheduledTask",
+                StartedAt = DateTime.UtcNow.AddMinutes(-2),
+                FinishedAt = DateTime.UtcNow.AddMinutes(-1),
+                DurationMs = 60000,
+                Status = ScheduledTaskHistoryStatus.Failed,
+                TriggerSource = ScheduledTaskTriggerSource.Manual,
+                ErrorMessage = "Task error",
+                ExceptionDetails = "Stack trace"
+            }
+        };
+        _taskManager.GetTaskHistory("SampleScheduledTask", 20).Returns(historyItems);
+
+        var actionResult = _controller.GetTaskHistoryByName("SampleScheduledTask", 20);
+
+        Assert.That(actionResult.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+        var resources = okResult.Value as List<ScheduledTaskHistoryResource>;
+        Assert.That(resources, Has.Count.EqualTo(1));
+        Assert.That(resources[0].Id, Is.EqualTo(2));
+        Assert.That(resources[0].Status, Is.EqualTo("Failed"));
+        Assert.That(resources[0].TriggerSource, Is.EqualTo("Manual"));
+        Assert.That(resources[0].ErrorMessage, Is.EqualTo("Task error"));
+    }
 }

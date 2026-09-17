@@ -16,8 +16,13 @@ public interface ITaskManager
     ScheduledTask GetNextScheduled();
     void UpdateLastExecution(string typeName);
     void RecordTaskStarted(string typeName);
-    CancellationTokenSource RecordTaskStarted(string typeName, CancellationTokenSource cts, TimeSpan? timeout = null);
+    void RecordTaskStarted(string typeName, ScheduledTaskTriggerSource triggerSource);
+    CancellationTokenSource RecordTaskStarted(string typeName, CancellationTokenSource cts, ScheduledTaskTriggerSource triggerSource);
+    CancellationTokenSource RecordTaskStarted(string typeName, CancellationTokenSource cts, TimeSpan? timeout = null, ScheduledTaskTriggerSource triggerSource = ScheduledTaskTriggerSource.Scheduler);
     void RecordTaskFinished(string typeName, DateTime startTime);
+    void RecordTaskFinished(string typeName, DateTime startTime, ScheduledTaskTriggerSource? triggerSource = null);
+    void RecordTaskFailed(string typeName, DateTime startTime, Exception exception, ScheduledTaskTriggerSource? triggerSource = null);
+    void RecordTaskFailed(string typeName, DateTime startTime, string errorMessage, string exceptionDetails = null, ScheduledTaskTriggerSource? triggerSource = null);
     bool IsRunning(string typeName);
     bool CancelTask(int id);
     bool CancelTask(string typeName);
@@ -25,23 +30,44 @@ public interface ITaskManager
     string GetTaskStatus(string typeName);
     bool IsCanceled(string typeName);
     DateTime GetNextExecution(string typeName);
+    List<ScheduledTaskHistory> GetTaskHistory(int taskId, int limit = 50);
+    List<ScheduledTaskHistory> GetTaskHistory(string typeName, int limit = 50);
 }
 
 public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
 {
+    private class TaskExecutionInfo
+    {
+        public DateTime StartTime { get; set; }
+        public ScheduledTaskTriggerSource TriggerSource { get; set; }
+        public CancellationTokenSource Cts { get; set; }
+        public bool HistoryRecorded { get; set; }
+    }
+
     private readonly IBasicRepository<ScheduledTask> _repository;
     private readonly IEnumerable<IScheduledTask> _scheduledTasks;
+    private readonly IScheduledTaskHistoryRepository _historyRepository;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, bool> _activeTasks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _cancellationTokens = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, string> _taskStatuses = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, TaskExecutionInfo> _activeExecutionInfo = new(StringComparer.OrdinalIgnoreCase);
 
     public TaskManager(
         IBasicRepository<ScheduledTask> repository,
         IEnumerable<IScheduledTask> scheduledTasks)
+        : this(repository, scheduledTasks, null)
+    {
+    }
+
+    public TaskManager(
+        IBasicRepository<ScheduledTask> repository,
+        IEnumerable<IScheduledTask> scheduledTasks,
+        IScheduledTaskHistoryRepository historyRepository)
     {
         _repository = repository;
         _scheduledTasks = scheduledTasks;
+        _historyRepository = historyRepository;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -92,10 +118,20 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
 
     public void RecordTaskStarted(string typeName)
     {
-        RecordTaskStarted(typeName, null, TimeSpan.FromMinutes(10));
+        RecordTaskStarted(typeName, ScheduledTaskTriggerSource.Scheduler);
     }
 
-    public CancellationTokenSource RecordTaskStarted(string typeName, CancellationTokenSource cts, TimeSpan? timeout = null)
+    public void RecordTaskStarted(string typeName, ScheduledTaskTriggerSource triggerSource)
+    {
+        RecordTaskStarted(typeName, null, TimeSpan.FromMinutes(10), triggerSource);
+    }
+
+    public CancellationTokenSource RecordTaskStarted(string typeName, CancellationTokenSource cts, ScheduledTaskTriggerSource triggerSource)
+    {
+        return RecordTaskStarted(typeName, cts, null, triggerSource);
+    }
+
+    public CancellationTokenSource RecordTaskStarted(string typeName, CancellationTokenSource cts, TimeSpan? timeout = null, ScheduledTaskTriggerSource triggerSource = ScheduledTaskTriggerSource.Scheduler)
     {
         if (!_activeTasks.TryAdd(typeName, true))
         {
@@ -105,6 +141,13 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         cts ??= new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(10));
         _cancellationTokens[typeName] = cts;
         _taskStatuses[typeName] = "Running";
+        _activeExecutionInfo[typeName] = new TaskExecutionInfo
+        {
+            StartTime = DateTime.UtcNow,
+            TriggerSource = triggerSource,
+            Cts = cts,
+            HistoryRecorded = false
+        };
 
         var task = _repository.All()
             .FirstOrDefault(t => string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase));
@@ -120,6 +163,11 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
 
     public void RecordTaskFinished(string typeName, DateTime startTime)
     {
+        RecordTaskFinished(typeName, startTime, null);
+    }
+
+    public void RecordTaskFinished(string typeName, DateTime startTime, ScheduledTaskTriggerSource? triggerSource = null)
+    {
         _activeTasks.TryRemove(typeName, out _);
 
         if (_cancellationTokens.TryRemove(typeName, out var cts))
@@ -133,13 +181,19 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
             }
         }
 
-        if (!_taskStatuses.TryGetValue(typeName, out var status) || status != "Canceled")
+        _activeExecutionInfo.TryRemove(typeName, out var execInfo);
+
+        var isCanceled = (_taskStatuses.TryGetValue(typeName, out var status) && string.Equals(status, "Canceled", StringComparison.OrdinalIgnoreCase)) ||
+                         (execInfo?.Cts != null && execInfo.Cts.IsCancellationRequested);
+
+        if (!isCanceled && status != "Failed")
         {
             _taskStatuses[typeName] = "Completed";
         }
 
         var task = _repository.All()
-            .FirstOrDefault(t => string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(t => string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(t.TypeName.Split('.').LastOrDefault(), typeName, StringComparison.OrdinalIgnoreCase));
 
         if (task != null)
         {
@@ -147,6 +201,86 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
             task.LastExecution = DateTime.UtcNow;
             _repository.Update(task);
         }
+
+        if (execInfo == null || !execInfo.HistoryRecorded)
+        {
+            var now = DateTime.UtcNow;
+            var durationMs = (long)Math.Max(0, (now - startTime).TotalMilliseconds);
+            var trigger = triggerSource ?? execInfo?.TriggerSource ?? ScheduledTaskTriggerSource.Scheduler;
+
+            var historyStatus = isCanceled
+                ? ScheduledTaskHistoryStatus.Canceled
+                : (status == "Failed" ? ScheduledTaskHistoryStatus.Failed : ScheduledTaskHistoryStatus.Success);
+
+            var history = new ScheduledTaskHistory
+            {
+                TaskId = task?.Id ?? 0,
+                TypeName = task?.TypeName ?? typeName,
+                StartedAt = startTime,
+                FinishedAt = now,
+                DurationMs = durationMs,
+                Status = historyStatus,
+                TriggerSource = trigger,
+                ErrorMessage = isCanceled ? "Task execution was canceled" : null,
+                ExceptionDetails = null
+            };
+
+            try
+            {
+                _historyRepository?.Insert(history);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to record task completion history for '{0}'", typeName);
+            }
+        }
+    }
+
+    public void RecordTaskFailed(string typeName, DateTime startTime, Exception exception, ScheduledTaskTriggerSource? triggerSource = null)
+    {
+        RecordTaskFailed(typeName, startTime, exception?.Message ?? "Task execution failed", exception?.ToString(), triggerSource);
+    }
+
+    public void RecordTaskFailed(string typeName, DateTime startTime, string errorMessage, string exceptionDetails = null, ScheduledTaskTriggerSource? triggerSource = null)
+    {
+        var now = DateTime.UtcNow;
+        var durationMs = (long)Math.Max(0, (now - startTime).TotalMilliseconds);
+
+        _activeExecutionInfo.TryGetValue(typeName, out var execInfo);
+        var trigger = triggerSource ?? execInfo?.TriggerSource ?? ScheduledTaskTriggerSource.Scheduler;
+
+        var task = _repository.All()
+            .FirstOrDefault(t => string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(t.TypeName.Split('.').LastOrDefault(), typeName, StringComparison.OrdinalIgnoreCase));
+
+        var history = new ScheduledTaskHistory
+        {
+            TaskId = task?.Id ?? 0,
+            TypeName = task?.TypeName ?? typeName,
+            StartedAt = startTime,
+            FinishedAt = now,
+            DurationMs = durationMs,
+            Status = ScheduledTaskHistoryStatus.Failed,
+            TriggerSource = trigger,
+            ErrorMessage = errorMessage,
+            ExceptionDetails = exceptionDetails
+        };
+
+        try
+        {
+            _historyRepository?.Insert(history);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to record task failure history for '{0}'", typeName);
+        }
+
+        if (execInfo != null)
+        {
+            execInfo.HistoryRecorded = true;
+        }
+
+        _taskStatuses[typeName] = "Failed";
     }
 
     public bool CancelTask(int id)
@@ -256,6 +390,26 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         }
 
         return task.NextExecution;
+    }
+
+    public List<ScheduledTaskHistory> GetTaskHistory(int taskId, int limit = 50)
+    {
+        if (_historyRepository == null)
+        {
+            return new List<ScheduledTaskHistory>();
+        }
+
+        return _historyRepository.GetByTaskId(taskId, limit);
+    }
+
+    public List<ScheduledTaskHistory> GetTaskHistory(string typeName, int limit = 50)
+    {
+        if (_historyRepository == null)
+        {
+            return new List<ScheduledTaskHistory>();
+        }
+
+        return _historyRepository.GetByTypeName(typeName, limit);
     }
 
     public void Handle(ApplicationStartedEvent message)
