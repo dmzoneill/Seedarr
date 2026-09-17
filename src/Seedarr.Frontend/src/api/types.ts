@@ -55,6 +55,7 @@ export interface Torrent {
   trackers?: string[];
   tagIds?: number[];
   source?: string | null;
+  isVpnPaused?: boolean;
 }
 
 export interface TrackerMetric {

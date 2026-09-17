@@ -57,6 +57,7 @@ public static class TorrentResourceMapper
             SeedingTime = model.SeedingTime,
             RatioLimit = model.RatioLimit,
             SeedingTimeLimit = model.SeedingTimeLimit,
+            IsVpnPaused = model.IsVpnPaused,
             TagIds = model.TagIds != null ? new List<int>(model.TagIds) : new List<int>()
         };
 
@@ -121,6 +122,7 @@ public static class TorrentResourceMapper
             SeedingTime = resource.SeedingTime,
             RatioLimit = resource.RatioLimit,
             SeedingTimeLimit = resource.SeedingTimeLimit,
+            IsVpnPaused = resource.IsVpnPaused,
             TagIds = resource.TagIds != null ? new List<int>(resource.TagIds) : new List<int>()
         };
     }

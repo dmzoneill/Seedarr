@@ -422,14 +422,16 @@ function TorrentGrid({
                   ↑ {formatBytes(torrent.uploaded)}
                 </span>
                 <span
-                  className={`badge badge-${torrent.status.toLowerCase()}`}
+                  className={torrent.isVpnPaused ? "badge badge-vpn-paused" : `badge badge-${torrent.status.toLowerCase()}`}
                   style={{
                     fontSize: "0.68rem",
                     padding: "0.15rem 0.45rem",
                     borderRadius: "3px",
                   }}
                 >
-                  {t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status === "QueuedForChecking" ? "Queued for Recheck" : torrent.status)}
+                  {torrent.isVpnPaused
+                    ? t("torrents.pausedVpnKillSwitch", undefined, "Paused (VPN Kill Switch)")
+                    : t(`torrents.${torrent.status.toLowerCase()}`, undefined, torrent.status === "QueuedForChecking" ? "Queued for Recheck" : torrent.status)}
                 </span>
               </div>
             </div>

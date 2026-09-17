@@ -3,11 +3,13 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Lifecycle;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Seeding;
 using NzbDrone.Core.Simulation.ClientBehavior;
@@ -21,6 +23,7 @@ public interface ITrackerAnnounceService
 {
     List<TrackerAnnounceResult> AnnounceTorrent(Torrent torrent, bool force = false, AnnounceEvent eventType = AnnounceEvent.None);
     TrackerAnnounceResult AnnounceTracker(Torrent torrent, TrackerEntry entry, bool force = false, AnnounceEvent eventType = AnnounceEvent.None);
+    TrackerScrapeResponse ScrapeTorrent(Torrent torrent);
 }
 
 public class TrackerAnnounceResult
@@ -44,7 +47,11 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     IHandle<TorrentFinishedEvent>,
     IHandle<TorrentDownloadCompletedEvent>,
     IHandle<TorrentHashCheckCompletedEvent>,
-    IHandle<ApplicationStartedEvent>
+    IHandle<ApplicationStartedEvent>,
+    IHandle<VpnKillSwitchTriggeredEvent>,
+    IHandle<VpnInterfaceRestoredEvent>,
+    IHandle<VpnRestoredEvent>,
+    IDisposable
 {
     private readonly ITrackerEntryService _trackerEntryService;
     private readonly IMultiTrackerManager _multiTracker;
@@ -55,8 +62,18 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
     private readonly IEventAggregator _eventAggregator;
     private readonly ITorrentService _torrentService;
     private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
+    private readonly IVpnKillSwitchService _vpnKillSwitchService;
     private readonly ConcurrentDictionary<int, bool> _completedTorrents = new();
+    private readonly ConcurrentQueue<Torrent> _staggeredQueue = new();
+    private readonly object _staggeredLock = new();
     private readonly Logger _logger;
+    private CancellationTokenSource _staggeredCts;
+    private DateTime _lastVpnRestore = DateTime.MinValue;
+    private bool _isVpnDown;
+
+    public int PendingStaggeredAnnounces => _staggeredQueue.Count;
+    public bool IsStaggeredAnnounceScheduled => _staggeredCts != null && !_staggeredCts.IsCancellationRequested;
+    internal Func<TimeSpan, CancellationToken, Task> DelayAsync = Task.Delay;
 
     public TrackerAnnounceService(
         ITrackerEntryService trackerEntryService,
@@ -67,7 +84,8 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         ITrackerMetricService trackerMetricService = null,
         IEventAggregator eventAggregator = null,
         ITorrentService torrentService = null,
-        IClientBehaviorSimulator clientBehaviorSimulator = null)
+        IClientBehaviorSimulator clientBehaviorSimulator = null,
+        IVpnKillSwitchService vpnKillSwitchService = null)
     {
         _trackerEntryService = trackerEntryService;
         _multiTracker = multiTracker;
@@ -78,6 +96,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         _eventAggregator = eventAggregator;
         _torrentService = torrentService;
         _clientBehaviorSimulator = clientBehaviorSimulator;
+        _vpnKillSwitchService = vpnKillSwitchService;
         _logger = LogManager.GetCurrentClassLogger();
 
         if (_torrentService != null)
@@ -108,6 +127,12 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         var results = new List<TrackerAnnounceResult>();
         if (torrent == null || string.IsNullOrWhiteSpace(torrent.InfoHash))
         {
+            return results;
+        }
+
+        if (IsVpnBlocked(torrent))
+        {
+            _logger.Debug("VPN is down or torrent {0} is VPN-paused; deferring tracker announce.", torrent.Name ?? torrent.InfoHash);
             return results;
         }
 
@@ -176,6 +201,12 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             return new TrackerAnnounceResult { Success = false, FailureReason = "Invalid torrent or tracker" };
         }
 
+        if (IsVpnBlocked(torrent))
+        {
+            _logger.Debug("VPN is down or torrent {0} is VPN-paused; deferring tracker announce for {1}.", torrent.Name ?? torrent.InfoHash, entry.Url);
+            return new TrackerAnnounceResult { Success = false, FailureReason = "VPN outage: announce deferred" };
+        }
+
         var isFirstAnnounce = entry.TotalAnnounces == 0 || !entry.LastAnnounce.HasValue;
         if (!force && !isFirstAnnounce && entry.NextAnnounce.HasValue && entry.NextAnnounce.Value > DateTime.UtcNow)
         {
@@ -183,6 +214,33 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         }
 
         return ExecuteAnnounce(torrent, entry, isFirstAnnounce, eventType);
+    }
+
+    public TrackerScrapeResponse ScrapeTorrent(Torrent torrent)
+    {
+        if (torrent == null || string.IsNullOrWhiteSpace(torrent.InfoHash))
+        {
+            return new TrackerScrapeResponse { Success = false, FailureReason = "Invalid torrent" };
+        }
+
+        if (IsVpnBlocked(torrent))
+        {
+            _logger.Debug("VPN is down or torrent {0} is VPN-paused; deferring tracker scrape.", torrent.Name ?? torrent.InfoHash);
+            return new TrackerScrapeResponse { Success = false, FailureReason = "VPN outage: scrape deferred" };
+        }
+
+        var trackerEntries = _trackerEntryService.GetByTorrentId(torrent.Id);
+        var announceList = trackerEntries
+            .Where(t => t.Enabled && !string.IsNullOrWhiteSpace(t.Url))
+            .Select(t => new List<string> { t.Url })
+            .ToList();
+
+        if (announceList.Count == 0 && !string.IsNullOrEmpty(torrent.TrackerUrl))
+        {
+            announceList.Add(new List<string> { torrent.TrackerUrl });
+        }
+
+        return _multiTracker.Scrape(torrent.InfoHash, announceList);
     }
 
     private TrackerAnnounceResult ExecuteAnnounce(Torrent torrent, TrackerEntry entry, bool isFirstAnnounce, AnnounceEvent eventType = AnnounceEvent.None)
@@ -499,5 +557,163 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 _logger.Debug(ex, "Failed to send stopped tracker announce for torrent {0}", message.TorrentId);
             }
         }).ConfigureAwait(false);
+    }
+
+    private bool IsVpnBlocked(Torrent torrent)
+    {
+        if (torrent != null && torrent.IsVpnPaused)
+        {
+            return true;
+        }
+
+        if (_isVpnDown)
+        {
+            return true;
+        }
+
+        if (_vpnKillSwitchService != null && _vpnKillSwitchService.IsFailClosedActive)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    public void Handle(VpnKillSwitchTriggeredEvent message)
+    {
+        _isVpnDown = true;
+        lock (_staggeredLock)
+        {
+            _staggeredCts?.Cancel();
+            while (_staggeredQueue.TryDequeue(out _))
+            {
+            }
+        }
+    }
+
+    public void Handle(VpnInterfaceRestoredEvent message)
+    {
+        OnVpnRestored();
+    }
+
+    public void Handle(VpnRestoredEvent message)
+    {
+        OnVpnRestored();
+    }
+
+    private void OnVpnRestored()
+    {
+        _isVpnDown = false;
+
+        lock (_staggeredLock)
+        {
+            if (DateTime.UtcNow - _lastVpnRestore < TimeSpan.FromSeconds(2))
+            {
+                return;
+            }
+
+            _lastVpnRestore = DateTime.UtcNow;
+        }
+
+        if (_torrentService == null)
+        {
+            return;
+        }
+
+        var activeTorrents = _torrentService.GetAll()
+            .Where(t => t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.Seeding)
+            .ToList();
+
+        if (activeTorrents.Count == 0)
+        {
+            return;
+        }
+
+        ScheduleStaggeredAnnounces(activeTorrents);
+    }
+
+    public void ScheduleStaggeredAnnounces(IEnumerable<Torrent> torrents)
+    {
+        lock (_staggeredLock)
+        {
+            _staggeredCts?.Cancel();
+            _staggeredCts?.Dispose();
+            _staggeredCts = new CancellationTokenSource();
+            var token = _staggeredCts.Token;
+
+            while (_staggeredQueue.TryDequeue(out _))
+            {
+            }
+
+            var list = torrents.ToList();
+            foreach (var torrent in list)
+            {
+                _staggeredQueue.Enqueue(torrent);
+            }
+
+            _logger.Info("VPN restored: scheduling staggered announces for {0} torrents across rate-limited window.", list.Count);
+
+            _ = ProcessStaggeredAnnouncesAsync(token);
+        }
+    }
+
+    private async Task ProcessStaggeredAnnouncesAsync(CancellationToken cancellationToken)
+    {
+        var count = _staggeredQueue.Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        var totalWindowMs = Math.Clamp(count * 1000, 15000, 30000);
+        var intervalMs = Math.Max(250, totalWindowMs / count);
+        var random = new Random();
+
+        while (_staggeredQueue.TryDequeue(out var torrent))
+        {
+            if (cancellationToken.IsCancellationRequested || _isVpnDown)
+            {
+                break;
+            }
+
+            try
+            {
+                if (!torrent.IsVpnPaused && (torrent.Status == TorrentStatus.Downloading || torrent.Status == TorrentStatus.Seeding))
+                {
+                    AnnounceTorrent(torrent, force: true);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed staggered announce for torrent {0}", torrent.Name);
+            }
+
+            if (_staggeredQueue.IsEmpty)
+            {
+                break;
+            }
+
+            var jitter = random.Next(-intervalMs / 4, Math.Max(1, intervalMs / 4));
+            var delayMs = Math.Max(50, intervalMs + jitter);
+
+            try
+            {
+                await DelayAsync(TimeSpan.FromMilliseconds(delayMs), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_staggeredLock)
+        {
+            _staggeredCts?.Cancel();
+            _staggeredCts?.Dispose();
+            _staggeredCts = null;
+        }
     }
 }

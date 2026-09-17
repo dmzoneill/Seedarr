@@ -7,6 +7,7 @@ using BencodeNET.Parsing;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Seeding;
@@ -534,5 +535,115 @@ public class TrackerAnnounceServiceTest
         _multiTracker.Received(1).Announce(
             Arg.Is<TrackerAnnounceRequest>(r => r.Event == AnnounceEvent.Stopped && r.NumWant == 0),
             Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_defer_announce_when_torrent_is_vpn_paused()
+    {
+        var torrent = new Torrent
+        {
+            Id = 60,
+            Name = "VpnPaused.Torrent",
+            InfoHash = "6666777788889999000011112222333344445555",
+            Status = TorrentStatus.Downloading,
+            IsVpnPaused = true
+        };
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results, Is.Empty);
+        _multiTracker.DidNotReceive().Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_defer_announce_when_vpn_kill_switch_triggered()
+    {
+        var torrent = new Torrent
+        {
+            Id = 61,
+            Name = "Active.Torrent",
+            InfoHash = "7777888899990000111122223333444455556666",
+            Status = TorrentStatus.Downloading,
+            IsVpnPaused = false
+        };
+
+        _service.Handle(new VpnKillSwitchTriggeredEvent("tun0"));
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results, Is.Empty);
+        _multiTracker.DidNotReceive().Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void ScrapeTorrent_should_defer_scrape_when_torrent_is_vpn_paused()
+    {
+        var torrent = new Torrent
+        {
+            Id = 62,
+            Name = "Scrape.Torrent",
+            InfoHash = "8888999900001111222233334444555566667777",
+            Status = TorrentStatus.Downloading,
+            IsVpnPaused = true
+        };
+
+        var result = _service.ScrapeTorrent(torrent);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Does.Contain("deferred"));
+        _multiTracker.DidNotReceive().Scrape(Arg.Any<string>(), Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public async Task Handle_VpnInterfaceRestoredEvent_schedules_staggered_announces()
+    {
+        var torrent1 = new Torrent
+        {
+            Id = 70,
+            Name = "Restored1",
+            InfoHash = "1111111122222222333333334444444455555555",
+            Status = TorrentStatus.Downloading,
+            IsVpnPaused = false
+        };
+        var torrent2 = new Torrent
+        {
+            Id = 71,
+            Name = "Restored2",
+            InfoHash = "2222222233333333444444445555555566666666",
+            Status = TorrentStatus.Seeding,
+            IsVpnPaused = false
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent1, torrent2 });
+
+        var tracker1 = new TrackerEntry { Id = 1, TorrentId = 70, Url = "http://tracker1.org/announce", Enabled = true };
+        var tracker2 = new TrackerEntry { Id = 2, TorrentId = 71, Url = "http://tracker2.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(70).Returns(new List<TrackerEntry> { tracker1 });
+        _trackerEntryService.GetByTorrentId(71).Returns(new List<TrackerEntry> { tracker2 });
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        _service.DelayAsync = (delay, ct) =>
+        {
+            return Task.CompletedTask;
+        };
+
+        _service.Handle(new VpnInterfaceRestoredEvent("tun0"));
+
+        Assert.That(_service.IsStaggeredAnnounceScheduled, Is.True);
+
+        // Wait briefly for async queue drain with 0 delay
+        for (var i = 0; i < 50; i++)
+        {
+            if (_service.PendingStaggeredAnnounces == 0)
+            {
+                break;
+            }
+
+            await Task.Delay(20);
+        }
+
+        Assert.That(_service.PendingStaggeredAnnounces, Is.EqualTo(0));
     }
 }

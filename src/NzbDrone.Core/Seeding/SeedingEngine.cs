@@ -315,7 +315,7 @@ public class SeedingEngine : BackgroundService
         foreach (var stalledId in _stalledTorrentIds)
         {
             var torrent = activeTorrents.FirstOrDefault(t => t.Id == stalledId);
-            if (torrent == null || torrent.Status != TorrentStatus.Downloading || torrent.DownloadSpeed > 0 || torrent.Progress >= 1.0)
+            if (torrent == null || torrent.Status != TorrentStatus.Downloading || torrent.DownloadSpeed > 0 || torrent.Progress >= 1.0 || torrent.IsVpnPaused)
             {
                 stalledIdsToRemove.Add(stalledId);
             }
@@ -340,7 +340,7 @@ public class SeedingEngine : BackgroundService
             totalDlSpeed += torrent.DownloadSpeed;
             totalUlSpeed += torrent.UploadSpeed;
 
-            if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed == 0 && torrent.Progress < 1.0)
+            if (!torrent.IsVpnPaused && torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed == 0 && torrent.Progress < 1.0)
             {
                 var stalledMinutes = (int)(_clock.UtcNow - torrent.DateAdded).TotalMinutes;
                 if (stalledMinutes >= 5 && _stalledTorrentIds.Add(torrent.Id))

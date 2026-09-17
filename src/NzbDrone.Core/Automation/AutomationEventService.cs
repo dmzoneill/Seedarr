@@ -24,7 +24,7 @@ public class AutomationEventService :
     IHandle<MediaEnrichedEvent>,
     IHandle<ArchiveExtractionCompletedEvent>,
     IHandle<ArchiveExtractionFailedEvent>,
-    IHandle<NzbDrone.Core.Network.Vpn.VpnKillSwitchTriggeredEvent>,
+    IHandle<VpnKillSwitchTriggeredEvent>,
     IHandle<VpnInterfaceRestoredEvent>,
     IHandle<CategoryUpdatedEvent>,
     IHandle<ApplicationStartedEvent>,
@@ -157,7 +157,7 @@ public class AutomationEventService :
         }
     }
 
-    public void Handle(NzbDrone.Core.Network.Vpn.VpnKillSwitchTriggeredEvent message)
+    public void Handle(VpnKillSwitchTriggeredEvent message)
     {
         DispatchTrigger(AutomationTrigger.VpnDisconnected, null);
     }

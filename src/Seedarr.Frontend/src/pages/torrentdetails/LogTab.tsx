@@ -461,9 +461,15 @@ export function LogTab({ torrent }: { torrent: Torrent }) {
           {torrent.infoHash}
         </StatusRow>
         <StatusRow label="Current Status">
-          <span className={`badge badge-${torrent.status.toLowerCase()}`}>
-            {torrent.status}
-          </span>
+          {torrent.isVpnPaused ? (
+            <span className="badge badge-vpn-paused">
+              Paused (VPN Kill Switch)
+            </span>
+          ) : (
+            <span className={`badge badge-${torrent.status.toLowerCase()}`}>
+              {torrent.status}
+            </span>
+          )}
         </StatusRow>
       </div>
     </div>
