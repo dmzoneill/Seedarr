@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
@@ -41,6 +43,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly NzbDrone.Core.Network.GeoIp.IGeoIpService _geoIpService;
     private readonly IPieceStorage _pieceStorage;
     private readonly NzbDrone.Core.Torrents.IPiecePicker _piecePicker;
+    private readonly ITorrentStreamService _torrentStreamService;
 
     private readonly ConcurrentDictionary<int, (List<TrackerEntry> Trackers, DateTime Expiry)> _broadcastTrackersCache = new();
     private readonly ConcurrentDictionary<int, (TorrentMediaMetadata Metadata, DateTime Expiry)> _broadcastMediaMetaCache = new();
@@ -64,7 +67,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         NzbDrone.Core.Network.GeoIp.IGeoIpService geoIpService = null,
         TimeSpan? coalesceWindow = null,
         IPieceStorage pieceStorage = null,
-        NzbDrone.Core.Torrents.IPiecePicker piecePicker = null)
+        NzbDrone.Core.Torrents.IPiecePicker piecePicker = null,
+        ITorrentStreamService torrentStreamService = null)
         : base(signalRBroadcaster, null, coalesceWindow)
     {
         _torrentService = torrentService;
@@ -82,6 +86,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _geoIpService = geoIpService;
         _pieceStorage = pieceStorage;
         _piecePicker = piecePicker;
+        _torrentStreamService = torrentStreamService;
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -489,6 +494,152 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         }
 
         return files.Select(TorrentResourceMapper.ToFileResource).ToList();
+    }
+
+    [HttpGet("{torrentId:int}/stream")]
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is validated against torrent save directory")]
+    public ActionResult StreamTorrent(int torrentId)
+    {
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var rangeStart = ParseRangeStart();
+        _torrentStreamService?.NotifyStreamPosition(torrentId, rangeStart);
+
+        var files = _torrentFileService.GetByTorrentId(torrentId)
+            .Where(f => !f.IsPaddingFile)
+            .ToList();
+
+        if (files.Count == 0)
+        {
+            return NotFound("No streamable files found in torrent.");
+        }
+
+        var targetFile = files.OrderByDescending(f => f.Size).First();
+        return ServeTorrentFile(torrent, targetFile, false);
+    }
+
+    [HttpGet("{torrentId:int}/files/{fileId:int}/stream")]
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is validated against torrent save directory")]
+    public ActionResult StreamFile(int torrentId, int fileId)
+    {
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var files = _torrentFileService.GetByTorrentId(torrentId);
+        var file = files.FirstOrDefault(f => f.Id == fileId);
+        if (file == null)
+        {
+            return NotFound();
+        }
+
+        var rangeStart = ParseRangeStart();
+        var effectiveOffset = file.ByteOffset > 0 ? file.ByteOffset + rangeStart : rangeStart;
+        _torrentStreamService?.NotifyStreamPosition(torrentId, effectiveOffset);
+
+        return ServeTorrentFile(torrent, file, false);
+    }
+
+    [HttpGet("{torrentId:int}/files/{fileId:int}/download")]
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is validated against torrent save directory")]
+    public ActionResult DownloadFile(int torrentId, int fileId)
+    {
+        var torrent = _torrentService.Get(torrentId);
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var files = _torrentFileService.GetByTorrentId(torrentId);
+        var file = files.FirstOrDefault(f => f.Id == fileId);
+        if (file == null)
+        {
+            return NotFound();
+        }
+
+        var rangeStart = ParseRangeStart();
+        var effectiveOffset = file.ByteOffset > 0 ? file.ByteOffset + rangeStart : rangeStart;
+        _torrentStreamService?.NotifyStreamPosition(torrentId, effectiveOffset);
+
+        return ServeTorrentFile(torrent, file, true);
+    }
+
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path is validated against torrent save directory")]
+    private ActionResult ServeTorrentFile(Torrent torrent, TorrentFile file, bool download)
+    {
+        var basePath = torrent.SavePath;
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            basePath = _configService?.DefaultSavePath ?? string.Empty;
+        }
+
+        if (string.IsNullOrWhiteSpace(basePath) || string.IsNullOrWhiteSpace(file?.Path))
+        {
+            return NotFound("File path not configured.");
+        }
+
+        var fullBasePath = Path.GetFullPath(basePath);
+        var baseDirWithSep = fullBasePath.EndsWith(Path.DirectorySeparatorChar)
+            ? fullBasePath
+            : fullBasePath + Path.DirectorySeparatorChar;
+
+        var fullPath = Path.GetFullPath(Path.Combine(fullBasePath, file.Path));
+        if (!fullPath.StartsWith(baseDirWithSep, StringComparison.OrdinalIgnoreCase) && !string.Equals(fullPath, fullBasePath, StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest("Invalid file path");
+        }
+
+        if (!global::System.IO.File.Exists(fullPath))
+        {
+            return NotFound("File not found on disk.");
+        }
+
+        var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var contentType = GetContentType(file.Path);
+        var downloadName = download ? Path.GetFileName(file.Path) : null;
+
+        return File(stream, contentType, fileDownloadName: downloadName, enableRangeProcessing: true);
+    }
+
+    private long ParseRangeStart()
+    {
+        var rangeHeader = Request?.Headers["Range"].ToString();
+        if (!string.IsNullOrEmpty(rangeHeader) && rangeHeader.StartsWith("bytes=", StringComparison.OrdinalIgnoreCase))
+        {
+            var dashIndex = rangeHeader.IndexOf('-');
+            var startStr = dashIndex > 6 ? rangeHeader.Substring(6, dashIndex - 6) : rangeHeader.Substring(6);
+            if (long.TryParse(startStr, out var start) && start >= 0)
+            {
+                return start;
+            }
+        }
+
+        return 0;
+    }
+
+    private static string GetContentType(string path)
+    {
+        var ext = Path.GetExtension(path)?.ToLowerInvariant();
+        return ext switch
+        {
+            ".mp4" => "video/mp4",
+            ".mkv" => "video/x-matroska",
+            ".webm" => "video/webm",
+            ".avi" => "video/x-msvideo",
+            ".mov" => "video/quicktime",
+            ".mp3" => "audio/mpeg",
+            ".flac" => "audio/flac",
+            ".aac" => "audio/aac",
+            ".ogg" => "audio/ogg",
+            ".wav" => "audio/wav",
+            _ => "application/octet-stream"
+        };
     }
 
     [HttpGet("{torrentId:int}/trackers")]

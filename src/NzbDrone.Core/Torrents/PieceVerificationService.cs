@@ -7,11 +7,16 @@ public class PieceVerificationService : IPieceVerificationService
 {
     private readonly IPieceStorage _pieceStorage;
     private readonly IPiecePicker _piecePicker;
+    private readonly ITorrentStreamService _torrentStreamService;
 
-    public PieceVerificationService(IPieceStorage pieceStorage, IPiecePicker piecePicker = null)
+    public PieceVerificationService(
+        IPieceStorage pieceStorage,
+        IPiecePicker piecePicker = null,
+        ITorrentStreamService torrentStreamService = null)
     {
         _pieceStorage = pieceStorage ?? throw new ArgumentNullException(nameof(pieceStorage));
         _piecePicker = piecePicker;
+        _torrentStreamService = torrentStreamService;
     }
 
     public bool VerifyPiece(string infoHash, int pieceIndex, byte[] pieceData, byte[] expectedHash)
@@ -42,6 +47,7 @@ public class PieceVerificationService : IPieceVerificationService
         if (isMatch)
         {
             _pieceStorage.MarkPieceVerified(infoHash, pieceIndex, pieceData.Length);
+            _torrentStreamService?.NotifyPieceCompleted(infoHash, pieceIndex);
             return true;
         }
 
