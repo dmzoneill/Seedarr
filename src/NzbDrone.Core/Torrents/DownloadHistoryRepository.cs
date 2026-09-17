@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using Dapper;
 using NzbDrone.Core.Datastore;
 
@@ -104,10 +105,33 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
 
     public int DeleteOlderThan(DateTime cutoffDate)
     {
-        using var connection = _database.OpenConnection();
-        return connection.Execute(
-            $"DELETE FROM \"{_table}\" WHERE \"DateAdded\" < @Cutoff",
-            new { Cutoff = cutoffDate });
+        return RetryPolicy.Execute(() =>
+        {
+            var totalDeleted = 0;
+            using var connection = _database.OpenConnection();
+
+            while (true)
+            {
+                var rowsAffected = connection.Execute(
+                    $@"DELETE FROM ""{_table}""
+                       WHERE ""Id"" IN (
+                           SELECT ""Id"" FROM ""{_table}""
+                           WHERE ""DateAdded"" < @Cutoff AND ""DateRemoved"" IS NOT NULL
+                           LIMIT 500
+                       )",
+                    new { Cutoff = cutoffDate });
+
+                totalDeleted += rowsAffected;
+                if (rowsAffected == 0)
+                {
+                    break;
+                }
+
+                Thread.Sleep(1);
+            }
+
+            return totalDeleted;
+        });
     }
 
     public void DeleteAll()
