@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
@@ -774,20 +776,27 @@ public class TransmissionClientTest
     [Test]
     public async Task SendRequest_should_handle_concurrent_409_conflicts_thread_safely()
     {
-        var handler = new MockHttpMessageHandler();
-
-        for (var i = 0; i < 5; i++)
+        var handler = new MockHttpMessageHandler
         {
-            handler.EnqueueWithHeaders(
-                HttpStatusCode.Conflict,
-                @"{}",
-                new Dictionary<string, string> { { "X-Transmission-Session-Id", "concurrent-session-456" } });
-        }
+            ResponseFactory = req =>
+            {
+                if (req.Headers.TryGetValues("X-Transmission-Session-Id", out var vals) &&
+                    vals.Contains("concurrent-session-456"))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(@"{""result"":""success"",""arguments"":{}}", Encoding.UTF8, "application/json"),
+                    };
+                }
 
-        for (var i = 0; i < 5; i++)
-        {
-            handler.Enqueue(HttpStatusCode.OK, @"{""result"":""success"",""arguments"":{}}");
-        }
+                var resp = new HttpResponseMessage(HttpStatusCode.Conflict)
+                {
+                    Content = new StringContent(@"{}", Encoding.UTF8, "application/json"),
+                };
+                resp.Headers.TryAddWithoutValidation("X-Transmission-Session-Id", "concurrent-session-456");
+                return resp;
+            },
+        };
 
         InjectMockClient(handler);
 

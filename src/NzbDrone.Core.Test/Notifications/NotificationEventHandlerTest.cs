@@ -250,7 +250,7 @@ public class NotificationEventHandlerTest
             {
                 lock (lockObj)
                 {
-                    dispatchedUrls.Add(callInfo.Arg<string>());
+                    dispatchedUrls.Add(callInfo.ArgAt<string>(0));
                 }
 
                 dispatchedSignal.TrySetResult(true);
@@ -414,7 +414,7 @@ public class NotificationEventHandlerTest
             {
                 lock (lockObj)
                 {
-                    dispatchedUrls.Add(callInfo.Arg<string>());
+                    dispatchedUrls.Add(callInfo.ArgAt<string>(0));
                 }
 
                 signal.TrySetResult(true);

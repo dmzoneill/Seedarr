@@ -1830,6 +1830,17 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         }
 
         var torrent = _torrentService.GetByInfoHash(infoHash);
+        if (torrent == null)
+        {
+            try
+            {
+                torrent = _torrentService.GetAll()?.FirstOrDefault(t => string.Equals(t.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+            }
+            catch
+            {
+            }
+        }
+
         if (torrent != null)
         {
             _torrentCache[infoHash] = torrent;
