@@ -31,6 +31,7 @@ public interface IConfigService
     bool CsrfProtectionEnabled { get; }
     bool HostHeaderValidationEnabled { get; }
     string AllowedHosts { get; }
+    string WebhookBaseUrl { get; }
 
     // Watch Folder
     bool WatchFolderEnabled { get; }
@@ -361,6 +362,7 @@ public class ConfigService : IConfigService
     public bool CsrfProtectionEnabled => GetValueBoolean("CsrfProtectionEnabled", true);
     public bool HostHeaderValidationEnabled => GetValueBoolean("HostHeaderValidationEnabled", false);
     public string AllowedHosts => GetValue("AllowedHosts", "");
+    public string WebhookBaseUrl => GetValue("WebhookBaseUrl", "");
 
     // Watch Folder
     public bool WatchFolderEnabled => GetValueBoolean("WatchFolderEnabled", false);

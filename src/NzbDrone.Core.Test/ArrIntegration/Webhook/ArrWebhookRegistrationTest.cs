@@ -217,6 +217,158 @@ public class ArrWebhookRegistrationTest
     }
 
     [Test]
+    public void GetSeedarrBaseUrl_should_not_append_port_for_domain_name()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(7070);
+        _configFileProvider.UrlBase.Returns("");
+        var connection = new ArrConnectionDefinition { WebhookHost = "seedarr.example.com" };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("http://seedarr.example.com"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_not_append_port_for_lan_domain()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(7070);
+        _configFileProvider.UrlBase.Returns("");
+        var connection = new ArrConnectionDefinition { WebhookHost = "seedarr.lan" };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("http://seedarr.lan"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_preserve_custom_port_for_domain()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(7070);
+        _configFileProvider.UrlBase.Returns("");
+        var connection = new ArrConnectionDefinition { WebhookHost = "seedarr.lan:8080" };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("http://seedarr.lan:8080"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_not_append_standard_ports()
+    {
+        _configFileProvider.BindAddress.Returns("myhost");
+        _configFileProvider.Port.Returns(80);
+        _configFileProvider.UrlBase.Returns("");
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var connection = new ArrConnectionDefinition();
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("http://myhost"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_support_http_url_in_webhook_host()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(7070);
+        _configFileProvider.UrlBase.Returns("");
+        var connection = new ArrConnectionDefinition { WebhookHost = "http://seedarr.example.com" };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("http://seedarr.example.com"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_support_https_url_in_webhook_host()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(7070);
+        _configFileProvider.UrlBase.Returns("");
+        var connection = new ArrConnectionDefinition { WebhookHost = "https://seedarr.example.com" };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("https://seedarr.example.com"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_cleanly_append_url_base_to_full_url()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(7070);
+        _configFileProvider.UrlBase.Returns("/seedarr");
+        var connection = new ArrConnectionDefinition { WebhookHost = "https://seedarr.example.com" };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("https://seedarr.example.com/seedarr"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_not_duplicate_url_base_if_already_present_in_full_url()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(7070);
+        _configFileProvider.UrlBase.Returns("/seedarr");
+        var connection = new ArrConnectionDefinition { WebhookHost = "https://seedarr.example.com/seedarr" };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("https://seedarr.example.com/seedarr"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_use_global_webhook_base_url_when_connection_webhook_host_is_empty()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(7070);
+        _configFileProvider.UrlBase.Returns("");
+        _configService.WebhookBaseUrl.Returns("https://global.seedarr.example.com");
+        var connection = new ArrConnectionDefinition { WebhookHost = "" };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("https://global.seedarr.example.com"));
+    }
+
+    [Test]
+    public void GetSeedarrBaseUrl_should_prefer_connection_webhook_host_over_global_webhook_base_url()
+    {
+        _configFileProvider.BindAddress.Returns("*");
+        _configFileProvider.Port.Returns(7070);
+        _configFileProvider.UrlBase.Returns("");
+        _configService.WebhookBaseUrl.Returns("https://global.seedarr.example.com");
+        var connection = new ArrConnectionDefinition { WebhookHost = "https://override.seedarr.example.com" };
+
+        var method = typeof(ArrWebhookRegistration).GetMethod("GetSeedarrBaseUrl",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var result = (string)method.Invoke(_registration, new object[] { connection });
+
+        Assert.That(result, Is.EqualTo("https://override.seedarr.example.com"));
+    }
+
+    [Test]
     public void RegisterWebhook_should_use_v1_api_for_lidarr()
     {
         var connection = new ArrConnectionDefinition
