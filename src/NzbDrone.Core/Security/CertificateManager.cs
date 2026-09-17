@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Security;
@@ -451,6 +452,24 @@ public class CertificateManager : ICertificateManager
         sanBuilder.AddDnsName("localhost");
         try
         {
+            sanBuilder.AddDnsName("seedarr");
+        }
+        catch
+        {
+            // Ignore invalid DNS name characters
+        }
+
+        try
+        {
+            sanBuilder.AddDnsName("host.docker.internal");
+        }
+        catch
+        {
+            // Ignore invalid DNS name characters
+        }
+
+        try
+        {
             sanBuilder.AddDnsName(Environment.MachineName);
         }
         catch
@@ -461,6 +480,39 @@ public class CertificateManager : ICertificateManager
         sanBuilder.AddIpAddress(IPAddress.Loopback);
         sanBuilder.AddIpAddress(IPAddress.IPv6Loopback);
 
+        var addedIps = new HashSet<IPAddress>
+        {
+            IPAddress.Loopback,
+            IPAddress.IPv6Loopback,
+        };
+
+        try
+        {
+            var interfaces = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
+            foreach (var ni in interfaces.Where(i => i.OperationalStatus == System.Net.NetworkInformation.OperationalStatus.Up))
+            {
+                try
+                {
+                    foreach (var ipInfo in ni.GetIPProperties().UnicastAddresses)
+                    {
+                        var ip = ipInfo.Address;
+                        if (!IPAddress.IsLoopback(ip) && !ip.IsIPv6LinkLocal && !ip.IsIPv6SiteLocal && addedIps.Add(ip))
+                        {
+                            sanBuilder.AddIpAddress(ip);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Debug(ex, "Could not read IP properties for interface '{0}'", ni.Name);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn(ex, "Could not discover local network interfaces for SSL SAN extension");
+        }
+
         if (!string.IsNullOrWhiteSpace(config.BindAddress) && config.BindAddress != "*")
         {
             if (IPAddress.TryParse(config.BindAddress, out var bindIp))
@@ -468,7 +520,8 @@ public class CertificateManager : ICertificateManager
                 if (!IPAddress.Any.Equals(bindIp) &&
                     !IPAddress.IPv6Any.Equals(bindIp) &&
                     !IPAddress.Loopback.Equals(bindIp) &&
-                    !IPAddress.IPv6Loopback.Equals(bindIp))
+                    !IPAddress.IPv6Loopback.Equals(bindIp) &&
+                    addedIps.Add(bindIp))
                 {
                     sanBuilder.AddIpAddress(bindIp);
                 }
