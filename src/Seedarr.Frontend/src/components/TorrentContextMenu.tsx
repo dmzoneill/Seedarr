@@ -466,6 +466,15 @@ function TorrentContextMenu({
           >
             {ct.sequentialDownload ? "Disable" : "Enable"} {t("torrents.sequentialDownload", undefined, "Sequential Download")}
           </button>
+          <button
+            className="context-menu-item"
+            onClick={() => {
+              onUpdate({ ...ct, firstLastPiecePrio: !ct.firstLastPiecePrio });
+              onClose();
+            }}
+          >
+            {ct.firstLastPiecePrio ? "Disable" : "Enable"} {t("torrents.firstLastPiecePrio", undefined, "Prioritize First & Last Pieces")}
+          </button>
 
           <div className="context-menu-separator" />
 

@@ -861,6 +861,12 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                     shouldUpdate = true;
                 }
 
+                if (resource.FirstLastPiecePrio)
+                {
+                    imported.FirstLastPiecePrio = true;
+                    shouldUpdate = true;
+                }
+
                 if (string.Equals(resource.Status, "Paused", StringComparison.OrdinalIgnoreCase))
                 {
                     imported.Status = TorrentStatus.Paused;
@@ -965,6 +971,7 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         [FromForm] string category = null,
         [FromForm] string savePath = null,
         [FromForm] bool? sequentialDownload = null,
+        [FromForm] bool? firstLastPiecePrio = null,
         [FromForm] bool? paused = null)
     {
         if (files == null || files.Count == 0)
@@ -1009,6 +1016,12 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                 if (sequentialDownload == true)
                 {
                     torrent.SequentialDownload = true;
+                    shouldUpdate = true;
+                }
+
+                if (firstLastPiecePrio == true)
+                {
+                    torrent.FirstLastPiecePrio = true;
                     shouldUpdate = true;
                 }
 

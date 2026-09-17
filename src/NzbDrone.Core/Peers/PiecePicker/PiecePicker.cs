@@ -85,6 +85,7 @@ public interface IDownloadManager : IPieceBlockDownloader
     bool CanRequestBlock(PeerConnection peer, int pieceIndex);
     PieceBlock RequestBlock(PeerConnection peer, int pieceIndex = -1);
     PieceBlock RequestBlock(PeerConnection peer, int pieceIndex, bool sequential);
+    PieceBlock RequestBlock(PeerConnection peer, int pieceIndex, bool sequential, bool firstLastPiecePrio, int pieceCount = 0, IReadOnlyCollection<int> customBoundaryPieces = null);
     IPiecePicker SequentialPicker { get; }
     IPiecePicker RarestFirstPicker { get; }
     IPiecePicker GetPicker(Torrent torrent);
@@ -171,6 +172,34 @@ public class PiecePicker : IDownloadManager, IPiecePicker
         return GetPicker(sequential).PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, activePieces);
     }
 
+    public int? PickPiece(
+        BitArray myPieces,
+        BitArray peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow,
+        double rarestFirstRatio,
+        IReadOnlyCollection<int> activePieces,
+        bool firstLastPiecePrio,
+        IReadOnlyCollection<int> customBoundaryPieces = null)
+    {
+        return GetPicker(sequential).PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, activePieces, firstLastPiecePrio, customBoundaryPieces);
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        IReadOnlyList<BitArray> peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow,
+        double rarestFirstRatio,
+        IReadOnlyCollection<int> activePieces,
+        bool firstLastPiecePrio,
+        IReadOnlyCollection<int> customBoundaryPieces = null)
+    {
+        return GetPicker(sequential).PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, activePieces, firstLastPiecePrio, customBoundaryPieces);
+    }
+
     public ActivePiece AddActivePiece(int pieceIndex, int pieceLength, int blockSize = 16384)
     {
         var piece = new ActivePiece(pieceIndex, pieceLength, blockSize);
@@ -211,10 +240,26 @@ public class PiecePicker : IDownloadManager, IPiecePicker
 
     public PieceBlock RequestBlock(PeerConnection peer, int pieceIndex, Torrent torrent)
     {
-        return RequestBlock(peer, pieceIndex, torrent?.SequentialDownload ?? false);
+        return RequestBlock(
+            peer,
+            pieceIndex,
+            torrent?.SequentialDownload ?? false,
+            torrent?.FirstLastPiecePrio ?? false,
+            torrent?.PieceCount ?? 0);
     }
 
     public PieceBlock RequestBlock(PeerConnection peer, int pieceIndex, bool sequential)
+    {
+        return RequestBlock(peer, pieceIndex, sequential, false, 0);
+    }
+
+    public PieceBlock RequestBlock(
+        PeerConnection peer,
+        int pieceIndex,
+        bool sequential,
+        bool firstLastPiecePrio,
+        int pieceCount = 0,
+        IReadOnlyCollection<int> customBoundaryPieces = null)
     {
         if (peer == null)
         {
@@ -272,9 +317,32 @@ public class PiecePicker : IDownloadManager, IPiecePicker
                 return null;
             }
 
-            var piecesToConsider = sequential
-                ? (IEnumerable<KeyValuePair<int, ActivePiece>>)_activePieces.OrderBy(kvp => kvp.Key)
-                : _activePieces;
+            IEnumerable<KeyValuePair<int, ActivePiece>> piecesToConsider;
+            if (firstLastPiecePrio && pieceCount > 0)
+            {
+                var boundaryList = customBoundaryPieces != null && customBoundaryPieces.Count > 0
+                    ? customBoundaryPieces
+                    : SequentialPiecePicker.GetBoundaryPieces(pieceCount);
+                var boundarySet = new HashSet<int>(boundaryList);
+
+                var boundaryPieces = boundaryList
+                    .Where(b => _activePieces.ContainsKey(b))
+                    .Select(b => new KeyValuePair<int, ActivePiece>(b, _activePieces[b]));
+
+                var otherPieces = sequential
+                    ? (IEnumerable<KeyValuePair<int, ActivePiece>>)_activePieces.Where(kvp => !boundarySet.Contains(kvp.Key)).OrderBy(kvp => kvp.Key)
+                    : _activePieces.Where(kvp => !boundarySet.Contains(kvp.Key));
+
+                piecesToConsider = boundaryPieces.Concat(otherPieces);
+            }
+            else if (sequential)
+            {
+                piecesToConsider = _activePieces.OrderBy(kvp => kvp.Key);
+            }
+            else
+            {
+                piecesToConsider = _activePieces;
+            }
 
             foreach (var kvp in piecesToConsider)
             {

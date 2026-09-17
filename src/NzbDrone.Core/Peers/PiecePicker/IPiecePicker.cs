@@ -38,4 +38,26 @@ public interface IPiecePicker
         int lookaheadWindow,
         double rarestFirstRatio,
         IReadOnlyCollection<int> activePieces);
+
+    int? PickPiece(
+        BitArray myPieces,
+        IReadOnlyList<BitArray> peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow,
+        double rarestFirstRatio,
+        IReadOnlyCollection<int> activePieces,
+        bool firstLastPiecePrio,
+        IReadOnlyCollection<int> customBoundaryPieces = null);
+
+    int? PickPiece(
+        BitArray myPieces,
+        BitArray peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow,
+        double rarestFirstRatio,
+        IReadOnlyCollection<int> activePieces,
+        bool firstLastPiecePrio,
+        IReadOnlyCollection<int> customBoundaryPieces = null);
 }

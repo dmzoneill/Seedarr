@@ -864,4 +864,69 @@ public class QBittorrentApiControllerTest
         _torrentFileService.DidNotReceive().Update(file3);
         _torrentService.Received(1).Recheck(1);
     }
+
+    [Test]
+    public void ToggleFirstLastPiecePrio_toggles_first_last_prio_and_updates_torrent()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            FirstLastPiecePrio = false
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.ToggleFirstLastPiecePrio(hash);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        Assert.That(torrent.FirstLastPiecePrio, Is.True);
+        _torrentService.Received(1).Update(torrent);
+
+        _controller.ToggleFirstLastPiecePrio(hash);
+        Assert.That(torrent.FirstLastPiecePrio, Is.False);
+        _torrentService.Received(2).Update(torrent);
+    }
+
+    [Test]
+    public void SetFirstLastPiecePrio_sets_first_last_prio_and_updates_torrent()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            FirstLastPiecePrio = false
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.SetFirstLastPiecePrio(hash, enable: true);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        Assert.That(torrent.FirstLastPiecePrio, Is.True);
+        _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public void GetTorrents_includes_first_last_piece_prio_in_response()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            FirstLastPiecePrio = true
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var result = _controller.GetTorrentsInfo();
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result.Result;
+        var list = ok.Value as List<Dictionary<string, object>>;
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list[0]["f_l_piece_prio"], Is.EqualTo(true));
+    }
 }

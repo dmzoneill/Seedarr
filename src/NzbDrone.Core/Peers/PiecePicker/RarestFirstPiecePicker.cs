@@ -46,8 +46,7 @@ public class RarestFirstPiecePicker : IPiecePicker
         double rarestFirstRatio,
         IReadOnlyCollection<int> activePieces)
     {
-        var list = peerPieces != null ? new[] { peerPieces } : Array.Empty<BitArray>();
-        return PickPiece(myPieces, list, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, activePieces);
+        return PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, activePieces, false, null);
     }
 
     public int? PickPiece(
@@ -59,12 +58,60 @@ public class RarestFirstPiecePicker : IPiecePicker
         double rarestFirstRatio,
         IReadOnlyCollection<int> activePieces)
     {
+        return PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, activePieces, false, null);
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        BitArray peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow,
+        double rarestFirstRatio,
+        IReadOnlyCollection<int> activePieces,
+        bool firstLastPiecePrio,
+        IReadOnlyCollection<int> customBoundaryPieces = null)
+    {
+        var list = peerPieces != null ? new[] { peerPieces } : Array.Empty<BitArray>();
+        return PickPiece(myPieces, list, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, activePieces, firstLastPiecePrio, customBoundaryPieces);
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        IReadOnlyList<BitArray> peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow,
+        double rarestFirstRatio,
+        IReadOnlyCollection<int> activePieces,
+        bool firstLastPiecePrio,
+        IReadOnlyCollection<int> customBoundaryPieces = null)
+    {
         if (myPieces == null || myPieces.Length == 0 || peerPieces == null || peerPieces.Count == 0)
         {
             return null;
         }
 
         var pieceCount = myPieces.Length;
+
+        if (firstLastPiecePrio)
+        {
+            var boundary = customBoundaryPieces != null && customBoundaryPieces.Count > 0
+                ? customBoundaryPieces
+                : SequentialPiecePicker.GetBoundaryPieces(pieceCount);
+
+            foreach (var b in boundary)
+            {
+                if (b >= 0 && b < pieceCount && !myPieces[b] && PeerHasPiece(peerPieces, b))
+                {
+                    if (activePieces == null || !activePieces.Contains(b))
+                    {
+                        return b;
+                    }
+                }
+            }
+        }
+
         var candidates = new List<int>();
 
         for (var i = 0; i < pieceCount; i++)

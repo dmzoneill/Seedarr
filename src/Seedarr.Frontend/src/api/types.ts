@@ -30,6 +30,7 @@ export interface Torrent {
   savePath?: string | null;
   downloadPath?: string | null;
   sequentialDownload: boolean;
+  firstLastPiecePrio?: boolean;
   announceInterval: number;
   nextUpdate: number;
   sessionUploaded: number;
