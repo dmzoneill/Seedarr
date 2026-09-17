@@ -7,6 +7,8 @@ import type {
   AuthProvider,
   CurrentUser,
   LoginRequest,
+  CustomScriptTestRequest,
+  CustomScriptTestResult,
 } from "./types";
 
 const BASE_URL = "/api/v1";
@@ -211,6 +213,12 @@ class ApiClient {
 
   logout(): Promise<{ message: string }> {
     return this.post<{ message: string }>("/auth/logout");
+  }
+
+  testCustomScript(
+    request: CustomScriptTestRequest,
+  ): Promise<CustomScriptTestResult> {
+    return this.post<CustomScriptTestResult>("/customscript/test", request);
   }
 
   async postForm<T>(endpoint: string, formData: FormData): Promise<T> {

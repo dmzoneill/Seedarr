@@ -16,6 +16,8 @@ namespace NzbDrone.Core.Notifications;
 public interface ICustomScriptService
 {
     Task<bool> ExecuteScriptAsync(string scriptPath, Torrent torrent, string eventType, string arguments = null);
+
+    Task<CustomScriptTestResult> TestScriptAsync(string scriptPath, string arguments = null, string eventType = "Test");
 }
 
 public class CustomScriptService : ICustomScriptService
@@ -492,6 +494,196 @@ public class CustomScriptService : ICustomScriptService
         {
             _logger.Error(ex, "Failed to execute custom script: {0}", resolvedScriptPath);
             return false;
+        }
+    }
+
+    public async Task<CustomScriptTestResult> TestScriptAsync(string scriptPath, string arguments = null, string eventType = "Test")
+    {
+        var resolvedScriptPath = scriptPath;
+        var resolvedArguments = arguments;
+
+        if (!string.IsNullOrWhiteSpace(scriptPath) && scriptPath.TrimStart().StartsWith("{", StringComparison.Ordinal))
+        {
+            var (parsedPath, parsedArgs) = ParseSettings(scriptPath);
+            if (!string.IsNullOrWhiteSpace(parsedPath))
+            {
+                resolvedScriptPath = parsedPath;
+                if (string.IsNullOrWhiteSpace(resolvedArguments))
+                {
+                    resolvedArguments = parsedArgs;
+                }
+            }
+        }
+
+        var scriptDir = !string.IsNullOrWhiteSpace(resolvedScriptPath) ? Path.GetDirectoryName(resolvedScriptPath) : null;
+        var workingDir = !string.IsNullOrWhiteSpace(scriptDir) && Directory.Exists(scriptDir)
+            ? scriptDir
+            : Environment.CurrentDirectory;
+
+        if (string.IsNullOrWhiteSpace(resolvedScriptPath) || !File.Exists(resolvedScriptPath))
+        {
+            var msg = string.IsNullOrWhiteSpace(resolvedScriptPath)
+                ? "Script path is required."
+                : $"Script file does not exist: '{resolvedScriptPath}'";
+            _logger.Warn(msg);
+            return new CustomScriptTestResult
+            {
+                Success = false,
+                ExitCode = -1,
+                Stdout = string.Empty,
+                Stderr = msg,
+                ExecutionTimeMs = 0,
+                TimedOut = false,
+                ResolvedInterpreter = string.Empty,
+                WorkingDirectory = workingDir,
+            };
+        }
+
+        var (resolvedFileName, resolvedArgs) = ResolveInterpreter(resolvedScriptPath, resolvedArguments);
+
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = resolvedFileName,
+                Arguments = resolvedArgs,
+                WorkingDirectory = workingDir,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true,
+            };
+
+            // Sanitize inherited environment variables
+            SanitizeEnvironment(startInfo.EnvironmentVariables);
+
+            // Inject Servarr / Seedarr standard environment variables
+            var envVars = BuildEnvironmentVariables(eventType ?? "Test", null, null);
+            foreach (var kvp in envVars)
+            {
+                var cleanKey = SanitizeEnvKey(kvp.Key);
+                var cleanVal = SanitizeEnvValue(kvp.Value);
+                if (!string.IsNullOrEmpty(cleanKey))
+                {
+                    startInfo.EnvironmentVariables[cleanKey] = cleanVal;
+                }
+            }
+
+            _logger.Info("Testing custom script '{0}' for event '{1}' in working directory '{2}'...", resolvedScriptPath, eventType, workingDir);
+
+            using var process = new Process { StartInfo = startInfo };
+            process.Start();
+
+            using var timeoutCts = new CancellationTokenSource(_scriptTimeout);
+            var stdoutTask = process.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+            var stderrTask = process.StandardError.ReadToEndAsync(timeoutCts.Token);
+
+            var timedOut = false;
+            try
+            {
+                await process.WaitForExitAsync(timeoutCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                timedOut = true;
+                _logger.Error("Custom script test timed out after {0}s: {1}", _scriptTimeout.TotalSeconds, resolvedScriptPath);
+                try
+                {
+                    if (!process.HasExited)
+                    {
+                        process.Kill(true);
+                        using var reapCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                        await process.WaitForExitAsync(reapCts.Token);
+                    }
+                }
+                catch
+                {
+                    // Ignore kill exception
+                }
+            }
+
+            stopwatch.Stop();
+            var elapsedMs = stopwatch.ElapsedMilliseconds > 0 ? stopwatch.ElapsedMilliseconds : (stopwatch.Elapsed.TotalMilliseconds > 0 ? 1L : 0L);
+
+            var stdout = string.Empty;
+            var stderr = string.Empty;
+
+            try
+            {
+                using var drainCts = new CancellationTokenSource(_streamDrainTimeout);
+                using var linkedDrainCts = CancellationTokenSource.CreateLinkedTokenSource(timeoutCts.Token, drainCts.Token);
+
+                try
+                {
+                    await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(linkedDrainCts.Token);
+                }
+                catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
+                {
+                    _logger.Debug("Custom script test stream draining timed out after process exit: {0}", resolvedScriptPath);
+                }
+
+                if (stdoutTask.IsCompletedSuccessfully)
+                {
+                    stdout = await stdoutTask.ConfigureAwait(false);
+                }
+
+                if (stderrTask.IsCompletedSuccessfully)
+                {
+                    stderr = await stderrTask.ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Exception while draining custom script test streams: {0}", resolvedScriptPath);
+            }
+
+            var exitCode = timedOut ? -1 : process.ExitCode;
+            if (timedOut && string.IsNullOrWhiteSpace(stderr))
+            {
+                stderr = $"Script execution timed out after {_scriptTimeout.TotalSeconds} seconds.";
+            }
+
+            if (!string.IsNullOrWhiteSpace(stdout))
+            {
+                _logger.Debug("Custom script test stdout: {0}", stdout.Trim());
+            }
+
+            if (!string.IsNullOrWhiteSpace(stderr))
+            {
+                _logger.Warn("Custom script test stderr: {0}", stderr.Trim());
+            }
+
+            _logger.Info("Custom script test '{0}' completed with exit code: {1}", resolvedScriptPath, exitCode);
+
+            return new CustomScriptTestResult
+            {
+                Success = !timedOut && exitCode == 0,
+                ExitCode = exitCode,
+                Stdout = stdout ?? string.Empty,
+                Stderr = stderr ?? string.Empty,
+                ExecutionTimeMs = elapsedMs,
+                TimedOut = timedOut,
+                ResolvedInterpreter = resolvedFileName,
+                WorkingDirectory = workingDir,
+            };
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            var elapsedMs = stopwatch.ElapsedMilliseconds > 0 ? stopwatch.ElapsedMilliseconds : (stopwatch.Elapsed.TotalMilliseconds > 0 ? 1L : 0L);
+            _logger.Error(ex, "Failed to execute custom script test: {0}", resolvedScriptPath);
+            return new CustomScriptTestResult
+            {
+                Success = false,
+                ExitCode = ex is System.ComponentModel.Win32Exception win32Ex ? win32Ex.NativeErrorCode : -1,
+                Stdout = string.Empty,
+                Stderr = ex.Message,
+                ExecutionTimeMs = elapsedMs,
+                TimedOut = false,
+                ResolvedInterpreter = resolvedFileName,
+                WorkingDirectory = workingDir,
+            };
         }
     }
 }

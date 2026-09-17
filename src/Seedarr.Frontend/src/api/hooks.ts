@@ -71,6 +71,8 @@ import type {
   AutomationTestRequest,
   InstallMarketplaceTemplateRequest,
   FileSystemResource,
+  CustomScriptTestRequest,
+  CustomScriptTestResult,
 } from "./types";
 
 const DEFAULT_REFETCH_MS = 5000;
@@ -1633,6 +1635,12 @@ export function useInstallMarketplaceTemplate() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["automation", "scripts"] });
     },
+  });
+}
+
+export function useTestCustomScript() {
+  return useMutation<CustomScriptTestResult, Error, CustomScriptTestRequest>({
+    mutationFn: (req) => apiClient.testCustomScript(req),
   });
 }
 
