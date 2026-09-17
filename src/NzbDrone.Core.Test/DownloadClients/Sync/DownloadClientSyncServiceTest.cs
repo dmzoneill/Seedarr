@@ -982,4 +982,193 @@ public class DownloadClientSyncServiceTest
 
         _downloadClientFactory.Received(1).All();
     }
+
+    [Test]
+    public void Sync_should_reconcile_and_update_existing_torrent_status_progress_downloaded_and_speeds()
+    {
+        var hash = "9999111122223333444455556666777788889999";
+        var existingTorrent = new Torrent
+        {
+            Id = 99,
+            InfoHash = hash,
+            Name = "Active Torrent",
+            TotalSize = 10000,
+            Downloaded = 4000,
+            Uploaded = 1000,
+            Progress = 0.4,
+            Status = TorrentStatus.Downloading,
+            DownloadSpeed = 0,
+            UploadSpeed = 0
+        };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Active Torrent",
+                InfoHash = hash,
+                TotalSize = 10000,
+                RemainingSize = 0,
+                Status = "seeding",
+                DownloadSpeed = 0,
+                UploadSpeed = 250000
+            }
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true }
+        });
+
+        var result = _service.Sync();
+
+        Assert.That(result.Updated, Is.EqualTo(1));
+        Assert.That(existingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(existingTorrent.Progress, Is.EqualTo(1.0));
+        Assert.That(existingTorrent.Downloaded, Is.EqualTo(10000));
+        Assert.That(existingTorrent.UploadSpeed, Is.EqualTo(250000));
+        _torrentService.Received(1).Update(existingTorrent);
+    }
+
+    [Test]
+    public void ImportTorrent_should_map_client_status_seeding_on_initial_import_instead_of_hardcoded_stopped()
+    {
+        var hash = "8888111122223333444455556666777788889999";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Seeding Torrent",
+                InfoHash = hash,
+                TotalSize = 20000,
+                RemainingSize = 0,
+                Status = "seeding"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Seeding Torrent",
+            TotalSize = 20000,
+            PieceCount = 20,
+            PieceLength = 1000
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var torrent = _service.ImportTorrent(1, hash);
+
+        Assert.That(torrent, Is.Not.Null);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(torrent.Progress, Is.EqualTo(1.0));
+        Assert.That(torrent.Downloaded, Is.EqualTo(20000));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == hash &&
+            t.Status == TorrentStatus.Seeding &&
+            t.Progress == 1.0 &&
+            t.Downloaded == 20000));
+    }
+
+    [Test]
+    public void Sync_should_map_client_status_seeding_on_initial_sync_instead_of_hardcoded_stopped()
+    {
+        var hash = "7777111122223333444455556666777788889999";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Initial Sync Seeding",
+                InfoHash = hash,
+                TotalSize = 30000,
+                RemainingSize = 0,
+                Status = "seeding"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Initial Sync Seeding",
+            TotalSize = 30000,
+            PieceCount = 30,
+            PieceLength = 1000
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true }
+        });
+
+        var result = _service.Sync();
+
+        Assert.That(result.Added, Is.EqualTo(1));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == hash &&
+            t.Status == TorrentStatus.Seeding &&
+            t.Progress == 1.0 &&
+            t.Downloaded == 30000));
+    }
+
+    [Test]
+    public void Sync_should_calculate_progress_as_one_point_zero_when_remaining_size_is_zero()
+    {
+        var hash = "6666111122223333444455556666777788889999";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Zero Remaining Item",
+                InfoHash = hash,
+                TotalSize = 0,
+                RemainingSize = 0,
+                Status = "seeding"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Zero Remaining Item",
+            TotalSize = 0,
+            PieceCount = 0,
+            PieceLength = 0
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.All().Returns(new List<DownloadClientDefinition>
+        {
+            new() { Id = 1, Name = "qBittorrent", ClientType = "QBitTorrent", Enable = true }
+        });
+
+        var result = _service.Sync();
+
+        Assert.That(result.Added, Is.EqualTo(1));
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == hash &&
+            t.Progress == 1.0));
+    }
 }

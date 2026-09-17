@@ -94,21 +94,29 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
                             torrent.TotalSize = total;
                             torrent.Downloaded = downloaded;
-                            if (total > 0)
-                            {
-                                torrent.Progress = Math.Round((double)downloaded / total, 6);
-                            }
-                            else if (remaining == 0)
-                            {
-                                torrent.Progress = 1.0;
-                            }
+
+                            var progress = total > 0 ? (double)(total - remaining) / total : (remaining == 0 ? 1.0 : 0.0);
+                            torrent.Progress = Math.Clamp(Math.Round(progress, 6), 0.0, 1.0);
 
                             if (remaining == 0)
                             {
                                 torrent.MarkForceCompleted();
                             }
 
-                            torrent.Status = MapClientStatus(item.Status, remaining, total);
+                            if (!string.IsNullOrWhiteSpace(item.Status))
+                            {
+                                torrent.Status = MapClientStatus(item.Status, remaining, total);
+                            }
+
+                            if (item.DownloadSpeed.HasValue)
+                            {
+                                torrent.DownloadSpeed = item.DownloadSpeed.Value;
+                            }
+
+                            if (item.UploadSpeed.HasValue)
+                            {
+                                torrent.UploadSpeed = item.UploadSpeed.Value;
+                            }
 
                             if (!string.IsNullOrWhiteSpace(item.Category))
                             {
@@ -131,6 +139,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
                             torrent.UpdateRatio();
                             _torrentService.Update(torrent);
+                            result.Updated++;
                             result.Skipped++;
                             continue;
                         }
@@ -161,6 +170,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             var remaining = item.RemainingSize;
                             var downloaded = Math.Max(0, total - remaining);
                             var remappedPath = _remotePathMappingService.Remap(definition.Host, item.OutputPath);
+                            var initialProgress = total > 0 ? (double)(total - remaining) / total : (remaining == 0 ? 1.0 : 0.0);
 
                             torrent = new Torrent
                             {
@@ -178,15 +188,26 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                                 Category = item.Category,
                                 SavePath = remappedPath,
                                 SourcePath = remappedPath,
+                                Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
                             };
+
+                            if (item.DownloadSpeed.HasValue)
+                            {
+                                torrent.DownloadSpeed = item.DownloadSpeed.Value;
+                            }
+
+                            if (item.UploadSpeed.HasValue)
+                            {
+                                torrent.UploadSpeed = item.UploadSpeed.Value;
+                            }
 
                             if (remaining == 0)
                             {
                                 torrent.MarkForceCompleted();
-                            }
-                            else if (total > 0)
-                            {
-                                torrent.Progress = Math.Round((double)downloaded / total, 6);
+                                if (!string.IsNullOrWhiteSpace(item.Status))
+                                {
+                                    torrent.Status = MapClientStatus(item.Status, remaining, total);
+                                }
                             }
 
                             torrent.UpdateRatio();
@@ -204,6 +225,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             var remaining = item.RemainingSize;
                             var downloaded = Math.Max(0, total - remaining);
                             var remappedPath = _remotePathMappingService.Remap(definition.Host, item.OutputPath);
+                            var initialProgress = total > 0 ? (double)(total - remaining) / total : (remaining == 0 ? 1.0 : 0.0);
 
                             torrent = new Torrent
                             {
@@ -217,15 +239,26 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                                 Category = item.Category,
                                 SavePath = remappedPath,
                                 SourcePath = remappedPath,
+                                Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
                             };
+
+                            if (item.DownloadSpeed.HasValue)
+                            {
+                                torrent.DownloadSpeed = item.DownloadSpeed.Value;
+                            }
+
+                            if (item.UploadSpeed.HasValue)
+                            {
+                                torrent.UploadSpeed = item.UploadSpeed.Value;
+                            }
 
                             if (remaining == 0)
                             {
                                 torrent.MarkForceCompleted();
-                            }
-                            else if (total > 0)
-                            {
-                                torrent.Progress = Math.Round((double)downloaded / total, 6);
+                                if (!string.IsNullOrWhiteSpace(item.Status))
+                                {
+                                    torrent.Status = MapClientStatus(item.Status, remaining, total);
+                                }
                             }
 
                             torrent.UpdateRatio();
@@ -310,7 +343,9 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 Category = item.Category,
                 IsPrivate = item.IsPrivate,
                 IsInLibrary = isInLibrary,
-                LibraryTorrentId = libraryId
+                LibraryTorrentId = libraryId,
+                DownloadSpeed = item.DownloadSpeed,
+                UploadSpeed = item.UploadSpeed,
             });
         }
 
@@ -398,6 +433,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             var total = parsed.TotalSize > 0 ? parsed.TotalSize : (matchingItem?.TotalSize ?? 0);
             var remaining = matchingItem?.RemainingSize ?? 0;
             var downloaded = Math.Max(0, total - remaining);
+            var initialProgress = total > 0 ? (double)(total - remaining) / total : (remaining == 0 ? 1.0 : 0.0);
 
             torrent = new Torrent
             {
@@ -415,16 +451,26 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 Category = matchingItem?.Category,
                 SavePath = remappedPath,
                 SourcePath = remappedPath,
+                Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
             };
+
+            if (matchingItem?.DownloadSpeed.HasValue == true)
+            {
+                torrent.DownloadSpeed = matchingItem.DownloadSpeed.Value;
+            }
+
+            if (matchingItem?.UploadSpeed.HasValue == true)
+            {
+                torrent.UploadSpeed = matchingItem.UploadSpeed.Value;
+            }
 
             if (remaining == 0)
             {
                 torrent.MarkForceCompleted();
-                torrent.Status = MapClientStatus(matchingItem?.Status, remaining, total);
-            }
-            else if (total > 0)
-            {
-                torrent.Progress = Math.Round((double)downloaded / total, 6);
+                if (!string.IsNullOrWhiteSpace(matchingItem?.Status))
+                {
+                    torrent.Status = MapClientStatus(matchingItem?.Status, remaining, total);
+                }
             }
 
             torrent.UpdateRatio();
@@ -437,6 +483,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
             var total = matchingItem.TotalSize;
             var remaining = matchingItem.RemainingSize;
             var downloaded = Math.Max(0, total - remaining);
+            var initialProgress = total > 0 ? (double)(total - remaining) / total : (remaining == 0 ? 1.0 : 0.0);
 
             torrent = new Torrent
             {
@@ -451,16 +498,26 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                 Category = matchingItem.Category,
                 SavePath = remappedPath,
                 SourcePath = remappedPath,
+                Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
             };
+
+            if (matchingItem.DownloadSpeed.HasValue)
+            {
+                torrent.DownloadSpeed = matchingItem.DownloadSpeed.Value;
+            }
+
+            if (matchingItem.UploadSpeed.HasValue)
+            {
+                torrent.UploadSpeed = matchingItem.UploadSpeed.Value;
+            }
 
             if (remaining == 0)
             {
                 torrent.MarkForceCompleted();
-                torrent.Status = MapClientStatus(matchingItem.Status, remaining, total);
-            }
-            else if (total > 0)
-            {
-                torrent.Progress = Math.Round((double)downloaded / total, 6);
+                if (!string.IsNullOrWhiteSpace(matchingItem.Status))
+                {
+                    torrent.Status = MapClientStatus(matchingItem.Status, remaining, total);
+                }
             }
 
             torrent.UpdateRatio();

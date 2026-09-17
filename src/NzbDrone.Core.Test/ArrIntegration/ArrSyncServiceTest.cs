@@ -221,6 +221,7 @@ public class ArrSyncServiceTest
 
         Assert.That(result.Added, Is.EqualTo(0));
         Assert.That(result.Skipped, Is.EqualTo(0));
+        Assert.That(result.Updated, Is.EqualTo(0));
         Assert.That(result.Failed, Is.EqualTo(0));
     }
 
@@ -322,11 +323,13 @@ public class ArrSyncServiceTest
         {
             Added = 5,
             Skipped = 10,
+            Updated = 4,
             Failed = 2
         };
 
         Assert.That(result.Added, Is.EqualTo(5));
         Assert.That(result.Skipped, Is.EqualTo(10));
+        Assert.That(result.Updated, Is.EqualTo(4));
         Assert.That(result.Failed, Is.EqualTo(2));
     }
 

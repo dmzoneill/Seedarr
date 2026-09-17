@@ -273,7 +273,7 @@ public class DelugeClient : IDownloadClient, IDisposable
 
         try
         {
-            var fields = new[] { "hash", "name", "total_size", "total_remaining", "state", "save_path", "label", "private" };
+            var fields = new[] { "hash", "name", "total_size", "total_remaining", "state", "save_path", "label", "private", "download_payload_rate", "upload_payload_rate" };
             var filters = new Dictionary<string, object>();
 
             if (!string.IsNullOrEmpty(Category))
@@ -312,6 +312,8 @@ public class DelugeClient : IDownloadClient, IDisposable
                     OutputPath = t.TryGetProperty("save_path", out var sp) ? sp.GetString() : "",
                     Category = t.TryGetProperty("label", out var l) ? l.GetString() : "",
                     IsPrivate = isPrivate,
+                    DownloadSpeed = t.TryGetProperty("download_payload_rate", out var ds) ? ds.GetInt64() : null,
+                    UploadSpeed = t.TryGetProperty("upload_payload_rate", out var us) ? us.GetInt64() : null,
                 });
             }
 
