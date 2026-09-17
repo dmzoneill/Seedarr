@@ -454,6 +454,9 @@ export interface Category {
   targetSeedTimeMinutes?: number;
   autoStop?: boolean;
   isDefault?: boolean;
+  maxActiveDownloads?: number | null;
+  maxActiveUploads?: number | null;
+  reservedDownloadSlots?: number;
 }
 
 export interface BitTorrentConfig {

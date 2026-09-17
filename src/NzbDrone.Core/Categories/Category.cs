@@ -19,4 +19,10 @@ public class Category : ModelBase
     public bool AutoStop { get; set; }
 
     public bool IsDefault { get; set; }
+
+    public int? MaxActiveDownloads { get; set; }
+
+    public int? MaxActiveUploads { get; set; }
+
+    public int ReservedDownloadSlots { get; set; }
 }

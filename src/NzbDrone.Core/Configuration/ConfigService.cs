@@ -55,6 +55,8 @@ public interface IConfigService
     int MaxGlobalConnections { get; }
     int MaxPerTorrentConnections { get; }
     int MaxUploadSlots { get; }
+    int MaxActiveDownloads { get; }
+    int MaxActiveUploads { get; }
     int MaxConnectionsPerIp { get; }
     int MaximumHalfOpenConnections { get; }
     bool AnonymousMode { get; }
@@ -437,6 +439,8 @@ public class ConfigService : IConfigService
     public int MaxGlobalConnections => GetValueInt("MaxGlobalConnections", 200);
     public int MaxPerTorrentConnections => GetValueInt("MaxPerTorrentConnections", 50);
     public int MaxUploadSlots => GetValueInt("MaxUploadSlots", 4);
+    public int MaxActiveDownloads => GetValueInt("MaxActiveDownloads", 0);
+    public int MaxActiveUploads => GetValueInt("MaxActiveUploads", 0);
     public int MaxConnectionsPerIp => GetValueInt("MaxConnectionsPerIp", 5);
     public int MaximumHalfOpenConnections => GetValueInt("MaximumHalfOpenConnections", 50);
     public bool AnonymousMode => GetValueBoolean("AnonymousMode", false);
