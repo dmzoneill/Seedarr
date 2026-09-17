@@ -569,4 +569,64 @@ public class DelugeJsonRpcControllerTest
 
         _categoryService.Received(1).Update(Arg.Is<Category>(c => c.Id == 3 && c.SavePath == "/data/media/tv"));
     }
+
+    [Test]
+    public async Task HandleRpc_CoreGetConfig_Reflects_AlternativeSpeedMode_When_True()
+    {
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        _configService.AltDownloadSpeedKbps.Returns(100);
+        _configService.AltUploadSpeedKbps.Returns(50);
+
+        var json = "{\"method\": \"core.get_config\", \"params\": [], \"id\": 600}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)result;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var resObj = resDoc.RootElement.GetProperty("result");
+        Assert.That(resObj.GetProperty("max_download_speed").GetDouble(), Is.EqualTo(100.0));
+        Assert.That(resObj.GetProperty("max_upload_speed").GetDouble(), Is.EqualTo(50.0));
+        Assert.That(resObj.GetProperty("alt_speed_enabled").GetBoolean(), Is.True);
+    }
+
+    [Test]
+    public async Task HandleRpc_WebUpdateUi_Reflects_AlternativeSpeedMode_When_True()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        _configService.AltDownloadSpeedKbps.Returns(100);
+        _configService.AltUploadSpeedKbps.Returns(50);
+
+        var json = "{\"method\": \"web.update_ui\", \"params\": [[], {}], \"id\": 601}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+        var jsonResult = (JsonResult)result;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var stats = resDoc.RootElement.GetProperty("result").GetProperty("stats");
+        Assert.That(stats.GetProperty("max_download").GetDouble(), Is.EqualTo(100.0));
+        Assert.That(stats.GetProperty("max_upload").GetDouble(), Is.EqualTo(50.0));
+    }
+
+    [Test]
+    public async Task HandleRpc_CoreSetConfig_Updates_AltSpeeds_When_AlternativeSpeedMode_Active()
+    {
+        _configService.AlternativeSpeedEnabled.Returns(true);
+
+        var json = "{\"method\": \"core.set_config\", \"params\": [{\"max_download_speed\": 150.0, \"alt_speed_enabled\": false}], \"id\": 602}";
+        using var doc = JsonDocument.Parse(json);
+
+        var result = await _controller.HandleRpc(doc.RootElement);
+        Assert.That(result, Is.InstanceOf<JsonResult>());
+
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            d.ContainsKey("AltDownloadSpeedKbps") && (int)d["AltDownloadSpeedKbps"] == 150 &&
+            d.ContainsKey("AlternativeSpeedEnabled") && (bool)d["AlternativeSpeedEnabled"] == false));
+    }
 }
