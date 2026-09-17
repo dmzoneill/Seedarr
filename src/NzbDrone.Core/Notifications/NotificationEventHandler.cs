@@ -307,6 +307,76 @@ public class NotificationEventHandler :
         _dispatchSemaphore?.Dispose();
     }
 
+    internal async Task<bool> DispatchSingleNotificationAsync(
+        NotificationDefinition notif,
+        string eventType,
+        Torrent torrent,
+        dynamic meta,
+        object genericPayload)
+    {
+        if (string.Equals(notif.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
+        {
+            var (scriptPath, scriptArgs) = CustomScriptService.ParseSettings(notif.Settings);
+            return await _customScriptService.ExecuteScriptAsync(scriptPath, torrent, eventType, scriptArgs).ConfigureAwait(false);
+        }
+
+        if (string.Equals(notif.Implementation, "Email", StringComparison.OrdinalIgnoreCase))
+        {
+            await EmailNotificationSender.SendEmailNotificationAsync(notif.Settings, eventType, torrent, (object)meta, genericPayload).ConfigureAwait(false);
+            return true;
+        }
+
+        var providerPayload = NotificationPayloadBuilder.BuildProviderPayload(notif.Implementation, eventType, torrent, (object)meta, genericPayload, notif.Settings);
+        var targetUrl = NotificationPayloadBuilder.ResolveTargetUrl(notif.Implementation, notif.Settings);
+        var customHeaders = NotificationPayloadBuilder.ResolveCustomHeaders(notif.Implementation, notif.Settings);
+        return await _webhookDispatcher.DispatchAsync(targetUrl, providerPayload, customHeaders).ConfigureAwait(false);
+    }
+
+    internal async Task DispatchWithFallbackAsync(
+        NotificationDefinition notif,
+        string eventType,
+        Torrent torrent,
+        dynamic meta,
+        object genericPayload)
+    {
+        var success = false;
+        try
+        {
+            success = await DispatchSingleNotificationAsync(notif, eventType, torrent, meta, genericPayload).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Primary notification dispatch failed for {0} ({1})", notif.Name ?? notif.Implementation, notif.Id);
+            success = false;
+        }
+
+        if (!success && notif.FallbackNotificationId.HasValue)
+        {
+            var fallbackId = notif.FallbackNotificationId.Value;
+            _logger.Info("Attempting fallback notification dispatch to ID {0} for {1}", fallbackId, notif.Name ?? notif.Implementation);
+            try
+            {
+                var fallbackDef = _notificationRepository.Get(fallbackId);
+                if (fallbackDef != null)
+                {
+                    var fallbackSuccess = await DispatchSingleNotificationAsync(fallbackDef, eventType, torrent, meta, genericPayload).ConfigureAwait(false);
+                    if (!fallbackSuccess)
+                    {
+                        _logger.Warn("Fallback notification dispatch failed for fallback ID {0}", fallbackId);
+                    }
+                }
+                else
+                {
+                    _logger.Warn("Fallback notification {0} not found", fallbackId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Exception during fallback notification dispatch to ID {0}", fallbackId);
+            }
+        }
+    }
+
     internal Task EnqueueDispatch(Func<Task> action, string eventType, string implementation)
     {
         return Task.Run(async () =>
@@ -355,31 +425,10 @@ public class NotificationEventHandler :
                 }
             }
 
-            if (string.Equals(notif.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
-            {
-                var (scriptPath, scriptArgs) = CustomScriptService.ParseSettings(notif.Settings);
-                EnqueueDispatch(
-                    async () => await _customScriptService.ExecuteScriptAsync(scriptPath, null, eventType, scriptArgs).ConfigureAwait(false),
-                    eventType,
-                    "CustomScript");
-            }
-            else if (string.Equals(notif.Implementation, "Email", StringComparison.OrdinalIgnoreCase))
-            {
-                EnqueueDispatch(
-                    async () => await EmailNotificationSender.SendEmailNotificationAsync(notif.Settings, eventType, null, null, payload).ConfigureAwait(false),
-                    eventType,
-                    "Email");
-            }
-            else
-            {
-                var providerPayload = NotificationPayloadBuilder.BuildProviderPayload(notif.Implementation, eventType, null, null, payload, notif.Settings);
-                var targetUrl = NotificationPayloadBuilder.ResolveTargetUrl(notif.Implementation, notif.Settings);
-                var customHeaders = NotificationPayloadBuilder.ResolveCustomHeaders(notif.Implementation, notif.Settings);
-                EnqueueDispatch(
-                    async () => await _webhookDispatcher.DispatchAsync(targetUrl, providerPayload, customHeaders).ConfigureAwait(false),
-                    eventType,
-                    notif.Implementation ?? "Webhook");
-            }
+            EnqueueDispatch(
+                async () => await DispatchWithFallbackAsync(notif, eventType, null, null, payload).ConfigureAwait(false),
+                eventType,
+                notif.Implementation ?? "Webhook");
         }
     }
 
@@ -501,31 +550,10 @@ public class NotificationEventHandler :
                 }
             }
 
-            if (string.Equals(notif.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
-            {
-                var (scriptPath, scriptArgs) = CustomScriptService.ParseSettings(notif.Settings);
-                EnqueueDispatch(
-                    async () => await _customScriptService.ExecuteScriptAsync(scriptPath, torrent, eventType, scriptArgs).ConfigureAwait(false),
-                    eventType,
-                    "CustomScript");
-            }
-            else if (string.Equals(notif.Implementation, "Email", StringComparison.OrdinalIgnoreCase))
-            {
-                EnqueueDispatch(
-                    async () => await EmailNotificationSender.SendEmailNotificationAsync(notif.Settings, eventType, torrent, meta, payload).ConfigureAwait(false),
-                    eventType,
-                    "Email");
-            }
-            else
-            {
-                var providerPayload = NotificationPayloadBuilder.BuildProviderPayload(notif.Implementation, eventType, torrent, meta, payload, notif.Settings);
-                var targetUrl = NotificationPayloadBuilder.ResolveTargetUrl(notif.Implementation, notif.Settings);
-                var customHeaders = NotificationPayloadBuilder.ResolveCustomHeaders(notif.Implementation, notif.Settings);
-                EnqueueDispatch(
-                    async () => await _webhookDispatcher.DispatchAsync(targetUrl, providerPayload, customHeaders).ConfigureAwait(false),
-                    eventType,
-                    notif.Implementation ?? "Webhook");
-            }
+            EnqueueDispatch(
+                async () => await DispatchWithFallbackAsync(notif, eventType, torrent, meta, payload).ConfigureAwait(false),
+                eventType,
+                notif.Implementation ?? "Webhook");
         }
     }
 }

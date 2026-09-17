@@ -626,4 +626,100 @@ public class NotificationEventHandlerTest
         var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(300));
         Assert.That(completed, Is.EqualTo(dispatchedSignal.Task), "Notification should be dispatched for BackupFailedEvent via OnHealthIssue");
     }
+
+    [Test]
+    public async Task Dispatch_triggers_fallback_when_primary_dispatch_returns_false()
+    {
+        var fallbackSignal = new TaskCompletionSource<bool>();
+
+        var primaryNotif = new NotificationDefinition
+        {
+            Id = 1,
+            Name = "Primary Webhook",
+            Implementation = "Webhook",
+            Enable = true,
+            OnGrab = true,
+            Settings = "{\"url\":\"http://primary.local/hook\"}",
+            FallbackNotificationId = 2
+        };
+
+        var fallbackNotif = new NotificationDefinition
+        {
+            Id = 2,
+            Name = "Fallback Webhook",
+            Implementation = "Webhook",
+            Enable = true,
+            OnGrab = true,
+            Settings = "{\"url\":\"http://fallback.local/hook\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { primaryNotif });
+        _notificationRepository.Get(2).Returns(fallbackNotif);
+
+        _webhookDispatcher.DispatchAsync(Arg.Is<string>(u => u.Contains("primary")), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(false));
+
+        _webhookDispatcher.DispatchAsync(Arg.Is<string>(u => u.Contains("fallback")), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true))
+            .AndDoes(_ => fallbackSignal.TrySetResult(true));
+
+        var torrent = new Torrent
+        {
+            Id = 10,
+            Name = "Fallback Test Torrent",
+        };
+
+        _handler.Handle(new TorrentAddedEvent(torrent));
+
+        var completed = await Task.WhenAny(fallbackSignal.Task, Task.Delay(500));
+        Assert.That(completed, Is.EqualTo(fallbackSignal.Task), "Fallback notification should be dispatched when primary returns false");
+    }
+
+    [Test]
+    public async Task Dispatch_triggers_fallback_when_primary_dispatch_throws()
+    {
+        var fallbackSignal = new TaskCompletionSource<bool>();
+
+        var primaryNotif = new NotificationDefinition
+        {
+            Id = 10,
+            Name = "Faulty Webhook",
+            Implementation = "Webhook",
+            Enable = true,
+            OnGrab = true,
+            Settings = "{\"url\":\"http://faulty.local/hook\"}",
+            FallbackNotificationId = 20
+        };
+
+        var fallbackNotif = new NotificationDefinition
+        {
+            Id = 20,
+            Name = "Fallback Webhook",
+            Implementation = "Webhook",
+            Enable = true,
+            OnGrab = true,
+            Settings = "{\"url\":\"http://fallback.local/hook\"}"
+        };
+
+        _notificationRepository.GetEnabled().Returns(new List<NotificationDefinition> { primaryNotif });
+        _notificationRepository.Get(20).Returns(fallbackNotif);
+
+        _webhookDispatcher.DispatchAsync(Arg.Is<string>(u => u.Contains("faulty")), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns<Task<bool>>(_ => throw new System.Net.Http.HttpRequestException("Connection refused"));
+
+        _webhookDispatcher.DispatchAsync(Arg.Is<string>(u => u.Contains("fallback")), Arg.Any<object>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(true))
+            .AndDoes(_ => fallbackSignal.TrySetResult(true));
+
+        var torrent = new Torrent
+        {
+            Id = 10,
+            Name = "Faulty Primary Torrent",
+        };
+
+        _handler.Handle(new TorrentAddedEvent(torrent));
+
+        var completed = await Task.WhenAny(fallbackSignal.Task, Task.Delay(500));
+        Assert.That(completed, Is.EqualTo(fallbackSignal.Task), "Fallback notification should be dispatched when primary throws exception");
+    }
 }

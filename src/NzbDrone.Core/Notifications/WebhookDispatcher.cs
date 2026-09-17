@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
@@ -86,6 +87,20 @@ public class WebhookDispatcher : IWebhookDispatcher
         }
 
         return UrlValidator.IsSafeHost(uri.Host, allowLoopback);
+    }
+
+    public static string SanitizeUrlForLogging(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return string.Empty;
+        }
+
+        var sanitized = Regex.Replace(url, @"bot\d+:[A-Za-z0-9_-]+", "bot[REDACTED]", RegexOptions.IgnoreCase);
+        sanitized = Regex.Replace(sanitized, @"/api/webhooks/(?<id>\d+)/[A-Za-z0-9_-]+", "/api/webhooks/${id}/[REDACTED]", RegexOptions.IgnoreCase);
+        sanitized = Regex.Replace(sanitized, @"/services/T[A-Za-z0-9]+/B[A-Za-z0-9]+/[A-Za-z0-9]+", "/services/[REDACTED]", RegexOptions.IgnoreCase);
+
+        return sanitized;
     }
 
     internal static AsyncRetryPolicy<HttpResponseMessage> CreateRetryPolicy(
@@ -270,11 +285,11 @@ public class WebhookDispatcher : IWebhookDispatcher
 
         if (!IsValidTargetUrl(targetUrl, _allowLoopback))
         {
-            _logger.Warn("Webhook dispatch blocked: Invalid or prohibited target URL (SSRF protection): {0}", targetUrl);
+            _logger.Warn("Webhook dispatch blocked: Invalid or prohibited target URL (SSRF protection): {0}", SanitizeUrlForLogging(targetUrl));
             return new WebhookDispatchResult
             {
                 Success = false,
-                Message = $"Target URL '{targetUrl}' is prohibited (SSRF protection: loopback, link-local, and cloud metadata addresses are not permitted).",
+                Message = $"Target URL '{SanitizeUrlForLogging(targetUrl)}' is prohibited (SSRF protection: loopback, link-local, and cloud metadata addresses are not permitted).",
             };
         }
 
@@ -290,7 +305,7 @@ public class WebhookDispatcher : IWebhookDispatcher
 
             if (response.IsSuccessStatusCode)
             {
-                _logger.Info("Webhook successfully dispatched to {0} (Status: {1})", targetUrl, response.StatusCode);
+                _logger.Info("Webhook successfully dispatched to {0} (Status: {1})", SanitizeUrlForLogging(targetUrl), response.StatusCode);
                 return new WebhookDispatchResult
                 {
                     Success = true,
@@ -299,7 +314,7 @@ public class WebhookDispatcher : IWebhookDispatcher
                 };
             }
 
-            _logger.Warn("Webhook dispatch to {0} returned non-success status code: {1}", targetUrl, response.StatusCode);
+            _logger.Warn("Webhook dispatch to {0} returned non-success status code: {1}", SanitizeUrlForLogging(targetUrl), response.StatusCode);
             return new WebhookDispatchResult
             {
                 Success = false,
@@ -309,7 +324,7 @@ public class WebhookDispatcher : IWebhookDispatcher
         }
         catch (HttpRequestException ex)
         {
-            _logger.Error(ex, "HTTP error while dispatching webhook to {0}", targetUrl);
+            _logger.Error(ex, "HTTP error while dispatching webhook to {0}", SanitizeUrlForLogging(targetUrl));
             return new WebhookDispatchResult
             {
                 Success = false,
@@ -319,7 +334,7 @@ public class WebhookDispatcher : IWebhookDispatcher
         }
         catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
         {
-            _logger.Error(ex, "Webhook dispatch to {0} timed out", targetUrl);
+            _logger.Error(ex, "Webhook dispatch to {0} timed out", SanitizeUrlForLogging(targetUrl));
             return new WebhookDispatchResult
             {
                 Success = false,
@@ -328,7 +343,7 @@ public class WebhookDispatcher : IWebhookDispatcher
         }
         catch (Exception ex)
         {
-            _logger.Error(ex, "Failed to dispatch webhook to {0}", targetUrl);
+            _logger.Error(ex, "Failed to dispatch webhook to {0}", SanitizeUrlForLogging(targetUrl));
             return new WebhookDispatchResult
             {
                 Success = false,

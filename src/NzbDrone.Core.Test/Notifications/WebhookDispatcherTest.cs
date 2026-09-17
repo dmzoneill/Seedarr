@@ -213,4 +213,44 @@ public class WebhookDispatcherTest
         Assert.That(result.StatusCode, Is.EqualTo(HttpStatusCode.Found));
         Assert.That(handler.Requests.Count, Is.EqualTo(1));
     }
+
+    [Test]
+    public void SanitizeUrlForLogging_should_redact_telegram_bot_token()
+    {
+        var url = "https://api.telegram.org" + "/bot123456789:ABCdefGHIjklMNOpqrsTUVwxyz123456/sendMessage";
+        var sanitized = WebhookDispatcher.SanitizeUrlForLogging(url);
+        Assert.That(sanitized, Is.EqualTo("https://api.telegram.org/bot[REDACTED]/sendMessage"));
+    }
+
+    [Test]
+    public void SanitizeUrlForLogging_should_redact_discord_webhook_token_while_keeping_webhook_id()
+    {
+        var url = "https://discord.com" + "/api/webhooks/9876543210/abcdef_12345-XYZ";
+        var sanitized = WebhookDispatcher.SanitizeUrlForLogging(url);
+        Assert.That(sanitized, Is.EqualTo("https://discord.com/api/webhooks/9876543210/[REDACTED]"));
+    }
+
+    [Test]
+    public void SanitizeUrlForLogging_should_redact_slack_webhook_path()
+    {
+        var url = "https://hooks.slack.com" + "/services/T00000000/B00000000/SECRETTOKEN12345";
+        var sanitized = WebhookDispatcher.SanitizeUrlForLogging(url);
+        Assert.That(sanitized, Is.EqualTo("https://hooks.slack.com/services/[REDACTED]"));
+    }
+
+    [Test]
+    public void SanitizeUrlForLogging_should_return_empty_for_null_or_whitespace()
+    {
+        Assert.That(WebhookDispatcher.SanitizeUrlForLogging(null), Is.EqualTo(string.Empty));
+        Assert.That(WebhookDispatcher.SanitizeUrlForLogging(""), Is.EqualTo(string.Empty));
+        Assert.That(WebhookDispatcher.SanitizeUrlForLogging("   "), Is.EqualTo(string.Empty));
+    }
+
+    [Test]
+    public void SanitizeUrlForLogging_should_leave_unredacted_urls_unchanged()
+    {
+        var url = "https://example.com/api/notify?channel=alerts";
+        var sanitized = WebhookDispatcher.SanitizeUrlForLogging(url);
+        Assert.That(sanitized, Is.EqualTo(url));
+    }
 }
