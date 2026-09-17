@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "../i18n";
+import { useModalRegistration } from "./ModalProvider";
 
 export interface PromptModalProps {
   isOpen: boolean;
@@ -40,6 +41,14 @@ export function PromptModal({
   const [value, setValue] = useState(String(initialValue ?? ""));
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useModalRegistration({
+    id: "prompt-modal",
+    isOpen,
+    onClose,
+    modalRef,
+  });
 
   useEffect(() => {
     if (isOpen) {
@@ -51,18 +60,6 @@ export function PromptModal({
       }, 50);
     }
   }, [isOpen, initialValue]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -99,11 +96,13 @@ export function PromptModal({
 
   return (
     <div
+      ref={modalRef}
       className="modal-overlay"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="prompt-modal-title"
+      aria-describedby={description ? "prompt-modal-desc" : undefined}
       style={{
         position: "fixed",
         top: 0,
@@ -146,6 +145,7 @@ export function PromptModal({
 
         {description && (
           <p
+            id="prompt-modal-desc"
             style={{
               margin: "0 0 1rem 0",
               fontSize: "0.85rem",

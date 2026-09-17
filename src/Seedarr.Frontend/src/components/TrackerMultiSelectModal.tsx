@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useRef } from "react";
 import TrackerFavicon from "./TrackerFavicon";
+import { useModalRegistration } from "./ModalProvider";
 
 export interface TrackerPickerItem {
   url: string;
@@ -42,20 +43,14 @@ export default function TrackerMultiSelectModal({
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [customUrl, setCustomUrl] = useState("");
+  const modalRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  useModalRegistration({
+    id: "tracker-multi-select-modal",
+    isOpen,
+    onClose,
+    modalRef,
+  });
 
   // Sort trackers: Active / Verified -> Online -> Slow -> Untested -> Offline, then alphabetically
   const sortedTrackers = useMemo(() => {
@@ -137,6 +132,7 @@ export default function TrackerMultiSelectModal({
 
   return (
     <div
+      ref={modalRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="tracker-picker-title"

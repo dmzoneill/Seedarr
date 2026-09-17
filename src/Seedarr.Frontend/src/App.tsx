@@ -38,6 +38,7 @@ import ToastContainer from "./components/Toast";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SignalRProvider from "./components/SignalRProvider";
 import { useSignalR } from "./api/signalr";
+import { ModalProvider } from "./components/ModalProvider";
 import AddTorrentModal from "./components/AddTorrentModal";
 import CommandPalette from "./components/CommandPalette";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
@@ -381,7 +382,8 @@ function App() {
   }
 
   return (
-    <div className={`app ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+    <ModalProvider>
+      <div className={`app ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar" aria-label="Main Navigation">
         <div className="sidebar-header">
           <a
@@ -1229,6 +1231,7 @@ function App() {
         onClose={() => setShowGettingStartedModal(false)}
       />
     </div>
+    </ModalProvider>
   );
 }
 

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router";
 import { useTranslation } from "../i18n";
+import { useModalRegistration } from "./ModalProvider";
 import {
   useCreateDownloadClient,
   useTestDirectDownloadClient,
@@ -242,16 +243,14 @@ export function GettingStartedModal({
     onClose();
   }, [dontShowAgain, onClose]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        handleClose();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, handleClose]);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useModalRegistration({
+    id: "getting-started-modal",
+    isOpen,
+    onClose: handleClose,
+    modalRef,
+  });
 
   if (!isOpen) return null;
 
@@ -474,6 +473,7 @@ export function GettingStartedModal({
 
   return (
     <div
+      ref={modalRef}
       className="modal-overlay"
       role="dialog"
       aria-modal="true"
@@ -514,6 +514,22 @@ export function GettingStartedModal({
           flexDirection: "column",
         }}
       >
+        <h2
+          id="getting-started-modal-title"
+          style={{
+            position: "absolute",
+            width: "1px",
+            height: "1px",
+            padding: 0,
+            margin: "-1px",
+            overflow: "hidden",
+            clip: "rect(0, 0, 0, 0)",
+            whiteSpace: "nowrap",
+            border: 0,
+          }}
+        >
+          {t("gettingStarted.title", undefined, "Getting Started Setup Guide")}
+        </h2>
         {/* Top Header Controls: Mode Selector & Close Button */}
         <div
           style={{
