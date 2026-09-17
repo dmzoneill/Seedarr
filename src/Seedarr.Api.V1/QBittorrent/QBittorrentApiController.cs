@@ -1853,12 +1853,13 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     public ActionResult<Dictionary<string, object>> GetTransferInfo()
     {
         var torrents = _torrentService.GetAll();
-        var dlLimitKbps = _configService?.AlternativeSpeedEnabled == true
-            ? (_configService?.AltDownloadSpeedKbps ?? 0)
-            : (_configService?.MaxDownloadSpeedKbps ?? 0);
-        var upLimitKbps = _configService?.AlternativeSpeedEnabled == true
-            ? (_configService?.AltUploadSpeedKbps ?? 0)
-            : (_configService?.MaxUploadSpeedKbps ?? 0);
+        var altEnabled = _configService?.AlternativeSpeedEnabled == true;
+        var dlLimitKbps = altEnabled
+            ? (_configService?.AltDownloadSpeedKbps ?? 100)
+            : (_configService?.MaxDownloadSpeedKbps ?? 1250);
+        var upLimitKbps = altEnabled
+            ? (_configService?.AltUploadSpeedKbps ?? 50)
+            : (_configService?.MaxUploadSpeedKbps ?? 625);
 
         var dlRateLimit = dlLimitKbps > 0 ? dlLimitKbps * 1024 : 0;
         var upRateLimit = upLimitKbps > 0 ? upLimitKbps * 1024 : 0;
@@ -1915,14 +1916,18 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     [HttpPost("transfer/setDownloadLimit")]
     public ActionResult SetTransferDownloadLimit([FromForm] long limit)
     {
-        _configService?.SaveConfigDictionary(new Dictionary<string, object> { ["MaxDownloadSpeedKbps"] = (int)(limit / 1024) });
+        var limitKbps = limit <= 0 ? 0 : (int)(limit / 1024);
+        var key = _configService?.AlternativeSpeedEnabled == true ? "AltDownloadSpeedKbps" : "MaxDownloadSpeedKbps";
+        _configService?.SaveConfigDictionary(new Dictionary<string, object> { [key] = limitKbps });
         return Content("Ok.", "text/plain");
     }
 
     [HttpPost("transfer/setUploadLimit")]
     public ActionResult SetTransferUploadLimit([FromForm] long limit)
     {
-        _configService?.SaveConfigDictionary(new Dictionary<string, object> { ["MaxUploadSpeedKbps"] = (int)(limit / 1024) });
+        var limitKbps = limit <= 0 ? 0 : (int)(limit / 1024);
+        var key = _configService?.AlternativeSpeedEnabled == true ? "AltUploadSpeedKbps" : "MaxUploadSpeedKbps";
+        _configService?.SaveConfigDictionary(new Dictionary<string, object> { [key] = limitKbps });
         return Content("Ok.", "text/plain");
     }
 
@@ -1931,9 +1936,10 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     {
         if (!string.IsNullOrWhiteSpace(hashes))
         {
+            var limitKbps = limit <= 0 ? 0 : (int)(limit / 1024);
             foreach (var t in ResolveTorrents(hashes))
             {
-                t.DownloadLimit = (int)(limit / 1024);
+                t.DownloadLimit = limitKbps;
                 _torrentService.Update(t);
             }
         }
@@ -1946,9 +1952,10 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     {
         if (!string.IsNullOrWhiteSpace(hashes))
         {
+            var limitKbps = limit <= 0 ? 0 : (int)(limit / 1024);
             foreach (var t in ResolveTorrents(hashes))
             {
-                t.UploadLimit = (int)(limit / 1024);
+                t.UploadLimit = limitKbps;
                 _torrentService.Update(t);
             }
         }

@@ -791,8 +791,8 @@ public class DelugeJsonRpcController : ControllerBase
                 filters = BuildFilterTree(allTorrents),
                 stats = new
                 {
-                    max_download = _configService?.MaxDownloadSpeedKbps ?? 1250,
-                    max_upload = _configService?.MaxUploadSpeedKbps ?? 625,
+                    max_download = (double)((_configService?.AlternativeSpeedEnabled == true ? _configService?.AltDownloadSpeedKbps : _configService?.MaxDownloadSpeedKbps) ?? 1250),
+                    max_upload = (double)((_configService?.AlternativeSpeedEnabled == true ? _configService?.AltUploadSpeedKbps : _configService?.MaxUploadSpeedKbps) ?? 625),
                     num_connections = allTorrents.Sum(t => t.Leechers + t.Seeders),
                     upload_rate = allTorrents.Sum(t => t.UploadSpeed),
                     download_rate = allTorrents.Sum(t => t.DownloadSpeed),
@@ -862,14 +862,51 @@ public class DelugeJsonRpcController : ControllerBase
 
             if (cfgElem.ValueKind == JsonValueKind.Object)
             {
+                var altEnabled = _configService.AlternativeSpeedEnabled;
+
+                if (cfgElem.TryGetProperty("alt_speed_enabled", out var altProp))
+                {
+                    if (altProp.ValueKind == JsonValueKind.True || altProp.ValueKind == JsonValueKind.False)
+                    {
+                        altEnabled = altProp.GetBoolean();
+                        cfgUpdates["AlternativeSpeedEnabled"] = altEnabled;
+                    }
+                }
+
                 if (cfgElem.TryGetProperty("max_download_speed", out var dlProp) && dlProp.ValueKind == JsonValueKind.Number && dlProp.TryGetDouble(out var dlVal))
                 {
-                    cfgUpdates["MaxDownloadSpeedKbps"] = (int)Math.Round(dlVal);
+                    var speed = Math.Max(0, (int)Math.Round(dlVal));
+                    if (altEnabled)
+                    {
+                        cfgUpdates["AltDownloadSpeedKbps"] = speed;
+                    }
+                    else
+                    {
+                        cfgUpdates["MaxDownloadSpeedKbps"] = speed;
+                    }
                 }
 
                 if (cfgElem.TryGetProperty("max_upload_speed", out var ulProp) && ulProp.ValueKind == JsonValueKind.Number && ulProp.TryGetDouble(out var ulVal))
                 {
-                    cfgUpdates["MaxUploadSpeedKbps"] = (int)Math.Round(ulVal);
+                    var speed = Math.Max(0, (int)Math.Round(ulVal));
+                    if (altEnabled)
+                    {
+                        cfgUpdates["AltUploadSpeedKbps"] = speed;
+                    }
+                    else
+                    {
+                        cfgUpdates["MaxUploadSpeedKbps"] = speed;
+                    }
+                }
+
+                if (cfgElem.TryGetProperty("alt_speed_down", out var altDlProp) && altDlProp.ValueKind == JsonValueKind.Number && altDlProp.TryGetDouble(out var altDlVal))
+                {
+                    cfgUpdates["AltDownloadSpeedKbps"] = Math.Max(0, (int)Math.Round(altDlVal));
+                }
+
+                if (cfgElem.TryGetProperty("alt_speed_up", out var altUlProp) && altUlProp.ValueKind == JsonValueKind.Number && altUlProp.TryGetDouble(out var altUlVal))
+                {
+                    cfgUpdates["AltUploadSpeedKbps"] = Math.Max(0, (int)Math.Round(altUlVal));
                 }
 
                 if (cfgElem.TryGetProperty("download_location", out var dlLocProp) && dlLocProp.ValueKind == JsonValueKind.String)
@@ -1611,10 +1648,21 @@ public class DelugeJsonRpcController : ControllerBase
 
     private Dictionary<string, object> GetDelugeConfigDictionary()
     {
+        var altEnabled = _configService?.AlternativeSpeedEnabled ?? false;
+        var maxDl = altEnabled
+            ? (_configService?.AltDownloadSpeedKbps ?? 100)
+            : (_configService?.MaxDownloadSpeedKbps ?? 1250);
+        var maxUl = altEnabled
+            ? (_configService?.AltUploadSpeedKbps ?? 50)
+            : (_configService?.MaxUploadSpeedKbps ?? 625);
+
         return new Dictionary<string, object>
         {
-            ["max_download_speed"] = (double)(_configService?.MaxDownloadSpeedKbps ?? 1250),
-            ["max_upload_speed"] = (double)(_configService?.MaxUploadSpeedKbps ?? 625),
+            ["max_download_speed"] = (double)maxDl,
+            ["max_upload_speed"] = (double)maxUl,
+            ["alt_speed_enabled"] = altEnabled,
+            ["alt_speed_down"] = (double)(_configService?.AltDownloadSpeedKbps ?? 100),
+            ["alt_speed_up"] = (double)(_configService?.AltUploadSpeedKbps ?? 50),
             ["download_location"] = RemapLocalToRemote(_configService?.WatchFolderPath ?? "/downloads"),
             ["move_completed_path"] = RemapLocalToRemote(_configService?.WatchFolderPath ?? "/downloads"),
             ["move_completed"] = false,

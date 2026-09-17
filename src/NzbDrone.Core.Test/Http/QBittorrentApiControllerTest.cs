@@ -698,4 +698,49 @@ public class QBittorrentApiControllerTest
         Assert.That(nameProp, Is.EqualTo("tv-sonarr"));
         Assert.That(savePathProp, Is.EqualTo("/data/media/tv"));
     }
+
+    [Test]
+    public void GetTransferInfo_Returns_RateLimits_Reflecting_AlternativeSpeedMode()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _configService.AlternativeSpeedEnabled.Returns(false);
+        _configService.MaxDownloadSpeedKbps.Returns(1250);
+        _configService.MaxUploadSpeedKbps.Returns(625);
+
+        var normalResult = _controller.GetTransferInfo();
+        Assert.That(normalResult.Result, Is.InstanceOf<OkObjectResult>());
+        var normalOk = (OkObjectResult)normalResult.Result;
+        var normalDict = normalOk.Value as Dictionary<string, object>;
+        Assert.That(normalDict, Is.Not.Null);
+        Assert.That(normalDict["dl_rate_limit"], Is.EqualTo(1250 * 1024));
+        Assert.That(normalDict["up_rate_limit"], Is.EqualTo(625 * 1024));
+
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        _configService.AltDownloadSpeedKbps.Returns(100);
+        _configService.AltUploadSpeedKbps.Returns(50);
+
+        var altResult = _controller.GetTransferInfo();
+        Assert.That(altResult.Result, Is.InstanceOf<OkObjectResult>());
+        var altOk = (OkObjectResult)altResult.Result;
+        var altDict = altOk.Value as Dictionary<string, object>;
+        Assert.That(altDict, Is.Not.Null);
+        Assert.That(altDict["dl_rate_limit"], Is.EqualTo(100 * 1024));
+        Assert.That(altDict["up_rate_limit"], Is.EqualTo(50 * 1024));
+    }
+
+    [Test]
+    public void SetTransferDownloadLimit_Guards_Zero_And_Negative_Limits()
+    {
+        _configService.AlternativeSpeedEnabled.Returns(false);
+        _controller.SetTransferDownloadLimit(-1024);
+
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            d.ContainsKey("MaxDownloadSpeedKbps") && (int)d["MaxDownloadSpeedKbps"] == 0));
+
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        _controller.SetTransferDownloadLimit(204800);
+
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            d.ContainsKey("AltDownloadSpeedKbps") && (int)d["AltDownloadSpeedKbps"] == 200));
+    }
 }
