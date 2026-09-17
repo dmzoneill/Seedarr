@@ -39,6 +39,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     private readonly IMediaEnrichmentService _mediaEnrichmentService;
     private readonly ICategoryService _categoryService;
     private readonly NzbDrone.Core.Network.GeoIp.IGeoIpService _geoIpService;
+    private readonly IPieceStorage _pieceStorage;
+    private readonly NzbDrone.Core.Torrents.IPiecePicker _piecePicker;
 
     private readonly ConcurrentDictionary<int, (List<TrackerEntry> Trackers, DateTime Expiry)> _broadcastTrackersCache = new();
     private readonly ConcurrentDictionary<int, (TorrentMediaMetadata Metadata, DateTime Expiry)> _broadcastMediaMetaCache = new();
@@ -60,7 +62,9 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         IMediaEnrichmentService mediaEnrichmentService = null,
         ICategoryService categoryService = null,
         NzbDrone.Core.Network.GeoIp.IGeoIpService geoIpService = null,
-        TimeSpan? coalesceWindow = null)
+        TimeSpan? coalesceWindow = null,
+        IPieceStorage pieceStorage = null,
+        NzbDrone.Core.Torrents.IPiecePicker piecePicker = null)
         : base(signalRBroadcaster, null, coalesceWindow)
     {
         _torrentService = torrentService;
@@ -76,6 +80,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         _mediaEnrichmentService = mediaEnrichmentService;
         _categoryService = categoryService;
         _geoIpService = geoIpService;
+        _pieceStorage = pieceStorage;
+        _piecePicker = piecePicker;
         _logger = LogManager.GetCurrentClassLogger();
 
         SharedValidator = torrentResourceValidator;
@@ -671,6 +677,154 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
             var geo = _geoIpService?.Lookup(c.RemoteIp);
             return TorrentResourceMapper.ToPeerResource(c, id++, geo);
         }).ToList();
+    }
+
+    [HttpGet("{id}/piecemap")]
+    [HttpGet("/api/v1/torrents/{id}/piecemap")]
+    public ActionResult<PieceMapResource> GetPieceMap(string id)
+    {
+        Torrent torrent = null;
+        if (int.TryParse(id, out var torrentId))
+        {
+            torrent = _torrentService.Get(torrentId);
+        }
+
+        if (torrent == null)
+        {
+            torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, id, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        return Ok(BuildPieceMapResource(torrent));
+    }
+
+    private PieceMapResource BuildPieceMapResource(Torrent torrent)
+    {
+        var totalPieces = torrent.PieceCount;
+        if (totalPieces <= 0 && torrent.TotalSize > 0 && torrent.PieceLength > 0)
+        {
+            totalPieces = (int)Math.Ceiling((double)torrent.TotalSize / torrent.PieceLength);
+        }
+
+        if (totalPieces <= 0)
+        {
+            totalPieces = 100;
+        }
+
+        var pieceLength = (long)torrent.PieceLength;
+        if (pieceLength <= 0)
+        {
+            pieceLength = torrent.TotalSize > 0 && totalPieces > 0
+                ? (torrent.TotalSize + totalPieces - 1) / totalPieces
+                : 262144;
+        }
+
+        var pieceStates = new int[totalPieces];
+        var verifiedPieces = _pieceStorage?.GetVerifiedPieces(torrent.InfoHash);
+        var corruptedPieces = _pieceStorage?.GetCorruptedPieces(torrent.InfoHash);
+        var activePieces = _piecePicker?.GetActivePieces(torrent.InfoHash);
+
+        if (verifiedPieces != null && verifiedPieces.Length > 0)
+        {
+            for (var i = 0; i < totalPieces; i++)
+            {
+                if (corruptedPieces != null && corruptedPieces.Contains(i))
+                {
+                    pieceStates[i] = 3;
+                }
+                else if (i < verifiedPieces.Length && verifiedPieces[i])
+                {
+                    pieceStates[i] = 2;
+                }
+                else if (activePieces != null && activePieces.Contains(i))
+                {
+                    pieceStates[i] = 1;
+                }
+                else
+                {
+                    pieceStates[i] = 0;
+                }
+            }
+        }
+        else if (torrent.Progress >= 1.0 || torrent.ForceCompleted)
+        {
+            for (var i = 0; i < totalPieces; i++)
+            {
+                if (corruptedPieces != null && corruptedPieces.Contains(i))
+                {
+                    pieceStates[i] = 3;
+                }
+                else
+                {
+                    pieceStates[i] = 2;
+                }
+            }
+        }
+        else
+        {
+            var completedCount = (int)(totalPieces * torrent.Progress);
+            for (var i = 0; i < totalPieces; i++)
+            {
+                if (corruptedPieces != null && corruptedPieces.Contains(i))
+                {
+                    pieceStates[i] = 3;
+                }
+                else if (activePieces != null && activePieces.Contains(i))
+                {
+                    pieceStates[i] = 1;
+                }
+                else
+                {
+                    pieceStates[i] = i < completedCount ? 2 : 0;
+                }
+            }
+        }
+
+        var rarity = new int[totalPieces];
+        if (_connectionManager != null && !string.IsNullOrEmpty(torrent.InfoHash))
+        {
+            var connections = _connectionManager.GetConnections(torrent.InfoHash);
+            if (connections != null)
+            {
+                foreach (var conn in connections)
+                {
+                    if (conn.IsSeed)
+                    {
+                        for (var i = 0; i < totalPieces; i++)
+                        {
+                            rarity[i]++;
+                        }
+                    }
+                    else if (conn.PeerPieces != null)
+                    {
+                        var limit = Math.Min(totalPieces, conn.PeerPieces.Length);
+                        for (var i = 0; i < limit; i++)
+                        {
+                            if (conn.PeerPieces[i])
+                            {
+                                rarity[i]++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return new PieceMapResource
+        {
+            TorrentId = torrent.Id,
+            InfoHash = torrent.InfoHash,
+            TotalPieces = totalPieces,
+            PieceLength = pieceLength,
+            Spans = PieceMapResource.CompressToSpans(pieceStates),
+            RleSpans = PieceMapResource.CompressToRleTuples(pieceStates),
+            Rarity = rarity,
+            RaritySpans = PieceMapResource.CompressToRleTuples(rarity)
+        };
     }
 
     [HttpPost]
