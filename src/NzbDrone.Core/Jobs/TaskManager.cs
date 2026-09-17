@@ -24,6 +24,7 @@ public interface ITaskManager
     CancellationTokenSource GetCancellationTokenSource(string typeName);
     string GetTaskStatus(string typeName);
     bool IsCanceled(string typeName);
+    DateTime GetNextExecution(string typeName);
 }
 
 public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
@@ -51,13 +52,29 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
 
     public IEnumerable<ScheduledTask> GetAll()
     {
-        return _repository.All();
+        var tasks = _repository.All().ToList();
+        foreach (var task in tasks)
+        {
+            if (task.LastExecution.Kind != DateTimeKind.Utc && task.LastExecution != DateTime.MinValue)
+            {
+                task.LastExecution = DateTime.SpecifyKind(task.LastExecution, DateTimeKind.Utc);
+            }
+
+            if (task.LastStartTime.HasValue && task.LastStartTime.Value.Kind != DateTimeKind.Utc)
+            {
+                task.LastStartTime = DateTime.SpecifyKind(task.LastStartTime.Value, DateTimeKind.Utc);
+            }
+        }
+
+        return tasks;
     }
 
     public ScheduledTask GetNextScheduled()
     {
-        return _repository.All()
-            .OrderBy(t => t.LastExecution.AddMinutes(t.Interval))
+        return GetAll()
+            .OrderBy(t => t.LastExecution == DateTime.MinValue
+                ? DateTime.UtcNow.AddMinutes(t.Interval)
+                : t.LastExecution.AddMinutes(t.Interval))
             .FirstOrDefault();
     }
 
@@ -222,6 +239,25 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         return string.Equals(GetTaskStatus(typeName), "Canceled", StringComparison.OrdinalIgnoreCase);
     }
 
+    public DateTime GetNextExecution(string typeName)
+    {
+        if (string.IsNullOrWhiteSpace(typeName))
+        {
+            return DateTime.UtcNow;
+        }
+
+        var task = GetAll().FirstOrDefault(t =>
+            string.Equals(t.TypeName, typeName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.TypeName.Split('.').LastOrDefault(), typeName, StringComparison.OrdinalIgnoreCase));
+
+        if (task == null)
+        {
+            return DateTime.UtcNow;
+        }
+
+        return task.NextExecution;
+    }
+
     public void Handle(ApplicationStartedEvent message)
     {
         var existing = _repository.All().ToList();
@@ -229,9 +265,22 @@ public class TaskManager : ITaskManager, IHandle<ApplicationStartedEvent>
         // Reset any stale in-flight task start times from an unexpected shutdown/crash
         foreach (var task in existing)
         {
+            var updated = false;
+
             if (task.LastStartTime.HasValue && task.LastStartTime.Value > task.LastExecution)
             {
                 task.LastStartTime = task.LastExecution;
+                updated = true;
+            }
+
+            if (task.LastExecution == DateTime.MinValue || task.LastExecution <= DateTime.MinValue.AddDays(1))
+            {
+                task.LastExecution = DateTime.UtcNow;
+                updated = true;
+            }
+
+            if (updated)
+            {
                 _repository.Update(task);
             }
         }

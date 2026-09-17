@@ -48,13 +48,18 @@ function formatInterval(minutes: number): string {
   return `${hours}h ${minutes % 60}m`;
 }
 
-function formatRelativeTime(dateStr: string | null): string {
+function formatRelativeTime(dateStr: string | null, isNextExecution = false): string {
   if (!dateStr) return "-";
   const date = new Date(dateStr);
+  if (isNaN(date.getTime()) || date.getFullYear() <= 1970) return "-";
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const absDiff = Math.abs(diffMs);
   const isFuture = diffMs < 0;
+
+  if (isNextExecution && !isFuture) {
+    return "now";
+  }
 
   const seconds = Math.floor(absDiff / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -64,7 +69,7 @@ function formatRelativeTime(dateStr: string | null): string {
   let text: string;
   if (seconds < 60) {
     text = "just now";
-    return text;
+    return isFuture ? "in < 1 min" : text;
   } else if (minutes < 60) {
     text = `${minutes} minute${minutes !== 1 ? "s" : ""}`;
   } else if (hours < 24) {
@@ -91,7 +96,9 @@ function formatDuration(durationStr: string | null): string {
 
 function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return "-";
-  return new Date(dateStr).toLocaleString();
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime()) || date.getFullYear() <= 1970) return "-";
+  return date.toLocaleString();
 }
 
 function statusIcon(status: string): string {
@@ -361,7 +368,7 @@ function SystemTasks() {
                         fontWeight: 500,
                       }}
                     >
-                      {formatRelativeTime(task.nextExecution)}
+                      {formatRelativeTime(task.nextExecution, true)}
                     </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <button
