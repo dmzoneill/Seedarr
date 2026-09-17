@@ -23,6 +23,10 @@ public class PeerInfo
 {
     public string Ip { get; set; }
     public int Port { get; set; }
+    public byte Flags { get; set; }
+    public bool IsSeeder => (Flags & 0x02) != 0;
+    public bool PrefersEncryption => (Flags & 0x01) != 0;
+    public bool SupportsUtp => (Flags & 0x04) != 0;
 }
 
 public class PexData
@@ -106,12 +110,18 @@ public class PeerExchange : IPeerExchange
 
     public static List<PeerInfo> ParseCompactPeers(ReadOnlySpan<byte> data, bool isIPv6 = false, int listeningPort = 0)
     {
+        return ParseCompactPeers(data, ReadOnlySpan<byte>.Empty, isIPv6, listeningPort);
+    }
+
+    public static List<PeerInfo> ParseCompactPeers(ReadOnlySpan<byte> data, ReadOnlySpan<byte> flags, bool isIPv6 = false, int listeningPort = 0)
+    {
         var peers = new List<PeerInfo>();
         var stride = isIPv6 ? 18 : 6;
         var ipLen = isIPv6 ? 16 : 4;
 
         for (var i = 0; i + stride <= data.Length; i += stride)
         {
+            var peerIndex = i / stride;
             var ip = new IPAddress(data.Slice(i, ipLen));
             var port = (data[i + ipLen] << 8) | data[i + ipLen + 1];
 
@@ -125,10 +135,13 @@ public class PeerExchange : IPeerExchange
                 continue;
             }
 
+            var flag = peerIndex < flags.Length ? flags[peerIndex] : (byte)0;
+
             peers.Add(new PeerInfo
             {
                 Ip = ip.ToString(),
-                Port = port
+                Port = port,
+                Flags = flag
             });
         }
 
@@ -137,7 +150,12 @@ public class PeerExchange : IPeerExchange
 
     public static List<PeerInfo> ParseCompactPeers6(ReadOnlySpan<byte> data, int listeningPort = 0)
     {
-        return ParseCompactPeers(data, isIPv6: true, listeningPort);
+        return ParseCompactPeers(data, ReadOnlySpan<byte>.Empty, isIPv6: true, listeningPort);
+    }
+
+    public static List<PeerInfo> ParseCompactPeers6(ReadOnlySpan<byte> data, ReadOnlySpan<byte> flags, int listeningPort = 0)
+    {
+        return ParseCompactPeers(data, flags, isIPv6: true, listeningPort);
     }
 
     public static byte[] CompactPeers(List<PeerInfo> peers)
@@ -189,20 +207,40 @@ public class PeerExchange : IPeerExchange
         var cappedAdded = added.Count > maxPeers ? added.Take(maxPeers).ToList() : added;
         var cappedDropped = dropped.Count > maxPeers ? dropped.Take(maxPeers).ToList() : dropped;
 
-        var addedCompact = CompactPeers(cappedAdded);
+        var ipv4Added = cappedAdded
+            .Where(p => IPAddress.TryParse(p.Ip, out var addr) && addr.AddressFamily == AddressFamily.InterNetwork)
+            .ToList();
+        var addedCompact = CompactPeers(ipv4Added);
+        var addedFlags = new byte[ipv4Added.Count];
+        for (var i = 0; i < ipv4Added.Count; i++)
+        {
+            addedFlags[i] = ipv4Added[i].Flags;
+        }
+
+        var ipv6Added = cappedAdded
+            .Where(p => IPAddress.TryParse(p.Ip, out var addr) && addr.AddressFamily == AddressFamily.InterNetworkV6)
+            .ToList();
+        var added6Compact = CompactPeers6(ipv6Added);
+        var added6Flags = new byte[ipv6Added.Count];
+        for (var i = 0; i < ipv6Added.Count; i++)
+        {
+            added6Flags[i] = ipv6Added[i].Flags;
+        }
+
         var droppedCompact = CompactPeers(cappedDropped);
-        var added6Compact = CompactPeers6(cappedAdded);
         var dropped6Compact = CompactPeers6(cappedDropped);
 
         var dict = new BDictionary
         {
             ["added"] = new BString(addedCompact),
+            ["added.f"] = new BString(addedFlags),
             ["dropped"] = new BString(droppedCompact)
         };
 
         if (added6Compact.Length > 0)
         {
             dict["added6"] = new BString(added6Compact);
+            dict["added6.f"] = new BString(added6Flags);
         }
 
         if (dropped6Compact.Length > 0)
@@ -228,16 +266,28 @@ public class PeerExchange : IPeerExchange
             var result = new PexData();
             var listeningPort = _configService?.ListeningPort ?? 0;
 
+            ReadOnlySpan<byte> addedFlags = default;
+            if (dict.ContainsKey("added.f") && dict["added.f"] is BString addedFlagsBStr)
+            {
+                addedFlags = addedFlagsBStr.Value.Span;
+            }
+
+            ReadOnlySpan<byte> added6Flags = default;
+            if (dict.ContainsKey("added6.f") && dict["added6.f"] is BString added6FlagsBStr)
+            {
+                added6Flags = added6FlagsBStr.Value.Span;
+            }
+
             if (dict.ContainsKey("added"))
             {
                 var addedBytes = ((BString)dict["added"]).Value;
-                result.Added.AddRange(ParseCompactPeers(addedBytes.Span, isIPv6: false, listeningPort));
+                result.Added.AddRange(ParseCompactPeers(addedBytes.Span, addedFlags, isIPv6: false, listeningPort));
             }
 
             if (dict.ContainsKey("added6"))
             {
                 var added6Bytes = ((BString)dict["added6"]).Value;
-                result.Added.AddRange(ParseCompactPeers(added6Bytes.Span, isIPv6: true, listeningPort));
+                result.Added.AddRange(ParseCompactPeers(added6Bytes.Span, added6Flags, isIPv6: true, listeningPort));
             }
 
             if (dict.ContainsKey("dropped"))

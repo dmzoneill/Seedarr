@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 
@@ -391,5 +392,42 @@ public class PeerDiscoveryServiceTest
         _service.PruneStalePeers();
 
         Assert.That(peersDict.ContainsKey(InfoHash), Is.False);
+    }
+
+    [Test]
+    public void GetPeers_should_prioritize_seeders_over_leechers_from_same_source()
+    {
+        var leecher = new TrackerPeer { Ip = "93.184.216.35", Port = 6882, IsSeeder = false };
+        var seeder = new TrackerPeer { Ip = "93.184.216.34", Port = 6881, IsSeeder = true };
+
+        _service.AddPeers(InfoHash, new[] { leecher, seeder }, "pex");
+
+        var candidates = _service.GetPeers(InfoHash, 10);
+
+        Assert.That(candidates.Count, Is.EqualTo(2));
+        Assert.That(candidates[0].Ip, Is.EqualTo("93.184.216.34"));
+        Assert.That(candidates[0].IsSeeder, Is.True);
+        Assert.That(candidates[1].Ip, Is.EqualTo("93.184.216.35"));
+        Assert.That(candidates[1].IsSeeder, Is.False);
+    }
+
+    [Test]
+    public void AddPeers_with_PeerInfo_should_convert_and_record_IsSeeder()
+    {
+        var peerInfoList = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x02 },
+            new PeerInfo { Ip = "93.184.216.35", Port = 6882, Flags = 0x00 }
+        };
+
+        _service.AddPeers(InfoHash, peerInfoList, "pex");
+
+        var candidates = _service.GetPeers(InfoHash, 10);
+
+        Assert.That(candidates.Count, Is.EqualTo(2));
+        Assert.That(candidates[0].Ip, Is.EqualTo("93.184.216.34"));
+        Assert.That(candidates[0].IsSeeder, Is.True);
+        Assert.That(candidates[1].Ip, Is.EqualTo("93.184.216.35"));
+        Assert.That(candidates[1].IsSeeder, Is.False);
     }
 }

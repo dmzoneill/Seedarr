@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 
@@ -16,11 +17,13 @@ public class DiscoveredPeer
     public DateTime DiscoveredAt { get; set; }
     public DateTime? LastAttempt { get; set; }
     public int FailCount { get; set; }
+    public bool IsSeeder { get; set; }
 }
 
 public interface IPeerDiscoveryService
 {
     void AddPeers(string infoHash, IEnumerable<TrackerPeer> peers, string source);
+    void AddPeers(string infoHash, IEnumerable<PeerInfo> peers, string source);
     List<DiscoveredPeer> GetPeers(string infoHash, int maxCount = 10);
     void MarkAttempted(string infoHash, string ip, int port, bool success);
     int PeerCount(string infoHash);
@@ -43,6 +46,24 @@ public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDelete
     private readonly object _pruneLock = new();
     private DateTime _lastPruneTime = DateTime.UtcNow;
 
+    public void AddPeers(string infoHash, IEnumerable<PeerInfo> peers, string source)
+    {
+        if (peers == null)
+        {
+            return;
+        }
+
+        AddPeers(
+            infoHash,
+            peers.Select(p => new TrackerPeer
+            {
+                Ip = p.Ip,
+                Port = p.Port,
+                IsSeeder = p.IsSeeder
+            }),
+            source);
+    }
+
     public void AddPeers(string infoHash, IEnumerable<TrackerPeer> peers, string source)
     {
         PruneIfDue();
@@ -62,6 +83,11 @@ public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDelete
                 if (existing != null)
                 {
                     existing.DiscoveredAt = DateTime.UtcNow;
+                    if (peer.IsSeeder)
+                    {
+                        existing.IsSeeder = true;
+                    }
+
                     if (GetSourcePriority(source) >= GetSourcePriority(existing.Source))
                     {
                         existing.Source = source;
@@ -75,7 +101,8 @@ public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDelete
                     Ip = peer.Ip,
                     Port = peer.Port,
                     Source = source,
-                    DiscoveredAt = DateTime.UtcNow
+                    DiscoveredAt = DateTime.UtcNow,
+                    IsSeeder = peer.IsSeeder
                 });
             }
 
@@ -85,6 +112,7 @@ public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDelete
                 var peersToRemove = list
                     .OrderByDescending(p => p.FailCount >= MaxFailCount ? 1 : 0)
                     .ThenBy(p => GetSourcePriority(p.Source))
+                    .ThenBy(p => p.IsSeeder ? 1 : 0)
                     .ThenByDescending(p => p.FailCount)
                     .ThenBy(p => p.DiscoveredAt)
                     .Take(toRemoveCount)
@@ -111,6 +139,7 @@ public class PeerDiscoveryService : IPeerDiscoveryService, IHandle<TorrentDelete
                 .Where(p => !p.LastAttempt.HasValue || (now - p.LastAttempt.Value).TotalMinutes >= GetRetryDelayMinutes(p.Source))
                 .OrderBy(p => p.FailCount)
                 .ThenByDescending(p => GetSourcePriority(p.Source))
+                .ThenByDescending(p => p.IsSeeder ? 1 : 0)
                 .ThenByDescending(p => p.DiscoveredAt)
                 .Take(maxCount)
                 .ToList();
