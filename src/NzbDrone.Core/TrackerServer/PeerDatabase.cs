@@ -11,6 +11,7 @@ public interface IPeerDatabase
     void RemovePeer(string infoHash, string ip, int port);
     List<TrackerPeerEntry> GetPeers(string infoHash);
     ScrapeStats GetStats(string infoHash);
+    Dictionary<string, ScrapeStats> GetAllStats();
     List<string> GetAllInfoHashes();
     int GetTotalPeerCount();
     int GetTotalTorrentCount();
@@ -138,6 +139,31 @@ public class PeerDatabase : IPeerDatabase
                 Incomplete = 0,
                 Downloaded = active.Count
             };
+        }
+    }
+
+    public Dictionary<string, ScrapeStats> GetAllStats()
+    {
+        lock (_lock)
+        {
+            var now = DateTime.UtcNow;
+            var result = new Dictionary<string, ScrapeStats>(_peers.Count, StringComparer.OrdinalIgnoreCase);
+
+            foreach (var kvp in _peers)
+            {
+                var active = kvp.Value.Count(p => (now - p.LastAnnounce).TotalMinutes <= PeerTtlMinutes);
+                if (active > 0)
+                {
+                    result[kvp.Key] = new ScrapeStats
+                    {
+                        Complete = active,
+                        Incomplete = 0,
+                        Downloaded = active
+                    };
+                }
+            }
+
+            return result;
         }
     }
 

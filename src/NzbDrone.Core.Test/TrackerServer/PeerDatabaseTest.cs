@@ -231,6 +231,30 @@ public class PeerDatabaseTest
     }
 
     [Test]
+    public void GetAllStats_should_return_empty_dictionary_when_no_peers()
+    {
+        var stats = _peerDatabase.GetAllStats();
+
+        Assert.That(stats, Is.Empty);
+    }
+
+    [Test]
+    public void GetAllStats_should_return_all_active_torrents_stats()
+    {
+        _peerDatabase.AddPeer("hash1", "192.168.1.1", 6881, "peer1");
+        _peerDatabase.AddPeer("hash1", "192.168.1.2", 6882, "peer2");
+        _peerDatabase.AddPeer("hash2", "192.168.1.3", 6883, "peer3");
+
+        var stats = _peerDatabase.GetAllStats();
+
+        Assert.That(stats, Has.Count.EqualTo(2));
+        Assert.That(stats.ContainsKey("hash1"), Is.True);
+        Assert.That(stats["hash1"].Complete, Is.EqualTo(2));
+        Assert.That(stats.ContainsKey("hash2"), Is.True);
+        Assert.That(stats["hash2"].Complete, Is.EqualTo(1));
+    }
+
+    [Test]
     public void GetTotalPeerCount_should_return_zero_when_empty()
     {
         var count = _peerDatabase.GetTotalPeerCount();
