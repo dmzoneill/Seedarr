@@ -15,6 +15,8 @@ namespace NzbDrone.Core.Peers;
 public interface IConnectionManager
 {
     void Add(PeerConnection connection);
+    bool TryAdd(PeerConnection connection, IConnectionReservation reservation);
+    bool TryReserveSlot(string infoHash, bool isInbound, out IConnectionReservation reservation);
     void Remove(PeerConnection connection);
     List<PeerConnection> GetConnections(string infoHash);
     int ActiveCount { get; }
@@ -41,6 +43,7 @@ public class ConnectionManager : IConnectionManager,
     private readonly ITorrentEventLogService _eventLogService;
     private readonly IRandomNumberGenerator _random;
     private readonly List<PeerConnection> _connections = new();
+    private readonly List<ConnectionReservation> _reservations = new();
     private readonly object _lock = new();
     private readonly Logger _logger;
 
@@ -76,31 +79,140 @@ public class ConnectionManager : IConnectionManager,
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public void Add(PeerConnection connection)
+    public bool TryReserveSlot(string infoHash, bool isInbound, out IConnectionReservation reservation)
     {
+        return TryReserveSlot(infoHash, isInbound, TimeSpan.FromSeconds(15), out reservation);
+    }
+
+    internal bool TryReserveSlot(string infoHash, bool isInbound, TimeSpan ttl, out IConnectionReservation reservation)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            reservation = null;
+            return false;
+        }
+
+        lock (_lock)
+        {
+            PruneExpiredReservations();
+
+            var maxGlobal = _configService.MaxGlobalConnections;
+            if (maxGlobal > 0 && (_connections.Count + _reservations.Count) >= maxGlobal)
+            {
+                reservation = null;
+                return false;
+            }
+
+            var maxPerTorrent = _configService.MaxPerTorrentConnections;
+            var activeConnectionsForTorrent = _connections.Count(c =>
+                string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+            var activeReservationsForTorrent = _reservations.Count(r =>
+                string.Equals(r.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+
+            if (maxPerTorrent > 0 && (activeConnectionsForTorrent + activeReservationsForTorrent) >= maxPerTorrent)
+            {
+                reservation = null;
+                return false;
+            }
+
+            var res = new ConnectionReservation(infoHash, isInbound, ttl, r =>
+            {
+                lock (_lock)
+                {
+                    _reservations.Remove(r);
+                }
+            });
+
+            _reservations.Add(res);
+            reservation = res;
+            return true;
+        }
+    }
+
+    public bool TryAdd(PeerConnection connection, IConnectionReservation reservation)
+    {
+        if (connection == null)
+        {
+            reservation?.Dispose();
+            return false;
+        }
+
         PeerConnection evicted = null;
         lock (_lock)
         {
-            var maxGlobal = _configService.MaxGlobalConnections;
+            PruneExpiredReservations();
 
-            if (_connections.Count >= maxGlobal)
+            if (reservation is ConnectionReservation res && _reservations.Remove(res))
             {
-                evicted = _connections.OrderBy(c => c.LastActivity).First();
-                _logger.Debug("Evicting peer {0} (LRU, global limit {1})", evicted.RemoteIp, maxGlobal);
-                _connections.Remove(evicted);
+                _connections.Add(connection);
             }
+            else
+            {
+                var maxGlobal = _configService.MaxGlobalConnections;
+                var maxPerTorrent = _configService.MaxPerTorrentConnections;
 
-            _connections.Add(connection);
+                var sameTorrentPeers = _connections
+                    .Where(c => string.Equals(c.InfoHash, connection.InfoHash, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                if (maxPerTorrent > 0 && sameTorrentPeers.Count >= maxPerTorrent)
+                {
+                    evicted = sameTorrentPeers
+                        .OrderByDescending(GetEvictionPriority)
+                        .ThenBy(c => c.DownloadRate + c.UploadRate)
+                        .ThenBy(c => c.LastActivity)
+                        .ThenBy(c => c.ConnectedAt)
+                        .FirstOrDefault();
+
+                    if (evicted != null)
+                    {
+                        _logger.Debug("Evicting peer {0} from same torrent {1} (per-torrent limit {2})", evicted.RemoteIp, connection.InfoHash, maxPerTorrent);
+                        _connections.Remove(evicted);
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+                else if (maxGlobal > 0 && _connections.Count >= maxGlobal)
+                {
+                    var candidates = sameTorrentPeers.Count > 0 ? sameTorrentPeers : _connections;
+                    evicted = candidates
+                        .OrderByDescending(GetEvictionPriority)
+                        .ThenBy(c => c.DownloadRate + c.UploadRate)
+                        .ThenBy(c => c.LastActivity)
+                        .ThenBy(c => c.ConnectedAt)
+                        .FirstOrDefault();
+
+                    if (evicted != null)
+                    {
+                        _logger.Debug("Evicting peer {0} (global limit {1})", evicted.RemoteIp, maxGlobal);
+                        _connections.Remove(evicted);
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+
+                _connections.Add(connection);
+            }
         }
 
         if (evicted != null)
         {
             LogDisconnect(evicted);
-            _fastExtensionHandler.UnregisterPeer(evicted);
+            _fastExtensionHandler?.UnregisterPeer(evicted);
             evicted.Dispose();
         }
 
         LogConnect(connection);
+        return true;
+    }
+
+    public void Add(PeerConnection connection)
+    {
+        TryAdd(connection, null);
     }
 
     public void Remove(PeerConnection connection)
@@ -265,16 +377,20 @@ public class ConnectionManager : IConnectionManager,
     {
         lock (_lock)
         {
-            if (_connections.Count >= _configService.MaxGlobalConnections)
+            PruneExpiredReservations();
+
+            var maxGlobal = _configService.MaxGlobalConnections;
+            if (maxGlobal > 0 && (_connections.Count + _reservations.Count) >= maxGlobal)
             {
                 return false;
             }
 
             var maxPerTorrent = _configService.MaxPerTorrentConnections;
             var torrentCount = _connections.Count(c =>
-                string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
+                string.Equals(c.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase)) +
+                _reservations.Count(r => string.Equals(r.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase));
 
-            return torrentCount < maxPerTorrent;
+            return maxPerTorrent <= 0 || torrentCount < maxPerTorrent;
         }
     }
 
@@ -503,6 +619,43 @@ public class ConnectionManager : IConnectionManager,
         catch (Exception ex)
         {
             _logger.Debug(ex, "Failed to log peer disconnection event");
+        }
+    }
+
+    private void PruneExpiredReservations()
+    {
+        var now = DateTime.UtcNow;
+        _reservations.RemoveAll(r => r.IsDisposed || now >= r.ExpiresAt);
+    }
+
+    internal sealed class ConnectionReservation : IConnectionReservation
+    {
+        public string InfoHash { get; }
+        public bool IsInbound { get; }
+        public DateTime CreatedAt { get; }
+        public DateTime ExpiresAt { get; }
+        public bool IsDisposed { get; private set; }
+
+        private readonly Action<ConnectionReservation> _onDispose;
+
+        public ConnectionReservation(string infoHash, bool isInbound, TimeSpan ttl, Action<ConnectionReservation> onDispose)
+        {
+            InfoHash = infoHash;
+            IsInbound = isInbound;
+            CreatedAt = DateTime.UtcNow;
+            ExpiresAt = CreatedAt.Add(ttl);
+            _onDispose = onDispose;
+        }
+
+        public void Dispose()
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            IsDisposed = true;
+            _onDispose?.Invoke(this);
         }
     }
 }

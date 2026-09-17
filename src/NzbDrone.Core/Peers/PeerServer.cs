@@ -864,9 +864,15 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 break;
             }
 
+            if (!_connectionManager.TryReserveSlot(torrent.InfoHash, isInbound: false, out var reservation))
+            {
+                break;
+            }
+
             var endpointKey = $"{candidate.Ip}:{candidate.Port}";
             if (!_inFlightOutgoingEndpoints.TryAdd(endpointKey, 0))
             {
+                reservation.Dispose();
                 continue;
             }
 
@@ -875,7 +881,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 {
                     try
                     {
-                        await ConnectToPeerAsync(torrent, candidate, stoppingToken);
+                        await ConnectToPeerAsync(torrent, candidate, stoppingToken, reservation);
                     }
                     finally
                     {
@@ -891,8 +897,14 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         return ConnectToPeerAsync(torrent, candidate, CancellationToken.None);
     }
 
-    private async Task ConnectToPeerAsync(Torrent torrent, DiscoveredPeer candidate, CancellationToken stoppingToken)
+    private async Task ConnectToPeerAsync(
+        Torrent torrent,
+        DiscoveredPeer candidate,
+        CancellationToken stoppingToken,
+        IConnectionReservation reservation = null)
     {
+        using var reservationScope = reservation;
+
         if (_vpnKillSwitchService?.IsFailClosedActive == true)
         {
             return;
@@ -1070,7 +1082,20 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 connection.AmChoking = false;
             }
 
-            _connectionManager.Add(connection);
+            if (reservation != null)
+            {
+                if (!_connectionManager.TryAdd(connection, reservation))
+                {
+                    _logger.Debug("Failed to add outgoing connection for {0}", connection.InfoHash);
+                    connection.Dispose();
+                    return;
+                }
+            }
+            else
+            {
+                _connectionManager.Add(connection);
+            }
+
             _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, true);
 
             _logger.Info(
@@ -1190,6 +1215,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
         _logger.Debug("Incoming peer: {0}:{1}", connection.RemoteIp, connection.RemotePort);
 
+        var addedToConnectionManager = false;
         try
         {
             var negotiated = _mseSkeyRegistry != null
@@ -1223,105 +1249,120 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 return;
             }
 
-            if (!string.IsNullOrEmpty(torrent.InfoHash))
+            if (!_connectionManager.TryReserveSlot(connection.InfoHash, isInbound: true, out var reservation))
             {
-                _torrentCache[torrent.InfoHash] = torrent;
+                _logger.Debug("Inbound connection rejected: quota exceeded for {0}", connection.InfoHash);
+                return;
             }
 
-            onHandshakeSuccess?.Invoke();
-
-            if (client.Client != null)
+            using (reservation)
             {
-                try
+                if (!string.IsNullOrEmpty(torrent.InfoHash))
                 {
-                    client.Client.ReceiveTimeout = connection.MessageReadTimeoutMs > 0 ? connection.MessageReadTimeoutMs : 0;
-                }
-                catch
-                {
-                }
-            }
-
-            var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
-                : null;
-            var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
-                : null);
-            var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
-            connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile);
-
-            _logger.Debug(
-                "Peer {0} connected (encrypted: {1}, method: {2})",
-                connection.RemoteIp,
-                connection.IsEncrypted,
-                connection.EncryptionMethod);
-
-            if (connection.SupportsFastExtension && _fastExtensionHandler != null && !string.IsNullOrEmpty(torrent.InfoHash))
-            {
-                _fastExtensionHandler.RegisterFastPeer(connection, Convert.FromHexString(torrent.InfoHash), torrent.PieceCount, 10);
-            }
-
-            if (connection.SupportsExtensionProtocol && _extensionManager != null)
-            {
-                var extHandshake = _extensionManager.BuildExtensionHandshake(torrent.IsPrivate, profile);
-                var payload = new byte[extHandshake.Length + 1];
-                payload[0] = 0;
-                Array.Copy(extHandshake, 0, payload, 1, extHandshake.Length);
-                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
-            }
-
-            if (_fastExtensionHandler != null && connection.SupportsFastExtension)
-            {
-                _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, true);
-            }
-            else
-            {
-                connection.SendBitfield(torrent.PieceCount);
-            }
-
-            _chokeManager?.PeerConnected(connection);
-            if (_chokeManager != null)
-            {
-                if (_chokeManager.CanUnchoke(connection))
-                {
-                    connection.AmChoking = false;
-                    connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
-                }
-            }
-            else
-            {
-                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
-                connection.AmChoking = false;
-            }
-
-            _connectionManager.Add(connection);
-
-            while (connection.IsConnected && !stoppingToken.IsCancellationRequested)
-            {
-                if (_vpnKillSwitchService?.IsFailClosedActive == true)
-                {
-                    _logger.Debug("VPN fail-closed engaged; terminating incoming session with {0}", connection.RemoteIp);
-                    break;
+                    _torrentCache[torrent.InfoHash] = torrent;
                 }
 
-                var message = connection.ReceiveMessage();
-                if (message == null)
+                onHandshakeSuccess?.Invoke();
+
+                if (client.Client != null)
                 {
-                    if (!connection.IsConnected)
+                    try
                     {
+                        client.Client.ReceiveTimeout = connection.MessageReadTimeoutMs > 0 ? connection.MessageReadTimeoutMs : 0;
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                    ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
+                    : null;
+                var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                    ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
+                    : null);
+                var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+                connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile);
+
+                _logger.Debug(
+                    "Peer {0} connected (encrypted: {1}, method: {2})",
+                    connection.RemoteIp,
+                    connection.IsEncrypted,
+                    connection.EncryptionMethod);
+
+                if (connection.SupportsFastExtension && _fastExtensionHandler != null && !string.IsNullOrEmpty(torrent.InfoHash))
+                {
+                    _fastExtensionHandler.RegisterFastPeer(connection, Convert.FromHexString(torrent.InfoHash), torrent.PieceCount, 10);
+                }
+
+                if (connection.SupportsExtensionProtocol && _extensionManager != null)
+                {
+                    var extHandshake = _extensionManager.BuildExtensionHandshake(torrent.IsPrivate, profile);
+                    var payload = new byte[extHandshake.Length + 1];
+                    payload[0] = 0;
+                    Array.Copy(extHandshake, 0, payload, 1, extHandshake.Length);
+                    connection.SendMessage(new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
+                }
+
+                if (_fastExtensionHandler != null && connection.SupportsFastExtension)
+                {
+                    _fastExtensionHandler.SendHaveAllOrBitfield(connection, torrent.PieceCount, true);
+                }
+                else
+                {
+                    connection.SendBitfield(torrent.PieceCount);
+                }
+
+                _chokeManager?.PeerConnected(connection);
+                if (_chokeManager != null)
+                {
+                    if (_chokeManager.CanUnchoke(connection))
+                    {
+                        connection.AmChoking = false;
+                        connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                    }
+                }
+                else
+                {
+                    connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                    connection.AmChoking = false;
+                }
+
+                if (!_connectionManager.TryAdd(connection, reservation))
+                {
+                    _logger.Debug("Failed to add inbound connection for {0}", connection.InfoHash);
+                    return;
+                }
+
+                addedToConnectionManager = true;
+
+                while (connection.IsConnected && !stoppingToken.IsCancellationRequested)
+                {
+                    if (_vpnKillSwitchService?.IsFailClosedActive == true)
+                    {
+                        _logger.Debug("VPN fail-closed engaged; terminating incoming session with {0}", connection.RemoteIp);
                         break;
                     }
 
-                    var elapsed = DateTime.UtcNow - connection.LastActivity;
-                    if (elapsed.TotalSeconds >= connection.KeepAliveIntervalSeconds)
+                    var message = connection.ReceiveMessage();
+                    if (message == null)
                     {
-                        connection.SendKeepAlive();
+                        if (!connection.IsConnected)
+                        {
+                            break;
+                        }
+
+                        var elapsed = DateTime.UtcNow - connection.LastActivity;
+                        if (elapsed.TotalSeconds >= connection.KeepAliveIntervalSeconds)
+                        {
+                            connection.SendKeepAlive();
+                        }
+
+                        continue;
                     }
 
-                    continue;
+                    HandleMessage(connection, message, torrent);
                 }
-
-                HandleMessage(connection, message, torrent);
             }
         }
         catch (Exception ex)
@@ -1332,7 +1373,11 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         {
             _fastExtensionHandler?.UnregisterPeer(connection);
             _chokeManager?.PeerDisconnected(connection);
-            _connectionManager.Remove(connection);
+            if (addedToConnectionManager)
+            {
+                _connectionManager.Remove(connection);
+            }
+
             connection.PendingRequestCount = 0;
         }
     }
