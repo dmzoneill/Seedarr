@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
@@ -545,5 +546,182 @@ public class LocalPeerDiscoveryTest
 
         using var stopCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         await lpd.StopAsync(stopCts.Token);
+    }
+
+    [TestCase("192.168.1.50")]
+    [TestCase("10.0.1.20")]
+    [TestCase("172.16.5.5")]
+    public void ParseAnnouncement_should_accept_private_ipv4_addresses(string ip)
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
+
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse(ip), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            "abc123def456",
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == ip && peers.Single().Port == 6881),
+            "lpd");
+    }
+
+    [TestCase("169.254.1.1")]
+    [TestCase("fe80::1")]
+    public void ParseAnnouncement_should_accept_link_local_addresses(string ip)
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
+
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse(ip), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            "abc123def456",
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == ip && peers.Single().Port == 6881),
+            "lpd");
+    }
+
+    [TestCase("fc00::1")]
+    [TestCase("fd00::1")]
+    public void ParseAnnouncement_should_accept_unique_local_ipv6_addresses(string ip)
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
+
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse(ip), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            "abc123def456",
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == ip && peers.Single().Port == 6881),
+            "lpd");
+    }
+
+    [TestCase("8.8.8.8")]
+    [TestCase("1.1.1.1")]
+    [TestCase("93.184.216.34")]
+    public void ParseAnnouncement_should_reject_public_ipv4_addresses(string ip)
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
+
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse(ip), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
+    }
+
+    [TestCase(22)]
+    [TestCase(80)]
+    [TestCase(1023)]
+    [TestCase(0)]
+    [TestCase(-1)]
+    [TestCase(65536)]
+    [TestCase(70000)]
+    public void ParseAnnouncement_should_reject_privileged_and_invalid_ports(int port)
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
+
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: {port}\r\nInfohash: abc123def456\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void ParseAnnouncement_should_reject_loopback_on_listening_port()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.ListeningPort.Returns(6881);
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            configService,
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
+
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Loopback, 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void ParseAnnouncement_should_reject_self_address_on_listening_port()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.ListeningPort.Returns(6881);
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var lpd = new LocalPeerDiscovery(
+            configService,
+            Substitute.For<ITorrentService>(),
+            peerDiscovery);
+
+        var localIp = NetworkInterface.GetAllNetworkInterfaces()
+            .SelectMany(n => n.GetIPProperties().UnicastAddresses)
+            .Select(u => u.Address)
+            .FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(a));
+
+        if (localIp != null)
+        {
+            var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+            var sender = new IPEndPoint(localIp, 12345);
+
+            var method = typeof(LocalPeerDiscovery).GetMethod("ParseAnnouncement",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+
+            method.Invoke(lpd, new object[] { announcement, sender });
+
+            peerDiscovery.DidNotReceive().AddPeers(
+                Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
+        }
     }
 }

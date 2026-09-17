@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -301,7 +302,7 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
 
     private void ParseAnnouncement(string message, IPEndPoint sender)
     {
-        if (!message.StartsWith("BT-SEARCH"))
+        if (sender?.Address == null || string.IsNullOrWhiteSpace(message) || !message.StartsWith("BT-SEARCH"))
         {
             return;
         }
@@ -321,10 +322,130 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
             }
         }
 
-        if (infoHash != null && port > 0)
+        if (string.IsNullOrEmpty(infoHash) || port <= 0)
         {
-            _logger.Debug("LPD: peer {0}:{1} for {2}", sender.Address, port, infoHash);
-            _peerDiscovery.AddPeers(infoHash, new[] { new TrackerPeer { Ip = sender.Address.ToString(), Port = port } }, "lpd");
+            return;
         }
+
+        if (port < 1024 || port > 65535)
+        {
+            _logger.Debug("LPD: rejected announcement from {0} with invalid or privileged port {1}", sender.Address, port);
+            return;
+        }
+
+        var listeningPort = _configService?.ListeningPort ?? 0;
+        if (listeningPort > 0 && port == listeningPort && (IPAddress.IsLoopback(sender.Address) || IsLocalAddress(sender.Address)))
+        {
+            _logger.Debug("LPD: rejected self-announcement from {0}:{1}", sender.Address, port);
+            return;
+        }
+
+        if (!IsPrivateSubnet(sender.Address))
+        {
+            _logger.Debug("LPD: rejected announcement from non-private IP {0}", sender.Address);
+            return;
+        }
+
+        _logger.Debug("LPD: peer {0}:{1} for {2}", sender.Address, port, infoHash);
+        _peerDiscovery.AddPeers(infoHash, new[] { new TrackerPeer { Ip = sender.Address.ToString(), Port = port } }, "lpd");
+    }
+
+    internal static bool IsPrivateSubnet(IPAddress address)
+    {
+        if (address == null)
+        {
+            return false;
+        }
+
+        if (address.AddressFamily == AddressFamily.InterNetwork)
+        {
+            var bytes = address.GetAddressBytes();
+
+            // 10.0.0.0/8
+            if (bytes[0] == 10)
+            {
+                return true;
+            }
+
+            // 172.16.0.0/12 (172.16.0.0 - 172.31.255.255)
+            if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+            {
+                return true;
+            }
+
+            // 192.168.0.0/16
+            if (bytes[0] == 192 && bytes[1] == 168)
+            {
+                return true;
+            }
+
+            // 169.254.0.0/16 (IPv4 link-local)
+            if (bytes[0] == 169 && bytes[1] == 254)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        if (address.AddressFamily == AddressFamily.InterNetworkV6)
+        {
+            // fe80::/10 (link-local)
+            if (address.IsIPv6LinkLocal)
+            {
+                return true;
+            }
+
+            // fc00::/7 (unique local: fc00::/7 covering fc00:: to fdff:ffff:...)
+            var bytes = address.GetAddressBytes();
+            if ((bytes[0] & 0xfe) == 0xfc)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        return false;
+    }
+
+    internal static bool IsLocalAddress(IPAddress address)
+    {
+        if (address == null)
+        {
+            return false;
+        }
+
+        if (IPAddress.IsLoopback(address))
+        {
+            return true;
+        }
+
+        try
+        {
+            var nics = NetworkInterface.GetAllNetworkInterfaces();
+            foreach (var nic in nics)
+            {
+                var ipProps = nic.GetIPProperties();
+                if (ipProps?.UnicastAddresses == null)
+                {
+                    continue;
+                }
+
+                foreach (var unicast in ipProps.UnicastAddresses)
+                {
+                    if (unicast.Address.Equals(address))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Safe fallback if querying network interfaces throws.
+        }
+
+        return false;
     }
 }
