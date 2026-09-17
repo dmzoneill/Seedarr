@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -49,6 +51,7 @@ public class TransmissionRpcController : ControllerBase
     private static readonly object _removedLock = new();
     private static readonly List<(int Id, DateTime RemovedAt)> _recentlyRemovedList = new();
     private static readonly DateTime _serviceStartTime = DateTime.UtcNow;
+    private static readonly HttpClient _sharedHttpClient = new();
 
     private readonly ITorrentService _torrentService;
     private readonly ITorrentFileService _torrentFileService;
@@ -127,7 +130,7 @@ public class TransmissionRpcController : ControllerBase
         _configService = configService;
         _configFileProvider = configFileProvider;
         _tagService = tagService;
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? _sharedHttpClient;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -377,10 +380,14 @@ public class TransmissionRpcController : ControllerBase
         }
         else if (isRecentlyActive)
         {
-            torrents = torrents.Where(t => t.Status == TorrentStatus.Downloading ||
+            var recentCutoff = DateTime.UtcNow.AddMinutes(-5);
+            torrents = torrents.Where(t =>
+                t.Status == TorrentStatus.Downloading ||
                 t.Status == TorrentStatus.Seeding ||
                 t.DownloadSpeed > 0 ||
-                t.UploadSpeed > 0);
+                t.UploadSpeed > 0 ||
+                t.Active ||
+                (t.LastActive.HasValue && t.LastActive.Value >= recentCutoff));
         }
 
         HashSet<string> requestedFields = null;
@@ -566,6 +573,7 @@ public class TransmissionRpcController : ControllerBase
         return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
     }
 
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Transmission RPC intentionally imports torrent files from local filesystem paths")]
     private async Task<IActionResult> HandleTorrentAddAsync(TransmissionRpcRequest request, object tag)
     {
         var filename = request.Arguments != null && request.Arguments.TryGetValue("filename", out var f) ? f.GetString() : null;
@@ -587,6 +595,7 @@ public class TransmissionRpcController : ControllerBase
         }
 
         Torrent added = null;
+        var cancellationToken = HttpContext?.RequestAborted ?? CancellationToken.None;
 
         try
         {
@@ -604,18 +613,53 @@ public class TransmissionRpcController : ControllerBase
                 }
                 else if (filename.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || filename.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 {
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    cts.CancelAfter(TimeSpan.FromSeconds(30));
+
                     using var reqMsg = new HttpRequestMessage(HttpMethod.Get, filename);
                     if (!string.IsNullOrWhiteSpace(cookies))
                     {
                         reqMsg.Headers.TryAddWithoutValidation("Cookie", cookies);
                     }
 
-                    using var resp = await _httpClient.SendAsync(reqMsg);
+                    using var resp = await _httpClient.SendAsync(reqMsg, HttpCompletionOption.ResponseHeadersRead, cts.Token);
                     resp.EnsureSuccessStatusCode();
 
-                    var bytes = await resp.Content.ReadAsByteArrayAsync();
+                    const long maxTorrentFileSize = 20 * 1024 * 1024; // 20 MB
+                    if (resp.Content.Headers.ContentLength > maxTorrentFileSize)
+                    {
+                        return Ok(new TransmissionRpcResponse { Result = "torrent file exceeds maximum allowed size", Tag = tag });
+                    }
+
+                    var bytes = await resp.Content.ReadAsByteArrayAsync(cts.Token);
+                    if (bytes.Length > maxTorrentFileSize)
+                    {
+                        return Ok(new TransmissionRpcResponse { Result = "torrent file exceeds maximum allowed size", Tag = tag });
+                    }
+
                     using var ms = new MemoryStream(bytes);
                     added = _torrentImportService.ImportFromFile(ms, "downloaded.torrent");
+                }
+                else
+                {
+                    var localPath = filename;
+                    if (localPath.StartsWith("file://", StringComparison.OrdinalIgnoreCase) && Uri.TryCreate(localPath, UriKind.Absolute, out var fileUri))
+                    {
+                        localPath = fileUri.LocalPath;
+                    }
+
+                    if (global::System.IO.File.Exists(localPath))
+                    {
+                        var bytes = await global::System.IO.File.ReadAllBytesAsync(localPath, cancellationToken);
+                        var fileName = Path.GetFileName(localPath);
+                        if (string.IsNullOrWhiteSpace(fileName))
+                        {
+                            fileName = "file.torrent";
+                        }
+
+                        using var ms = new MemoryStream(bytes);
+                        added = _torrentImportService.ImportFromFile(ms, fileName);
+                    }
                 }
             }
 
@@ -855,31 +899,40 @@ public class TransmissionRpcController : ControllerBase
         return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
     }
 
-    private Dictionary<string, object> MapTorrentToTransmission(Torrent t, HashSet<string> fields)
+    [NonAction]
+    public Dictionary<string, object> MapTorrentToTransmission(Torrent t, HashSet<string> fields)
     {
         var totalSize = t.TotalSize;
         var downloaded = t.Downloaded;
         var leftUntilDone = Math.Max(0, totalSize - downloaded);
-        var files = _torrentFileService.GetByTorrentId(t.Id);
 
-        var trkList = _trackerEntryService.GetByTorrentId(t.Id);
-        var trackers = trkList.Select((tr, idx) => new Dictionary<string, object>
-        {
-            ["id"] = tr.Id,
-            ["announce"] = tr.Url ?? string.Empty,
-            ["scrape"] = tr.Url ?? string.Empty,
-            ["tier"] = tr.Tier,
-        }).ToList();
+        var needFiles = fields == null || fields.Count == 0 || fields.Contains("files") || fields.Contains("fileStats");
+        var needTrackers = fields == null || fields.Count == 0 || fields.Contains("trackers") || fields.Contains("trackerStats");
 
-        if (trackers.Count == 0 && !string.IsNullOrWhiteSpace(t.TrackerUrl))
+        var files = needFiles ? _torrentFileService.GetByTorrentId(t.Id) : new List<TorrentFile>();
+
+        var trackers = new List<Dictionary<string, object>>();
+        if (needTrackers)
         {
-            trackers.Add(new Dictionary<string, object>
+            var trkList = _trackerEntryService.GetByTorrentId(t.Id);
+            trackers = trkList.Select((tr, idx) => new Dictionary<string, object>
             {
-                ["id"] = 1,
-                ["announce"] = t.TrackerUrl,
-                ["scrape"] = t.TrackerUrl,
-                ["tier"] = 0,
-            });
+                ["id"] = tr.Id,
+                ["announce"] = tr.Url ?? string.Empty,
+                ["scrape"] = tr.Url ?? string.Empty,
+                ["tier"] = tr.Tier,
+            }).ToList();
+
+            if (trackers.Count == 0 && !string.IsNullOrWhiteSpace(t.TrackerUrl))
+            {
+                trackers.Add(new Dictionary<string, object>
+                {
+                    ["id"] = 1,
+                    ["announce"] = t.TrackerUrl,
+                    ["scrape"] = t.TrackerUrl,
+                    ["tier"] = 0,
+                });
+            }
         }
 
         var labelList = !string.IsNullOrWhiteSpace(t.Label)
@@ -923,6 +976,13 @@ public class TransmissionRpcController : ControllerBase
                 ["length"] = f.Size,
                 ["name"] = f.Path ?? string.Empty,
             }).ToList(),
+            ["fileStats"] = files.Select(f => new Dictionary<string, object>
+            {
+                ["bytesCompleted"] = (long)(f.Size * t.Progress),
+                ["wanted"] = true,
+                ["priority"] = 0,
+            }).ToList(),
+            ["trackerStats"] = trackers,
             ["pieceCount"] = t.PieceCount,
             ["pieceSize"] = t.PieceLength,
             ["leftUntilDone"] = leftUntilDone,
@@ -991,7 +1051,8 @@ public class TransmissionRpcController : ControllerBase
         };
     }
 
-    private List<int> ExtractIds(Dictionary<string, JsonElement> arguments, bool returnAllIfMissing = true)
+    [NonAction]
+    public List<int> ExtractIds(Dictionary<string, JsonElement> arguments, bool returnAllIfMissing = true)
     {
         var result = new List<int>();
         if (arguments == null)
@@ -1001,6 +1062,8 @@ public class TransmissionRpcController : ControllerBase
 
         if (arguments.TryGetValue("ids", out var idsElem))
         {
+            Dictionary<string, int> hashToId = null;
+
             if (idsElem.ValueKind == JsonValueKind.Number && idsElem.TryGetInt32(out var idNum))
             {
                 result.Add(idNum);
@@ -1010,10 +1073,14 @@ public class TransmissionRpcController : ControllerBase
                 var hash = idsElem.GetString();
                 if (!string.Equals(hash, "recently-active", StringComparison.OrdinalIgnoreCase))
                 {
-                    var t = _torrentService.GetAll().FirstOrDefault(x => string.Equals(x.InfoHash, hash, StringComparison.OrdinalIgnoreCase));
-                    if (t != null)
+                    hashToId ??= _torrentService.GetAll()
+                        .Where(t => !string.IsNullOrEmpty(t.InfoHash))
+                        .GroupBy(t => t.InfoHash, StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+                    if (hashToId.TryGetValue(hash, out var tId))
                     {
-                        result.Add(t.Id);
+                        result.Add(tId);
                     }
                 }
             }
@@ -1030,10 +1097,14 @@ public class TransmissionRpcController : ControllerBase
                         var arrHash = item.GetString();
                         if (!string.Equals(arrHash, "recently-active", StringComparison.OrdinalIgnoreCase))
                         {
-                            var t = _torrentService.GetAll().FirstOrDefault(x => string.Equals(x.InfoHash, arrHash, StringComparison.OrdinalIgnoreCase));
-                            if (t != null)
+                            hashToId ??= _torrentService.GetAll()
+                                .Where(t => !string.IsNullOrEmpty(t.InfoHash))
+                                .GroupBy(t => t.InfoHash, StringComparer.OrdinalIgnoreCase)
+                                .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+                            if (hashToId.TryGetValue(arrHash, out var tId))
                             {
-                                result.Add(t.Id);
+                                result.Add(tId);
                             }
                         }
                     }
