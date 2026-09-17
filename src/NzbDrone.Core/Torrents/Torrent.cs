@@ -225,7 +225,7 @@ public class Torrent : ModelBase
     {
         Ratio = Downloaded > 0
             ? Math.Round((double)Uploaded / Downloaded, 4)
-            : (Uploaded > 0 ? (double)Uploaded : 0.0);
+            : (TotalSize > 0 ? Math.Round((double)Uploaded / TotalSize, 4) : 0.0);
     }
 
     /// <summary>

@@ -215,6 +215,32 @@ public class SpeedPolicyTest
     }
 
     [Test]
+    public void ProcessSeeding_when_downloaded_is_positive_calculates_ratio_against_downloaded()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Downloaded = 500,
+            Uploaded = 0,
+            TotalSize = 1000,
+            Progress = 1.0,
+            Leechers = 10,
+            SeedingTime = 300
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250 });
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250, MaxDownloadSpeed = 500 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Uploaded, Is.EqualTo(250));
+        Assert.That(torrent.Ratio, Is.EqualTo(0.5));
+    }
+
+    [Test]
     public void ProcessSeeding_when_torrent_has_no_limit_inherits_category_upload_limit()
     {
         var torrent = new Torrent
