@@ -21,6 +21,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 {
     private readonly IPeerDatabase _peerDatabase;
     private readonly IConfigService _configService;
+    private readonly IScrapeCache _scrapeCache;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
     private readonly object _listenerLock = new();
@@ -30,9 +31,15 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     private bool _wasEnabled;
 
     public TrackerServer(IPeerDatabase peerDatabase, IConfigService configService)
+        : this(peerDatabase, configService, new ScrapeCache())
+    {
+    }
+
+    public TrackerServer(IPeerDatabase peerDatabase, IConfigService configService, IScrapeCache scrapeCache)
     {
         _peerDatabase = peerDatabase;
         _configService = configService;
+        _scrapeCache = scrapeCache ?? new ScrapeCache();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -152,7 +159,15 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private async Task AcceptLoop(TcpListener listener, CancellationToken ct)
     {
-        var cleanupTimer = new Timer(_ => PurgeExpiredRateLimits(), null, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        var cleanupTimer = new Timer(
+            _ =>
+            {
+                PurgeExpiredRateLimits();
+                _scrapeCache.PurgeExpired();
+            },
+            null,
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromMinutes(1));
 
         try
         {
@@ -492,27 +507,49 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private byte[] HandleScrape(string path)
     {
-        var (parameters, error) = ParseRequest(path);
-        if (error != null)
-        {
-            return Encoding.ASCII.GetBytes(error);
-        }
+        var queryIndex = path.IndexOf('?');
+        var isFullScrape = queryIndex < 0 || queryIndex == path.Length - 1;
 
-        if (!parameters.TryGetValue("info_hash", out var infoHash))
+        if (!isFullScrape)
         {
-            return Encoding.ASCII.GetBytes("d14:failure reason18:Missing info_hashe");
+            var (parameters, error) = ParseRequest(path);
+            if (error != null)
+            {
+                return Encoding.ASCII.GetBytes(error);
+            }
+
+            if (!parameters.TryGetValue("info_hash", out var infoHash))
+            {
+                return Encoding.ASCII.GetBytes("d14:failure reason18:Missing info_hashe");
+            }
+
+            _peerDatabase.IncrementScrapes();
+
+            return _scrapeCache.GetOrCreate(infoHash, () =>
+            {
+                var stats = _peerDatabase.GetStats(infoHash) ?? new ScrapeStats();
+                return BuildSingleScrapeResponse(infoHash, stats);
+            });
         }
 
         _peerDatabase.IncrementScrapes();
 
-        var stats = _peerDatabase.GetStats(infoHash) ?? new ScrapeStats();
+        return _scrapeCache.GetOrCreateFullScrape(() =>
+        {
+            var allStats = _peerDatabase.GetAllStats();
+            return BuildFullScrapeResponse(allStats);
+        });
+    }
+
+    private byte[] BuildSingleScrapeResponse(string infoHash, ScrapeStats stats)
+    {
         var scrapeInterval = _configService.ScrapeIntervalSeconds;
 
         var fileDict = new BDictionary
         {
-            ["complete"] = new BNumber(stats.Complete),
-            ["downloaded"] = new BNumber(stats.Downloaded),
-            ["incomplete"] = new BNumber(stats.Incomplete),
+            ["complete"] = new BNumber(stats?.Complete ?? 0),
+            ["downloaded"] = new BNumber(stats?.Downloaded ?? 0),
+            ["incomplete"] = new BNumber(stats?.Incomplete ?? 0),
         };
 
         var files = new BDictionary();
@@ -527,6 +564,45 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         files.Add(new BString(hashKeyBytes), fileDict);
+
+        var response = new BDictionary
+        {
+            ["files"] = files,
+            ["min_request_interval"] = new BNumber(scrapeInterval),
+        };
+
+        return response.EncodeAsBytes();
+    }
+
+    private byte[] BuildFullScrapeResponse(Dictionary<string, ScrapeStats> allStats)
+    {
+        var scrapeInterval = _configService.ScrapeIntervalSeconds;
+        var files = new BDictionary();
+
+        if (allStats != null)
+        {
+            foreach (var (infoHash, stats) in allStats)
+            {
+                var fileDict = new BDictionary
+                {
+                    ["complete"] = new BNumber(stats?.Complete ?? 0),
+                    ["downloaded"] = new BNumber(stats?.Downloaded ?? 0),
+                    ["incomplete"] = new BNumber(stats?.Incomplete ?? 0),
+                };
+
+                byte[] hashKeyBytes;
+                try
+                {
+                    hashKeyBytes = Convert.FromHexString(infoHash);
+                }
+                catch (FormatException)
+                {
+                    hashKeyBytes = Encoding.Latin1.GetBytes(infoHash);
+                }
+
+                files.Add(new BString(hashKeyBytes), fileDict);
+            }
+        }
 
         var response = new BDictionary
         {

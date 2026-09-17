@@ -726,11 +726,32 @@ public class TrackerServerTest
     // ---- HandleScrape tests ----
 
     [Test]
-    public void HandleScrape_should_return_error_when_missing_query_string()
+    public void HandleScrape_should_return_full_scrape_when_missing_query_string()
     {
+        var hashHex = Convert.ToHexString(Encoding.Latin1.GetBytes("abcdefghijklmnopqrst")).ToLowerInvariant();
+        _peerDatabase.GetAllStats().Returns(new Dictionary<string, ScrapeStats>
+        {
+            [hashHex] = new ScrapeStats { Complete = 5, Incomplete = 2, Downloaded = 10 }
+        });
+
         var result = InvokeHandleScrape("/scrape");
 
-        Assert.That(result, Does.Contain("Missing query string"));
+        Assert.That(result, Does.Contain("5:files"));
+        Assert.That(result, Does.Contain("8:completei5e"));
+        Assert.That(result, Does.Contain("20:min_request_intervali900e"));
+    }
+
+    [Test]
+    public void HandleScrape_should_return_cached_response_without_querying_database_again()
+    {
+        var hashHex = Convert.ToHexString(Encoding.Latin1.GetBytes("abcdefghijklmnopqrst")).ToLowerInvariant();
+        _peerDatabase.GetStats(hashHex).Returns(new ScrapeStats { Complete = 5, Incomplete = 2, Downloaded = 10 });
+
+        var result1 = InvokeHandleScrape("/scrape?info_hash=abcdefghijklmnopqrst");
+        var result2 = InvokeHandleScrape("/scrape?info_hash=abcdefghijklmnopqrst");
+
+        Assert.That(result1, Is.EqualTo(result2));
+        _peerDatabase.Received(1).GetStats(hashHex);
     }
 
     [Test]
