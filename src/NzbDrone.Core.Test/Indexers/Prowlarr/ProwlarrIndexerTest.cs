@@ -208,6 +208,55 @@ namespace NzbDrone.Core.Test.Indexers.Prowlarr
             Assert.That(dlRequest.Headers.GetValues("X-Api-Key").First(), Is.EqualTo("secret-key"));
         }
 
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("   ")]
+        public void FetchTorrentByHash_should_not_attach_api_key_when_api_key_is_null_or_whitespace(string apiKey)
+        {
+            var handler = new ProwlarrTestHttpMessageHandler();
+            var indexer = new ProwlarrIndexer(new HttpClient(handler));
+
+            var definition = new IndexerDefinition
+            {
+                Id = 1,
+                Name = "Prowlarr Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = apiKey
+            };
+
+            var searchJson = @"[
+                {
+                    ""title"": ""Same Origin Torrent"",
+                    ""downloadUrl"": ""http://8.8.8.8:9696/download/1.torrent""
+                }
+            ]";
+
+            var torrentBytes = new byte[] { 40, 50, 60 };
+
+            handler.Handler = req =>
+            {
+                if (req.RequestUri.ToString().Contains("/api/v1/search"))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(searchJson)
+                    };
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(torrentBytes)
+                };
+            };
+
+            var result = indexer.FetchTorrentByHash(definition, "0123456789abcdef0123456789abcdef01234567");
+
+            Assert.That(result, Is.EqualTo(torrentBytes));
+            Assert.That(handler.SentRequests.Count, Is.EqualTo(2));
+            Assert.That(handler.SentRequests[0].Headers.Contains("X-Api-Key"), Is.False);
+            Assert.That(handler.SentRequests[1].Headers.Contains("X-Api-Key"), Is.False);
+        }
+
         private class ProwlarrTestHttpMessageHandler : HttpMessageHandler
         {
             public List<HttpRequestMessage> SentRequests { get; } = new();

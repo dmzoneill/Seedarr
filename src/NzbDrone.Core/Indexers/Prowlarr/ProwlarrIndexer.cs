@@ -110,7 +110,11 @@ public class ProwlarrIndexer : IIndexer
             var url = $"{definition.Url.TrimEnd('/')}/api/v1/search?query={infoHash}&type=search";
 
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.Add("X-Api-Key", definition.ApiKey);
+            if (!string.IsNullOrWhiteSpace(definition.ApiKey))
+            {
+                request.Headers.Add("X-Api-Key", definition.ApiKey);
+            }
+
             using var response = _httpClient.Send(request);
 
             if (!response.IsSuccessStatusCode)
