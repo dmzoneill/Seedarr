@@ -1,3 +1,4 @@
+import { useState, useEffect, Fragment, type CSSProperties } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import { useToast } from "../context/ToastContext";
@@ -12,6 +13,19 @@ interface ScheduledTask {
   lastDuration: string | null;
   nextExecution: string | null;
   isRunning?: boolean;
+}
+
+interface ScheduledTaskHistoryItem {
+  id: number;
+  taskId: number;
+  typeName: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  status: string | number;
+  triggerSource: string | number;
+  errorMessage: string | null;
+  exceptionDetails: string | null;
 }
 
 interface CommandItem {
@@ -135,9 +149,402 @@ function statusClass(status: string): string {
   }
 }
 
+function formatDurationMs(durationMs: number): string {
+  if (durationMs < 1000) {
+    return `${durationMs} ms`;
+  }
+  const seconds = (durationMs / 1000).toFixed(2);
+  return `${seconds} s`;
+}
+
+function getHistoryStatusInfo(status: string | number): {
+  label: string;
+  badgeClass: string;
+  style: CSSProperties;
+} {
+  const s = String(status).toLowerCase();
+  if (s === "0" || s === "success") {
+    return {
+      label: "Success",
+      badgeClass: "badge badge-seeding",
+      style: {
+        backgroundColor: "rgba(46, 204, 113, 0.2)",
+        color: "#2ecc71",
+        borderColor: "#2ecc71",
+      },
+    };
+  }
+  if (s === "1" || s === "failed") {
+    return {
+      label: "Failed",
+      badgeClass: "badge badge-error",
+      style: {
+        backgroundColor: "rgba(231, 76, 60, 0.2)",
+        color: "#e74c3c",
+        borderColor: "#e74c3c",
+      },
+    };
+  }
+  if (s === "2" || s === "canceled" || s === "cancelled") {
+    return {
+      label: "Canceled",
+      badgeClass: "badge badge-queued",
+      style: {
+        backgroundColor: "rgba(241, 196, 15, 0.2)",
+        color: "#f1c40f",
+        borderColor: "#f1c40f",
+      },
+    };
+  }
+  return {
+    label: String(status),
+    badgeClass: "badge",
+    style: {},
+  };
+}
+
+function formatTriggerSource(source: string | number): string {
+  const s = String(source).toLowerCase();
+  if (s === "0" || s === "scheduler") return "Scheduler";
+  if (s === "1" || s === "manual") return "Manual";
+  if (s === "2" || s === "api") return "API";
+  return String(source);
+}
+
+interface TaskHistoryModalProps {
+  task: ScheduledTask;
+  onClose: () => void;
+}
+
+function TaskHistoryModal({ task, onClose }: TaskHistoryModalProps) {
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+
+  const {
+    data: history,
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+  } = useQuery<ScheduledTaskHistoryItem[]>({
+    queryKey: ["system", "task-history", task.id ?? task.typeName],
+    queryFn: () => {
+      const endpoint = task.id
+        ? `/system/task/${task.id}/history?limit=50`
+        : `/system/task/${encodeURIComponent(task.typeName)}/history?limit=50`;
+      return apiClient.get(endpoint);
+    },
+    refetchInterval: 15000,
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="task-history-title"
+    >
+      <div
+        className="modal"
+        style={{
+          maxWidth: "960px",
+          width: "95%",
+          maxHeight: "85vh",
+          display: "flex",
+          flexDirection: "column",
+          padding: "1.5rem",
+          boxShadow:
+            "0 12px 40px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.3)",
+          border: "1px solid var(--border-light)",
+        }}
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1rem",
+            paddingBottom: "0.75rem",
+            borderBottom: "1px solid var(--border-light)",
+            flexWrap: "wrap",
+            gap: "0.5rem",
+          }}
+        >
+          <div>
+            <h2
+              id="task-history-title"
+              className="modal-title"
+              style={{
+                margin: 0,
+                fontSize: "1.25rem",
+                fontWeight: 600,
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              <span>📜</span> Task History: {formatTaskName(task.typeName)}
+            </h2>
+            <div
+              style={{
+                fontSize: "0.8rem",
+                color: "var(--text-muted)",
+                marginTop: "0.25rem",
+                fontFamily: "monospace",
+              }}
+            >
+              {task.typeName}
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              style={{ padding: "0.25rem 0.6rem", fontSize: "0.8rem" }}
+              onClick={() => refetch()}
+              disabled={isFetching}
+              title="Refresh history"
+            >
+              {isFetching ? "🔄 Refreshing..." : "🔄 Refresh"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline"
+              style={{ padding: "0.25rem 0.6rem", fontSize: "0.85rem" }}
+              onClick={onClose}
+              title="Close modal"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div style={{ flex: 1, overflowY: "auto", minHeight: "200px" }}>
+          {isLoading && (
+            <p className="loading" style={{ padding: "1.5rem" }}>
+              Loading execution history...
+            </p>
+          )}
+          {!isLoading && isError && (
+            <p className="error" style={{ padding: "1.5rem" }}>
+              Failed to load task history.
+            </p>
+          )}
+          {!isLoading && !isError && history && history.length === 0 && (
+            <p
+              className="torrent-table-empty"
+              style={{ padding: "2rem", textAlign: "center" }}
+            >
+              No execution history recorded for this task yet.
+            </p>
+          )}
+          {!isLoading && !isError && history && history.length > 0 && (
+            <div className="torrent-table-wrapper">
+              <table className="torrent-table">
+                <thead>
+                  <tr>
+                    <th className="torrent-table-th">Status</th>
+                    <th className="torrent-table-th">Started</th>
+                    <th className="torrent-table-th">Finished</th>
+                    <th className="torrent-table-th">Duration</th>
+                    <th className="torrent-table-th">Trigger</th>
+                    <th className="torrent-table-th">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((item) => {
+                    const statusInfo = getHistoryStatusInfo(item.status);
+                    const isExpanded = expandedIds.has(item.id);
+                    const hasError =
+                      Boolean(item.errorMessage || item.exceptionDetails) ||
+                      statusInfo.label === "Failed";
+
+                    return (
+                      <Fragment key={item.id}>
+                        <tr className="torrent-table-row">
+                          <td>
+                            <span
+                              className={statusInfo.badgeClass}
+                              style={{
+                                fontSize: "0.75rem",
+                                padding: "0.2rem 0.5rem",
+                                ...statusInfo.style,
+                              }}
+                            >
+                              {statusInfo.label === "Success" && "✓ "}
+                              {statusInfo.label === "Failed" && "✕ "}
+                              {statusInfo.label === "Canceled" && "— "}
+                              {statusInfo.label}
+                            </span>
+                          </td>
+                          <td title={formatDateTime(item.startedAt)}>
+                            {formatDateTime(item.startedAt)}
+                            <div
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "var(--text-muted)",
+                              }}
+                            >
+                              {formatRelativeTime(item.startedAt)}
+                            </div>
+                          </td>
+                          <td title={formatDateTime(item.finishedAt)}>
+                            {formatDateTime(item.finishedAt)}
+                            <div
+                              style={{
+                                fontSize: "0.75rem",
+                                color: "var(--text-muted)",
+                              }}
+                            >
+                              {formatRelativeTime(item.finishedAt)}
+                            </div>
+                          </td>
+                          <td>
+                            <code style={{ fontSize: "0.85rem", fontWeight: 600 }}>
+                              {formatDurationMs(item.durationMs)}
+                            </code>
+                          </td>
+                          <td>
+                            <span
+                              className="badge badge-secondary"
+                              style={{ fontSize: "0.75rem" }}
+                            >
+                              {formatTriggerSource(item.triggerSource)}
+                            </span>
+                          </td>
+                          <td>
+                            {hasError ? (
+                              <button
+                                type="button"
+                                className="btn btn-outline"
+                                style={{
+                                  fontSize: "0.75rem",
+                                  padding: "0.2rem 0.5rem",
+                                  color: "var(--color-danger, #e55353)",
+                                  borderColor: "var(--color-danger, #e55353)",
+                                }}
+                                onClick={() => toggleExpand(item.id)}
+                              >
+                                {isExpanded ? "Hide Error ▲" : "View Error ▼"}
+                              </button>
+                            ) : (
+                              <span
+                                style={{
+                                  fontSize: "0.8rem",
+                                  color: "var(--text-muted)",
+                                }}
+                              >
+                                -
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                        {isExpanded && hasError && (
+                          <tr style={{ backgroundColor: "rgba(231, 76, 60, 0.05)" }}>
+                            <td colSpan={6} style={{ padding: "0.75rem 1rem" }}>
+                              {item.errorMessage && (
+                                <div
+                                  style={{
+                                    marginBottom: item.exceptionDetails ? "0.5rem" : 0,
+                                    color: "var(--color-danger, #e55353)",
+                                    fontWeight: 500,
+                                  }}
+                                >
+                                  <strong>Error:</strong> {item.errorMessage}
+                                </div>
+                              )}
+                              {item.exceptionDetails && (
+                                <pre
+                                  style={{
+                                    margin: 0,
+                                    padding: "0.75rem",
+                                    backgroundColor: "var(--bg-dark, #15181e)",
+                                    borderRadius: "4px",
+                                    border: "1px solid var(--border-light)",
+                                    fontSize: "0.75rem",
+                                    overflowX: "auto",
+                                    whiteSpace: "pre-wrap",
+                                    wordBreak: "break-all",
+                                    color: "var(--text-muted, #ccc)",
+                                    maxHeight: "220px",
+                                  }}
+                                >
+                                  {item.exceptionDetails}
+                                </pre>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: "1rem",
+            paddingTop: "0.75rem",
+            borderTop: "1px solid var(--border-light)",
+          }}
+        >
+          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            Showing {history?.length ?? 0} recent runs
+          </span>
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ padding: "0.35rem 0.8rem", fontSize: "0.85rem" }}
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SystemTasks() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const [selectedHistoryTask, setSelectedHistoryTask] = useState<ScheduledTask | null>(null);
 
   const {
     data: tasks,
@@ -372,6 +779,22 @@ function SystemTasks() {
                     </td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "0.25rem 0.6rem",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.3rem",
+                          marginRight: "0.5rem",
+                        }}
+                        onClick={() => setSelectedHistoryTask(task)}
+                        title="View task execution history"
+                      >
+                        📜 History
+                      </button>
+                      <button
                         className="btn btn-outline"
                         style={{
                           fontSize: "0.75rem",
@@ -546,6 +969,13 @@ function SystemTasks() {
           </p>
         )}
       </div>
+
+      {selectedHistoryTask && (
+        <TaskHistoryModal
+          task={selectedHistoryTask}
+          onClose={() => setSelectedHistoryTask(null)}
+        />
+      )}
     </div>
   );
 }

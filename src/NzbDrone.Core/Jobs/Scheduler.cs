@@ -102,7 +102,7 @@ public class Scheduler : BackgroundService
                         var startTime = DateTime.UtcNow;
                         using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
                         cts.CancelAfter(TimeSpan.FromMinutes(10));
-                        _taskManager.RecordTaskStarted(next.TypeName, cts);
+                        _taskManager.RecordTaskStarted(next.TypeName, cts, null, ScheduledTaskTriggerSource.Scheduler);
 
                         try
                         {
@@ -127,11 +127,12 @@ public class Scheduler : BackgroundService
                         catch (Exception ex)
                         {
                             _logger.Error(ex, "Scheduled task failed: {0}", next.TypeName);
+                            _taskManager.RecordTaskFailed(next.TypeName, startTime, ex, ScheduledTaskTriggerSource.Scheduler);
                         }
                         finally
                         {
                             _taskManager.UpdateLastExecution(next.TypeName);
-                            _taskManager.RecordTaskFinished(next.TypeName, startTime);
+                            _taskManager.RecordTaskFinished(next.TypeName, startTime, ScheduledTaskTriggerSource.Scheduler);
                         }
 
                         // Stagger consecutive/overdue task runs with jitter to prevent CPU/IO spikes

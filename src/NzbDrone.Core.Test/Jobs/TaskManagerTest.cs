@@ -367,4 +367,108 @@ public class TaskManagerTest
         Assert.That(next.Kind, Is.EqualTo(DateTimeKind.Utc));
         Assert.That(next, Is.GreaterThan(DateTime.UtcNow));
     }
+
+    [Test]
+    public void RecordTaskFinished_should_save_history_record_with_success_and_duration()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 42,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        var historyRepo = Substitute.For<IScheduledTaskHistoryRepository>();
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>(), historyRepo);
+
+        var startTime = DateTime.UtcNow.AddSeconds(-3);
+        _subject.RecordTaskStarted("TestTask", ScheduledTaskTriggerSource.Manual);
+        _subject.RecordTaskFinished("TestTask", startTime);
+
+        historyRepo.Received(1).Insert(Arg.Is<ScheduledTaskHistory>(h =>
+            h.TaskId == 42 &&
+            h.TypeName == "TestTask" &&
+            h.Status == ScheduledTaskHistoryStatus.Success &&
+            h.TriggerSource == ScheduledTaskTriggerSource.Manual &&
+            h.DurationMs >= 2000));
+    }
+
+    [Test]
+    public void RecordTaskFailed_should_save_history_record_with_failed_status_and_error_message()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 42,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        var historyRepo = Substitute.For<IScheduledTaskHistoryRepository>();
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>(), historyRepo);
+
+        var startTime = DateTime.UtcNow.AddSeconds(-2);
+        _subject.RecordTaskStarted("TestTask", ScheduledTaskTriggerSource.Scheduler);
+        _subject.RecordTaskFailed("TestTask", startTime, new InvalidOperationException("Simulated failure"));
+
+        historyRepo.Received(1).Insert(Arg.Is<ScheduledTaskHistory>(h =>
+            h.TaskId == 42 &&
+            h.TypeName == "TestTask" &&
+            h.Status == ScheduledTaskHistoryStatus.Failed &&
+            h.TriggerSource == ScheduledTaskTriggerSource.Scheduler &&
+            h.ErrorMessage == "Simulated failure" &&
+            h.ExceptionDetails.Contains("Simulated failure")));
+
+        // Calling RecordTaskFinished afterwards does not insert a duplicate
+        _subject.RecordTaskFinished("TestTask", startTime);
+        historyRepo.Received(1).Insert(Arg.Any<ScheduledTaskHistory>());
+    }
+
+    [Test]
+    public void RecordTaskFinished_after_cancel_should_save_history_record_with_canceled_status()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 42,
+            TypeName = "TestTask",
+            Interval = 15,
+            LastExecution = DateTime.UtcNow.AddMinutes(-20)
+        };
+        _repository.All().Returns(new List<ScheduledTask> { task });
+        var historyRepo = Substitute.For<IScheduledTaskHistoryRepository>();
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>(), historyRepo);
+
+        var startTime = DateTime.UtcNow.AddSeconds(-1);
+        using var cts = new CancellationTokenSource();
+        _subject.RecordTaskStarted("TestTask", cts, ScheduledTaskTriggerSource.Api);
+        _subject.CancelTask(42);
+        _subject.RecordTaskFinished("TestTask", startTime);
+
+        historyRepo.Received(1).Insert(Arg.Is<ScheduledTaskHistory>(h =>
+            h.TaskId == 42 &&
+            h.TypeName == "TestTask" &&
+            h.Status == ScheduledTaskHistoryStatus.Canceled &&
+            h.TriggerSource == ScheduledTaskTriggerSource.Api));
+    }
+
+    [Test]
+    public void GetTaskHistory_should_delegate_to_history_repository()
+    {
+        var historyRepo = Substitute.For<IScheduledTaskHistoryRepository>();
+        var items = new List<ScheduledTaskHistory>
+        {
+            new() { Id = 1, TaskId = 10, TypeName = "TaskA", Status = ScheduledTaskHistoryStatus.Success }
+        };
+        historyRepo.GetByTaskId(10, 20).Returns(items);
+        historyRepo.GetByTypeName("TaskA", 20).Returns(items);
+
+        _subject = new TaskManager(_repository, Enumerable.Empty<IScheduledTask>(), historyRepo);
+
+        var byId = _subject.GetTaskHistory(10, 20);
+        var byName = _subject.GetTaskHistory("TaskA", 20);
+
+        Assert.That(byId, Is.EqualTo(items));
+        Assert.That(byName, Is.EqualTo(items));
+    }
 }

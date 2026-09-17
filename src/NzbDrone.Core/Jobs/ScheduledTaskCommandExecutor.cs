@@ -46,7 +46,7 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
         _logger.Info("Executing scheduled task via command queue: {0}", command.TaskName);
         var startTime = DateTime.UtcNow;
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-        _taskManager.RecordTaskStarted(command.TaskName, cts);
+        _taskManager.RecordTaskStarted(command.TaskName, cts, null, command.TriggerSource);
 
         try
         {
@@ -57,10 +57,16 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
         {
             _logger.Warn("Scheduled task was canceled or timed out: {0}", command.TaskName);
         }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Scheduled task failed: {0}", command.TaskName);
+            _taskManager.RecordTaskFailed(command.TaskName, startTime, ex, command.TriggerSource);
+            throw;
+        }
         finally
         {
             _taskManager.UpdateLastExecution(command.TaskName);
-            _taskManager.RecordTaskFinished(command.TaskName, startTime);
+            _taskManager.RecordTaskFinished(command.TaskName, startTime, command.TriggerSource);
         }
     }
 }
