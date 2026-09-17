@@ -125,5 +125,108 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
 
             Assert.Throws<System.Xml.XmlException>(() => _subject.ParseResponse(xmlWithDtd));
         }
+
+        [Test]
+        public void BuildSearchUrl_should_build_tvsearch_url_with_parameters()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local",
+                ApiKey = "nzbkey",
+                ApiPath = "/api"
+            };
+
+            var query = new SearchQuery
+            {
+                Mode = SearchMode.TvSearch,
+                Query = "Simpsons",
+                Season = 3,
+                Episode = 10,
+                TvdbId = "71663",
+                Rid = "1234",
+                Offset = 5,
+                Limit = 20
+            };
+
+            var url = _subject.BuildSearchUrl(definition, query);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=tvsearch"));
+            Assert.That(url, Does.Contain("q=Simpsons"));
+            Assert.That(url, Does.Contain("season=3"));
+            Assert.That(url, Does.Contain("ep=10"));
+            Assert.That(url, Does.Contain("tvdbid=71663"));
+            Assert.That(url, Does.Contain("rid=1234"));
+            Assert.That(url, Does.Contain("offset=5"));
+            Assert.That(url, Does.Contain("limit=20"));
+            Assert.That(url, Does.Contain("apikey=nzbkey"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_should_build_movie_url_with_parameters()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local"
+            };
+
+            var query = new SearchQuery
+            {
+                Mode = SearchMode.Movie,
+                Query = "Matrix",
+                ImdbId = "tt0133093",
+                TmdbId = "603"
+            };
+
+            var url = _subject.BuildSearchUrl(definition, query);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=movie"));
+            Assert.That(url, Does.Contain("q=Matrix"));
+            Assert.That(url, Does.Contain("imdbid=tt0133093"));
+            Assert.That(url, Does.Contain("tmdbid=603"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_should_build_music_url_with_parameters()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local"
+            };
+
+            var query = new SearchQuery
+            {
+                Mode = SearchMode.Music,
+                Artist = "Beatles",
+                Album = "Abbey Road"
+            };
+
+            var url = _subject.BuildSearchUrl(definition, query);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=music"));
+            Assert.That(url, Does.Contain("artist=Beatles"));
+            Assert.That(url, Does.Contain("album=Abbey%20Road"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_should_build_book_url_with_parameters()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://newznab.local"
+            };
+
+            var query = new SearchQuery
+            {
+                Mode = SearchMode.Book,
+                Author = "Asimov",
+                Title = "Foundation"
+            };
+
+            var url = _subject.BuildSearchUrl(definition, query);
+
+            Assert.That(url, Does.StartWith("http://newznab.local/api?t=book"));
+            Assert.That(url, Does.Contain("author=Asimov"));
+            Assert.That(url, Does.Contain("title=Foundation"));
+        }
     }
 }

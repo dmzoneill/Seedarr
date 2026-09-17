@@ -720,6 +720,110 @@ namespace NzbDrone.Core.Test.Indexers.Torznab
             Assert.That(rule.Matches(results[0]), Is.False);
         }
 
+        [Test]
+        public void BuildSearchUrl_should_build_tvsearch_url_with_parameters()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local",
+                ApiKey = "myapikey",
+                ApiPath = "/api"
+            };
+
+            var query = new SearchQuery
+            {
+                Mode = SearchMode.TvSearch,
+                Query = "Simpsons",
+                Season = 5,
+                Episode = 2,
+                TvdbId = "12345",
+                ImdbId = "tt0096697",
+                Offset = 10,
+                Limit = 25
+            };
+
+            var url = _subject.BuildSearchUrl(definition, query);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=tvsearch"));
+            Assert.That(url, Does.Contain("q=Simpsons"));
+            Assert.That(url, Does.Contain("season=5"));
+            Assert.That(url, Does.Contain("ep=2"));
+            Assert.That(url, Does.Contain("tvdbid=12345"));
+            Assert.That(url, Does.Contain("imdbid=tt0096697"));
+            Assert.That(url, Does.Contain("offset=10"));
+            Assert.That(url, Does.Contain("limit=25"));
+            Assert.That(url, Does.Contain("apikey=myapikey"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_should_build_movie_url_with_tmdb_and_imdb()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local",
+                ApiKey = "myapikey"
+            };
+
+            var query = new SearchQuery
+            {
+                Mode = SearchMode.Movie,
+                Query = "Inception",
+                ImdbId = "tt1375666",
+                TmdbId = "27205"
+            };
+
+            var url = _subject.BuildSearchUrl(definition, query);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=movie"));
+            Assert.That(url, Does.Contain("q=Inception"));
+            Assert.That(url, Does.Contain("imdbid=tt1375666"));
+            Assert.That(url, Does.Contain("tmdbid=27205"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_should_build_music_url_with_artist_and_album()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local"
+            };
+
+            var query = new SearchQuery
+            {
+                Mode = SearchMode.Music,
+                Artist = "Pink Floyd",
+                Album = "The Wall"
+            };
+
+            var url = _subject.BuildSearchUrl(definition, query);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=music"));
+            Assert.That(url, Does.Contain("artist=Pink%20Floyd"));
+            Assert.That(url, Does.Contain("album=The%20Wall"));
+        }
+
+        [Test]
+        public void BuildSearchUrl_should_build_book_url_with_author_and_title()
+        {
+            var definition = new IndexerDefinition
+            {
+                Url = "http://torznab.local"
+            };
+
+            var query = new SearchQuery
+            {
+                Mode = SearchMode.Book,
+                Author = "Tolkien",
+                Title = "The Hobbit"
+            };
+
+            var url = _subject.BuildSearchUrl(definition, query);
+
+            Assert.That(url, Does.StartWith("http://torznab.local/api?t=book"));
+            Assert.That(url, Does.Contain("author=Tolkien"));
+            Assert.That(url, Does.Contain("title=The%20Hobbit"));
+        }
+
         private class TorznabTestHttpMessageHandler : HttpMessageHandler
         {
             public List<HttpRequestMessage> SentRequests { get; } = new();

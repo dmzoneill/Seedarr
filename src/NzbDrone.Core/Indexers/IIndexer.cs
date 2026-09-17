@@ -16,4 +16,5 @@ public interface IIndexer : IProvider
     IndexerTestResult TestConnectionDetailed(IndexerDefinition definition);
     byte[] FetchTorrentByHash(IndexerDefinition definition, string infoHash);
     System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, string query, string category = null, int offset = 0, int limit = 50);
+    System.Collections.Generic.List<ReleaseInfo> Search(IndexerDefinition definition, SearchQuery searchQuery);
 }
