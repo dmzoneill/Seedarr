@@ -695,6 +695,137 @@ public class WatchFolderServiceTest
         Assert.That(result, Is.True);
     }
 
+    [Test]
+    public void OnTorrentFileRenamed_should_process_renamed_torrent_file()
+    {
+        var torrentPath = Path.Combine(_tempDir, "onrenamed.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "OnRenamed",
+            InfoHash = "renamed123",
+            TotalSize = 1024,
+            PieceCount = 1,
+            PieceLength = 1024,
+            Files = new List<ParsedTorrentFile>()
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 1 });
+
+        var method = typeof(WatchFolderService).GetMethod("OnTorrentFileRenamed",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        var args = new RenamedEventArgs(WatcherChangeTypes.Renamed, _tempDir, "onrenamed.torrent", "onrenamed.torrent.crdownload");
+
+        method.Invoke(_subject, new object[] { null, args });
+        Thread.Sleep(700);
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.Name == "OnRenamed"));
+    }
+
+    [Test]
+    public void ProcessMagnetFile_should_detect_parse_and_import_magnet_file()
+    {
+        var magnetPath = Path.Combine(_tempDir, "sample.magnet");
+        var magnetUri = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=Ubuntu+Linux&tr=http%3A%2F%2Ftracker.example.com%2Fannounce";
+        File.WriteAllText(magnetPath, magnetUri);
+
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 101, Name = "Ubuntu Linux" });
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessMagnetFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { magnetPath, _tempDir });
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Name == "Ubuntu Linux" &&
+            t.InfoHash == "0123456789abcdef0123456789abcdef01234567" &&
+            t.MagnetUrl == magnetUri));
+        _trackerEntryService.Received(1).Add(Arg.Is<TrackerEntry>(te =>
+            te.TorrentId == 101 && te.Url == "http://tracker.example.com/announce"));
+    }
+
+    [Test]
+    public void ProcessTorrentFile_when_delete_after_add_is_false_should_rename_file_to_imported()
+    {
+        _configService.WatchFolderDeleteAddedTorrents.Returns(false);
+
+        var torrentPath = Path.Combine(_tempDir, "preserve.torrent");
+        CreateDummyTorrentFile(torrentPath);
+
+        var parsed = new ParsedTorrent
+        {
+            Name = "PreserveTorrent",
+            InfoHash = "preserve123",
+            TotalSize = 1024,
+            PieceCount = 1,
+            PieceLength = 1024,
+            Files = new List<ParsedTorrentFile>()
+        };
+        _parser.Parse(torrentPath).Returns(parsed);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(new Torrent { Id = 2 });
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath, _tempDir });
+
+        Assert.That(File.Exists(torrentPath), Is.False);
+        Assert.That(File.Exists(torrentPath + ".imported"), Is.True);
+    }
+
+    [Test]
+    public void ProcessTorrentFile_when_unparseable_should_rename_file_to_failed()
+    {
+        var torrentPath = Path.Combine(_tempDir, "corrupted.torrent");
+        File.WriteAllText(torrentPath, "not valid bencode data");
+
+        _parser.Parse(torrentPath).Returns(_ => throw new Exception("Corrupted bencode"));
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessTorrentFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { torrentPath, _tempDir });
+
+        Assert.That(File.Exists(torrentPath), Is.False);
+        Assert.That(File.Exists(torrentPath + ".failed"), Is.True);
+    }
+
+    [Test]
+    public void ProcessMagnetFile_when_unparseable_should_rename_file_to_failed()
+    {
+        var magnetPath = Path.Combine(_tempDir, "corrupted.magnet");
+        File.WriteAllText(magnetPath, "not a magnet uri");
+
+        var method = typeof(WatchFolderService).GetMethod("ProcessMagnetFile",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { magnetPath, _tempDir });
+
+        Assert.That(File.Exists(magnetPath), Is.False);
+        Assert.That(File.Exists(magnetPath + ".failed"), Is.True);
+    }
+
+    [Test]
+    public void PeriodicScan_should_skip_imported_and_failed_files()
+    {
+        var watchDir = Path.Combine(_tempDir, "scan-watch");
+        Directory.CreateDirectory(watchDir);
+
+        var importedTorrent = Path.Combine(watchDir, "test.torrent.imported");
+        var failedTorrent = Path.Combine(watchDir, "test2.torrent.failed");
+        var importedMagnet = Path.Combine(watchDir, "test.magnet.imported");
+        var failedMagnet = Path.Combine(watchDir, "test2.magnet.failed");
+
+        File.WriteAllText(importedTorrent, "dummy");
+        File.WriteAllText(failedTorrent, "dummy");
+        File.WriteAllText(importedMagnet, "dummy");
+        File.WriteAllText(failedMagnet, "dummy");
+
+        var method = typeof(WatchFolderService).GetMethod("PeriodicScan",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(_subject, new object[] { watchDir });
+
+        _parser.DidNotReceive().Parse(Arg.Any<string>());
+        _torrentService.DidNotReceive().Add(Arg.Any<Torrent>());
+    }
+
     private static void CreateDummyTorrentFile(string path)
     {
         var pieces = new byte[20];
