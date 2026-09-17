@@ -59,7 +59,7 @@ public class CategoryService : ICategoryService
     private readonly ICategoryRepository _repository;
     private readonly IEventAggregator _eventAggregator;
     private readonly ITorrentRepository _torrentRepository;
-    private readonly ITorrentService _torrentService;
+    private readonly Lazy<ITorrentService> _torrentService;
     private readonly Logger _logger;
 
     private readonly ConcurrentDictionary<string, Category> _nameCache = new(StringComparer.OrdinalIgnoreCase);
@@ -72,7 +72,7 @@ public class CategoryService : ICategoryService
         ICategoryRepository repository,
         IEventAggregator eventAggregator,
         ITorrentRepository torrentRepository = null,
-        ITorrentService torrentService = null)
+        Lazy<ITorrentService> torrentService = null)
     {
         _repository = repository;
         _eventAggregator = eventAggregator;
@@ -406,9 +406,9 @@ public class CategoryService : ICategoryService
 
     private IEnumerable<Torrent> GetTorrents()
     {
-        if (_torrentService != null)
+        if (_torrentService?.Value != null)
         {
-            return _torrentService.GetAll();
+            return _torrentService.Value.GetAll();
         }
 
         if (_torrentRepository != null)
@@ -421,9 +421,9 @@ public class CategoryService : ICategoryService
 
     private void UpdateTorrent(Torrent torrent)
     {
-        if (_torrentService != null)
+        if (_torrentService?.Value != null)
         {
-            _torrentService.Update(torrent);
+            _torrentService.Value.Update(torrent);
         }
         else if (_torrentRepository != null)
         {

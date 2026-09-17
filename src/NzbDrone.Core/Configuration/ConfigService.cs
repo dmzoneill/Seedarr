@@ -9,7 +9,7 @@ namespace NzbDrone.Core.Configuration;
 
 public interface IConfigService
 {
-    void SaveConfigDictionary(Dictionary<string, object> configValues);
+    void SaveConfigDictionary(Dictionary<string, object> configValues, bool publishEvent = true);
     bool GetValueBoolean(string key, bool defaultValue = false);
     string GetValue(string key, string defaultValue = "");
     int GetValueInt(string key, int defaultValue = 0);
@@ -264,6 +264,11 @@ public class ConfigService : IConfigService
 
     public void SaveConfigDictionary(Dictionary<string, object> configValues)
     {
+        SaveConfigDictionary(configValues, true);
+    }
+
+    public void SaveConfigDictionary(Dictionary<string, object> configValues, bool publishEvent)
+    {
         lock (_cacheLock)
         {
             var all = _repository.All().ToList();
@@ -288,7 +293,10 @@ public class ConfigService : IConfigService
         }
 
         _logger.Debug("Saved {0} config values", configValues.Count);
-        _eventAggregator.PublishEvent(new ConfigSavedEvent());
+        if (publishEvent)
+        {
+            _eventAggregator.PublishEvent(new ConfigSavedEvent());
+        }
     }
 
     public bool GetValueBoolean(string key, bool defaultValue = false)
@@ -365,7 +373,7 @@ public class ConfigService : IConfigService
             if (string.IsNullOrWhiteSpace(uuid))
             {
                 uuid = Guid.NewGuid().ToString().ToLowerInvariant();
-                SaveConfigDictionary(new Dictionary<string, object> { { "InstanceUuid", uuid } });
+                SaveConfigDictionary(new Dictionary<string, object> { { "InstanceUuid", uuid } }, false);
                 _logger.Info("Generated and saved new instance UUID: {0}", uuid);
             }
 
@@ -587,7 +595,7 @@ public class ConfigService : IConfigService
     public string DhtNodeIdHex
     {
         get => GetValue("DhtNodeIdHex", string.Empty);
-        set => SaveConfigDictionary(new Dictionary<string, object> { { "DhtNodeIdHex", value } });
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "DhtNodeIdHex", value } }, false);
     }
 
     // Simulation

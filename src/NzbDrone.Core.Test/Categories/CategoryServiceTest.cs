@@ -193,7 +193,7 @@ public class CategoryServiceTest
         var torrentService = Substitute.For<ITorrentService>();
         torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
-        var service = new CategoryService(_repository, _eventAggregator, _torrentRepository, torrentService);
+        var service = new CategoryService(_repository, _eventAggregator, _torrentRepository, new Lazy<ITorrentService>(() => torrentService));
 
         _repository.Get(1).Returns(oldCat);
         _repository.Update(newCat).Returns(newCat);
