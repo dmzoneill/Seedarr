@@ -12,7 +12,7 @@ public static class EmailTemplateRenderer
         string eventType,
         string messageOrBody,
         Torrent torrent = null,
-        dynamic meta = null,
+        object meta = null,
         object genericPayload = null,
         string errorMessage = null)
     {
@@ -127,9 +127,9 @@ public static class EmailTemplateRenderer
 
         // Diagnostic details callout box for errors or health issues
         var isErrorOrHealth = cleanEventType.Contains("health", StringComparison.OrdinalIgnoreCase) ||
-                              cleanEventType.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
-                              cleanEventType.Contains("error", StringComparison.OrdinalIgnoreCase) ||
-                              cleanEventType.Contains("issue", StringComparison.OrdinalIgnoreCase);
+            cleanEventType.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+            cleanEventType.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+            cleanEventType.Contains("issue", StringComparison.OrdinalIgnoreCase);
 
         var diagnosticMessage = !string.IsNullOrWhiteSpace(errorMessage)
             ? errorMessage

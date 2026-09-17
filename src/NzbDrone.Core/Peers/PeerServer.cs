@@ -1438,13 +1438,18 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 ? _clientBehaviorSimulator.GetEffectiveIdleChance(_configService.PeerIdleChance)
                 : _configService.PeerIdleChance;
 
-            if (!await connection.NegotiateEncryptionOutgoingAsync(torrent.InfoHash, GetEncryptionMode(), stoppingToken))
+            if (!string.Equals(_configService.EncryptionMode, "disabled", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(_configService.EncryptionMode, "plain", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(_configService.EncryptionMode, "none", StringComparison.OrdinalIgnoreCase))
             {
-                _logger.Debug("Outgoing encryption failed to {0}:{1}", candidate.Ip, candidate.Port);
-                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
-                _eventLogService?.Debug(torrent.Id, "Peers", $"Encryption negotiation rejected by peer {candidate.Ip}:{candidate.Port}");
-                connection.Dispose();
-                return;
+                if (!await connection.NegotiateEncryptionOutgoingAsync(torrent.InfoHash, GetEncryptionMode(), stoppingToken))
+                {
+                    _logger.Debug("Outgoing encryption failed to {0}:{1}", candidate.Ip, candidate.Port);
+                    _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                    _eventLogService?.Debug(torrent.Id, "Peers", $"Encryption negotiation rejected by peer {candidate.Ip}:{candidate.Port}");
+                    connection.Dispose();
+                    return;
+                }
             }
 
             var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)

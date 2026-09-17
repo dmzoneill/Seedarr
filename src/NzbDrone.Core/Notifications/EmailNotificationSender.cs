@@ -30,7 +30,7 @@ public static class EmailNotificationSender
         string settings,
         string eventType,
         Torrent torrent,
-        dynamic meta,
+        object meta,
         object genericPayload,
         Action<SmtpClient, MailMessage> smtpSender = null,
         IReadOnlyList<TimeSpan> retryDelays = null)
@@ -58,7 +58,7 @@ public static class EmailNotificationSender
         string settings,
         string eventType,
         Torrent torrent,
-        dynamic meta,
+        object meta,
         object genericPayload,
         Func<SmtpClient, MailMessage, CancellationToken, Task> asyncSmtpSender = null,
         IReadOnlyList<TimeSpan> retryDelays = null,

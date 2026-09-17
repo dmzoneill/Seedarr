@@ -11,14 +11,14 @@ public static class SpeedLimitMerger
             return null;
         }
 
-        if (uploadBps > 0)
+        if (uploadBps >= 0)
         {
             limits.MaxUploadSpeed = limits.MaxUploadSpeed == SpeedLimits.Unlimited
                 ? uploadBps
                 : Math.Min(limits.MaxUploadSpeed, uploadBps);
         }
 
-        if (downloadBps > 0)
+        if (downloadBps >= 0)
         {
             limits.MaxDownloadSpeed = limits.MaxDownloadSpeed == SpeedLimits.Unlimited
                 ? downloadBps

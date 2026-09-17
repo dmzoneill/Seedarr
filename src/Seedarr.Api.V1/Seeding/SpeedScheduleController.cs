@@ -50,7 +50,10 @@ public class SpeedScheduleController : Controller
             ? _configService.AltDownloadSpeedKbps
             : _configService.MaxDownloadSpeedKbps;
 
-        return SpeedLimitMerger.Apply(limits, (long)uploadKbps * 1024, (long)downloadKbps * 1024);
+        var uploadLimitBps = uploadKbps > 0 ? (long)uploadKbps * 1024 : SpeedLimits.Unlimited;
+        var downloadLimitBps = downloadKbps > 0 ? (long)downloadKbps * 1024 : SpeedLimits.Unlimited;
+
+        return SpeedLimitMerger.Apply(limits, uploadLimitBps, downloadLimitBps);
     }
 
     [HttpPost]

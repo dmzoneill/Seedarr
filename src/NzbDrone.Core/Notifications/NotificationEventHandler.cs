@@ -288,16 +288,16 @@ public class NotificationEventHandler :
         string settings,
         string eventType,
         Torrent torrent,
-        dynamic meta,
+        object meta,
         object genericPayload,
         Action<System.Net.Mail.SmtpClient, System.Net.Mail.MailMessage> smtpSender = null)
     {
-        EmailNotificationSender.SendEmailNotification(settings, eventType, torrent, (object)meta, genericPayload, smtpSender);
+        EmailNotificationSender.SendEmailNotification(settings, eventType, torrent, meta, genericPayload, smtpSender);
     }
 
-    internal static object BuildProviderPayload(string implementation, string eventType, Torrent torrent, dynamic meta, object genericPayload, string settings = null)
+    internal static object BuildProviderPayload(string implementation, string eventType, Torrent torrent, object meta, object genericPayload, string settings = null)
     {
-        return NotificationPayloadBuilder.BuildProviderPayload(implementation, eventType, torrent, (object)meta, genericPayload, settings);
+        return NotificationPayloadBuilder.BuildProviderPayload(implementation, eventType, torrent, meta, genericPayload, settings);
     }
 
     public void Dispose()
@@ -309,7 +309,7 @@ public class NotificationEventHandler :
         NotificationDefinition notif,
         string eventType,
         Torrent torrent,
-        dynamic meta,
+        object meta,
         object genericPayload)
     {
         if (string.Equals(notif.Implementation, "CustomScript", StringComparison.OrdinalIgnoreCase))
@@ -320,11 +320,11 @@ public class NotificationEventHandler :
 
         if (string.Equals(notif.Implementation, "Email", StringComparison.OrdinalIgnoreCase))
         {
-            await EmailNotificationSender.SendEmailNotificationAsync(notif.Settings, eventType, torrent, (object)meta, genericPayload).ConfigureAwait(false);
+            await EmailNotificationSender.SendEmailNotificationAsync(notif.Settings, eventType, torrent, meta, genericPayload).ConfigureAwait(false);
             return true;
         }
 
-        var providerPayload = NotificationPayloadBuilder.BuildProviderPayload(notif.Implementation, eventType, torrent, (object)meta, genericPayload, notif.Settings);
+        var providerPayload = NotificationPayloadBuilder.BuildProviderPayload(notif.Implementation, eventType, torrent, meta, genericPayload, notif.Settings);
         var targetUrl = NotificationPayloadBuilder.ResolveTargetUrl(notif.Implementation, notif.Settings);
         var customHeaders = NotificationPayloadBuilder.ResolveCustomHeaders(notif.Implementation, notif.Settings);
         return await _webhookDispatcher.DispatchAsync(targetUrl, providerPayload, customHeaders).ConfigureAwait(false);
@@ -334,7 +334,7 @@ public class NotificationEventHandler :
         NotificationDefinition notif,
         string eventType,
         Torrent torrent,
-        dynamic meta,
+        object meta,
         object genericPayload)
     {
         var success = false;

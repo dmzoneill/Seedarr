@@ -14,14 +14,18 @@ namespace NzbDrone.Core.Test.TestHelpers;
 /// </summary>
 internal class MockHttpMessageHandler : HttpMessageHandler
 {
+    private readonly object _syncRoot = new();
     private readonly Queue<HttpResponseMessage> _responses = new();
 
     public void Enqueue(HttpStatusCode statusCode, string content)
     {
-        _responses.Enqueue(new HttpResponseMessage(statusCode)
+        lock (_syncRoot)
         {
-            Content = new StringContent(content, Encoding.UTF8, "application/json"),
-        });
+            _responses.Enqueue(new HttpResponseMessage(statusCode)
+            {
+                Content = new StringContent(content, Encoding.UTF8, "application/json"),
+            });
+        }
     }
 
     public void EnqueueWithHeaders(
@@ -39,20 +43,29 @@ internal class MockHttpMessageHandler : HttpMessageHandler
             response.Headers.TryAddWithoutValidation(kvp.Key, kvp.Value);
         }
 
-        _responses.Enqueue(response);
+        lock (_syncRoot)
+        {
+            _responses.Enqueue(response);
+        }
     }
 
     public void EnqueueBytes(HttpStatusCode statusCode, byte[] content)
     {
-        _responses.Enqueue(new HttpResponseMessage(statusCode)
+        lock (_syncRoot)
         {
-            Content = new ByteArrayContent(content),
-        });
+            _responses.Enqueue(new HttpResponseMessage(statusCode)
+            {
+                Content = new ByteArrayContent(content),
+            });
+        }
     }
 
     public void EnqueueResponse(HttpResponseMessage response)
     {
-        _responses.Enqueue(response);
+        lock (_syncRoot)
+        {
+            _responses.Enqueue(response);
+        }
     }
 
     public HttpRequestMessage LastRequest { get; private set; }
@@ -63,9 +76,12 @@ internal class MockHttpMessageHandler : HttpMessageHandler
     {
         cancellationToken.ThrowIfCancellationRequested();
         PreserveContent(request);
-        LastRequest = request;
-        Requests.Add(request);
-        return Task.FromResult(GetNext());
+        lock (_syncRoot)
+        {
+            LastRequest = request;
+            Requests.Add(request);
+            return Task.FromResult(GetNext());
+        }
     }
 
     protected override HttpResponseMessage Send(
@@ -73,9 +89,12 @@ internal class MockHttpMessageHandler : HttpMessageHandler
     {
         cancellationToken.ThrowIfCancellationRequested();
         PreserveContent(request);
-        LastRequest = request;
-        Requests.Add(request);
-        return GetNext();
+        lock (_syncRoot)
+        {
+            LastRequest = request;
+            Requests.Add(request);
+            return GetNext();
+        }
     }
 
     private static void PreserveContent(HttpRequestMessage request)
