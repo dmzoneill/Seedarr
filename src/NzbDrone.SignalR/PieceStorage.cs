@@ -350,6 +350,14 @@ public class PieceStorage : IPieceStorage, IDisposable
         }
     }
 
+    public void CloseHandles(string infoHash)
+    {
+        if (!string.IsNullOrEmpty(infoHash))
+        {
+            FlushBatch(infoHash);
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)

@@ -25,4 +25,6 @@ public interface IPieceStorage
     void Clear(string infoHash);
 
     void Flush();
+
+    void CloseHandles(string infoHash);
 }

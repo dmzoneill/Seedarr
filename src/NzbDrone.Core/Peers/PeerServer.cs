@@ -355,6 +355,54 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         }
     }
 
+    public void ChokePeers(string infoHash)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return;
+        }
+
+        var connections = _connectionManager?.GetConnections(infoHash);
+        if (connections == null)
+        {
+            return;
+        }
+
+        foreach (var connection in connections)
+        {
+            if (connection != null && !connection.AmChoking)
+            {
+                connection.AmChoking = true;
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Choke });
+                _logger.Debug("Choked peer {0}:{1} on torrent {2}", connection.RemoteIp, connection.RemotePort, infoHash);
+            }
+        }
+    }
+
+    public void UnchokePeers(string infoHash)
+    {
+        if (string.IsNullOrEmpty(infoHash))
+        {
+            return;
+        }
+
+        var connections = _connectionManager?.GetConnections(infoHash);
+        if (connections == null)
+        {
+            return;
+        }
+
+        foreach (var connection in connections)
+        {
+            if (connection != null && connection.AmChoking)
+            {
+                connection.AmChoking = false;
+                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                _logger.Debug("Unchoked peer {0}:{1} on torrent {2}", connection.RemoteIp, connection.RemotePort, infoHash);
+            }
+        }
+    }
+
     public void UpdateLocalInterest(PeerConnection connection, Torrent torrent)
     {
         torrent ??= connection?.MatchedTorrent ?? GetCachedTorrent(connection?.InfoHash);

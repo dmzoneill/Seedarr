@@ -6,6 +6,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Peers;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Torrents;
@@ -16,6 +17,9 @@ public class TorrentRelocationServiceTests
     private ITorrentService _torrentService;
     private IEventAggregator _eventAggregator;
     private IConfigService _configService;
+    private IConnectionManager _connectionManager;
+    private IPeerServer _peerServer;
+    private IPieceStorage _pieceStorage;
     private TorrentRelocationService _subject;
     private string _sourceDir;
     private string _destDir;
@@ -26,7 +30,17 @@ public class TorrentRelocationServiceTests
         _torrentService = Substitute.For<ITorrentService>();
         _eventAggregator = Substitute.For<IEventAggregator>();
         _configService = Substitute.For<IConfigService>();
-        _subject = new TorrentRelocationService(_torrentService, _eventAggregator, _configService);
+        _connectionManager = Substitute.For<IConnectionManager>();
+        _peerServer = Substitute.For<IPeerServer>();
+        _pieceStorage = Substitute.For<IPieceStorage>();
+
+        _subject = new TorrentRelocationService(
+            _torrentService,
+            _eventAggregator,
+            _configService,
+            _connectionManager,
+            _peerServer,
+            _pieceStorage);
 
         _sourceDir = Path.Combine(Path.GetTempPath(), "reloc_src_" + Guid.NewGuid().ToString("N"));
         _destDir = Path.Combine(Path.GetTempPath(), "reloc_dst_" + Guid.NewGuid().ToString("N"));
@@ -73,7 +87,8 @@ public class TorrentRelocationServiceTests
             Id = 42,
             Name = fileName,
             SavePath = _sourceDir,
-            SourcePath = _sourceDir
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Downloading
         };
         _torrentService.Get(42).Returns(torrent);
 
@@ -112,7 +127,8 @@ public class TorrentRelocationServiceTests
             Id = 100,
             Name = "TorrentDir",
             SavePath = _sourceDir,
-            SourcePath = _sourceDir
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Downloading
         };
         _torrentService.Get(100).Returns(torrent);
 
@@ -153,7 +169,8 @@ public class TorrentRelocationServiceTests
             Id = 200,
             Name = fileName,
             SavePath = _sourceDir,
-            SourcePath = _sourceDir
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Downloading
         };
         _torrentService.Get(200).Returns(torrent);
 
@@ -189,7 +206,8 @@ public class TorrentRelocationServiceTests
             Id = 300,
             Name = fileName,
             SavePath = _sourceDir,
-            SourcePath = _sourceDir
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Downloading
         };
         _torrentService.Get(300).Returns(torrent);
 
@@ -219,7 +237,8 @@ public class TorrentRelocationServiceTests
             Id = 400,
             Name = fileName,
             SavePath = _sourceDir,
-            SourcePath = _sourceDir
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Downloading
         };
         _torrentService.Get(400).Returns(torrent);
 
@@ -237,6 +256,130 @@ public class TorrentRelocationServiceTests
         // Destination file must not be left behind
         var destFilePath = Path.Combine(_destDir, fileName);
         Assert.That(File.Exists(destFilePath), Is.False);
+    }
+
+    [Test]
+    public async Task Exclusive_lock_blocks_concurrent_relocations_on_same_torrent()
+    {
+        var torrentId = 500;
+        var sem = _subject.GetTorrentLock(torrentId);
+
+        // Pre-acquire the lock
+        await sem.WaitAsync();
+        Assert.That(_subject.IsLocked(torrentId), Is.True);
+
+        // Attempting a relocation while the lock is held should block or time out
+        using var cts = new CancellationTokenSource(100);
+        try
+        {
+            var result = await _subject.RelocateTorrentAsync(torrentId, _destDir, cts.Token);
+            Assert.That(result, Is.False);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected if WaitAsync throws on cancellation
+        }
+
+        // Release the lock
+        sem.Release();
+        Assert.That(_subject.IsLocked(torrentId), Is.False);
+    }
+
+    [Test]
+    public async Task Peer_choking_and_handle_teardown_called_prior_to_file_operations()
+    {
+        var fileName = "peer_test.bin";
+        var sourceFilePath = Path.Combine(_sourceDir, fileName);
+        await File.WriteAllBytesAsync(sourceFilePath, new byte[] { 1, 2, 3 });
+
+        var torrent = new Torrent
+        {
+            Id = 600,
+            Name = fileName,
+            InfoHash = "abc600def",
+            SavePath = _sourceDir,
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Seeding
+        };
+        _torrentService.Get(600).Returns(torrent);
+
+        var chokeCalledBeforeMove = false;
+        var flushCalledBeforeMove = false;
+        var closeHandlesCalledBeforeMove = false;
+
+        _peerServer.When(x => x.ChokePeers("abc600def")).Do(_ =>
+        {
+            var destPath = Path.Combine(_destDir, fileName);
+            if (!File.Exists(destPath))
+            {
+                chokeCalledBeforeMove = true;
+            }
+        });
+
+        _pieceStorage.When(x => x.Flush()).Do(_ =>
+        {
+            var destPath = Path.Combine(_destDir, fileName);
+            if (!File.Exists(destPath))
+            {
+                flushCalledBeforeMove = true;
+            }
+        });
+
+        _pieceStorage.When(x => x.CloseHandles("abc600def")).Do(_ =>
+        {
+            var destPath = Path.Combine(_destDir, fileName);
+            if (!File.Exists(destPath))
+            {
+                closeHandlesCalledBeforeMove = true;
+            }
+        });
+
+        var result = await _subject.RelocateTorrentAsync(600, _destDir);
+
+        Assert.That(result, Is.True);
+        Assert.That(chokeCalledBeforeMove, Is.True);
+        Assert.That(flushCalledBeforeMove, Is.True);
+        Assert.That(closeHandlesCalledBeforeMove, Is.True);
+
+        _peerServer.Received(1).ChokePeers("abc600def");
+        _peerServer.Received(1).UnchokePeers("abc600def");
+        _pieceStorage.Received(1).Flush();
+        _pieceStorage.Received(1).CloseHandles("abc600def");
+    }
+
+    [Test]
+    public async Task Status_is_restored_and_lock_is_released_when_relocation_encounters_error()
+    {
+        _subject.ForceFallbackCopy = true;
+        _subject.SimulateTruncation = true;
+
+        var fileName = "error_restore_test.bin";
+        var sourceFilePath = Path.Combine(_sourceDir, fileName);
+        await File.WriteAllBytesAsync(sourceFilePath, new byte[] { 1, 2, 3, 4, 5 });
+
+        var torrent = new Torrent
+        {
+            Id = 700,
+            Name = fileName,
+            InfoHash = "error700hash",
+            SavePath = _sourceDir,
+            SourcePath = _sourceDir,
+            Status = TorrentStatus.Seeding
+        };
+        _torrentService.Get(700).Returns(torrent);
+
+        var result = await _subject.RelocateTorrentAsync(700, _destDir);
+
+        Assert.That(result, Is.False);
+
+        // Status must be restored to previous status (Seeding), not left in Moving
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+
+        // Lock must be released
+        Assert.That(_subject.IsLocked(700), Is.False);
+
+        // Peers should be unchoked
+        _peerServer.Received(1).UnchokePeers("error700hash");
     }
 
     [Test]

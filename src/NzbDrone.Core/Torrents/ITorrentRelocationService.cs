@@ -11,6 +11,10 @@ public interface ITorrentRelocationService
     TorrentRelocationProgress GetProgress(int torrentId);
 
     bool IsRelocating(int torrentId);
+
+    SemaphoreSlim GetTorrentLock(int torrentId);
+
+    bool IsLocked(int torrentId);
 }
 
 public class TorrentRelocationProgress
