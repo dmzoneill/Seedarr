@@ -28,6 +28,7 @@ public interface ITorrentService
     void Delete(int id, bool deleteFiles = false);
     Torrent Recheck(int id);
     void MoveQueue(int id, string position);
+    void BatchMoveQueue(IEnumerable<int> ids, string position);
     Torrent Start(int id);
     Torrent Pause(int id, string reason = null);
 }
@@ -288,6 +289,113 @@ public class TorrentService : ITorrentService,
                 _repository.Update(all[i]);
             }
         }
+    }
+
+    public void BatchMoveQueue(IEnumerable<int> ids, string position)
+    {
+        if (ids == null || string.IsNullOrWhiteSpace(position))
+        {
+            return;
+        }
+
+        var idSet = ids as ISet<int> ?? new HashSet<int>(ids);
+        if (idSet.Count == 0)
+        {
+            return;
+        }
+
+        lock (_sortOrderLock)
+        {
+            var all = _repository.All().OrderBy(t => t.SortOrder).ToList();
+            if (all.Count == 0)
+            {
+                return;
+            }
+
+            var moving = all.Where(t => idSet.Contains(t.Id)).ToList();
+            if (moving.Count == 0)
+            {
+                return;
+            }
+
+            _logger.Info("Batch moving {0} torrents queue position: {1}", moving.Count, position);
+
+            List<Torrent> reordered;
+            switch (position.ToLowerInvariant())
+            {
+                case "top":
+                    var remainderTop = all.Where(t => !idSet.Contains(t.Id)).ToList();
+                    reordered = new List<Torrent>(all.Count);
+                    reordered.AddRange(moving);
+                    reordered.AddRange(remainderTop);
+                    break;
+
+                case "bottom":
+                    var remainderBottom = all.Where(t => !idSet.Contains(t.Id)).ToList();
+                    reordered = new List<Torrent>(all.Count);
+                    reordered.AddRange(remainderBottom);
+                    reordered.AddRange(moving);
+                    break;
+
+                case "up":
+                    reordered = ShiftQueueUp(all, idSet);
+                    break;
+
+                case "down":
+                    reordered = ShiftQueueDown(all, idSet);
+                    break;
+
+                default:
+                    return;
+            }
+
+            var changed = new List<Torrent>();
+            for (var i = 0; i < reordered.Count; i++)
+            {
+                if (reordered[i].SortOrder != i)
+                {
+                    reordered[i].SortOrder = i;
+                    changed.Add(reordered[i]);
+                }
+            }
+
+            if (changed.Count > 0)
+            {
+                _repository.UpdateMany(changed);
+            }
+        }
+    }
+
+    private static List<Torrent> ShiftQueueUp(List<Torrent> all, ISet<int> idSet)
+    {
+        var reordered = new List<Torrent>(all);
+        for (var i = 0; i < reordered.Count; i++)
+        {
+            if (idSet.Contains(reordered[i].Id) && i > 0 && !idSet.Contains(reordered[i - 1].Id))
+            {
+                var temp = reordered[i];
+                reordered[i] = reordered[i - 1];
+                reordered[i - 1] = temp;
+            }
+        }
+
+        return reordered;
+    }
+
+    private static List<Torrent> ShiftQueueDown(List<Torrent> all, ISet<int> idSet)
+    {
+        var reordered = new List<Torrent>(all);
+        for (var i = reordered.Count - 1; i >= 0; i--)
+        {
+            if (idSet.Contains(reordered[i].Id) && i < reordered.Count - 1 && !idSet.Contains(reordered[i + 1].Id))
+            {
+                var temp = reordered[i];
+                reordered[i] = reordered[i + 1];
+                reordered[i + 1] = temp;
+            }
+        }
+
+        return reordered;
     }
 
     public void Handle(VpnKillSwitchTriggeredEvent message)

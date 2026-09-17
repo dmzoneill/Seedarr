@@ -535,6 +535,144 @@ namespace NzbDrone.Core.Test.Torrents
         }
 
         [Test]
+        public void BatchMoveQueue_should_move_multiple_items_to_top_and_update_only_changed()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 1, SortOrder = 0 },
+                new Torrent { Id = 2, SortOrder = 1 },
+                new Torrent { Id = 3, SortOrder = 2 },
+                new Torrent { Id = 4, SortOrder = 3 },
+                new Torrent { Id = 5, SortOrder = 4 }
+            };
+            _repository.All().Returns(torrents.AsQueryable());
+
+            _subject.BatchMoveQueue(new[] { 2, 3 }, "top");
+
+            Assert.That(torrents[1].SortOrder, Is.EqualTo(0));
+            Assert.That(torrents[2].SortOrder, Is.EqualTo(1));
+            Assert.That(torrents[0].SortOrder, Is.EqualTo(2));
+            Assert.That(torrents[3].SortOrder, Is.EqualTo(3));
+            Assert.That(torrents[4].SortOrder, Is.EqualTo(4));
+
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+                items.Count() == 3 &&
+                items.Any(t => t.Id == 2 && t.SortOrder == 0) &&
+                items.Any(t => t.Id == 3 && t.SortOrder == 1) &&
+                items.Any(t => t.Id == 1 && t.SortOrder == 2) &&
+                !items.Any(t => t.Id == 4) &&
+                !items.Any(t => t.Id == 5)));
+        }
+
+        [Test]
+        public void BatchMoveQueue_should_move_multiple_items_to_bottom_and_update_only_changed()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 1, SortOrder = 0 },
+                new Torrent { Id = 2, SortOrder = 1 },
+                new Torrent { Id = 3, SortOrder = 2 },
+                new Torrent { Id = 4, SortOrder = 3 },
+                new Torrent { Id = 5, SortOrder = 4 }
+            };
+            _repository.All().Returns(torrents.AsQueryable());
+
+            _subject.BatchMoveQueue(new[] { 3, 4 }, "bottom");
+
+            Assert.That(torrents[0].SortOrder, Is.EqualTo(0));
+            Assert.That(torrents[1].SortOrder, Is.EqualTo(1));
+            Assert.That(torrents[4].SortOrder, Is.EqualTo(2));
+            Assert.That(torrents[2].SortOrder, Is.EqualTo(3));
+            Assert.That(torrents[3].SortOrder, Is.EqualTo(4));
+
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+                items.Count() == 3 &&
+                items.Any(t => t.Id == 5 && t.SortOrder == 2) &&
+                items.Any(t => t.Id == 3 && t.SortOrder == 3) &&
+                items.Any(t => t.Id == 4 && t.SortOrder == 4) &&
+                !items.Any(t => t.Id == 1) &&
+                !items.Any(t => t.Id == 2)));
+        }
+
+        [Test]
+        public void BatchMoveQueue_should_move_multiple_items_up_and_update_only_changed()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 1, SortOrder = 0 },
+                new Torrent { Id = 2, SortOrder = 1 },
+                new Torrent { Id = 3, SortOrder = 2 },
+                new Torrent { Id = 4, SortOrder = 3 },
+                new Torrent { Id = 5, SortOrder = 4 }
+            };
+            _repository.All().Returns(torrents.AsQueryable());
+
+            _subject.BatchMoveQueue(new[] { 3, 4 }, "up");
+
+            Assert.That(torrents[0].SortOrder, Is.EqualTo(0));
+            Assert.That(torrents[2].SortOrder, Is.EqualTo(1));
+            Assert.That(torrents[3].SortOrder, Is.EqualTo(2));
+            Assert.That(torrents[1].SortOrder, Is.EqualTo(3));
+            Assert.That(torrents[4].SortOrder, Is.EqualTo(4));
+
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+                items.Count() == 3 &&
+                items.Any(t => t.Id == 3 && t.SortOrder == 1) &&
+                items.Any(t => t.Id == 4 && t.SortOrder == 2) &&
+                items.Any(t => t.Id == 2 && t.SortOrder == 3) &&
+                !items.Any(t => t.Id == 1) &&
+                !items.Any(t => t.Id == 5)));
+        }
+
+        [Test]
+        public void BatchMoveQueue_should_move_multiple_items_down_and_update_only_changed()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 1, SortOrder = 0 },
+                new Torrent { Id = 2, SortOrder = 1 },
+                new Torrent { Id = 3, SortOrder = 2 },
+                new Torrent { Id = 4, SortOrder = 3 },
+                new Torrent { Id = 5, SortOrder = 4 }
+            };
+            _repository.All().Returns(torrents.AsQueryable());
+
+            _subject.BatchMoveQueue(new[] { 2, 3 }, "down");
+
+            Assert.That(torrents[0].SortOrder, Is.EqualTo(0));
+            Assert.That(torrents[3].SortOrder, Is.EqualTo(1));
+            Assert.That(torrents[1].SortOrder, Is.EqualTo(2));
+            Assert.That(torrents[2].SortOrder, Is.EqualTo(3));
+            Assert.That(torrents[4].SortOrder, Is.EqualTo(4));
+
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+                items.Count() == 3 &&
+                items.Any(t => t.Id == 4 && t.SortOrder == 1) &&
+                items.Any(t => t.Id == 2 && t.SortOrder == 2) &&
+                items.Any(t => t.Id == 3 && t.SortOrder == 3) &&
+                !items.Any(t => t.Id == 1) &&
+                !items.Any(t => t.Id == 5)));
+        }
+
+        [Test]
+        public void BatchMoveQueue_should_not_update_when_already_at_boundary_or_invalid()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 1, SortOrder = 0 },
+                new Torrent { Id = 2, SortOrder = 1 }
+            };
+            _repository.All().Returns(torrents.AsQueryable());
+
+            _subject.BatchMoveQueue(new[] { 1 }, "up");
+            _subject.BatchMoveQueue(new[] { 2 }, "down");
+            _subject.BatchMoveQueue(new[] { 1 }, "invalid");
+            _subject.BatchMoveQueue(new List<int>(), "top");
+
+            _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+        }
+
+        [Test]
         public void UpdateUserFields_should_apply_user_fields_and_update_repository()
         {
             var existing = new Torrent
