@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Configuration;
@@ -10,19 +11,33 @@ namespace NzbDrone.Core.Notifications;
 public class LifecycleScriptEventHandler :
     IHandle<TorrentAddedEvent>,
     IHandle<TorrentDownloadCompletedEvent>,
-    IHandle<TorrentSeedGoalReachedEvent>
+    IHandle<TorrentSeedGoalReachedEvent>,
+    IHandle<TorrentDeletedEvent>,
+    IHandle<HealthIssueEvent>,
+    IHandle<FileMoveCompletedEvent>,
+    IHandle<ApplicationUpdatedEvent>,
+    IDisposable
 {
     private readonly ICustomScriptService _customScriptService;
     private readonly IConfigService _configService;
+    private readonly IEventAggregator _eventAggregator;
+    private readonly SemaphoreSlim _scriptSemaphore;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     public LifecycleScriptEventHandler(
         ICustomScriptService customScriptService,
-        IConfigService configService)
+        IConfigService configService,
+        IEventAggregator eventAggregator = null,
+        int maxConcurrency = 4)
     {
         _customScriptService = customScriptService;
         _configService = configService;
+        _eventAggregator = eventAggregator;
+        var concurrency = maxConcurrency > 0 ? maxConcurrency : 4;
+        _scriptSemaphore = new SemaphoreSlim(concurrency, concurrency);
     }
+
+    public SemaphoreSlim ScriptSemaphore => _scriptSemaphore;
 
     public void Handle(TorrentAddedEvent message)
     {
@@ -33,17 +48,7 @@ public class LifecycleScriptEventHandler :
 
         if (!string.IsNullOrWhiteSpace(_configService?.ScriptTorrentAddedFilename))
         {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _customScriptService.ExecuteScriptAsync(_configService.ScriptTorrentAddedFilename, message.Torrent, "OnGrab").ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error executing ScriptTorrentAdded script");
-                }
-            });
+            ExecuteThrottledScriptAsync(_configService.ScriptTorrentAddedFilename, message.Torrent, "OnGrab");
         }
     }
 
@@ -56,32 +61,12 @@ public class LifecycleScriptEventHandler :
 
         if (!string.IsNullOrWhiteSpace(_configService?.OnDownloadCompleteScript))
         {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _customScriptService.ExecuteScriptAsync(_configService.OnDownloadCompleteScript, message.Torrent, "OnDownloadComplete").ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error executing OnDownloadComplete script");
-                }
-            });
+            ExecuteThrottledScriptAsync(_configService.OnDownloadCompleteScript, message.Torrent, "OnDownloadComplete");
         }
 
         if (!string.IsNullOrWhiteSpace(_configService?.ScriptTorrentDoneFilename))
         {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _customScriptService.ExecuteScriptAsync(_configService.ScriptTorrentDoneFilename, message.Torrent, "OnDownloadComplete").ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error executing ScriptTorrentDone script");
-                }
-            });
+            ExecuteThrottledScriptAsync(_configService.ScriptTorrentDoneFilename, message.Torrent, "OnDownloadComplete");
         }
     }
 
@@ -94,32 +79,126 @@ public class LifecycleScriptEventHandler :
 
         if (!string.IsNullOrWhiteSpace(_configService?.OnSeedGoalReachedScript))
         {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _customScriptService.ExecuteScriptAsync(_configService.OnSeedGoalReachedScript, message.Torrent, "OnSeedGoalReached").ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error executing OnSeedGoalReached script");
-                }
-            });
+            ExecuteThrottledScriptAsync(_configService.OnSeedGoalReachedScript, message.Torrent, "OnSeedGoalReached");
         }
 
         if (!string.IsNullOrWhiteSpace(_configService?.ScriptTorrentDoneSeedingFilename))
         {
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await _customScriptService.ExecuteScriptAsync(_configService.ScriptTorrentDoneSeedingFilename, message.Torrent, "OnSeedGoalReached").ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.Error(ex, "Error executing ScriptTorrentDoneSeeding script");
-                }
-            });
+            ExecuteThrottledScriptAsync(_configService.ScriptTorrentDoneSeedingFilename, message.Torrent, "OnSeedGoalReached");
         }
+    }
+
+    public void Handle(TorrentDeletedEvent message)
+    {
+        var script = !string.IsNullOrWhiteSpace(_configService?.OnTorrentDeletedScript)
+            ? _configService.OnTorrentDeletedScript
+            : _configService?.OnDeleteScript;
+
+        if (!string.IsNullOrWhiteSpace(script))
+        {
+            ExecuteThrottledScriptAsync(script, message?.Torrent, "OnDelete");
+        }
+
+        if (!string.IsNullOrWhiteSpace(_configService?.ScriptTorrentRemovedFilename))
+        {
+            ExecuteThrottledScriptAsync(_configService.ScriptTorrentRemovedFilename, message?.Torrent, "TorrentRemoved");
+        }
+    }
+
+    public void Handle(HealthIssueEvent message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_configService?.OnHealthIssueScript))
+        {
+            ExecuteThrottledScriptAsync(_configService.OnHealthIssueScript, message.Torrent, "OnHealthIssue");
+        }
+    }
+
+    public void Handle(FileMoveCompletedEvent message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+
+        var script = !string.IsNullOrWhiteSpace(_configService?.OnFileMoveScript)
+            ? _configService.OnFileMoveScript
+            : _configService?.OnRenameScript;
+
+        if (!string.IsNullOrWhiteSpace(script))
+        {
+            ExecuteThrottledScriptAsync(script, message.Torrent, "OnRename");
+        }
+    }
+
+    public void Handle(ApplicationUpdatedEvent message)
+    {
+        if (message == null)
+        {
+            return;
+        }
+
+        var script = !string.IsNullOrWhiteSpace(_configService?.OnApplicationUpdatedScript)
+            ? _configService.OnApplicationUpdatedScript
+            : _configService?.OnUpgradeScript;
+
+        if (!string.IsNullOrWhiteSpace(script))
+        {
+            ExecuteThrottledScriptAsync(script, null, "OnUpgrade");
+        }
+    }
+
+    public Task ExecuteThrottledScriptAsync(string scriptPath, Torrent torrent, string eventType)
+    {
+        if (string.IsNullOrWhiteSpace(scriptPath))
+        {
+            return Task.CompletedTask;
+        }
+
+        return Task.Run(async () =>
+        {
+            await _scriptSemaphore.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                var success = await _customScriptService.ExecuteScriptAsync(scriptPath, torrent, eventType).ConfigureAwait(false);
+                if (!success)
+                {
+                    _logger.Warn("Custom lifecycle script '{0}' for event '{1}' failed or timed out.", scriptPath, eventType);
+                    if (!string.Equals(eventType, "OnHealthIssue", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _eventAggregator?.PublishEvent(new HealthIssueEvent(
+                            torrent,
+                            "CustomScript",
+                            $"Custom lifecycle script '{scriptPath}' for event '{eventType}' failed or timed out.",
+                            isResolved: false));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Exception while executing custom lifecycle script '{0}' for event '{1}'.", scriptPath, eventType);
+                if (!string.Equals(eventType, "OnHealthIssue", StringComparison.OrdinalIgnoreCase))
+                {
+                    _eventAggregator?.PublishEvent(new HealthIssueEvent(
+                        torrent,
+                        "CustomScript",
+                        $"Custom lifecycle script '{scriptPath}' for event '{eventType}' threw an exception: {ex.Message}",
+                        isResolved: false));
+                }
+            }
+            finally
+            {
+                _scriptSemaphore.Release();
+            }
+        });
+    }
+
+    public void Dispose()
+    {
+        _scriptSemaphore?.Dispose();
     }
 }

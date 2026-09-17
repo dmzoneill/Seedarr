@@ -83,6 +83,14 @@ public interface IConfigService
     string ScriptTorrentDoneFilename { get; }
     string ScriptTorrentAddedFilename { get; }
     string ScriptTorrentDoneSeedingFilename { get; }
+    string OnTorrentDeletedScript { get; }
+    string OnDeleteScript { get; }
+    string ScriptTorrentRemovedFilename { get; }
+    string OnHealthIssueScript { get; }
+    string OnFileMoveScript { get; }
+    string OnRenameScript { get; }
+    string OnApplicationUpdatedScript { get; }
+    string OnUpgradeScript { get; }
     int CustomScriptTimeoutSeconds { get; }
 
     // Speed
@@ -416,6 +424,14 @@ public class ConfigService : IConfigService
     public string ScriptTorrentDoneFilename => GetValue("ScriptTorrentDoneFilename", string.Empty);
     public string ScriptTorrentAddedFilename => GetValue("ScriptTorrentAddedFilename", string.Empty);
     public string ScriptTorrentDoneSeedingFilename => GetValue("ScriptTorrentDoneSeedingFilename", string.Empty);
+    public string OnTorrentDeletedScript => GetValue("OnTorrentDeletedScript", string.Empty);
+    public string OnDeleteScript => GetValue("OnDeleteScript", string.Empty);
+    public string ScriptTorrentRemovedFilename => GetValue("ScriptTorrentRemovedFilename", string.Empty);
+    public string OnHealthIssueScript => GetValue("OnHealthIssueScript", string.Empty);
+    public string OnFileMoveScript => GetValue("OnFileMoveScript", string.Empty);
+    public string OnRenameScript => GetValue("OnRenameScript", string.Empty);
+    public string OnApplicationUpdatedScript => GetValue("OnApplicationUpdatedScript", string.Empty);
+    public string OnUpgradeScript => GetValue("OnUpgradeScript", string.Empty);
     public int CustomScriptTimeoutSeconds => Math.Max(1, GetValueInt("CustomScriptTimeoutSeconds", 60));
 
     // Speed

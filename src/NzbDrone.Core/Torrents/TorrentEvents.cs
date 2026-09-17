@@ -485,6 +485,26 @@ public class FileMoveFailedEvent : IEvent
     }
 }
 
+public class FileMoveCompletedEvent : IEvent
+{
+    public Torrent Torrent { get; set; }
+
+    public string SourcePath { get; set; }
+
+    public string DestinationPath { get; set; }
+
+    public FileMoveCompletedEvent()
+    {
+    }
+
+    public FileMoveCompletedEvent(Torrent torrent, string sourcePath = null, string destinationPath = null)
+    {
+        this.Torrent = torrent;
+        this.SourcePath = sourcePath;
+        this.DestinationPath = destinationPath;
+    }
+}
+
 public class MediaInspectionFailedEvent : IEvent
 {
     public Torrent Torrent { get; set; }
