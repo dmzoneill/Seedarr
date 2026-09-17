@@ -44,6 +44,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, byte> _inFlightOutgoingEndpoints = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Torrent> _torrentCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Logger _logger;
     private readonly object _listenerLock = new();
@@ -52,6 +53,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private CancellationTokenSource _listenerCts;
 
     public Socket ListenerSocket => _listener?.Server;
+
+    internal bool IsOutgoingEndpointInFlight(string ip, int port) => _inFlightOutgoingEndpoints.ContainsKey($"{ip}:{port}");
 
     public PeerServer(
         IConfigService configService,
@@ -752,7 +755,25 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 break;
             }
 
-            _ = Task.Run(() => ConnectToPeerAsync(torrent, candidate, stoppingToken), stoppingToken);
+            var endpointKey = $"{candidate.Ip}:{candidate.Port}";
+            if (!_inFlightOutgoingEndpoints.TryAdd(endpointKey, 0))
+            {
+                continue;
+            }
+
+            _ = Task.Run(
+                async () =>
+                {
+                    try
+                    {
+                        await ConnectToPeerAsync(torrent, candidate, stoppingToken);
+                    }
+                    finally
+                    {
+                        _inFlightOutgoingEndpoints.TryRemove(endpointKey, out _);
+                    }
+                },
+                stoppingToken);
         }
     }
 

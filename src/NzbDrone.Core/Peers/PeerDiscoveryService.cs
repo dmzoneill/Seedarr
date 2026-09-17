@@ -94,7 +94,7 @@ public class PeerDiscoveryService : IPeerDiscoveryService
 
         lock (list)
         {
-            return list
+            var selected = list
                 .Where(p => p.FailCount < MaxFailCount)
                 .Where(p => !p.LastAttempt.HasValue || (now - p.LastAttempt.Value).TotalMinutes >= GetRetryDelayMinutes(p.Source))
                 .OrderBy(p => p.FailCount)
@@ -102,6 +102,13 @@ public class PeerDiscoveryService : IPeerDiscoveryService
                 .ThenByDescending(p => p.DiscoveredAt)
                 .Take(maxCount)
                 .ToList();
+
+            foreach (var peer in selected)
+            {
+                peer.LastAttempt = now;
+            }
+
+            return selected;
         }
     }
 

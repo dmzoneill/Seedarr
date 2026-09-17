@@ -178,4 +178,74 @@ public class PeerDiscoveryServiceTest
         Assert.That(peers.Count, Is.EqualTo(1));
         Assert.That(peers[0].Source, Is.EqualTo("pex"));
     }
+
+    [Test]
+    public void GetPeers_should_update_LastAttempt_immediately_and_prevent_duplicate_return_on_immediate_subsequent_call()
+    {
+        var peers = new[]
+        {
+            new TrackerPeer { Ip = "192.168.1.50", Port = 6881 },
+            new TrackerPeer { Ip = "192.168.1.51", Port = 6882 }
+        };
+
+        _service.AddPeers(InfoHash, peers, "tracker");
+
+        var beforeCall = DateTime.UtcNow;
+        var firstBatch = _service.GetPeers(InfoHash, 10);
+
+        Assert.That(firstBatch.Count, Is.EqualTo(2));
+        foreach (var peer in firstBatch)
+        {
+            Assert.That(peer.LastAttempt.HasValue, Is.True);
+            Assert.That(peer.LastAttempt.Value, Is.GreaterThanOrEqualTo(beforeCall));
+        }
+
+        // An immediate subsequent call should return nothing because candidates are in-flight
+        var secondBatch = _service.GetPeers(InfoHash, 10);
+        Assert.That(secondBatch, Is.Empty);
+    }
+
+    [Test]
+    public void MarkAttempted_should_increment_FailCount_and_update_LastAttempt_on_failure()
+    {
+        var peer = new TrackerPeer { Ip = "10.0.0.5", Port = 51413 };
+        _service.AddPeers(InfoHash, new[] { peer }, "tracker");
+
+        var candidates = _service.GetPeers(InfoHash, 10);
+        Assert.That(candidates.Count, Is.EqualTo(1));
+        var candidate = candidates[0];
+        Assert.That(candidate.FailCount, Is.EqualTo(0));
+
+        var timeBeforeFailure = DateTime.UtcNow.AddSeconds(-1);
+        _service.MarkAttempted(InfoHash, "10.0.0.5", 51413, success: false);
+
+        Assert.That(candidate.FailCount, Is.EqualTo(1));
+        Assert.That(candidate.LastAttempt.HasValue, Is.True);
+        Assert.That(candidate.LastAttempt.Value, Is.GreaterThanOrEqualTo(timeBeforeFailure));
+
+        _service.MarkAttempted(InfoHash, "10.0.0.5", 51413, success: false);
+        Assert.That(candidate.FailCount, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void MarkAttempted_should_reset_FailCount_and_update_LastAttempt_on_success()
+    {
+        var peer = new TrackerPeer { Ip = "10.0.0.6", Port = 51413 };
+        _service.AddPeers(InfoHash, new[] { peer }, "tracker");
+
+        var candidates = _service.GetPeers(InfoHash, 10);
+        Assert.That(candidates.Count, Is.EqualTo(1));
+        var candidate = candidates[0];
+
+        _service.MarkAttempted(InfoHash, "10.0.0.6", 51413, success: false);
+        _service.MarkAttempted(InfoHash, "10.0.0.6", 51413, success: false);
+        Assert.That(candidate.FailCount, Is.EqualTo(2));
+
+        var timeBeforeSuccess = DateTime.UtcNow.AddSeconds(-1);
+        _service.MarkAttempted(InfoHash, "10.0.0.6", 51413, success: true);
+
+        Assert.That(candidate.FailCount, Is.EqualTo(0));
+        Assert.That(candidate.LastAttempt.HasValue, Is.True);
+        Assert.That(candidate.LastAttempt.Value, Is.GreaterThanOrEqualTo(timeBeforeSuccess));
+    }
 }
