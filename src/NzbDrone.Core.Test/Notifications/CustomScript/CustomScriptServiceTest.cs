@@ -247,4 +247,92 @@ public class CustomScriptServiceTest
         Assert.That(result.Stderr, Does.Contain("does not exist"));
         Assert.That(result.TimedOut, Is.False);
     }
+
+    [Test]
+    public async Task ExecuteScriptAsync_with_null_bytes_in_torrent_fields_does_not_throw_ArgumentException()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "echo.bat" : "echo.sh");
+            var scriptContent = isWindows
+                ? "@echo off\necho done\n"
+                : "#!/bin/sh\necho done\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            var torrent = new Torrent
+            {
+                Id = 1,
+                Name = "Bad\0Name",
+                SavePath = tempDir,
+                SourcePath = tempDir,
+                InfoHash = "12345\067890",
+            };
+
+            var service = new CustomScriptService();
+            var result = await service.ExecuteScriptAsync(scriptFile, torrent, "Download");
+
+            Assert.That(result, Is.True);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task ExecuteScriptAsync_should_terminate_timed_out_process_tree()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "hang.bat" : "hang.sh");
+            var scriptContent = isWindows
+                ? "@echo off\nping -n 60 127.0.0.1 >nul\n"
+                : "#!/bin/sh\nsleep 60\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            var service = new CustomScriptService(scriptTimeout: TimeSpan.FromMilliseconds(500));
+            var result = await service.ExecuteScriptAsync(scriptFile, null, "Test");
+
+            Assert.That(result, Is.False);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public async Task TestScriptAsync_should_terminate_timed_out_process_tree_and_return_timeout_result()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "hang.bat" : "hang.sh");
+            var scriptContent = isWindows
+                ? "@echo off\nping -n 60 127.0.0.1 >nul\n"
+                : "#!/bin/sh\nsleep 60\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            var service = new CustomScriptService(scriptTimeout: TimeSpan.FromMilliseconds(500));
+            var result = await service.TestScriptAsync(scriptFile);
+
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result.TimedOut, Is.True);
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.ExitCode, Is.EqualTo(-1));
+            Assert.That(result.Stderr, Does.Contain("timed out"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
 }

@@ -94,20 +94,144 @@ public class CustomScriptService : ICustomScriptService
         }
     }
 
+    internal static async Task TerminateProcessTreeAsync(Process process, string scriptPath, Logger logger)
+    {
+        if (process == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var pid = -1;
+            try
+            {
+                pid = process.Id;
+            }
+            catch (Exception ex)
+            {
+                logger.Debug(ex, "Could not retrieve PID for process of script {0}", scriptPath);
+            }
+
+            if (pid > 0)
+            {
+                // Kill process tree first using built-in framework support
+                try
+                {
+                    if (!process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.Warn(ex, "Failed to kill process tree for script {0} (PID {1})", scriptPath, pid);
+                }
+
+                // If on POSIX, terminate the process group to ensure detached child processes are terminated
+                if (!OperatingSystem.IsWindows())
+                {
+                    try
+                    {
+                        using var killProc = Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "kill",
+                            Arguments = $"-9 -{pid}",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                        });
+
+                        if (killProc != null)
+                        {
+                            using var killCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                            await killProc.WaitForExitAsync(killCts.Token).ConfigureAwait(false);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Debug(ex, "Failed to send kill -9 to process group -{0} for script {1}", pid, scriptPath);
+                    }
+                }
+                else
+                {
+                    // On Windows, taskkill /F /T terminates process and all child processes started by it
+                    try
+                    {
+                        using var taskkillProc = Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "taskkill",
+                            Arguments = $"/F /T /PID {pid}",
+                            UseShellExecute = false,
+                            CreateNoWindow = true,
+                        });
+
+                        if (taskkillProc != null)
+                        {
+                            using var taskkillCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                            await taskkillProc.WaitForExitAsync(taskkillCts.Token).ConfigureAwait(false);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.Debug(ex, "Failed to run taskkill /F /T for PID {0} for script {1}", pid, scriptPath);
+                    }
+                }
+            }
+
+            // Structured reaping: wait for the root process to exit
+            try
+            {
+                using var reapCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                await process.WaitForExitAsync(reapCts.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, "Timed out or failed while reaping process {0} for script {1}", pid, scriptPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.Warn(ex, "Exception during TerminateProcessTreeAsync for script {0}", scriptPath);
+        }
+    }
+
     internal static void SanitizeEnvironment(System.Collections.Specialized.StringDictionary environmentVariables)
     {
         var keysToRemove = new List<string>();
+        var keysToUpdate = new Dictionary<string, string>();
+
         foreach (string key in environmentVariables.Keys)
         {
             if (IsSensitiveEnvironmentVariable(key))
             {
                 keysToRemove.Add(key);
+                continue;
+            }
+
+            var val = environmentVariables[key];
+            var keyHasNull = key != null && key.Contains('\0');
+            var valHasNull = val != null && val.Contains('\0');
+
+            if (keyHasNull || valHasNull)
+            {
+                keysToRemove.Add(key);
+                var cleanKey = SanitizeEnvKey(key);
+                var cleanVal = SanitizeEnvValue(val);
+                if (!string.IsNullOrEmpty(cleanKey))
+                {
+                    keysToUpdate[cleanKey] = cleanVal;
+                }
             }
         }
 
         foreach (var key in keysToRemove)
         {
             environmentVariables.Remove(key);
+        }
+
+        foreach (var kvp in keysToUpdate)
+        {
+            environmentVariables[kvp.Key] = kvp.Value;
         }
     }
 
@@ -428,20 +552,7 @@ public class CustomScriptService : ICustomScriptService
             catch (OperationCanceledException)
             {
                 _logger.Error("Custom script timed out after {0}s: {1}", _scriptTimeout.TotalSeconds, resolvedScriptPath);
-                try
-                {
-                    if (!process.HasExited)
-                    {
-                        process.Kill(true);
-                        using var reapCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                        await process.WaitForExitAsync(reapCts.Token);
-                    }
-                }
-                catch
-                {
-                    // Ignore kill exception
-                }
-
+                await TerminateProcessTreeAsync(process, resolvedScriptPath, _logger).ConfigureAwait(false);
                 return false;
             }
 
@@ -588,19 +699,7 @@ public class CustomScriptService : ICustomScriptService
             {
                 timedOut = true;
                 _logger.Error("Custom script test timed out after {0}s: {1}", _scriptTimeout.TotalSeconds, resolvedScriptPath);
-                try
-                {
-                    if (!process.HasExited)
-                    {
-                        process.Kill(true);
-                        using var reapCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                        await process.WaitForExitAsync(reapCts.Token);
-                    }
-                }
-                catch
-                {
-                    // Ignore kill exception
-                }
+                await TerminateProcessTreeAsync(process, resolvedScriptPath, _logger).ConfigureAwait(false);
             }
 
             stopwatch.Stop();

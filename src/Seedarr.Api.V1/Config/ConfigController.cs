@@ -399,7 +399,8 @@ public class BitTorrentConfigController : ConfigController<BitTorrentConfigResou
             .WithMessage("EncryptionMode must be one of: disabled, enabled, required, forced.");
 
         SharedValidator.RuleFor(c => c.CustomScriptTimeoutSeconds)
-            .GreaterThanOrEqualTo(1);
+            .InclusiveBetween(5, 3600)
+            .WithMessage("CustomScriptTimeoutSeconds must be between 5 and 3600 seconds.");
 
         SharedValidator.RuleFor(c => c.PeerIdPrefix)
             .MaximumLength(12)
