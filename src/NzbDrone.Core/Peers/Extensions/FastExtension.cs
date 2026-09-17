@@ -302,10 +302,11 @@ public class FastExtensionHandler : IFastExtensionHandler
                 break;
 
             case FastMessageType.AllowedFast:
+                connection.SupportsFastExtension = true;
                 _logger.Debug("Peer {0} allows fast piece {1}", connection.RemoteIp, fastMessage.PieceIndex);
-                lock (connection.AllowedFastPieces)
+                lock (connection.RemoteAllowedFastPieces)
                 {
-                    connection.AllowedFastPieces.Add(fastMessage.PieceIndex);
+                    connection.RemoteAllowedFastPieces.Add(fastMessage.PieceIndex);
                 }
 
                 RecordAllowedFastPiece(connection, fastMessage.PieceIndex);

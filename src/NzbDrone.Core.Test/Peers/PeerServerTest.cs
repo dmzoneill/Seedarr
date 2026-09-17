@@ -2056,6 +2056,80 @@ public class PeerServerTest
     }
 
     [Test]
+    public void HandleMessage_allowed_fast_adds_piece_index_to_remote_allowed_fast_pieces()
+    {
+        var conn = CreateTestConnection();
+        var payload = new byte[4];
+        payload[3] = 7;
+        var message = new PeerMessage { Type = PeerMessageType.AllowedFast, Payload = payload };
+
+        InvokeHandleMessage(conn, message);
+
+        Assert.That(conn.RemoteAllowedFastPieces, Contains.Item(7));
+        Assert.That(conn.SupportsFastExtension, Is.True);
+    }
+
+    [Test]
+    public void CanRequestBlock_and_RequestBlock_permitted_for_remote_allowed_fast_pieces_when_peer_choking()
+    {
+        var conn = CreateTestConnection();
+        conn.PeerChoking = true;
+        conn.SupportsFastExtension = true;
+        conn.RemoteAllowedFastPieces.Add(2);
+        conn.PeerPieces = new bool[5];
+        conn.PeerPieces[2] = true;
+
+        var picker = _server.PiecePicker;
+        picker.AddActivePiece(2, 32768, 16384);
+
+        Assert.That(_server.CanRequestBlock(conn, 2), Is.True);
+
+        var block = _server.RequestBlock(conn, 2);
+        Assert.That(block, Is.Not.Null);
+        Assert.That(block.PieceIndex, Is.EqualTo(2));
+        Assert.That(block.RequestedFrom, Is.EqualTo(conn));
+        Assert.That(conn.PendingRequestCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void CanRequestBlock_and_RequestBlock_suppressed_for_non_allowed_fast_pieces_when_peer_choking()
+    {
+        var conn = CreateTestConnection();
+        conn.PeerChoking = true;
+        conn.SupportsFastExtension = true;
+        conn.RemoteAllowedFastPieces.Add(2);
+        conn.PeerPieces = new bool[5];
+        conn.PeerPieces[1] = true;
+
+        var picker = _server.PiecePicker;
+        picker.AddActivePiece(1, 32768, 16384);
+
+        Assert.That(_server.CanRequestBlock(conn, 1), Is.False);
+
+        var block = _server.RequestBlock(conn, 1);
+        Assert.That(block, Is.Null);
+        Assert.That(conn.PendingRequestCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void RequestBlock_prioritizes_bootstrap_remote_allowed_fast_pieces_when_starting_choked()
+    {
+        var conn = CreateTestConnection();
+        conn.PeerChoking = true;
+        conn.SupportsFastExtension = true;
+        conn.RemoteAllowedFastPieces.Add(3);
+
+        var picker = _server.PiecePicker;
+        picker.AddActivePiece(1, 32768, 16384);
+        picker.AddActivePiece(3, 32768, 16384);
+
+        var block = _server.RequestBlock(conn);
+        Assert.That(block, Is.Not.Null);
+        Assert.That(block.PieceIndex, Is.EqualTo(3));
+        Assert.That(block.RequestedFrom, Is.EqualTo(conn));
+    }
+
+    [Test]
     public void ConnectToDiscoveredPeers_should_skip_peer_endpoints_already_in_flight()
     {
         var torrent = new Torrent { Id = 1, InfoHash = "0123456789abcdef0123456789abcdef01234567", Name = "Test" };
