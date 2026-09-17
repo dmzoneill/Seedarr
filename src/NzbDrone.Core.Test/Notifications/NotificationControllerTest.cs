@@ -627,8 +627,8 @@ public class NotificationControllerTest
         };
         _repository.Get(5).Returns(existing);
 
-        _dispatcher.DispatchAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>())
-            .Returns(Task.FromResult(true));
+        _dispatcher.DispatchDetailedAsync(Arg.Any<string>(), Arg.Any<object>(), Arg.Any<string>())
+            .Returns(new WebhookDispatchResult { Success = true, Message = "OK" });
 
         var testResource = new NotificationResource
         {
@@ -643,7 +643,7 @@ public class NotificationControllerTest
         var result = await _controller.TestDirect(testResource);
 
         Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
-        await _dispatcher.Received(1).DispatchAsync(
+        await _dispatcher.Received(1).DispatchDetailedAsync(
             Arg.Is<string>(url => url.Contains("REAL_SECRET_TOKEN")),
             Arg.Any<object>(),
             Arg.Any<string>());

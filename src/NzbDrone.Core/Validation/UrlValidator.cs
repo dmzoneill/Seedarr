@@ -5,7 +5,7 @@ namespace NzbDrone.Core.Validation;
 
 public static class UrlValidator
 {
-    public static bool IsSafeUrl(string url, bool allowLoopback = false)
+    public static bool IsSafeUrl(string url, bool allowLoopback = false, bool allowInternal = false)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
@@ -22,10 +22,10 @@ public static class UrlValidator
             return false;
         }
 
-        return IsSafeHost(uri.Host, allowLoopback);
+        return IsSafeHost(uri.Host, allowLoopback, allowInternal);
     }
 
-    public static bool IsSafeHost(string host, bool allowLoopback = false)
+    public static bool IsSafeHost(string host, bool allowLoopback = false, bool allowInternal = false)
     {
         if (string.IsNullOrWhiteSpace(host))
         {
@@ -45,12 +45,12 @@ public static class UrlValidator
         if (string.Equals(trimmedHost, "localhost", StringComparison.OrdinalIgnoreCase) ||
             trimmedHost.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase))
         {
-            return allowLoopback;
+            return allowLoopback || allowInternal;
         }
 
         if (IPAddress.TryParse(trimmedHost, out var ip))
         {
-            return IsSafeIp(ip, allowLoopback);
+            return IsSafeIp(ip, allowLoopback, allowInternal);
         }
 
         try
@@ -63,7 +63,7 @@ public static class UrlValidator
 
             foreach (var addr in addresses)
             {
-                if (!IsSafeIp(addr, allowLoopback))
+                if (!IsSafeIp(addr, allowLoopback, allowInternal))
                 {
                     return false;
                 }
@@ -71,6 +71,13 @@ public static class UrlValidator
         }
         catch
         {
+            if (allowInternal && (trimmedHost.EndsWith(".local", StringComparison.OrdinalIgnoreCase) ||
+                                  trimmedHost.EndsWith(".internal", StringComparison.OrdinalIgnoreCase) ||
+                                  trimmedHost.EndsWith(".lan", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
             return false;
         }
 
@@ -123,11 +130,40 @@ public static class UrlValidator
         return IsLoopbackIp(ip) || IsRestrictedOrPrivateIp(ip);
     }
 
-    private static bool IsSafeIp(IPAddress ip, bool allowLoopback)
+    private static bool IsSafeIp(IPAddress ip, bool allowLoopback, bool allowInternal = false)
     {
         if (IsLoopbackIp(ip))
         {
-            return allowLoopback;
+            return allowLoopback || allowInternal;
+        }
+
+        if (allowInternal)
+        {
+            if (ip.IsIPv4MappedToIPv6)
+            {
+                ip = ip.MapToIPv4();
+            }
+
+            var bytes = ip.GetAddressBytes();
+
+            // Link-local / Cloud metadata (169.254.0.0/16) is NEVER permitted
+            if (bytes.Length == 4 && bytes[0] == 169 && bytes[1] == 254)
+            {
+                return false;
+            }
+
+            // Disallow unspecified/multicast/broadcast
+            if (ip.Equals(IPAddress.Any) ||
+                ip.Equals(IPAddress.IPv6Any) ||
+                ip.Equals(IPAddress.IPv6None) ||
+                (bytes.Length == 4 && bytes[0] == 0) ||
+                (bytes.Length == 4 && bytes[0] >= 224) ||
+                ip.IsIPv6Multicast)
+            {
+                return false;
+            }
+
+            return true;
         }
 
         return !IsRestrictedOrPrivateIp(ip);

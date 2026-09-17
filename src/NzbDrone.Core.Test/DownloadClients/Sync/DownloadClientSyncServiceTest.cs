@@ -876,6 +876,7 @@ public class DownloadClientSyncServiceTest
     {
         var hash = "aaaa111122223333444455556666777788889999";
         var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(new byte[] { 0x64, 0x38, 0x3a });
         mockClient.GetItems().Returns(new List<DownloadClientItem>
         {
             new()
@@ -887,6 +888,12 @@ public class DownloadClientSyncServiceTest
                 OutputPath = "/remote/downloads/movies/test",
                 Status = "seeding"
             }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Test Torrent",
+            TotalSize = 1000
         });
 
         _remotePathMappingService.Remap("192.168.1.50", "/remote/downloads/movies/test")

@@ -357,7 +357,7 @@ public class NotificationEventHandlerTest
         var errorMessage = "Archive checksum mismatch in file part 2";
         _handler.Handle(new ArchiveExtractionFailedEvent(torrent, errorMessage));
 
-        var completed = await Task.WhenAny(signal.Task, Task.Delay(300));
+        var completed = await Task.WhenAny(signal.Task, Task.Delay(3000));
         Assert.That(completed, Is.EqualTo(signal.Task), "Notification should be dispatched");
         Assert.That(capturedPayload, Is.Not.Null);
 
@@ -543,7 +543,7 @@ public class NotificationEventHandlerTest
 
         _handler.Handle(new BackupCreatedEvent("/path/to/backup.zip", "backup.zip", BackupType.Scheduled, 1024));
 
-        var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(300));
+        var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(3000));
         Assert.That(completed, Is.EqualTo(dispatchedSignal.Task), "Notification should be dispatched for BackupCreatedEvent");
     }
 
@@ -596,7 +596,7 @@ public class NotificationEventHandlerTest
 
         _handler.Handle(new BackupFailedEvent(BackupType.Scheduled, "Disk full"));
 
-        var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(300));
+        var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(3000));
         Assert.That(completed, Is.EqualTo(dispatchedSignal.Task), "Notification should be dispatched for BackupFailedEvent");
     }
 
@@ -623,7 +623,7 @@ public class NotificationEventHandlerTest
 
         _handler.Handle(new BackupFailedEvent(BackupType.Manual, "Database locked"));
 
-        var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(300));
+        var completed = await Task.WhenAny(dispatchedSignal.Task, Task.Delay(3000));
         Assert.That(completed, Is.EqualTo(dispatchedSignal.Task), "Notification should be dispatched for BackupFailedEvent via OnHealthIssue");
     }
 

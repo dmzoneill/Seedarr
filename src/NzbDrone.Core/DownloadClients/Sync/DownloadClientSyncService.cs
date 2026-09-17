@@ -51,7 +51,10 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     public SyncResult Sync()
     {
-        _syncLock.Wait();
+        if (!_syncLock.Wait(200))
+        {
+            return new SyncResult();
+        }
 
         try
         {
@@ -224,58 +227,6 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                             existingTorrents[hash] = torrent;
                             result.Added++;
                             _logger.Info("Synced torrent {0} from download client {1}", torrent.Name, definition.Name);
-                        }
-                        else if (item != null)
-                        {
-                            var clientTrackers = provider.GetTrackers(hash) ?? new List<string>();
-                            var total = item.TotalSize;
-                            var remaining = item.RemainingSize;
-                            var downloaded = Math.Max(0, total - remaining);
-                            var remappedPath = _remotePathMappingService.Remap(definition.Host, item.OutputPath);
-                            var initialProgress = total > 0 ? (double)(total - remaining) / total : (remaining == 0 ? 1.0 : 0.0);
-
-                            torrent = new Torrent
-                            {
-                                Name = !string.IsNullOrEmpty(item.Title) ? item.Title : hash,
-                                InfoHash = hash,
-                                TotalSize = total,
-                                Downloaded = downloaded,
-                                TrackerUrl = clientTrackers.Count > 0 ? clientTrackers[0] : null,
-                                DateAdded = DateTime.UtcNow,
-                                Status = MapClientStatus(item.Status, remaining, total),
-                                Category = !string.IsNullOrWhiteSpace(item.Category) ? item.Category : definition.Category,
-                                SavePath = remappedPath,
-                                SourcePath = remappedPath,
-                                Progress = Math.Clamp(Math.Round(initialProgress, 6), 0.0, 1.0),
-                                DownloadClientId = definition.Id,
-                            };
-
-                            if (item.DownloadSpeed.HasValue)
-                            {
-                                torrent.DownloadSpeed = item.DownloadSpeed.Value;
-                            }
-
-                            if (item.UploadSpeed.HasValue)
-                            {
-                                torrent.UploadSpeed = item.UploadSpeed.Value;
-                            }
-
-                            if (remaining == 0)
-                            {
-                                torrent.MarkForceCompleted();
-                                if (!string.IsNullOrWhiteSpace(item.Status))
-                                {
-                                    torrent.Status = MapClientStatus(item.Status, remaining, total);
-                                }
-                            }
-
-                            torrent.UpdateRatio();
-                            _torrentService.Add(torrent);
-                            SaveClientTrackers(torrent.Id, clientTrackers);
-
-                            existingTorrents[hash] = torrent;
-                            result.Added++;
-                            _logger.Info("Synced torrent {0} (client metadata) from download client {1}", torrent.Name, definition.Name);
                         }
                         else
                         {

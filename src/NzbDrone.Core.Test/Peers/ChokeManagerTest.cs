@@ -29,7 +29,7 @@ public class ChokeManagerTest
         _connectionManager.GetConnections(Arg.Any<string>()).Returns(x =>
             _connections.Where(c => string.Equals(c.InfoHash, x.Arg<string>(), StringComparison.OrdinalIgnoreCase)).ToList());
         _configService.MaxUploadSlots.Returns(4);
-        _connectionManager.GetDynamicUploadSlotCount(Arg.Any<string>()).Returns(0);
+        _connectionManager.GetDynamicUploadSlotCount(Arg.Any<string>()).Returns(x => _configService.MaxUploadSlots);
 
         _subject = new ChokeManager(_connectionManager, _configService);
     }

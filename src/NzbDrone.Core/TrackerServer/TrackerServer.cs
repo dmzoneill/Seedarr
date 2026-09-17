@@ -260,6 +260,13 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             var path = parts[1];
             var infoHash = ExtractInfoHash(path);
 
+            // Drain remaining headers to prevent connection reset
+            string line;
+            while (!string.IsNullOrEmpty(line = ReadBoundedLine(stream, 1024)))
+            {
+                // Discard header lines
+            }
+
             if (IsRateLimited(clientIp, infoHash))
             {
                 var rateLimitHeaders = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
@@ -267,13 +274,6 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
                 stream.Write(rateLimitHeaderBytes, 0, rateLimitHeaderBytes.Length);
                 stream.Flush();
                 return;
-            }
-
-            // Drain remaining headers to prevent connection reset
-            string line;
-            while (!string.IsNullOrEmpty(line = ReadBoundedLine(stream, 1024)))
-            {
-                // Discard header lines
             }
 
             byte[] bodyBytes;

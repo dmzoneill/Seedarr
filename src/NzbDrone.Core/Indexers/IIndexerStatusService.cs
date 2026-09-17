@@ -12,7 +12,8 @@ public class IndexerStatus
     public int ConsecutiveFailures { get; set; }
     public string LastFailureMessage { get; set; }
     public int? LastStatusCode { get; set; }
-    public bool IsDisabled => DisabledTill.HasValue && DisabledTill.Value > DateTime.UtcNow;
+    public DateTime? CurrentTime { get; set; }
+    public bool IsDisabled => DisabledTill.HasValue && DisabledTill.Value > (CurrentTime ?? DateTime.UtcNow);
     public bool IsAuthFailure => (LastStatusCode == 401 || LastStatusCode == 403) && IsDisabled;
     public bool IsRateLimited => LastStatusCode == 429 && IsDisabled;
 }

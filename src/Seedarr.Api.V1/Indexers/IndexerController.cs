@@ -240,7 +240,7 @@ public class IndexerController : Controller
             return NotFound();
         }
 
-        if (!UrlValidator.IsSafeUrl(definition.Url))
+        if (!UrlValidator.IsSafeUrl(definition.Url, allowLoopback: true, allowInternal: true))
         {
             return BadRequest("Target host/URL is not permitted.");
         }

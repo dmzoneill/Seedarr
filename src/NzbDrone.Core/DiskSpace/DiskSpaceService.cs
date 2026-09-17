@@ -839,7 +839,7 @@ public class DiskSpaceService : IDiskSpaceService
         try
         {
             var directDrive = new DriveInfo(fullPath);
-            if (bestMatch == null || directDrive.RootDirectory.FullName.Length > bestMatch.RootDirectory.FullName.Length)
+            if (directDrive.IsReady && (bestMatch == null || directDrive.RootDirectory.FullName.Length > bestMatch.RootDirectory.FullName.Length))
             {
                 return directDrive;
             }

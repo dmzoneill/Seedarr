@@ -250,32 +250,35 @@ public class PeerConnectionLogController : Controller
                 if (_connectionManager != null)
                 {
                     var conns = _connectionManager.GetConnections(hash);
-                    foreach (var conn in conns)
+                    if (conns != null)
                     {
-                        var peerKey = $"{conn.RemoteIp}:{conn.RemotePort}:{hash}";
-                        if (disconnectedPeers.Contains(peerKey))
+                        foreach (var conn in conns)
                         {
-                            continue;
-                        }
-
-                        if (seenPeers.Add(peerKey))
-                        {
-                            nodes.Add(new PeerGraphNode
+                            var peerKey = $"{conn.RemoteIp}:{conn.RemotePort}:{hash}";
+                            if (disconnectedPeers.Contains(peerKey))
                             {
-                                Id = $"peer:{conn.RemoteIp}:{conn.RemotePort}:{hash}",
-                                Label = conn.RemoteIp,
-                                Type = "peer",
-                                InfoHash = hash,
-                                IsEncrypted = conn.IsEncrypted,
-                                IsActive = true,
-                            });
+                                continue;
+                            }
 
-                            links.Add(new PeerGraphLink
+                            if (seenPeers.Add(peerKey))
                             {
-                                Source = $"torrent:{hash}",
-                                Target = $"peer:{conn.RemoteIp}:{conn.RemotePort}:{hash}",
-                                Type = conn.IsEncrypted ? "encrypted" : "plain",
-                            });
+                                nodes.Add(new PeerGraphNode
+                                {
+                                    Id = $"peer:{conn.RemoteIp}:{conn.RemotePort}:{hash}",
+                                    Label = conn.RemoteIp,
+                                    Type = "peer",
+                                    InfoHash = hash,
+                                    IsEncrypted = conn.IsEncrypted,
+                                    IsActive = true,
+                                });
+
+                                links.Add(new PeerGraphLink
+                                {
+                                    Source = $"torrent:{hash}",
+                                    Target = $"peer:{conn.RemoteIp}:{conn.RemotePort}:{hash}",
+                                    Type = conn.IsEncrypted ? "encrypted" : "plain",
+                                });
+                            }
                         }
                     }
                 }

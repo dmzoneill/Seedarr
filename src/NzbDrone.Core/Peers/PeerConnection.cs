@@ -193,7 +193,7 @@ public class PeerConnection : IDisposable
 
     private bool _isSeed;
 
-    public bool IsSeed
+    public virtual bool IsSeed
     {
         get => _isSeed || Progress >= 1.0 || (PeerPieces != null && PeerPieces.Length > 0 && PeerPieces.All(p => p));
         set => _isSeed = value;

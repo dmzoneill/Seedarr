@@ -691,7 +691,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 }
 
                 var files = _torrentFileService.GetByTorrentId(t.Id);
-                if (files.Count > 0)
+                if (files != null && files.Count > 0)
                 {
                     var modifiedFiles = new HashSet<TorrentFile>();
 
