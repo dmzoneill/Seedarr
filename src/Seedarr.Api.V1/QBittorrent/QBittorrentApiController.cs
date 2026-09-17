@@ -45,6 +45,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     private readonly IRemotePathMappingService _remotePathMappingService;
     private readonly ICallerHostResolver _callerHostResolver;
     private readonly ICategoryService _categoryService;
+    private readonly IPieceStorage _pieceStorage;
+    private readonly IPiecePicker _piecePicker;
     private readonly Logger _logger;
 
     public QBittorrentApiController(
@@ -61,7 +63,9 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         IHttpClientFactory httpClientFactory = null,
         IRemotePathMappingService remotePathMappingService = null,
         ICallerHostResolver callerHostResolver = null,
-        ICategoryService categoryService = null)
+        ICategoryService categoryService = null,
+        IPieceStorage pieceStorage = null,
+        IPiecePicker piecePicker = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -76,6 +80,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         _remotePathMappingService = remotePathMappingService;
         _callerHostResolver = callerHostResolver;
         _categoryService = categoryService;
+        _pieceStorage = pieceStorage;
+        _piecePicker = piecePicker;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -1641,11 +1647,55 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         }
 
         var pieceCount = torrent.PieceCount > 0 ? torrent.PieceCount : 100;
+        var activePieces = _piecePicker?.GetActivePieces(torrent.InfoHash);
         var states = new List<int>(pieceCount);
-        var completedCount = (int)(pieceCount * torrent.Progress);
-        for (var i = 0; i < pieceCount; i++)
+
+        if (_pieceStorage != null)
         {
-            states.Add(i < completedCount ? 2 : 0);
+            var verifiedPieces = _pieceStorage.GetVerifiedPieces(torrent.InfoHash);
+            if (verifiedPieces != null && verifiedPieces.Length > 0)
+            {
+                for (var i = 0; i < pieceCount; i++)
+                {
+                    if (i < verifiedPieces.Length && verifiedPieces[i])
+                    {
+                        states.Add(2);
+                    }
+                    else if (activePieces != null && activePieces.Contains(i))
+                    {
+                        states.Add(1);
+                    }
+                    else
+                    {
+                        states.Add(0);
+                    }
+                }
+
+                return Ok(states);
+            }
+        }
+
+        if (torrent.Progress >= 1.0)
+        {
+            for (var i = 0; i < pieceCount; i++)
+            {
+                states.Add(2);
+            }
+        }
+        else
+        {
+            var completedCount = (int)(pieceCount * torrent.Progress);
+            for (var i = 0; i < pieceCount; i++)
+            {
+                if (activePieces != null && activePieces.Contains(i))
+                {
+                    states.Add(1);
+                }
+                else
+                {
+                    states.Add(i < completedCount ? 2 : 0);
+                }
+            }
         }
 
         return Ok(states);

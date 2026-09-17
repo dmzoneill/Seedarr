@@ -110,7 +110,17 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
             return "AutomationTriggerEvaluated";
         }
 
-        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandCompleted" or "AutomationExecuted" or "AutomationTriggerEvaluated")
+        if (string.Equals(message.Name, "PieceCompleted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PieceCompleted";
+        }
+
+        if (string.Equals(message.Name, "PieceBatchCompleted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PieceBatchCompleted";
+        }
+
+        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandCompleted" or "AutomationExecuted" or "AutomationTriggerEvaluated" or "PieceCompleted" or "PieceBatchCompleted")
         {
             return message.Name;
         }
@@ -142,6 +152,16 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
     {
         var name = message.Name ?? string.Empty;
         var action = message.Action.ToString();
+
+        if (message is PieceCompletedMessage pcm)
+        {
+            return $"{name}:{pcm.InfoHash}:{pcm.PieceIndex}";
+        }
+
+        if (message is PieceBatchCompletedMessage pbcm)
+        {
+            return $"{name}:{pbcm.InfoHash}:{string.Join(",", pbcm.PieceIndexes)}";
+        }
 
         if (message.Body != null)
         {

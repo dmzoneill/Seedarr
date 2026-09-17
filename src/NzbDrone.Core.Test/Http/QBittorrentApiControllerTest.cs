@@ -743,4 +743,45 @@ public class QBittorrentApiControllerTest
         _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
             d.ContainsKey("AltDownloadSpeedKbps") && (int)d["AltDownloadSpeedKbps"] == 200));
     }
+
+    [Test]
+    public void GetPieceStates_queries_authentic_piece_storage_and_picker()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            PieceCount = 5
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var pieceStorage = Substitute.For<IPieceStorage>();
+        var piecePicker = Substitute.For<IPiecePicker>();
+
+        pieceStorage.GetVerifiedPieces(hash).Returns(new[] { true, false, true, false, false });
+        piecePicker.GetActivePieces(hash).Returns(new HashSet<int> { 1 });
+
+        var controller = new QBittorrentApiController(
+            _torrentService,
+            _torrentFileService,
+            _torrentFileParser,
+            _torrentImportService,
+            _trackerEntryService,
+            _configService,
+            _tagService,
+            _configFileProvider,
+            categoryService: _categoryService,
+            pieceStorage: pieceStorage,
+            piecePicker: piecePicker);
+
+        var result = controller.GetPieceStates(hash);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var states = okResult.Value as List<int>;
+
+        Assert.That(states, Is.EqualTo(new List<int> { 2, 1, 2, 0, 0 }));
+    }
 }

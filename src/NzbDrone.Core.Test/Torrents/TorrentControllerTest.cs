@@ -506,4 +506,97 @@ public class TorrentControllerTest
         mediaService.Received(1).GetMetadata(100);
         _trackerEntryService.Received(1).GetByTorrentId(100);
     }
+
+    [Test]
+    public void GetPieceMap_returns_compressed_RLE_bitmask_and_rarity()
+    {
+        const int torrentId = 42;
+        const string infoHash = "1234567890abcdef1234567890abcdef12345678";
+        var torrent = new Torrent
+        {
+            Id = torrentId,
+            InfoHash = infoHash,
+            PieceCount = 6,
+            PieceLength = 16384
+        };
+
+        _torrentService.Get(torrentId).Returns(torrent);
+
+        var pieceStorage = Substitute.For<IPieceStorage>();
+        var piecePicker = Substitute.For<NzbDrone.Core.Torrents.IPiecePicker>();
+
+        pieceStorage.GetVerifiedPieces(infoHash).Returns(new[] { true, true, false, false, false, false });
+        pieceStorage.GetCorruptedPieces(infoHash).Returns(new HashSet<int> { 3 });
+        piecePicker.GetActivePieces(infoHash).Returns(new HashSet<int> { 2 });
+
+        var peerSeed = Substitute.For<PeerConnection>((System.Net.Sockets.TcpClient)null, (NzbDrone.Core.Peers.Encryption.IDhKeyPool)null);
+        peerSeed.IsSeed.Returns(true);
+
+        var peerLeech = Substitute.For<PeerConnection>((System.Net.Sockets.TcpClient)null, (NzbDrone.Core.Peers.Encryption.IDhKeyPool)null);
+        peerLeech.IsSeed.Returns(false);
+        peerLeech.PeerPieces.Returns(new[] { true, true, false, false, false, false });
+
+        _connectionManager.GetConnections(infoHash).Returns(new List<PeerConnection> { peerSeed, peerLeech });
+
+        using var controller = new TorrentController(
+            _torrentService,
+            _torrentFileService,
+            _trackerEntryService,
+            _torrentImportService,
+            _connectionManager,
+            _eventLogService,
+            _configService,
+            _signalRBroadcaster,
+            _validator,
+            categoryService: _categoryService,
+            pieceStorage: pieceStorage,
+            piecePicker: piecePicker);
+
+        var result = controller.GetPieceMap(torrentId.ToString());
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var okResult = (OkObjectResult)result.Result;
+        var pieceMap = okResult.Value as PieceMapResource;
+
+        Assert.That(pieceMap, Is.Not.Null);
+        Assert.That(pieceMap.TorrentId, Is.EqualTo(torrentId));
+        Assert.That(pieceMap.InfoHash, Is.EqualTo(infoHash));
+        Assert.That(pieceMap.TotalPieces, Is.EqualTo(6));
+        Assert.That(pieceMap.PieceLength, Is.EqualTo(16384));
+
+        // Spans: 2x verified (2), 1x in-flight (1), 1x corrupted (3), 2x missing (0)
+        Assert.That(pieceMap.Spans.Count, Is.EqualTo(4));
+        Assert.That(pieceMap.Spans[0].Count, Is.EqualTo(2));
+        Assert.That(pieceMap.Spans[0].State, Is.EqualTo(2));
+        Assert.That(pieceMap.Spans[1].Count, Is.EqualTo(1));
+        Assert.That(pieceMap.Spans[1].State, Is.EqualTo(1));
+        Assert.That(pieceMap.Spans[2].Count, Is.EqualTo(1));
+        Assert.That(pieceMap.Spans[2].State, Is.EqualTo(3));
+        Assert.That(pieceMap.Spans[3].Count, Is.EqualTo(2));
+        Assert.That(pieceMap.Spans[3].State, Is.EqualTo(0));
+
+        // RleSpans [[count, state], ...]
+        Assert.That(pieceMap.RleSpans.Count, Is.EqualTo(4));
+        Assert.That(pieceMap.RleSpans[0], Is.EqualTo(new[] { 2, 2 }));
+        Assert.That(pieceMap.RleSpans[1], Is.EqualTo(new[] { 1, 1 }));
+        Assert.That(pieceMap.RleSpans[2], Is.EqualTo(new[] { 1, 3 }));
+        Assert.That(pieceMap.RleSpans[3], Is.EqualTo(new[] { 2, 0 }));
+
+        // Rarity: [2, 2, 1, 1, 1, 1]
+        Assert.That(pieceMap.Rarity, Is.EqualTo(new[] { 2, 2, 1, 1, 1, 1 }));
+        // RaritySpans: [[2, 2], [4, 1]]
+        Assert.That(pieceMap.RaritySpans.Count, Is.EqualTo(2));
+        Assert.That(pieceMap.RaritySpans[0], Is.EqualTo(new[] { 2, 2 }));
+        Assert.That(pieceMap.RaritySpans[1], Is.EqualTo(new[] { 4, 1 }));
+    }
+
+    [Test]
+    public void GetPieceMap_returns_NotFound_when_torrent_does_not_exist()
+    {
+        _torrentService.Get(999).Returns((Torrent)null);
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var result = _controller.GetPieceMap("999");
+        Assert.That(result.Result, Is.InstanceOf<NotFoundResult>());
+    }
 }
