@@ -143,6 +143,50 @@ public class SystemControllerTasksTest
     }
 
     [Test]
+    public void AbortTask_returns_ok_when_task_cancelled_successfully()
+    {
+        _taskManager.CancelTask(1).Returns(true);
+
+        var result = _controller.AbortTask(1);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _taskManager.Received(1).CancelTask(1);
+    }
+
+    [Test]
+    public void AbortTask_returns_not_found_when_task_not_running_or_missing()
+    {
+        _taskManager.CancelTask(99).Returns(false);
+
+        var result = _controller.AbortTask(99);
+
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+        _taskManager.Received(1).CancelTask(99);
+    }
+
+    [Test]
+    public void AbortTaskByName_returns_ok_when_task_cancelled_successfully()
+    {
+        _taskManager.CancelTask("SampleScheduledTask").Returns(true);
+
+        var result = _controller.AbortTaskByName("SampleScheduledTask");
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _taskManager.Received(1).CancelTask("SampleScheduledTask");
+    }
+
+    [Test]
+    public void AbortTaskByName_returns_not_found_when_task_not_running_or_missing()
+    {
+        _taskManager.CancelTask("UnknownTask").Returns(false);
+
+        var result = _controller.AbortTaskByName("UnknownTask");
+
+        Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+        _taskManager.Received(1).CancelTask("UnknownTask");
+    }
+
+    [Test]
     public void GetTasks_computes_running_duration_and_is_running_flag()
     {
         var now = DateTime.UtcNow;

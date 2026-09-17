@@ -254,6 +254,51 @@ public class SystemController : ControllerBase
     }
 
     /// <summary>
+    /// Aborts a running scheduled task by ID.
+    /// </summary>
+    /// <param name="id">The task ID.</param>
+    /// <returns>Ok if task cancellation was signaled; NotFound if task is not found or not running.</returns>
+    [HttpPost("task/{id:int}/abort")]
+    public ActionResult AbortTask(int id)
+    {
+        var task = _taskManager.GetAll().FirstOrDefault(t => t.Id == id);
+        if (task == null)
+        {
+            return NotFound(new { message = $"Task with ID {id} not found" });
+        }
+
+        var cancelled = _taskManager.CancelTask(id);
+        if (!cancelled)
+        {
+            return NotFound(new { message = $"Task {task.TypeName} is not currently running" });
+        }
+
+        return Ok(new { message = $"Task {task.TypeName} abort requested" });
+    }
+
+    /// <summary>
+    /// Aborts a running scheduled task by type or name.
+    /// </summary>
+    /// <param name="name">The task type name or short name.</param>
+    /// <returns>Ok if task cancellation was signaled; NotFound if task is not found or not running.</returns>
+    [HttpPost("task/{name}/abort")]
+    public ActionResult AbortTaskByName(string name)
+    {
+        var task = _taskManager.GetAll().FirstOrDefault(t =>
+            string.Equals(t.TypeName, name, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(t.TypeName.Split('.').LastOrDefault(), name, StringComparison.OrdinalIgnoreCase));
+
+        var targetName = task?.TypeName ?? name;
+        var cancelled = _taskManager.CancelTask(targetName);
+        if (!cancelled)
+        {
+            return NotFound(new { message = $"Task '{name}' is not currently running or not found" });
+        }
+
+        return Ok(new { message = $"Task '{targetName}' abort requested" });
+    }
+
+    /// <summary>
     /// Gets the list of queued and running commands.
     /// </summary>
     /// <returns>A list of command resources.</returns>

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using NLog;
 using NzbDrone.Core.Messaging.Commands;
 
@@ -44,12 +45,17 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
 
         _logger.Info("Executing scheduled task via command queue: {0}", command.TaskName);
         var startTime = DateTime.UtcNow;
-        _taskManager.RecordTaskStarted(command.TaskName);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+        _taskManager.RecordTaskStarted(command.TaskName, cts);
 
         try
         {
-            taskInstance.Execute();
+            taskInstance.Execute(cts.Token);
             _logger.Info("Scheduled task completed successfully: {0}", command.TaskName);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.Warn("Scheduled task was canceled or timed out: {0}", command.TaskName);
         }
         finally
         {
