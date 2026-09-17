@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -121,9 +122,17 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
 
         oidcOptionsCache.TryRemove(schemeName);
 
+        var existingScheme = await schemeProvider.GetSchemeAsync(schemeName);
+        if (existingScheme != null)
+        {
+            schemeProvider.RemoveScheme(schemeName);
+        }
+
+        InvalidateHandlerCache(schemeName);
+
         if (string.IsNullOrWhiteSpace(provider.IssuerUrl) || string.IsNullOrWhiteSpace(provider.ClientId))
         {
-            return;
+            throw new ArgumentException("IssuerUrl and ClientId are required to register an OIDC provider.");
         }
 
         var options = new OpenIdConnectOptions
@@ -217,12 +226,6 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
 
         oidcOptionsCache.TryAdd(schemeName, options);
 
-        var existingScheme = await schemeProvider.GetSchemeAsync(schemeName);
-        if (existingScheme != null)
-        {
-            schemeProvider.RemoveScheme(schemeName);
-        }
-
         var newScheme = new AuthenticationScheme(schemeName, provider.Name, typeof(OpenIdConnectHandler));
         schemeProvider.AddScheme(newScheme);
 
@@ -249,8 +252,33 @@ public class DynamicAuthSchemeManager : IDynamicAuthSchemeManager
             oidcOptionsCache.TryRemove(schemeName);
         }
 
+        InvalidateHandlerCache(schemeName);
+
         _logger.Info("Removed dynamic authentication scheme: {0}", schemeName);
         await Task.CompletedTask;
+    }
+
+    private void InvalidateHandlerCache(string schemeName)
+    {
+        try
+        {
+            var handlerProvider = _serviceProvider.GetService<IAuthenticationHandlerProvider>();
+            if (handlerProvider != null)
+            {
+                var handlerMapField = handlerProvider.GetType().GetField("_handlerMap", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (handlerMapField?.GetValue(handlerProvider) is System.Collections.IDictionary handlerMap)
+                {
+                    lock (handlerMap.SyncRoot)
+                    {
+                        handlerMap.Remove(schemeName);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Trace(ex, "Failed to invalidate handler cache for scheme {0}", schemeName);
+        }
     }
 
     private static readonly HashSet<string> RoleClaimTypeNames = new(StringComparer.OrdinalIgnoreCase)

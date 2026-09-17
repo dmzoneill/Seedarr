@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
@@ -101,7 +102,7 @@ public class IdentityProviderConfigControllerTest
     }
 
     [Test]
-    public void Create_WhenValid_AddsProviderAndRegistersScheme()
+    public async Task Create_WhenValid_AddsProviderAndRegistersScheme()
     {
         var resource = new IdentityProviderResource
         {
@@ -119,7 +120,7 @@ public class IdentityProviderConfigControllerTest
             return def;
         });
 
-        var result = _controller.Create(resource);
+        var result = await _controller.Create(resource);
 
         Assert.That(result.Result, Is.TypeOf<CreatedResult>());
         var created = (CreatedResult)result.Result;
@@ -129,37 +130,64 @@ public class IdentityProviderConfigControllerTest
             p.ProviderId == "okta" &&
             p.ClientSecretEncrypted == "secret*with*asterisks!123"));
 
-        _ = _dynamicAuthManager.Received(1).RegisterOrUpdateOidcProviderAsync(Arg.Is<IdentityProviderDefinition>(p => p.Id == 42));
+        await _dynamicAuthManager.Received(1).RegisterOrUpdateOidcProviderAsync(Arg.Is<IdentityProviderDefinition>(p => p.Id == 42));
     }
 
     [Test]
-    public void Create_WhenNull_ReturnsBadRequest()
+    public async Task Create_WhenNull_ReturnsBadRequest()
     {
-        var result = _controller.Create(null);
+        var result = await _controller.Create(null);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestResult>());
     }
 
     [Test]
-    public void Update_WhenNull_ReturnsBadRequest()
+    public async Task Create_WhenDynamicAuthManagerThrows_ReturnsBadRequest()
     {
-        var result = _controller.Update(1, null);
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "okta",
+            Name = "Okta SSO",
+            IsEnabled = true,
+            ClientId = "okta-client",
+            IssuerUrl = "https://okta.example.com",
+        };
+
+        _providerService.Add(Arg.Any<IdentityProviderDefinition>()).Returns(callInfo =>
+        {
+            var def = callInfo.Arg<IdentityProviderDefinition>();
+            def.Id = 42;
+            return def;
+        });
+
+        _dynamicAuthManager.When(m => m.RegisterOrUpdateOidcProviderAsync(Arg.Any<IdentityProviderDefinition>()))
+            .Do(_ => throw new Exception("Dynamic registration failed"));
+
+        var result = await _controller.Create(resource);
+
+        Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public async Task Update_WhenNull_ReturnsBadRequest()
+    {
+        var result = await _controller.Update(1, null);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestResult>());
     }
 
     [Test]
-    public void Update_WhenNotFound_ReturnsNotFound()
+    public async Task Update_WhenNotFound_ReturnsNotFound()
     {
         _providerService.GetById(99).Returns((IdentityProviderDefinition)null);
 
-        var result = _controller.Update(99, new IdentityProviderResource { ProviderId = "test", Name = "Test" });
+        var result = await _controller.Update(99, new IdentityProviderResource { ProviderId = "test", Name = "Test" });
 
         Assert.That(result.Result, Is.TypeOf<NotFoundResult>());
     }
 
     [Test]
-    public void Update_WhenSecretIsMaskedWithEightAsterisks_PreservesExistingSecret()
+    public async Task Update_WhenSecretIsMaskedWithEightAsterisks_PreservesExistingSecret()
     {
         var existing = new IdentityProviderDefinition
         {
@@ -181,7 +209,7 @@ public class IdentityProviderConfigControllerTest
             ClientSecret = "********",
         };
 
-        var result = _controller.Update(1, resource);
+        var result = await _controller.Update(1, resource);
 
         Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
         _providerService.Received(1).Update(Arg.Is<IdentityProviderDefinition>(p =>
@@ -191,7 +219,7 @@ public class IdentityProviderConfigControllerTest
     }
 
     [Test]
-    public void Update_WhenDisabled_RemovesProviderScheme()
+    public async Task Update_WhenDisabled_RemovesProviderScheme()
     {
         var existing = new IdentityProviderDefinition
         {
@@ -211,14 +239,43 @@ public class IdentityProviderConfigControllerTest
             IsEnabled = false,
         };
 
-        var result = _controller.Update(1, resource);
+        var result = await _controller.Update(1, resource);
 
         Assert.That(result.Result, Is.TypeOf<OkObjectResult>());
-        _ = _dynamicAuthManager.Received(1).RemoveProviderSchemeAsync("test-provider");
+        await _dynamicAuthManager.Received(1).RemoveProviderSchemeAsync("test-provider");
     }
 
     [Test]
-    public void Delete_WhenFound_DeletesProviderAndRemovesScheme()
+    public async Task Update_WhenDynamicAuthManagerThrows_ReturnsBadRequest()
+    {
+        var existing = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test-provider",
+            Name = "Test Provider",
+            IsEnabled = true,
+        };
+
+        _providerService.GetById(1).Returns(existing);
+        _providerService.Update(Arg.Any<IdentityProviderDefinition>()).Returns(x => x.Arg<IdentityProviderDefinition>());
+
+        _dynamicAuthManager.When(m => m.RegisterOrUpdateOidcProviderAsync(Arg.Any<IdentityProviderDefinition>()))
+            .Do(_ => throw new Exception("Dynamic update failed"));
+
+        var resource = new IdentityProviderResource
+        {
+            ProviderId = "test-provider",
+            Name = "Test Provider Updated",
+            IsEnabled = true,
+        };
+
+        var result = await _controller.Update(1, resource);
+
+        Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
+    }
+
+    [Test]
+    public async Task Delete_WhenFound_DeletesProviderAndRemovesScheme()
     {
         var existing = new IdentityProviderDefinition
         {
@@ -229,21 +286,40 @@ public class IdentityProviderConfigControllerTest
 
         _providerService.GetById(1).Returns(existing);
 
-        var result = _controller.Delete(1);
+        var result = await _controller.Delete(1);
 
         Assert.That(result, Is.TypeOf<NoContentResult>());
         _providerService.Received(1).Delete(1);
-        _ = _dynamicAuthManager.Received(1).RemoveProviderSchemeAsync("test-provider");
+        await _dynamicAuthManager.Received(1).RemoveProviderSchemeAsync("test-provider");
     }
 
     [Test]
-    public void Delete_WhenNotFound_ReturnsNotFound()
+    public async Task Delete_WhenNotFound_ReturnsNotFound()
     {
         _providerService.GetById(99).Returns((IdentityProviderDefinition)null);
 
-        var result = _controller.Delete(99);
+        var result = await _controller.Delete(99);
 
         Assert.That(result, Is.TypeOf<NotFoundResult>());
+    }
+
+    [Test]
+    public async Task Delete_WhenDynamicAuthManagerThrows_ReturnsBadRequest()
+    {
+        var existing = new IdentityProviderDefinition
+        {
+            Id = 1,
+            ProviderId = "test-provider",
+            Name = "Test Provider",
+        };
+
+        _providerService.GetById(1).Returns(existing);
+        _dynamicAuthManager.When(m => m.RemoveProviderSchemeAsync(Arg.Any<string>()))
+            .Do(_ => throw new Exception("Dynamic removal failed"));
+
+        var result = await _controller.Delete(1);
+
+        Assert.That(result, Is.TypeOf<BadRequestObjectResult>());
     }
 
     [Test]
@@ -284,7 +360,7 @@ public class IdentityProviderConfigControllerTest
     }
 
     [Test]
-    public void Create_WhenValidationFails_ReturnsBadRequest()
+    public async Task Create_WhenValidationFails_ReturnsBadRequest()
     {
         var resource = new IdentityProviderResource
         {
@@ -292,14 +368,14 @@ public class IdentityProviderConfigControllerTest
             Name = "", // Invalid
         };
 
-        var result = _controller.Create(resource);
+        var result = await _controller.Create(resource);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
         _providerService.DidNotReceive().Add(Arg.Any<IdentityProviderDefinition>());
     }
 
     [Test]
-    public void Update_WhenValidationFails_ReturnsBadRequest()
+    public async Task Update_WhenValidationFails_ReturnsBadRequest()
     {
         var resource = new IdentityProviderResource
         {
@@ -307,7 +383,7 @@ public class IdentityProviderConfigControllerTest
             Name = "", // Invalid
         };
 
-        var result = _controller.Update(1, resource);
+        var result = await _controller.Update(1, resource);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
         _providerService.DidNotReceive().Update(Arg.Any<IdentityProviderDefinition>());
@@ -319,7 +395,7 @@ public class IdentityProviderConfigControllerTest
     [TestCase("has.dot")]
     [TestCase("has/slash")]
     [TestCase("has@special")]
-    public void Create_WhenProviderIdViolatesRegex_ReturnsBadRequest(string invalidProviderId)
+    public async Task Create_WhenProviderIdViolatesRegex_ReturnsBadRequest(string invalidProviderId)
     {
         var resource = new IdentityProviderResource
         {
@@ -327,7 +403,7 @@ public class IdentityProviderConfigControllerTest
             Name = "Valid Name",
         };
 
-        var result = _controller.Create(resource);
+        var result = await _controller.Create(resource);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
         _providerService.DidNotReceive().Add(Arg.Any<IdentityProviderDefinition>());
@@ -342,7 +418,7 @@ public class IdentityProviderConfigControllerTest
     [TestCase("bearer")]
     [TestCase("Basic")]
     [TestCase("basic")]
-    public void Create_WhenProviderIdIsReservedSchemeName_ReturnsBadRequest(string reservedProviderId)
+    public async Task Create_WhenProviderIdIsReservedSchemeName_ReturnsBadRequest(string reservedProviderId)
     {
         var resource = new IdentityProviderResource
         {
@@ -350,7 +426,7 @@ public class IdentityProviderConfigControllerTest
             Name = "Valid Name",
         };
 
-        var result = _controller.Create(resource);
+        var result = await _controller.Create(resource);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
         _providerService.DidNotReceive().Add(Arg.Any<IdentityProviderDefinition>());
@@ -359,7 +435,7 @@ public class IdentityProviderConfigControllerTest
     [TestCase("not-a-valid-uri")]
     [TestCase("/relative/path")]
     [TestCase("ftp://example.com/oauth")]
-    public void Create_WhenIssuerUrlIsInvalid_ReturnsBadRequest(string invalidIssuerUrl)
+    public async Task Create_WhenIssuerUrlIsInvalid_ReturnsBadRequest(string invalidIssuerUrl)
     {
         var resource = new IdentityProviderResource
         {
@@ -368,14 +444,14 @@ public class IdentityProviderConfigControllerTest
             IssuerUrl = invalidIssuerUrl,
         };
 
-        var result = _controller.Create(resource);
+        var result = await _controller.Create(resource);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
         _providerService.DidNotReceive().Add(Arg.Any<IdentityProviderDefinition>());
     }
 
     [Test]
-    public void Create_WhenIssuerUrlIsValidHttpsUri_Succeeds()
+    public async Task Create_WhenIssuerUrlIsValidHttpsUri_Succeeds()
     {
         var resource = new IdentityProviderResource
         {
@@ -392,7 +468,7 @@ public class IdentityProviderConfigControllerTest
             return def;
         });
 
-        var result = _controller.Create(resource);
+        var result = await _controller.Create(resource);
 
         Assert.That(result.Result, Is.TypeOf<CreatedResult>());
         _providerService.Received(1).Add(Arg.Is<IdentityProviderDefinition>(p =>
@@ -404,7 +480,7 @@ public class IdentityProviderConfigControllerTest
     [TestCase("SeedarrApiKey")]
     [TestCase("Bearer")]
     [TestCase("Basic")]
-    public void Update_WhenProviderIdIsReservedSchemeName_ReturnsBadRequest(string reservedProviderId)
+    public async Task Update_WhenProviderIdIsReservedSchemeName_ReturnsBadRequest(string reservedProviderId)
     {
         var resource = new IdentityProviderResource
         {
@@ -412,7 +488,7 @@ public class IdentityProviderConfigControllerTest
             Name = "Valid Name",
         };
 
-        var result = _controller.Update(1, resource);
+        var result = await _controller.Update(1, resource);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
         _providerService.DidNotReceive().Update(Arg.Any<IdentityProviderDefinition>());
@@ -421,7 +497,7 @@ public class IdentityProviderConfigControllerTest
     [TestCase("not-a-valid-uri")]
     [TestCase("/relative/path")]
     [TestCase("ftp://example.com/oauth")]
-    public void Update_WhenIssuerUrlIsInvalid_ReturnsBadRequest(string invalidIssuerUrl)
+    public async Task Update_WhenIssuerUrlIsInvalid_ReturnsBadRequest(string invalidIssuerUrl)
     {
         var resource = new IdentityProviderResource
         {
@@ -430,7 +506,7 @@ public class IdentityProviderConfigControllerTest
             IssuerUrl = invalidIssuerUrl,
         };
 
-        var result = _controller.Update(1, resource);
+        var result = await _controller.Update(1, resource);
 
         Assert.That(result.Result, Is.TypeOf<BadRequestObjectResult>());
         _providerService.DidNotReceive().Update(Arg.Any<IdentityProviderDefinition>());

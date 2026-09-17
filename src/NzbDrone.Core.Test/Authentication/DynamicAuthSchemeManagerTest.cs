@@ -396,4 +396,109 @@ public class DynamicAuthSchemeManagerTest
 
         Assert.That(manager.HasPendingRetry("transient_idp"), Is.False);
     }
+
+    [Test]
+    public async Task RegisterOrUpdateOidcProviderAsync_should_update_existing_scheme_and_refresh_options()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "test_update",
+            Name = "Initial Name",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "client-id-1",
+            IsEnabled = true,
+        };
+
+        await manager.RegisterOrUpdateOidcProviderAsync(provider);
+
+        var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
+        var initialScheme = await schemeProvider.GetSchemeAsync("Oidc_test_update");
+        Assert.That(initialScheme, Is.Not.Null);
+        Assert.That(initialScheme.DisplayName, Is.EqualTo("Initial Name"));
+
+        var cache = sp.GetRequiredService<IOptionsMonitorCache<OpenIdConnectOptions>>();
+        var initialOptions = cache.GetOrAdd("Oidc_test_update", () => new OpenIdConnectOptions());
+        Assert.That(initialOptions.ClientId, Is.EqualTo("client-id-1"));
+
+        provider.Name = "Updated Name";
+        provider.ClientId = "client-id-2";
+
+        await manager.RegisterOrUpdateOidcProviderAsync(provider);
+
+        var updatedScheme = await schemeProvider.GetSchemeAsync("Oidc_test_update");
+        Assert.That(updatedScheme, Is.Not.Null);
+        Assert.That(updatedScheme.DisplayName, Is.EqualTo("Updated Name"));
+
+        var updatedOptions = cache.GetOrAdd("Oidc_test_update", () => new OpenIdConnectOptions());
+        Assert.That(updatedOptions.ClientId, Is.EqualTo("client-id-2"));
+    }
+
+    [TestCase(null, "client-id")]
+    [TestCase("", "client-id")]
+    [TestCase("   ", "client-id")]
+    [TestCase("https://auth.example.com", null)]
+    [TestCase("https://auth.example.com", "")]
+    [TestCase("https://auth.example.com", "   ")]
+    public void RegisterOrUpdateOidcProviderAsync_should_throw_ArgumentException_when_required_fields_missing(string issuerUrl, string clientId)
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "test_invalid",
+            Name = "Invalid Provider",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = issuerUrl,
+            ClientId = clientId,
+            IsEnabled = true,
+        };
+
+        Assert.ThrowsAsync<ArgumentException>(async () => await manager.RegisterOrUpdateOidcProviderAsync(provider));
+    }
+
+    [Test]
+    public async Task RemoveProviderSchemeAsync_should_remove_scheme_and_clear_options()
+    {
+        var services = new ServiceCollection();
+        services.AddOptions();
+        services.AddAuthentication();
+        var sp = services.BuildServiceProvider();
+
+        var repo = Substitute.For<IIdentityProviderRepository>();
+        var manager = new DynamicAuthSchemeManager(sp, repo);
+
+        var provider = new IdentityProviderDefinition
+        {
+            ProviderId = "test_remove",
+            Name = "Provider To Remove",
+            ProviderType = IdentityProviderType.Oidc,
+            IssuerUrl = "https://auth.example.com",
+            ClientId = "client-id",
+            IsEnabled = true,
+        };
+
+        await manager.RegisterOrUpdateOidcProviderAsync(provider);
+
+        var schemeProvider = sp.GetRequiredService<IAuthenticationSchemeProvider>();
+        Assert.That(await schemeProvider.GetSchemeAsync("Oidc_test_remove"), Is.Not.Null);
+
+        await manager.RemoveProviderSchemeAsync("test_remove");
+
+        Assert.That(await schemeProvider.GetSchemeAsync("Oidc_test_remove"), Is.Null);
+    }
 }
