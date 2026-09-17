@@ -4,6 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using Dapper;
+using Microsoft.Data.Sqlite;
+using NLog;
+using NLog.Config;
+using NLog.Targets;
 using NUnit.Framework;
 using NzbDrone.Core.Datastore;
 
@@ -33,6 +37,25 @@ public class DbFactoryTest
         {
             File.Delete(_tempDbPath);
         }
+
+        var dir = Path.GetDirectoryName(_tempDbPath);
+        var fileName = Path.GetFileName(_tempDbPath);
+        if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
+        {
+            foreach (var bak in Directory.GetFiles(dir, $"{fileName}.pre-migration-*.bak"))
+            {
+                try
+                {
+                    File.Delete(bak);
+                }
+                catch
+                {
+                    // best-effort cleanup
+                }
+            }
+        }
+
+        LogManager.Configuration = null;
     }
 
     [Test]
@@ -270,6 +293,97 @@ public class DbFactoryTest
         var result = handler.Parse(100);
 
         Assert.That(result, Is.EqualTo(100.0));
+    }
+
+    [Test]
+    public void Create_creates_pre_migration_snapshot_when_database_file_exists()
+    {
+        using (var conn = new SqliteConnection($"Data Source={_tempDbPath}"))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "CREATE TABLE ExistingTable (Id INTEGER PRIMARY KEY, Val TEXT); INSERT INTO ExistingTable VALUES (1, 'initial');";
+            cmd.ExecuteNonQuery();
+        }
+
+        var factory = new DbFactory();
+        factory.Create(DatabaseType.SQLite, $"Data Source={_tempDbPath}");
+
+        var dir = Path.GetDirectoryName(_tempDbPath);
+        var fileName = Path.GetFileName(_tempDbPath);
+        var snapshots = Directory.GetFiles(dir, $"{fileName}.pre-migration-*.bak");
+
+        Assert.That(snapshots, Has.Length.EqualTo(1));
+
+        using (var backupConn = new SqliteConnection($"Data Source={snapshots[0]}"))
+        {
+            backupConn.Open();
+            using var cmd = backupConn.CreateCommand();
+            cmd.CommandText = "SELECT Val FROM ExistingTable WHERE Id = 1;";
+            var val = cmd.ExecuteScalar()?.ToString();
+            Assert.That(val, Is.EqualTo("initial"));
+        }
+    }
+
+    [Test]
+    public void PrunePreMigrationSnapshots_retains_at_most_3_pre_migration_bak_snapshots()
+    {
+        var b1 = $"{_tempDbPath}.pre-migration-20260101000001.bak";
+        var b2 = $"{_tempDbPath}.pre-migration-20260101000002.bak";
+        var b3 = $"{_tempDbPath}.pre-migration-20260101000003.bak";
+        var b4 = $"{_tempDbPath}.pre-migration-20260101000004.bak";
+        var b5 = $"{_tempDbPath}.pre-migration-20260101000005.bak";
+
+        File.WriteAllText(b1, "1");
+        File.WriteAllText(b2, "2");
+        File.WriteAllText(b3, "3");
+        File.WriteAllText(b4, "4");
+        File.WriteAllText(b5, "5");
+
+        DbFactory.PrunePreMigrationSnapshots(_tempDbPath, 3);
+
+        var dir = Path.GetDirectoryName(_tempDbPath);
+        var fileName = Path.GetFileName(_tempDbPath);
+        var remaining = Directory.GetFiles(dir, $"{fileName}.pre-migration-*.bak");
+
+        Assert.That(remaining, Has.Length.EqualTo(3));
+        Assert.That(File.Exists(b1), Is.False);
+        Assert.That(File.Exists(b2), Is.False);
+        Assert.That(File.Exists(b3), Is.True);
+        Assert.That(File.Exists(b4), Is.True);
+        Assert.That(File.Exists(b5), Is.True);
+    }
+
+    [Test]
+    public void Migration_failure_logs_backup_file_path_and_does_not_delete_snapshot()
+    {
+        using (var conn = new SqliteConnection($"Data Source={_tempDbPath}"))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "CREATE TABLE Config (Id INTEGER PRIMARY KEY, Conflict TEXT);";
+            cmd.ExecuteNonQuery();
+        }
+
+        var memoryTarget = new MemoryTarget { Layout = "${message} ${exception}" };
+        var config = new LoggingConfiguration();
+        config.AddTarget("memory", memoryTarget);
+        config.AddRule(LogLevel.Trace, LogLevel.Fatal, memoryTarget);
+        LogManager.Configuration = config;
+
+        var factory = new DbFactory();
+
+        Assert.Throws<Exception>(() => factory.Create(DatabaseType.SQLite, $"Data Source={_tempDbPath}"));
+
+        var dir = Path.GetDirectoryName(_tempDbPath);
+        var fileName = Path.GetFileName(_tempDbPath);
+        var snapshots = Directory.GetFiles(dir, $"{fileName}.pre-migration-*.bak");
+
+        Assert.That(snapshots, Has.Length.EqualTo(1));
+        Assert.That(File.Exists(snapshots[0]), Is.True, "Pre-migration snapshot must not be deleted on migration failure");
+
+        var logs = memoryTarget.Logs;
+        Assert.That(logs.Any(log => log.Contains(snapshots[0])), Is.True, "Log output must reference the pre-migration snapshot path");
     }
 
     private class FakeDbParameter : IDbDataParameter
