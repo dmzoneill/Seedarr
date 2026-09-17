@@ -41,6 +41,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private readonly Extensions.IExtensionManager _extensionManager;
     private readonly IChokeManager _chokeManager;
     private readonly Network.IProxySettingsProvider _proxySettingsProvider;
+    private readonly IDhKeyPool _dhKeyPool;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
@@ -73,7 +74,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         Extensions.IFastExtensionHandler fastExtensionHandler = null,
         Extensions.IExtensionManager extensionManager = null,
         IChokeManager chokeManager = null,
-        Network.IProxySettingsProvider proxySettingsProvider = null)
+        Network.IProxySettingsProvider proxySettingsProvider = null,
+        IDhKeyPool dhKeyPool = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -87,6 +89,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         _extensionManager = extensionManager;
         _chokeManager = chokeManager;
         _proxySettingsProvider = proxySettingsProvider;
+        _dhKeyPool = dhKeyPool;
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -867,7 +870,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                     utp.Connect(endpoint);
                     if (utp.IsConnected)
                     {
-                        connection = new PeerConnection(utp.GetStream(), candidate.Ip, candidate.Port);
+                        connection = new PeerConnection(utp.GetStream(), candidate.Ip, candidate.Port, _dhKeyPool);
                     }
                 }
                 catch (Exception ex)
@@ -878,12 +881,12 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 if (connection == null && _utpManager.TcpFallbackEnabled)
                 {
                     _logger.Debug("Falling back to TCP for peer {0}:{1}", candidate.Ip, candidate.Port);
-                    connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider);
+                    connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool);
                 }
             }
             else
             {
-                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider);
+                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool);
             }
 
             if (connection == null)
@@ -1058,7 +1061,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
     private void HandleConnection(TcpClient client, CancellationToken stoppingToken, Action onHandshakeSuccess)
     {
-        using var connection = new PeerConnection(client);
+        using var connection = new PeerConnection(client, _dhKeyPool);
         connection.HandshakeTimeoutMs = UnauthenticatedHandshakeTimeoutMs;
         connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
         connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;

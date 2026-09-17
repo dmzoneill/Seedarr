@@ -4,6 +4,7 @@ using System.IO.Pipes;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Peers.Encryption;
 
@@ -68,6 +69,41 @@ public class MseHandshakeTest
     public void Constructor_should_accept_prefer_plain_text_mode()
     {
         Assert.That(() => new MseHandshake(TestInfoHash, EncryptionMode.PreferPlainText), Throws.Nothing);
+    }
+
+    [Test]
+    public void Constructor_should_accept_optional_key_pool()
+    {
+        var pool = Substitute.For<IDhKeyPool>();
+        var handshake = new MseHandshake(TestInfoHash, EncryptionMode.PreferEncrypted, pool);
+
+        Assert.That(handshake.KeyPool, Is.SameAs(pool));
+    }
+
+    [Test]
+    public void NegotiateOutgoing_and_Incoming_should_use_rented_key_from_pool()
+    {
+        var poolA = Substitute.For<IDhKeyPool>();
+        var poolB = Substitute.For<IDhKeyPool>();
+
+        var keyA = new MseKeyDerivation();
+        var keyB = new MseKeyDerivation();
+
+        poolA.Rent().Returns(keyA);
+        poolB.Rent().Returns(keyB);
+
+        var (sideA, sideB) = CreateConnectedPair();
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted, poolA);
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted, poolB);
+
+        var taskA = Task.Run(() => outgoing.NegotiateOutgoing(sideA));
+        var taskB = Task.Run(() => incoming.NegotiateIncoming(sideB, ValidateInfoHash));
+        Assert.That(Task.WhenAll(taskA, taskB).Wait(TimeSpan.FromSeconds(15)), Is.True, "Handshake timed out");
+
+        poolA.Received(1).Rent();
+        poolB.Received(1).Rent();
+        Assert.That(outgoing.NegotiatedMethod, Is.EqualTo(CryptoMethod.Rc4));
+        Assert.That(incoming.NegotiatedMethod, Is.EqualTo(CryptoMethod.Rc4));
     }
 
     // ── Full-handshake negotiated-method assertions ────────────────────────

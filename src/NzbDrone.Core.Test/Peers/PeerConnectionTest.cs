@@ -7,6 +7,7 @@ using System.Text;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Simulation.ClientBehavior;
 
 namespace NzbDrone.Core.Test.Peers;
@@ -1220,5 +1221,14 @@ public class PeerConnectionTest
         var handshake = PeerConnection.BuildHandshake("0102030405060708091011121314151617181920", "-SD0001-012345678901", isPrivate: false, clientProfile: profile);
 
         Assert.That(handshake[27] & 0x01, Is.EqualTo(0x01));
+    }
+
+    [Test]
+    public void Constructor_should_accept_and_store_DhKeyPool()
+    {
+        var pool = Substitute.For<IDhKeyPool>();
+        var conn = new PeerConnection(new MemoryStream(), "127.0.0.1", 1234, pool);
+
+        Assert.That(conn.DhKeyPool, Is.SameAs(pool));
     }
 }
