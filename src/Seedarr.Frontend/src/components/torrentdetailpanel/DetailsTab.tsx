@@ -266,6 +266,7 @@ export function DetailsTab({ torrent }: { torrent: Torrent }) {
       </div>
 
       <PieceMap
+        torrentId={torrent.id}
         pieceCount={torrent.pieceCount}
         pieceLength={torrent.pieceLength}
         progress={torrent.progress}
