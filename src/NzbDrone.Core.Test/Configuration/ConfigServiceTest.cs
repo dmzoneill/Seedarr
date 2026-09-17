@@ -1486,6 +1486,14 @@ namespace NzbDrone.Core.Test.Configuration
             Assert.That(_subject.DhtMaxQueriesPerSecond, Is.EqualTo(10));
         }
 
+        [Test]
+        public void DhtNodeIdHex_should_default_to_empty()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.DhtNodeIdHex, Is.Empty);
+        }
+
         // ---- Property defaults (Simulation) ----
 
         [Test]

@@ -190,6 +190,7 @@ public interface IConfigService
     bool DhtRateLimitEnabled { get; }
     int DhtMaxQueriesPerSecond { get; }
     string DhtBootstrapNodes { get; set; }
+    string DhtNodeIdHex { get; set; }
 
     // Simulation
     bool ClientBehaviorEngineEnabled { get; }
@@ -577,6 +578,12 @@ public class ConfigService : IConfigService
     {
         get => GetValue("DhtBootstrapNodes", string.Empty);
         set => SaveConfigDictionary(new Dictionary<string, object> { { "DhtBootstrapNodes", value } });
+    }
+
+    public string DhtNodeIdHex
+    {
+        get => GetValue("DhtNodeIdHex", string.Empty);
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "DhtNodeIdHex", value } });
     }
 
     // Simulation
