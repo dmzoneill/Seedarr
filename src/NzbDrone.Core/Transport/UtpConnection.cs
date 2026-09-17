@@ -75,6 +75,10 @@ public class UtpConnection : IUtpConnection
     private uint _lastTimestampDiff;
     private uint _remoteWindowSize = DefaultWindowSize;
     private ushort _expectedSeqNr;
+    private ushort _lastAckReceived;
+    private int _duplicateAckCount;
+    private int _fastRetransmitCount;
+    private bool _hasReceivedFirstAck;
     private bool _hasReceivedFirstPacket;
     private bool _hasReceivedFin;
     private bool _isClosing;
@@ -91,6 +95,9 @@ public class UtpConnection : IUtpConnection
     public bool HasReceivedFin => _hasReceivedFin;
     public bool IsClosing => _isClosing;
     public int OutOfOrderCount => _outOfOrderBuffer.Count;
+    public int DuplicateAckCount => _duplicateAckCount;
+    public int FastRetransmitCount => _fastRetransmitCount;
+    public ushort LastAckReceived => _lastAckReceived;
     public uint RemoteWindowSize { get => _remoteWindowSize; internal set => _remoteWindowSize = value; }
     public IPEndPoint RemoteEndPoint => _remoteEndpoint;
     public bool OwnsUdpClient => _ownsUdpClient;
@@ -708,6 +715,39 @@ public class UtpConnection : IUtpConnection
 
     private void ProcessAck(ushort ackNr)
     {
+        if (!_hasReceivedFirstAck)
+        {
+            _hasReceivedFirstAck = true;
+            _lastAckReceived = ackNr;
+            _duplicateAckCount = 0;
+        }
+        else if (ackNr == _lastAckReceived)
+        {
+            if (!_inFlightPackets.IsEmpty)
+            {
+                _duplicateAckCount++;
+                if (_duplicateAckCount == 3)
+                {
+                    var lostSeq = (ushort)(ackNr + 1);
+                    if (_inFlightPackets.TryGetValue(lostSeq, out var lostPacket))
+                    {
+                        _logger.Debug("Fast Retransmit triggered for packet {0} on 3 duplicate ACKs", lostSeq);
+                        lostPacket.Retries++;
+                        lostPacket.SentTimestamp = Environment.TickCount64;
+                        SendUdpPacket(lostPacket.PacketData, lostPacket.PacketData.Length, _remoteEndpoint);
+                        _fastRetransmitCount++;
+                    }
+                }
+            }
+
+            return;
+        }
+        else if (IsAhead(ackNr, _lastAckReceived))
+        {
+            _lastAckReceived = ackNr;
+            _duplicateAckCount = 0;
+        }
+
         if (_inFlightPackets.IsEmpty)
         {
             return;
