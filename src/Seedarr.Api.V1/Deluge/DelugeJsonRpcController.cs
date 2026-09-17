@@ -155,6 +155,8 @@ public class DelugeJsonRpcController : ControllerBase
         return new JsonResult(value, _delugeJsonOptions);
     }
 
+    private static object CreateDelugeError(string message, int code = 1) => new { message, code };
+
     [HttpPost]
     public async Task<IActionResult> HandleRpc([FromBody] JsonElement root)
     {
@@ -174,7 +176,7 @@ public class DelugeJsonRpcController : ControllerBase
                 }
                 else
                 {
-                    responses.Add(new { result = (object)null, error = "Unknown RPC result", id = (object)null });
+                    responses.Add(new { result = (object)null, error = CreateDelugeError("Unknown RPC result"), id = (object)null });
                 }
             }
 
@@ -188,7 +190,7 @@ public class DelugeJsonRpcController : ControllerBase
     {
         if (root.ValueKind != JsonValueKind.Object)
         {
-            return DelugeResult(new { result = (object)null, error = new { message = "Invalid JSON-RPC format", code = 1 }, id = (object)null });
+            return DelugeResult(new { result = (object)null, error = CreateDelugeError("Invalid JSON-RPC format"), id = (object)null });
         }
 
         var methodElem = root.TryGetProperty("method", out var m) ? m : default;
@@ -230,7 +232,7 @@ public class DelugeJsonRpcController : ControllerBase
 
             if (!IsDelugeAuthenticated())
             {
-                return DelugeResult(new { result = (object)null, error = new { message = "Not authenticated", code = 1 }, id });
+                return DelugeResult(new { result = (object)null, error = CreateDelugeError("Not authenticated"), id });
             }
 
             if (lowerMethod.StartsWith("core."))
@@ -258,7 +260,7 @@ public class DelugeJsonRpcController : ControllerBase
         catch (Exception ex)
         {
             _logger.Error(ex, "Error handling Deluge RPC method: {0}", method);
-            return DelugeResult(new { result = (object)null, error = ex.Message, id });
+            return DelugeResult(new { result = (object)null, error = CreateDelugeError(ex.Message), id });
         }
     }
 
@@ -352,6 +354,10 @@ public class DelugeJsonRpcController : ControllerBase
         {
             providedPassword = paramsElem[0].GetString();
         }
+        else if (paramsElem.ValueKind == JsonValueKind.String)
+        {
+            providedPassword = paramsElem.GetString();
+        }
 
         var loginSuccess = false;
         if (_configFileProvider == null || !_configFileProvider.AuthenticationEnabled)
@@ -362,6 +368,25 @@ public class DelugeJsonRpcController : ControllerBase
             RpcAuthenticationHelper.FixedTimeEquals(providedPassword, _configFileProvider.ApiKey))
         {
             loginSuccess = true;
+        }
+        else if (!string.IsNullOrWhiteSpace(providedPassword) && _configService != null)
+        {
+            var userPassword = _configService.GetValue("Password");
+            if (string.IsNullOrWhiteSpace(userPassword))
+            {
+                userPassword = _configService.GetValue("AdminPassword");
+            }
+
+            if (string.IsNullOrWhiteSpace(userPassword))
+            {
+                userPassword = _configService.GetValue("UserPassword");
+            }
+
+            if (!string.IsNullOrWhiteSpace(userPassword) &&
+                RpcAuthenticationHelper.FixedTimeEquals(providedPassword, userPassword))
+            {
+                loginSuccess = true;
+            }
         }
 
         if (loginSuccess)
@@ -1006,7 +1031,7 @@ public class DelugeJsonRpcController : ControllerBase
             }
         }
 
-        return DelugeResult(new { result = (object)null, error = "Torrent not found", id });
+        return DelugeResult(new { result = (object)null, error = CreateDelugeError("Torrent not found"), id });
     }
 
     private async Task<IActionResult> HandleCoreAddTorrentFileAsync(JsonElement paramsElem, object id)
@@ -1027,7 +1052,7 @@ public class DelugeJsonRpcController : ControllerBase
                 catch (FormatException ex)
                 {
                     _logger.Error(ex, "Failed to decode base64 torrent file in Deluge RPC");
-                    return DelugeResult(new { result = (object)null, error = ex.Message, id });
+                    return DelugeResult(new { result = (object)null, error = CreateDelugeError(ex.Message), id });
                 }
 
                 string infoHash = null;
@@ -1058,13 +1083,13 @@ public class DelugeJsonRpcController : ControllerBase
                 catch (Exception ex)
                 {
                     _logger.Error(ex, "Failed to add torrent file in Deluge RPC");
-                    return DelugeResult(new { result = (object)null, error = ex.Message, id });
+                    return DelugeResult(new { result = (object)null, error = CreateDelugeError(ex.Message), id });
                 }
             }
         }
 
         await Task.CompletedTask;
-        return DelugeResult(new { result = (object)null, error = "Invalid arguments for add_torrent_file", id });
+        return DelugeResult(new { result = (object)null, error = CreateDelugeError("Invalid arguments for add_torrent_file"), id });
     }
 
     private async Task<IActionResult> HandleCoreAddTorrentMagnetAsync(JsonElement paramsElem, object id)
@@ -1101,13 +1126,13 @@ public class DelugeJsonRpcController : ControllerBase
                 catch (Exception ex)
                 {
                     _logger.Error(ex, "Failed to add magnet in Deluge RPC");
-                    return DelugeResult(new { result = (object)null, error = ex.Message, id });
+                    return DelugeResult(new { result = (object)null, error = CreateDelugeError(ex.Message), id });
                 }
             }
         }
 
         await Task.CompletedTask;
-        return DelugeResult(new { result = (object)null, error = "Invalid arguments for add_torrent_magnet", id });
+        return DelugeResult(new { result = (object)null, error = CreateDelugeError("Invalid arguments for add_torrent_magnet"), id });
     }
 
     private async Task<IActionResult> HandleCoreAddTorrentUrlAsync(JsonElement paramsElem, object id)
@@ -1172,12 +1197,12 @@ public class DelugeJsonRpcController : ControllerBase
                 catch (Exception ex)
                 {
                     _logger.Error(ex, "Failed to add torrent from URL in Deluge RPC");
-                    return DelugeResult(new { result = (object)null, error = ex.Message, id });
+                    return DelugeResult(new { result = (object)null, error = CreateDelugeError(ex.Message), id });
                 }
             }
         }
 
-        return DelugeResult(new { result = (object)null, error = "Invalid arguments for add_torrent_url", id });
+        return DelugeResult(new { result = (object)null, error = CreateDelugeError("Invalid arguments for add_torrent_url"), id });
     }
 
     private async Task<IActionResult> HandleWebUploadTorrentAsync(JsonElement paramsElem, object id)
@@ -1198,13 +1223,13 @@ public class DelugeJsonRpcController : ControllerBase
                 }
                 catch (Exception ex)
                 {
-                    return DelugeResult(new { result = (object)null, error = ex.Message, id });
+                    return DelugeResult(new { result = (object)null, error = CreateDelugeError(ex.Message), id });
                 }
             }
         }
 
         await Task.CompletedTask;
-        return DelugeResult(new { result = (object)null, error = "Invalid upload arguments", id });
+        return DelugeResult(new { result = (object)null, error = CreateDelugeError("Invalid upload arguments"), id });
     }
 
     private async Task<IActionResult> HandleWebGetTorrentInfoAsync(JsonElement paramsElem, object id)
@@ -1657,7 +1682,7 @@ public class DelugeJsonRpcController : ControllerBase
     private IActionResult HandleUnknownMethod(string method, object id)
     {
         _logger.Warn("Unhandled Deluge RPC method: {0}", method);
-        return DelugeResult(new { result = (object)null, error = $"Method '{method}' not implemented", id });
+        return DelugeResult(new { result = (object)null, error = CreateDelugeError($"Method '{method}' not implemented"), id });
     }
 
     private Dictionary<string, object> GetDelugeConfigDictionary()
@@ -2084,6 +2109,6 @@ public class DelugeJsonRpcController : ControllerBase
             return DelugeResult(new { result = preferredHash.ToLowerInvariant(), error = (object)null, id });
         }
 
-        return DelugeResult(new { result = (object)null, error = "Torrent already exists", id });
+        return DelugeResult(new { result = (object)null, error = CreateDelugeError("Torrent already exists"), id });
     }
 }
