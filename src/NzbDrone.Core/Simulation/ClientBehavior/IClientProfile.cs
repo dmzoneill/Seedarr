@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.Simulation.ClientBehavior;
@@ -12,4 +13,7 @@ public interface IClientProfile : IProvider
     bool SupportsDht { get; }
     bool SupportsPex { get; }
     string GeneratePeerId();
+
+    IReadOnlyList<string> AnnounceParameterOrder { get; }
+    IDictionary<string, string> ExtraAnnounceParameters { get; }
 }

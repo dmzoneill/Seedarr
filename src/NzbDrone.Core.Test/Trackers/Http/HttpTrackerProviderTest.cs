@@ -299,9 +299,94 @@ public class HttpTrackerProviderTest
         var uploadedPos = queryString.IndexOf("uploaded=");
         var downloadedPos = queryString.IndexOf("downloaded=");
         var leftPos = queryString.IndexOf("left=");
+        var corruptPos = queryString.IndexOf("corrupt=");
+        var keyPos = queryString.IndexOf("key=");
+        var eventPos = queryString.IndexOf("event=");
+        var numwantPos = queryString.IndexOf("numwant=");
+        var compactPos = queryString.IndexOf("compact=");
+        var noPeerIdPos = queryString.IndexOf("no_peer_id=");
+        var supportCryptoPos = queryString.IndexOf("supportcrypto=");
+        var redundantPos = queryString.IndexOf("redundant=");
+
+        Assert.That(infoHashPos, Is.LessThan(peerIdPos));
+        Assert.That(peerIdPos, Is.LessThan(portPos));
+        Assert.That(portPos, Is.LessThan(uploadedPos));
+        Assert.That(uploadedPos, Is.LessThan(downloadedPos));
+        Assert.That(downloadedPos, Is.LessThan(leftPos));
+        Assert.That(leftPos, Is.LessThan(corruptPos));
+        Assert.That(corruptPos, Is.LessThan(keyPos));
+        Assert.That(keyPos, Is.LessThan(eventPos));
+        Assert.That(eventPos, Is.LessThan(numwantPos));
+        Assert.That(numwantPos, Is.LessThan(compactPos));
+        Assert.That(compactPos, Is.LessThan(noPeerIdPos));
+        Assert.That(noPeerIdPos, Is.LessThan(supportCryptoPos));
+        Assert.That(supportCryptoPos, Is.LessThan(redundantPos));
+    }
+
+    [Test]
+    public void BuildAnnounceUrl_should_order_parameters_for_transmission_profile()
+    {
+        var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
+        var request = CreateRequest();
+        request.PeerId = "-TR3000-123456789012";
+        request.UserAgent = "Transmission/3.00";
+        request.Event = AnnounceEvent.Started;
+
+        var result = (string)method.Invoke(null, new object[] { request });
+
+        var queryStart = result.IndexOf('?');
+        Assert.That(queryStart, Is.GreaterThan(0));
+
+        var queryString = result.Substring(queryStart + 1);
+        var infoHashPos = queryString.IndexOf("info_hash=");
+        var peerIdPos = queryString.IndexOf("peer_id=");
+        var portPos = queryString.IndexOf("port=");
+        var uploadedPos = queryString.IndexOf("uploaded=");
+        var downloadedPos = queryString.IndexOf("downloaded=");
+        var leftPos = queryString.IndexOf("left=");
+        var numwantPos = queryString.IndexOf("numwant=");
+        var keyPos = queryString.IndexOf("key=");
+        var compactPos = queryString.IndexOf("compact=");
+        var supportCryptoPos = queryString.IndexOf("supportcrypto=");
+        var eventPos = queryString.IndexOf("event=");
+
+        Assert.That(infoHashPos, Is.LessThan(peerIdPos));
+        Assert.That(peerIdPos, Is.LessThan(portPos));
+        Assert.That(portPos, Is.LessThan(uploadedPos));
+        Assert.That(uploadedPos, Is.LessThan(downloadedPos));
+        Assert.That(downloadedPos, Is.LessThan(leftPos));
+        Assert.That(leftPos, Is.LessThan(numwantPos));
+        Assert.That(numwantPos, Is.LessThan(keyPos));
+        Assert.That(keyPos, Is.LessThan(compactPos));
+        Assert.That(compactPos, Is.LessThan(supportCryptoPos));
+        Assert.That(supportCryptoPos, Is.LessThan(eventPos));
+    }
+
+    [Test]
+    public void BuildAnnounceUrl_should_order_parameters_for_fallback_profile()
+    {
+        var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
+        var request = CreateRequest();
+        request.PeerId = "CustomClient-1234567";
+        request.UserAgent = null;
+        request.Event = AnnounceEvent.Started;
+
+        var result = (string)method.Invoke(null, new object[] { request });
+
+        var queryStart = result.IndexOf('?');
+        Assert.That(queryStart, Is.GreaterThan(0));
+
+        var queryString = result.Substring(queryStart + 1);
+        var infoHashPos = queryString.IndexOf("info_hash=");
+        var peerIdPos = queryString.IndexOf("peer_id=");
+        var portPos = queryString.IndexOf("port=");
+        var uploadedPos = queryString.IndexOf("uploaded=");
+        var downloadedPos = queryString.IndexOf("downloaded=");
+        var leftPos = queryString.IndexOf("left=");
         var compactPos = queryString.IndexOf("compact=");
         var numwantPos = queryString.IndexOf("numwant=");
         var eventPos = queryString.IndexOf("event=");
+        var keyPos = queryString.IndexOf("key=");
 
         Assert.That(infoHashPos, Is.LessThan(peerIdPos));
         Assert.That(peerIdPos, Is.LessThan(portPos));
@@ -311,6 +396,45 @@ public class HttpTrackerProviderTest
         Assert.That(leftPos, Is.LessThan(compactPos));
         Assert.That(compactPos, Is.LessThan(numwantPos));
         Assert.That(numwantPos, Is.LessThan(eventPos));
+        Assert.That(eventPos, Is.LessThan(keyPos));
+    }
+
+    [Test]
+    public void BuildAnnounceUrl_should_inject_key_parameter_when_missing()
+    {
+        var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
+        var request = CreateRequest();
+        request.Key = null;
+
+        var result = (string)method.Invoke(null, new object[] { request });
+
+        Assert.That(result, Does.Contain("key="));
+        Assert.That(request.Key, Is.Not.Null.And.Not.Empty);
+        Assert.That(request.Key.Length, Is.EqualTo(8));
+    }
+
+    [Test]
+    public void BuildAnnounceUrl_should_retain_unreserved_characters_in_peer_id()
+    {
+        var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
+        var request = CreateRequest();
+        request.PeerId = "-qB4420-a_b.c~d1234";
+
+        var result = (string)method.Invoke(null, new object[] { request });
+
+        Assert.That(result, Does.Contain("peer_id=-qB4420-a_b.c~d1234"));
+    }
+
+    [Test]
+    public void BuildAnnounceUrl_should_escape_reserved_and_non_ascii_characters_with_uppercase_hex()
+    {
+        var method = typeof(HttpTrackerProvider).GetMethod("BuildAnnounceUrl", BindingFlags.NonPublic | BindingFlags.Static);
+        var request = CreateRequest();
+        request.PeerId = "-qB4420-a b&c=d\x01\xFF";
+
+        var result = (string)method.Invoke(null, new object[] { request });
+
+        Assert.That(result, Does.Contain("peer_id=-qB4420-a%20b%26c%3Dd%01%FF"));
     }
 
     [Test]
