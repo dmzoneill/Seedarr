@@ -1613,6 +1613,198 @@ public class UtpConnectionTest
         }
     }
 
+    [Test]
+    public void ProcessAck_duplicate_acks_1_and_2_should_increment_duplicate_ack_count_without_retransmission()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            lock (sentPackets)
+            {
+                sentPackets.Add(data.ToArray());
+            }
+
+            return true;
+        };
+
+        // Send 3 packets
+        connection.Send(new byte[50], 0, 50);
+        connection.Send(new byte[50], 0, 50);
+        connection.Send(new byte[50], 0, 50);
+
+        sentPackets.Clear();
+
+        // Initial ACK for packet 1
+        var ack1 = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 1);
+        connection.HandleIncomingPacket(ack1, remoteEp);
+
+        Assert.That(connection.LastAckReceived, Is.EqualTo(1));
+        Assert.That(connection.DuplicateAckCount, Is.EqualTo(0));
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(0));
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+
+        // 1st duplicate ACK
+        connection.HandleIncomingPacket(ack1, remoteEp);
+        Assert.That(connection.DuplicateAckCount, Is.EqualTo(1));
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(0));
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+
+        // 2nd duplicate ACK
+        connection.HandleIncomingPacket(ack1, remoteEp);
+        Assert.That(connection.DuplicateAckCount, Is.EqualTo(2));
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(0));
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessAck_third_duplicate_ack_should_trigger_fast_retransmit_of_next_packet()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            lock (sentPackets)
+            {
+                sentPackets.Add(data.ToArray());
+            }
+
+            return true;
+        };
+
+        // Send 3 packets (seq 1, 2, 3)
+        connection.Send(new byte[50], 0, 50);
+        connection.Send(new byte[50], 0, 50);
+        connection.Send(new byte[50], 0, 50);
+
+        sentPackets.Clear();
+
+        // Initial ACK for packet 1
+        var ack1 = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 1);
+        connection.HandleIncomingPacket(ack1, remoteEp);
+
+        // 1st & 2nd duplicate ACKs
+        connection.HandleIncomingPacket(ack1, remoteEp);
+        connection.HandleIncomingPacket(ack1, remoteEp);
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+
+        // 3rd duplicate ACK triggers fast retransmit
+        connection.HandleIncomingPacket(ack1, remoteEp);
+        Assert.That(connection.DuplicateAckCount, Is.EqualTo(3));
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(1));
+        Assert.That(sentPackets.Count, Is.EqualTo(1));
+
+        // Retransmitted packet must be packet seq 2 (ackNr + 1)
+        var retransmittedSeq = BinaryPrimitives.ReadUInt16BigEndian(sentPackets[0].AsSpan(16, 2));
+        Assert.That(retransmittedSeq, Is.EqualTo(2));
+
+        // 4th duplicate ACK does not retransmit again
+        sentPackets.Clear();
+        connection.HandleIncomingPacket(ack1, remoteEp);
+        Assert.That(connection.DuplicateAckCount, Is.EqualTo(4));
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(1));
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessAck_higher_ack_should_reset_duplicate_ack_count()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            lock (sentPackets)
+            {
+                sentPackets.Add(data.ToArray());
+            }
+
+            return true;
+        };
+
+        // Send 3 packets (seq 1, 2, 3)
+        connection.Send(new byte[50], 0, 50);
+        connection.Send(new byte[50], 0, 50);
+        connection.Send(new byte[50], 0, 50);
+
+        // Initial ACK for packet 1
+        var ack1 = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 1);
+        connection.HandleIncomingPacket(ack1, remoteEp);
+
+        // Duplicate ACKs for packet 1
+        connection.HandleIncomingPacket(ack1, remoteEp);
+        connection.HandleIncomingPacket(ack1, remoteEp);
+        Assert.That(connection.DuplicateAckCount, Is.EqualTo(2));
+
+        // Higher ACK for packet 3 arrives
+        var ack3 = CreatePacket(UtpPacketType.State, connection.ReceiveId, 2, 3);
+        connection.HandleIncomingPacket(ack3, remoteEp);
+
+        Assert.That(connection.LastAckReceived, Is.EqualTo(3));
+        Assert.That(connection.DuplicateAckCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessAck_third_duplicate_ack_with_sequence_wrap_around_should_retransmit_packet_zero()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var seqField = typeof(UtpConnection).GetField("_sequenceNumber", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        seqField.SetValue(connection, (ushort)65535);
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            lock (sentPackets)
+            {
+                sentPackets.Add(data.ToArray());
+            }
+
+            return true;
+        };
+
+        // Send packet at seq 65535, then packet at seq 0 (wrapped)
+        connection.Send(new byte[50], 0, 50);
+        connection.Send(new byte[50], 0, 50);
+
+        sentPackets.Clear();
+
+        // Initial ACK for seq 65535
+        var ackWrap = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 65535);
+        connection.HandleIncomingPacket(ackWrap, remoteEp);
+
+        Assert.That(connection.LastAckReceived, Is.EqualTo(65535));
+        Assert.That(connection.DuplicateAckCount, Is.EqualTo(0));
+
+        // 1st and 2nd duplicate ACKs
+        connection.HandleIncomingPacket(ackWrap, remoteEp);
+        connection.HandleIncomingPacket(ackWrap, remoteEp);
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+
+        // 3rd duplicate ACK triggers fast retransmit of seq 0
+        connection.HandleIncomingPacket(ackWrap, remoteEp);
+        Assert.That(connection.DuplicateAckCount, Is.EqualTo(3));
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(1));
+        Assert.That(sentPackets.Count, Is.EqualTo(1));
+
+        var retransmittedSeq = BinaryPrimitives.ReadUInt16BigEndian(sentPackets[0].AsSpan(16, 2));
+        Assert.That(retransmittedSeq, Is.EqualTo(0));
+    }
+
     // ---- helpers ----
 
     private static byte[] CreatePacket(UtpPacketType type, ushort connectionId, ushort seqNr, ushort ackNr, byte[] payload = null)
