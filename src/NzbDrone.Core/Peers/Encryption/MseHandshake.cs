@@ -2,7 +2,10 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers.Encryption;
 
@@ -229,6 +232,218 @@ public class MseHandshake
         return wrappedStream;
     }
 
+    public async ValueTask<Stream> NegotiateOutgoingAsync(Stream stream, CancellationToken cancellationToken = default)
+    {
+        _keyDerivation = KeyPool?.Rent() ?? new MseKeyDerivation();
+
+        // Step 1: A -> B: Ya + PadA
+        var ya = _keyDerivation.GetPublicKeyBytes();
+        var padA = GeneratePadding();
+        await stream.WriteAsync(ya.AsMemory(), cancellationToken);
+        await stream.WriteAsync(padA.AsMemory(), cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+
+        // Step 2: A <- B: Yb (96 bytes, PadB follows but length is unknown)
+        var yb = await ReadExactAsync(stream, DhKeyLength, cancellationToken);
+        _sharedSecret = _keyDerivation.ComputeSharedSecret(yb);
+
+        // Initialize the RC4 ciphers
+        var encKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyAPrefix);
+        var decKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyBPrefix);
+        _outCipher = new Rc4StreamCipher(encKey);
+        _inCipher = new Rc4StreamCipher(decKey);
+
+        // Step 3: A -> B: HASH('req1', S) + HASH('req2', SKEY) XOR HASH('req3', S) + ENCRYPT(VC, crypto_provide, len(PadC), PadC, len(IA))
+        var req1Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req1Prefix);
+        var req2Hash = MseKeyDerivation.DeriveKey(_infoHash, Req2Prefix);
+        var req3Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req3Prefix);
+
+        var obfuscatedHash = new byte[20];
+        for (var i = 0; i < 20; i++)
+        {
+            obfuscatedHash[i] = (byte)(req2Hash[i] ^ req3Hash[i]);
+        }
+
+        await stream.WriteAsync(req1Hash.AsMemory(), cancellationToken);
+        await stream.WriteAsync(obfuscatedHash.AsMemory(), cancellationToken);
+
+        var encryptedPayload = BuildEncryptedPayload();
+        await stream.WriteAsync(encryptedPayload.AsMemory(), cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+
+        // Step 4: A <- B: ENCRYPT(VC, crypto_select, len(PadD), PadD)
+        // B's stream contains PadB (unknown length) followed by the encrypted response.
+        // Synchronize by computing what ENCRYPT(VC) looks like and scanning for it.
+        var vcMarker = ComputeEncryptedVcMarker(decKey);
+        stream = await ScanForMarkerAsync(stream, vcMarker, cancellationToken);
+
+        // Found the VC marker. The real decryption cipher has already been initialized
+        // and had 1024 bytes discarded. Advance it past the 8 VC bytes we just found.
+        var vcDummy = new byte[8];
+        _inCipher.ProcessInPlace(vcDummy, 0, 8);
+
+        // Read crypto_select (4 bytes)
+        var cryptoSelectBytes = await ReadExactAsync(stream, 4, cancellationToken);
+        _inCipher.ProcessInPlace(cryptoSelectBytes, 0, 4);
+        var cryptoSelect = (CryptoMethod)ReadUint32(cryptoSelectBytes);
+
+        if ((cryptoSelect & GetSupportedMethods()) == CryptoMethod.None)
+        {
+            throw new InvalidOperationException("Peer selected unsupported crypto method");
+        }
+
+        _negotiatedMethod = cryptoSelect;
+
+        // Read PadD length and PadD
+        var padDLenBytes = await ReadExactAsync(stream, 2, cancellationToken);
+        _inCipher.ProcessInPlace(padDLenBytes, 0, 2);
+        var padDLen = ReadUint16(padDLenBytes);
+
+        if (padDLen > MaxPadLength)
+        {
+            throw new InvalidOperationException("MSE padding length exceeds maximum");
+        }
+
+        if (padDLen > 0)
+        {
+            var padD = await ReadExactAsync(stream, padDLen, cancellationToken);
+            _inCipher.ProcessInPlace(padD, 0, padDLen);
+        }
+
+        _logger.Debug("MSE/PE outgoing negotiation complete: {0}", _negotiatedMethod);
+        return WrapStream(stream);
+    }
+
+    public ValueTask<Stream> NegotiateIncomingAsync(
+        Stream stream,
+        Func<byte[], Torrent> infoHashValidator,
+        CancellationToken cancellationToken = default)
+    {
+        if (infoHashValidator == null)
+        {
+            throw new ArgumentNullException(nameof(infoHashValidator));
+        }
+
+        return NegotiateIncomingAsync(stream, skeyHash => infoHashValidator(skeyHash) != null, cancellationToken);
+    }
+
+    public async ValueTask<Stream> NegotiateIncomingAsync(
+        Stream stream,
+        Func<byte[], bool> infoHashValidator,
+        CancellationToken cancellationToken = default)
+    {
+        if (infoHashValidator == null)
+        {
+            throw new ArgumentNullException(nameof(infoHashValidator));
+        }
+
+        _keyDerivation = KeyPool?.Rent() ?? new MseKeyDerivation();
+
+        // Step 1: B <- A: Ya (96 bytes, PadA follows but length is unknown)
+        var ya = await ReadExactAsync(stream, DhKeyLength, cancellationToken);
+        _sharedSecret = _keyDerivation.ComputeSharedSecret(ya);
+
+        // Step 2: B -> A: Yb + PadB
+        var yb = _keyDerivation.GetPublicKeyBytes();
+        var padB = GeneratePadding();
+        await stream.WriteAsync(yb.AsMemory(), cancellationToken);
+        await stream.WriteAsync(padB.AsMemory(), cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+
+        // Step 3: B <- A: HASH('req1', S), HASH('req2', SKEY) XOR HASH('req3', S), ENCRYPT(...)
+        // Synchronize by scanning for HASH('req1', S) to skip past PadA
+        var req1Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req1Prefix);
+        stream = await ScanForMarkerAsync(stream, req1Hash, cancellationToken);
+
+        // Read the obfuscated SKEY hash (20 bytes)
+        var obfuscatedHash = await ReadExactAsync(stream, 20, cancellationToken);
+
+        // Recover SKEY hash: obfuscatedHash XOR HASH('req3', S)
+        var req3Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req3Prefix);
+        var skeyHash = new byte[20];
+        for (var i = 0; i < 20; i++)
+        {
+            skeyHash[i] = (byte)(obfuscatedHash[i] ^ req3Hash[i]);
+        }
+
+        if (!infoHashValidator(skeyHash))
+        {
+            throw new InvalidOperationException("Unknown info hash in MSE/PE handshake");
+        }
+
+        // Initialize RC4 ciphers (reversed roles for incoming side)
+        var decKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyAPrefix);
+        var encKey = MseKeyDerivation.DeriveKey(_sharedSecret, KeyBPrefix);
+        _inCipher = new Rc4StreamCipher(decKey);
+        _outCipher = new Rc4StreamCipher(encKey);
+
+        // Read ENCRYPT(VC, crypto_provide, len(PadC), PadC, len(IA), IA)
+        var encryptedVc = await ReadExactAsync(stream, 8, cancellationToken);
+        _inCipher.ProcessInPlace(encryptedVc, 0, 8);
+
+        for (var i = 0; i < 8; i++)
+        {
+            if (encryptedVc[i] != 0)
+            {
+                throw new InvalidOperationException("MSE/PE verification constant mismatch");
+            }
+        }
+
+        var cryptoProvideBytes = await ReadExactAsync(stream, 4, cancellationToken);
+        _inCipher.ProcessInPlace(cryptoProvideBytes, 0, 4);
+        var cryptoProvide = (CryptoMethod)ReadUint32(cryptoProvideBytes);
+
+        var padCLenBytes = await ReadExactAsync(stream, 2, cancellationToken);
+        _inCipher.ProcessInPlace(padCLenBytes, 0, 2);
+        var padCLen = ReadUint16(padCLenBytes);
+
+        if (padCLen > MaxPadLength)
+        {
+            throw new InvalidOperationException("MSE padding length exceeds maximum");
+        }
+
+        if (padCLen > 0)
+        {
+            var padC = await ReadExactAsync(stream, padCLen, cancellationToken);
+            _inCipher.ProcessInPlace(padC, 0, padCLen);
+        }
+
+        var iaLenBytes = await ReadExactAsync(stream, 2, cancellationToken);
+        _inCipher.ProcessInPlace(iaLenBytes, 0, 2);
+        var iaLen = ReadUint16(iaLenBytes);
+
+        if (iaLen > MaxPadLength)
+        {
+            throw new InvalidOperationException("MSE padding length exceeds maximum");
+        }
+
+        byte[] initialPayload = null;
+        if (iaLen > 0)
+        {
+            initialPayload = await ReadExactAsync(stream, iaLen, cancellationToken);
+            _inCipher.ProcessInPlace(initialPayload, 0, iaLen);
+        }
+
+        // Select crypto method and send response
+        _negotiatedMethod = SelectCryptoMethod(cryptoProvide);
+
+        // Step 4: B -> A: ENCRYPT(VC, crypto_select, len(PadD), PadD)
+        var response = BuildCryptoSelectResponse(_negotiatedMethod);
+        await stream.WriteAsync(response.AsMemory(), cancellationToken);
+        await stream.FlushAsync(cancellationToken);
+
+        _logger.Debug("MSE/PE incoming negotiation complete: {0}", _negotiatedMethod);
+
+        var wrappedStream = WrapStream(stream);
+
+        if (initialPayload != null && initialPayload.Length > 0)
+        {
+            return new PrefixedStream(initialPayload, wrappedStream);
+        }
+
+        return wrappedStream;
+    }
+
     private CryptoMethod GetSupportedMethods()
     {
         return _preferredMode switch
@@ -383,6 +598,56 @@ public class MseHandshake
         throw new InvalidOperationException("MSE/PE sync marker not found within search limit");
     }
 
+    private static async ValueTask<Stream> ScanForMarkerAsync(Stream stream, byte[] marker, CancellationToken cancellationToken)
+    {
+        var maxSearch = DhKeyLength + MaxPadLength + marker.Length;
+        var window = new byte[marker.Length];
+        var filled = 0;
+        var bytesInspected = 0;
+        var buffer = new byte[Math.Min(256, maxSearch)];
+
+        while (bytesInspected < maxSearch)
+        {
+            var toRead = Math.Min(buffer.Length, maxSearch - bytesInspected);
+            var read = await stream.ReadAsync(buffer.AsMemory(0, toRead), cancellationToken);
+            if (read == 0)
+            {
+                throw new InvalidOperationException("Stream ended while searching for MSE/PE sync marker");
+            }
+
+            for (var i = 0; i < read; i++)
+            {
+                bytesInspected++;
+                var b = buffer[i];
+
+                if (filled < marker.Length)
+                {
+                    window[filled++] = b;
+                }
+                else
+                {
+                    Array.Copy(window, 1, window, 0, marker.Length - 1);
+                    window[marker.Length - 1] = b;
+                }
+
+                if (filled == marker.Length && BytesEqual(window, marker))
+                {
+                    var remainingInBuffer = read - (i + 1);
+                    if (remainingInBuffer > 0)
+                    {
+                        var remaining = new byte[remainingInBuffer];
+                        Array.Copy(buffer, i + 1, remaining, 0, remainingInBuffer);
+                        return new PrefixedStream(remaining, stream, ownsStream: false);
+                    }
+
+                    return stream;
+                }
+            }
+        }
+
+        throw new InvalidOperationException("MSE/PE sync marker not found within search limit");
+    }
+
     private static bool BytesEqual(byte[] a, byte[] b)
     {
         if (a.Length != b.Length)
@@ -406,6 +671,21 @@ public class MseHandshake
             }
 
             offset += read;
+        }
+
+        return buffer;
+    }
+
+    private static async ValueTask<byte[]> ReadExactAsync(Stream stream, int count, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[count];
+        try
+        {
+            await stream.ReadExactlyAsync(buffer.AsMemory(), cancellationToken);
+        }
+        catch (EndOfStreamException)
+        {
+            throw new InvalidOperationException("Unexpected end of stream during MSE/PE handshake");
         }
 
         return buffer;

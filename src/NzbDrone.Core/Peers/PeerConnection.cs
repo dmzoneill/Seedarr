@@ -5,6 +5,8 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Simulation.ClientBehavior;
@@ -175,6 +177,27 @@ public class PeerConnection : IDisposable
         }
     }
 
+    public async ValueTask<bool> NegotiateEncryptionOutgoingAsync(string infoHash, EncryptionMode mode, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var infoHashBytes = Convert.FromHexString(infoHash);
+            var handshake = new MseHandshake(infoHashBytes, mode, DhKeyPool);
+            _activeStream = await handshake.NegotiateOutgoingAsync(_networkStream, cancellationToken);
+            EncryptionMethod = handshake.NegotiatedMethod;
+            IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
+            InfoHash = infoHash;
+            LastActivity = DateTime.UtcNow;
+            _logger.Debug("MSE/PE outgoing completed with {0}:{1} - method: {2}", RemoteIp, RemotePort, EncryptionMethod);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "MSE/PE outgoing negotiation failed with {0}:{1}", RemoteIp, RemotePort);
+            return false;
+        }
+    }
+
     public bool NegotiateEncryptionIncoming(Func<byte[], bool> infoHashValidator, EncryptionMode mode)
     {
         try
@@ -226,6 +249,57 @@ public class PeerConnection : IDisposable
         }
     }
 
+    public async ValueTask<bool> NegotiateEncryptionIncomingAsync(Func<byte[], bool> infoHashValidator, EncryptionMode mode, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (HandshakeTimeoutMs > 0)
+            {
+                if (_client?.Client != null)
+                {
+                    _client.Client.ReceiveTimeout = HandshakeTimeoutMs;
+                }
+                else if (_networkStream.CanTimeout)
+                {
+                    _networkStream.ReadTimeout = HandshakeTimeoutMs;
+                }
+            }
+
+            // Peek the first byte to detect whether this is an MSE or plain handshake.
+            // A standard BT handshake starts with 0x13 (19); MSE starts with the DH public key.
+            var peek = new byte[1];
+            var read = await _networkStream.ReadAsync(peek.AsMemory(0, 1), cancellationToken);
+            if (read == 0)
+            {
+                return false;
+            }
+
+            if (peek[0] == 19 && mode != EncryptionMode.RequireEncrypted)
+            {
+                // Plain BitTorrent handshake - feed the peeked byte back through a PrefixedStream
+                _activeStream = new PrefixedStream(peek, _networkStream, ownsStream: false);
+                EncryptionMethod = CryptoMethod.PlainText;
+                IsEncrypted = false;
+                return true;
+            }
+
+            // MSE/PE handshake - prefix the peeked byte back
+            var prefixed = new PrefixedStream(peek, _networkStream, ownsStream: false);
+            var handshake = new MseHandshake(Array.Empty<byte>(), mode, DhKeyPool);
+            _activeStream = await handshake.NegotiateIncomingAsync(prefixed, infoHashValidator, cancellationToken);
+            EncryptionMethod = handshake.NegotiatedMethod;
+            IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
+            LastActivity = DateTime.UtcNow;
+            _logger.Debug("MSE/PE incoming completed with {0}:{1} - method: {2}", RemoteIp, RemotePort, EncryptionMethod);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "MSE/PE incoming negotiation failed with {0}:{1}", RemoteIp, RemotePort);
+            return false;
+        }
+    }
+
     public bool NegotiateEncryptionIncoming(IMseSkeyRegistry skeyRegistry, EncryptionMode mode)
     {
         if (skeyRegistry == null)
@@ -246,6 +320,29 @@ public class PeerConnection : IDisposable
                 return false;
             },
             mode);
+    }
+
+    public async ValueTask<bool> NegotiateEncryptionIncomingAsync(IMseSkeyRegistry skeyRegistry, EncryptionMode mode, CancellationToken cancellationToken = default)
+    {
+        if (skeyRegistry == null)
+        {
+            return false;
+        }
+
+        return await NegotiateEncryptionIncomingAsync(
+            skeyHash =>
+            {
+                if (skeyRegistry.TryMatchTorrent(skeyHash, out var torrent))
+                {
+                    InfoHash = torrent?.InfoHash;
+                    MatchedTorrent = torrent;
+                    return true;
+                }
+
+                return false;
+            },
+            mode,
+            cancellationToken);
     }
 
     public bool NegotiateEncryptionIncoming(Func<byte[], Torrent> torrentValidator, EncryptionMode mode)
@@ -269,6 +366,30 @@ public class PeerConnection : IDisposable
                 return false;
             },
             mode);
+    }
+
+    public async ValueTask<bool> NegotiateEncryptionIncomingAsync(Func<byte[], Torrent> torrentValidator, EncryptionMode mode, CancellationToken cancellationToken = default)
+    {
+        if (torrentValidator == null)
+        {
+            return false;
+        }
+
+        return await NegotiateEncryptionIncomingAsync(
+            skeyHash =>
+            {
+                var torrent = torrentValidator(skeyHash);
+                if (torrent != null)
+                {
+                    InfoHash = torrent.InfoHash;
+                    MatchedTorrent = torrent;
+                    return true;
+                }
+
+                return false;
+            },
+            mode,
+            cancellationToken);
     }
 
     public bool SendHandshake(string infoHash, string peerId, bool isPrivate = false, IClientProfile clientProfile = null)

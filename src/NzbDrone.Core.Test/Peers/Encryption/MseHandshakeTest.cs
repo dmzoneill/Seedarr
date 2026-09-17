@@ -3,10 +3,12 @@ using System.IO;
 using System.IO.Pipes;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Peers.Encryption;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Peers.Encryption;
 
@@ -494,6 +496,84 @@ public class MseHandshakeTest
         return buffer;
     }
 
+    [Test]
+    public async Task NegotiateOutgoingAsync_and_NegotiateIncomingAsync_should_succeed_and_negotiate_rc4()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        var taskA = outgoing.NegotiateOutgoingAsync(sideA, CancellationToken.None).AsTask();
+        var taskB = incoming.NegotiateIncomingAsync(sideB, ValidateInfoHash, CancellationToken.None).AsTask();
+
+        await Task.WhenAll(taskA, taskB);
+
+        var streamA = await taskA;
+        var streamB = await taskB;
+
+        Assert.That(streamA, Is.Not.Null);
+        Assert.That(streamB, Is.Not.Null);
+        Assert.That(outgoing.NegotiatedMethod, Is.EqualTo(CryptoMethod.Rc4));
+        Assert.That(incoming.NegotiatedMethod, Is.EqualTo(CryptoMethod.Rc4));
+    }
+
+    [Test]
+    public async Task NegotiateIncomingAsync_with_torrent_selector_should_succeed()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        var expectedTorrent = new Torrent { Id = 123 };
+        var taskA = outgoing.NegotiateOutgoingAsync(sideA, CancellationToken.None).AsTask();
+        var taskB = incoming.NegotiateIncomingAsync(
+            sideB,
+            hash => hash.SequenceEqual(ExpectedSkeyHash) ? expectedTorrent : null,
+            CancellationToken.None).AsTask();
+
+        await Task.WhenAll(taskA, taskB);
+
+        var streamA = await taskA;
+        var streamB = await taskB;
+
+        Assert.That(streamA, Is.Not.Null);
+        Assert.That(streamB, Is.Not.Null);
+    }
+
+    [Test]
+    public void NegotiateOutgoingAsync_should_abort_when_cancelled()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        using (sideB)
+        {
+            var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            Assert.CatchAsync<OperationCanceledException>(async () =>
+            {
+                await outgoing.NegotiateOutgoingAsync(sideA, cts.Token);
+            });
+        }
+    }
+
+    [Test]
+    public void NegotiateIncomingAsync_should_abort_when_cancelled()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        using (sideA)
+        {
+            var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            Assert.CatchAsync<OperationCanceledException>(async () =>
+            {
+                await incoming.NegotiateIncomingAsync(sideB, ValidateInfoHash, cts.Token);
+            });
+        }
+    }
+
     /// <summary>
     /// A stream whose reads come from a fixed pre-loaded byte array and whose
     /// writes are silently discarded.  Used to inject controlled data into one
@@ -519,13 +599,21 @@ public class MseHandshakeTest
         public override int Read(byte[] buffer, int offset, int count) =>
             _readData.Read(buffer, offset, count);
 
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            _readData.ReadAsync(buffer, cancellationToken);
+
         public override void Write(byte[] buffer, int offset, int count)
         {
         }
 
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ValueTask.CompletedTask;
+
         public override void Flush()
         {
         }
+
+        public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
         public override long Seek(long offset, SeekOrigin origin) =>
             throw new NotSupportedException();
@@ -563,10 +651,18 @@ public class MseHandshakeTest
         public override int Read(byte[] buffer, int offset, int count) =>
             _reader.Read(buffer, offset, count);
 
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            _reader.ReadAsync(buffer, cancellationToken);
+
         public override void Write(byte[] buffer, int offset, int count) =>
             _writer.Write(buffer, offset, count);
 
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+            _writer.WriteAsync(buffer, cancellationToken);
+
         public override void Flush() => _writer.Flush();
+
+        public override Task FlushAsync(CancellationToken cancellationToken) => _writer.FlushAsync(cancellationToken);
 
         public override long Seek(long offset, SeekOrigin origin) =>
             throw new NotSupportedException();
