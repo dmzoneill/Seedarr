@@ -70,6 +70,7 @@ internal class MockHttpMessageHandler : HttpMessageHandler
 
     public HttpRequestMessage LastRequest { get; private set; }
     public List<HttpRequestMessage> Requests { get; } = new();
+    public Func<HttpRequestMessage, HttpResponseMessage> ResponseFactory { get; set; }
 
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
@@ -80,6 +81,11 @@ internal class MockHttpMessageHandler : HttpMessageHandler
         {
             LastRequest = request;
             Requests.Add(request);
+            if (ResponseFactory != null)
+            {
+                return Task.FromResult(ResponseFactory(request));
+            }
+
             return Task.FromResult(GetNext());
         }
     }
@@ -93,6 +99,11 @@ internal class MockHttpMessageHandler : HttpMessageHandler
         {
             LastRequest = request;
             Requests.Add(request);
+            if (ResponseFactory != null)
+            {
+                return ResponseFactory(request);
+            }
+
             return GetNext();
         }
     }

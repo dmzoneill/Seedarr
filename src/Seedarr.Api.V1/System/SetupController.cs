@@ -11,7 +11,6 @@ using Seedarr.Http;
 namespace Seedarr.Api.V1.System;
 
 [V1ApiController("system/setup")]
-[Route("api/v1/system/setup")]
 public class SetupController : Controller
 {
     private readonly IConfigService _configService;
@@ -28,18 +27,30 @@ public class SetupController : Controller
     [ProducesResponseType(typeof(SetupStatusResource), StatusCodes.Status200OK)]
     public ActionResult<SetupStatusResource> GetStatus()
     {
-        var isSetupCompleted = _configService.IsSetupCompleted;
-        var isAuthEnabled = _configService.AuthenticationEnabled;
-        var hasAdminUser = isSetupCompleted ||
-                           !string.IsNullOrWhiteSpace(_configService.GetValue("AdminUsername", string.Empty)) ||
-                           !string.IsNullOrWhiteSpace(_configService.GetValue("AdminPassword", string.Empty));
-
-        return Ok(new SetupStatusResource
+        try
         {
-            IsSetupCompleted = isSetupCompleted,
-            IsAuthEnabled = isAuthEnabled,
-            HasAdminUser = hasAdminUser,
-        });
+            var isSetupCompleted = _configService.IsSetupCompleted;
+            var isAuthEnabled = _configService.AuthenticationEnabled;
+            var hasAdminUser = isSetupCompleted ||
+                !string.IsNullOrWhiteSpace(_configService.GetValue("AdminUsername", string.Empty)) ||
+                !string.IsNullOrWhiteSpace(_configService.GetValue("AdminPassword", string.Empty));
+
+            return Ok(new SetupStatusResource
+            {
+                IsSetupCompleted = isSetupCompleted,
+                IsAuthEnabled = isAuthEnabled,
+                HasAdminUser = hasAdminUser,
+            });
+        }
+        catch (Exception)
+        {
+            return Ok(new SetupStatusResource
+            {
+                IsSetupCompleted = false,
+                IsAuthEnabled = false,
+                HasAdminUser = false,
+            });
+        }
     }
 
     [HttpPost("complete")]

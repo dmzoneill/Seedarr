@@ -133,6 +133,8 @@ public class TorrentEventLogService : ITorrentEventLogService, IDisposable, IAsy
         {
             while (await _logChannel.Reader.WaitToReadAsync(_cts.Token).ConfigureAwait(false))
             {
+                await Task.Delay(25, _cts.Token).ConfigureAwait(false);
+
                 while (batch.Count < 100 && _logChannel.Reader.TryRead(out var log))
                 {
                     batch.Add(log);
