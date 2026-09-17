@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network;
 
 namespace NzbDrone.Core.Transport;
 
@@ -51,7 +52,7 @@ public class UtpManager : BackgroundService, IUtpManager
         }
 
         var timeoutSeconds = _configService.TransportConnectionTimeoutSeconds;
-        var connection = new UtpConnection(timeoutSeconds);
+        var connection = new UtpConnection(timeoutSeconds, _configService.BindInterface);
         var recvKey = connection.ReceiveId.ToString();
         _activeConnections[recvKey] = connection;
 
@@ -86,7 +87,8 @@ public class UtpManager : BackgroundService, IUtpManager
 
         try
         {
-            listener = new UdpClient(listenPort);
+            listener = new UdpClient();
+            listener.Client.BindToNetworkInterface(_configService.BindInterface, IPAddress.Any, listenPort);
         }
         catch (SocketException ex)
         {

@@ -703,4 +703,30 @@ public class UdpTrackerProviderTest
         Assert.That(result.Success, Is.False);
         Assert.That(result.FailureReason, Is.EqualTo("Response too short"));
     }
+
+    [Test]
+    public void CreateClient_should_initialize_socket_with_bound_interface()
+    {
+        _configService.BindInterface.Returns("tun0");
+
+        using var client = _provider.CreateClient(5000);
+
+        Assert.That(client, Is.Not.Null);
+        Assert.That(client.Client, Is.Not.Null);
+        Assert.That(client.Client.ReceiveTimeout, Is.EqualTo(5000));
+        Assert.That(client.Client.SendTimeout, Is.EqualTo(5000));
+    }
+
+    [Test]
+    public void CreateClient_should_initialize_socket_when_bind_interface_is_null()
+    {
+        _configService.BindInterface.Returns((string)null);
+
+        using var client = _provider.CreateClient(3000);
+
+        Assert.That(client, Is.Not.Null);
+        Assert.That(client.Client, Is.Not.Null);
+        Assert.That(client.Client.ReceiveTimeout, Is.EqualTo(3000));
+        Assert.That(client.Client.SendTimeout, Is.EqualTo(3000));
+    }
 }

@@ -15,6 +15,7 @@ using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Network;
 using NzbDrone.Core.Network.Vpn;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Simulation.ClientBehavior;
@@ -539,6 +540,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                     listener.Server.DualMode = true;
                 }
 
+                listener.Server.BindToNetworkInterface(_configService.BindInterface);
                 listener.Start();
             }
             catch (SocketException ex)
@@ -572,6 +574,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 try
                 {
                     listener = new TcpListener(IPAddress.Any, listeningPort);
+                    listener.Server.BindToNetworkInterface(_configService.BindInterface);
                     listener.Start();
                 }
                 catch (Exception fallbackEx)
@@ -980,12 +983,12 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 if (connection == null && _utpManager.TcpFallbackEnabled)
                 {
                     _logger.Debug("Falling back to TCP for peer {0}:{1}", candidate.Ip, candidate.Port);
-                    connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool);
+                    connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
                 }
             }
             else
             {
-                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool);
+                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
             }
 
             if (connection == null)
