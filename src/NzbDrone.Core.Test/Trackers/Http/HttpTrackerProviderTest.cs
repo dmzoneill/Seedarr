@@ -773,11 +773,95 @@ public class HttpTrackerProviderTest
         Assert.That(result.Downloaded, Is.EqualTo(99));
     }
 
+    [Test]
+    public void Announce_should_apply_custom_request_user_agent_when_specified()
+    {
+        var responseBytes = BencodeBytes(new BDictionary());
+        var (provider, handler) = CreateProviderWithCapturingHandler(responseBytes);
+        var request = CreateRequest();
+        request.UserAgent = "Transmission/3.00";
+
+        var result = provider.Announce(request);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest, Is.Not.Null);
+        Assert.That(handler.LastRequest.Headers.UserAgent.ToString(), Is.EqualTo("Transmission/3.00"));
+    }
+
+    [Test]
+    public void Announce_should_fallback_to_config_user_agent_when_request_user_agent_is_null()
+    {
+        var responseBytes = BencodeBytes(new BDictionary());
+        var (provider, handler) = CreateProviderWithCapturingHandler(responseBytes);
+        var request = CreateRequest();
+        request.UserAgent = null;
+
+        var result = provider.Announce(request);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest, Is.Not.Null);
+        Assert.That(handler.LastRequest.Headers.UserAgent.ToString(), Is.EqualTo("qBittorrent/4.4.2"));
+    }
+
+    [Test]
+    public void Announce_should_fallback_to_config_user_agent_when_request_user_agent_is_whitespace()
+    {
+        var responseBytes = BencodeBytes(new BDictionary());
+        var (provider, handler) = CreateProviderWithCapturingHandler(responseBytes);
+        var request = CreateRequest();
+        request.UserAgent = "   ";
+
+        var result = provider.Announce(request);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest, Is.Not.Null);
+        Assert.That(handler.LastRequest.Headers.UserAgent.ToString(), Is.EqualTo("qBittorrent/4.4.2"));
+    }
+
+    [Test]
+    public void Scrape_should_include_config_user_agent_header()
+    {
+        var responseBytes = BencodeBytes(new BDictionary());
+        var (provider, handler) = CreateProviderWithCapturingHandler(responseBytes);
+
+        var result = provider.Scrape("AABBCCDDEE112233445566778899AABBCCDDEEFF", "http://tracker.example.com/announce");
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest, Is.Not.Null);
+        Assert.That(handler.LastRequest.Headers.UserAgent.ToString(), Is.EqualTo("qBittorrent/4.4.2"));
+    }
+
+    [Test]
+    public void Constructor_should_not_set_static_user_agent_header_on_httpclient()
+    {
+        var provider = new HttpTrackerProvider(_configService);
+        var clientField = typeof(HttpTrackerProvider).GetField("_client", BindingFlags.NonPublic | BindingFlags.Instance);
+        var client = (HttpClient)clientField!.GetValue(provider);
+
+        Assert.That(client!.DefaultRequestHeaders.UserAgent.ToString(), Is.Empty);
+    }
+
     // ---- private mock handler ----
+
+    private (HttpTrackerProvider provider, FixedResponseHandler handler) CreateProviderWithCapturingHandler(byte[] responseBytes)
+    {
+        var provider = new HttpTrackerProvider(_configService)
+        {
+            ResiliencePipeline = Polly.ResiliencePipeline.Empty
+        };
+        var handler = new FixedResponseHandler(responseBytes);
+        var client = new HttpClient(handler);
+        var field = typeof(HttpTrackerProvider).GetField("_client",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        field!.SetValue(provider, client);
+        return (provider, handler);
+    }
 
     private sealed class FixedResponseHandler : HttpMessageHandler
     {
         private readonly byte[] _responseBytes;
+
+        public HttpRequestMessage LastRequest { get; private set; }
 
         public FixedResponseHandler(byte[] responseBytes)
         {
@@ -787,6 +871,7 @@ public class HttpTrackerProviderTest
         protected override HttpResponseMessage Send(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            LastRequest = request;
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(_responseBytes)
@@ -796,6 +881,7 @@ public class HttpTrackerProviderTest
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            LastRequest = request;
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new ByteArrayContent(_responseBytes)

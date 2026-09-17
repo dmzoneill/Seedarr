@@ -39,7 +39,6 @@ public class HttpTrackerProvider : ITrackerProvider
         {
             Timeout = TimeSpan.FromSeconds(configService.HttpTrackerTimeoutSeconds)
         };
-        _client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", configService.BitTorrentUserAgent);
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -53,6 +52,10 @@ public class HttpTrackerProvider : ITrackerProvider
             var responseBytes = (ResiliencePipeline ?? ResiliencePipeline.Empty).Execute(ct =>
             {
                 using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                var userAgent = !string.IsNullOrWhiteSpace(request.UserAgent)
+                    ? request.UserAgent
+                    : _configService.BitTorrentUserAgent;
+                req.Headers.TryAddWithoutValidation("User-Agent", userAgent);
                 using var response = _client.Send(req, ct);
                 response.EnsureSuccessStatusCode();
                 using var ms = new MemoryStream();
@@ -142,6 +145,7 @@ public class HttpTrackerProvider : ITrackerProvider
             var responseBytes = (ResiliencePipeline ?? ResiliencePipeline.Empty).Execute(ct =>
             {
                 using var req = new HttpRequestMessage(HttpMethod.Get, scrapeUrl);
+                req.Headers.TryAddWithoutValidation("User-Agent", _configService.BitTorrentUserAgent);
                 using var response = _client.Send(req, ct);
                 response.EnsureSuccessStatusCode();
                 using var ms = new MemoryStream();
