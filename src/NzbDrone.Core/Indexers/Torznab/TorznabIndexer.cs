@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Xml;
@@ -373,16 +374,24 @@ public class TorznabIndexer : IIndexer
                     release.Size = sVal;
                 }
 
-                if (pubDateNode != null && DateTime.TryParse(pubDateNode.InnerText, out var pDate))
+                if (pubDateNode != null && !string.IsNullOrWhiteSpace(pubDateNode.InnerText))
                 {
-                    release.PublishDate = pDate;
+                    if (DateTimeOffset.TryParse(pubDateNode.InnerText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dto))
+                    {
+                        release.PublishDate = dto.UtcDateTime;
+                    }
+                    else if (DateTime.TryParse(pubDateNode.InnerText, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var pDate))
+                    {
+                        release.PublishDate = DateTime.SpecifyKind(pDate, DateTimeKind.Utc);
+                    }
                 }
 
                 var freeleechNode = item.SelectSingleNode("*[local-name()='freeleech']");
                 if (freeleechNode != null)
                 {
-                    var flVal = freeleechNode.InnerText?.Trim();
-                    if (flVal == "1" || string.Equals(flVal, "true", StringComparison.OrdinalIgnoreCase))
+                    var flVal = freeleechNode.InnerText;
+                    var flAttr = freeleechNode.Attributes?["value"]?.Value;
+                    if (IsFreeleechValue(flVal) || IsFreeleechValue(flAttr))
                     {
                         release.DownloadVolumeFactor = 0.0;
                     }
@@ -441,8 +450,7 @@ public class TorznabIndexer : IIndexer
                         }
                         else if (name == "freeleech")
                         {
-                            var trimmed = val?.Trim();
-                            if (trimmed == "1" || string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase))
+                            if (IsFreeleechValue(val) || IsFreeleechValue(attr.InnerText))
                             {
                                 release.DownloadVolumeFactor = 0.0;
                             }
@@ -455,6 +463,11 @@ public class TorznabIndexer : IIndexer
                     }
                 }
 
+                if (HasFreeleechTitleTag(release.Title))
+                {
+                    release.DownloadVolumeFactor = 0.0;
+                }
+
                 if (!string.IsNullOrWhiteSpace(release.Title))
                 {
                     results.Add(release);
@@ -463,5 +476,32 @@ public class TorznabIndexer : IIndexer
         }
 
         return results;
+    }
+
+    private static bool IsFreeleechValue(string val)
+    {
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
+        var trimmed = val.Trim();
+        return trimmed == "1"
+            || string.Equals(trimmed, "true", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmed, "yes", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(trimmed, "free", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HasFreeleechTitleTag(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return false;
+        }
+
+        return title.IndexOf("[Freeleech]", StringComparison.OrdinalIgnoreCase) >= 0
+            || title.IndexOf("[FL]", StringComparison.OrdinalIgnoreCase) >= 0
+            || title.IndexOf("(Freeleech)", StringComparison.OrdinalIgnoreCase) >= 0
+            || title.IndexOf("(FL)", StringComparison.OrdinalIgnoreCase) >= 0;
     }
 }

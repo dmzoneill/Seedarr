@@ -20,7 +20,7 @@ public class ReleaseInfo
     public string Protocol { get; set; } = "torrent";
     public double? DownloadVolumeFactor { get; set; } = 1.0;
     public double? UploadVolumeFactor { get; set; } = 1.0;
-    public bool IsFreeleech => DownloadVolumeFactor == 0.0;
+    public bool IsFreeleech => DownloadVolumeFactor <= 0.001;
     public int? ResponseOffset { get; set; }
     public int? ResponseTotal { get; set; }
 }
