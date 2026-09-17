@@ -176,6 +176,7 @@ export interface TorrentFileInfo {
   size: number;
   pieceOffset: number;
   pieceCount: number;
+  isPaddingFile?: boolean;
 }
 
 export interface SeedingStats {

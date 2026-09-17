@@ -9,4 +9,5 @@ public class TorrentFile : ModelBase
     public long Size { get; set; }
     public int PieceOffset { get; set; }
     public int PieceCount { get; set; }
+    public bool IsPaddingFile { get; set; }
 }

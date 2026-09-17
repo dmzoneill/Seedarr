@@ -126,7 +126,8 @@ public class TorrentImportService : ITorrentImportService
                 {
                     TorrentId = addedTorrent.Id,
                     Path = f.Path,
-                    Size = f.Size
+                    Size = f.Size,
+                    IsPaddingFile = f.IsPaddingFile
                 });
             }
         }

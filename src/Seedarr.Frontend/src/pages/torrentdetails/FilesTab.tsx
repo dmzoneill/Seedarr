@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Torrent } from "../../api/types";
 import { useTorrentFiles } from "../../api/hooks";
 import { formatBytes } from "../../utils/formatters";
@@ -220,10 +220,15 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
     [],
   );
 
+  const nonPaddingFiles = useMemo(
+    () => files?.filter((f) => !f.isPaddingFile) ?? [],
+    [files],
+  );
+
   function expandAll() {
-    if (!files) return;
+    if (!nonPaddingFiles.length) return;
     const dirs = new Set<string>();
-    for (const f of files) {
+    for (const f of nonPaddingFiles) {
       const normalized = f.path.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
       const parts = normalized.split("/").filter(Boolean);
       for (let i = 1; i < parts.length; i++) {
@@ -238,8 +243,8 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
       ? 100
       : (torrent.progress ?? 0) * 100;
 
-  const tree = files
-    ? buildFileTree(files, {
+  const tree = nonPaddingFiles.length > 0
+    ? buildFileTree(nonPaddingFiles, {
         priorities: filePriorities,
         progress: torrentProgress,
       })
@@ -255,7 +260,7 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
           alignItems: "center",
         }}
       >
-        <h3>Files ({files?.length ?? 0})</h3>
+        <h3>Files ({nonPaddingFiles.length})</h3>
         {hasDirectories && (
           <div style={{ display: "flex", gap: 4 }}>
             <button className="btn btn-sm btn-default" onClick={expandAll}>
