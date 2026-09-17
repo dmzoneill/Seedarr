@@ -788,4 +788,130 @@ public class DelugeJsonRpcControllerTest
         Assert.That(trackersElem[1].GetProperty("tier").GetInt32(), Is.EqualTo(1));
         Assert.That(trackersElem[1].GetProperty("url").GetString(), Is.EqualTo("http://tracker2.com/announce"));
     }
+
+    [Test]
+    public async Task HandleRpc_ErrorResponse_NonExistentTorrent_ReturnsStructuredErrorObject()
+    {
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var json = "{\"method\": \"core.get_torrent_status\", \"params\": [\"nonexistenthash0000000000000000000000\", [\"name\"]], \"id\": 801}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        var error = root.GetProperty("error");
+        Assert.That(error.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        Assert.That(error.GetProperty("message").GetString(), Is.EqualTo("Torrent not found"));
+        Assert.That(error.GetProperty("code").GetInt32(), Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task HandleRpc_ErrorResponse_InvalidArguments_ReturnsStructuredErrorObject()
+    {
+        var json = "{\"method\": \"core.add_torrent_file\", \"params\": [], \"id\": 802}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        var error = root.GetProperty("error");
+        Assert.That(error.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        Assert.That(error.GetProperty("message").GetString(), Is.EqualTo("Invalid arguments for add_torrent_file"));
+        Assert.That(error.GetProperty("code").GetInt32(), Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task HandleRpc_ErrorResponse_UnknownMethod_ReturnsStructuredErrorObject()
+    {
+        var json = "{\"method\": \"unknown.some_method\", \"params\": [], \"id\": 803}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        var error = root.GetProperty("error");
+        Assert.That(error.ValueKind, Is.EqualTo(JsonValueKind.Object));
+        Assert.That(error.GetProperty("message").GetString(), Does.Contain("not implemented"));
+        Assert.That(error.GetProperty("code").GetInt32(), Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task HandleRpc_AuthLogin_WhenAuthEnabled_AcceptsValidApiKey()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("valid-api-key-xyz");
+
+        var json = "{\"method\": \"auth.login\", \"params\": [\"valid-api-key-xyz\"], \"id\": 804}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").GetBoolean(), Is.True);
+        Assert.That(root.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [Test]
+    public async Task HandleRpc_AuthLogin_WhenAuthEnabled_AcceptsValidUserPassword()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("different-api-key");
+        _configService.GetValue("Password", Arg.Any<string>()).Returns("user-secret-password");
+        _configService.GetValue("Password").Returns("user-secret-password");
+
+        var json = "{\"method\": \"auth.login\", \"params\": [\"user-secret-password\"], \"id\": 805}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").GetBoolean(), Is.True);
+        Assert.That(root.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [Test]
+    public async Task HandleRpc_AuthLogin_WhenAuthEnabled_RejectsInvalidCredentials()
+    {
+        _configFileProvider.AuthenticationEnabled.Returns(true);
+        _configFileProvider.ApiKey.Returns("valid-api-key");
+        _configService.GetValue("Password", Arg.Any<string>()).Returns("valid-user-password");
+        _configService.GetValue("Password").Returns("valid-user-password");
+
+        var json = "{\"method\": \"auth.login\", \"params\": [\"wrong-credential\"], \"id\": 806}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var root = resDoc.RootElement;
+
+        Assert.That(root.GetProperty("result").GetBoolean(), Is.False);
+        Assert.That(root.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
 }
