@@ -8,6 +8,7 @@ using System.Text;
 using NLog;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Simulation.ClientBehavior;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
@@ -27,6 +28,7 @@ public class PeerConnection : IDisposable
     public string RemoteIp { get; }
     public int RemotePort { get; }
     public string InfoHash { get; set; }
+    public Torrent MatchedTorrent { get; set; }
     public string PeerId { get; private set; }
     public bool IsConnected => !_isDisposed && (_client != null ? _client.Connected : (_activeStream != null));
     public bool IsEncrypted { get; private set; }
@@ -222,6 +224,51 @@ public class PeerConnection : IDisposable
             _logger.Debug(ex, "MSE/PE incoming negotiation failed with {0}:{1}", RemoteIp, RemotePort);
             return false;
         }
+    }
+
+    public bool NegotiateEncryptionIncoming(IMseSkeyRegistry skeyRegistry, EncryptionMode mode)
+    {
+        if (skeyRegistry == null)
+        {
+            return false;
+        }
+
+        return NegotiateEncryptionIncoming(
+            skeyHash =>
+            {
+                if (skeyRegistry.TryMatchTorrent(skeyHash, out var torrent))
+                {
+                    InfoHash = torrent?.InfoHash;
+                    MatchedTorrent = torrent;
+                    return true;
+                }
+
+                return false;
+            },
+            mode);
+    }
+
+    public bool NegotiateEncryptionIncoming(Func<byte[], Torrent> torrentValidator, EncryptionMode mode)
+    {
+        if (torrentValidator == null)
+        {
+            return false;
+        }
+
+        return NegotiateEncryptionIncoming(
+            skeyHash =>
+            {
+                var torrent = torrentValidator(skeyHash);
+                if (torrent != null)
+                {
+                    InfoHash = torrent.InfoHash;
+                    MatchedTorrent = torrent;
+                    return true;
+                }
+
+                return false;
+            },
+            mode);
     }
 
     public bool SendHandshake(string infoHash, string peerId, bool isPrivate = false, IClientProfile clientProfile = null)
