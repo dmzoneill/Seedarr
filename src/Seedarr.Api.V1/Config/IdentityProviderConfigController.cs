@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
+using NLog;
 using NzbDrone.Core.Authentication;
 using Seedarr.Http;
 using Seedarr.Http.Authentication;
@@ -58,6 +59,7 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
 
     private readonly IIdentityProviderService _providerService;
     private readonly IDynamicAuthSchemeManager _dynamicAuthManager;
+    private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     public IdentityProviderConfigController(
         IIdentityProviderService providerService,
@@ -117,14 +119,14 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
     }
 
     [HttpPost]
-    public ActionResult<IdentityProviderResource> Create([FromBody] IdentityProviderResource resource)
+    public async Task<ActionResult<IdentityProviderResource>> Create([FromBody] IdentityProviderResource resource)
     {
         if (resource == null)
         {
             return BadRequest();
         }
 
-        var validationResult = SharedValidator.Validate(resource);
+        var validationResult = await SharedValidator.ValidateAsync(resource);
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.Errors);
@@ -135,21 +137,29 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
 
         if (created.IsEnabled)
         {
-            _ = _dynamicAuthManager.RegisterOrUpdateOidcProviderAsync(created);
+            try
+            {
+                await _dynamicAuthManager.RegisterOrUpdateOidcProviderAsync(created);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to register dynamic authentication scheme for provider: {0}", created.ProviderId);
+                return BadRequest(new { message = $"Failed to register authentication scheme: {ex.Message}" });
+            }
         }
 
         return Created($"/api/v1/config/auth/providers/{created.Id}", ToResource(created));
     }
 
     [HttpPut("{id:int}")]
-    public ActionResult<IdentityProviderResource> Update(int id, [FromBody] IdentityProviderResource resource)
+    public async Task<ActionResult<IdentityProviderResource>> Update(int id, [FromBody] IdentityProviderResource resource)
     {
         if (resource == null)
         {
             return BadRequest();
         }
 
-        var validationResult = SharedValidator.Validate(resource);
+        var validationResult = await SharedValidator.ValidateAsync(resource);
         if (!validationResult.IsValid)
         {
             return BadRequest(validationResult.Errors);
@@ -176,18 +186,34 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
 
         if (updated.IsEnabled)
         {
-            _ = _dynamicAuthManager.RegisterOrUpdateOidcProviderAsync(updated);
+            try
+            {
+                await _dynamicAuthManager.RegisterOrUpdateOidcProviderAsync(updated);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to update dynamic authentication scheme for provider: {0}", updated.ProviderId);
+                return BadRequest(new { message = $"Failed to update authentication scheme: {ex.Message}" });
+            }
         }
         else
         {
-            _ = _dynamicAuthManager.RemoveProviderSchemeAsync(updated.ProviderId);
+            try
+            {
+                await _dynamicAuthManager.RemoveProviderSchemeAsync(updated.ProviderId);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to remove dynamic authentication scheme for provider: {0}", updated.ProviderId);
+                return BadRequest(new { message = $"Failed to remove authentication scheme: {ex.Message}" });
+            }
         }
 
         return Ok(ToResource(updated));
     }
 
     [HttpDelete("{id:int}")]
-    public ActionResult Delete(int id)
+    public async Task<ActionResult> Delete(int id)
     {
         var existing = _providerService.GetById(id);
         if (existing == null)
@@ -196,7 +222,15 @@ public class IdentityProviderConfigController : RestController<IdentityProviderR
         }
 
         _providerService.Delete(id);
-        _ = _dynamicAuthManager.RemoveProviderSchemeAsync(existing.ProviderId);
+        try
+        {
+            await _dynamicAuthManager.RemoveProviderSchemeAsync(existing.ProviderId);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to remove dynamic authentication scheme for provider: {0}", existing.ProviderId);
+            return BadRequest(new { message = $"Failed to remove authentication scheme: {ex.Message}" });
+        }
 
         return NoContent();
     }
