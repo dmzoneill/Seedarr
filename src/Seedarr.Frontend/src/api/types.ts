@@ -875,6 +875,20 @@ export interface SyncResult {
   failed: number;
 }
 
+export interface BatchImportItemResult {
+  infoHash: string;
+  title: string;
+  success: boolean;
+  errorMessage?: string | null;
+}
+
+export interface BatchImportResponse {
+  added: number;
+  skipped: number;
+  failed: number;
+  items: BatchImportItemResult[];
+}
+
 export interface MediaActor {
   name: string;
   character?: string | null;

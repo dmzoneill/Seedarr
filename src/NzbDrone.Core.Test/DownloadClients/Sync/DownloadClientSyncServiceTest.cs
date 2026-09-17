@@ -461,6 +461,13 @@ public class DownloadClientSyncServiceTest
 
         Assert.That(result.Added, Is.EqualTo(1));
         Assert.That(result.Failed, Is.EqualTo(1));
+        Assert.That(result.Items, Has.Count.EqualTo(2));
+        Assert.That(result.Items[0].InfoHash, Is.EqualTo(hash1));
+        Assert.That(result.Items[0].Success, Is.True);
+        Assert.That(result.Items[0].ErrorMessage, Is.Null);
+        Assert.That(result.Items[1].InfoHash, Is.EqualTo(hash2));
+        Assert.That(result.Items[1].Success, Is.False);
+        Assert.That(result.Items[1].ErrorMessage, Is.Not.Null);
     }
 
     [Test]
@@ -1170,5 +1177,102 @@ public class DownloadClientSyncServiceTest
         _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
             t.InfoHash == hash &&
             t.Progress == 1.0));
+    }
+
+    [Test]
+    public void ImportTorrent_should_attribute_client_ownership_fallback_category_and_source_path()
+    {
+        var hash = "9999111122223333444455556666777788889999";
+        var rawBytes = new byte[] { 0x64, 0x38, 0x3a };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(rawBytes);
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new()
+            {
+                Title = "Attributed Item",
+                InfoHash = hash,
+                TotalSize = 5000,
+                OutputPath = "/remote/media/downloads"
+            }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Attributed Item",
+            TotalSize = 5000,
+            PieceCount = 10,
+            PieceLength = 500
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(7).Returns(new DownloadClientDefinition
+        {
+            Id = 7,
+            Name = "Client 7",
+            ClientType = "QBitTorrent",
+            Enable = true,
+            Category = "default-category",
+            Host = "localhost"
+        });
+
+        var torrent = _service.ImportTorrent(7, hash);
+
+        Assert.That(torrent, Is.Not.Null);
+        Assert.That(torrent.DownloadClientId, Is.EqualTo(7));
+        Assert.That(torrent.Category, Is.EqualTo("default-category"));
+        Assert.That(torrent.SourcePath, Is.EqualTo("/remote/media/downloads"));
+
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.InfoHash == hash &&
+            t.DownloadClientId == 7 &&
+            t.Category == "default-category" &&
+            t.SourcePath == "/remote/media/downloads"));
+    }
+
+    [Test]
+    public void GetClientItems_should_isolate_library_status_by_download_client_id()
+    {
+        var hashOwnedByOther = "1111000000000000000000000000000000000001";
+        var hashOwnedByThis = "2222000000000000000000000000000000000002";
+        var hashLegacy = "3333000000000000000000000000000000000003";
+
+        _torrentService.GetAll().Returns(new List<Torrent>
+        {
+            new() { Id = 101, InfoHash = hashOwnedByOther, DownloadClientId = 2 },
+            new() { Id = 102, InfoHash = hashOwnedByThis, DownloadClientId = 1 },
+            new() { Id = 103, InfoHash = hashLegacy, DownloadClientId = null }
+        });
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { Title = "Other Client Item", InfoHash = hashOwnedByOther },
+            new() { Title = "This Client Item", InfoHash = hashOwnedByThis },
+            new() { Title = "Legacy Item", InfoHash = hashLegacy }
+        });
+
+        _service.InjectedClient = mockClient;
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "qBittorrent",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var items = _service.GetClientItems(1);
+
+        Assert.That(items, Has.Count.EqualTo(3));
+        Assert.That(items[0].IsInLibrary, Is.False);
+        Assert.That(items[0].LibraryTorrentId, Is.Null);
+
+        Assert.That(items[1].IsInLibrary, Is.True);
+        Assert.That(items[1].LibraryTorrentId, Is.EqualTo(102));
+
+        Assert.That(items[2].IsInLibrary, Is.True);
+        Assert.That(items[2].LibraryTorrentId, Is.EqualTo(103));
     }
 }

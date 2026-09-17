@@ -56,6 +56,22 @@ public class DownloadClientImportRequest
     public System.Collections.Generic.List<string> InfoHashes { get; set; } = new();
 }
 
+public class BatchImportItemResult
+{
+    public string InfoHash { get; set; }
+    public string Title { get; set; }
+    public bool Success { get; set; }
+    public string ErrorMessage { get; set; }
+}
+
+public class BatchImportResponse
+{
+    public int Added { get; set; }
+    public int Skipped { get; set; }
+    public int Failed { get; set; }
+    public List<BatchImportItemResult> Items { get; set; } = new();
+}
+
 public class DownloadClientSpeedLimits
 {
     public long? UploadLimitBps { get; set; }

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
-using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.DownloadClients;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
@@ -235,7 +234,8 @@ public class DownloadClientController : Controller
     }
 
     [HttpPost("{id}/import")]
-    public ActionResult<SyncResult> ImportTorrents(int id, [FromBody] DownloadClientImportRequest request)
+    [HttpPost("{id}/import-torrents")]
+    public ActionResult<BatchImportResponse> ImportTorrents(int id, [FromBody] DownloadClientImportRequest request)
     {
         try
         {
