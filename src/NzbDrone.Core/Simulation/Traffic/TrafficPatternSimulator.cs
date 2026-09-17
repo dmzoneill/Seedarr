@@ -54,6 +54,7 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
     private TrafficState _currentState;
     private DateTime _stateExpiresAt;
     private double _stateMultiplier;
+    private DateTime _lastStateTransitionEvaluation;
 
     public TrafficPatternSimulator(
         IConfigService configService,
@@ -67,6 +68,7 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
         _currentState = TrafficState.Normal;
         _stateExpiresAt = DateTime.MinValue;
         _stateMultiplier = 1.0;
+        _lastStateTransitionEvaluation = DateTime.MinValue;
     }
 
     public double GetSpeedMultiplier(SeedingProfile profile)
@@ -129,10 +131,11 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
                 randomSample = _random.NextDouble();
             }
 
-            variationMultiplier = 1.0 + (((randomSample * 2.0) - 1.0) * behaviorVariation);
+            variationMultiplier = Math.Max(0.1, 1.0 + (((randomSample * 2.0) - 1.0) * behaviorVariation));
         }
 
         var result = baseMultiplier * timeMultiplier * stateMultiplier * congestionMultiplier * peerMultiplier * variationMultiplier;
+        result = Math.Clamp(result, 0.05, 5.0);
 
         _logger.Trace(
             "Speed multiplier: {0:F2} (profile={1}, hour={2}, state={3}, congestion={4:F2}, peers={5}, peerMult={6:F2}, variation={7:F2})",
@@ -179,8 +182,9 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
                 _stateMultiplier = 1.0;
             }
 
-            if (_currentState == TrafficState.Normal)
+            if (_currentState == TrafficState.Normal && (now - _lastStateTransitionEvaluation).TotalSeconds >= 1.0)
             {
+                _lastStateTransitionEvaluation = now;
                 var roll = _random.NextDouble();
                 if (roll < BurstProbability)
                 {
@@ -216,8 +220,9 @@ public class TrafficPatternSimulator : ITrafficPatternSimulator
 
     private double GetCongestionMultiplier()
     {
-        var seconds = _clock.UtcNow.TimeOfDay.TotalSeconds;
-        var sineValue = Math.Sin(2.0 * Math.PI * seconds / CongestionCyclePeriodSeconds);
+        var now = _clock.UtcNow;
+        var totalSeconds = (now - DateTime.UnixEpoch).TotalSeconds;
+        var sineValue = Math.Sin(2.0 * Math.PI * (totalSeconds % CongestionCyclePeriodSeconds) / CongestionCyclePeriodSeconds);
         return 1.0 + (CongestionAmplitude * sineValue);
     }
 
