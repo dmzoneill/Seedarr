@@ -40,4 +40,5 @@ public enum AutomationTrigger
     BackupCompleted = 35,
     BackupFailed = 36,
     TaskFailed = 37,
+    TorrentStallResolved = 38,
 }

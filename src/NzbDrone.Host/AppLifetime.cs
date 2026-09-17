@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,6 +24,9 @@ public class AppLifetime : IHostedService, IDisposable
     private readonly IDiskSpaceService _diskSpaceService;
     private readonly IUpnpService _upnpService;
     private readonly Logger _logger;
+    private readonly HashSet<int> _stalledTorrentIds = new();
+    private bool _speedThresholdExceededState;
+    private bool _portForwardingFailureEmitted;
     private CancellationTokenSource _cts;
     private Task _watchdogLoopTask;
 
@@ -111,7 +115,7 @@ public class AppLifetime : IHostedService, IDisposable
         }
     }
 
-    private void EvaluateWatchdogMetrics()
+    internal void EvaluateWatchdogMetrics()
     {
         // 1. Evaluate Disk Space
         if (_diskSpaceService != null)
@@ -132,37 +136,67 @@ public class AppLifetime : IHostedService, IDisposable
         {
             try
             {
-                var torrents = _torrentService.GetAll();
-                if (torrents != null && torrents.Count > 0)
+                var torrents = _torrentService.GetAll() ?? new List<Torrent>();
+                var currentTorrentMap = torrents.ToDictionary(t => t.Id);
+
+                // Check previously stalled torrents that are now resolved or removed
+                var resolvedIds = new List<int>();
+                foreach (var stalledId in _stalledTorrentIds)
                 {
-                    var activeTorrents = torrents.Where(t => t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.Seeding).ToList();
-                    long totalDownloadSpeed = 0;
-                    long totalUploadSpeed = 0;
-
-                    foreach (var torrent in torrents)
+                    if (!currentTorrentMap.TryGetValue(stalledId, out var torrent))
                     {
-                        totalDownloadSpeed += torrent.DownloadSpeed;
-                        totalUploadSpeed += torrent.UploadSpeed;
+                        resolvedIds.Add(stalledId);
+                    }
+                    else if (torrent.DownloadSpeed > 0 || torrent.Progress >= 1.0 || torrent.Status != TorrentStatus.Downloading)
+                    {
+                        resolvedIds.Add(stalledId);
+                    }
+                }
 
-                        if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed == 0 && torrent.Progress < 1.0)
+                foreach (var resolvedId in resolvedIds)
+                {
+                    _stalledTorrentIds.Remove(resolvedId);
+                    var torrent = currentTorrentMap.TryGetValue(resolvedId, out var t) ? t : new Torrent { Id = resolvedId };
+                    _eventAggregator.PublishEvent(new TorrentStallResolvedEvent(torrent));
+                }
+
+                var activeTorrents = torrents.Where(t => t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.Seeding).ToList();
+                long totalDownloadSpeed = 0;
+                long totalUploadSpeed = 0;
+
+                foreach (var torrent in torrents)
+                {
+                    totalDownloadSpeed += torrent.DownloadSpeed;
+                    totalUploadSpeed += torrent.UploadSpeed;
+
+                    if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed == 0 && torrent.Progress < 1.0)
+                    {
+                        var minutesSinceAdd = (DateTime.UtcNow - torrent.DateAdded).TotalMinutes;
+                        if (minutesSinceAdd >= 5)
                         {
-                            var minutesSinceAdd = (DateTime.UtcNow - torrent.DateAdded).TotalMinutes;
-                            if (minutesSinceAdd >= 5)
+                            if (_stalledTorrentIds.Add(torrent.Id))
                             {
                                 _eventAggregator.PublishEvent(new TorrentStalledEvent(torrent, (int)minutesSinceAdd));
                             }
                         }
                     }
+                }
 
-                    if (_configService != null)
+                if (_configService != null)
+                {
+                    var maxDl = _configService.MaxDownloadSpeedKbps > 0 ? _configService.MaxDownloadSpeedKbps * 1024L : 0;
+                    var maxUl = _configService.MaxUploadSpeedKbps > 0 ? _configService.MaxUploadSpeedKbps * 1024L : 0;
+                    var isExceeded = (maxDl > 0 && totalDownloadSpeed >= maxDl) || (maxUl > 0 && totalUploadSpeed >= maxUl);
+
+                    if (isExceeded && !_speedThresholdExceededState)
                     {
-                        var maxDl = _configService.MaxDownloadSpeedKbps > 0 ? _configService.MaxDownloadSpeedKbps * 1024L : 0;
-                        var maxUl = _configService.MaxUploadSpeedKbps > 0 ? _configService.MaxUploadSpeedKbps * 1024L : 0;
-
-                        if ((maxDl > 0 && totalDownloadSpeed >= maxDl) || (maxUl > 0 && totalUploadSpeed >= maxUl))
-                        {
-                            _eventAggregator.PublishEvent(new SpeedThresholdExceededEvent(totalDownloadSpeed, totalUploadSpeed, activeTorrents.Count));
-                        }
+                        _speedThresholdExceededState = true;
+                        _eventAggregator.PublishEvent(new SpeedThresholdExceededEvent(totalDownloadSpeed, totalUploadSpeed, activeTorrents.Count));
+                    }
+                    else if (!isExceeded && _speedThresholdExceededState)
+                    {
+                        _speedThresholdExceededState = false;
+                        _eventAggregator.PublishEvent(new SpeedThresholdDroppedEvent());
                     }
                 }
             }
@@ -179,7 +213,15 @@ public class AppLifetime : IHostedService, IDisposable
             {
                 if (!_upnpService.IsAvailable)
                 {
-                    _eventAggregator.PublishEvent(new PortForwardingFailedEvent(_configService.ListeningPort, "TCP", "UPnP device unavailable or port mapping failed"));
+                    if (!_portForwardingFailureEmitted)
+                    {
+                        _portForwardingFailureEmitted = true;
+                        _eventAggregator.PublishEvent(new PortForwardingFailedEvent(_configService.ListeningPort, "TCP", "UPnP device unavailable or port mapping failed"));
+                    }
+                }
+                else
+                {
+                    _portForwardingFailureEmitted = false;
                 }
             }
             catch (Exception ex)

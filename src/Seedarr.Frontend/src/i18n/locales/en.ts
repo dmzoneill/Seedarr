@@ -431,6 +431,7 @@ const en = {
         onTorrentResumedStarted: "▶️ On Torrent Resumed / Started",
         onTorrentPausedStopped: "⏸️ On Torrent Paused / Stopped",
         onTorrentStalled: "⏳ On Torrent Stalled",
+        onTorrentStallResolved: "🟢 On Torrent Stall Resolved",
         onSeedingTimeTargetMet: "⌛ On Seeding Time Target Met",
         onHashCheckCompleted: "🔍 On Hash Check Completed",
         onProgressMilestone: "📈 On Progress Milestone",

@@ -49,6 +49,8 @@ public class SeedingEngine : BackgroundService
     private readonly Dictionary<int, long> _sessionStartDownloaded = new();
     private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _uploadSpeedHistory = new();
     private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _downloadSpeedHistory = new();
+    private readonly HashSet<int> _stalledTorrentIds = new();
+    private bool _speedThresholdExceededState;
 
     private string _localPeerId;
 
@@ -302,10 +304,32 @@ public class SeedingEngine : BackgroundService
             _sessionStartDownloaded.Remove(id);
             _uploadSpeedHistory.Remove(id);
             _downloadSpeedHistory.Remove(id);
+            _stalledTorrentIds.Remove(id);
         }
 
         var totalActive = downloadingTorrents.Count + seedingTorrents.Count;
         _eventAggregator.PublishEvent(new SeedingTickEvent(totalActive));
+
+        // Resolve previously stalled torrents that are no longer stalled or downloading
+        var stalledIdsToRemove = new List<int>();
+        foreach (var stalledId in _stalledTorrentIds)
+        {
+            var torrent = activeTorrents.FirstOrDefault(t => t.Id == stalledId);
+            if (torrent == null || torrent.Status != TorrentStatus.Downloading || torrent.DownloadSpeed > 0 || torrent.Progress >= 1.0)
+            {
+                stalledIdsToRemove.Add(stalledId);
+            }
+        }
+
+        foreach (var stalledId in stalledIdsToRemove)
+        {
+            _stalledTorrentIds.Remove(stalledId);
+            var torrent = activeTorrents.FirstOrDefault(t => t.Id == stalledId);
+            if (torrent != null)
+            {
+                _eventAggregator.PublishEvent(new TorrentStallResolvedEvent(torrent));
+            }
+        }
 
         // Evaluate metric thresholds across active torrents
         long totalDlSpeed = 0;
@@ -319,7 +343,7 @@ public class SeedingEngine : BackgroundService
             if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed == 0 && torrent.Progress < 1.0)
             {
                 var stalledMinutes = (int)(_clock.UtcNow - torrent.DateAdded).TotalMinutes;
-                if (stalledMinutes >= 5)
+                if (stalledMinutes >= 5 && _stalledTorrentIds.Add(torrent.Id))
                 {
                     _eventAggregator.PublishEvent(new TorrentStalledEvent(torrent, stalledMinutes));
                 }
@@ -333,9 +357,16 @@ public class SeedingEngine : BackgroundService
 
         var configuredMaxDl = _configService.MaxDownloadSpeedKbps > 0 ? _configService.MaxDownloadSpeedKbps * 1024L : 0;
         var configuredMaxUl = _configService.MaxUploadSpeedKbps > 0 ? _configService.MaxUploadSpeedKbps * 1024L : 0;
-        if ((configuredMaxDl > 0 && totalDlSpeed >= configuredMaxDl) || (configuredMaxUl > 0 && totalUlSpeed >= configuredMaxUl))
+        var isSpeedExceeded = (configuredMaxDl > 0 && totalDlSpeed >= configuredMaxDl) || (configuredMaxUl > 0 && totalUlSpeed >= configuredMaxUl);
+        if (isSpeedExceeded && !_speedThresholdExceededState)
         {
+            _speedThresholdExceededState = true;
             _eventAggregator.PublishEvent(new SpeedThresholdExceededEvent(totalDlSpeed, totalUlSpeed, activeTorrents.Count));
+        }
+        else if (!isSpeedExceeded && _speedThresholdExceededState)
+        {
+            _speedThresholdExceededState = false;
+            _eventAggregator.PublishEvent(new SpeedThresholdDroppedEvent());
         }
 
         foreach (var torrent in activeTorrents)
