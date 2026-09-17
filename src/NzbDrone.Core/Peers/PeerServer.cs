@@ -1782,6 +1782,36 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
             return;
         }
 
+        var now = DateTime.UtcNow;
+        var elapsed = (now - connection.LastPexReceived).TotalSeconds;
+
+        if (elapsed < 55.0)
+        {
+            connection.PexRateLimitViolations++;
+            _logger.Warn(
+                "Peer {0}:{1} violated BEP 11 PEX rate limit ({2:F1}s since last PEX, violations: {3})",
+                connection.RemoteIp,
+                connection.RemotePort,
+                elapsed,
+                connection.PexRateLimitViolations);
+
+            if (connection.PexRateLimitViolations > 3)
+            {
+                _logger.Error(
+                    "Disconnecting abusive peer {0}:{1} for repeated PEX flood attacks",
+                    connection.RemoteIp,
+                    connection.RemotePort);
+                _connectionManager?.Remove(connection);
+                connection.Dispose();
+                return;
+            }
+
+            return;
+        }
+
+        connection.LastPexReceived = now;
+        connection.PexRateLimitViolations = 0;
+
         var pexData = _peerExchange.ParsePexMessage(extendedPayload, currentTorrent?.IsPrivate ?? false);
         if (pexData == null || pexData.Added == null || pexData.Added.Count == 0)
         {
