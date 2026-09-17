@@ -13,4 +13,7 @@ public class TorrentFile : ModelBase
     public bool Wanted { get; set; } = true;
     public int Priority { get; set; }
     public long BytesCompleted { get; set; }
+
+    [Ignore]
+    public long ByteOffset { get; set; }
 }
