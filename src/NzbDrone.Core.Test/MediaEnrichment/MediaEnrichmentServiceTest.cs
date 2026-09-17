@@ -28,6 +28,7 @@ public class MediaEnrichmentServiceTest
     private IEventAggregator _eventAggregator;
     private IArrConnectionRepository _arrRepository;
     private IArrConnectionFactory _connectionFactory;
+    private ITmdbMetadataProvider _tmdbProvider;
     private MediaEnrichmentService _service;
     private string _tempDirectory;
 
@@ -44,6 +45,7 @@ public class MediaEnrichmentServiceTest
         _eventAggregator = Substitute.For<IEventAggregator>();
         _arrRepository = Substitute.For<IArrConnectionRepository>();
         _connectionFactory = Substitute.For<IArrConnectionFactory>();
+        _tmdbProvider = Substitute.For<ITmdbMetadataProvider>();
 
         _appFolderInfo.AppDataFolder.Returns(_tempDirectory);
         _configService.AutoPruneRemovedArtwork.Returns(true);
@@ -56,7 +58,8 @@ public class MediaEnrichmentServiceTest
             _appFolderInfo,
             _eventAggregator,
             _arrRepository,
-            _connectionFactory);
+            _connectionFactory,
+            _tmdbProvider);
     }
 
     [TearDown]
@@ -243,6 +246,102 @@ public class MediaEnrichmentServiceTest
         Assert.That(MediaEnrichmentService.IsValidImage(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }), Is.True); // JPEG
         Assert.That(MediaEnrichmentService.IsValidImage(new byte[] { 0x89, 0x50, 0x4E, 0x47 }), Is.True); // PNG
         Assert.That(MediaEnrichmentService.IsValidImage(new byte[] { 0x00, 0x00, 0x00, 0x00 }), Is.False); // Invalid
+    }
+
+    [Test]
+    public async Task EnrichTorrentAsync_WhenArrReturnsNoMetadata_FallsBackToTmdbProvider()
+    {
+        _arrRepository.All().Returns(new List<ArrConnectionDefinition>());
+
+        var tmdbMeta = new TorrentMediaMetadata
+        {
+            Title = "Oppenheimer",
+            Year = 2023,
+            Overview = "The story of J. Robert Oppenheimer.",
+            Rating = 8.9,
+            PosterUrl = "https://image.tmdb.org/t/p/w500/poster.jpg",
+            BackdropUrl = "https://image.tmdb.org/t/p/original/backdrop.jpg",
+            Genres = "Biography, Drama, History",
+            Cast = "Cillian Murphy, Emily Blunt",
+            TmdbId = "872585",
+            ArrType = "Radarr",
+        };
+
+        _tmdbProvider.LookupMediaAsync(
+            Arg.Any<string>(),
+            Arg.Any<int?>(),
+            Arg.Any<string>(),
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>()).Returns(tmdbMeta);
+
+        var torrent = new Torrent
+        {
+            Id = 88,
+            Name = "Oppenheimer.2023.2160p.UHD",
+            Label = "radarr-movies",
+        };
+
+        var result = await _service.EnrichTorrentAsync(torrent);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Title, Is.EqualTo("Oppenheimer"));
+        Assert.That(result.Year, Is.EqualTo(2023));
+        Assert.That(result.Rating, Is.EqualTo(8.9));
+        Assert.That(result.Genres, Is.EqualTo("Biography, Drama, History"));
+        Assert.That(result.Cast, Is.EqualTo("Cillian Murphy, Emily Blunt"));
+        Assert.That(result.TmdbId, Is.EqualTo("872585"));
+        _repository.Received(1).Upsert(Arg.Is<TorrentMediaMetadata>(m => m.Title == "Oppenheimer" && m.TmdbId == "872585"));
+    }
+
+    [Test]
+    public async Task EnrichTorrentAsync_WhenTorrentHasImdbId_PassesImdbIdToTmdbProvider()
+    {
+        _arrRepository.All().Returns(new List<ArrConnectionDefinition>());
+
+        _tmdbProvider.LookupMediaAsync(
+            Arg.Any<string>(),
+            Arg.Any<int?>(),
+            "tt1375666",
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>()).Returns(new TorrentMediaMetadata
+        {
+            Title = "Inception",
+            Year = 2010,
+            ImdbId = "tt1375666",
+            TmdbId = "27205",
+        });
+
+        var torrent = new Torrent
+        {
+            Id = 89,
+            Name = "Inception.2010.tt1375666.1080p",
+            Label = "movies",
+        };
+
+        var result = await _service.EnrichTorrentAsync(torrent);
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Title, Is.EqualTo("Inception"));
+        Assert.That(result.ImdbId, Is.EqualTo("tt1375666"));
+        await _tmdbProvider.Received(1).LookupMediaAsync(
+            Arg.Any<string>(),
+            Arg.Any<int?>(),
+            "tt1375666",
+            Arg.Any<string>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ExtractImdbId_ExtractsFromTitleAndNfoFile()
+    {
+        var idFromTitle = MediaEnrichmentService.ExtractImdbId("Fight.Club.1999.tt0137523.mkv");
+        Assert.That(idFromTitle, Is.EqualTo("tt0137523"));
+
+        var nfoPath = Path.Combine(_tempDirectory, "movie.nfo");
+        await File.WriteAllTextAsync(nfoPath, "Movie details at https://www.imdb.com/title/tt0137523/ enjoy!");
+
+        var idFromNfo = MediaEnrichmentService.ExtractImdbId("Fight.Club.1999.mkv", nfoPath);
+        Assert.That(idFromNfo, Is.EqualTo("tt0137523"));
     }
 
     [Test]

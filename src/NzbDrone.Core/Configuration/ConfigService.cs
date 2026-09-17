@@ -23,6 +23,7 @@ public interface IConfigService
     bool AutoPruneRemovedArtwork { get; }
     int MediaCoverMaxCacheSizeMb { get; set; }
     int MediaCoverCacheTtlDays { get; set; }
+    string TmdbApiKey { get; }
     string ThemeStyle { get; }
     string ColorScheme { get; }
     string UiLanguage { get; }
@@ -234,6 +235,8 @@ public class ConfigModel : ModelBase
 
 public class ConfigService : IConfigService
 {
+    public const string DefaultTmdbApiKey = "b69b7f0431f4d3cd5116acc5e73b6668";
+
     private readonly IBasicRepository<ConfigModel> _repository;
     private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
@@ -372,6 +375,15 @@ public class ConfigService : IConfigService
     {
         get => GetValueInt("MediaCoverCacheTtlDays", 60);
         set => SaveConfigDictionary(new Dictionary<string, object> { { "MediaCoverCacheTtlDays", value } });
+    }
+
+    public string TmdbApiKey
+    {
+        get
+        {
+            var key = GetValue("TmdbApiKey", string.Empty);
+            return string.IsNullOrWhiteSpace(key) ? DefaultTmdbApiKey : key;
+        }
     }
 
     public string ThemeStyle => GetValue("ThemeStyle", GetValue("UiTheme", "system"));

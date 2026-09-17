@@ -1905,5 +1905,25 @@ namespace NzbDrone.Core.Test.Configuration
 
             _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "MediaCoverCacheTtlDays" && c.Value == "90"));
         }
+
+        [Test]
+        public void TmdbApiKey_should_return_default_when_not_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.TmdbApiKey, Is.EqualTo(ConfigService.DefaultTmdbApiKey));
+        }
+
+        [Test]
+        public void TmdbApiKey_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "TmdbApiKey", Value = "custom_tmdb_key_abc123" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.TmdbApiKey, Is.EqualTo("custom_tmdb_key_abc123"));
+        }
     }
 }
