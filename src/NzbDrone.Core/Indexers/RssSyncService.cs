@@ -8,6 +8,8 @@ public interface IRssSyncService
 {
     bool MatchesRule(RssRule rule, ReleaseInfo release, DateTime? now = null);
 
+    RssRule GetFirstMatchingRule(IEnumerable<RssRule> rules, ReleaseInfo release, DateTime? now = null);
+
     List<ReleaseInfo> FilterReleases(IEnumerable<ReleaseInfo> releases, IEnumerable<RssRule> rules, DateTime? now = null);
 }
 
@@ -30,6 +32,30 @@ public class RssSyncService : IRssSyncService
         return _ruleEvaluator.Matches(rule, release, now);
     }
 
+    public RssRule GetFirstMatchingRule(IEnumerable<RssRule> rules, ReleaseInfo release, DateTime? now = null)
+    {
+        if (rules == null || release == null)
+        {
+            return null;
+        }
+
+        var enabledRules = rules
+            .Where(r => r != null && r.IsEnabled)
+            .OrderBy(r => r.Priority)
+            .ThenBy(r => r.Id)
+            .ToList();
+
+        foreach (var rule in enabledRules)
+        {
+            if (MatchesRule(rule, release, now))
+            {
+                return rule;
+            }
+        }
+
+        return null;
+    }
+
     public List<ReleaseInfo> FilterReleases(IEnumerable<ReleaseInfo> releases, IEnumerable<RssRule> rules, DateTime? now = null)
     {
         var matched = new List<ReleaseInfo>();
@@ -38,7 +64,12 @@ public class RssSyncService : IRssSyncService
             return matched;
         }
 
-        var enabledRules = rules.Where(r => r != null && r.IsEnabled).ToList();
+        var enabledRules = rules
+            .Where(r => r != null && r.IsEnabled)
+            .OrderBy(r => r.Priority)
+            .ThenBy(r => r.Id)
+            .ToList();
+
         if (enabledRules.Count == 0)
         {
             return matched;

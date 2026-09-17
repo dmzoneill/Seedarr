@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using NLog;
+using NzbDrone.Core.Categories;
 using NzbDrone.Core.Indexers;
 using Seedarr.Http;
 
@@ -17,24 +18,32 @@ namespace Seedarr.Api.V1.Indexers;
 public class RssRuleController : Controller
 {
     private readonly IRssRuleRepository _rssRuleRepository;
+    private readonly IIndexerRepository _indexerRepository;
+    private readonly ICategoryService _categoryService;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     private static readonly object _syncLock = new();
     private static readonly TimeSpan _syncCooldown = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
     private static DateTime _lastSyncTime = DateTime.MinValue;
 
-    public RssRuleController(IRssRuleRepository rssRuleRepository)
+    public RssRuleController(
+        IRssRuleRepository rssRuleRepository,
+        IIndexerRepository indexerRepository = null,
+        ICategoryService categoryService = null)
     {
         _rssRuleRepository = rssRuleRepository;
+        _indexerRepository = indexerRepository;
+        _categoryService = categoryService;
     }
 
     /// <summary>
-    /// Retrieves all configured RSS rules.
+    /// Retrieves all configured RSS rules ordered by priority and ID.
     /// </summary>
     [HttpGet]
     public ActionResult<List<RssRuleResource>> GetAll()
     {
-        var rules = _rssRuleRepository.All();
+        var rules = _rssRuleRepository.All().OrderBy(r => r.Priority).ThenBy(r => r.Id);
         return Ok(rules.Select(ToResource).ToList());
     }
 
@@ -59,30 +68,10 @@ public class RssRuleController : Controller
     [HttpPost]
     public ActionResult<RssRuleResource> Create([FromBody] RssRuleResource resource)
     {
-        if (resource == null)
+        var validationError = ValidateResource(resource, null);
+        if (validationError != null)
         {
-            return BadRequest(new { message = "Request body cannot be null." });
-        }
-
-        if (string.IsNullOrWhiteSpace(resource.Name))
-        {
-            return BadRequest(new { message = "Rule name cannot be empty." });
-        }
-
-        var allRules = _rssRuleRepository.All();
-        if (allRules.Any(r => string.Equals(r.Name?.Trim(), resource.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
-        {
-            return BadRequest(new { message = $"An RSS rule with the name '{resource.Name.Trim()}' already exists." });
-        }
-
-        if (!IsValidRegex(resource.MustContain, out var mustContainError))
-        {
-            return BadRequest(new { message = $"Invalid MustContain regex pattern: {mustContainError}" });
-        }
-
-        if (!IsValidRegex(resource.MustNotContain, out var mustNotContainError))
-        {
-            return BadRequest(new { message = $"Invalid MustNotContain regex pattern: {mustNotContainError}" });
+            return validationError;
         }
 
         var model = ToModel(resource);
@@ -101,31 +90,16 @@ public class RssRuleController : Controller
             return BadRequest(new { message = "Request body cannot be null." });
         }
 
-        if (string.IsNullOrWhiteSpace(resource.Name))
-        {
-            return BadRequest(new { message = "Rule name cannot be empty." });
-        }
-
         var existing = _rssRuleRepository.Get(id);
         if (existing == null)
         {
             return NotFound();
         }
 
-        var allRules = _rssRuleRepository.All();
-        if (allRules.Any(r => r.Id != id && string.Equals(r.Name?.Trim(), resource.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+        var validationError = ValidateResource(resource, id);
+        if (validationError != null)
         {
-            return BadRequest(new { message = $"An RSS rule with the name '{resource.Name.Trim()}' already exists." });
-        }
-
-        if (!IsValidRegex(resource.MustContain, out var mustContainError))
-        {
-            return BadRequest(new { message = $"Invalid MustContain regex pattern: {mustContainError}" });
-        }
-
-        if (!IsValidRegex(resource.MustNotContain, out var mustNotContainError))
-        {
-            return BadRequest(new { message = $"Invalid MustNotContain regex pattern: {mustNotContainError}" });
+            return validationError;
         }
 
         var model = ToModel(resource);
@@ -184,6 +158,64 @@ public class RssRuleController : Controller
         return Ok(new { success = true, grabbedCount = 0 });
     }
 
+    private ActionResult ValidateResource(RssRuleResource resource, int? currentId)
+    {
+        if (resource == null)
+        {
+            return BadRequest(new { message = "Request body cannot be null." });
+        }
+
+        if (resource.MinSeeders < 0 || resource.MinSizeBytes < 0 || resource.MaxSizeBytes < 0 || resource.MaxAgeDays < 0 || resource.Priority < 0)
+        {
+            return BadRequest(new { message = "Numerical constraints (MinSeeders, MinSizeBytes, MaxSizeBytes, MaxAgeDays, Priority) cannot be negative." });
+        }
+
+        if (resource.MaxSizeBytes > 0 && resource.MinSizeBytes > resource.MaxSizeBytes)
+        {
+            return BadRequest(new { message = "MinSizeBytes cannot be greater than MaxSizeBytes." });
+        }
+
+        if (string.IsNullOrWhiteSpace(resource.Name))
+        {
+            return BadRequest(new { message = "Rule name cannot be empty." });
+        }
+
+        var allRules = _rssRuleRepository.All();
+        if (allRules.Any(r => (!currentId.HasValue || r.Id != currentId.Value) && string.Equals(r.Name?.Trim(), resource.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            return BadRequest(new { message = $"An RSS rule with the name '{resource.Name.Trim()}' already exists." });
+        }
+
+        if (!IsValidRegex(resource.MustContain, out var mustContainError))
+        {
+            return BadRequest(new { message = $"Invalid MustContain regex pattern: {mustContainError}" });
+        }
+
+        if (!IsValidRegex(resource.MustNotContain, out var mustNotContainError))
+        {
+            return BadRequest(new { message = $"Invalid MustNotContain regex pattern: {mustNotContainError}" });
+        }
+
+        if (_indexerRepository != null && resource.IndexerIds != null && resource.IndexerIds.Count > 0)
+        {
+            var invalidIndexers = resource.IndexerIds.Where(indexerId => _indexerRepository.Get(indexerId) == null).ToList();
+            if (invalidIndexers.Count > 0)
+            {
+                return BadRequest(new { message = $"Referenced indexer ID(s) do not exist: {string.Join(", ", invalidIndexers)}." });
+            }
+        }
+
+        if (_categoryService != null && resource.CategoryId > 0)
+        {
+            if (_categoryService.Get(resource.CategoryId) == null)
+            {
+                return BadRequest(new { message = $"Referenced CategoryId {resource.CategoryId} does not exist." });
+            }
+        }
+
+        return null;
+    }
+
     [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA3012:Review code for regex injection vulnerabilities", Justification = "Regex pattern validation helper")]
     private static bool IsValidRegex(string pattern, out string errorMessage)
     {
@@ -195,9 +227,16 @@ public class RssRuleController : Controller
 
         try
         {
-            _ = new Regex(pattern);
+            var regex = new Regex(pattern, RegexOptions.None, RegexTimeout);
+            _ = regex.IsMatch("Seedarr.Test.Release.Title.2026.1080p.WEBRip.x264.TestStringWithNumbersAndSpaces");
+            _ = regex.IsMatch("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!");
             errorMessage = null;
             return true;
+        }
+        catch (RegexMatchTimeoutException ex)
+        {
+            errorMessage = $"Regex validation timed out after 250ms: {ex.Message}";
+            return false;
         }
         catch (ArgumentException ex)
         {
@@ -217,6 +256,7 @@ public class RssRuleController : Controller
             MustNotContain = model.MustNotContain,
             MinSeeders = model.MinSeeders,
             AllowUnknownSeeders = model.AllowUnknownSeeders,
+            Priority = model.Priority,
             MinSizeBytes = model.MinSizeBytes,
             MaxSizeBytes = model.MaxSizeBytes,
             MaxAgeDays = model.MaxAgeDays,
@@ -238,6 +278,7 @@ public class RssRuleController : Controller
             MustNotContain = resource.MustNotContain,
             MinSeeders = resource.MinSeeders,
             AllowUnknownSeeders = resource.AllowUnknownSeeders,
+            Priority = resource.Priority,
             MinSizeBytes = resource.MinSizeBytes,
             MaxSizeBytes = resource.MaxSizeBytes,
             MaxAgeDays = resource.MaxAgeDays,

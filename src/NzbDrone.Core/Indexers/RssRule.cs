@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using NzbDrone.Core.Datastore;
 
 namespace NzbDrone.Core.Indexers;
 
 public class RssRule : ModelBase
 {
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+
     public string Name { get; set; }
 
     public bool IsEnabled { get; set; } = true;
@@ -32,6 +35,8 @@ public class RssRule : ModelBase
 
     public bool AllowUnknownSeeders { get; set; } = true;
 
+    public int Priority { get; set; }
+
     public bool Matches(ReleaseInfo release, DateTime? now = null)
     {
         if (release == null || !IsEnabled)
@@ -57,15 +62,12 @@ public class RssRule : ModelBase
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(MustContain) &&
-            (release.Title == null || !release.Title.Contains(MustContain, StringComparison.OrdinalIgnoreCase)))
+        if (!string.IsNullOrWhiteSpace(MustContain) && !IsTitleMatch(MustContain, release.Title))
         {
             return false;
         }
 
-        if (!string.IsNullOrWhiteSpace(MustNotContain) &&
-            release.Title != null &&
-            release.Title.Contains(MustNotContain, StringComparison.OrdinalIgnoreCase))
+        if (!string.IsNullOrWhiteSpace(MustNotContain) && IsTitleMatch(MustNotContain, release.Title))
         {
             return false;
         }
@@ -106,5 +108,32 @@ public class RssRule : ModelBase
         }
 
         return true;
+    }
+
+    [global::System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA3012:Review code for regex injection vulnerabilities", Justification = "Pattern supplied by user in rule definition")]
+    private static bool IsTitleMatch(string pattern, string title)
+    {
+        if (string.IsNullOrWhiteSpace(pattern))
+        {
+            return true;
+        }
+
+        if (title == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return Regex.IsMatch(title, pattern, RegexOptions.IgnoreCase, RegexTimeout);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
+        catch (ArgumentException)
+        {
+            return title.Contains(pattern, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

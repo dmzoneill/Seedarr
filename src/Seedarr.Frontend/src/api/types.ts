@@ -679,6 +679,7 @@ export interface RssRule {
   mustNotContain: string;
   minSeeders: number;
   allowUnknownSeeders?: boolean;
+  priority?: number;
   minSizeBytes: number;
   maxSizeBytes: number;
   maxAgeDays?: number;
