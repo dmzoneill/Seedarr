@@ -19,6 +19,8 @@ public interface IConfigService
     string InstanceUuid { get; }
 
     // General
+    bool IsSetupCompleted { get; set; }
+    bool AuthenticationEnabled { get; set; }
     bool AutoStart { get; }
     bool AutoPruneRemovedArtwork { get; }
     int MediaCoverMaxCacheSizeMb { get; set; }
@@ -367,6 +369,18 @@ public class ConfigService : IConfigService
     }
 
     // General
+    public bool IsSetupCompleted
+    {
+        get => GetValueBoolean("IsSetupCompleted", false);
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "IsSetupCompleted", value } });
+    }
+
+    public bool AuthenticationEnabled
+    {
+        get => GetValueBoolean("AuthenticationEnabled", false);
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "AuthenticationEnabled", value } });
+    }
+
     public bool AutoStart => GetValueBoolean("AutoStart", true);
     public bool AutoPruneRemovedArtwork => GetValueBoolean("AutoPruneRemovedArtwork", true);
 

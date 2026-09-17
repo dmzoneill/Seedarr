@@ -26,6 +26,10 @@ public interface IConfigFileProvider
 
     bool AuthenticationEnabled { get; }
 
+    bool IsSetupCompleted { get; }
+
+    void SetIsSetupCompleted(bool isCompleted);
+
     bool TerminalAccessEnabled { get; }
 
     string LogLevel { get; }

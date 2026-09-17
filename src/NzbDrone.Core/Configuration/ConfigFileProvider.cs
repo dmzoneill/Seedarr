@@ -60,6 +60,13 @@ public class ConfigFileProvider : IConfigFileProvider
 
     public bool AuthenticationEnabled => GetValueBool("AuthenticationEnabled", false);
 
+    public bool IsSetupCompleted => GetValueBool("IsSetupCompleted", false);
+
+    public void SetIsSetupCompleted(bool isCompleted)
+    {
+        SetValue("IsSetupCompleted", isCompleted ? "true" : "false");
+    }
+
     public bool TerminalAccessEnabled => GetValueBool("TerminalAccessEnabled", true);
 
     public string LogLevel => GetValue("LogLevel", "info");

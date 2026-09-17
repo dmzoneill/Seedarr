@@ -9,6 +9,8 @@ import type {
   LoginRequest,
   CustomScriptTestRequest,
   CustomScriptTestResult,
+  SetupStatus,
+  SetupCompleteRequest,
 } from "./types";
 
 const BASE_URL = "/api/v1";
@@ -213,6 +215,14 @@ class ApiClient {
 
   logout(): Promise<{ message: string }> {
     return this.post<{ message: string }>("/auth/logout");
+  }
+
+  getSetupStatus(): Promise<SetupStatus> {
+    return this.get<SetupStatus>("/system/setup/status");
+  }
+
+  completeSetup(payload: SetupCompleteRequest): Promise<{ message: string; isSetupCompleted: boolean; isAuthEnabled: boolean }> {
+    return this.post<{ message: string; isSetupCompleted: boolean; isAuthEnabled: boolean }>("/system/setup/complete", payload);
   }
 
   testCustomScript(

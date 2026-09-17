@@ -776,6 +776,12 @@ public class CertificateManager : ICertificateManager, IDisposable
 
         public bool AuthenticationEnabled => false;
 
+        public bool IsSetupCompleted => false;
+
+        public void SetIsSetupCompleted(bool isCompleted)
+        {
+        }
+
         public bool TerminalAccessEnabled => true;
 
         public string LogLevel => "info";
