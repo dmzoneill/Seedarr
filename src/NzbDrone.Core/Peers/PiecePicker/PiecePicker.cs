@@ -1,10 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using NzbDrone.Core.Torrents;
 
-namespace NzbDrone.Core.Peers;
+namespace NzbDrone.Core.Peers.PiecePicker;
 
 public class PieceBlock
 {
@@ -71,7 +73,7 @@ public interface IPieceBlockDownloader
     void OnBlockRejected(PeerConnection peer, int pieceIndex, int begin, int length);
 }
 
-public interface IPiecePicker : IPieceBlockDownloader
+public interface IDownloadManager : IPieceBlockDownloader
 {
     TimeSpan RequestTimeout { get; set; }
     IReadOnlyDictionary<int, ActivePiece> ActivePieces { get; }
@@ -82,6 +84,11 @@ public interface IPiecePicker : IPieceBlockDownloader
 
     bool CanRequestBlock(PeerConnection peer, int pieceIndex);
     PieceBlock RequestBlock(PeerConnection peer, int pieceIndex = -1);
+    PieceBlock RequestBlock(PeerConnection peer, int pieceIndex, bool sequential);
+    IPiecePicker SequentialPicker { get; }
+    IPiecePicker RarestFirstPicker { get; }
+    IPiecePicker GetPicker(Torrent torrent);
+    IPiecePicker GetPicker(bool sequential);
     void MarkBlockRequested(PeerConnection peer, int pieceIndex, int begin, int length, TimeSpan? timeout = null);
     void MarkBlockCompleted(int pieceIndex, int begin, int length);
 
@@ -90,17 +97,79 @@ public interface IPiecePicker : IPieceBlockDownloader
     void ProcessTimeouts();
 }
 
-public interface IDownloadManager : IPiecePicker
-{
-}
-
-public class PiecePicker : IDownloadManager
+public class PiecePicker : IDownloadManager, IPiecePicker
 {
     private readonly ConcurrentDictionary<int, ActivePiece> _activePieces = new();
     private readonly object _syncLock = new();
+    private readonly IPiecePicker _sequentialPicker;
+    private readonly IPiecePicker _rarestFirstPicker;
 
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(30);
     public IReadOnlyDictionary<int, ActivePiece> ActivePieces => _activePieces;
+    public IPiecePicker SequentialPicker => _sequentialPicker;
+    public IPiecePicker RarestFirstPicker => _rarestFirstPicker;
+
+    public PiecePicker(IPiecePicker sequentialPicker = null, IPiecePicker rarestFirstPicker = null)
+    {
+        _rarestFirstPicker = rarestFirstPicker ?? new RarestFirstPiecePicker();
+        _sequentialPicker = sequentialPicker ?? new SequentialPiecePicker(_rarestFirstPicker);
+    }
+
+    public IPiecePicker GetPicker(Torrent torrent)
+    {
+        return torrent?.SequentialDownload == true ? _sequentialPicker : _rarestFirstPicker;
+    }
+
+    public IPiecePicker GetPicker(bool sequential)
+    {
+        return sequential ? _sequentialPicker : _rarestFirstPicker;
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        BitArray peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow = 20,
+        double rarestFirstRatio = 0.2)
+    {
+        return GetPicker(sequential).PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio);
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        IReadOnlyList<BitArray> peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow = 20,
+        double rarestFirstRatio = 0.2)
+    {
+        return GetPicker(sequential).PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio);
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        BitArray peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow,
+        double rarestFirstRatio,
+        IReadOnlyCollection<int> activePieces)
+    {
+        return GetPicker(sequential).PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, activePieces);
+    }
+
+    public int? PickPiece(
+        BitArray myPieces,
+        IReadOnlyList<BitArray> peerPieces,
+        IReadOnlyList<int> pieceAvailability,
+        bool sequential,
+        int lookaheadWindow,
+        double rarestFirstRatio,
+        IReadOnlyCollection<int> activePieces)
+    {
+        return GetPicker(sequential).PickPiece(myPieces, peerPieces, pieceAvailability, sequential, lookaheadWindow, rarestFirstRatio, activePieces);
+    }
 
     public ActivePiece AddActivePiece(int pieceIndex, int pieceLength, int blockSize = 16384)
     {
@@ -136,6 +205,16 @@ public class PiecePicker : IDownloadManager
     }
 
     public PieceBlock RequestBlock(PeerConnection peer, int pieceIndex = -1)
+    {
+        return RequestBlock(peer, pieceIndex, false);
+    }
+
+    public PieceBlock RequestBlock(PeerConnection peer, int pieceIndex, Torrent torrent)
+    {
+        return RequestBlock(peer, pieceIndex, torrent?.SequentialDownload ?? false);
+    }
+
+    public PieceBlock RequestBlock(PeerConnection peer, int pieceIndex, bool sequential)
     {
         if (peer == null)
         {
@@ -193,7 +272,11 @@ public class PiecePicker : IDownloadManager
                 return null;
             }
 
-            foreach (var kvp in _activePieces)
+            var piecesToConsider = sequential
+                ? (IEnumerable<KeyValuePair<int, ActivePiece>>)_activePieces.OrderBy(kvp => kvp.Key)
+                : _activePieces;
+
+            foreach (var kvp in piecesToConsider)
             {
                 var idx = kvp.Key;
                 var activePiece = kvp.Value;

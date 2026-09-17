@@ -50,7 +50,9 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     private readonly Extensions.ISyntheticMetadataGenerator _syntheticMetadataGenerator;
     private readonly Extensions.IMagnetMetadataDownloader _magnetMetadataDownloader;
     private readonly Extensions.IPeerExchange _peerExchange;
-    private readonly IPiecePicker _piecePicker;
+    private readonly PiecePicker.PiecePicker _piecePicker;
+    private readonly PiecePicker.IPiecePicker _sequentialPicker;
+    private readonly PiecePicker.IPiecePicker _rarestFirstPicker;
     private readonly IPieceStorage _pieceStorage;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
@@ -65,11 +67,23 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     private CancellationTokenSource _listenerCts;
 
     public Socket ListenerSocket => _listener?.Server;
-    public IPiecePicker PiecePicker => _piecePicker;
+    public PiecePicker.PiecePicker PiecePicker => _piecePicker;
+    public PiecePicker.IPiecePicker SequentialPicker => _piecePicker?.SequentialPicker ?? _sequentialPicker;
+    public PiecePicker.IPiecePicker RarestFirstPicker => _piecePicker?.RarestFirstPicker ?? _rarestFirstPicker;
     public bool IsListening { get; private set; }
     public bool BindFailed { get; private set; }
     public int ListeningPort { get; private set; }
     public string BindErrorMessage { get; private set; }
+
+    public PiecePicker.IPiecePicker GetPiecePicker(Torrent torrent)
+    {
+        return torrent?.SequentialDownload == true ? SequentialPicker : RarestFirstPicker;
+    }
+
+    public PiecePicker.IPiecePicker GetPiecePicker(bool sequential)
+    {
+        return sequential ? SequentialPicker : RarestFirstPicker;
+    }
 
     internal bool IsOutgoingEndpointInFlight(string ip, int port) => _inFlightOutgoingEndpoints.ContainsKey($"{ip}:{port}");
 
@@ -181,7 +195,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         Extensions.ISyntheticMetadataGenerator syntheticMetadataGenerator = null,
         Extensions.IMagnetMetadataDownloader magnetMetadataDownloader = null,
         Extensions.IPeerExchange peerExchange = null,
-        IPiecePicker piecePicker = null,
+        PiecePicker.PiecePicker piecePicker = null,
         IPieceStorage pieceStorage = null)
     {
         _configService = configService;
@@ -202,14 +216,16 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _syntheticMetadataGenerator = syntheticMetadataGenerator ?? new Extensions.SyntheticMetadataGenerator();
         _magnetMetadataDownloader = magnetMetadataDownloader;
         _peerExchange = peerExchange ?? new Extensions.PeerExchange(_configService);
-        _piecePicker = piecePicker ?? new PiecePicker();
+        _random = random ?? new RandomNumberGenerator();
+        _rarestFirstPicker = new PiecePicker.RarestFirstPiecePicker(_random);
+        _sequentialPicker = new PiecePicker.SequentialPiecePicker(_rarestFirstPicker, _random);
+        _piecePicker = piecePicker ?? new PiecePicker.PiecePicker(_sequentialPicker, _rarestFirstPicker);
         _pieceStorage = pieceStorage;
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
                 : null);
         _clientBehaviorSimulator = clientBehaviorSimulator;
-        _random = random ?? new RandomNumberGenerator();
         _utpManager = utpManager;
         _vpnKillSwitchService = vpnKillSwitchService;
 
@@ -489,9 +505,16 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         return !connection.PeerChoking || (connection.SupportsFastExtension && connection.RemoteAllowedFastPieces.Contains(pieceIndex));
     }
 
-    public PieceBlock RequestBlock(PeerConnection connection, int pieceIndex = -1)
+    public PiecePicker.PieceBlock RequestBlock(PeerConnection connection, int pieceIndex = -1)
     {
-        return _piecePicker?.RequestBlock(connection, pieceIndex);
+        var torrent = connection?.MatchedTorrent ?? GetCachedTorrent(connection?.InfoHash);
+        var sequential = torrent?.SequentialDownload ?? false;
+        return _piecePicker?.RequestBlock(connection, pieceIndex, sequential);
+    }
+
+    public PiecePicker.PieceBlock RequestBlock(PeerConnection connection, int pieceIndex, bool sequential)
+    {
+        return _piecePicker?.RequestBlock(connection, pieceIndex, sequential);
     }
 
     public void SetTorrentMetadata(string infoHash, byte[] metadata)
