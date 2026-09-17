@@ -327,7 +327,7 @@ public class MultiTrackerManagerTest
     {
         _configService.MultiTrackerFailoverEnabled.Returns(false);
 
-        var method = typeof(MultiTrackerManager).GetMethod("IsTrackerBackedOff", BindingFlags.NonPublic | BindingFlags.Instance);
+        var method = typeof(MultiTrackerManager).GetMethod("IsTrackerBackedOff", BindingFlags.NonPublic | BindingFlags.Instance, new[] { typeof(string) });
         var result = (bool)method.Invoke(_manager, new object[] { "http://tracker.com/announce" });
 
         Assert.That(result, Is.False);
@@ -336,10 +336,141 @@ public class MultiTrackerManagerTest
     [Test]
     public void IsTrackerBackedOff_should_return_false_for_unknown_tracker()
     {
-        var method = typeof(MultiTrackerManager).GetMethod("IsTrackerBackedOff", BindingFlags.NonPublic | BindingFlags.Instance);
+        var method = typeof(MultiTrackerManager).GetMethod("IsTrackerBackedOff", BindingFlags.NonPublic | BindingFlags.Instance, new[] { typeof(string) });
         var result = (bool)method.Invoke(_manager, new object[] { "http://unknown.com/announce" });
 
         Assert.That(result, Is.False);
+    }
+
+    [Test]
+    public void Announce_should_isolate_torrent_specific_failure_and_allow_other_torrents_to_announce()
+    {
+        _configService.FailoverMaxConsecutiveFailures.Returns(1);
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.InfoHash == "AABBCCDD00112233445566778899AABBCCDDEEFF"))
+            .Returns(new TrackerAnnounceResponse { Success = false, FailureReason = "unregistered torrent" });
+        _httpTracker.Announce(Arg.Is<TrackerAnnounceRequest>(r => r.InfoHash == "11223344556677889900AABBCCDDEEFF00112233"))
+            .Returns(new TrackerAnnounceResponse { Success = true, Interval = 1800 });
+
+        var requestA = CreateRequest();
+        var requestB = new TrackerAnnounceRequest
+        {
+            InfoHash = "11223344556677889900AABBCCDDEEFF00112233",
+            PeerId = "-qB4420-otherpeer123",
+            Port = 6881,
+            Uploaded = 0,
+            Downloaded = 0,
+            Left = 1000,
+            NumWant = 50
+        };
+
+        var announceList = new List<List<string>>
+        {
+            new() { "http://tracker.com/announce" }
+        };
+
+        // Torrent A fails with application-level rejection
+        var resultA1 = _manager.Announce(requestA, announceList);
+        Assert.That(resultA1.Success, Is.False);
+
+        // Torrent A is now backed off on this tracker
+        var resultA2 = _manager.Announce(requestA, announceList);
+        Assert.That(resultA2.Success, Is.False);
+        Assert.That(resultA2.FailureReason, Is.EqualTo("All trackers failed"));
+
+        // Torrent B sharing the same tracker URL must NOT be backed off and should succeed!
+        var resultB = _manager.Announce(requestB, announceList);
+        Assert.That(resultB.Success, Is.True);
+    }
+
+    [Test]
+    public void Announce_should_back_off_all_torrents_on_network_error()
+    {
+        _configService.FailoverMaxConsecutiveFailures.Returns(1);
+        _httpTracker.Announce(Arg.Any<TrackerAnnounceRequest>())
+            .Returns(new TrackerAnnounceResponse { Success = false, FailureReason = "Connection refused" });
+
+        var requestA = CreateRequest();
+        var requestB = new TrackerAnnounceRequest
+        {
+            InfoHash = "11223344556677889900AABBCCDDEEFF00112233",
+            PeerId = "-qB4420-otherpeer123",
+            Port = 6881,
+            Uploaded = 0,
+            Downloaded = 0,
+            Left = 1000,
+            NumWant = 50
+        };
+
+        var announceList = new List<List<string>>
+        {
+            new() { "http://tracker.com/announce" }
+        };
+
+        // Torrent A encounters a network error
+        _manager.Announce(requestA, announceList);
+
+        // Tracker host is now backed off globally; Torrent B should also be backed off
+        var resultB = _manager.Announce(requestB, announceList);
+        Assert.That(resultB.Success, Is.False);
+        Assert.That(resultB.FailureReason, Is.EqualTo("All trackers failed"));
+    }
+
+    [Test]
+    public void IsTrackerBackedOff_with_infohash_should_isolate_by_infohash()
+    {
+        _configService.FailoverMaxConsecutiveFailures.Returns(1);
+
+        var recordFailureMethod = typeof(MultiTrackerManager).GetMethod(
+            "RecordFailure",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(string), typeof(string), typeof(bool) });
+
+        var isBackedOffMethod = typeof(MultiTrackerManager).GetMethod(
+            "IsTrackerBackedOff",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(string), typeof(string) });
+
+        var hashA = "AABBCCDD00112233445566778899AABBCCDDEEFF";
+        var hashB = "11223344556677889900AABBCCDDEEFF00112233";
+        var trackerUrl = "http://tracker.com/announce";
+
+        // Record torrent-level failure for Torrent A
+        recordFailureMethod.Invoke(_manager, new object[] { hashA, trackerUrl, false });
+
+        var backedOffA = (bool)isBackedOffMethod.Invoke(_manager, new object[] { hashA, trackerUrl });
+        var backedOffB = (bool)isBackedOffMethod.Invoke(_manager, new object[] { hashB, trackerUrl });
+
+        Assert.That(backedOffA, Is.True);
+        Assert.That(backedOffB, Is.False);
+    }
+
+    [Test]
+    public void IsTrackerBackedOff_should_return_true_for_all_torrents_when_host_backed_off()
+    {
+        _configService.FailoverMaxConsecutiveFailures.Returns(1);
+
+        var recordFailureMethod = typeof(MultiTrackerManager).GetMethod(
+            "RecordFailure",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(string), typeof(string), typeof(bool) });
+
+        var isBackedOffMethod = typeof(MultiTrackerManager).GetMethod(
+            "IsTrackerBackedOff",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            new[] { typeof(string), typeof(string) });
+
+        var hashA = "AABBCCDD00112233445566778899AABBCCDDEEFF";
+        var hashB = "11223344556677889900AABBCCDDEEFF00112233";
+        var trackerUrl = "http://tracker.com/announce";
+
+        // Record host-level network failure
+        recordFailureMethod.Invoke(_manager, new object[] { hashA, trackerUrl, true });
+
+        var backedOffA = (bool)isBackedOffMethod.Invoke(_manager, new object[] { hashA, trackerUrl });
+        var backedOffB = (bool)isBackedOffMethod.Invoke(_manager, new object[] { hashB, trackerUrl });
+
+        Assert.That(backedOffA, Is.True);
+        Assert.That(backedOffB, Is.True);
     }
 
     [Test]

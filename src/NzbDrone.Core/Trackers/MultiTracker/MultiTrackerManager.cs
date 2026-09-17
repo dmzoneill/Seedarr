@@ -52,10 +52,11 @@ public class MultiTrackerManager : IMultiTrackerManager
                 return new TrackerAnnounceResponse { Success = false, FailureReason = "No trackers available" };
             }
 
-            return AnnounceToTracker(request, firstTracker);
+            return AnnounceToTracker(request, firstTracker).Response;
         }
 
         return ExecuteTrackerOperation(
+            request.InfoHash,
             announceList,
             trackerUrl => AnnounceToTracker(request, trackerUrl),
             () => new TrackerAnnounceResponse { Success = false, FailureReason = "All trackers failed" },
@@ -72,10 +73,11 @@ public class MultiTrackerManager : IMultiTrackerManager
                 return new TrackerScrapeResponse { Success = false, FailureReason = "No trackers available" };
             }
 
-            return ScrapeTracker(infoHash, firstTracker);
+            return ScrapeTracker(infoHash, firstTracker).Response;
         }
 
         return ExecuteTrackerOperation(
+            infoHash,
             announceList,
             trackerUrl => ScrapeTracker(infoHash, trackerUrl),
             () => new TrackerScrapeResponse { Success = false, FailureReason = "All trackers failed" },
@@ -83,8 +85,9 @@ public class MultiTrackerManager : IMultiTrackerManager
     }
 
     private TResponse ExecuteTrackerOperation<TResponse>(
+        string infoHash,
         List<List<string>> announceList,
-        Func<string, TResponse> operation,
+        Func<string, (TResponse Response, bool IsNetworkError)> operation,
         Func<TResponse> fallbackResponse,
         bool logBackoffSkip)
         where TResponse : class, ITrackerResponse
@@ -97,7 +100,7 @@ public class MultiTrackerManager : IMultiTrackerManager
         {
             foreach (var trackerUrl in tier)
             {
-                if (IsTrackerBackedOff(trackerUrl))
+                if (IsTrackerBackedOff(infoHash, trackerUrl))
                 {
                     if (logBackoffSkip)
                     {
@@ -107,11 +110,11 @@ public class MultiTrackerManager : IMultiTrackerManager
                     continue;
                 }
 
-                var response = operation(trackerUrl);
+                var (response, isNetworkError) = operation(trackerUrl);
 
                 if (response != null && response.Success)
                 {
-                    ResetFailureState(trackerUrl);
+                    ResetFailureState(infoHash, trackerUrl);
 
                     if (bestResponse == null)
                     {
@@ -125,7 +128,7 @@ public class MultiTrackerManager : IMultiTrackerManager
                 }
                 else
                 {
-                    RecordFailure(trackerUrl);
+                    RecordFailure(infoHash, trackerUrl, isNetworkError);
                 }
             }
 
@@ -138,7 +141,7 @@ public class MultiTrackerManager : IMultiTrackerManager
         return bestResponse ?? fallbackResponse();
     }
 
-    private TrackerAnnounceResponse AnnounceToTracker(TrackerAnnounceRequest request, string trackerUrl)
+    private (TrackerAnnounceResponse Response, bool IsNetworkError) AnnounceToTracker(TrackerAnnounceRequest request, string trackerUrl)
     {
         try
         {
@@ -146,7 +149,7 @@ public class MultiTrackerManager : IMultiTrackerManager
             var provider = GetProvider(trackerUrl);
             if (provider == null)
             {
-                return new TrackerAnnounceResponse { Success = false, FailureReason = "Unknown tracker protocol" };
+                return (new TrackerAnnounceResponse { Success = false, FailureReason = "Unknown tracker protocol" }, true);
             }
 
             var response = provider.Announce(request);
@@ -155,42 +158,66 @@ public class MultiTrackerManager : IMultiTrackerManager
                 _logger.Warn("Tracker {0} failed: {1}", trackerUrl, response.FailureReason);
             }
 
-            return response;
+            var isNetwork = IsNetworkError(response?.FailureReason);
+            return (response, isNetwork);
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Tracker {0} error", trackerUrl);
-            return new TrackerAnnounceResponse { Success = false, FailureReason = ex.Message };
+            return (new TrackerAnnounceResponse { Success = false, FailureReason = ex.Message }, true);
         }
     }
 
-    private TrackerScrapeResponse ScrapeTracker(string infoHash, string trackerUrl)
+    private (TrackerScrapeResponse Response, bool IsNetworkError) ScrapeTracker(string infoHash, string trackerUrl)
     {
         try
         {
             var provider = GetProvider(trackerUrl);
             if (provider == null)
             {
-                return new TrackerScrapeResponse { Success = false, FailureReason = "Unknown tracker protocol" };
+                return (new TrackerScrapeResponse { Success = false, FailureReason = "Unknown tracker protocol" }, true);
             }
 
-            return provider.Scrape(infoHash, trackerUrl);
+            var response = provider.Scrape(infoHash, trackerUrl);
+            var isNetwork = IsNetworkError(response?.FailureReason);
+            return (response, isNetwork);
         }
         catch (Exception ex)
         {
             _logger.Warn(ex, "Scrape {0} error", trackerUrl);
-            return new TrackerScrapeResponse { Success = false, FailureReason = ex.Message };
+            return (new TrackerScrapeResponse { Success = false, FailureReason = ex.Message }, true);
         }
     }
 
     private bool IsTrackerBackedOff(string trackerUrl)
+    {
+        return IsTrackerBackedOff(null, trackerUrl);
+    }
+
+    private bool IsTrackerBackedOff(string infoHash, string trackerUrl)
     {
         if (!_configService.MultiTrackerFailoverEnabled)
         {
             return false;
         }
 
-        if (!_failureStates.TryGetValue(trackerUrl, out var state))
+        if (IsKeyBackedOff(trackerUrl))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(infoHash))
+        {
+            var torrentKey = GetTorrentKey(infoHash, trackerUrl);
+            return IsKeyBackedOff(torrentKey);
+        }
+
+        return false;
+    }
+
+    private bool IsKeyBackedOff(string key)
+    {
+        if (!_failureStates.TryGetValue(key, out var state))
         {
             return false;
         }
@@ -205,12 +232,21 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     private void RecordFailure(string trackerUrl)
     {
+        RecordFailure(null, trackerUrl, isNetworkError: true);
+    }
+
+    private void RecordFailure(string infoHash, string trackerUrl, bool isNetworkError = false)
+    {
         if (!_configService.MultiTrackerFailoverEnabled)
         {
             return;
         }
 
-        var state = _failureStates.GetOrAdd(trackerUrl, _ => new TrackerFailureState());
+        var key = (isNetworkError || string.IsNullOrWhiteSpace(infoHash))
+            ? trackerUrl
+            : GetTorrentKey(infoHash, trackerUrl);
+
+        var state = _failureStates.GetOrAdd(key, _ => new TrackerFailureState());
         var failures = Interlocked.Increment(ref state.ConsecutiveFailures);
 
         var maxFailures = _configService.FailoverMaxConsecutiveFailures;
@@ -222,10 +258,11 @@ public class MultiTrackerManager : IMultiTrackerManager
             var backoffSeconds = Math.Min(baseSeconds * Math.Pow(2, exponent), maxBackoffSeconds);
             state.BackoffUntil = DateTime.UtcNow.AddSeconds(backoffSeconds);
             _logger.Warn(
-                "Tracker {0} disabled for {1:F0}s after {2} consecutive failures",
+                "Tracker {0} disabled for {1:F0}s after {2} consecutive failures (key: {3})",
                 trackerUrl,
                 backoffSeconds,
-                failures);
+                failures,
+                key);
         }
 
         if (_failureStates.Count > 1000)
@@ -250,7 +287,61 @@ public class MultiTrackerManager : IMultiTrackerManager
 
     private void ResetFailureState(string trackerUrl)
     {
+        ResetFailureState(null, trackerUrl);
+    }
+
+    private void ResetFailureState(string infoHash, string trackerUrl)
+    {
         _failureStates.TryRemove(trackerUrl, out _);
+
+        if (!string.IsNullOrWhiteSpace(infoHash))
+        {
+            _failureStates.TryRemove(GetTorrentKey(infoHash, trackerUrl), out _);
+        }
+    }
+
+    private static string GetTorrentKey(string infoHash, string trackerUrl)
+    {
+        return $"{infoHash.ToLowerInvariant()}@{trackerUrl}";
+    }
+
+    private static bool IsNetworkError(string failureReason)
+    {
+        if (string.IsNullOrWhiteSpace(failureReason))
+        {
+            return true;
+        }
+
+        var lower = failureReason.ToLowerInvariant();
+
+        if (lower.Contains("torrent") ||
+            lower.Contains("hash") ||
+            lower.Contains("passkey") ||
+            lower.Contains("unregistered") ||
+            lower.Contains("not registered"))
+        {
+            return false;
+        }
+
+        if (lower.Contains("timeout") ||
+            lower.Contains("timed out") ||
+            lower.Contains("connection") ||
+            lower.Contains("socket") ||
+            lower.Contains("unreachable") ||
+            lower.Contains("refused") ||
+            lower.Contains("reset") ||
+            lower.Contains("dns") ||
+            lower.Contains("host") ||
+            lower.Contains("network") ||
+            lower.Contains("gateway") ||
+            lower.Contains("unavailable") ||
+            lower.Contains("protocol") ||
+            lower == "error")
+        {
+            return true;
+        }
+
+        return false;
     }
 
     private ITrackerProvider GetProvider(string url)
