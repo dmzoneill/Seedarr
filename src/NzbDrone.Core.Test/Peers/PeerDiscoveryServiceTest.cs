@@ -1,0 +1,181 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using NUnit.Framework;
+using NzbDrone.Core.Peers;
+using NzbDrone.Core.Trackers;
+
+namespace NzbDrone.Core.Test.Peers;
+
+[TestFixture]
+public class PeerDiscoveryServiceTest
+{
+    private const string InfoHash = "0123456789abcdef0123456789abcdef01234567";
+    private PeerDiscoveryService _service;
+
+    [SetUp]
+    public void Setup()
+    {
+        _service = new PeerDiscoveryService();
+    }
+
+    [Test]
+    public void GetPeers_should_select_LPD_peers_ahead_of_tracker_and_DHT_peers_even_if_DHT_discovered_more_recently()
+    {
+        var lpdPeer = new TrackerPeer { Ip = "192.168.1.100", Port = 5001 };
+        var trackerPeer = new TrackerPeer { Ip = "2.2.2.2", Port = 5002 };
+        var dhtPeer = new TrackerPeer { Ip = "1.1.1.1", Port = 5003 };
+
+        _service.AddPeers(InfoHash, new[] { lpdPeer }, "lpd");
+        _service.AddPeers(InfoHash, new[] { trackerPeer }, "tracker");
+        _service.AddPeers(InfoHash, new[] { dhtPeer }, "dht");
+
+        var peers = _service.GetPeers(InfoHash, 10);
+
+        Assert.That(peers.Count, Is.EqualTo(3));
+        Assert.That(peers[0].Source, Is.EqualTo("lpd"));
+        Assert.That(peers[0].Ip, Is.EqualTo("192.168.1.100"));
+        Assert.That(peers[1].Source, Is.EqualTo("tracker"));
+        Assert.That(peers[1].Ip, Is.EqualTo("2.2.2.2"));
+        Assert.That(peers[2].Source, Is.EqualTo("dht"));
+        Assert.That(peers[2].Ip, Is.EqualTo("1.1.1.1"));
+    }
+
+    [Test]
+    public void Candidate_eviction_should_protect_LPD_peers_when_list_exceeds_MaxPeersPerTorrent()
+    {
+        var lpdPeers = new List<TrackerPeer>
+        {
+            new TrackerPeer { Ip = "192.168.1.10", Port = 5000 },
+            new TrackerPeer { Ip = "192.168.1.11", Port = 5001 },
+            new TrackerPeer { Ip = "192.168.1.12", Port = 5002 }
+        };
+
+        _service.AddPeers(InfoHash, lpdPeers, "lpd");
+
+        var dhtPeers = new List<TrackerPeer>();
+        for (var i = 1; i <= 210; i++)
+        {
+            dhtPeers.Add(new TrackerPeer
+            {
+                Ip = $"10.0.{i / 256}.{i % 256}",
+                Port = 6000 + i
+            });
+        }
+
+        _service.AddPeers(InfoHash, dhtPeers, "dht");
+
+        var peers = _service.GetPeers(InfoHash, 200);
+
+        Assert.That(peers.Count, Is.EqualTo(200));
+
+        foreach (var lpd in lpdPeers)
+        {
+            Assert.That(peers.Any(p => p.Ip == lpd.Ip && p.Port == lpd.Port && p.Source == "lpd"), Is.True);
+        }
+    }
+
+    [Test]
+    public void Candidate_eviction_should_evict_failed_peers_before_active_peers()
+    {
+        var failedPeers = new List<TrackerPeer>();
+        for (var i = 1; i <= 5; i++)
+        {
+            failedPeers.Add(new TrackerPeer { Ip = $"8.8.8.{i}", Port = 7000 + i });
+        }
+
+        _service.AddPeers(InfoHash, failedPeers, "tracker");
+
+        for (var i = 1; i <= 5; i++)
+        {
+            _service.MarkAttempted(InfoHash, $"8.8.8.{i}", 7000 + i, success: false);
+            _service.MarkAttempted(InfoHash, $"8.8.8.{i}", 7000 + i, success: false);
+            _service.MarkAttempted(InfoHash, $"8.8.8.{i}", 7000 + i, success: false);
+        }
+
+        var activePeers = new List<TrackerPeer>();
+        for (var i = 1; i <= 200; i++)
+        {
+            activePeers.Add(new TrackerPeer { Ip = $"9.9.{i / 256}.{i % 256}", Port = 8000 + i });
+        }
+
+        _service.AddPeers(InfoHash, activePeers, "dht");
+
+        var lpdPeer = new TrackerPeer { Ip = "192.168.1.99", Port = 51413 };
+        _service.AddPeers(InfoHash, new[] { lpdPeer }, "lpd");
+
+        var peers = _service.GetPeers(InfoHash, 200);
+
+        Assert.That(peers.Count, Is.EqualTo(200));
+        Assert.That(peers.Any(p => p.Ip == lpdPeer.Ip), Is.True);
+        Assert.That(peers.Any(p => failedPeers.Any(fp => fp.Ip == p.Ip)), Is.False);
+    }
+
+    [Test]
+    public void LPD_peers_should_become_eligible_for_retry_much_sooner_than_WAN_peers()
+    {
+        var lpdPeer = new TrackerPeer { Ip = "192.168.1.50", Port = 6881 };
+        var wanPeer = new TrackerPeer { Ip = "45.33.32.156", Port = 6881 };
+
+        _service.AddPeers(InfoHash, new[] { lpdPeer }, "lpd");
+        _service.AddPeers(InfoHash, new[] { wanPeer }, "tracker");
+
+        var candidates = _service.GetPeers(InfoHash, 10);
+        var lpdDiscovered = candidates.First(p => p.Source == "lpd");
+        var wanDiscovered = candidates.First(p => p.Source == "tracker");
+
+        _service.MarkAttempted(InfoHash, lpdPeer.Ip, lpdPeer.Port, success: false);
+        _service.MarkAttempted(InfoHash, wanPeer.Ip, wanPeer.Port, success: false);
+
+        // Simulate 2 minutes having elapsed since the failed attempt
+        var twoMinutesAgo = DateTime.UtcNow.AddMinutes(-2);
+        lpdDiscovered.LastAttempt = twoMinutesAgo;
+        wanDiscovered.LastAttempt = twoMinutesAgo;
+
+        // At 2 minutes elapsed:
+        // LPD peer retry backoff is 1 minute -> eligible
+        // WAN peer retry backoff is 10 minutes -> not eligible
+        var peersAfterTwoMinutes = _service.GetPeers(InfoHash, 10);
+
+        Assert.That(peersAfterTwoMinutes.Count, Is.EqualTo(1));
+        Assert.That(peersAfterTwoMinutes[0].Ip, Is.EqualTo(lpdPeer.Ip));
+        Assert.That(peersAfterTwoMinutes[0].Source, Is.EqualTo("lpd"));
+
+        // Simulate 11 minutes having elapsed since the failed attempt
+        var elevenMinutesAgo = DateTime.UtcNow.AddMinutes(-11);
+        lpdDiscovered.LastAttempt = elevenMinutesAgo;
+        wanDiscovered.LastAttempt = elevenMinutesAgo;
+
+        var peersAfterElevenMinutes = _service.GetPeers(InfoHash, 10);
+
+        Assert.That(peersAfterElevenMinutes.Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void AddPeers_should_not_downgrade_existing_LPD_peer_when_re_announced_by_tracker()
+    {
+        var peer = new TrackerPeer { Ip = "192.168.1.50", Port = 6881 };
+
+        _service.AddPeers(InfoHash, new[] { peer }, "lpd");
+        _service.AddPeers(InfoHash, new[] { peer }, "tracker");
+
+        var peers = _service.GetPeers(InfoHash, 10);
+
+        Assert.That(peers.Count, Is.EqualTo(1));
+        Assert.That(peers[0].Source, Is.EqualTo("lpd"));
+    }
+
+    [Test]
+    public void AddPeers_should_upgrade_existing_peer_to_higher_priority_source()
+    {
+        var peer = new TrackerPeer { Ip = "192.168.1.50", Port = 6881 };
+
+        _service.AddPeers(InfoHash, new[] { peer }, "dht");
+        _service.AddPeers(InfoHash, new[] { peer }, "pex");
+
+        var peers = _service.GetPeers(InfoHash, 10);
+
+        Assert.That(peers.Count, Is.EqualTo(1));
+        Assert.That(peers[0].Source, Is.EqualTo("pex"));
+    }
+}
