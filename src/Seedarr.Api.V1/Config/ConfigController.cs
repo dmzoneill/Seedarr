@@ -314,11 +314,38 @@ public class SeedingConfigController : ConfigController<SeedingConfigResource>
 [V1ApiController("config/network")]
 public class NetworkConfigController : ConfigController<NetworkConfigResource>
 {
-    public NetworkConfigController(IConfigService configService)
+    private readonly IConfigFileProvider _configFileProvider;
+
+    public NetworkConfigController(IConfigService configService, IConfigFileProvider configFileProvider = null)
         : base(configService)
     {
+        _configFileProvider = configFileProvider;
+
         SharedValidator.RuleFor(c => c.ListeningPort)
-            .InclusiveBetween(1, 65535);
+            .InclusiveBetween(1024, 65535)
+            .WithMessage("Listening port must be a non-privileged port between 1024 and 65535.");
+
+        SharedValidator.RuleFor(c => c.ListeningPort)
+            .Must((resource, port) =>
+            {
+                if (_configFileProvider == null)
+                {
+                    return true;
+                }
+
+                if (_configFileProvider.Port > 0 && port == _configFileProvider.Port)
+                {
+                    return false;
+                }
+
+                if (_configFileProvider.SslPort > 0 && port == _configFileProvider.SslPort)
+                {
+                    return false;
+                }
+
+                return true;
+            })
+            .WithMessage("Listening port cannot conflict with web server Port or SslPort.");
 
         SharedValidator.RuleFor(c => c.MaxGlobalConnections)
             .GreaterThanOrEqualTo(1);
@@ -362,6 +389,24 @@ public class NetworkConfigController : ConfigController<NetworkConfigResource>
         if (resource == null)
         {
             return BadRequest("Request body cannot be empty.");
+        }
+
+        if (resource.ListeningPort < 1024 || resource.ListeningPort > 65535)
+        {
+            return BadRequest("Listening port must be a non-privileged port between 1024 and 65535.");
+        }
+
+        if (_configFileProvider != null)
+        {
+            if (_configFileProvider.Port > 0 && resource.ListeningPort == _configFileProvider.Port)
+            {
+                return BadRequest("Listening port cannot conflict with web server Port.");
+            }
+
+            if (_configFileProvider.SslPort > 0 && resource.ListeningPort == _configFileProvider.SslPort)
+            {
+                return BadRequest("Listening port cannot conflict with web server SslPort.");
+            }
         }
 
         // If the masked proxy password was sent back, preserve the existing value
