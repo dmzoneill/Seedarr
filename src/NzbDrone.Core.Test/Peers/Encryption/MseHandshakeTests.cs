@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Peers;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Torrents;
 
@@ -645,6 +646,168 @@ public class MseHandshakeTests
 
         Assert.That(outgoing.NegotiatedMethod, Is.EqualTo(CryptoMethod.PlainText));
         Assert.That(incoming.NegotiatedMethod, Is.EqualTo(CryptoMethod.PlainText));
+    }
+
+    [TestCase(1024)]
+    [TestCase(4096)]
+    [TestCase(8192)]
+    public void Incoming_handshake_with_ia_payload_larger_than_512_bytes_succeeds_and_decrypts(int payloadSize)
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        var payload = new byte[payloadSize];
+        for (var i = 0; i < payloadSize; i++)
+        {
+            payload[i] = (byte)(i % 251);
+        }
+
+        var taskA = Task.Run(() => outgoing.NegotiateOutgoing(sideA, payload));
+        var taskB = Task.Run(() => incoming.NegotiateIncoming(sideB, ValidateInfoHash));
+
+        Assert.That(Task.WhenAll(taskA, taskB).Wait(TimeSpan.FromSeconds(15)), Is.True, "Handshake timed out");
+
+        Assert.That(incoming.InitialApplicationData, Is.Not.Null);
+        Assert.That(incoming.InitialApplicationData, Is.EqualTo(payload));
+
+        var streamB = taskB.Result;
+        var readBuf = new byte[payloadSize];
+        var totalRead = 0;
+        while (totalRead < payloadSize)
+        {
+            var read = streamB.Read(readBuf, totalRead, payloadSize - totalRead);
+            if (read <= 0)
+            {
+                break;
+            }
+
+            totalRead += read;
+        }
+
+        Assert.That(totalRead, Is.EqualTo(payloadSize));
+        Assert.That(readBuf, Is.EqualTo(payload));
+    }
+
+    [Test]
+    public void ValidateIaLength_should_reject_length_greater_than_65535()
+    {
+        Assert.Throws<InvalidOperationException>(() => MseHandshake.ValidateIaLength(65536));
+        Assert.Throws<InvalidOperationException>(() => MseHandshake.ValidateIaLength(70000));
+    }
+
+    [Test]
+    public void NegotiateOutgoing_should_throw_when_initial_payload_exceeds_65535_bytes()
+    {
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        using var stream = new MemoryStream();
+        var oversizedPayload = new byte[65536];
+
+        Assert.Throws<InvalidOperationException>(() => outgoing.NegotiateOutgoing(stream, oversizedPayload));
+    }
+
+    [Test]
+    public void Outbound_MSE_handshake_pipelines_68_byte_bittorrent_handshake()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        var infoHashHex = Convert.ToHexString(TestInfoHash);
+        var btHandshake = PeerConnection.BuildHandshake(infoHashHex, "-SD1000-123456789012");
+        Assert.That(btHandshake.Length, Is.EqualTo(68));
+
+        var taskA = Task.Run(() => outgoing.NegotiateOutgoing(sideA, btHandshake));
+        var taskB = Task.Run(() => incoming.NegotiateIncoming(sideB, ValidateInfoHash));
+
+        Assert.That(Task.WhenAll(taskA, taskB).Wait(TimeSpan.FromSeconds(15)), Is.True, "Handshake timed out");
+
+        Assert.That(incoming.InitialApplicationData, Is.Not.Null);
+        Assert.That(incoming.InitialApplicationData, Is.EqualTo(btHandshake));
+
+        var streamB = taskB.Result;
+        var receivedHandshake = new byte[68];
+        var read = streamB.Read(receivedHandshake, 0, 68);
+        Assert.That(read, Is.EqualTo(68));
+        Assert.That(receivedHandshake, Is.EqualTo(btHandshake));
+
+        // Verify that subsequent communication flows through encrypted stream
+        var streamA = taskA.Result;
+        var message = Encoding.UTF8.GetBytes("SubsequentEncryptedPayload");
+        streamA.Write(message, 0, message.Length);
+        streamA.Flush();
+
+        var receivedMessage = new byte[message.Length];
+        var msgRead = streamB.Read(receivedMessage, 0, receivedMessage.Length);
+        Assert.That(msgRead, Is.EqualTo(message.Length));
+        Assert.That(receivedMessage, Is.EqualTo(message));
+    }
+
+    [Test]
+    public void Zero_length_ia_payload_succeeds_without_prefixed_data()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        var taskA = Task.Run(() => outgoing.NegotiateOutgoing(sideA, Array.Empty<byte>()));
+        var taskB = Task.Run(() => incoming.NegotiateIncoming(sideB, ValidateInfoHash));
+
+        Assert.That(Task.WhenAll(taskA, taskB).Wait(TimeSpan.FromSeconds(15)), Is.True, "Handshake timed out");
+
+        Assert.That(incoming.InitialApplicationData, Is.Null);
+
+        var streamA = taskA.Result;
+        var streamB = taskB.Result;
+        var testData = new byte[] { 0x42, 0x43, 0x44 };
+        streamA.Write(testData, 0, testData.Length);
+        streamA.Flush();
+
+        var readBuffer = new byte[testData.Length];
+        var read = streamB.Read(readBuffer, 0, readBuffer.Length);
+        Assert.That(read, Is.EqualTo(testData.Length));
+        Assert.That(readBuffer, Is.EqualTo(testData));
+    }
+
+    [Test]
+    public async Task Outbound_MSE_handshake_async_pipelines_payload_successfully()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var outgoing = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+        var incoming = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        var infoHashHex = Convert.ToHexString(TestInfoHash);
+        var btHandshake = PeerConnection.BuildHandshake(infoHashHex, "-SD1000-123456789012");
+
+        var taskA = outgoing.NegotiateOutgoingAsync(sideA, btHandshake).AsTask();
+        var taskB = incoming.NegotiateIncomingAsync(sideB, ValidateInfoHash).AsTask();
+
+        await Task.WhenAll(taskA, taskB);
+
+        Assert.That(incoming.InitialApplicationData, Is.EqualTo(btHandshake));
+        var streamB = await taskB;
+        var buf = new byte[68];
+        var read = await streamB.ReadAsync(buf.AsMemory(0, 68));
+        Assert.That(read, Is.EqualTo(68));
+        Assert.That(buf, Is.EqualTo(btHandshake));
+    }
+
+    [Test]
+    public void PeerConnection_NegotiateEncryptionOutgoing_pipelines_handshake_when_enabled()
+    {
+        var (sideA, sideB) = CreateConnectedPair();
+        var infoHashHex = Convert.ToHexString(TestInfoHash);
+        var connA = new PeerConnection(sideA, "127.0.0.1", 6881) { PeerId = "-SD1000-123456789012" };
+        var incomingHandshake = new MseHandshake(TestInfoHash, EncryptionMode.RequireEncrypted);
+
+        var taskA = Task.Run(() => connA.NegotiateEncryptionOutgoing(infoHashHex, EncryptionMode.RequireEncrypted));
+        var taskB = Task.Run(() => incomingHandshake.NegotiateIncoming(sideB, ValidateInfoHash));
+
+        Assert.That(Task.WhenAll(taskA, taskB).Wait(TimeSpan.FromSeconds(15)), Is.True, "Handshake timed out");
+        Assert.That(taskA.Result, Is.True);
+        Assert.That(connA.HandshakeSent, Is.True);
+        Assert.That(incomingHandshake.InitialApplicationData, Is.Not.Null);
+        Assert.That(incomingHandshake.InitialApplicationData.Length, Is.EqualTo(68));
     }
 
     /// <summary>
