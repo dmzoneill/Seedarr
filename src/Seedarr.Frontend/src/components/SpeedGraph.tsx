@@ -1,10 +1,73 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useMemo } from "react";
 import { useSpeedHistory, useSeedingStats } from "../api/hooks";
 import { formatSpeed } from "../utils/formatters";
+import {
+  downsampleLTTB,
+  SpeedRingBuffer,
+  type SpeedDataPoint,
+} from "../utils/downsample";
 
-interface SpeedDataPoint {
-  uploadSpeed: number;
-  downloadSpeed: number;
+export type TimeRange = "60s" | "5m" | "15m" | "30m";
+
+export interface TimeRangeConfig {
+  value: TimeRange;
+  label: string;
+  points: number;
+  startLabel: string;
+  midLabel: string;
+}
+
+export const TIME_RANGES: Record<TimeRange, TimeRangeConfig> = {
+  "60s": {
+    value: "60s",
+    label: "60s",
+    points: 60,
+    startLabel: "60s ago",
+    midLabel: "30s ago",
+  },
+  "5m": {
+    value: "5m",
+    label: "5m",
+    points: 300,
+    startLabel: "5m ago",
+    midLabel: "2.5m ago",
+  },
+  "15m": {
+    value: "15m",
+    label: "15m",
+    points: 900,
+    startLabel: "15m ago",
+    midLabel: "7.5m ago",
+  },
+  "30m": {
+    value: "30m",
+    label: "30m",
+    points: 1800,
+    startLabel: "30m ago",
+    midLabel: "15m ago",
+  },
+};
+
+export const TIME_RANGE_OPTIONS: TimeRangeConfig[] = Object.values(TIME_RANGES);
+export const MAX_BUFFER_POINTS = 1800;
+const STORAGE_KEY = "seedarr_speedgraph_range";
+
+function getInitialRange(propMaxPoints?: number): TimeRange {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && saved in TIME_RANGES) {
+      return saved as TimeRange;
+    }
+  } catch {
+    // localStorage might be unavailable
+  }
+  if (propMaxPoints) {
+    if (propMaxPoints >= 1800) return "30m";
+    if (propMaxPoints >= 900) return "15m";
+    if (propMaxPoints >= 300) return "5m";
+    return "60s";
+  }
+  return "60s";
 }
 
 interface SpeedGraphProps {
@@ -27,10 +90,17 @@ function getNiceMax(value: number): number {
   return nice * magnitude;
 }
 
-function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
+function SpeedGraph({ maxPoints }: SpeedGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] =
     useState<number>(DEFAULT_SVG_WIDTH);
+  const [selectedRange, setSelectedRange] = useState<TimeRange>(() =>
+    getInitialRange(maxPoints),
+  );
+  const currentRangeConfig = TIME_RANGES[selectedRange];
+  const ringBufferRef = useRef<SpeedRingBuffer>(
+    new SpeedRingBuffer(MAX_BUFFER_POINTS),
+  );
   const [history, setHistory] = useState<SpeedDataPoint[]>([]);
   const seededRef = useRef(false);
   const prevRef = useRef<{
@@ -65,13 +135,14 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
     if (!serverHistory || seededRef.current) return;
     seededRef.current = true;
 
-    const points: SpeedDataPoint[] = serverHistory
-      .slice(-maxPoints)
-      .map((s) => ({
-        uploadSpeed: s.uploadSpeed,
-        downloadSpeed: s.downloadSpeed,
-      }));
-    setHistory(points);
+    for (const s of serverHistory) {
+      ringBufferRef.current.push(
+        new Date(s.timestamp).getTime(),
+        s.uploadSpeed,
+        s.downloadSpeed,
+      );
+    }
+    setHistory(ringBufferRef.current.getPoints(currentRangeConfig.points));
 
     if (serverHistory.length > 0) {
       const last = serverHistory[serverHistory.length - 1];
@@ -81,7 +152,7 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
         timestamp: new Date(last.timestamp).getTime(),
       };
     }
-  }, [serverHistory, maxPoints]);
+  }, [serverHistory, currentRangeConfig.points]);
 
   useEffect(() => {
     if (!stats) return;
@@ -101,13 +172,8 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
           (stats.totalDownloaded - prev.totalDownloaded) / timeDelta,
         );
 
-        setHistory((prevHistory) => {
-          const next = [...prevHistory, { uploadSpeed, downloadSpeed }];
-          if (next.length > maxPoints) {
-            next.splice(0, next.length - maxPoints);
-          }
-          return next;
-        });
+        ringBufferRef.current.push(now, uploadSpeed, downloadSpeed);
+        setHistory(ringBufferRef.current.getPoints(currentRangeConfig.points));
       }
     }
 
@@ -116,7 +182,21 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
       totalDownloaded: stats.totalDownloaded,
       timestamp: now,
     };
-  }, [stats, maxPoints]);
+  }, [stats, currentRangeConfig.points]);
+
+  const handleRangeChange = (range: TimeRange) => {
+    setSelectedRange(range);
+    const cfg = TIME_RANGES[range];
+    if (cfg) {
+      setHistory(ringBufferRef.current.getPoints(cfg.points));
+    }
+    try {
+      localStorage.setItem(STORAGE_KEY, range);
+    } catch {
+      // ignore localStorage errors
+    }
+  };
+
   const svgWidth = Math.max(300, containerWidth);
   const chartWidth = Math.max(100, svgWidth - PADDING.left - PADDING.right);
   const chartHeight = SVG_HEIGHT - PADDING.top - PADDING.bottom;
@@ -134,14 +214,54 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
     return { value, y };
   });
 
+  const indexedHistory = useMemo(() => {
+    return history.map((pt, idx) => ({
+      ...pt,
+      index: idx,
+    }));
+  }, [history]);
+
+  // Downsample matching visual resolution between 120 and 250 points
+  const targetPoints = Math.min(250, Math.max(120, Math.floor(chartWidth / 4)));
+
+  const displayUpload = useMemo(() => {
+    if (indexedHistory.length <= targetPoints) {
+      return indexedHistory;
+    }
+    return downsampleLTTB(
+      indexedHistory,
+      targetPoints,
+      (d) => d.index,
+      (d) => d.uploadSpeed,
+    );
+  }, [indexedHistory, targetPoints]);
+
+  const displayDownload = useMemo(() => {
+    if (indexedHistory.length <= targetPoints) {
+      return indexedHistory;
+    }
+    return downsampleLTTB(
+      indexedHistory,
+      targetPoints,
+      (d) => d.index,
+      (d) => d.downloadSpeed,
+    );
+  }, [indexedHistory, targetPoints]);
+
+  const windowPoints = currentRangeConfig.points;
+  const offset =
+    windowPoints > history.length ? windowPoints - history.length : 0;
+
   const toPoints = (
-    data: SpeedDataPoint[],
+    data: (SpeedDataPoint & { index: number })[],
     key: "uploadSpeed" | "downloadSpeed",
   ): string => {
     if (data.length === 0) return "";
     return data
-      .map((point, i) => {
-        const x = PADDING.left + (i / Math.max(1, maxPoints - 1)) * chartWidth;
+      .map((point) => {
+        const x =
+          PADDING.left +
+          ((offset + point.index) / Math.max(1, windowPoints - 1)) * chartWidth;
         const y =
           PADDING.top + chartHeight - (point[key] / niceMax) * chartHeight;
         return `${x.toFixed(1)},${y.toFixed(1)}`;
@@ -150,19 +270,25 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
   };
 
   const toAreaPath = (
-    data: SpeedDataPoint[],
+    data: (SpeedDataPoint & { index: number })[],
     key: "uploadSpeed" | "downloadSpeed",
   ): string => {
     if (data.length < 2) return "";
     const bottom = PADDING.top + chartHeight;
-    const firstX = PADDING.left;
+    const firstX =
+      PADDING.left +
+      ((offset + data[0].index) / Math.max(1, windowPoints - 1)) * chartWidth;
     const lastX =
       PADDING.left +
-      ((data.length - 1) / Math.max(1, maxPoints - 1)) * chartWidth;
+      ((offset + data[data.length - 1].index) /
+        Math.max(1, windowPoints - 1)) *
+        chartWidth;
 
     const linePoints = data
-      .map((point, i) => {
-        const x = PADDING.left + (i / Math.max(1, maxPoints - 1)) * chartWidth;
+      .map((point) => {
+        const x =
+          PADDING.left +
+          ((offset + point.index) / Math.max(1, windowPoints - 1)) * chartWidth;
         const y =
           PADDING.top + chartHeight - (point[key] / niceMax) * chartHeight;
         return `L ${x.toFixed(1)} ${y.toFixed(1)}`;
@@ -172,10 +298,10 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
     return `M ${firstX.toFixed(1)} ${bottom.toFixed(1)} ${linePoints} L ${lastX.toFixed(1)} ${bottom.toFixed(1)} Z`;
   };
 
-  const uploadPoints = toPoints(history, "uploadSpeed");
-  const downloadPoints = toPoints(history, "downloadSpeed");
-  const uploadArea = toAreaPath(history, "uploadSpeed");
-  const downloadArea = toAreaPath(history, "downloadSpeed");
+  const uploadPoints = toPoints(displayUpload, "uploadSpeed");
+  const downloadPoints = toPoints(displayDownload, "downloadSpeed");
+  const uploadArea = toAreaPath(displayUpload, "uploadSpeed");
+  const downloadArea = toAreaPath(displayDownload, "downloadSpeed");
 
   const currentUpload =
     history.length > 0 ? history[history.length - 1].uploadSpeed : 0;
@@ -200,6 +326,8 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
           justifyContent: "space-between",
           alignItems: "center",
           marginBottom: "0.75rem",
+          flexWrap: "wrap",
+          gap: "0.75rem",
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -238,6 +366,50 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
             />
             Live (1s)
           </span>
+        </div>
+
+        {/* Time-Window Range Selector Buttons */}
+        <div
+          className="speed-graph-ranges"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            background: "rgba(255, 255, 255, 0.05)",
+            borderRadius: "6px",
+            padding: "2px",
+            gap: "2px",
+            border: "1px solid var(--border-light, rgba(255, 255, 255, 0.1))",
+          }}
+          role="group"
+          aria-label="Time window range"
+        >
+          {TIME_RANGE_OPTIONS.map((opt) => {
+            const isActive = selectedRange === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => handleRangeChange(opt.value)}
+                style={{
+                  background: isActive
+                    ? "var(--accent, #c8a84e)"
+                    : "transparent",
+                  color: isActive ? "#000" : "var(--text-muted, #888)",
+                  fontWeight: isActive ? 600 : 400,
+                  border: "none",
+                  borderRadius: "4px",
+                  padding: "0.2rem 0.55rem",
+                  fontSize: "0.75rem",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  lineHeight: 1.2,
+                }}
+                className={`speed-range-btn ${isActive ? "active" : ""}`}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
         </div>
 
         <div
@@ -392,7 +564,7 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
             fontSize={9.5}
             textAnchor="start"
           >
-            {maxPoints}s ago
+            {currentRangeConfig.startLabel}
           </text>
           <text
             x={PADDING.left + chartWidth / 2}
@@ -401,7 +573,7 @@ function SpeedGraph({ maxPoints = 60 }: SpeedGraphProps) {
             fontSize={9.5}
             textAnchor="middle"
           >
-            {Math.floor(maxPoints / 2)}s ago
+            {currentRangeConfig.midLabel}
           </text>
           <text
             x={svgWidth - PADDING.right}
