@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using NLog;
+using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.HealthCheck;
 
@@ -12,11 +15,19 @@ public interface IHealthCheckService
 public class HealthCheckService : IHealthCheckService
 {
     private readonly IEnumerable<IHealthCheck> _healthChecks;
+    private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
+    private readonly ConcurrentDictionary<string, HealthCheckResultType> _previousResults = new(StringComparer.OrdinalIgnoreCase);
 
     public HealthCheckService(IEnumerable<IHealthCheck> healthChecks)
+        : this(healthChecks, null)
+    {
+    }
+
+    public HealthCheckService(IEnumerable<IHealthCheck> healthChecks, IEventAggregator eventAggregator)
     {
         _healthChecks = healthChecks;
+        _eventAggregator = eventAggregator;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -43,6 +54,38 @@ public class HealthCheckService : IHealthCheckService
             }
         }
 
+        foreach (var result in results)
+        {
+            var source = result.Source ?? string.Empty;
+            var isDegraded = IsDegraded(result.Type);
+
+            if (_previousResults.TryGetValue(source, out var previousType))
+            {
+                var wasDegraded = IsDegraded(previousType);
+
+                if (!wasDegraded && isDegraded)
+                {
+                    _eventAggregator?.PublishEvent(new HealthIssueEvent((Torrent)null, result.Source, result.Message, isResolved: false));
+                }
+                else if (wasDegraded && !isDegraded)
+                {
+                    _eventAggregator?.PublishEvent(new HealthIssueEvent((Torrent)null, result.Source, result.Message, isResolved: true));
+                }
+            }
+            else
+            {
+                if (isDegraded)
+                {
+                    _eventAggregator?.PublishEvent(new HealthIssueEvent((Torrent)null, result.Source, result.Message, isResolved: false));
+                }
+            }
+
+            _previousResults[source] = result.Type;
+        }
+
         return results;
     }
+
+    private static bool IsDegraded(HealthCheckResultType type) =>
+        type is HealthCheckResultType.Warning or HealthCheckResultType.Error;
 }
