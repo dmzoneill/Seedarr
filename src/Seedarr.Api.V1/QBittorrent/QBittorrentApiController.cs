@@ -48,6 +48,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     private readonly ICategoryService _categoryService;
     private readonly IPieceStorage _pieceStorage;
     private readonly IPiecePicker _piecePicker;
+    private readonly ITorrentRelocationService _relocationService;
     private readonly Logger _logger;
 
     public QBittorrentApiController(
@@ -66,7 +67,8 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         ICallerHostResolver callerHostResolver = null,
         ICategoryService categoryService = null,
         IPieceStorage pieceStorage = null,
-        IPiecePicker piecePicker = null)
+        IPiecePicker piecePicker = null,
+        ITorrentRelocationService relocationService = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -83,6 +85,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         _categoryService = categoryService;
         _pieceStorage = pieceStorage;
         _piecePicker = piecePicker;
+        _relocationService = relocationService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -2200,8 +2203,15 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             var remappedLocation = RemapRemoteToLocal(location);
             foreach (var t in ResolveTorrents(hashes))
             {
-                t.SourcePath = remappedLocation;
-                _torrentService.Update(t);
+                if (_relocationService != null)
+                {
+                    _ = _relocationService.RelocateTorrentAsync(t.Id, remappedLocation);
+                }
+                else
+                {
+                    t.SourcePath = remappedLocation;
+                    _torrentService.Update(t);
+                }
             }
         }
 

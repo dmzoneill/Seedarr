@@ -78,6 +78,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
     private readonly IRemotePathMappingService _remotePathMappingService;
     private readonly ICallerHostResolver _callerHostResolver;
     private readonly ICategoryService _categoryService;
+    private readonly ITorrentRelocationService _relocationService;
     private readonly Logger _logger;
 
     public static void RecordRemovedId(int id)
@@ -186,7 +187,8 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         HttpClient httpClient = null,
         IRemotePathMappingService remotePathMappingService = null,
         ICallerHostResolver callerHostResolver = null,
-        ICategoryService categoryService = null)
+        ICategoryService categoryService = null,
+        ITorrentRelocationService relocationService = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -200,6 +202,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         _remotePathMappingService = remotePathMappingService;
         _callerHostResolver = callerHostResolver;
         _categoryService = categoryService;
+        _relocationService = relocationService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -765,12 +768,14 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         return Ok(new TransmissionRpcResponse { Result = "success", Tag = tag });
     }
 
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Transmission RPC relocates torrent paths")]
     private IActionResult HandleTorrentSetLocation(TransmissionRpcRequest request, object tag)
     {
         var locIds = ExtractIds(request.Arguments, false);
         var newLocation = request.Arguments != null && request.Arguments.TryGetValue("location", out var locElem)
             ? locElem.GetString()
             : null;
+        var shouldMove = request.Arguments != null && request.Arguments.TryGetValue("move", out var moveElem) && SafeGetBoolean(moveElem);
 
         if (!string.IsNullOrWhiteSpace(newLocation))
         {
@@ -780,8 +785,15 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 var t = _torrentService.Get(id);
                 if (t != null)
                 {
-                    t.SourcePath = remappedLocation;
-                    _torrentService.Update(t);
+                    if (shouldMove && _relocationService != null)
+                    {
+                        _ = _relocationService.RelocateTorrentAsync(id, remappedLocation);
+                    }
+                    else
+                    {
+                        t.SourcePath = remappedLocation;
+                        _torrentService.Update(t);
+                    }
                 }
             }
         }
