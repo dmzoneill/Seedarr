@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -20,7 +19,7 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
-public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>
+public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>
 {
     private const int OutgoingConnectTimeoutMs = 5000;
     private const int UnauthenticatedHandshakeTimeoutMs = 5000;
@@ -42,6 +41,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     private readonly IChokeManager _chokeManager;
     private readonly Network.IProxySettingsProvider _proxySettingsProvider;
     private readonly IDhKeyPool _dhKeyPool;
+    private readonly IMseSkeyRegistry _mseSkeyRegistry;
     private readonly SemaphoreSlim _connectionSemaphore;
     private readonly SemaphoreSlim _halfOpenSemaphore;
     private readonly ConcurrentDictionary<string, int> _connectionsPerIp = new(StringComparer.OrdinalIgnoreCase);
@@ -75,7 +75,8 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         Extensions.IExtensionManager extensionManager = null,
         IChokeManager chokeManager = null,
         Network.IProxySettingsProvider proxySettingsProvider = null,
-        IDhKeyPool dhKeyPool = null)
+        IDhKeyPool dhKeyPool = null,
+        IMseSkeyRegistry mseSkeyRegistry = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -90,6 +91,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         _chokeManager = chokeManager;
         _proxySettingsProvider = proxySettingsProvider;
         _dhKeyPool = dhKeyPool;
+        _mseSkeyRegistry = mseSkeyRegistry ?? new MseSkeyRegistry(_torrentService);
         _trackerAnnounceService = trackerAnnounceService ??
             (trackerEntryService != null && multiTracker != null && peerDiscovery != null && eventLogService != null && configService != null
                 ? new Trackers.TrackerAnnounceService(trackerEntryService, multiTracker, peerDiscovery, eventLogService, configService, trackerMetricService)
@@ -142,11 +144,21 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         OnVpnRestored(message?.InterfaceName);
     }
 
+    public void Handle(TorrentAddedEvent message)
+    {
+        if (!string.IsNullOrEmpty(message?.Torrent?.InfoHash))
+        {
+            _torrentCache[message.Torrent.InfoHash] = message.Torrent;
+            _mseSkeyRegistry?.RegisterTorrent(message.Torrent);
+        }
+    }
+
     public void Handle(TorrentUpdatedEvent message)
     {
         if (!string.IsNullOrEmpty(message?.Torrent?.InfoHash))
         {
             _torrentCache[message.Torrent.InfoHash] = message.Torrent;
+            _mseSkeyRegistry?.RegisterTorrent(message.Torrent);
         }
     }
 
@@ -157,6 +169,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
         {
             _torrentCache.TryRemove(infoHash, out _);
             _peerDiscovery?.RemoveTorrent(infoHash);
+            _mseSkeyRegistry?.UnregisterTorrent(infoHash);
         }
         else if (message?.TorrentId > 0)
         {
@@ -166,6 +179,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 {
                     _torrentCache.TryRemove(kvp.Key, out _);
                     _peerDiscovery?.RemoveTorrent(kvp.Key);
+                    _mseSkeyRegistry?.UnregisterTorrent(kvp.Key);
                     break;
                 }
             }
@@ -1085,7 +1099,9 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
         try
         {
-            var negotiated = connection.NegotiateEncryptionIncoming(ValidateInfoHash, GetEncryptionMode());
+            var negotiated = _mseSkeyRegistry != null
+                ? connection.NegotiateEncryptionIncoming(_mseSkeyRegistry, GetEncryptionMode())
+                : connection.NegotiateEncryptionIncoming(ValidateInfoHash, GetEncryptionMode());
             if (!negotiated)
             {
                 _logger.Debug("Encryption negotiation failed from {0}", connection.RemoteIp);
@@ -1098,12 +1114,25 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
                 return;
             }
 
-            var torrent = GetCachedTorrent(connection.InfoHash);
+            if (connection.MatchedTorrent != null &&
+                !string.IsNullOrEmpty(connection.InfoHash) &&
+                !string.Equals(connection.MatchedTorrent.InfoHash, connection.InfoHash, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.Debug("MSE SKEY info hash mismatch with BitTorrent handshake from {0}", connection.RemoteIp);
+                return;
+            }
+
+            var torrent = connection.MatchedTorrent ?? GetCachedTorrent(connection.InfoHash);
 
             if (torrent == null)
             {
                 _logger.Debug("Unknown info hash from {0}: {1}", connection.RemoteIp, connection.InfoHash);
                 return;
+            }
+
+            if (!string.IsNullOrEmpty(torrent.InfoHash))
+            {
+                _torrentCache[torrent.InfoHash] = torrent;
             }
 
             onHandshakeSuccess?.Invoke();
@@ -1217,13 +1246,7 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
 
     private bool ValidateInfoHash(byte[] skeyHash)
     {
-        var torrents = _torrentService.GetAll();
-        return torrents.Where(t => !string.IsNullOrEmpty(t.InfoHash)).Any(t =>
-        {
-            var infoHashBytes = Convert.FromHexString(t.InfoHash);
-            var expected = MseKeyDerivation.DeriveKey(infoHashBytes, Encoding.ASCII.GetBytes("req2"));
-            return expected.AsSpan().SequenceEqual(skeyHash);
-        });
+        return _mseSkeyRegistry != null && _mseSkeyRegistry.TryMatchTorrent(skeyHash, out _);
     }
 
     private void DecrementConnectionCount(string clientIp)

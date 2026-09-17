@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -27,6 +28,7 @@ public class PeerServerTest
     private IConnectionManager _connectionManager;
     private IPeerDiscoveryService _peerDiscovery;
     private IMultiTrackerManager _multiTracker;
+    private IMseSkeyRegistry _mseSkeyRegistry;
     private PeerServer _server;
     private List<PeerConnection> _connections;
     private List<TcpListener> _listeners;
@@ -40,6 +42,7 @@ public class PeerServerTest
         _connectionManager = Substitute.For<IConnectionManager>();
         _peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         _multiTracker = Substitute.For<IMultiTrackerManager>();
+        _mseSkeyRegistry = Substitute.For<IMseSkeyRegistry>();
 
         _configService.MaxGlobalConnections.Returns(200);
         _configService.ListeningPort.Returns(0);
@@ -51,7 +54,7 @@ public class PeerServerTest
         _configService.PeerIdleChance.Returns(0.0);
         _configService.PeerContactIntervalSeconds.Returns(300);
 
-        _server = new PeerServer(_configService, _torrentService, _connectionManager, _peerDiscovery, _multiTracker);
+        _server = new PeerServer(_configService, _torrentService, _connectionManager, _peerDiscovery, _multiTracker, mseSkeyRegistry: _mseSkeyRegistry);
         _connections = new List<PeerConnection>();
         _listeners = new List<TcpListener>();
         _clients = new List<TcpClient>();
@@ -694,53 +697,62 @@ public class PeerServerTest
     {
         var infoHash = "0102030405060708091011121314151617181920";
         var torrent = new Torrent { InfoHash = infoHash };
-        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
-
         var infoHashBytes = Convert.FromHexString(infoHash);
         var skeyHash = MseKeyDerivation.DeriveKey(infoHashBytes, System.Text.Encoding.ASCII.GetBytes("req2"));
+
+        _mseSkeyRegistry.TryMatchTorrent(skeyHash, out Arg.Any<Torrent>()).Returns(x =>
+        {
+            x[1] = torrent;
+            return true;
+        });
 
         var result = InvokeValidateInfoHash(skeyHash);
 
         Assert.That(result, Is.True);
+        _mseSkeyRegistry.Received(1).TryMatchTorrent(skeyHash, out Arg.Any<Torrent>());
     }
 
     [Test]
     public void ValidateInfoHash_should_return_false_for_non_matching_hash()
     {
-        var infoHash = "0102030405060708091011121314151617181920";
-        var torrent = new Torrent { InfoHash = infoHash };
-        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
-
         var wrongHash = new byte[20];
+        _mseSkeyRegistry.TryMatchTorrent(wrongHash, out Arg.Any<Torrent>()).Returns(false);
+
         var result = InvokeValidateInfoHash(wrongHash);
 
         Assert.That(result, Is.False);
+        _mseSkeyRegistry.Received(1).TryMatchTorrent(wrongHash, out Arg.Any<Torrent>());
     }
 
     [Test]
     public void ValidateInfoHash_should_return_false_when_no_torrents()
     {
-        _torrentService.GetAll().Returns(new List<Torrent>());
-
         var skeyHash = new byte[20];
+        _mseSkeyRegistry.TryMatchTorrent(skeyHash, out Arg.Any<Torrent>()).Returns(false);
+
         var result = InvokeValidateInfoHash(skeyHash);
 
         Assert.That(result, Is.False);
+        _mseSkeyRegistry.Received(1).TryMatchTorrent(skeyHash, out Arg.Any<Torrent>());
     }
 
     [Test]
-    public void ValidateInfoHash_should_check_all_torrents()
+    public void ValidateInfoHash_should_use_skey_registry_for_matching()
     {
-        var torrent1 = new Torrent { InfoHash = "0102030405060708091011121314151617181920" };
         var torrent2 = new Torrent { InfoHash = "A1A2A3A4A5A6A7A8A9A0B1B2B3B4B5B6B7B8B9B0" };
-        _torrentService.GetAll().Returns(new List<Torrent> { torrent1, torrent2 });
-
         var infoHashBytes = Convert.FromHexString(torrent2.InfoHash);
         var skeyHash = MseKeyDerivation.DeriveKey(infoHashBytes, System.Text.Encoding.ASCII.GetBytes("req2"));
+
+        _mseSkeyRegistry.TryMatchTorrent(skeyHash, out Arg.Any<Torrent>()).Returns(x =>
+        {
+            x[1] = torrent2;
+            return true;
+        });
 
         var result = InvokeValidateInfoHash(skeyHash);
 
         Assert.That(result, Is.True);
+        _mseSkeyRegistry.Received(1).TryMatchTorrent(skeyHash, out Arg.Any<Torrent>());
     }
 
     // HandleMessage idle chance tests
@@ -951,6 +963,54 @@ public class PeerServerTest
 
         using var cts = new CancellationTokenSource();
         Assert.DoesNotThrow(() => InvokeHandleConnection(serverTcp, cts.Token));
+        _connectionManager.Received().Remove(Arg.Any<PeerConnection>());
+    }
+
+    [Test]
+    [CancelAfter(5000)]
+    public void HandleConnection_inbound_MSE_handshake_should_validate_using_registry_and_match_torrent()
+    {
+        var (clientTcp, serverTcp) = CreateRawTcpPair();
+        _clients.Add(clientTcp);
+
+        var infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = infoHash,
+            PieceCount = 10,
+            PieceLength = 16384,
+            Name = "MseTestTorrent"
+        };
+
+        var infoHashBytes = Convert.FromHexString(infoHash);
+        var skeyHash = MseKeyDerivation.DeriveKey(infoHashBytes, Encoding.ASCII.GetBytes("req2"));
+
+        _mseSkeyRegistry.TryMatchTorrent(Arg.Is<byte[]>(b => b.SequenceEqual(skeyHash)), out Arg.Any<Torrent>()).Returns(x =>
+        {
+            x[1] = torrent;
+            return true;
+        });
+
+        _configService.EncryptionMode.Returns("enabled");
+
+        var clientTask = Task.Run(() =>
+        {
+            var outgoing = new MseHandshake(infoHashBytes, EncryptionMode.RequireEncrypted);
+            var stream = clientTcp.GetStream();
+            var encStream = outgoing.NegotiateOutgoing(stream);
+            var handshake = BuildBtHandshake(infoHash, "-SD0001-012345678901");
+            encStream.Write(handshake, 0, handshake.Length);
+            encStream.Flush();
+            clientTcp.Close();
+        });
+
+        using var cts = new CancellationTokenSource();
+        Assert.DoesNotThrow(() => InvokeHandleConnection(serverTcp, cts.Token));
+
+        clientTask.Wait(TimeSpan.FromSeconds(5));
+
+        _mseSkeyRegistry.Received().TryMatchTorrent(Arg.Is<byte[]>(b => b.SequenceEqual(skeyHash)), out Arg.Any<Torrent>());
         _connectionManager.Received().Remove(Arg.Any<PeerConnection>());
     }
 
