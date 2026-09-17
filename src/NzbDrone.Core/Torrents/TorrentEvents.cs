@@ -524,3 +524,17 @@ public class TaskFailedEvent : IEvent
         this.ErrorMessage = errorMessage;
     }
 }
+
+public class TorrentMetadataResolvedEvent : IEvent
+{
+    public Torrent Torrent { get; set; }
+
+    public TorrentMetadataResolvedEvent()
+    {
+    }
+
+    public TorrentMetadataResolvedEvent(Torrent torrent)
+    {
+        this.Torrent = torrent;
+    }
+}
