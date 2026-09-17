@@ -14,6 +14,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerServer.Users;
 
 namespace NzbDrone.Core.TrackerServer;
@@ -24,11 +25,13 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     private static readonly byte[] InvalidParametersResponse = Encoding.ASCII.GetBytes("d14:failure reason18:Invalid parameterse");
     private static readonly byte[] MissingPasskeyResponse = Encoding.ASCII.GetBytes("d14:failure reason25:Missing announce passkeye");
     private static readonly byte[] InvalidPasskeyResponse = Encoding.ASCII.GetBytes("d14:failure reason27:Invalid or revoked passkeye");
+    private static readonly byte[] UnregisteredTorrentResponse = Encoding.ASCII.GetBytes("d14:failure reason35:torrent not registered with trackere");
 
     private readonly IPeerDatabase _peerDatabase;
     private readonly IConfigService _configService;
     private readonly IScrapeCache _scrapeCache;
     private readonly ITrackerUserService _trackerUserService;
+    private readonly ITorrentService _torrentService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
     private readonly ConcurrentDictionary<string, (long Uploaded, long Downloaded)> _peerTraffic = new();
@@ -39,17 +42,17 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     private bool _wasEnabled;
 
     public TrackerServer(IPeerDatabase peerDatabase, IConfigService configService)
-        : this(peerDatabase, configService, new ScrapeCache(), null)
+        : this(peerDatabase, configService, new ScrapeCache(), null, null)
     {
     }
 
     public TrackerServer(IPeerDatabase peerDatabase, IConfigService configService, IScrapeCache scrapeCache)
-        : this(peerDatabase, configService, scrapeCache, null)
+        : this(peerDatabase, configService, scrapeCache, null, null)
     {
     }
 
     public TrackerServer(IPeerDatabase peerDatabase, IConfigService configService, ITrackerUserService trackerUserService)
-        : this(peerDatabase, configService, new ScrapeCache(), trackerUserService)
+        : this(peerDatabase, configService, new ScrapeCache(), trackerUserService, null)
     {
     }
 
@@ -58,11 +61,30 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         IConfigService configService,
         IScrapeCache scrapeCache,
         ITrackerUserService trackerUserService)
+        : this(peerDatabase, configService, scrapeCache, trackerUserService, null)
+    {
+    }
+
+    public TrackerServer(
+        IPeerDatabase peerDatabase,
+        IConfigService configService,
+        ITorrentService torrentService)
+        : this(peerDatabase, configService, new ScrapeCache(), null, torrentService)
+    {
+    }
+
+    public TrackerServer(
+        IPeerDatabase peerDatabase,
+        IConfigService configService,
+        IScrapeCache scrapeCache,
+        ITrackerUserService trackerUserService,
+        ITorrentService torrentService)
     {
         _peerDatabase = peerDatabase;
         _configService = configService;
         _scrapeCache = scrapeCache ?? new ScrapeCache();
         _trackerUserService = trackerUserService;
+        _torrentService = torrentService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -557,6 +579,15 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             !long.TryParse(leftStr, out var left) || left < 0)
         {
             return InvalidParametersResponse;
+        }
+
+        if (_configService.TrackerPrivateMode)
+        {
+            var isRegistered = _torrentService != null && _torrentService.ExistsByInfoHash(infoHash);
+            if (!isRegistered)
+            {
+                return UnregisteredTorrentResponse;
+            }
         }
 
         var peerIp = remoteEndpoint.Address.ToString();

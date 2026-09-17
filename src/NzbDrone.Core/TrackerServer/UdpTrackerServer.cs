@@ -13,6 +13,7 @@ using Microsoft.Extensions.Hosting;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.TrackerServer;
 
@@ -34,6 +35,7 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private readonly IPeerDatabase _peerDatabase;
     private readonly IConfigService _configService;
+    private readonly ITorrentService _torrentService;
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<long, ConnectionEntry> _connectionIds = new();
     private readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
@@ -48,9 +50,15 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     private string _boundAddress;
 
     public UdpTrackerServer(IPeerDatabase peerDatabase, IConfigService configService)
+        : this(peerDatabase, configService, null)
+    {
+    }
+
+    public UdpTrackerServer(IPeerDatabase peerDatabase, IConfigService configService, ITorrentService torrentService)
     {
         _peerDatabase = peerDatabase;
         _configService = configService;
+        _torrentService = torrentService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -316,6 +324,15 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
         var infoHash = ConvertInfoHashToHex(data, 16);
         var peerId = Encoding.Latin1.GetString(data, 16 + InfoHashLength, PeerIdLength);
+
+        if (_configService.TrackerPrivateMode)
+        {
+            var isRegistered = _torrentService != null && _torrentService.ExistsByInfoHash(infoHash);
+            if (!isRegistered)
+            {
+                return BuildErrorResponse(transactionId, "torrent not registered with tracker");
+            }
+        }
 
         var eventId = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(80, 4));
 
