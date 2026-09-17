@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Runtime.InteropServices;
 
 namespace NzbDrone.Core.Dht;
 
@@ -10,20 +11,6 @@ namespace NzbDrone.Core.Dht;
 /// </summary>
 public class RoutingTable
 {
-    private static readonly IComparer<byte[]> _byteComparer = Comparer<byte[]>.Create((a, b) =>
-    {
-        for (var i = 0; i < a.Length && i < b.Length; i++)
-        {
-            var cmp = a[i].CompareTo(b[i]);
-            if (cmp != 0)
-            {
-                return cmp;
-            }
-        }
-
-        return a.Length.CompareTo(b.Length);
-    });
-
     private readonly int _bucketSize;
     private readonly int _idBits;
     private readonly int _maxNodes;
@@ -160,12 +147,115 @@ public class RoutingTable
         lock (_lock)
         {
             var take = count > 0 ? count : _bucketSize;
-            return _buckets.SelectMany(b => b)
-                .Where(n => n.IsGood)
-                .OrderBy(n => Distance(n.NodeId, targetId), _byteComparer)
-                .Take(take)
-                .ToList();
+            var maxCandidates = Math.Max(take * 2, _bucketSize);
+            var candidates = new List<DhtNode>(maxCandidates);
+
+            var targetBucketIndex = GetBucketIndex(targetId);
+
+            foreach (var node in _buckets[targetBucketIndex])
+            {
+                if (node.IsGood)
+                {
+                    candidates.Add(node);
+                }
+            }
+
+            // If target bucket alone does not have enough nodes to reach 'take', expand outward to adjacent buckets
+            if (candidates.Count < take)
+            {
+                var left = targetBucketIndex - 1;
+                var right = targetBucketIndex + 1;
+
+                while (candidates.Count < maxCandidates && (left >= 0 || right < _buckets.Count))
+                {
+                    if (left >= 0)
+                    {
+                        foreach (var node in _buckets[left])
+                        {
+                            if (node.IsGood)
+                            {
+                                candidates.Add(node);
+                            }
+                        }
+
+                        left--;
+                    }
+
+                    if (candidates.Count >= maxCandidates)
+                    {
+                        break;
+                    }
+
+                    if (right < _buckets.Count)
+                    {
+                        foreach (var node in _buckets[right])
+                        {
+                            if (node.IsGood)
+                            {
+                                candidates.Add(node);
+                            }
+                        }
+
+                        right++;
+                    }
+                }
+            }
+
+            if (candidates.Count == 0)
+            {
+                return candidates;
+            }
+
+            CollectionsMarshal.AsSpan(candidates).Sort(new NodeDistanceComparer(targetId));
+
+            if (candidates.Count > take)
+            {
+                candidates.RemoveRange(take, candidates.Count - take);
+            }
+
+            return candidates;
         }
+    }
+
+    /// <summary>
+    /// Compares the XOR distance of two node IDs relative to a target ID without allocating memory.
+    /// </summary>
+    /// <param name="a">The first node ID.</param>
+    /// <param name="b">The second node ID.</param>
+    /// <param name="target">The target ID.</param>
+    /// <returns>Negative if a is closer to target than b; positive if b is closer; 0 if equal distance.</returns>
+    public static int CompareDistance(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b, ReadOnlySpan<byte> target)
+    {
+        var length = Math.Min(a.Length, Math.Min(b.Length, target.Length));
+        for (var i = 0; i < length; i++)
+        {
+            var da = (byte)(a[i] ^ target[i]);
+            var db = (byte)(b[i] ^ target[i]);
+            if (da != db)
+            {
+                return da.CompareTo(db);
+            }
+        }
+
+        return a.Length.CompareTo(b.Length);
+    }
+
+    /// <summary>
+    /// Calculates the XOR distance between two byte arrays.
+    /// </summary>
+    /// <param name="a">The first byte array.</param>
+    /// <param name="b">The second byte array.</param>
+    /// <returns>The XOR distance array.</returns>
+    public static byte[] Distance(byte[] a, byte[] b)
+    {
+        var length = Math.Min(a.Length, b.Length);
+        var result = new byte[length];
+        for (var i = 0; i < length; i++)
+        {
+            result[i] = (byte)(a[i] ^ b[i]);
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -317,15 +407,33 @@ public class RoutingTable
         return 0; // Same as local node
     }
 
-    private static byte[] Distance(byte[] a, byte[] b)
+    private readonly struct NodeDistanceComparer : IComparer<DhtNode>
     {
-        var length = Math.Min(a.Length, b.Length);
-        var result = new byte[length];
-        for (var i = 0; i < length; i++)
+        private readonly byte[] _target;
+
+        public NodeDistanceComparer(byte[] target)
         {
-            result[i] = (byte)(a[i] ^ b[i]);
+            _target = target;
         }
 
-        return result;
+        public int Compare(DhtNode x, DhtNode y)
+        {
+            if (ReferenceEquals(x, y))
+            {
+                return 0;
+            }
+
+            if (x == null)
+            {
+                return 1;
+            }
+
+            if (y == null)
+            {
+                return -1;
+            }
+
+            return CompareDistance(x.NodeId, y.NodeId, _target);
+        }
     }
 }
