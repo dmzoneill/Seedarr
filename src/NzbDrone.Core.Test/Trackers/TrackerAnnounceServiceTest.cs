@@ -1,11 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading.Tasks;
+using BencodeNET.Objects;
+using BencodeNET.Parsing;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Peers;
+using NzbDrone.Core.Peers.Extensions;
 using NzbDrone.Core.Seeding;
+using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Trackers;
 using NzbDrone.Core.Trackers.Metrics;
@@ -288,5 +293,112 @@ public class TrackerAnnounceServiceTest
         _multiTracker.Received(1).Announce(
             Arg.Is<TrackerAnnounceRequest>(r => r.Event == "stopped" && r.NumWant == 0),
             Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_populate_user_agent_from_client_profile()
+    {
+        var torrent = new Torrent
+        {
+            Id = 42,
+            Name = "Test.Movie.2024",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Uploaded = 1000,
+            Downloaded = 500,
+            TotalSize = 2000,
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry { Id = 1, TorrentId = 42, Url = "http://tracker1.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(42).Returns(new List<TrackerEntry> { tracker });
+        _configService.ClientBehaviorEngineEnabled.Returns(true);
+        _configService.AnonymousMode.Returns(false);
+
+        var clientProfile = Substitute.For<IClientProfile>();
+        clientProfile.UserAgent.Returns("Transmission/3.00");
+        clientProfile.Name.Returns("Transmission 3.00");
+        clientProfile.GeneratePeerId().Returns("-TR3000-123456789012");
+
+        var session = new TorrentClientSession
+        {
+            Profile = clientProfile,
+            PeerId = "-TR3000-123456789012",
+            AnnounceKey = "ABCD1234",
+            ProfileName = "Transmission 3.00",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var simulator = Substitute.For<IClientBehaviorSimulator>();
+        simulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate).Returns(session);
+        simulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate).Returns(clientProfile);
+
+        var service = new TrackerAnnounceService(
+            _trackerEntryService,
+            _multiTracker,
+            _peerDiscovery,
+            _eventLogService,
+            _configService,
+            _trackerMetricService,
+            eventAggregator: null,
+            torrentService: _torrentService,
+            clientBehaviorSimulator: simulator);
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var results = service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.UserAgent == "Transmission/3.00" && r.PeerId == "-TR3000-123456789012"),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void AnnounceTorrent_should_fallback_to_config_user_agent_when_client_behavior_is_disabled()
+    {
+        var torrent = new Torrent
+        {
+            Id = 42,
+            Name = "Test.Movie.2024",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Uploaded = 1000,
+            Downloaded = 500,
+            TotalSize = 2000,
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry { Id = 1, TorrentId = 42, Url = "http://tracker1.org/announce", Enabled = true };
+        _trackerEntryService.GetByTorrentId(42).Returns(new List<TrackerEntry> { tracker });
+        _configService.ClientBehaviorEngineEnabled.Returns(false);
+        _configService.BitTorrentUserAgent.Returns("qBittorrent/4.4.2");
+
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(new TrackerAnnounceResponse { Success = true });
+
+        var results = _service.AnnounceTorrent(torrent, force: true);
+
+        Assert.That(results.Count, Is.EqualTo(1));
+        _multiTracker.Received(1).Announce(
+            Arg.Is<TrackerAnnounceRequest>(r => r.UserAgent == "qBittorrent/4.4.2"),
+            Arg.Any<List<List<string>>>());
+    }
+
+    [Test]
+    public void BEP10_extension_handshake_dictionary_should_include_client_version_v()
+    {
+        var configService = Substitute.For<IConfigService>();
+        var manager = new ExtensionManager(configService);
+        var profile = Substitute.For<IClientProfile>();
+        profile.UserAgent.Returns("qBittorrent/4.4.2");
+        profile.Name.Returns("qBittorrent 4.4.2");
+
+        var bytes = manager.BuildExtensionHandshake(false, profile);
+        var parser = new BencodeParser();
+        using var stream = new MemoryStream(bytes);
+        var dict = parser.Parse<BDictionary>(stream);
+
+        Assert.That(dict.ContainsKey("v"), Is.True);
+        Assert.That(((BString)dict["v"]).ToString(), Is.EqualTo("qBittorrent/4.4.2"));
     }
 }

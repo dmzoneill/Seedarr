@@ -156,12 +156,17 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
         var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
             ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
             : null;
-        var peerId = session?.PeerId ?? "-SD1000-000000000000";
+        var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+            ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
+            : null);
+        var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+        var userAgent = profile?.UserAgent ?? _configService.BitTorrentUserAgent;
 
         var request = new TrackerAnnounceRequest
         {
             InfoHash = torrent.InfoHash,
             PeerId = peerId,
+            UserAgent = userAgent,
             Key = session?.AnnounceKey,
             Port = _configService.ListeningPort,
             Uploaded = torrent.Uploaded,
