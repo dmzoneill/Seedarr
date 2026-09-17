@@ -40,6 +40,7 @@ public class SeedingEngine : BackgroundService
     private readonly ITrafficPatternSimulator _trafficPatternSimulator;
     private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
     private readonly ISwarmAnalyzer _swarmAnalyzer;
+    private readonly ICategoryService _categoryService;
     private readonly ISystemClock _clock;
     private readonly IRandomNumberGenerator _random;
     private readonly Logger _logger;
@@ -88,6 +89,7 @@ public class SeedingEngine : BackgroundService
         _swarmAnalyzer = swarmAnalyzer ?? new SwarmAnalyzer(configService);
         _trafficPatternSimulator = trafficPatternSimulator ?? new TrafficPatternSimulator(configService, _random, _clock);
         _clientBehaviorSimulator = clientBehaviorSimulator;
+        _categoryService = categoryService;
         _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator, categoryService);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -194,6 +196,31 @@ public class SeedingEngine : BackgroundService
         var seedingTorrents = allTorrents
             .Where(t => t.Status == TorrentStatus.Seeding && (autoStart || t.ForceStart))
             .ToList();
+
+        if (_categoryService != null && autoStart)
+        {
+            var queuedTorrents = allTorrents
+                .Where(t => t.Status == TorrentStatus.Queued)
+                .OrderBy(t => t.SortOrder)
+                .ToList();
+
+            if (queuedTorrents.Count > 0)
+            {
+                var globalMaxDl = _configService.MaxActiveDownloads > 0 ? (int?)_configService.MaxActiveDownloads : null;
+                var toPromote = _categoryService.EvaluateDownloadQueue(queuedTorrents, downloadingTorrents, globalMaxDl);
+                if (toPromote.Count > 0)
+                {
+                    foreach (var torrent in toPromote)
+                    {
+                        torrent.Status = TorrentStatus.Downloading;
+                        torrent.LastActive = _clock.UtcNow;
+                        _torrentService.Update(torrent);
+                        downloadingTorrents.Add(torrent);
+                        _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, TorrentStatus.Queued, TorrentStatus.Downloading) { IsQueueManagerInternal = true });
+                    }
+                }
+            }
+        }
 
         var isAnyPrivate = allTorrents.Any(t => t.IsPrivate && (t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading));
 

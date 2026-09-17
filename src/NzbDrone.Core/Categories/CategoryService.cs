@@ -42,6 +42,14 @@ public interface ICategoryService
     string GetSavePathForCategory(string categoryName, string defaultPath = "");
 
     void InvalidateCache();
+
+    bool CanDownload(Torrent torrent, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null);
+
+    bool CanUpload(Torrent torrent, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveUploads = null);
+
+    List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> queuedTorrents, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null);
+
+    List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> allTorrents, int? globalMaxActiveDownloads = null);
 }
 
 public class CategoryService : ICategoryService
@@ -633,5 +641,297 @@ public class CategoryService : ICategoryService
         }
 
         return trimmed.TrimEnd('/', '\\');
+    }
+
+    public bool CanDownload(Torrent torrent, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null)
+    {
+        if (torrent == null)
+        {
+            return false;
+        }
+
+        var activeList = activeTorrents as IList<Torrent> ?? activeTorrents?.ToList() ?? new List<Torrent>();
+
+        if (globalMaxActiveDownloads.HasValue && globalMaxActiveDownloads.Value > 0 && activeList.Count >= globalMaxActiveDownloads.Value)
+        {
+            return false;
+        }
+
+        var category = GetByName(torrent.Category);
+        if (category != null && category.MaxActiveDownloads.HasValue && category.MaxActiveDownloads.Value > 0)
+        {
+            var categoryName = category.Name;
+            var activeInCategory = activeList.Count(t =>
+            {
+                var cat = GetByName(t.Category);
+                return cat != null && string.Equals(cat.Name, categoryName, StringComparison.OrdinalIgnoreCase);
+            });
+
+            if (activeInCategory >= category.MaxActiveDownloads.Value)
+            {
+                return false;
+            }
+        }
+
+        if (globalMaxActiveDownloads.HasValue && globalMaxActiveDownloads.Value > 0)
+        {
+            var g = globalMaxActiveDownloads.Value;
+            var reserved = category != null ? Math.Max(0, category.ReservedDownloadSlots) : 0;
+            if (category?.MaxActiveDownloads.HasValue == true && category.MaxActiveDownloads.Value > 0)
+            {
+                reserved = Math.Min(reserved, category.MaxActiveDownloads.Value);
+            }
+
+            var categoryName = category?.Name;
+            var activeInCategory = categoryName != null
+                ? activeList.Count(t =>
+                {
+                    var cat = GetByName(t.Category);
+                    return cat != null && string.Equals(cat.Name, categoryName, StringComparison.OrdinalIgnoreCase);
+                })
+                : 0;
+
+            if (activeInCategory < reserved)
+            {
+                return true;
+            }
+
+            var allCats = GetAll()?.ToList() ?? new List<Category>();
+            var totalReserved = allCats.Sum(c =>
+            {
+                var r = Math.Max(0, c.ReservedDownloadSlots);
+                if (c.MaxActiveDownloads.HasValue && c.MaxActiveDownloads.Value > 0)
+                {
+                    r = Math.Min(r, c.MaxActiveDownloads.Value);
+                }
+
+                return r;
+            });
+
+            var generalCapacity = Math.Max(0, g - totalReserved);
+            var generalUsed = 0;
+            foreach (var c in allCats)
+            {
+                var r = Math.Max(0, c.ReservedDownloadSlots);
+                if (c.MaxActiveDownloads.HasValue && c.MaxActiveDownloads.Value > 0)
+                {
+                    r = Math.Min(r, c.MaxActiveDownloads.Value);
+                }
+
+                var act = activeList.Count(t =>
+                {
+                    var cat = GetByName(t.Category);
+                    return cat != null && string.Equals(cat.Name, c.Name, StringComparison.OrdinalIgnoreCase);
+                });
+                generalUsed += Math.Max(0, act - r);
+            }
+
+            var uncategorizedActive = activeList.Count(t => GetByName(t.Category) == null);
+            generalUsed += uncategorizedActive;
+
+            if (generalUsed >= generalCapacity)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public bool CanUpload(Torrent torrent, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveUploads = null)
+    {
+        if (torrent == null)
+        {
+            return false;
+        }
+
+        var activeList = activeTorrents as IList<Torrent> ?? activeTorrents?.ToList() ?? new List<Torrent>();
+
+        if (globalMaxActiveUploads.HasValue && globalMaxActiveUploads.Value > 0 && activeList.Count >= globalMaxActiveUploads.Value)
+        {
+            return false;
+        }
+
+        var category = GetByName(torrent.Category);
+        if (category != null && category.MaxActiveUploads.HasValue && category.MaxActiveUploads.Value > 0)
+        {
+            var categoryName = category.Name;
+            var activeInCategory = activeList.Count(t =>
+            {
+                var cat = GetByName(t.Category);
+                return cat != null && string.Equals(cat.Name, categoryName, StringComparison.OrdinalIgnoreCase);
+            });
+
+            if (activeInCategory >= category.MaxActiveUploads.Value)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> allTorrents, int? globalMaxActiveDownloads = null)
+    {
+        if (allTorrents == null)
+        {
+            return new List<Torrent>();
+        }
+
+        var list = allTorrents.ToList();
+        var activeTorrents = list.Where(t => t.Status == TorrentStatus.Downloading).ToList();
+        var queuedTorrents = list.Where(t => t.Status == TorrentStatus.Queued).OrderBy(t => t.SortOrder).ToList();
+
+        return EvaluateDownloadQueue(queuedTorrents, activeTorrents, globalMaxActiveDownloads);
+    }
+
+    public List<Torrent> EvaluateDownloadQueue(IEnumerable<Torrent> queuedTorrents, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null)
+    {
+        var promoted = new List<Torrent>();
+        if (queuedTorrents == null)
+        {
+            return promoted;
+        }
+
+        var queuedList = queuedTorrents.ToList();
+        if (queuedList.Count == 0)
+        {
+            return promoted;
+        }
+
+        var activeList = activeTorrents?.ToList() ?? new List<Torrent>();
+        var totalActiveCount = activeList.Count;
+
+        // Map active counts by category
+        var activeCountByCategory = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var t in activeList)
+        {
+            var cat = GetByName(t.Category);
+            if (cat != null && !string.IsNullOrWhiteSpace(cat.Name))
+            {
+                var key = cat.Name;
+                activeCountByCategory[key] = activeCountByCategory.GetValueOrDefault(key, 0) + 1;
+            }
+        }
+
+        var allCategories = GetAll()?.ToList() ?? new List<Category>();
+
+        // Calculate available reserved download slots per category
+        var availableReservedSlots = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var totalReservedCapacity = 0;
+        foreach (var cat in allCategories)
+        {
+            if (cat.ReservedDownloadSlots > 0)
+            {
+                var key = cat.Name;
+                var currentActive = activeCountByCategory.GetValueOrDefault(key, 0);
+                var effectiveReserved = cat.ReservedDownloadSlots;
+                if (cat.MaxActiveDownloads.HasValue && cat.MaxActiveDownloads.Value > 0)
+                {
+                    effectiveReserved = Math.Min(effectiveReserved, cat.MaxActiveDownloads.Value);
+                }
+
+                totalReservedCapacity += effectiveReserved;
+                var available = Math.Max(0, effectiveReserved - currentActive);
+                if (available > 0)
+                {
+                    availableReservedSlots[key] = available;
+                }
+            }
+        }
+
+        // Calculate general pool capacity and usage if a global limit is specified
+        var hasGlobalLimit = globalMaxActiveDownloads.HasValue && globalMaxActiveDownloads.Value > 0;
+        var globalLimit = hasGlobalLimit ? globalMaxActiveDownloads.Value : 0;
+        var generalCapacity = hasGlobalLimit ? Math.Max(0, globalLimit - totalReservedCapacity) : int.MaxValue;
+
+        var generalUsed = 0;
+        if (hasGlobalLimit)
+        {
+            foreach (var cat in allCategories)
+            {
+                var key = cat.Name;
+                var effectiveReserved = cat.ReservedDownloadSlots > 0 ? cat.ReservedDownloadSlots : 0;
+                if (cat.MaxActiveDownloads.HasValue && cat.MaxActiveDownloads.Value > 0)
+                {
+                    effectiveReserved = Math.Min(effectiveReserved, cat.MaxActiveDownloads.Value);
+                }
+
+                var currentActive = activeCountByCategory.GetValueOrDefault(key, 0);
+                generalUsed += Math.Max(0, currentActive - effectiveReserved);
+            }
+
+            var uncategorizedActive = activeList.Count(t => GetByName(t.Category) == null);
+            generalUsed += uncategorizedActive;
+        }
+
+        var promotedIds = new HashSet<int>();
+
+        // Phase 1: Allocate reserved slots to matching queued torrents in sort order
+        if (availableReservedSlots.Count > 0)
+        {
+            foreach (var torrent in queuedList)
+            {
+                if (hasGlobalLimit && totalActiveCount >= globalLimit)
+                {
+                    break;
+                }
+
+                var cat = GetByName(torrent.Category);
+                if (cat != null && !string.IsNullOrWhiteSpace(cat.Name))
+                {
+                    var key = cat.Name;
+                    if (availableReservedSlots.TryGetValue(key, out var avail) && avail > 0)
+                    {
+                        var currentActive = activeCountByCategory.GetValueOrDefault(key, 0);
+                        if (!cat.MaxActiveDownloads.HasValue || cat.MaxActiveDownloads.Value <= 0 || currentActive < cat.MaxActiveDownloads.Value)
+                        {
+                            promoted.Add(torrent);
+                            promotedIds.Add(torrent.Id);
+                            availableReservedSlots[key] = avail - 1;
+                            activeCountByCategory[key] = currentActive + 1;
+                            totalActiveCount++;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Phase 2: Allocate general / remaining global slots in sort order
+        foreach (var torrent in queuedList)
+        {
+            if (promotedIds.Contains(torrent.Id))
+            {
+                continue;
+            }
+
+            if (hasGlobalLimit && (totalActiveCount >= globalLimit || generalUsed >= generalCapacity))
+            {
+                break;
+            }
+
+            var cat = GetByName(torrent.Category);
+            if (cat != null && !string.IsNullOrWhiteSpace(cat.Name))
+            {
+                var key = cat.Name;
+                var currentActive = activeCountByCategory.GetValueOrDefault(key, 0);
+                if (cat.MaxActiveDownloads.HasValue && cat.MaxActiveDownloads.Value > 0 && currentActive >= cat.MaxActiveDownloads.Value)
+                {
+                    continue;
+                }
+
+                activeCountByCategory[key] = currentActive + 1;
+            }
+
+            promoted.Add(torrent);
+            promotedIds.Add(torrent.Id);
+            totalActiveCount++;
+            if (hasGlobalLimit)
+            {
+                generalUsed++;
+            }
+        }
+
+        return promoted;
     }
 }

@@ -529,4 +529,93 @@ public class CategoryServiceTest
         var nullByteEx = Assert.Throws<ArgumentException>(() => CategoryService.ValidateSavePath("/data/\0test"));
         Assert.That(nullByteEx.Message, Does.Contain("null"));
     }
+
+    [Test]
+    public void CanDownload_with_category_max_active_downloads_enforces_limit()
+    {
+        var category = new Category { Id = 1, Name = "Movies", MaxActiveDownloads = 2 };
+        _repository.GetByName("Movies").Returns(category);
+        _repository.All().Returns(new[] { category });
+
+        var t1 = new Torrent { Id = 1, Category = "Movies" };
+        var t2 = new Torrent { Id = 2, Category = "Movies" };
+        var newTorrent = new Torrent { Id = 3, Category = "Movies" };
+
+        var canDownloadWithTwoActive = _subject.CanDownload(newTorrent, new[] { t1, t2 });
+        var canDownloadWithOneActive = _subject.CanDownload(newTorrent, new[] { t1 });
+
+        Assert.That(canDownloadWithTwoActive, Is.False);
+        Assert.That(canDownloadWithOneActive, Is.True);
+    }
+
+    [Test]
+    public void CanUpload_with_category_max_active_uploads_enforces_limit()
+    {
+        var category = new Category { Id = 1, Name = "TV", MaxActiveUploads = 1 };
+        _repository.GetByName("TV").Returns(category);
+        _repository.All().Returns(new[] { category });
+
+        var t1 = new Torrent { Id = 1, Category = "TV" };
+        var newTorrent = new Torrent { Id = 2, Category = "TV" };
+
+        var canUploadWithOneActive = _subject.CanUpload(newTorrent, new[] { t1 });
+        var canUploadWithZeroActive = _subject.CanUpload(newTorrent, Array.Empty<Torrent>());
+
+        Assert.That(canUploadWithOneActive, Is.False);
+        Assert.That(canUploadWithZeroActive, Is.True);
+    }
+
+    [Test]
+    public void EvaluateDownloadQueue_promotes_reserved_slots_first()
+    {
+        var catPriority = new Category { Id = 1, Name = "Priority", ReservedDownloadSlots = 2 };
+        var catNormal = new Category { Id = 2, Name = "Normal", ReservedDownloadSlots = 0 };
+        _repository.All().Returns(new[] { catPriority, catNormal });
+        _repository.GetByName("Priority").Returns(catPriority);
+        _repository.GetByName("Normal").Returns(catNormal);
+
+        var normal1 = new Torrent { Id = 1, Category = "Normal", SortOrder = 1 };
+        var priority1 = new Torrent { Id = 2, Category = "Priority", SortOrder = 2 };
+        var priority2 = new Torrent { Id = 3, Category = "Priority", SortOrder = 3 };
+        var normal2 = new Torrent { Id = 4, Category = "Normal", SortOrder = 4 };
+
+        var queued = new[] { normal1, priority1, priority2, normal2 };
+
+        // Global limit of 2; Priority has 2 reserved slots, so both priority torrents should be promoted before normal1
+        var promoted = _subject.EvaluateDownloadQueue(queued, Array.Empty<Torrent>(), 2);
+
+        Assert.That(promoted.Select(t => t.Id), Is.EqualTo(new[] { 2, 3 }));
+    }
+
+    [Test]
+    public void EvaluateDownloadQueue_respects_category_max_active_downloads()
+    {
+        var cat = new Category { Id = 1, Name = "Capped", MaxActiveDownloads = 1 };
+        _repository.All().Returns(new[] { cat });
+        _repository.GetByName("Capped").Returns(cat);
+
+        var t1 = new Torrent { Id = 1, Category = "Capped", SortOrder = 1 };
+        var t2 = new Torrent { Id = 2, Category = "Capped", SortOrder = 2 };
+        var t3 = new Torrent { Id = 3, Category = "Capped", SortOrder = 3 };
+
+        var queued = new[] { t1, t2, t3 };
+        var promoted = _subject.EvaluateDownloadQueue(queued, Array.Empty<Torrent>(), 10);
+
+        Assert.That(promoted.Select(t => t.Id), Is.EqualTo(new[] { 1 }));
+    }
+
+    [Test]
+    public void EvaluateDownloadQueue_does_not_exceed_global_limit()
+    {
+        var cat = new Category { Id = 1, Name = "General" };
+        _repository.All().Returns(new[] { cat });
+        _repository.GetByName("General").Returns(cat);
+
+        var torrents = Enumerable.Range(1, 5).Select(i => new Torrent { Id = i, Category = "General", SortOrder = i }).ToList();
+
+        var promoted = _subject.EvaluateDownloadQueue(torrents, Array.Empty<Torrent>(), 2);
+
+        Assert.That(promoted.Count, Is.EqualTo(2));
+        Assert.That(promoted.Select(t => t.Id), Is.EqualTo(new[] { 1, 2 }));
+    }
 }

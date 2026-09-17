@@ -28,6 +28,15 @@ public class CategoryResource : RestResource
     public bool AutoStop { get; set; }
 
     public bool IsDefault { get; set; }
+
+    [Range(-1, int.MaxValue)]
+    public int? MaxActiveDownloads { get; set; }
+
+    [Range(-1, int.MaxValue)]
+    public int? MaxActiveUploads { get; set; }
+
+    [Range(0, int.MaxValue)]
+    public int ReservedDownloadSlots { get; set; }
 }
 
 public static class CategoryResourceMapper
@@ -50,6 +59,9 @@ public static class CategoryResourceMapper
             TargetSeedTimeMinutes = model.TargetSeedTimeMinutes,
             AutoStop = model.AutoStop,
             IsDefault = model.IsDefault,
+            MaxActiveDownloads = model.MaxActiveDownloads,
+            MaxActiveUploads = model.MaxActiveUploads,
+            ReservedDownloadSlots = model.ReservedDownloadSlots,
         };
     }
 
@@ -71,6 +83,9 @@ public static class CategoryResourceMapper
             TargetSeedTimeMinutes = resource.TargetSeedTimeMinutes,
             AutoStop = resource.AutoStop,
             IsDefault = resource.IsDefault,
+            MaxActiveDownloads = resource.MaxActiveDownloads,
+            MaxActiveUploads = resource.MaxActiveUploads,
+            ReservedDownloadSlots = resource.ReservedDownloadSlots,
         };
     }
 }

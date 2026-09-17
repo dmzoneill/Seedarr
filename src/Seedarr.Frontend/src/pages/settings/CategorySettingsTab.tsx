@@ -157,6 +157,9 @@ export function CategorySettingsTab({
     targetSeedTimeMinutes: 0,
     autoStop: false,
     isDefault: false,
+    maxActiveDownloads: null,
+    maxActiveUploads: null,
+    reservedDownloadSlots: 0,
   };
 
   const handleOpenAdd = () => {
@@ -176,6 +179,9 @@ export function CategorySettingsTab({
       targetSeedTimeMinutes: cat.targetSeedTimeMinutes || 0,
       autoStop: Boolean(cat.autoStop),
       isDefault: Boolean(cat.isDefault),
+      maxActiveDownloads: cat.maxActiveDownloads ?? null,
+      maxActiveUploads: cat.maxActiveUploads ?? null,
+      reservedDownloadSlots: cat.reservedDownloadSlots ?? 0,
     });
   };
 
@@ -216,6 +222,15 @@ export function CategorySettingsTab({
       targetSeedTimeMinutes: Number(editingCategory.targetSeedTimeMinutes) || 0,
       autoStop: Boolean(editingCategory.autoStop),
       isDefault: Boolean(editingCategory.isDefault),
+      maxActiveDownloads:
+        editingCategory.maxActiveDownloads && Number(editingCategory.maxActiveDownloads) > 0
+          ? Number(editingCategory.maxActiveDownloads)
+          : null,
+      maxActiveUploads:
+        editingCategory.maxActiveUploads && Number(editingCategory.maxActiveUploads) > 0
+          ? Number(editingCategory.maxActiveUploads)
+          : null,
+      reservedDownloadSlots: Number(editingCategory.reservedDownloadSlots) || 0,
     };
 
     if (editingCategory.id) {
@@ -377,6 +392,7 @@ export function CategorySettingsTab({
                   <th style={{ padding: "0.6rem 0.8rem" }}>Save Path & Disk Space</th>
                   <th style={{ padding: "0.6rem 0.8rem" }}>Max Download</th>
                   <th style={{ padding: "0.6rem 0.8rem" }}>Max Upload</th>
+                  <th style={{ padding: "0.6rem 0.8rem" }}>Slots</th>
                   <th style={{ padding: "0.6rem 0.8rem" }}>Target Ratio</th>
                   <th style={{ padding: "0.6rem 0.8rem" }}>Auto Stop</th>
                   <th style={{ padding: "0.6rem 0.8rem", textAlign: "right" }}>
@@ -453,6 +469,34 @@ export function CategorySettingsTab({
                         {cat.defaultUploadLimit
                           ? `${cat.defaultUploadLimit} KB/s`
                           : "Unlimited"}
+                      </td>
+                      <td style={{ padding: "0.65rem 0.8rem" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.15rem",
+                            fontSize: "0.75rem",
+                            color: "var(--text-secondary)",
+                          }}
+                        >
+                          <span>
+                            DL:{" "}
+                            <strong>
+                              {cat.maxActiveDownloads ? cat.maxActiveDownloads : "∞"}
+                            </strong>
+                          </span>
+                          <span>
+                            UL:{" "}
+                            <strong>
+                              {cat.maxActiveUploads ? cat.maxActiveUploads : "∞"}
+                            </strong>
+                          </span>
+                          <span>
+                            Reserved:{" "}
+                            <strong>{cat.reservedDownloadSlots || 0}</strong>
+                          </span>
+                        </div>
                       </td>
                       <td style={{ padding: "0.65rem 0.8rem" }}>
                         {cat.targetRatio ? `${cat.targetRatio}x` : "Unlimited"}
@@ -663,6 +707,61 @@ export function CategorySettingsTab({
                 min={0}
                 suffix="KB/s"
                 hint="0 for unlimited"
+              />
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "1rem",
+              }}
+            >
+              <NumberInput
+                label="Max Active Downloads"
+                value={editingCategory.maxActiveDownloads ?? 0}
+                onChange={(v) =>
+                  setEditingCategory({
+                    ...editingCategory,
+                    maxActiveDownloads: v > 0 ? v : null,
+                  })
+                }
+                min={0}
+                hint="0 for unlimited concurrent downloads"
+              />
+
+              <NumberInput
+                label="Max Active Uploads"
+                value={editingCategory.maxActiveUploads ?? 0}
+                onChange={(v) =>
+                  setEditingCategory({
+                    ...editingCategory,
+                    maxActiveUploads: v > 0 ? v : null,
+                  })
+                }
+                min={0}
+                hint="0 for unlimited concurrent uploads"
+              />
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: "1rem",
+              }}
+            >
+              <NumberInput
+                label="Reserved Download Slots"
+                value={editingCategory.reservedDownloadSlots ?? 0}
+                onChange={(v) =>
+                  setEditingCategory({
+                    ...editingCategory,
+                    reservedDownloadSlots: v,
+                  })
+                }
+                min={0}
+                hint="Dedicated download slots reserved for this category"
               />
             </div>
 
