@@ -632,7 +632,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition();
         var result = (string)method.Invoke(_registration, new object[] { connection });
 
-        Assert.That(result, Is.EqualTo("http://localhost:80"));
+        Assert.That(result, Is.EqualTo("http://localhost"));
     }
 
     [Test]
@@ -647,7 +647,7 @@ public class ArrWebhookRegistrationTest
         var connection = new ArrConnectionDefinition();
         var result = (string)method.Invoke(_registration, new object[] { connection });
 
-        Assert.That(result, Is.EqualTo("http://localhost:443"));
+        Assert.That(result, Is.EqualTo("http://localhost"));
     }
 
     [Test]

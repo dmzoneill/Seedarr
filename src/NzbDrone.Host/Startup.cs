@@ -342,11 +342,6 @@ public class Startup
             app.UseHttpsRedirection();
         }
 
-        app.UseRouting();
-
-        app.UseAuthentication();
-        app.UseAuthorization();
-
         app.UseWhen(ctx => ctx.Request.Path.StartsWithSegments("/swagger"), swaggerApp =>
         {
             swaggerApp.Use(async (context, next) =>
@@ -397,6 +392,11 @@ public class Startup
                 c.ConfigObject.PersistAuthorization = true;
             });
         });
+
+        app.UseRouting();
+
+        app.UseAuthentication();
+        app.UseAuthorization();
 
         app.MapControllers();
         app.MapHub<MessageHub>("/signalr/messages");

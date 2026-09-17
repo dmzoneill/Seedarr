@@ -152,6 +152,7 @@ public class FileSystemController : Controller
                 {
                     IgnoreInaccessible = true,
                     RecurseSubdirectories = false,
+                    AttributesToSkip = showHidden ? FileAttributes.None : (FileAttributes.Hidden | FileAttributes.System),
                 };
 
                 var allDirs = new List<DirectoryInfo>();
@@ -213,6 +214,7 @@ public class FileSystemController : Controller
                     {
                         IgnoreInaccessible = true,
                         RecurseSubdirectories = false,
+                        AttributesToSkip = showHidden ? FileAttributes.None : (FileAttributes.Hidden | FileAttributes.System),
                     };
 
                     var allFiles = new List<FileInfo>();

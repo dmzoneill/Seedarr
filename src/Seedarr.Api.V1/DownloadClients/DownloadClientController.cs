@@ -80,16 +80,26 @@ public class DownloadClientController : Controller
             return BadRequest("Request body cannot be null");
         }
 
-        var validationError = ValidateDefinition(definition);
-        if (validationError != null)
-        {
-            return BadRequest(validationError);
-        }
-
         var existing = _downloadClientFactory.Get(id);
         if (existing == null)
         {
             return NotFound();
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.Host))
+        {
+            definition.Host = existing.Host;
+        }
+
+        if (definition.Port < 1 || definition.Port > 65535)
+        {
+            definition.Port = existing.Port > 0 ? existing.Port : 8080;
+        }
+
+        var validationError = ValidateDefinition(definition);
+        if (validationError != null)
+        {
+            return BadRequest(validationError);
         }
 
         definition.Id = id;

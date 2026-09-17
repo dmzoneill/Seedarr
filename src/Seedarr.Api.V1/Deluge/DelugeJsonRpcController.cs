@@ -890,7 +890,8 @@ public class DelugeJsonRpcController : ControllerBase
 
             if (cfgElem.ValueKind == JsonValueKind.Object)
             {
-                var altEnabled = _configService.AlternativeSpeedEnabled;
+                var wasAltActive = _configService.AlternativeSpeedEnabled;
+                var altEnabled = wasAltActive;
 
                 if (cfgElem.TryGetProperty("alt_speed_enabled", out var altProp))
                 {
@@ -904,7 +905,7 @@ public class DelugeJsonRpcController : ControllerBase
                 if (cfgElem.TryGetProperty("max_download_speed", out var dlProp) && dlProp.ValueKind == JsonValueKind.Number && dlProp.TryGetDouble(out var dlVal))
                 {
                     var speed = Math.Max(0, (int)Math.Round(dlVal));
-                    if (altEnabled)
+                    if (wasAltActive)
                     {
                         cfgUpdates["AltDownloadSpeedKbps"] = speed;
                     }
@@ -917,7 +918,7 @@ public class DelugeJsonRpcController : ControllerBase
                 if (cfgElem.TryGetProperty("max_upload_speed", out var ulProp) && ulProp.ValueKind == JsonValueKind.Number && ulProp.TryGetDouble(out var ulVal))
                 {
                     var speed = Math.Max(0, (int)Math.Round(ulVal));
-                    if (altEnabled)
+                    if (wasAltActive)
                     {
                         cfgUpdates["AltUploadSpeedKbps"] = speed;
                     }

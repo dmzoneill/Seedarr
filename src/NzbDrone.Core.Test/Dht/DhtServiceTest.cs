@@ -37,6 +37,7 @@ public class DhtServiceTest
         _configService.EnableDht.Returns(true);
 
         _service = new DhtService(_configService);
+        _service.RoutingTable.AllowLocal = true;
     }
 
     [TearDown]
@@ -2087,6 +2088,7 @@ public class DhtServiceTest
         _configService.DhtRateLimitEnabled.Returns(true);
         _configService.DhtMaxQueriesPerSecond.Returns(100);
         using var service = new DhtService(_configService);
+        service.RoutingTable.AllowLocal = true;
 
         var executeMethod = typeof(DhtService).GetMethod("ExecuteAsync", BindingFlags.NonPublic | BindingFlags.Instance);
         using var cts = new CancellationTokenSource();
@@ -2154,6 +2156,7 @@ public class DhtServiceTest
         _configService.DhtRateLimitEnabled.Returns(true);
         _configService.DhtMaxQueriesPerSecond.Returns(5);
         using var service = new DhtService(_configService);
+        service.RoutingTable.AllowLocal = true;
 
         var ipA = IPAddress.Parse("10.0.0.1");
         var invokeMethod = typeof(DhtService).GetMethod("HandleMessage", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -2175,6 +2178,7 @@ public class DhtServiceTest
         _configService.DhtRateLimitEnabled.Returns(true);
         _configService.DhtMaxQueriesPerSecond.Returns(5);
         using var service = new DhtService(_configService);
+        service.RoutingTable.AllowLocal = true;
 
         var ipA = IPAddress.Parse("10.0.0.1");
         var ipB = IPAddress.Parse("10.0.0.2");

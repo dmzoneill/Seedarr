@@ -83,7 +83,7 @@ public class PathSanitizerTests
     }
 
     [TestCase("file<name>:\"test\"|path?*.mkv", "filenametestpath.mkv")]
-    [TestCase("name\x00with\x1Fcontrol.txt", "namewithcontrol.txt")]
+    [TestCase("name\0with\u001Fcontrol.txt", "namewithcontrol.txt")]
     public void SanitizeFileName_strips_illegal_and_control_characters(string input, string expected)
     {
         Assert.That(PathSanitizer.SanitizeFileName(input), Is.EqualTo(expected));

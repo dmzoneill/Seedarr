@@ -320,8 +320,10 @@ public class ConfigFileProviderTest
     [Test]
     public void LoadFromFile_when_both_missing_falls_back_to_defaults()
     {
-        var configFile = Path.Combine(_tempDir, "config.xml");
-        var backupFile = Path.Combine(_tempDir, "config.xml.bak");
+        var emptyDir = Path.Combine(_tempDir, "missing_test_dir");
+        Directory.CreateDirectory(emptyDir);
+        var configFile = Path.Combine(emptyDir, "config.xml");
+        var backupFile = Path.Combine(emptyDir, "config.xml.bak");
 
         Assert.That(File.Exists(configFile), Is.False);
         Assert.That(File.Exists(backupFile), Is.False);
@@ -329,7 +331,7 @@ public class ConfigFileProviderTest
         ConfigFileProvider provider = null;
         Assert.DoesNotThrow(() =>
         {
-            provider = new ConfigFileProvider(new TestAppFolderInfo(_tempDir));
+            provider = new ConfigFileProvider(new TestAppFolderInfo(emptyDir));
         });
 
         Assert.That(provider, Is.Not.Null);

@@ -738,11 +738,15 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             added.Label = request.Tags;
             if (_tagService != null)
             {
-                added.TagIds = _tagService.SyncTagsFromLabels(new[] { request.Tags });
-                var labels = _tagService.GetLabelsForTagIds(added.TagIds);
-                if (labels.Count > 0)
+                var tagIds = _tagService.SyncTagsFromLabels(new[] { request.Tags });
+                if (tagIds != null)
                 {
-                    added.Label = string.Join(", ", labels);
+                    added.TagIds = tagIds;
+                    var labels = _tagService.GetLabelsForTagIds(tagIds);
+                    if (labels != null && labels.Count > 0)
+                    {
+                        added.Label = string.Join(", ", labels);
+                    }
                 }
             }
 
@@ -1584,11 +1588,14 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         foreach (var kvp in _categorySavePaths)
         {
-            var catSavePath = !string.IsNullOrWhiteSpace(kvp.Value)
-                ? RemapLocalToRemote(kvp.Value)
-                : Path.Combine(defaultPath, kvp.Key);
+            if (!result.ContainsKey(kvp.Key))
+            {
+                var catSavePath = !string.IsNullOrWhiteSpace(kvp.Value)
+                    ? RemapLocalToRemote(kvp.Value)
+                    : Path.Combine(defaultPath, kvp.Key);
 
-            result[kvp.Key] = new { name = kvp.Key, savePath = catSavePath };
+                result[kvp.Key] = new { name = kvp.Key, savePath = catSavePath };
+            }
         }
 
         var torrents = _torrentService.GetAll();
@@ -2127,7 +2134,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     [HttpGet("transfer/speedLimitsMode")]
     public ActionResult<int> GetSpeedLimitsMode()
     {
-        return Ok((_configService?.AlternativeSpeedEnabled == true) ? 1 : 0);
+        return (_configService?.AlternativeSpeedEnabled == true) ? 1 : 0;
     }
 
     [HttpPost("transfer/toggleSpeedLimitsMode")]

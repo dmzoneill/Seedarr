@@ -8,7 +8,7 @@ namespace NzbDrone.Core.Indexers.Prowlarr;
 
 public class ProwlarrIndexer : IIndexer
 {
-    private static readonly HttpClient DefaultClient = new();
+    private static readonly HttpClient DefaultClient = new() { Timeout = TimeSpan.FromSeconds(10) };
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
 
@@ -42,7 +42,8 @@ public class ProwlarrIndexer : IIndexer
                 request.Headers.Add("X-Api-Key", definition.ApiKey);
             }
 
-            using var response = _httpClient.Send(request);
+            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var response = _httpClient.Send(request, cts.Token);
 
             if (response.IsSuccessStatusCode)
             {

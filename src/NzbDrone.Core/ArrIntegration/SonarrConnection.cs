@@ -49,6 +49,7 @@ public class SonarrConnection : IArrConnection
 
     public async Task<List<ArrDownloadRecord>> GetDownloadHistoryAsync(int pageSize, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
             var effectivePageSize = Math.Max(1, pageSize);

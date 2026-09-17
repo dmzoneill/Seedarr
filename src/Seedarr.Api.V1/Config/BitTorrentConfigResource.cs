@@ -8,7 +8,7 @@ public class BitTorrentConfigResource : RestResource
     public bool EnableDht { get; set; }
     public bool EnablePex { get; set; }
     public bool EnableLpd { get; set; }
-    public string EncryptionMode { get; set; }
+    public string EncryptionMode { get; set; } = "enabled";
     public string BitTorrentUserAgent { get; set; }
     public string PeerIdPrefix { get; set; }
     public int AnnounceIntervalSeconds { get; set; }

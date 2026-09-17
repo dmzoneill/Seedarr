@@ -51,11 +51,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     public SyncResult Sync()
     {
-        if (!_syncLock.Wait(0))
-        {
-            _logger.Warn("Download client sync is already running, skipping overlapping sync request.");
-            return new SyncResult();
-        }
+        _syncLock.Wait();
 
         try
         {
@@ -231,7 +227,7 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
                         }
                         else if (item != null)
                         {
-                            var clientTrackers = provider.GetTrackers(hash);
+                            var clientTrackers = provider.GetTrackers(hash) ?? new List<string>();
                             var total = item.TotalSize;
                             var remaining = item.RemainingSize;
                             var downloaded = Math.Max(0, total - remaining);
