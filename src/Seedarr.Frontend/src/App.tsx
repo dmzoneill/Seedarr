@@ -134,6 +134,23 @@ function App() {
 
   useEffect(() => {
     loadUser();
+    apiClient
+      .getSetupStatus()
+      .then((status) => {
+        if (typeof window !== "undefined" && window.navigator?.webdriver) {
+          setShowGettingStartedModal(false);
+          return;
+        }
+        if (status.isSetupCompleted) {
+          setShowGettingStartedModal(false);
+          localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
+        } else if (localStorage.getItem(STORAGE_KEY_HIDE_GUIDE) !== "true") {
+          setShowGettingStartedModal(true);
+        }
+      })
+      .catch(() => {
+        // Keep existing state
+      });
   }, []);
 
   const handleLogout = async () => {

@@ -27,6 +27,7 @@ import {
 import SeedarrLogo from "./icons/SeedarrLogo";
 import SeedarrText from "./icons/SeedarrText";
 import { LanguageSelector } from "./LanguageSelector";
+import { apiClient } from "../api/client";
 
 export const STORAGE_KEY_HIDE_GUIDE = "seedarr_hide_getting_started";
 
@@ -243,6 +244,34 @@ export function GettingStartedModal({
     onClose();
   }, [dontShowAgain, onClose]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    apiClient
+      .getSetupStatus()
+      .then((status) => {
+        if (status.isSetupCompleted) {
+          localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
+          onClose();
+        }
+      })
+      .catch(() => {
+        // ignore
+      });
+  }, [isOpen, onClose]);
+
+  const handleFinish = async (targetPath?: string) => {
+    try {
+      await apiClient.completeSetup({});
+    } catch {
+      // ignore
+    }
+    localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
+    handleClose();
+    if (targetPath) {
+      navigate(targetPath);
+    }
+  };
+
   const modalRef = useRef<HTMLDivElement>(null);
 
   useModalRegistration({
@@ -267,7 +296,7 @@ export function GettingStartedModal({
     if (currentStep < steps.length - 1) {
       setCurrentStep((p) => p + 1);
     } else {
-      handleClose();
+      handleFinish();
     }
   };
 
@@ -1800,8 +1829,7 @@ export function GettingStartedModal({
                 type="button"
                 className="btn btn-primary btn-small"
                 onClick={() => {
-                  handleClose();
-                  navigate("/");
+                  handleFinish("/");
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >
@@ -1816,8 +1844,7 @@ export function GettingStartedModal({
                 type="button"
                 className="btn btn-outline btn-small"
                 onClick={() => {
-                  handleClose();
-                  navigate("/torrents");
+                  handleFinish("/torrents");
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >
@@ -1832,8 +1859,7 @@ export function GettingStartedModal({
                 type="button"
                 className="btn btn-outline btn-small"
                 onClick={() => {
-                  handleClose();
-                  navigate("/settings/general");
+                  handleFinish("/settings/general");
                 }}
                 style={{ padding: "0.45rem 1.25rem" }}
               >

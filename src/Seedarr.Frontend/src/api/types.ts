@@ -1364,4 +1364,13 @@ export interface RemotePathMappingTestRequest {
   direction?: string;
 }
 
+export interface SetupStatus {
+  isSetupCompleted: boolean;
+  isAuthEnabled: boolean;
+  hasAdminUser: boolean;
+}
 
+export interface SetupCompleteRequest {
+  username?: string;
+  password?: string;
+}
