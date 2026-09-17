@@ -135,7 +135,7 @@ public class DhtSecurityTests
         string storedHex = null;
         configService.DhtNodeIdHex.Returns(_ => storedHex);
         configService.When(c => c.DhtNodeIdHex = Arg.Any<string>())
-                     .Do(call => storedHex = call.Arg<string>());
+            .Do(call => storedHex = call.Arg<string>());
 
         configService.DhtBucketSize.Returns(8);
         configService.DhtRoutingTableSize.Returns(160);
@@ -165,7 +165,7 @@ public class DhtSecurityTests
         string storedHex = null;
         configService.DhtNodeIdHex.Returns(_ => storedHex);
         configService.When(c => c.DhtNodeIdHex = Arg.Any<string>())
-                     .Do(call => storedHex = call.Arg<string>());
+            .Do(call => storedHex = call.Arg<string>());
 
         configService.DhtBucketSize.Returns(8);
         configService.DhtRoutingTableSize.Returns(160);

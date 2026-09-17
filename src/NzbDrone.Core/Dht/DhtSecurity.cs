@@ -105,8 +105,8 @@ public static class DhtSecurity
         var exp2High5 = (byte)((crc >> 8) & 0xF8);
 
         return nodeId[0] == exp0 &&
-               nodeId[1] == exp1 &&
-               (nodeId[2] & 0xF8) == exp2High5;
+            nodeId[1] == exp1 &&
+            (nodeId[2] & 0xF8) == exp2High5;
     }
 
     private static uint[] InitializeTable()
