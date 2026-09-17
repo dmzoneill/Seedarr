@@ -34,7 +34,7 @@ public class PeerConnection : IDisposable
     public int RemotePort { get; }
     public string InfoHash { get; set; }
     public Torrent MatchedTorrent { get; set; }
-    public string PeerId { get; private set; }
+    public string PeerId { get; set; }
     public bool IsConnected => !_isDisposed && (_client != null ? _client.Connected : (_activeStream != null));
     public bool IsEncrypted { get; private set; }
     public CryptoMethod EncryptionMethod { get; private set; }
@@ -200,6 +200,9 @@ public class PeerConnection : IDisposable
     }
 
     public IDhKeyPool DhKeyPool { get; set; }
+    public byte[] InitialApplicationData { get; private set; }
+    public bool HandshakeSent { get; private set; }
+    public bool EnableIaPipelining { get; set; } = true;
 
     public PeerConnection(TcpClient client, IDhKeyPool dhKeyPool = null)
     {
@@ -291,16 +294,28 @@ public class PeerConnection : IDisposable
         }
     }
 
-    public bool NegotiateEncryptionOutgoing(string infoHash, EncryptionMode mode)
+    public bool NegotiateEncryptionOutgoing(string infoHash, EncryptionMode mode, byte[] initialPayload = null)
     {
         try
         {
             var infoHashBytes = Convert.FromHexString(infoHash);
             var handshake = new MseHandshake(infoHashBytes, mode, DhKeyPool);
-            _activeStream = handshake.NegotiateOutgoing(_networkStream);
+            var payload = initialPayload;
+            if (payload == null && EnableIaPipelining && !string.IsNullOrEmpty(PeerId))
+            {
+                payload = BuildHandshake(infoHash, PeerId);
+            }
+
+            _activeStream = handshake.NegotiateOutgoing(_networkStream, payload);
             EncryptionMethod = handshake.NegotiatedMethod;
+            InitialApplicationData = handshake.InitialApplicationData;
             IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
             InfoHash = infoHash;
+            if (payload != null && payload.Length > 0)
+            {
+                HandshakeSent = true;
+            }
+
             LastActivity = DateTime.UtcNow;
             _logger.Debug("MSE/PE outgoing completed with {0}:{1} - method: {2}", RemoteIp, RemotePort, EncryptionMethod);
             return true;
@@ -312,16 +327,33 @@ public class PeerConnection : IDisposable
         }
     }
 
-    public async ValueTask<bool> NegotiateEncryptionOutgoingAsync(string infoHash, EncryptionMode mode, CancellationToken cancellationToken = default)
+    public ValueTask<bool> NegotiateEncryptionOutgoingAsync(string infoHash, EncryptionMode mode, CancellationToken cancellationToken = default)
+    {
+        return NegotiateEncryptionOutgoingAsync(infoHash, mode, null, cancellationToken);
+    }
+
+    public async ValueTask<bool> NegotiateEncryptionOutgoingAsync(string infoHash, EncryptionMode mode, byte[] initialPayload, CancellationToken cancellationToken = default)
     {
         try
         {
             var infoHashBytes = Convert.FromHexString(infoHash);
             var handshake = new MseHandshake(infoHashBytes, mode, DhKeyPool);
-            _activeStream = await handshake.NegotiateOutgoingAsync(_networkStream, cancellationToken);
+            var payload = initialPayload;
+            if (payload == null && EnableIaPipelining && !string.IsNullOrEmpty(PeerId))
+            {
+                payload = BuildHandshake(infoHash, PeerId);
+            }
+
+            _activeStream = await handshake.NegotiateOutgoingAsync(_networkStream, payload, cancellationToken);
             EncryptionMethod = handshake.NegotiatedMethod;
+            InitialApplicationData = handshake.InitialApplicationData;
             IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
             InfoHash = infoHash;
+            if (payload != null && payload.Length > 0)
+            {
+                HandshakeSent = true;
+            }
+
             LastActivity = DateTime.UtcNow;
             _logger.Debug("MSE/PE outgoing completed with {0}:{1} - method: {2}", RemoteIp, RemotePort, EncryptionMethod);
             return true;
@@ -372,6 +404,7 @@ public class PeerConnection : IDisposable
             var handshake = new MseHandshake(Array.Empty<byte>(), mode, DhKeyPool);
             _activeStream = handshake.NegotiateIncoming(prefixed, infoHashValidator);
             EncryptionMethod = handshake.NegotiatedMethod;
+            InitialApplicationData = handshake.InitialApplicationData;
             IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
             LastActivity = DateTime.UtcNow;
             _logger.Debug("MSE/PE incoming completed with {0}:{1} - method: {2}", RemoteIp, RemotePort, EncryptionMethod);
@@ -414,6 +447,7 @@ public class PeerConnection : IDisposable
                 // Plain BitTorrent handshake - feed the peeked byte back through a PrefixedStream
                 _activeStream = new PrefixedStream(peek, _networkStream, ownsStream: false);
                 EncryptionMethod = CryptoMethod.PlainText;
+                InitialApplicationData = null;
                 IsEncrypted = false;
                 return true;
             }
@@ -423,6 +457,7 @@ public class PeerConnection : IDisposable
             var handshake = new MseHandshake(Array.Empty<byte>(), mode, DhKeyPool);
             _activeStream = await handshake.NegotiateIncomingAsync(prefixed, infoHashValidator, cancellationToken);
             EncryptionMethod = handshake.NegotiatedMethod;
+            InitialApplicationData = handshake.InitialApplicationData;
             IsEncrypted = EncryptionMethod == CryptoMethod.Rc4;
             LastActivity = DateTime.UtcNow;
             _logger.Debug("MSE/PE incoming completed with {0}:{1} - method: {2}", RemoteIp, RemotePort, EncryptionMethod);
@@ -538,11 +573,19 @@ public class PeerConnection : IDisposable
     {
         try
         {
+            if (HandshakeSent && string.Equals(InfoHash, infoHash, StringComparison.OrdinalIgnoreCase))
+            {
+                PeerId = peerId;
+                LastActivity = DateTime.UtcNow;
+                return true;
+            }
+
             var handshake = BuildHandshake(infoHash, peerId, isPrivate, clientProfile, supportsExtensions, supportsFast, supportsDht);
             _activeStream.Write(handshake, 0, handshake.Length);
             _activeStream.Flush();
             InfoHash = infoHash;
             PeerId = peerId;
+            HandshakeSent = true;
             LastActivity = DateTime.UtcNow;
             return true;
         }

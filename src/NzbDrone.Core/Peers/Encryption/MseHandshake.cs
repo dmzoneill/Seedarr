@@ -13,6 +13,7 @@ namespace NzbDrone.Core.Peers.Encryption;
 public class MseHandshake
 {
     private const int MaxPadLength = 512;
+    internal const int MaxIaLength = 65535;
     private const int DhKeyLength = 96;
 
     private static readonly byte[] KeyAPrefix = Encoding.ASCII.GetBytes("keyA");
@@ -32,6 +33,7 @@ public class MseHandshake
     private CryptoMethod _negotiatedMethod;
 
     public CryptoMethod NegotiatedMethod => _negotiatedMethod;
+    public byte[] InitialApplicationData { get; private set; }
     public IDhKeyPool KeyPool { get; set; }
 
     public MseHandshake(byte[] infoHash, EncryptionMode preferredMode, IDhKeyPool keyPool = null)
@@ -42,7 +44,7 @@ public class MseHandshake
         _logger = LogManager.GetCurrentClassLogger();
     }
 
-    public Stream NegotiateOutgoing(Stream stream)
+    public Stream NegotiateOutgoing(Stream stream, byte[] initialPayload = null)
     {
         _keyDerivation = KeyPool?.Rent() ?? new MseKeyDerivation();
 
@@ -63,7 +65,7 @@ public class MseHandshake
         _outCipher = new Rc4StreamCipher(encKey);
         _inCipher = new Rc4StreamCipher(decKey);
 
-        // Step 3: A -> B: HASH('req1', S) + HASH('req2', SKEY) XOR HASH('req3', S) + ENCRYPT(VC, crypto_provide, len(PadC), PadC, len(IA))
+        // Step 3: A -> B: HASH('req1', S) + HASH('req2', SKEY) XOR HASH('req3', S) + ENCRYPT(VC, crypto_provide, len(PadC), PadC, len(IA), IA)
         var req1Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req1Prefix);
         var req2Hash = MseKeyDerivation.DeriveKey(_infoHash, Req2Prefix);
         var req3Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req3Prefix);
@@ -77,7 +79,7 @@ public class MseHandshake
         stream.Write(req1Hash, 0, req1Hash.Length);
         stream.Write(obfuscatedHash, 0, obfuscatedHash.Length);
 
-        var encryptedPayload = BuildEncryptedPayload();
+        var encryptedPayload = BuildEncryptedPayload(initialPayload);
         stream.Write(encryptedPayload, 0, encryptedPayload.Length);
         stream.Flush();
 
@@ -196,18 +198,18 @@ public class MseHandshake
 
         var iaLenBytes = ReadExact(stream, 2);
         _inCipher.ProcessInPlace(iaLenBytes, 0, 2);
-        var iaLen = ReadUint16(iaLenBytes);
+        var iaLen = (int)ReadUint16(iaLenBytes);
 
-        if (iaLen > MaxPadLength)
-        {
-            throw new InvalidOperationException("MSE padding length exceeds maximum");
-        }
+        ValidateIaLength(iaLen);
 
-        byte[] initialPayload = null;
         if (iaLen > 0)
         {
-            initialPayload = ReadExact(stream, iaLen);
-            _inCipher.ProcessInPlace(initialPayload, 0, iaLen);
+            InitialApplicationData = ReadExact(stream, iaLen);
+            _inCipher.ProcessInPlace(InitialApplicationData, 0, iaLen);
+        }
+        else
+        {
+            InitialApplicationData = null;
         }
 
         // Select crypto method and send response
@@ -220,17 +222,15 @@ public class MseHandshake
 
         _logger.Debug("MSE/PE incoming negotiation complete: {0}", _negotiatedMethod);
 
-        var wrappedStream = WrapStream(stream);
-
-        if (initialPayload != null && initialPayload.Length > 0)
-        {
-            return new PrefixedStream(initialPayload, wrappedStream);
-        }
-
-        return wrappedStream;
+        return WrapStream(stream);
     }
 
-    public async ValueTask<Stream> NegotiateOutgoingAsync(Stream stream, CancellationToken cancellationToken = default)
+    public ValueTask<Stream> NegotiateOutgoingAsync(Stream stream, CancellationToken cancellationToken = default)
+    {
+        return NegotiateOutgoingAsync(stream, null, cancellationToken);
+    }
+
+    public async ValueTask<Stream> NegotiateOutgoingAsync(Stream stream, byte[] initialPayload, CancellationToken cancellationToken = default)
     {
         _keyDerivation = KeyPool?.Rent() ?? new MseKeyDerivation();
 
@@ -251,7 +251,7 @@ public class MseHandshake
         _outCipher = new Rc4StreamCipher(encKey);
         _inCipher = new Rc4StreamCipher(decKey);
 
-        // Step 3: A -> B: HASH('req1', S) + HASH('req2', SKEY) XOR HASH('req3', S) + ENCRYPT(VC, crypto_provide, len(PadC), PadC, len(IA))
+        // Step 3: A -> B: HASH('req1', S) + HASH('req2', SKEY) XOR HASH('req3', S) + ENCRYPT(VC, crypto_provide, len(PadC), PadC, len(IA), IA)
         var req1Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req1Prefix);
         var req2Hash = MseKeyDerivation.DeriveKey(_infoHash, Req2Prefix);
         var req3Hash = MseKeyDerivation.DeriveKey(_sharedSecret, Req3Prefix);
@@ -265,7 +265,7 @@ public class MseHandshake
         await stream.WriteAsync(req1Hash.AsMemory(), cancellationToken);
         await stream.WriteAsync(obfuscatedHash.AsMemory(), cancellationToken);
 
-        var encryptedPayload = BuildEncryptedPayload();
+        var encryptedPayload = BuildEncryptedPayload(initialPayload);
         await stream.WriteAsync(encryptedPayload.AsMemory(), cancellationToken);
         await stream.FlushAsync(cancellationToken);
 
@@ -405,18 +405,18 @@ public class MseHandshake
 
         var iaLenBytes = await ReadExactAsync(stream, 2, cancellationToken);
         _inCipher.ProcessInPlace(iaLenBytes, 0, 2);
-        var iaLen = ReadUint16(iaLenBytes);
+        var iaLen = (int)ReadUint16(iaLenBytes);
 
-        if (iaLen > MaxPadLength)
-        {
-            throw new InvalidOperationException("MSE padding length exceeds maximum");
-        }
+        ValidateIaLength(iaLen);
 
-        byte[] initialPayload = null;
         if (iaLen > 0)
         {
-            initialPayload = await ReadExactAsync(stream, iaLen, cancellationToken);
-            _inCipher.ProcessInPlace(initialPayload, 0, iaLen);
+            InitialApplicationData = await ReadExactAsync(stream, iaLen, cancellationToken);
+            _inCipher.ProcessInPlace(InitialApplicationData, 0, iaLen);
+        }
+        else
+        {
+            InitialApplicationData = null;
         }
 
         // Select crypto method and send response
@@ -429,14 +429,7 @@ public class MseHandshake
 
         _logger.Debug("MSE/PE incoming negotiation complete: {0}", _negotiatedMethod);
 
-        var wrappedStream = WrapStream(stream);
-
-        if (initialPayload != null && initialPayload.Length > 0)
-        {
-            return new PrefixedStream(initialPayload, wrappedStream);
-        }
-
-        return wrappedStream;
+        return WrapStream(stream);
     }
 
     private CryptoMethod GetSupportedMethods()
@@ -522,10 +515,21 @@ public class MseHandshake
         return selected;
     }
 
-    private byte[] BuildEncryptedPayload()
+    internal static void ValidateIaLength(int iaLen)
+    {
+        if (iaLen > MaxIaLength)
+        {
+            throw new InvalidOperationException("MSE initial application data length exceeds maximum");
+        }
+    }
+
+    private byte[] BuildEncryptedPayload(byte[] initialPayload = null)
     {
         var padC = GeneratePadding();
-        var payloadLen = 8 + 4 + 2 + padC.Length + 2;
+        var iaLen = initialPayload?.Length ?? 0;
+        ValidateIaLength(iaLen);
+
+        var payloadLen = 8 + 4 + 2 + padC.Length + 2 + iaLen;
         var payload = new byte[payloadLen];
         var offset = 0;
 
@@ -550,8 +554,16 @@ public class MseHandshake
             offset += padC.Length;
         }
 
-        // len(IA) = 0 (no initial application data)
-        // Already zero from initialization
+        // len(IA) (2 bytes, big-endian)
+        payload[offset++] = (byte)(iaLen >> 8);
+        payload[offset++] = (byte)iaLen;
+
+        // IA
+        if (iaLen > 0 && initialPayload != null)
+        {
+            Array.Copy(initialPayload, 0, payload, offset, iaLen);
+            offset += iaLen;
+        }
 
         _outCipher.ProcessInPlace(payload, 0, payload.Length);
         return payload;
@@ -590,12 +602,16 @@ public class MseHandshake
 
     private Stream WrapStream(Stream inner)
     {
-        if (_negotiatedMethod == CryptoMethod.PlainText)
+        var wrapped = _negotiatedMethod == CryptoMethod.PlainText
+            ? inner
+            : new EncryptedStream(inner, _outCipher, _inCipher, ownsStream: false);
+
+        if (InitialApplicationData != null && InitialApplicationData.Length > 0)
         {
-            return inner;
+            return new PrefixedStream(InitialApplicationData, wrapped);
         }
 
-        return new EncryptedStream(inner, _outCipher, _inCipher, ownsStream: false);
+        return wrapped;
     }
 
     private static byte[] ComputeEncryptedVcMarker(byte[] decryptionKey)

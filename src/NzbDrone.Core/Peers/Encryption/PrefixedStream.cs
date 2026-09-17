@@ -20,6 +20,11 @@ public class PrefixedStream : Stream
         _prefixOffset = 0;
     }
 
+    public PrefixedStream(Stream inner, byte[] prefix, bool ownsStream = true)
+        : this(prefix, inner, ownsStream)
+    {
+    }
+
     public override bool CanRead => _inner.CanRead;
     public override bool CanSeek => _inner.CanSeek;
     public override bool CanWrite => _inner.CanWrite;
