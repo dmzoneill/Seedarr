@@ -139,6 +139,67 @@ public class DbFactoryTest
     }
 
     [Test]
+    public void GetMigrationConnectionString_for_sqlite_includes_30_second_timeout()
+    {
+        var connStr = DbFactory.GetMigrationConnectionString(DatabaseType.SQLite, "Data Source=seedarr.db;");
+
+        Assert.That(connStr, Does.Contain("Default Timeout=30"));
+        Assert.That(connStr, Does.Contain("Foreign Keys=True"));
+    }
+
+    [Test]
+    public void CleanSqliteConnectionString_preserves_default_timeout()
+    {
+        var input = "Data Source=seedarr.db;Default Timeout=45;Foreign Keys=True;";
+        var result = DbFactory.CleanSqliteConnectionString(input);
+
+        Assert.That(result, Does.Contain("Default Timeout=45"));
+        Assert.That(result, Does.Contain("Foreign Keys=True"));
+    }
+
+    [Test]
+    public void CleanSqliteConnectionString_preserves_busy_timeout_as_default_timeout()
+    {
+        var input = "Data Source=seedarr.db;Busy Timeout=30;";
+        var result = DbFactory.CleanSqliteConnectionString(input);
+
+        Assert.That(result, Does.Contain("Default Timeout=30"));
+        Assert.That(result, Does.Not.Contain("Busy Timeout"));
+    }
+
+    [Test]
+    public void CleanSqliteConnectionString_converts_millisecond_busy_timeout_to_seconds()
+    {
+        var input = "Data Source=seedarr.db;Busy Timeout=30000;";
+        var result = DbFactory.CleanSqliteConnectionString(input);
+
+        Assert.That(result, Does.Contain("Default Timeout=30"));
+        Assert.That(result, Does.Not.Contain("Busy Timeout"));
+    }
+
+    [Test]
+    public void CleanSqliteConnectionString_preserves_existing_foreign_keys_and_default_timeout_when_busy_timeout_also_present()
+    {
+        var input = "Data Source=seedarr.db;Cache=Shared;Busy Timeout=30;Default Timeout=30;Foreign Keys=True;";
+        var result = DbFactory.CleanSqliteConnectionString(input);
+
+        Assert.That(result, Does.Contain("Default Timeout=30"));
+        Assert.That(result, Does.Contain("Foreign Keys=True"));
+        Assert.That(result, Does.Contain("Cache=Shared"));
+        Assert.That(result, Does.Not.Contain("Busy Timeout"));
+    }
+
+    [Test]
+    public void CleanSqliteConnectionString_ensures_foreign_keys_and_timeout_when_neither_provided()
+    {
+        var input = "Data Source=seedarr.db;";
+        var result = DbFactory.CleanSqliteConnectionString(input);
+
+        Assert.That(result, Does.Contain("Default Timeout=30"));
+        Assert.That(result, Does.Contain("Foreign Keys=True"));
+    }
+
+    [Test]
     public void SqliteDoubleTypeHandler_SetValue_stores_double_value()
     {
         var handler = new SqliteDoubleTypeHandler();

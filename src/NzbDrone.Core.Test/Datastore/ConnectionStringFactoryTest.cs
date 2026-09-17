@@ -121,6 +121,18 @@ public class ConnectionStringFactoryTest
     }
 
     [Test]
+    public void MainDbConnectionString_cleaned_for_migrations_should_include_30_second_timeout_and_foreign_keys()
+    {
+        _configFileProvider.PostgresHost.Returns(string.Empty);
+
+        var subject = BuildSubject();
+        var migrationConnStr = DbFactory.CleanSqliteConnectionString(subject.MainDbConnectionString);
+
+        Assert.That(migrationConnStr, Does.Contain("Default Timeout=30"));
+        Assert.That(migrationConnStr, Does.Contain("Foreign Keys=True"));
+    }
+
+    [Test]
     public void MainDbConnectionString_should_contain_host_when_postgres()
     {
         _configFileProvider.PostgresHost.Returns("pg.example.com");

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Dapper;
 using FluentMigrator.Runner;
 using Microsoft.Data.Sqlite;
@@ -62,9 +63,15 @@ public class DbFactory : IDbFactory
 
         _logger.Info("Creating {0} database: {1}", dbType, RedactConnectionString(dbType, connectionString));
 
-        var sqliteConnectionString = dbType == DatabaseType.SQLite ? CleanSqliteConnectionString(connectionString) : connectionString;
+        var migrationConnectionString = GetMigrationConnectionString(dbType, connectionString);
+        var sqliteConnectionString = dbType == DatabaseType.SQLite ? migrationConnectionString : connectionString;
 
-        RunMigrations(dbType, sqliteConnectionString);
+        if (dbType == DatabaseType.SQLite)
+        {
+            EnableSqlitePragmas(sqliteConnectionString);
+        }
+
+        RunMigrations(dbType, migrationConnectionString);
 
         if (dbType == DatabaseType.SQLite)
         {
@@ -93,6 +100,11 @@ public class DbFactory : IDbFactory
         return new Database(factory, dbType);
     }
 
+    public static string GetMigrationConnectionString(DatabaseType dbType, string connectionString)
+    {
+        return dbType == DatabaseType.SQLite ? CleanSqliteConnectionString(connectionString) : connectionString;
+    }
+
     public static string CleanSqliteConnectionString(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -100,7 +112,43 @@ public class DbFactory : IDbFactory
             return connectionString;
         }
 
-        return System.Text.RegularExpressions.Regex.Replace(connectionString, @"(?i)Busy\s+Timeout\s*=\s*[^;]+;?", "");
+        var busyTimeoutMatch = Regex.Match(
+            connectionString,
+            @"(?i)Busy\s+Timeout\s*=\s*(\d+)");
+
+        var defaultTimeoutMatch = Regex.Match(
+            connectionString,
+            @"(?i)Default\s+Timeout\s*=\s*(\d+)");
+
+        // Remove unsupported "Busy Timeout" parameter to prevent Microsoft.Data.Sqlite keyword exceptions
+        var cleaned = Regex.Replace(
+            connectionString,
+            @"(?i)Busy\s+Timeout\s*=\s*[^;]+;?",
+            "").Trim();
+
+        var timeoutSeconds = 30;
+        if (defaultTimeoutMatch.Success && int.TryParse(defaultTimeoutMatch.Groups[1].Value, out var parsedDefaultTimeout))
+        {
+            timeoutSeconds = parsedDefaultTimeout;
+        }
+        else if (busyTimeoutMatch.Success && int.TryParse(busyTimeoutMatch.Groups[1].Value, out var parsedBusyTimeout))
+        {
+            timeoutSeconds = parsedBusyTimeout >= 1000 ? parsedBusyTimeout / 1000 : parsedBusyTimeout;
+        }
+
+        if (!Regex.IsMatch(cleaned, @"(?i)Default\s+Timeout\s*="))
+        {
+            var separator = cleaned.EndsWith(";") || string.IsNullOrEmpty(cleaned) ? "" : ";";
+            cleaned = $"{cleaned}{separator}Default Timeout={timeoutSeconds};";
+        }
+
+        if (!Regex.IsMatch(cleaned, @"(?i)Foreign\s+Keys\s*="))
+        {
+            var separator = cleaned.EndsWith(";") || string.IsNullOrEmpty(cleaned) ? "" : ";";
+            cleaned = $"{cleaned}{separator}Foreign Keys=True;";
+        }
+
+        return cleaned;
     }
 
     private void EnableSqlitePragmas(string connectionString)
@@ -155,6 +203,19 @@ public class DbFactory : IDbFactory
         using var serviceProvider = services.BuildServiceProvider();
         using var scope = serviceProvider.CreateScope();
         var runner = scope.ServiceProvider.GetRequiredService<IMigrationRunner>();
+
+        if (dbType == DatabaseType.SQLite)
+        {
+            try
+            {
+                runner.Processor.Execute("PRAGMA busy_timeout = 30000; PRAGMA foreign_keys = ON;");
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to apply SQLite pragmas to migration runner connection");
+            }
+        }
+
         runner.MigrateUp();
 
         _logger.Info("Database migrations complete");
