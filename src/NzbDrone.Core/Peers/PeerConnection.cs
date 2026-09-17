@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Network;
 using NzbDrone.Core.Peers.Encryption;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Torrents;
@@ -108,10 +109,16 @@ public class PeerConnection : IDisposable
         LastActivity = DateTime.UtcNow;
     }
 
-    public PeerConnection(string host, int port, IPAddress localBindAddress = null, int dscp = 0, int tos = 0, Network.IProxySettingsProvider proxySettings = null, IDhKeyPool dhKeyPool = null)
+    public PeerConnection(string host, int port, IPAddress localBindAddress = null, int dscp = 0, int tos = 0, Network.IProxySettingsProvider proxySettings = null, IDhKeyPool dhKeyPool = null, string bindInterface = null)
     {
         DhKeyPool = dhKeyPool;
-        if (localBindAddress != null)
+        if (!string.IsNullOrWhiteSpace(bindInterface))
+        {
+            var family = localBindAddress?.AddressFamily ?? (IPAddress.TryParse(host, out var parsed) ? parsed.AddressFamily : AddressFamily.InterNetwork);
+            _client = new TcpClient(family);
+            _client.Client.BindToNetworkInterface(bindInterface, localBindAddress, 0);
+        }
+        else if (localBindAddress != null)
         {
             var localEp = new IPEndPoint(localBindAddress, 0);
             _client = new TcpClient(localEp);

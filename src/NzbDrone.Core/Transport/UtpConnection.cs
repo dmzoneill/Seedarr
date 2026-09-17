@@ -8,6 +8,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Threading;
 using NLog;
+using NzbDrone.Core.Network;
 
 namespace NzbDrone.Core.Transport;
 
@@ -86,9 +87,10 @@ public class UtpConnection : IUtpConnection
     public ushort ReceiveId { get; private set; }
     public ushort SendId => _connectionId;
 
-    public UtpConnection(int connectionTimeoutSeconds = 30)
+    public UtpConnection(int connectionTimeoutSeconds = 30, string bindInterface = null, IPAddress localIp = null)
     {
         _udpClient = new UdpClient();
+        _udpClient.Client.BindToNetworkInterface(bindInterface, localIp);
         _ownsUdpClient = true;
         _logger = LogManager.GetCurrentClassLogger();
         _connectionId = (ushort)RandomNumberGenerator.GetInt32(0, ushort.MaxValue + 1);
@@ -97,11 +99,12 @@ public class UtpConnection : IUtpConnection
         _connectionTimeoutSeconds = connectionTimeoutSeconds;
     }
 
-    public UtpConnection(UdpClient udpClient, ushort connectionId, IPEndPoint remoteEndpoint, int connectionTimeoutSeconds = 30)
+    public UtpConnection(UdpClient udpClient, ushort connectionId, IPEndPoint remoteEndpoint, int connectionTimeoutSeconds = 30, string bindInterface = null, IPAddress localIp = null)
     {
         if (udpClient == null)
         {
             _udpClient = new UdpClient();
+            _udpClient.Client.BindToNetworkInterface(bindInterface, localIp);
             _ownsUdpClient = true;
         }
         else

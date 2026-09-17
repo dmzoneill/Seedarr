@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using NLog;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network;
 
 namespace NzbDrone.Core.Trackers.Udp;
 
@@ -25,15 +26,22 @@ public class UdpTrackerProvider : ITrackerProvider
         _logger = LogManager.GetCurrentClassLogger();
     }
 
+    internal virtual UdpClient CreateClient(int timeoutMs)
+    {
+        var client = new UdpClient();
+        client.Client.ReceiveTimeout = timeoutMs;
+        client.Client.SendTimeout = timeoutMs;
+        client.Client.BindToNetworkInterface(_configService.BindInterface);
+        return client;
+    }
+
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request)
     {
         try
         {
             var timeoutMs = _configService.UdpTrackerTimeoutSeconds * 1000;
             var uri = new Uri(request.TrackerUrl);
-            using var client = new UdpClient();
-            client.Client.ReceiveTimeout = timeoutMs;
-            client.Client.SendTimeout = timeoutMs;
+            using var client = CreateClient(timeoutMs);
 
             var endpoint = new IPEndPoint(IPAddress.Any, 0);
             client.Connect(uri.Host, uri.Port);
@@ -64,9 +72,7 @@ public class UdpTrackerProvider : ITrackerProvider
         {
             var timeoutMs = _configService.UdpTrackerTimeoutSeconds * 1000;
             var uri = new Uri(trackerUrl);
-            using var client = new UdpClient();
-            client.Client.ReceiveTimeout = timeoutMs;
-            client.Client.SendTimeout = timeoutMs;
+            using var client = CreateClient(timeoutMs);
 
             var endpoint = new IPEndPoint(IPAddress.Any, 0);
             client.Connect(uri.Host, uri.Port);
