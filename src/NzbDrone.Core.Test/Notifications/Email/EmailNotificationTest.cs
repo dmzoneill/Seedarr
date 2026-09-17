@@ -348,4 +348,26 @@ public class EmailNotificationTest
 
         Assert.That(subject.SmtpSendCalled, Is.True);
     }
+
+    [Test]
+    public void SendEmail_should_add_multiple_recipients_when_semicolon_separated()
+    {
+        var subject = CreateConfiguredSubject("a@example.com; b@example.com; c@example.com");
+
+        subject.OnTorrentAdded("test.torrent");
+
+        Assert.That(subject.LastSentMessage.To.Count, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void SendEmail_should_skip_invalid_email_format_and_deliver_to_valid_recipients()
+    {
+        var subject = CreateConfiguredSubject("valid@example.com; invalid-address; valid2@example.com");
+
+        subject.OnTorrentAdded("test.torrent");
+
+        Assert.That(subject.LastSentMessage.To.Count, Is.EqualTo(2));
+        Assert.That(subject.LastSentMessage.To[0].Address, Is.EqualTo("valid@example.com"));
+        Assert.That(subject.LastSentMessage.To[1].Address, Is.EqualTo("valid2@example.com"));
+    }
 }

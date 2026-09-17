@@ -366,11 +366,7 @@ public class NotificationEventHandler :
             else if (string.Equals(notif.Implementation, "Email", StringComparison.OrdinalIgnoreCase))
             {
                 EnqueueDispatch(
-                    () =>
-                    {
-                        EmailNotificationSender.SendEmailNotification(notif.Settings, eventType, null, null, payload);
-                        return Task.CompletedTask;
-                    },
+                    async () => await EmailNotificationSender.SendEmailNotificationAsync(notif.Settings, eventType, null, null, payload).ConfigureAwait(false),
                     eventType,
                     "Email");
             }
@@ -508,11 +504,7 @@ public class NotificationEventHandler :
             else if (string.Equals(notif.Implementation, "Email", StringComparison.OrdinalIgnoreCase))
             {
                 EnqueueDispatch(
-                    () =>
-                    {
-                        EmailNotificationSender.SendEmailNotification(notif.Settings, eventType, torrent, meta, payload);
-                        return Task.CompletedTask;
-                    },
+                    async () => await EmailNotificationSender.SendEmailNotificationAsync(notif.Settings, eventType, torrent, meta, payload).ConfigureAwait(false),
                     eventType,
                     "Email");
             }
