@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "../i18n";
 import {
   useTorrents,
@@ -198,6 +198,39 @@ interface ContextMenuState {
   torrent: Torrent | null;
 }
 
+function getSortValue(t: Torrent, key: SortKey): string | number {
+  switch (key) {
+    case "#":
+      return t.id;
+    case "trackerUrl":
+      return t.trackerUrl ?? "";
+    case "lastActive":
+      return t.lastActive ?? "";
+    case "creationDate":
+      return t.creationDate ?? "";
+    case "comment":
+      return t.comment ?? "";
+    case "createdBy":
+      return t.createdBy ?? "";
+    case "label":
+      return t.label ?? "";
+    case "infoHash":
+      return t.infoHash;
+    case "isPrivate":
+      return t.isPrivate ? 1 : 0;
+    case "superSeeding":
+      return t.superSeeding ? 1 : 0;
+    case "sequentialDownload":
+      return t.sequentialDownload ? 1 : 0;
+    case "forceStart":
+      return t.forceStart ? 1 : 0;
+    case "active":
+      return t.active ? 1 : 0;
+    default:
+      return t[key] as string | number;
+  }
+}
+
 interface TorrentTableProps {
   filter?: string;
   stateFilter?: string;
@@ -211,6 +244,8 @@ interface TorrentTableProps {
   onSelectAll?: (ids: number[]) => void;
   onSelectRange?: (ids: number[]) => void;
   onSelectMultiple?: (ids: Set<number>) => void;
+  onDeleteSelected?: () => void;
+  onToggleActive?: () => void;
 }
 
 function TorrentTable({
@@ -226,6 +261,8 @@ function TorrentTable({
   onSelectAll,
   onSelectRange,
   onSelectMultiple,
+  onDeleteSelected,
+  onToggleActive,
 }: TorrentTableProps) {
   const { t } = useTranslation();
   const { data: torrents, isLoading, isError } = useTorrents();
@@ -239,6 +276,9 @@ function TorrentTable({
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+  const [focusedIndex, setFocusedIndex] = useState<number>(0);
+  const [anchorIndex, setAnchorIndex] = useState<number | null>(null);
+  const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
   const [visibleColumns, setVisibleColumns] =
@@ -248,6 +288,234 @@ function TorrentTable({
   const { data: arrConnections } = useArrConnections();
 
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  const filtered = filterTorrents(torrents, {
+    filter,
+    stateFilter,
+    trackerFilter,
+    categoryFilter,
+    tagFilter,
+  });
+
+  const sorted = [...filtered].sort((a, b) => {
+    const va = getSortValue(a, sortKey);
+    const vb = getSortValue(b, sortKey);
+    const cmp =
+      typeof va === "string" && typeof vb === "string"
+        ? va.localeCompare(vb)
+        : Number(va) - Number(vb);
+    return sortAsc ? cmp : -cmp;
+  });
+
+  useEffect(() => {
+    if (selectedTorrentId != null && sorted.length > 0) {
+      const idx = sorted.findIndex((t) => t.id === selectedTorrentId);
+      if (idx !== -1) {
+        setFocusedIndex(idx);
+        if (anchorIndex === null) {
+          setAnchorIndex(idx);
+        }
+      }
+    }
+  }, [selectedTorrentId, sorted]);
+
+  useEffect(() => {
+    if (sorted.length > 0 && focusedIndex >= sorted.length) {
+      setFocusedIndex(sorted.length - 1);
+    }
+  }, [sorted.length, focusedIndex]);
+
+  const moveFocus = useCallback(
+    (targetIndex: number, isShift: boolean) => {
+      if (sorted.length === 0) return;
+      const nextIndex = Math.max(0, Math.min(sorted.length - 1, targetIndex));
+      setFocusedIndex(nextIndex);
+
+      const rowEl = rowRefs.current[nextIndex];
+      if (rowEl) {
+        rowEl.focus();
+        rowEl.scrollIntoView({ block: "nearest" });
+      }
+
+      if (isShift) {
+        const effectiveAnchor =
+          anchorIndex !== null ? anchorIndex : focusedIndex;
+        if (anchorIndex === null) {
+          setAnchorIndex(focusedIndex);
+        }
+        const start = Math.min(effectiveAnchor, nextIndex);
+        const end = Math.max(effectiveAnchor, nextIndex);
+        const rangeIds = sorted.slice(start, end + 1).map((item) => item.id);
+        if (onSelectMultiple) {
+          onSelectMultiple(new Set(rangeIds));
+        } else if (onSelectRange) {
+          onSelectRange(rangeIds);
+        }
+        onSelectTorrent?.(sorted[nextIndex].id);
+      } else {
+        setAnchorIndex(nextIndex);
+        setLastClickedIndex(nextIndex);
+        if (onSelectMultiple) {
+          onSelectMultiple(new Set([sorted[nextIndex].id]));
+        } else if (onSelectRange) {
+          onSelectRange([sorted[nextIndex].id]);
+        }
+        onSelectTorrent?.(sorted[nextIndex].id);
+      }
+    },
+    [
+      sorted,
+      anchorIndex,
+      focusedIndex,
+      onSelectMultiple,
+      onSelectRange,
+      onSelectTorrent,
+    ],
+  );
+
+  const handleDefaultToggleActive = useCallback(() => {
+    if (selectedIds && selectedIds.size > 0) {
+      const selectedTorrents = sorted.filter((t) => selectedIds.has(t.id));
+      const anyActive = selectedTorrents.some(
+        (t) => t.status === "Seeding" || t.active,
+      );
+      for (const t of selectedTorrents) {
+        if (anyActive) {
+          stopSeeding.mutate(t.id);
+        } else {
+          startSeeding.mutate(t.id);
+        }
+      }
+    } else {
+      const curr =
+        sorted[focusedIndex] ??
+        (selectedTorrentId != null
+          ? sorted.find((t) => t.id === selectedTorrentId)
+          : null);
+      if (curr) {
+        if (curr.status === "Seeding" || curr.active) {
+          stopSeeding.mutate(curr.id);
+        } else {
+          startSeeding.mutate(curr.id);
+        }
+      }
+    }
+  }, [
+    selectedIds,
+    sorted,
+    focusedIndex,
+    selectedTorrentId,
+    startSeeding,
+    stopSeeding,
+  ]);
+
+  const handleDefaultDeleteSelected = useCallback(() => {
+    const ids =
+      selectedIds && selectedIds.size > 0
+        ? Array.from(selectedIds)
+        : selectedTorrentId != null
+          ? [selectedTorrentId]
+          : sorted[focusedIndex]
+            ? [sorted[focusedIndex].id]
+            : [];
+    if (ids.length === 0) return;
+    if (confirm(`Delete ${ids.length} torrent(s)?`)) {
+      for (const id of ids) {
+        deleteTorrent.mutate({ id });
+      }
+    }
+  }, [selectedIds, selectedTorrentId, sorted, focusedIndex, deleteTorrent]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement ||
+        (e.target as HTMLElement)?.isContentEditable
+      ) {
+        return;
+      }
+
+      if (sorted.length === 0) return;
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        moveFocus(focusedIndex + 1, e.shiftKey);
+        return;
+      }
+
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        moveFocus(focusedIndex - 1, e.shiftKey);
+        return;
+      }
+
+      if (e.key === "Home") {
+        e.preventDefault();
+        moveFocus(0, e.shiftKey);
+        return;
+      }
+
+      if (e.key === "End") {
+        e.preventDefault();
+        moveFocus(sorted.length - 1, e.shiftKey);
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === "a" || e.key === "A")) {
+        e.preventDefault();
+        const allIds = sorted.map((t) => t.id);
+        if (onSelectMultiple) {
+          onSelectMultiple(new Set(allIds));
+        } else if (onSelectAll) {
+          onSelectAll(allIds);
+        }
+        return;
+      }
+
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const curr = sorted[focusedIndex];
+        if (curr) {
+          onSelectTorrent?.(curr.id);
+        }
+        return;
+      }
+
+      if (e.key === " ") {
+        e.preventDefault();
+        if (onToggleActive) {
+          onToggleActive();
+        } else {
+          handleDefaultToggleActive();
+        }
+        return;
+      }
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        e.preventDefault();
+        if (onDeleteSelected) {
+          onDeleteSelected();
+        } else {
+          handleDefaultDeleteSelected();
+        }
+        return;
+      }
+    },
+    [
+      sorted,
+      focusedIndex,
+      moveFocus,
+      onSelectMultiple,
+      onSelectAll,
+      onSelectTorrent,
+      onToggleActive,
+      handleDefaultToggleActive,
+      onDeleteSelected,
+      handleDefaultDeleteSelected,
+    ],
+  );
 
   function toggleColumn(key: string) {
     setVisibleColumns((prev) => {
@@ -265,6 +533,14 @@ function TorrentTable({
   function handleContextMenu(e: React.MouseEvent, torrent: Torrent | null) {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, torrent });
+  }
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else {
+      setSortKey(key);
+      setSortAsc(true);
+    }
   }
 
   const columns = ALL_COLUMNS.filter((col) => visibleColumns.has(col.key));
@@ -295,65 +571,6 @@ function TorrentTable({
 
   if (isError) {
     return <p className="error">Failed to load data.</p>;
-  }
-
-  const filtered = filterTorrents(torrents, {
-    filter,
-    stateFilter,
-    trackerFilter,
-    categoryFilter,
-    tagFilter,
-  });
-
-  function getSortValue(t: Torrent, key: SortKey): string | number {
-    switch (key) {
-      case "#":
-        return t.id;
-      case "trackerUrl":
-        return t.trackerUrl ?? "";
-      case "lastActive":
-        return t.lastActive ?? "";
-      case "creationDate":
-        return t.creationDate ?? "";
-      case "comment":
-        return t.comment ?? "";
-      case "createdBy":
-        return t.createdBy ?? "";
-      case "label":
-        return t.label ?? "";
-      case "infoHash":
-        return t.infoHash;
-      case "isPrivate":
-        return t.isPrivate ? 1 : 0;
-      case "superSeeding":
-        return t.superSeeding ? 1 : 0;
-      case "sequentialDownload":
-        return t.sequentialDownload ? 1 : 0;
-      case "forceStart":
-        return t.forceStart ? 1 : 0;
-      case "active":
-        return t.active ? 1 : 0;
-      default:
-        return t[key] as string | number;
-    }
-  }
-
-  const sorted = [...filtered].sort((a, b) => {
-    const va = getSortValue(a, sortKey);
-    const vb = getSortValue(b, sortKey);
-    const cmp =
-      typeof va === "string" && typeof vb === "string"
-        ? va.localeCompare(vb)
-        : Number(va) - Number(vb);
-    return sortAsc ? cmp : -cmp;
-  });
-
-  function handleSort(key: SortKey) {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else {
-      setSortKey(key);
-      setSortAsc(true);
-    }
   }
 
   const priorityLabel = (p: number) =>
@@ -569,7 +786,17 @@ function TorrentTable({
   }
 
   return (
-    <div className="torrent-table-wrapper">
+    <div
+      className="torrent-table-wrapper"
+      tabIndex={0}
+      onKeyDown={handleKeyDown}
+      onFocus={(e) => {
+        if (e.target === e.currentTarget && sorted.length > 0) {
+          const idx = Math.min(Math.max(0, focusedIndex), sorted.length - 1);
+          rowRefs.current[idx]?.focus();
+        }
+      }}
+    >
       <table className="torrent-table">
         <thead onContextMenu={(e) => handleContextMenu(e, null)}>
           <tr>
@@ -599,27 +826,39 @@ function TorrentTable({
           {sorted.map((t, index) => (
             <tr
               key={t.id}
-              className={`torrent-table-row${selectedTorrentId === t.id ? " torrent-table-row-selected" : ""}${selectedIds?.has(t.id) ? " torrent-table-row-selected" : ""}`}
+              ref={(el) => {
+                rowRefs.current[index] = el;
+              }}
+              tabIndex={focusedIndex === index ? 0 : -1}
+              className={`torrent-table-row${selectedTorrentId === t.id ? " torrent-table-row-selected" : ""}${selectedIds?.has(t.id) ? " torrent-table-row-selected" : ""}${focusedIndex === index ? " torrent-table-row-focused" : ""}`}
+              onFocus={() => {
+                setFocusedIndex(index);
+                if (anchorIndex === null) {
+                  setAnchorIndex(index);
+                }
+              }}
               onClick={(e) => {
-                if (e.shiftKey && lastClickedIndex !== null) {
-                  const start = Math.min(lastClickedIndex, index);
-                  const end = Math.max(lastClickedIndex, index);
+                setFocusedIndex(index);
+                if (e.shiftKey && (anchorIndex !== null || lastClickedIndex !== null)) {
+                  const base = anchorIndex !== null ? anchorIndex : lastClickedIndex!;
+                  const start = Math.min(base, index);
+                  const end = Math.max(base, index);
                   const rangeIds = sorted
                     .slice(start, end + 1)
                     .map((item) => item.id);
-                  if (onSelectRange) {
+                  if (onSelectMultiple) {
+                    onSelectMultiple(new Set(rangeIds));
+                  } else if (onSelectRange) {
                     onSelectRange(rangeIds);
-                  } else if (onSelectMultiple) {
-                    onSelectMultiple(
-                      new Set([...(selectedIds || []), ...rangeIds]),
-                    );
                   }
                   onSelectTorrent?.(t.id);
                 } else if (e.ctrlKey || e.metaKey) {
+                  setAnchorIndex(index);
                   onToggleSelect?.(t.id);
                   onSelectTorrent?.(t.id);
                   setLastClickedIndex(index);
                 } else {
+                  setAnchorIndex(index);
                   onSelectTorrent?.(selectedTorrentId === t.id ? null : t.id);
                   setLastClickedIndex(index);
                 }
@@ -634,20 +873,21 @@ function TorrentTable({
                   onChange={() => {}}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (e.shiftKey && lastClickedIndex !== null) {
-                      const start = Math.min(lastClickedIndex, index);
-                      const end = Math.max(lastClickedIndex, index);
+                    setFocusedIndex(index);
+                    if (e.shiftKey && (anchorIndex !== null || lastClickedIndex !== null)) {
+                      const base = anchorIndex !== null ? anchorIndex : lastClickedIndex!;
+                      const start = Math.min(base, index);
+                      const end = Math.max(base, index);
                       const rangeIds = sorted
                         .slice(start, end + 1)
                         .map((item) => item.id);
-                      if (onSelectRange) {
+                      if (onSelectMultiple) {
+                        onSelectMultiple(new Set(rangeIds));
+                      } else if (onSelectRange) {
                         onSelectRange(rangeIds);
-                      } else if (onSelectMultiple) {
-                        onSelectMultiple(
-                          new Set([...(selectedIds || []), ...rangeIds]),
-                        );
                       }
                     } else {
+                      setAnchorIndex(index);
                       onToggleSelect?.(t.id);
                       setLastClickedIndex(index);
                     }

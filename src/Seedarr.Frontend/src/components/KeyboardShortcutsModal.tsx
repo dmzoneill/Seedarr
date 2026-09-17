@@ -53,6 +53,33 @@ export function KeyboardShortcutsModal({
       ],
     },
     {
+      name: "Torrent Table Navigation",
+      shortcuts: [
+        { keys: ["↑", "↓"], description: "Navigate up / down table rows" },
+        {
+          keys: ["Shift", "↑ / ↓"],
+          description: "Contiguous range selection expansion / contraction",
+        },
+        { keys: ["Home", "End"], description: "Jump to first / last row" },
+        {
+          keys: ["Ctrl / ⌘", "A"],
+          description: "Select all filtered torrents",
+        },
+        {
+          keys: ["Enter"],
+          description: "Open details panel for focused torrent",
+        },
+        {
+          keys: ["Space"],
+          description: "Toggle Pause / Resume on selected torrent(s)",
+        },
+        {
+          keys: ["Delete / Backspace"],
+          description: "Delete selected torrent(s)",
+        },
+      ],
+    },
+    {
       name: "Torrent Operations (Selected Torrent)",
       shortcuts: [
         { keys: ["Space"], description: "Pause / Resume Seeding" },
