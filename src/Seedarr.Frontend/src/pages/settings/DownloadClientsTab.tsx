@@ -8,10 +8,17 @@ import {
   useTestDirectDownloadClient,
   useDownloadClientSync,
   useTags,
+  useRemotePathMappings,
+  useCreateRemotePathMapping,
+  useUpdateRemotePathMapping,
+  useDeleteRemotePathMapping,
+  useTestRemotePathMapping,
 } from "../../api/hooks";
 import type {
   DownloadClientDefinition,
   DownloadClientTestResult,
+  RemotePathMapping,
+  RemotePathMappingTestResult,
 } from "../../api/types";
 import { useToast } from "../../context/ToastContext";
 import {
@@ -33,6 +40,14 @@ export function DownloadClientsTab() {
   const testMutation = useTestDownloadClient();
   const testDirectMutation = useTestDirectDownloadClient();
   const syncMutation = useDownloadClientSync();
+
+  const { data: mappings, isLoading: isMappingsLoading } =
+    useRemotePathMappings();
+  const createMappingMutation = useCreateRemotePathMapping();
+  const updateMappingMutation = useUpdateRemotePathMapping();
+  const deleteMappingMutation = useDeleteRemotePathMapping();
+  const testMappingMutation = useTestRemotePathMapping();
+
   const [editing, setEditing] =
     useState<Partial<DownloadClientDefinition> | null>(null);
   const [testResults, setTestResults] = useState<
@@ -40,6 +55,15 @@ export function DownloadClientsTab() {
   >({});
   const [modalTestResult, setModalTestResult] =
     useState<DownloadClientTestResult | null>(null);
+
+  const [editingMapping, setEditingMapping] =
+    useState<Partial<RemotePathMapping> | null>(null);
+  const [testModalOpen, setTestModalOpen] = useState(false);
+  const [testHost, setTestHost] = useState("");
+  const [testPath, setTestPath] = useState("");
+  const [testDirection, setTestDirection] = useState("remoteToLocal");
+  const [mappingTestResult, setMappingTestResult] =
+    useState<RemotePathMappingTestResult | null>(null);
 
   const defaultClient: Partial<DownloadClientDefinition> = {
     name: "",
@@ -99,6 +123,93 @@ export function DownloadClientsTab() {
           message: err.message || "Connection test failed",
         }),
     });
+  };
+
+  const defaultMapping: Partial<RemotePathMapping> = {
+    host: "",
+    remotePath: "",
+    localPath: "",
+  };
+
+  const handleOpenMappingModal = (mapping: Partial<RemotePathMapping>) => {
+    setEditingMapping({ ...mapping });
+  };
+
+  const handleSaveMapping = () => {
+    if (!editingMapping) return;
+    if (
+      !editingMapping.host?.trim() ||
+      !editingMapping.remotePath?.trim() ||
+      !editingMapping.localPath?.trim()
+    ) {
+      showToast("Host, Remote Path, and Local Path are all required", "error");
+      return;
+    }
+
+    if (editingMapping.id) {
+      updateMappingMutation.mutate(editingMapping as RemotePathMapping, {
+        onSuccess: () => {
+          showToast("Remote path mapping updated", "success");
+          setEditingMapping(null);
+        },
+        onError: (err) =>
+          showToast(err.message || "Failed to update mapping", "error"),
+      });
+    } else {
+      createMappingMutation.mutate(editingMapping, {
+        onSuccess: () => {
+          showToast("Remote path mapping created", "success");
+          setEditingMapping(null);
+        },
+        onError: (err) =>
+          showToast(err.message || "Failed to create mapping", "error"),
+      });
+    }
+  };
+
+  const handleDeleteMapping = (mapping: RemotePathMapping) => {
+    if (!mapping.id) return;
+    if (
+      window.confirm(
+        `Are you sure you want to delete path mapping for host "${mapping.host}" (${mapping.remotePath} -> ${mapping.localPath})?`,
+      )
+    ) {
+      deleteMappingMutation.mutate(mapping.id, {
+        onSuccess: () => showToast("Remote path mapping deleted", "success"),
+        onError: (err) =>
+          showToast(err.message || "Failed to delete mapping", "error"),
+      });
+    }
+  };
+
+  const handleOpenTestModal = (host = "", samplePath = "") => {
+    setTestHost(
+      host || (clients && clients.length > 0 ? clients[0].host : "localhost"),
+    );
+    setTestPath(samplePath || "/downloads/sample-movie/video.mkv");
+    setTestDirection("remoteToLocal");
+    setMappingTestResult(null);
+    setTestModalOpen(true);
+  };
+
+  const handleRunMappingTest = () => {
+    if (!testHost.trim() || !testPath.trim()) {
+      showToast("Host and Sample Path are required for testing", "error");
+      return;
+    }
+    setMappingTestResult(null);
+    testMappingMutation.mutate(
+      {
+        host: testHost.trim(),
+        path: testPath.trim(),
+        direction: testDirection,
+      },
+      {
+        onSuccess: (data) => setMappingTestResult(data),
+        onError: (err) =>
+          showToast(err.message || "Path translation test failed", "error"),
+      },
+    );
   };
 
   if (isLoading)
@@ -268,6 +379,181 @@ export function DownloadClientsTab() {
             <span className="provider-card-add-icon">+</span>
           </div>
         </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Remote Path Mappings"
+        description="Translate directory paths between remote download clients and Seedarr's local filesystem"
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "1rem",
+            flexWrap: "wrap",
+            gap: "0.75rem",
+          }}
+        >
+          <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+            Configure host-specific path mappings for remote download clients (e.g. Docker mount paths or remote seedboxes).
+          </span>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-small"
+              onClick={() => handleOpenTestModal()}
+            >
+              🧪 Test Path Mapping
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-small"
+              onClick={() => handleOpenMappingModal(defaultMapping)}
+            >
+              + Add Mapping
+            </button>
+          </div>
+        </div>
+
+        {isMappingsLoading ? (
+          <div
+            style={{
+              padding: "1rem",
+              textAlign: "center",
+              color: "var(--text-muted)",
+              fontSize: "0.85rem",
+            }}
+          >
+            Loading remote path mappings...
+          </div>
+        ) : !mappings || mappings.length === 0 ? (
+          <div
+            style={{
+              textAlign: "center",
+              padding: "2rem",
+              color: "var(--text-muted)",
+              fontSize: "0.85rem",
+              backgroundColor: "rgba(255, 255, 255, 0.02)",
+              borderRadius: "6px",
+              border: "1px dashed var(--border-light)",
+            }}
+          >
+            No remote path mappings configured. Click <strong>+ Add Mapping</strong> to configure path translation.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              className="table"
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: "0.85rem",
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    borderBottom: "1px solid var(--border-light)",
+                    textAlign: "left",
+                    color: "var(--text-muted, #7e8092)",
+                    fontSize: "0.8rem",
+                  }}
+                >
+                  <th style={{ padding: "0.6rem 0.8rem" }}>Host</th>
+                  <th style={{ padding: "0.6rem 0.8rem" }}>Remote Path</th>
+                  <th style={{ padding: "0.6rem 0.8rem" }}>Local Path</th>
+                  <th style={{ padding: "0.6rem 0.8rem", textAlign: "right" }}>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {mappings.map((mapping) => (
+                  <tr
+                    key={mapping.id}
+                    style={{ borderBottom: "1px solid var(--border-light)" }}
+                  >
+                    <td style={{ padding: "0.65rem 0.8rem", fontWeight: 600 }}>
+                      {mapping.host}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.65rem 0.8rem",
+                        fontFamily: "monospace",
+                        fontSize: "0.8rem",
+                      }}
+                    >
+                      {mapping.remotePath}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.65rem 0.8rem",
+                        fontFamily: "monospace",
+                        fontSize: "0.8rem",
+                      }}
+                    >
+                      {mapping.localPath}
+                    </td>
+                    <td
+                      style={{
+                        padding: "0.65rem 0.8rem",
+                        textAlign: "right",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "inline-flex",
+                          gap: "0.4rem",
+                          justifyContent: "flex-end",
+                        }}
+                      >
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-small"
+                          style={{
+                            padding: "0.25rem 0.55rem",
+                            fontSize: "0.75rem",
+                          }}
+                          title="Test translation with this mapping"
+                          onClick={() =>
+                            handleOpenTestModal(mapping.host, mapping.remotePath)
+                          }
+                        >
+                          Test
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-small"
+                          style={{
+                            padding: "0.25rem 0.55rem",
+                            fontSize: "0.75rem",
+                          }}
+                          title="Edit mapping"
+                          onClick={() => handleOpenMappingModal(mapping)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-small"
+                          style={{
+                            padding: "0.25rem 0.55rem",
+                            fontSize: "0.75rem",
+                          }}
+                          title="Delete mapping"
+                          onClick={() => handleDeleteMapping(mapping)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </SectionCard>
 
       {editing && (
@@ -573,6 +859,381 @@ export function DownloadClientsTab() {
                     : "Save"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingMapping && (
+        <div
+          className="modal-overlay"
+          onClick={() => setEditingMapping(null)}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 520,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid var(--border-light)",
+            }}
+          >
+            <div
+              className="modal-title"
+              style={{ fontSize: "1.2rem", marginBottom: "1rem" }}
+            >
+              {editingMapping.id
+                ? "Edit Remote Path Mapping"
+                : "Add Remote Path Mapping"}
+            </div>
+            <TextInput
+              label="Host"
+              value={editingMapping.host || ""}
+              onChange={(v) =>
+                setEditingMapping({ ...editingMapping, host: v })
+              }
+              placeholder="e.g. localhost, 192.168.1.100, or seedbox"
+              hint="The download client host as configured in Seedarr (must match client Host)."
+            />
+            <TextInput
+              label="Remote Path"
+              value={editingMapping.remotePath || ""}
+              onChange={(v) =>
+                setEditingMapping({ ...editingMapping, remotePath: v })
+              }
+              placeholder="e.g. /downloads or D:\Torrents"
+              hint="Path prefix reported by the remote download client."
+            />
+            <TextInput
+              label="Local Path"
+              value={editingMapping.localPath || ""}
+              onChange={(v) =>
+                setEditingMapping({ ...editingMapping, localPath: v })
+              }
+              placeholder="e.g. /media/downloads or /mnt/storage/downloads"
+              hint="Local path prefix where files are accessible by Seedarr on disk."
+            />
+
+            {(createMappingMutation.isError ||
+              updateMappingMutation.isError) && (
+              <div className="modal-error">
+                {(createMappingMutation.error || updateMappingMutation.error)
+                  ?.message}
+              </div>
+            )}
+
+            <div
+              className="modal-actions"
+              style={{
+                display: "flex",
+                justifyContent: "flex-end",
+                alignItems: "center",
+                gap: "0.5rem",
+                marginTop: "1.5rem",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-outline btn-small"
+                onClick={() => setEditingMapping(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-small"
+                onClick={handleSaveMapping}
+                disabled={
+                  createMappingMutation.isPending ||
+                  updateMappingMutation.isPending
+                }
+              >
+                {createMappingMutation.isPending ||
+                updateMappingMutation.isPending
+                  ? "Saving..."
+                  : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {testModalOpen && (
+        <div
+          className="modal-overlay"
+          onClick={() => setTestModalOpen(false)}
+        >
+          <div
+            className="modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: 580,
+              borderRadius: "8px",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.7)",
+              border: "1px solid var(--border-light)",
+            }}
+          >
+            <div
+              className="modal-title"
+              style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}
+            >
+              🧪 Test Remote Path Translation
+            </div>
+            <p
+              style={{
+                fontSize: "0.85rem",
+                color: "var(--text-secondary)",
+                marginBottom: "1rem",
+              }}
+            >
+              Simulate path translation for a download client and verify whether the resolved local path exists on disk.
+            </p>
+
+            <TextInput
+              label="Host"
+              value={testHost}
+              onChange={(v) => {
+                setTestHost(v);
+                setMappingTestResult(null);
+              }}
+              placeholder="e.g. localhost, 192.168.1.100, or seedbox"
+              hint="Host name or IP to match against configured mapping rules."
+            />
+            <TextInput
+              label="Sample Path"
+              value={testPath}
+              onChange={(v) => {
+                setTestPath(v);
+                setMappingTestResult(null);
+              }}
+              placeholder="e.g. /downloads/Torrents/Sample.mkv"
+              hint="Path to translate."
+            />
+            <SelectInput
+              label="Direction"
+              value={testDirection}
+              onChange={(v) => {
+                setTestDirection(v);
+                setMappingTestResult(null);
+              }}
+              options={[
+                {
+                  value: "remoteToLocal",
+                  label: "Remote to Local (Download Client → Seedarr)",
+                },
+                {
+                  value: "localToRemote",
+                  label: "Local to Remote (Seedarr → Download Client)",
+                },
+              ]}
+            />
+
+            {mappingTestResult && (
+              <div
+                style={{
+                  marginTop: "1rem",
+                  padding: "1rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-light)",
+                  backgroundColor: "var(--bg-primary, #0f111c)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  {mappingTestResult.ruleApplied &&
+                    mappingTestResult.localPathExists && (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          padding: "0.3rem 0.65rem",
+                          borderRadius: "4px",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          backgroundColor: "rgba(34, 197, 94, 0.15)",
+                          color: "#22c55e",
+                          border: "1px solid rgba(34, 197, 94, 0.3)",
+                        }}
+                      >
+                        <span>✓</span> Rule matched &amp; local path verified on disk
+                      </span>
+                    )}
+                  {mappingTestResult.ruleApplied &&
+                    !mappingTestResult.localPathExists && (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "0.35rem",
+                          padding: "0.3rem 0.65rem",
+                          borderRadius: "4px",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                          backgroundColor: "rgba(245, 158, 11, 0.15)",
+                          color: "#f59e0b",
+                          border: "1px solid rgba(245, 158, 11, 0.3)",
+                        }}
+                      >
+                        <span>⚠️</span> Rule matched, but local directory/file not found on disk
+                      </span>
+                    )}
+                  {!mappingTestResult.ruleApplied && (
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.35rem",
+                        padding: "0.3rem 0.65rem",
+                        borderRadius: "4px",
+                        fontSize: "0.8rem",
+                        fontWeight: 600,
+                        backgroundColor: "rgba(239, 68, 68, 0.15)",
+                        color: "#ef4444",
+                        border: "1px solid rgba(239, 68, 68, 0.3)",
+                      }}
+                    >
+                      <span>✕</span> No rule matched (unmapped fallback)
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "0.5rem",
+                    fontSize: "0.82rem",
+                  }}
+                >
+                  <div>
+                    <span
+                      style={{
+                        color: "var(--text-muted)",
+                        display: "block",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      Input Path:
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: "monospace",
+                        color: "var(--text-secondary)",
+                      }}
+                    >
+                      {mappingTestResult.inputPath}
+                    </span>
+                  </div>
+                  <div>
+                    <span
+                      style={{
+                        color: "var(--text-muted)",
+                        display: "block",
+                        fontSize: "0.75rem",
+                      }}
+                    >
+                      Mapped Path:
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: "monospace",
+                        color: "var(--text-primary)",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {mappingTestResult.mappedPath}
+                    </span>
+                  </div>
+                  {mappingTestResult.ruleApplied && (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: "0.5rem",
+                        marginTop: "0.25rem",
+                        padding: "0.5rem",
+                        backgroundColor: "rgba(255, 255, 255, 0.02)",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      <div>
+                        <span
+                          style={{
+                            color: "var(--text-muted)",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          Matched Rule:
+                        </span>
+                        <div>
+                          #{mappingTestResult.matchedRuleId} ({mappingTestResult.matchedRuleHost})
+                        </div>
+                      </div>
+                      <div>
+                        <span
+                          style={{
+                            color: "var(--text-muted)",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          Prefix Translation:
+                        </span>
+                        <div
+                          style={{
+                            fontFamily: "monospace",
+                            fontSize: "0.75rem",
+                          }}
+                        >
+                          {mappingTestResult.matchedRemotePrefix} &rarr;{" "}
+                          {mappingTestResult.matchedLocalPrefix}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {testMappingMutation.isError && (
+              <div className="modal-error" style={{ marginTop: "1rem" }}>
+                {testMappingMutation.error?.message}
+              </div>
+            )}
+
+            <div
+              className="modal-actions"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginTop: "1.5rem",
+              }}
+            >
+              <button
+                type="button"
+                className="btn btn-primary btn-small"
+                onClick={handleRunMappingTest}
+                disabled={testMappingMutation.isPending}
+              >
+                {testMappingMutation.isPending
+                  ? "Translating..."
+                  : "Translate / Test"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-outline btn-small"
+                onClick={() => setTestModalOpen(false)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

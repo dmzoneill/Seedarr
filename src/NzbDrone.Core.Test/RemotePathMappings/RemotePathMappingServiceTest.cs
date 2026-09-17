@@ -212,4 +212,62 @@ public class RemotePathMappingServiceTest
         Assert.That(_service.Get(mapping1.Id), Is.Null);
         Assert.That(_service.All(), Is.Empty);
     }
+
+    [Test]
+    public void TestMapping_with_matching_rule_verifies_mapped_path_prefix_replacement_and_rule_applied()
+    {
+        var mapping = _service.Add(new RemotePathMapping
+        {
+            Host = "seedbox.local",
+            RemotePath = "/remote/torrents/complete",
+            LocalPath = "/media/storage/downloads"
+        });
+
+        var result = _service.TestMapping("seedbox.local", "/remote/torrents/complete/movie/sample.mkv");
+
+        Assert.That(result.RuleApplied, Is.True);
+        Assert.That(result.MappedPath, Is.EqualTo("/media/storage/downloads/movie/sample.mkv"));
+        Assert.That(result.InputPath, Is.EqualTo("/remote/torrents/complete/movie/sample.mkv"));
+        Assert.That(result.MatchedRuleId, Is.EqualTo(mapping.Id));
+        Assert.That(result.MatchedRuleHost, Is.EqualTo("seedbox.local"));
+        Assert.That(result.MatchedRemotePrefix, Is.EqualTo("/remote/torrents/complete"));
+        Assert.That(result.MatchedLocalPrefix, Is.EqualTo("/media/storage/downloads"));
+    }
+
+    [Test]
+    public void TestMapping_with_non_matching_host_or_path_returns_rule_applied_false()
+    {
+        _service.Add(new RemotePathMapping
+        {
+            Host = "seedbox.local",
+            RemotePath = "/remote/torrents",
+            LocalPath = "/media/torrents"
+        });
+
+        var resultNonMatchingHost = _service.TestMapping("otherhost.local", "/remote/torrents/file.mkv");
+        Assert.That(resultNonMatchingHost.RuleApplied, Is.False);
+        Assert.That(resultNonMatchingHost.MappedPath, Is.EqualTo("/remote/torrents/file.mkv"));
+        Assert.That(resultNonMatchingHost.MatchedRuleId, Is.Null);
+
+        var resultNonMatchingPath = _service.TestMapping("seedbox.local", "/other/path/file.mkv");
+        Assert.That(resultNonMatchingPath.RuleApplied, Is.False);
+        Assert.That(resultNonMatchingPath.MappedPath, Is.EqualTo("/other/path/file.mkv"));
+        Assert.That(resultNonMatchingPath.MatchedRuleId, Is.Null);
+    }
+
+    [Test]
+    public void TestMapping_local_to_remote_direction_works_correctly()
+    {
+        var mapping = _service.Add(new RemotePathMapping
+        {
+            Host = "seedbox.local",
+            RemotePath = "/remote/torrents",
+            LocalPath = "/local/downloads"
+        });
+
+        var result = _service.TestMapping("seedbox.local", "/local/downloads/sub/file.mkv", "localToRemote");
+        Assert.That(result.RuleApplied, Is.True);
+        Assert.That(result.MappedPath, Is.EqualTo("/remote/torrents/sub/file.mkv"));
+        Assert.That(result.MatchedRuleId, Is.EqualTo(mapping.Id));
+    }
 }
