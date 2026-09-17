@@ -1422,6 +1422,55 @@ public class PeerServerTest
 
     [Test]
     [CancelAfter(10000)]
+    public async Task Handle_VpnRestoredEvent_should_rebind_listener()
+    {
+        _configService.BindInterface.Returns("tun0");
+        _configService.ListeningPort.Returns(0);
+
+        var vpnService = Substitute.For<IVpnKillSwitchService>();
+        vpnService.GetVpnInterfaceIpAddress(Arg.Any<AddressFamily>()).Returns((IPAddress)null);
+
+        var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            vpnKillSwitchService: vpnService);
+
+        using var cts = new CancellationTokenSource();
+        var listenerTask = InvokeRunListenerAsync(cts.Token, server);
+
+        await Task.Delay(100);
+        Assert.That(server.ListenerSocket, Is.Null);
+
+        vpnService.GetVpnInterfaceIpAddress(AddressFamily.InterNetwork).Returns(IPAddress.Loopback);
+        server.Handle(new VpnRestoredEvent("tun0"));
+
+        var deadline = DateTime.UtcNow.AddSeconds(3);
+        while (server.ListenerSocket == null && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50);
+        }
+
+        Assert.That(server.ListenerSocket, Is.Not.Null);
+        var boundEndpoint = (IPEndPoint)server.ListenerSocket.LocalEndPoint!;
+        Assert.That(boundEndpoint.Address, Is.EqualTo(IPAddress.Loopback));
+
+        await cts.CancelAsync();
+        try
+        {
+            await listenerTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        server.Dispose();
+    }
+
+    [Test]
+    [CancelAfter(10000)]
     public async Task OnVpnDropped_should_stop_listener_when_dedicated_interface_configured()
     {
         _configService.BindInterface.Returns("tun0");

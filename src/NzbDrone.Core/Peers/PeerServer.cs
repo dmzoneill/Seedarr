@@ -22,7 +22,7 @@ using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Peers;
 
-public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>
+public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>, IHandle<VpnRestoredEvent>, IHandle<TorrentAddedEvent>, IHandle<TorrentUpdatedEvent>, IHandle<TorrentDeletedEvent>
 {
     private const int OutgoingConnectTimeoutMs = 5000;
     private const int UnauthenticatedHandshakeTimeoutMs = 5000;
@@ -153,6 +153,11 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     }
 
     public void Handle(VpnInterfaceRestoredEvent message)
+    {
+        OnVpnRestored(message?.InterfaceName);
+    }
+
+    public void Handle(VpnRestoredEvent message)
     {
         OnVpnRestored(message?.InterfaceName);
     }
@@ -444,7 +449,13 @@ public class PeerServer : BackgroundService, IHandle<VpnInterfaceRestoredEvent>,
     {
         if (HasDedicatedBindInterface())
         {
-            return ResolveDedicatedBindIp();
+            var ip = ResolveDedicatedBindIp();
+            if (ip == null)
+            {
+                _logger.Warn("Configured bind interface '{0}' is not available or not yet plumbed.", _configService.BindInterface?.Trim());
+            }
+
+            return ip;
         }
 
         return _configService.EnableIPv6 ? IPAddress.IPv6Any : IPAddress.Any;

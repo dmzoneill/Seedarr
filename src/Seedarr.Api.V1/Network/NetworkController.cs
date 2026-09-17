@@ -234,7 +234,11 @@ public class NetworkController : Controller
         return Ok(new NetworkDiagnostics
         {
             LocalIp = status?.LocalIp ?? "unknown",
+            BoundInterface = status?.BoundInterface,
+            BoundIp = status?.BoundIp,
+            PhysicalIp = status?.PhysicalIp,
             ExternalIp = status?.ExternalIp,
+            IsVpnKillSwitchActive = status?.IsVpnKillSwitchActive ?? false,
             LocalAddresses = _networkStatusService.GetLocalAddresses() ?? new List<string>(),
             UpnpAvailable = status?.UpnpAvailable ?? false,
             ProxyEnabled = status?.ProxyEnabled ?? false,
@@ -272,7 +276,11 @@ public class NetworkController : Controller
 public class NetworkDiagnostics
 {
     public string LocalIp { get; set; }
+    public string BoundInterface { get; set; }
+    public string BoundIp { get; set; }
+    public string PhysicalIp { get; set; }
     public string ExternalIp { get; set; }
+    public bool IsVpnKillSwitchActive { get; set; }
     public List<string> LocalAddresses { get; set; }
     public bool UpnpAvailable { get; set; }
     public bool ProxyEnabled { get; set; }

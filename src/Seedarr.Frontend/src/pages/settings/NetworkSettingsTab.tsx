@@ -124,13 +124,38 @@ export function NetworkSettingsTab() {
         >
           <div
             style={{
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              color: "var(--text-secondary)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
               marginBottom: "0.5rem",
+              flexWrap: "wrap",
+              gap: "0.5rem",
             }}
           >
-            Live Network &amp; Interface Status
+            <span
+              style={{
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                color: "var(--text-secondary)",
+              }}
+            >
+              Live Network &amp; Interface Status
+            </span>
+            {netStatus.boundInterface && netStatus.boundInterface !== "Any" && (
+              <span
+                className="badge"
+                style={{
+                  fontSize: "0.78rem",
+                  padding: "0.2rem 0.6rem",
+                  borderRadius: "4px",
+                  backgroundColor: netStatus.isVpnKillSwitchActive ? "rgba(40, 167, 69, 0.2)" : "rgba(200, 168, 78, 0.2)",
+                  color: netStatus.isVpnKillSwitchActive ? "var(--success, #28a745)" : "var(--accent, #c8a84e)",
+                  border: `1px solid ${netStatus.isVpnKillSwitchActive ? "var(--success, #28a745)" : "var(--accent, #c8a84e)"}`,
+                }}
+              >
+                {netStatus.isVpnKillSwitchActive ? "🛡️ " : ""}Bound: {netStatus.boundInterface} ({netStatus.boundIp || "Unplumbed"})
+              </span>
+            )}
           </div>
           <div
             style={{
@@ -141,7 +166,22 @@ export function NetworkSettingsTab() {
             }}
           >
             <div>
-              Local IP: <strong>{netStatus.localIp || "0.0.0.0"}</strong>
+              BitTorrent Swarm IP:{" "}
+              <strong>{netStatus.boundIp || netStatus.localIp || "0.0.0.0"}</strong>
+            </div>
+            <div>
+              Host Physical IP:{" "}
+              <strong>{netStatus.physicalIp || netStatus.localIp || "0.0.0.0"}</strong>
+            </div>
+            <div>
+              Bound Interface:{" "}
+              <strong>{netStatus.boundInterface || "Any"}</strong>
+            </div>
+            <div>
+              VPN Kill Switch:{" "}
+              <strong style={{ color: netStatus.isVpnKillSwitchActive ? "var(--success, #28a745)" : "var(--text-secondary)" }}>
+                {netStatus.isVpnKillSwitchActive ? "🛡️ Operational" : "Direct / Off"}
+              </strong>
             </div>
             <div>
               Public IP: <strong>{netStatus.externalIp || "Not Detected"}</strong>

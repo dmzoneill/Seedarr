@@ -8,14 +8,20 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Network.Vpn;
 
 namespace NzbDrone.Core.Network;
 
 public class NetworkStatus
 {
     public string LocalIp { get; set; }
+    public string BoundInterface { get; set; }
+    public string BoundIp { get; set; }
+    public string PhysicalIp { get; set; }
     public string ExternalIp { get; set; }
+    public bool IsVpnKillSwitchActive { get; set; }
     public bool UpnpAvailable { get; set; }
     public bool ProxyEnabled { get; set; }
     public List<PortMapping> PortMappings { get; set; } = new();
@@ -43,13 +49,24 @@ public class NetworkStatusService : INetworkStatusService, IHandle<UpnpMappingCr
     private readonly IUpnpService _upnpService;
     private readonly IExternalIpService _externalIpService;
     private readonly IProxySettingsProvider _proxySettings;
+    private readonly IConfigService _configService;
+    private readonly IVpnKillSwitchService _vpnKillSwitchService;
     private readonly Logger _logger;
 
-    public NetworkStatusService(IUpnpService upnpService, IExternalIpService externalIpService, IProxySettingsProvider proxySettings)
+    public Func<List<string>> LocalAddressesResolver { get; set; }
+
+    public NetworkStatusService(
+        IUpnpService upnpService,
+        IExternalIpService externalIpService,
+        IProxySettingsProvider proxySettings,
+        IConfigService configService = null,
+        IVpnKillSwitchService vpnKillSwitchService = null)
     {
         _upnpService = upnpService;
         _externalIpService = externalIpService;
         _proxySettings = proxySettings;
+        _configService = configService;
+        _vpnKillSwitchService = vpnKillSwitchService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -57,6 +74,57 @@ public class NetworkStatusService : INetworkStatusService, IHandle<UpnpMappingCr
     {
         var localAddresses = GetLocalAddresses();
         _logger.Debug("Local addresses: {0}", string.Join(", ", localAddresses));
+
+        var configuredInterface = _configService?.BindInterface?.Trim();
+        var hasDedicatedInterface = !string.IsNullOrWhiteSpace(configuredInterface) &&
+                                    !configuredInterface.Equals("Any", StringComparison.OrdinalIgnoreCase) &&
+                                    !configuredInterface.Equals("all", StringComparison.OrdinalIgnoreCase) &&
+                                    !configuredInterface.Equals("*", StringComparison.OrdinalIgnoreCase) &&
+                                    !configuredInterface.Equals("0.0.0.0", StringComparison.OrdinalIgnoreCase) &&
+                                    !configuredInterface.Equals("::", StringComparison.OrdinalIgnoreCase);
+
+        string vpnIp = null;
+        if (hasDedicatedInterface)
+        {
+            if (_vpnKillSwitchService != null)
+            {
+                var ip = _vpnKillSwitchService.GetVpnInterfaceIpAddress(AddressFamily.InterNetwork);
+                if (ip != null)
+                {
+                    vpnIp = ip.ToString();
+                }
+            }
+
+            if (string.IsNullOrEmpty(vpnIp) && IPAddress.TryParse(configuredInterface, out var parsedIp))
+            {
+                vpnIp = parsedIp.ToString();
+            }
+        }
+
+        var physicalIp = localAddresses.FirstOrDefault(ip => !string.Equals(ip, vpnIp, StringComparison.OrdinalIgnoreCase))
+                         ?? localAddresses.FirstOrDefault()
+                         ?? "unknown";
+
+        string boundInterface;
+        string boundIp;
+        string localIp;
+
+        if (hasDedicatedInterface && !string.IsNullOrEmpty(vpnIp))
+        {
+            boundInterface = _configService.BindInterface;
+            boundIp = vpnIp;
+            localIp = boundIp;
+        }
+        else
+        {
+            boundInterface = "Any";
+            boundIp = physicalIp;
+            localIp = physicalIp;
+        }
+
+        var isVpnKillSwitchActive = _vpnKillSwitchService != null
+            ? _vpnKillSwitchService.IsKillSwitchEnabled
+            : (_configService?.EnableVpnKillSwitch ?? false);
 
         var externalIp = _upnpService.ExternalIp;
 
@@ -72,8 +140,12 @@ public class NetworkStatusService : INetworkStatusService, IHandle<UpnpMappingCr
 
         return new NetworkStatus
         {
-            LocalIp = localAddresses.FirstOrDefault() ?? "unknown",
+            LocalIp = localIp,
+            BoundInterface = boundInterface,
+            BoundIp = boundIp,
+            PhysicalIp = physicalIp,
             ExternalIp = externalIp,
+            IsVpnKillSwitchActive = isVpnKillSwitchActive,
             UpnpAvailable = _upnpService.IsAvailable,
             ProxyEnabled = _proxySettings.IsEnabled,
             PortMappings = _upnpService.GetMappings()
@@ -85,8 +157,13 @@ public class NetworkStatusService : INetworkStatusService, IHandle<UpnpMappingCr
         _logger.Info("UPnP port mapping created for external port {0}", message.ExternalPort);
     }
 
-    public List<string> GetLocalAddresses()
+    public virtual List<string> GetLocalAddresses()
     {
+        if (LocalAddressesResolver != null)
+        {
+            return LocalAddressesResolver();
+        }
+
         var addresses = new List<string>();
 
         try
