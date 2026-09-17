@@ -16,13 +16,24 @@ using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Security;
 
-public class CertificateManager : ICertificateManager
+public class CertificateManager : ICertificateManager, IDisposable
 {
     private static readonly Logger Logger = LogManager.GetCurrentClassLogger();
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly object _syncLock = new();
+
     private X509Certificate2 _cachedCustomCert;
     private X509Certificate2Collection _cachedCustomChain = new();
+    private string _cachedCustomCertPath;
+    private string _cachedCustomKeyPath;
+    private string _cachedCustomPassword;
+    private DateTime _cachedCustomCertLastWriteTimeUtc;
+    private DateTime _cachedCustomKeyLastWriteTimeUtc;
+
+    private X509Certificate2 _cachedSelfSignedCert;
+    private string _cachedSelfSignedPath;
+    private DateTime _cachedSelfSignedLastWriteTimeUtc;
+    private bool _disposed;
 
     public CertificateManager(IAppFolderInfo appFolderInfo)
     {
@@ -33,64 +44,103 @@ public class CertificateManager : ICertificateManager
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        if (!string.IsNullOrWhiteSpace(config.SslCertPath))
+        lock (_syncLock)
         {
-            var certPath = config.SslCertPath.Trim();
-            if (File.Exists(certPath))
+            if (!string.IsNullOrWhiteSpace(config.SslCertPath))
             {
-                try
+                var certPath = config.SslCertPath.Trim();
+                var keyPath = config.SslKeyPath?.Trim() ?? string.Empty;
+                var password = config.SslCertPassword ?? string.Empty;
+
+                if (File.Exists(certPath))
                 {
-                    var (loadedCert, loadedChain) = LoadCustomCertificate(certPath, config.SslKeyPath, config.SslCertPassword);
-                    if (loadedCert != null)
+                    var currentCertWriteTime = File.GetLastWriteTimeUtc(certPath);
+                    var currentKeyWriteTime = (!string.IsNullOrWhiteSpace(keyPath) && File.Exists(keyPath))
+                        ? File.GetLastWriteTimeUtc(keyPath)
+                        : DateTime.MinValue;
+
+                    if (_cachedCustomCert != null &&
+                        string.Equals(_cachedCustomCertPath, certPath, StringComparison.Ordinal) &&
+                        string.Equals(_cachedCustomKeyPath, keyPath, StringComparison.Ordinal) &&
+                        string.Equals(_cachedCustomPassword, password, StringComparison.Ordinal) &&
+                        currentCertWriteTime <= _cachedCustomCertLastWriteTimeUtc &&
+                        currentKeyWriteTime <= _cachedCustomKeyLastWriteTimeUtc &&
+                        DateTime.UtcNow < _cachedCustomCert.NotAfter.ToUniversalTime())
                     {
-                        lock (_syncLock)
+                        return _cachedCustomCert;
+                    }
+
+                    try
+                    {
+                        var (loadedCert, loadedChain) = LoadCustomCertificate(certPath, keyPath, password);
+                        if (loadedCert != null)
                         {
+                            var oldCert = _cachedCustomCert;
+                            var oldChain = _cachedCustomChain;
+
                             _cachedCustomCert = loadedCert;
                             _cachedCustomChain = loadedChain ?? new X509Certificate2Collection();
-                        }
+                            _cachedCustomCertPath = certPath;
+                            _cachedCustomKeyPath = keyPath;
+                            _cachedCustomPassword = password;
+                            _cachedCustomCertLastWriteTimeUtc = currentCertWriteTime;
+                            _cachedCustomKeyLastWriteTimeUtc = currentKeyWriteTime;
 
-                        Logger.Info("Successfully loaded custom SSL certificate from '{0}'", certPath);
-                        return loadedCert;
+                            if (oldCert != null && !ReferenceEquals(oldCert, loadedCert))
+                            {
+                                SafeDisposeCertificate(oldCert);
+                                SafeDisposeChain(oldChain);
+                            }
+
+                            if (_cachedSelfSignedCert != null)
+                            {
+                                SafeDisposeCertificate(_cachedSelfSignedCert);
+                                _cachedSelfSignedCert = null;
+                                _cachedSelfSignedPath = null;
+                            }
+
+                            Logger.Info("Successfully loaded custom SSL certificate from '{0}'", certPath);
+                            return loadedCert;
+                        }
                     }
-                }
-                catch (Exception ex)
-                {
-                    lock (_syncLock)
+                    catch (Exception ex)
                     {
                         if (_cachedCustomCert != null)
                         {
                             Logger.Warn(ex, "Failed to reload custom SSL certificate from '{0}'. Retaining previously loaded valid certificate.", certPath);
                             return _cachedCustomCert;
                         }
-                    }
 
-                    Logger.Error(ex, "Failed to load custom SSL certificate from '{0}'. Falling back to self-signed certificate.", certPath);
+                        Logger.Error(ex, "Failed to load custom SSL certificate from '{0}'. Falling back to self-signed certificate.", certPath);
+                    }
                 }
-            }
-            else
-            {
-                lock (_syncLock)
+                else
                 {
                     if (_cachedCustomCert != null)
                     {
                         Logger.Warn("Configured SSL certificate path '{0}' was not found. Retaining previously loaded valid certificate.", certPath);
                         return _cachedCustomCert;
                     }
+
+                    Logger.Warn("Configured SSL certificate path '{0}' was not found. Falling back to self-signed certificate.", certPath);
                 }
-
-                Logger.Warn("Configured SSL certificate path '{0}' was not found. Falling back to self-signed certificate.", certPath);
             }
-        }
-        else
-        {
-            lock (_syncLock)
+            else
             {
-                _cachedCustomCert = null;
-                _cachedCustomChain = new X509Certificate2Collection();
+                if (_cachedCustomCert != null)
+                {
+                    SafeDisposeCertificate(_cachedCustomCert);
+                    _cachedCustomCert = null;
+                    SafeDisposeChain(_cachedCustomChain);
+                    _cachedCustomChain = new X509Certificate2Collection();
+                    _cachedCustomCertPath = null;
+                    _cachedCustomKeyPath = null;
+                    _cachedCustomPassword = null;
+                }
             }
-        }
 
-        return GetOrCreateSelfSignedCertificate(config);
+            return GetOrCreateSelfSignedCertificate(config);
+        }
     }
 
     public X509Certificate2Collection GetCertificateChain()
@@ -110,10 +160,12 @@ public class CertificateManager : ICertificateManager
         bool testTlsHandshake = true)
     {
         var result = new SslCertificateValidationResult();
+        X509Certificate2 cert = null;
+        X509Certificate2Collection loadedChain = null;
+        var shouldDisposeCert = false;
 
         try
         {
-            X509Certificate2 cert = null;
             if (!string.IsNullOrWhiteSpace(certPath))
             {
                 var trimmedPath = certPath.Trim();
@@ -124,13 +176,16 @@ public class CertificateManager : ICertificateManager
                     return result;
                 }
 
-                var (loadedCert, _) = LoadCustomCertificate(trimmedPath, keyPath, password);
+                var (loadedCert, chain) = LoadCustomCertificate(trimmedPath, keyPath, password);
                 cert = loadedCert;
+                loadedChain = chain;
+                shouldDisposeCert = true;
             }
             else
             {
                 var dummyConfig = new DummySslConfig(bindAddress);
                 cert = GetOrCreateSelfSignedCertificate(dummyConfig);
+                shouldDisposeCert = false;
             }
 
             if (cert == null)
@@ -229,8 +284,48 @@ public class CertificateManager : ICertificateManager
             result.IsValid = false;
             result.Message = $"Certificate validation failed: {ex.Message}";
         }
+        finally
+        {
+            if (shouldDisposeCert)
+            {
+                SafeDisposeCertificate(cert);
+                SafeDisposeChain(loadedChain);
+            }
+        }
 
         return result;
+    }
+
+    public void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposed)
+        {
+            if (disposing)
+            {
+                lock (_syncLock)
+                {
+                    SafeDisposeCertificate(_cachedCustomCert);
+                    _cachedCustomCert = null;
+                    SafeDisposeChain(_cachedCustomChain);
+                    _cachedCustomChain = new X509Certificate2Collection();
+                    _cachedCustomCertPath = null;
+                    _cachedCustomKeyPath = null;
+                    _cachedCustomPassword = null;
+
+                    SafeDisposeCertificate(_cachedSelfSignedCert);
+                    _cachedSelfSignedCert = null;
+                    _cachedSelfSignedPath = null;
+                }
+            }
+
+            _disposed = true;
+        }
     }
 
     internal static (X509Certificate2 Leaf, X509Certificate2Collection Chain) LoadCustomCertificate(string certPath, string keyPath, string password)
@@ -365,6 +460,19 @@ public class CertificateManager : ICertificateManager
     {
         var cachePath = Path.Combine(_appFolderInfo.AppDataFolder, "seedarr-selfsigned.pfx");
         var passwordPath = Path.Combine(_appFolderInfo.AppDataFolder, "seedarr-selfsigned.pwd");
+
+        if (_cachedSelfSignedCert != null &&
+            string.Equals(_cachedSelfSignedPath, cachePath, StringComparison.Ordinal) &&
+            File.Exists(cachePath))
+        {
+            var currentWriteTime = File.GetLastWriteTimeUtc(cachePath);
+            if (currentWriteTime <= _cachedSelfSignedLastWriteTimeUtc &&
+                DateTime.UtcNow < _cachedSelfSignedCert.NotAfter.ToUniversalTime().AddDays(-30))
+            {
+                return _cachedSelfSignedCert;
+            }
+        }
+
         var pfxPassword = GetOrGenerateSelfSignedPassword(config, passwordPath);
 
         if (File.Exists(cachePath))
@@ -379,9 +487,20 @@ public class CertificateManager : ICertificateManager
                 if (DateTime.UtcNow < cached.NotAfter.ToUniversalTime().AddDays(-30))
                 {
                     Logger.Info("Using existing cached self-signed SSL certificate: {0} (Expires: {1:yyyy-MM-dd})", cached.Subject, cached.NotAfter);
+                    var oldCert = _cachedSelfSignedCert;
+                    _cachedSelfSignedCert = cached;
+                    _cachedSelfSignedPath = cachePath;
+                    _cachedSelfSignedLastWriteTimeUtc = File.GetLastWriteTimeUtc(cachePath);
+
+                    if (oldCert != null && !ReferenceEquals(oldCert, cached))
+                    {
+                        SafeDisposeCertificate(oldCert);
+                    }
+
                     return cached;
                 }
 
+                cached.Dispose();
                 Logger.Info("Cached self-signed SSL certificate is expired or expiring soon. Regenerating.");
             }
             catch (Exception ex)
@@ -390,7 +509,18 @@ public class CertificateManager : ICertificateManager
             }
         }
 
-        return GenerateAndSaveSelfSignedCertificate(config, cachePath, pfxPassword);
+        var generated = GenerateAndSaveSelfSignedCertificate(config, cachePath, pfxPassword);
+        var prevCert = _cachedSelfSignedCert;
+        _cachedSelfSignedCert = generated;
+        _cachedSelfSignedPath = cachePath;
+        _cachedSelfSignedLastWriteTimeUtc = File.GetLastWriteTimeUtc(cachePath);
+
+        if (prevCert != null && !ReferenceEquals(prevCert, generated))
+        {
+            SafeDisposeCertificate(prevCert);
+        }
+
+        return generated;
     }
 
     private static string GetOrGenerateSelfSignedPassword(IConfigFileProvider config, string passwordPath)
@@ -589,6 +719,34 @@ public class CertificateManager : ICertificateManager
             pfxBytes,
             pfxPassword,
             X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+    }
+
+    private static void SafeDisposeCertificate(X509Certificate2 cert)
+    {
+        if (cert != null)
+        {
+            try
+            {
+                cert.Dispose();
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug(ex, "Error disposing certificate");
+            }
+        }
+    }
+
+    private static void SafeDisposeChain(X509Certificate2Collection chain)
+    {
+        if (chain != null)
+        {
+            foreach (var cert in chain)
+            {
+                SafeDisposeCertificate(cert);
+            }
+
+            chain.Clear();
+        }
     }
 
     private sealed class DummySslConfig : IConfigFileProvider

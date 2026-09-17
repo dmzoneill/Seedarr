@@ -117,6 +117,7 @@ public class CertificateManagerTest
         var cert1 = _certificateManager.GetOrCreateCertificate(_config);
         var cert2 = _certificateManager.GetOrCreateCertificate(_config);
 
+        Assert.That(cert2, Is.SameAs(cert1));
         Assert.That(cert1.Thumbprint, Is.EqualTo(cert2.Thumbprint));
     }
 
@@ -590,6 +591,107 @@ public class CertificateManagerTest
 
         var buildResult = x509Chain.Build(leaf);
         Assert.That(buildResult, Is.True);
+    }
+
+    [Test]
+    public void GetOrCreateCertificate_WhenCalledRepeatedly_ReturnsSameCachedInstanceWithoutReallocation()
+    {
+        // Self-signed caching
+        var cert1 = _certificateManager.GetOrCreateCertificate(_config);
+        var cert2 = _certificateManager.GetOrCreateCertificate(_config);
+
+        Assert.That(cert1, Is.Not.Null);
+        Assert.That(cert2, Is.SameAs(cert1));
+
+        // Custom certificate caching
+        var (fullChainPem, keyPem, _, _) = GenerateTestChain();
+        var certPemPath = Path.Combine(_tempDir, "repeat-test.pem");
+        var keyPemPath = Path.Combine(_tempDir, "repeat-test.key");
+
+        File.WriteAllText(certPemPath, fullChainPem);
+        File.WriteAllText(keyPemPath, keyPem);
+
+        _config.SslCertPath.Returns(certPemPath);
+        _config.SslKeyPath.Returns(keyPemPath);
+
+        var custom1 = _certificateManager.GetOrCreateCertificate(_config);
+        var custom2 = _certificateManager.GetOrCreateCertificate(_config);
+
+        Assert.That(custom1, Is.Not.Null);
+        Assert.That(custom2, Is.SameAs(custom1));
+    }
+
+    [Test]
+    public void GetOrCreateCertificate_WhenCustomCertLastWriteTimeModified_TriggersReloadAndDisposesSupersededCert()
+    {
+        var (fullChainPem1, keyPem1, _, _) = GenerateTestChain("CN=initial.local");
+        var (fullChainPem2, keyPem2, _, _) = GenerateTestChain("CN=updated.local");
+
+        var certPemPath = Path.Combine(_tempDir, "reload-test.pem");
+        var keyPemPath = Path.Combine(_tempDir, "reload-test.key");
+
+        File.WriteAllText(certPemPath, fullChainPem1);
+        File.WriteAllText(keyPemPath, keyPem1);
+        File.SetLastWriteTimeUtc(certPemPath, DateTime.UtcNow.AddMinutes(-10));
+
+        _config.SslCertPath.Returns(certPemPath);
+        _config.SslKeyPath.Returns(keyPemPath);
+
+        var initialCert = _certificateManager.GetOrCreateCertificate(_config);
+        Assert.That(initialCert.Subject, Does.Contain("initial.local"));
+        Assert.That(initialCert.Handle, Is.Not.EqualTo(IntPtr.Zero));
+
+        // Overwrite file with updated cert and bump LastWriteTimeUtc
+        File.WriteAllText(certPemPath, fullChainPem2);
+        File.WriteAllText(keyPemPath, keyPem2);
+        File.SetLastWriteTimeUtc(certPemPath, DateTime.UtcNow.AddMinutes(5));
+
+        var reloadedCert = _certificateManager.GetOrCreateCertificate(_config);
+
+        Assert.That(reloadedCert, Is.Not.Null);
+        Assert.That(reloadedCert, Is.Not.SameAs(initialCert));
+        Assert.That(reloadedCert.Subject, Does.Contain("updated.local"));
+
+        // Verify superseded certificate was disposed
+        Assert.That(initialCert.Handle, Is.EqualTo(IntPtr.Zero));
+        Assert.Throws<CryptographicException>(() => _ = initialCert.RawData);
+    }
+
+    [Test]
+    public void GetOrCreateCertificate_WhenSelfSignedCertFileLastWriteTimeModified_TriggersReloadAndDisposesSupersededCert()
+    {
+        var initialCert = _certificateManager.GetOrCreateCertificate(_config);
+        Assert.That(initialCert, Is.Not.Null);
+        Assert.That(initialCert.Handle, Is.Not.EqualTo(IntPtr.Zero));
+
+        var cachedPfx = Path.Combine(_tempDir, "seedarr-selfsigned.pfx");
+        Assert.That(File.Exists(cachedPfx), Is.True);
+
+        // Update LastWriteTimeUtc of cached PFX file
+        File.SetLastWriteTimeUtc(cachedPfx, DateTime.UtcNow.AddMinutes(5));
+
+        var reloadedCert = _certificateManager.GetOrCreateCertificate(_config);
+
+        Assert.That(reloadedCert, Is.Not.Null);
+        Assert.That(reloadedCert, Is.Not.SameAs(initialCert));
+        Assert.That(reloadedCert.Thumbprint, Is.EqualTo(initialCert.Thumbprint));
+
+        // Verify superseded certificate was disposed
+        Assert.That(initialCert.Handle, Is.EqualTo(IntPtr.Zero));
+        Assert.Throws<CryptographicException>(() => _ = initialCert.RawData);
+    }
+
+    [Test]
+    public void Dispose_WhenCalled_DisposesCachedCertificates()
+    {
+        var cert = _certificateManager.GetOrCreateCertificate(_config);
+        Assert.That(cert, Is.Not.Null);
+        Assert.That(cert.Handle, Is.Not.EqualTo(IntPtr.Zero));
+
+        _certificateManager.Dispose();
+
+        Assert.That(cert.Handle, Is.EqualTo(IntPtr.Zero));
+        Assert.Throws<CryptographicException>(() => _ = cert.RawData);
     }
 
     private static (string FullChainPem, string KeyPem, string LeafPem, string CaPem) GenerateTestChain(
