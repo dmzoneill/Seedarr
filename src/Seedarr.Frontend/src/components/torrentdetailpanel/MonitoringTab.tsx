@@ -128,13 +128,20 @@ export function MonitoringTab({ torrent }: { torrent: Torrent }) {
           Math.max(0, (torrent.downloaded - prev.downloaded) / dt),
         );
         setTick((t) => t + 1);
+
+        prevRef.current = {
+          uploaded: torrent.uploaded,
+          downloaded: torrent.downloaded,
+          ts: now,
+        };
       }
+    } else {
+      prevRef.current = {
+        uploaded: torrent.uploaded,
+        downloaded: torrent.downloaded,
+        ts: now,
+      };
     }
-    prevRef.current = {
-      uploaded: torrent.uploaded,
-      downloaded: torrent.downloaded,
-      ts: now,
-    };
   }, [torrent.id, torrent.uploaded, torrent.downloaded]);
 
   const h = histRef.current;
