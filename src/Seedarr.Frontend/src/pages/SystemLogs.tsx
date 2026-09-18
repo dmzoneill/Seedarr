@@ -70,25 +70,34 @@ function SystemLogs() {
   } = useLogEntries(levelFilter === "All" ? null : levelFilter);
   const [searchText, setSearchText] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
-  const [cleared, setCleared] = useState(false);
+  const [clearedBeforeId, setClearedBeforeId] = useState<number | null>(null);
   const logContentRef = useRef<HTMLDivElement>(null);
 
   const filteredEntries = useMemo(() => {
-    if (cleared) return [];
     if (!entries) return [];
-    if (!searchText) return entries;
+    const visible =
+      clearedBeforeId !== null
+        ? entries.filter((entry) => entry.id > clearedBeforeId)
+        : entries;
+    if (!searchText) return visible;
     const q = searchText.toLowerCase();
-    return entries.filter(
+    return visible.filter(
       (entry) =>
         entry.message.toLowerCase().includes(q) ||
         entry.source.toLowerCase().includes(q) ||
         entry.level.toLowerCase().includes(q),
     );
-  }, [entries, searchText, cleared]);
+  }, [entries, searchText, clearedBeforeId]);
 
   const handleClear = useCallback(() => {
-    setCleared(true);
-  }, []);
+    if (entries && entries.length > 0) {
+      const maxId = entries.reduce(
+        (max, entry) => (entry.id > max ? entry.id : max),
+        entries[0].id,
+      );
+      setClearedBeforeId(maxId);
+    }
+  }, [entries]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -149,7 +158,7 @@ function SystemLogs() {
                 className={`btn btn-small ${levelFilter === level ? "log-filter-active" : ""} ${level !== "All" ? `log-filter-${level.toLowerCase()}` : ""}`}
                 onClick={() => {
                   setLevelFilter(level);
-                  setCleared(false);
+                  setClearedBeforeId(null);
                 }}
               >
                 {level}
@@ -163,10 +172,7 @@ function SystemLogs() {
               className="search-input"
               placeholder="Filter logs..."
               value={searchText}
-              onChange={(e) => {
-                setSearchText(e.target.value);
-                setCleared(false);
-              }}
+              onChange={(e) => setSearchText(e.target.value)}
             />
             <label className="log-auto-scroll">
               <input
