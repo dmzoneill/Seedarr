@@ -269,10 +269,12 @@ public class FastExtensionHandler : IFastExtensionHandler
                 {
                     connection.PeerPieces = new bool[pieceCount];
                     Array.Fill(connection.PeerPieces, true);
+                    connection.HaveCount = pieceCount;
                 }
                 else if (connection.PeerPieces != null && connection.PeerPieces.Length > 0)
                 {
                     Array.Fill(connection.PeerPieces, true);
+                    connection.HaveCount = connection.PeerPieces.Length;
                 }
 
                 connection.Progress = 1.0;
@@ -289,6 +291,7 @@ public class FastExtensionHandler : IFastExtensionHandler
                     Array.Fill(connection.PeerPieces, false);
                 }
 
+                connection.HaveCount = 0;
                 connection.Progress = 0.0;
                 break;
 

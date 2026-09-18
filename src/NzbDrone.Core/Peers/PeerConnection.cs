@@ -196,8 +196,37 @@ public class PeerConnection : IDisposable
         }
     }
 
+    private bool[] _peerPieces;
+
     public double Progress { get; set; }
-    public virtual bool[] PeerPieces { get; set; }
+    public int HaveCount { get; set; }
+
+    public virtual bool[] PeerPieces
+    {
+        get => _peerPieces;
+        set
+        {
+            _peerPieces = value;
+            if (value != null)
+            {
+                var count = 0;
+                for (var i = 0; i < value.Length; i++)
+                {
+                    if (value[i])
+                    {
+                        count++;
+                    }
+                }
+
+                HaveCount = count;
+            }
+            else
+            {
+                HaveCount = 0;
+            }
+        }
+    }
+
     public HashSet<int> SuggestedPieces { get; } = new();
     public HashSet<int> RemoteAllowedFastPieces { get; } = new();
     public HashSet<int> AllowedFastPieces => RemoteAllowedFastPieces;
@@ -212,7 +241,7 @@ public class PeerConnection : IDisposable
 
     public virtual bool IsSeed
     {
-        get => _isSeed || Progress >= 1.0 || (PeerPieces != null && PeerPieces.Length > 0 && PeerPieces.All(p => p));
+        get => _isSeed || Progress >= 1.0 || (PeerPieces != null && PeerPieces.Length > 0 && ((HaveCount > 0 && HaveCount == PeerPieces.Length) || (HaveCount == 0 && PeerPieces.All(p => p))));
         set => _isSeed = value;
     }
 
