@@ -3100,6 +3100,58 @@ public class PeerServerTest
     }
 
     [Test]
+    public void HandleMessage_Have_should_update_SwarmPieceHistogram()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        var torrent = new Torrent
+        {
+            InfoHash = "1111222233334444555566667777888899990000",
+            Name = "HistogramTest",
+            PieceCount = 4,
+            Progress = 0.0,
+            Status = TorrentStatus.Downloading
+        };
+
+        var havePayload = new byte[] { 0, 0, 0, 2 };
+        var haveMsg = new PeerMessage { Type = PeerMessageType.Have, Payload = havePayload };
+
+        InvokeHandleMessage(serverConn, haveMsg, torrent);
+
+        var histogram = _server.GetSwarmPieceHistogram(torrent.InfoHash);
+        Assert.That(histogram, Is.Not.Null);
+        Assert.That(histogram.GetAvailability(2), Is.EqualTo(1));
+        Assert.That(histogram.GetAvailability(0), Is.EqualTo(0));
+        Assert.That(serverConn.HaveCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void HandleMessage_Bitfield_should_update_SwarmPieceHistogram()
+    {
+        var (clientConn, serverConn) = CreateTestPair();
+        var torrent = new Torrent
+        {
+            InfoHash = "2222333344445555666677778888999900001111",
+            Name = "HistogramBitfieldTest",
+            PieceCount = 8,
+            Progress = 0.0,
+            Status = TorrentStatus.Downloading
+        };
+
+        var bitfieldPayload = new byte[] { 0b10100000 };
+        var bitfieldMsg = new PeerMessage { Type = PeerMessageType.Bitfield, Payload = bitfieldPayload };
+
+        InvokeHandleMessage(serverConn, bitfieldMsg, torrent);
+
+        var histogram = _server.GetSwarmPieceHistogram(torrent.InfoHash);
+        Assert.That(histogram, Is.Not.Null);
+        Assert.That(histogram.GetAvailability(0), Is.EqualTo(1));
+        Assert.That(histogram.GetAvailability(1), Is.EqualTo(0));
+        Assert.That(histogram.GetAvailability(2), Is.EqualTo(1));
+        Assert.That(histogram.GetAvailability(3), Is.EqualTo(0));
+        Assert.That(serverConn.HaveCount, Is.EqualTo(2));
+    }
+
+    [Test]
     public void HandleMessage_Bitfield_should_send_interested_when_remote_peer_has_missing_pieces()
     {
         var (clientConn, serverConn) = CreateTestPair();
