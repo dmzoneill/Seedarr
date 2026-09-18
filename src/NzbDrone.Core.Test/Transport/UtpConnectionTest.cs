@@ -1897,7 +1897,7 @@ public class UtpConnectionTest
         Assert.DoesNotThrow(() => connection.HandleIncomingPacket(packet, remoteEp));
 
         var buffer = new byte[10];
-        var readBytes = connection.Receive(buffer, 0, buffer.Length);
+        var readBytes = connection.Receive(buffer, 0, buffer.Length, timeoutMs: 50);
         Assert.That(readBytes, Is.EqualTo(0));
     }
 

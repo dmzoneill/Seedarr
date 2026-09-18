@@ -472,6 +472,34 @@ public class UtpConnection : IUtpConnection
 
         while (IsConnected && !_hasReceivedFin)
         {
+            var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+            if (elapsed >= timeoutMs)
+            {
+                break;
+            }
+
+            var waitMs = (int)Math.Min(100, timeoutMs - elapsed);
+            if (waitMs <= 0)
+            {
+                break;
+            }
+
+            if (_ownsUdpClient && _udpClient?.Client != null)
+            {
+                try
+                {
+                    if (!_udpClient.Client.Poll(waitMs * 1000, SelectMode.SelectRead))
+                    {
+                        RetransmitUnackedPackets();
+                        continue;
+                    }
+                }
+                catch
+                {
+                    break;
+                }
+            }
+
             byte[] data;
             try
             {
