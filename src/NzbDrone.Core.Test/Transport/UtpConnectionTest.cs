@@ -1804,6 +1804,283 @@ public class UtpConnectionTest
         Assert.That(retransmittedSeq, Is.EqualTo(0));
     }
 
+    [Test]
+    public void HandleIncomingPacket_with_chained_extension_headers_should_skip_extensions_and_extract_payload()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        // Header: extension = 2 (first extension is type 2)
+        // Extension 1 (type 2): next_ext = 1 (SACK), len = 4, data = [1, 2, 3, 4]
+        // Extension 2 (type 1 - SACK): next_ext = 0, len = 4, data = [0, 0, 0, 0]
+        // Payload: [0xDE, 0xAD, 0xBE, 0xEF]
+        var extensions = new byte[]
+        {
+            1, 4, 1, 2, 3, 4,
+            0, 4, 0, 0, 0, 0
+        };
+        var payload = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF };
+
+        var packet = CreatePacketWithExtensions(UtpPacketType.Data, connection.ReceiveId, 1, 0, 2, extensions, payload);
+        connection.HandleIncomingPacket(packet, remoteEp);
+
+        var buffer = new byte[10];
+        var readBytes = connection.Receive(buffer, 0, buffer.Length);
+
+        Assert.That(readBytes, Is.EqualTo(4));
+        Assert.That(buffer[0], Is.EqualTo(0xDE));
+        Assert.That(buffer[1], Is.EqualTo(0xAD));
+        Assert.That(buffer[2], Is.EqualTo(0xBE));
+        Assert.That(buffer[3], Is.EqualTo(0xEF));
+    }
+
+    [Test]
+    public void HandleIncomingPacket_with_truncated_extension_header_should_not_throw_or_corrupt_stream()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var packet = new byte[22];
+        packet[0] = ((byte)UtpPacketType.Data << 4) | 1;
+        packet[1] = 1;
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(2, 2), connection.ReceiveId);
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(16, 2), 1);
+        packet[20] = 0;
+        packet[21] = 10; // claims len 10, but total length is 22
+
+        Assert.DoesNotThrow(() => connection.HandleIncomingPacket(packet, remoteEp));
+
+        var buffer = new byte[10];
+        var readBytes = connection.Receive(buffer, 0, buffer.Length);
+        Assert.That(readBytes, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessSackBitmask_should_remove_acknowledged_in_flight_packets_selectively()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        // Send 5 packets (seq 1, 2, 3, 4, 5)
+        for (var i = 0; i < 5; i++)
+        {
+            connection.Send(new byte[50], 0, 50);
+        }
+
+        Assert.That(IsInFlight(connection, 1), Is.True);
+        Assert.That(IsInFlight(connection, 2), Is.True);
+        Assert.That(IsInFlight(connection, 3), Is.True);
+        Assert.That(IsInFlight(connection, 4), Is.True);
+        Assert.That(IsInFlight(connection, 5), Is.True);
+
+        // Remote peer sends State packet:
+        // ackNr = 1 (packet 1 cumulative ack)
+        // SACK extension: bit 0 (seq 1 + 2 = 3) and bit 2 (seq 1 + 2 + 2 = 5) set
+        // Bitmask byte 0: (1 << 0) | (1 << 2) = 0x01 | 0x04 = 0x05
+        var sackExtension = new byte[]
+        {
+            0, 4,
+            0x05, 0x00, 0x00, 0x00
+        };
+
+        var ackPacket = CreatePacketWithExtensions(UtpPacketType.State, connection.ReceiveId, 1, 1, 1, sackExtension);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        // Packet 1 removed by cumulative ACK
+        Assert.That(IsInFlight(connection, 1), Is.False);
+        // Packet 2 not acked (still in flight)
+        Assert.That(IsInFlight(connection, 2), Is.True);
+        // Packet 3 removed by SACK bit 0
+        Assert.That(IsInFlight(connection, 3), Is.False);
+        // Packet 4 not acked (still in flight)
+        Assert.That(IsInFlight(connection, 4), Is.True);
+        // Packet 5 removed by SACK bit 2
+        Assert.That(IsInFlight(connection, 5), Is.False);
+    }
+
+    [Test]
+    public void ProcessSackBitmask_with_multi_byte_bitmask_should_correctly_calculate_sequence_numbers()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        for (var i = 0; i < 15; i++)
+        {
+            connection.Send(new byte[50], 0, 50);
+        }
+
+        // ACK packet 1, SACK packet 12:
+        // seq 12 corresponds to n = seq - ackNr - 2 = 12 - 1 - 2 = 9
+        // n = 9 is byteIdx = 1, bitIdx = 1 (9 = 1 * 8 + 1)
+        var sackExtension = new byte[]
+        {
+            0, 4,
+            0x00, 0x02, 0x00, 0x00
+        };
+
+        var ackPacket = CreatePacketWithExtensions(UtpPacketType.State, connection.ReceiveId, 1, 1, 1, sackExtension);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        Assert.That(IsInFlight(connection, 1), Is.False);
+        Assert.That(IsInFlight(connection, 11), Is.True);
+        Assert.That(IsInFlight(connection, 12), Is.False);
+        Assert.That(IsInFlight(connection, 13), Is.True);
+    }
+
+    [Test]
+    public void ProcessSackBitmask_should_trigger_fast_retransmit_when_three_higher_packets_are_sack_acknowledged()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            lock (sentPackets)
+            {
+                sentPackets.Add(data.ToArray());
+            }
+
+            return true;
+        };
+
+        for (var i = 0; i < 5; i++)
+        {
+            connection.Send(new byte[50], 0, 50);
+        }
+
+        sentPackets.Clear();
+
+        // ACK 1 with SACK for packets 3, 4, 5 (bits 0, 1, 2)
+        var sackExtension = new byte[]
+        {
+            0, 4,
+            0x07, 0x00, 0x00, 0x00
+        };
+
+        var ackPacket = CreatePacketWithExtensions(UtpPacketType.State, connection.ReceiveId, 1, 1, 1, sackExtension);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(1));
+        Assert.That(sentPackets.Count, Is.EqualTo(1));
+
+        var retransmittedSeq = BinaryPrimitives.ReadUInt16BigEndian(sentPackets[0].AsSpan(16, 2));
+        Assert.That(retransmittedSeq, Is.EqualTo(2));
+        Assert.That(IsInFlight(connection, 2), Is.True);
+    }
+
+    [Test]
+    public void ProcessSackBitmask_with_incremental_sack_arrivals_should_trigger_fast_retransmit_on_third_higher_ack()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            lock (sentPackets)
+            {
+                sentPackets.Add(data.ToArray());
+            }
+
+            return true;
+        };
+
+        for (var i = 0; i < 5; i++)
+        {
+            connection.Send(new byte[50], 0, 50);
+        }
+
+        sentPackets.Clear();
+
+        // 1st SACK packet acknowledges packet 3 (bit 0)
+        var sack1 = CreatePacketWithExtensions(UtpPacketType.State, connection.ReceiveId, 1, 1, 1, new byte[] { 0, 4, 0x01, 0, 0, 0 });
+        connection.HandleIncomingPacket(sack1, remoteEp);
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(0));
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+
+        // 2nd SACK packet acknowledges packet 3 and packet 4 (bits 0, 1)
+        var sack2 = CreatePacketWithExtensions(UtpPacketType.State, connection.ReceiveId, 1, 1, 1, new byte[] { 0, 4, 0x03, 0, 0, 0 });
+        connection.HandleIncomingPacket(sack2, remoteEp);
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(0));
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+
+        // 3rd SACK packet acknowledges packets 3, 4, and 5 (bits 0, 1, 2)
+        var sack3 = CreatePacketWithExtensions(UtpPacketType.State, connection.ReceiveId, 1, 1, 1, new byte[] { 0, 4, 0x07, 0, 0, 0 });
+        connection.HandleIncomingPacket(sack3, remoteEp);
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(1));
+        Assert.That(sentPackets.Count, Is.EqualTo(1));
+
+        var retransmittedSeq = BinaryPrimitives.ReadUInt16BigEndian(sentPackets[0].AsSpan(16, 2));
+        Assert.That(retransmittedSeq, Is.EqualTo(2));
+
+        // 4th SACK packet does not retransmit packet 2 again
+        sentPackets.Clear();
+        var sack4 = CreatePacketWithExtensions(UtpPacketType.State, connection.ReceiveId, 1, 1, 1, new byte[] { 0, 4, 0x0F, 0, 0, 0 });
+        connection.HandleIncomingPacket(sack4, remoteEp);
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(1));
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ProcessSackBitmask_with_sequence_wrap_around_should_trigger_fast_retransmit()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var seqField = typeof(UtpConnection).GetField("_sequenceNumber", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        seqField.SetValue(connection, (ushort)65534);
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, ep) =>
+        {
+            lock (sentPackets)
+            {
+                sentPackets.Add(data.ToArray());
+            }
+
+            return true;
+        };
+
+        // Send seq 65534, 65535, 0, 1, 2
+        for (var i = 0; i < 5; i++)
+        {
+            connection.Send(new byte[50], 0, 50);
+        }
+
+        sentPackets.Clear();
+
+        // ACK seq 65534, SACK bits for 0, 1, 2:
+        var sackExtension = new byte[]
+        {
+            0, 4,
+            0x07, 0x00, 0x00, 0x00
+        };
+
+        var ackPacket = CreatePacketWithExtensions(UtpPacketType.State, connection.ReceiveId, 1, 65534, 1, sackExtension);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        Assert.That(connection.FastRetransmitCount, Is.EqualTo(1));
+        Assert.That(sentPackets.Count, Is.EqualTo(1));
+
+        var retransmittedSeq = BinaryPrimitives.ReadUInt16BigEndian(sentPackets[0].AsSpan(16, 2));
+        Assert.That(retransmittedSeq, Is.EqualTo(65535));
+    }
+
     // ---- helpers ----
 
     private static byte[] CreatePacket(UtpPacketType type, ushort connectionId, ushort seqNr, ushort ackNr, byte[] payload = null)
@@ -1855,5 +2132,38 @@ public class UtpConnectionTest
         udpClient.Client.Bind(new IPEndPoint(IPAddress.Loopback, 0));
         udpClient.Client.ReceiveTimeout = 3000;
         localPort = ((IPEndPoint)udpClient.Client.LocalEndPoint!).Port;
+    }
+
+    private static byte[] CreatePacketWithExtensions(UtpPacketType type, ushort connectionId, ushort seqNr, ushort ackNr, byte firstExtension, byte[] extensionData, byte[] payload = null)
+    {
+        var extLen = extensionData?.Length ?? 0;
+        var payloadLen = payload?.Length ?? 0;
+        var packet = new byte[20 + extLen + payloadLen];
+        packet[0] = (byte)(((byte)type << 4) | 1);
+        packet[1] = firstExtension;
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(2, 2), connectionId);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(4, 4), 1000);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(8, 4), 0);
+        BinaryPrimitives.WriteUInt32BigEndian(packet.AsSpan(12, 4), 65535);
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(16, 2), seqNr);
+        BinaryPrimitives.WriteUInt16BigEndian(packet.AsSpan(18, 2), ackNr);
+        if (extLen > 0)
+        {
+            Array.Copy(extensionData, 0, packet, 20, extLen);
+        }
+
+        if (payloadLen > 0)
+        {
+            Array.Copy(payload, 0, packet, 20 + extLen, payloadLen);
+        }
+
+        return packet;
+    }
+
+    private static bool IsInFlight(UtpConnection connection, ushort seqNr)
+    {
+        var field = typeof(UtpConnection).GetField("_inFlightPackets", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var inFlight = (System.Collections.IDictionary)field.GetValue(connection)!;
+        return inFlight.Contains(seqNr);
     }
 }
