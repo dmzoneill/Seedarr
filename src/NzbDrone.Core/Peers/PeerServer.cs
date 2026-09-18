@@ -1117,6 +1117,14 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             }
 
             clientIp = endpoint.Address.ToString();
+
+            if (_connectionManager?.IsPeerBanned(clientIp) == true)
+            {
+                _logger.Debug("PeerServer: rejected incoming connection from banned peer {0}", clientIp);
+                client.Dispose();
+                return;
+            }
+
             var maxPerIp = _configService.MaxConnectionsPerIp > 0 ? _configService.MaxConnectionsPerIp : 5;
             var currentCount = _connectionsPerIp.AddOrUpdate(clientIp, 1, (_, count) => count + 1);
             ipReserved = true;
@@ -1367,6 +1375,13 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         if (!IPAddress.TryParse(candidate.Ip, out var candIp))
         {
             _logger.Debug("Skipping invalid IP candidate '{0}'", candidate.Ip);
+            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+            return;
+        }
+
+        if (_connectionManager?.IsPeerBanned(candidate.Ip) == true)
+        {
+            _logger.Debug("PeerServer: rejected outgoing connection to banned peer {0}:{1}", candidate.Ip, candidate.Port);
             _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
             return;
         }

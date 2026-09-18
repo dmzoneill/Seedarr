@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
@@ -33,13 +35,18 @@ public interface IConnectionManager
     void DisconnectByInfoHash(string infoHash);
     void ProcessDropouts();
     void RotateConnections();
+    void BanPeer(string ip, TimeSpan? duration = null);
+    bool IsPeerBanned(string ip);
+    void UnbanPeer(string ip);
+    IReadOnlyCollection<string> GetBannedPeers();
 }
 
 public class ConnectionManager : IConnectionManager,
     IHandle<SeedingStoppedEvent>,
     IHandle<TorrentStatusChangedEvent>,
     IHandle<TorrentPausedEvent>,
-    IHandle<TorrentDeletedEvent>
+    IHandle<TorrentDeletedEvent>,
+    IHandle<PeerBannedEvent>
 {
     private readonly IConfigService _configService;
     private readonly IPeerConnectionLogService _connectionLogService;
@@ -49,6 +56,7 @@ public class ConnectionManager : IConnectionManager,
     private readonly IRandomNumberGenerator _random;
     private readonly List<PeerConnection> _connections = new();
     private readonly List<ConnectionReservation> _reservations = new();
+    private readonly ConcurrentDictionary<string, BannedPeerEntry> _bannedPeers = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
     private readonly Logger _logger;
 
@@ -148,6 +156,13 @@ public class ConnectionManager : IConnectionManager,
             return false;
         }
 
+        if (IsPeerBanned(connection.RemoteIp))
+        {
+            _logger.Debug("Rejecting connection from banned peer {0}", connection.RemoteIp);
+            reservation?.Dispose();
+            return false;
+        }
+
         PeerConnection evicted = null;
         lock (_lock)
         {
@@ -233,9 +248,15 @@ public class ConnectionManager : IConnectionManager,
             return;
         }
 
+        bool removed;
         lock (_lock)
         {
-            _connections.Remove(connection);
+            removed = _connections.Remove(connection);
+        }
+
+        if (!removed)
+        {
+            return;
         }
 
         _fastExtensionHandler?.UnregisterPeer(connection);
@@ -641,6 +662,178 @@ public class ConnectionManager : IConnectionManager,
         catch (Exception ex)
         {
             _logger.Debug(ex, "Failed to log peer disconnection event");
+        }
+    }
+
+    public void BanPeer(string ip, TimeSpan? duration = null)
+    {
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            return;
+        }
+
+        var normalizedIp = ip.Trim();
+        var ttl = duration ?? TimeSpan.FromHours(24);
+        var expiresAt = DateTime.UtcNow.Add(ttl);
+        var entry = new BannedPeerEntry(normalizedIp, expiresAt);
+        _bannedPeers[normalizedIp] = entry;
+
+        List<PeerConnection> toDisconnect;
+        lock (_lock)
+        {
+            toDisconnect = _connections
+                .Where(c => !string.IsNullOrWhiteSpace(c.RemoteIp) && entry.Matches(c.RemoteIp))
+                .ToList();
+        }
+
+        foreach (var conn in toDisconnect)
+        {
+            Remove(conn);
+        }
+    }
+
+    public bool IsPeerBanned(string ip)
+    {
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            return false;
+        }
+
+        var normalizedIp = ip.Trim();
+        var now = DateTime.UtcNow;
+
+        if (_bannedPeers.TryGetValue(normalizedIp, out var directEntry))
+        {
+            if (now < directEntry.ExpiresAt)
+            {
+                return true;
+            }
+
+            _bannedPeers.TryRemove(normalizedIp, out _);
+        }
+
+        var hasParsed = IPAddress.TryParse(normalizedIp, out var parsedIp);
+
+        foreach (var kvp in _bannedPeers)
+        {
+            var entry = kvp.Value;
+            if (now >= entry.ExpiresAt)
+            {
+                _bannedPeers.TryRemove(kvp.Key, out _);
+                continue;
+            }
+
+            if (entry.Matches(normalizedIp))
+            {
+                return true;
+            }
+
+            if (hasParsed && entry.Matches(parsedIp))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public void UnbanPeer(string ip)
+    {
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            return;
+        }
+
+        _bannedPeers.TryRemove(ip.Trim(), out _);
+    }
+
+    public IReadOnlyCollection<string> GetBannedPeers()
+    {
+        var now = DateTime.UtcNow;
+        return _bannedPeers
+            .Where(kvp => kvp.Value.ExpiresAt > now)
+            .Select(kvp => kvp.Key)
+            .ToList();
+    }
+
+    public void Handle(PeerBannedEvent message)
+    {
+        if (message == null || string.IsNullOrWhiteSpace(message.PeerIp))
+        {
+            return;
+        }
+
+        BanPeer(message.PeerIp);
+    }
+
+    private sealed class BannedPeerEntry
+    {
+        public string Rule { get; }
+        public DateTime ExpiresAt { get; }
+        public IPAddress SingleIp { get; }
+        public IPNetwork? Network { get; }
+
+        public BannedPeerEntry(string rule, DateTime expiresAt)
+        {
+            Rule = rule;
+            ExpiresAt = expiresAt;
+
+            if (IPNetwork.TryParse(rule, out var network))
+            {
+                Network = network;
+            }
+            else if (IPAddress.TryParse(rule, out var singleIp))
+            {
+                if (singleIp.IsIPv4MappedToIPv6)
+                {
+                    singleIp = singleIp.MapToIPv4();
+                }
+
+                SingleIp = singleIp;
+            }
+        }
+
+        public bool Matches(IPAddress ipAddress)
+        {
+            if (ipAddress == null)
+            {
+                return false;
+            }
+
+            var address = ipAddress.IsIPv4MappedToIPv6 ? ipAddress.MapToIPv4() : ipAddress;
+
+            if (SingleIp != null && SingleIp.Equals(address))
+            {
+                return true;
+            }
+
+            if (Network.HasValue && Network.Value.Contains(address))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool Matches(string ipStr)
+        {
+            if (string.IsNullOrWhiteSpace(ipStr))
+            {
+                return false;
+            }
+
+            var trimmed = ipStr.Trim();
+            if (string.Equals(Rule, trimmed, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (IPAddress.TryParse(trimmed, out var ip))
+            {
+                return Matches(ip);
+            }
+
+            return false;
         }
     }
 
