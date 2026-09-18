@@ -1434,6 +1434,48 @@ public class UtpConnectionTest
     }
 
     [Test]
+    public void HandleIncomingPacket_out_of_order_buffer_should_cap_at_max_capacity()
+    {
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
+        var sender = new IPEndPoint(IPAddress.Loopback, 12345);
+
+        // 1. Initial packet to establish sequence numbers: seq = 1 -> _expectedSeqNr becomes 2
+        var initialPayload = new byte[] { 0x01 };
+        var initialPacket = CreatePacket(UtpPacketType.Data, connection.ReceiveId, 1, 0, initialPayload);
+        connection.HandleIncomingPacket(initialPacket, sender);
+
+        Assert.That(connection.HasReceivedFirstPacket, Is.True);
+        Assert.That(connection.OutOfOrderCount, Is.EqualTo(0));
+
+        // 2. Send exactly MaxOutOfOrderPackets out-of-order packets (ahead of _expectedSeqNr = 2)
+        // Using seq numbers 100 .. (100 + MaxOutOfOrderPackets - 1)
+        for (ushort i = 0; i < UtpConnection.MaxOutOfOrderPackets; i++)
+        {
+            var seq = (ushort)(100 + i);
+            var packet = CreatePacket(UtpPacketType.Data, connection.ReceiveId, seq, 0, new byte[] { (byte)(i & 0xFF) });
+            connection.HandleIncomingPacket(packet, sender);
+        }
+
+        Assert.That(connection.OutOfOrderCount, Is.EqualTo(UtpConnection.MaxOutOfOrderPackets));
+
+        // 3. Send another out-of-order packet with a new sequence number beyond the cap
+        var overflowSeq = (ushort)(100 + UtpConnection.MaxOutOfOrderPackets + 5);
+        var overflowPacket = CreatePacket(UtpPacketType.Data, connection.ReceiveId, overflowSeq, 0, new byte[] { 0xFF });
+        connection.HandleIncomingPacket(overflowPacket, sender);
+
+        // Should NOT increase the count, packet is dropped
+        Assert.That(connection.OutOfOrderCount, Is.EqualTo(UtpConnection.MaxOutOfOrderPackets));
+
+        // 4. Send an out-of-order packet with an existing sequence number already in the buffer
+        // Should be accepted / updated without exceeding cap
+        var existingSeq = (ushort)100;
+        var updatePacket = CreatePacket(UtpPacketType.Data, connection.ReceiveId, existingSeq, 0, new byte[] { 0xAA, 0xBB });
+        connection.HandleIncomingPacket(updatePacket, sender);
+
+        Assert.That(connection.OutOfOrderCount, Is.EqualTo(UtpConnection.MaxOutOfOrderPackets));
+    }
+
+    [Test]
     public void HandleIncomingPacket_duplicate_or_older_packet_should_trigger_ack_without_corrupting_receive_queue()
     {
         using var connection = new UtpConnection(connectionTimeoutSeconds: 3);
