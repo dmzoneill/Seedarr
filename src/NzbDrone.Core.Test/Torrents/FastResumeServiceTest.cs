@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Torrents;
@@ -206,5 +208,293 @@ public class FastResumeServiceTest
 
         Assert.Catch<Exception>(() => _service.SaveFastResume(torrent));
         Assert.That(File.Exists(tempPath), Is.False);
+    }
+
+    [Test]
+    public void LoadFastResume_should_succeed_when_file_size_and_mtime_match()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1234567890123456789012345678901234567890",
+            SavePath = _tempAppDataFolder,
+            PieceCount = 2,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+
+        var filePath = Path.Combine(_tempAppDataFolder, "testfile.dat");
+        File.WriteAllBytes(filePath, new byte[1024]);
+        var mtime = File.GetLastWriteTimeUtc(filePath);
+
+        var resumeData = new FastResumeData
+        {
+            InfoHash = torrent.InfoHash,
+            Bitfield = new[] { true, true },
+            Progress = 1.0,
+            Status = "Seeding",
+            SavePath = _tempAppDataFolder,
+            Files = new List<FastResumeFileEntry>
+            {
+                new() { Path = "testfile.dat", Length = 1024, Mtime = mtime }
+            }
+        };
+
+        var fastResumeDir = Path.Combine(_tempAppDataFolder, "fastresume");
+        Directory.CreateDirectory(fastResumeDir);
+        File.WriteAllText(Path.Combine(fastResumeDir, $"{torrent.InfoHash.ToLowerInvariant()}.fastresume"), STJson.ToJson(resumeData));
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var loaded = _service.LoadFastResume(torrent.InfoHash);
+
+        Assert.That(loaded, Is.Not.Null);
+        _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.Length == 2 && b[0] && b[1]));
+        _torrentService.DidNotReceive().Recheck(torrent.Id);
+    }
+
+    [Test]
+    public void LoadFastResume_should_trigger_recheck_fallback_when_file_size_mismatches()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1234567890123456789012345678901234567890",
+            SavePath = _tempAppDataFolder,
+            PieceCount = 2,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+
+        var filePath = Path.Combine(_tempAppDataFolder, "truncated.dat");
+        File.WriteAllBytes(filePath, new byte[512]);
+
+        var resumeData = new FastResumeData
+        {
+            InfoHash = torrent.InfoHash,
+            Bitfield = new[] { true, true },
+            Progress = 1.0,
+            Status = "Seeding",
+            SavePath = _tempAppDataFolder,
+            Files = new List<FastResumeFileEntry>
+            {
+                new() { Path = "truncated.dat", Length = 1024, Mtime = File.GetLastWriteTimeUtc(filePath) }
+            }
+        };
+
+        var fastResumeDir = Path.Combine(_tempAppDataFolder, "fastresume");
+        Directory.CreateDirectory(fastResumeDir);
+        File.WriteAllText(Path.Combine(fastResumeDir, $"{torrent.InfoHash.ToLowerInvariant()}.fastresume"), STJson.ToJson(resumeData));
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var loaded = _service.LoadFastResume(torrent.InfoHash);
+
+        Assert.That(loaded, Is.Null);
+        _pieceStorage.DidNotReceive().SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.All(x => x)));
+        _pieceStorage.Received().SetVerifiedPieces(torrent.InfoHash, null);
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Status == TorrentStatus.QueuedForChecking));
+        _torrentService.Received(1).Recheck(torrent.Id);
+    }
+
+    [Test]
+    public void LoadFastResume_should_trigger_recheck_fallback_when_file_is_missing()
+    {
+        var torrent = new Torrent
+        {
+            Id = 2,
+            InfoHash = "abcdef1234567890abcdef1234567890abcdef12",
+            SavePath = _tempAppDataFolder,
+            PieceCount = 2,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+
+        var resumeData = new FastResumeData
+        {
+            InfoHash = torrent.InfoHash,
+            Bitfield = new[] { true, true },
+            Progress = 1.0,
+            Status = "Seeding",
+            SavePath = _tempAppDataFolder,
+            Files = new List<FastResumeFileEntry>
+            {
+                new() { Path = "non_existent.dat", Length = 1024, Mtime = DateTime.UtcNow }
+            }
+        };
+
+        var fastResumeDir = Path.Combine(_tempAppDataFolder, "fastresume");
+        Directory.CreateDirectory(fastResumeDir);
+        File.WriteAllText(Path.Combine(fastResumeDir, $"{torrent.InfoHash.ToLowerInvariant()}.fastresume"), STJson.ToJson(resumeData));
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var loaded = _service.LoadFastResume(torrent.InfoHash);
+
+        Assert.That(loaded, Is.Null);
+        _pieceStorage.DidNotReceive().SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.All(x => x)));
+        _pieceStorage.Received().SetVerifiedPieces(torrent.InfoHash, null);
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Status == TorrentStatus.QueuedForChecking));
+        _torrentService.Received(1).Recheck(torrent.Id);
+    }
+
+    [Test]
+    public void LoadFastResume_should_trigger_recheck_fallback_without_unhandled_crash_when_fastresume_corrupted()
+    {
+        var torrent = new Torrent
+        {
+            Id = 3,
+            InfoHash = "corruptedhash123456789012345678901234567",
+            SavePath = _tempAppDataFolder,
+            PieceCount = 4,
+            Progress = 0.5,
+            Status = TorrentStatus.Downloading
+        };
+
+        var fastResumeDir = Path.Combine(_tempAppDataFolder, "fastresume");
+        Directory.CreateDirectory(fastResumeDir);
+        File.WriteAllText(Path.Combine(fastResumeDir, $"{torrent.InfoHash.ToLowerInvariant()}.fastresume"), "{\"infoHash\": \"corrupted\", invalid_json_syntax!!!");
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        FastResumeData loaded = null;
+        Assert.DoesNotThrow(() => loaded = _service.LoadFastResume(torrent.InfoHash));
+
+        Assert.That(loaded, Is.Null);
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Status == TorrentStatus.QueuedForChecking));
+        _torrentService.Received(1).Recheck(torrent.Id);
+    }
+
+    [Test]
+    public void LoadFastResume_should_trigger_recheck_fallback_when_mtime_mismatches()
+    {
+        var torrent = new Torrent
+        {
+            Id = 4,
+            InfoHash = "mtimehash12345678901234567890123456789012",
+            SavePath = _tempAppDataFolder,
+            PieceCount = 2,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+
+        var filePath = Path.Combine(_tempAppDataFolder, "modified_external.dat");
+        File.WriteAllBytes(filePath, new byte[1024]);
+        File.SetLastWriteTimeUtc(filePath, DateTime.UtcNow);
+
+        var pastMtime = DateTime.UtcNow.AddHours(-5);
+
+        var resumeData = new FastResumeData
+        {
+            InfoHash = torrent.InfoHash,
+            Bitfield = new[] { true, true },
+            Progress = 1.0,
+            Status = "Seeding",
+            SavePath = _tempAppDataFolder,
+            Files = new List<FastResumeFileEntry>
+            {
+                new() { Path = "modified_external.dat", Length = 1024, Mtime = pastMtime }
+            }
+        };
+
+        var fastResumeDir = Path.Combine(_tempAppDataFolder, "fastresume");
+        Directory.CreateDirectory(fastResumeDir);
+        File.WriteAllText(Path.Combine(fastResumeDir, $"{torrent.InfoHash.ToLowerInvariant()}.fastresume"), STJson.ToJson(resumeData));
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var loaded = _service.LoadFastResume(torrent.InfoHash);
+
+        Assert.That(loaded, Is.Null);
+        _pieceStorage.DidNotReceive().SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.All(x => x)));
+        _pieceStorage.Received().SetVerifiedPieces(torrent.InfoHash, null);
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Status == TorrentStatus.QueuedForChecking));
+        _torrentService.Received(1).Recheck(torrent.Id);
+    }
+
+    [Test]
+    public void PerformPieceHashVerification_should_reconstruct_bitfield_and_write_fresh_fastresume()
+    {
+        var torrent = new Torrent
+        {
+            Id = 5,
+            InfoHash = "recheckverif1234567890123456789012345678",
+            SavePath = _tempAppDataFolder,
+            PieceCount = 2,
+            PieceLength = 512,
+            TotalSize = 1024,
+            Progress = 0.0,
+            Status = TorrentStatus.QueuedForChecking
+        };
+
+        var filePath = Path.Combine(_tempAppDataFolder, "verified_file.dat");
+        File.WriteAllBytes(filePath, new byte[1024]);
+
+        var resumeData = new FastResumeData
+        {
+            InfoHash = torrent.InfoHash,
+            Bitfield = new[] { false, false },
+            SavePath = _tempAppDataFolder,
+            Files = new List<FastResumeFileEntry>
+            {
+                new() { Path = "verified_file.dat", Length = 1024, Mtime = File.GetLastWriteTimeUtc(filePath) }
+            }
+        };
+
+        _service.PerformPieceHashVerification(torrent, resumeData);
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        Assert.That(torrent.Progress, Is.EqualTo(1.0));
+        _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.Length == 2 && b[0] && b[1]));
+
+        var writtenFile = Path.Combine(_tempAppDataFolder, "fastresume", $"{torrent.InfoHash.ToLowerInvariant()}.fastresume");
+        Assert.That(File.Exists(writtenFile), Is.True);
+    }
+
+    [Test]
+    public void LoadAll_should_reconcile_fastresume_for_all_torrents()
+    {
+        var torrent1 = new Torrent
+        {
+            Id = 1,
+            InfoHash = "1111111111111111111111111111111111111111",
+            SavePath = _tempAppDataFolder,
+            PieceCount = 1,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+        var torrent2 = new Torrent
+        {
+            Id = 2,
+            InfoHash = "2222222222222222222222222222222222222222",
+            SavePath = _tempAppDataFolder,
+            PieceCount = 1,
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent1, torrent2 });
+
+        var file1 = Path.Combine(_tempAppDataFolder, "file1.dat");
+        File.WriteAllBytes(file1, new byte[512]);
+
+        var resumeDir = Path.Combine(_tempAppDataFolder, "fastresume");
+        Directory.CreateDirectory(resumeDir);
+
+        var data1 = new FastResumeData
+        {
+            InfoHash = torrent1.InfoHash,
+            Bitfield = new[] { true },
+            SavePath = _tempAppDataFolder,
+            Files = new List<FastResumeFileEntry>
+            {
+                new() { Path = "file1.dat", Length = 512, Mtime = File.GetLastWriteTimeUtc(file1) }
+            }
+        };
+        File.WriteAllText(Path.Combine(resumeDir, $"{torrent1.InfoHash.ToLowerInvariant()}.fastresume"), STJson.ToJson(data1));
+
+        _service.LoadAll();
+
+        _pieceStorage.Received(1).SetVerifiedPieces(torrent1.InfoHash, Arg.Is<bool[]>(b => b.Length == 1 && b[0]));
     }
 }

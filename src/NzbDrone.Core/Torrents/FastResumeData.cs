@@ -1,6 +1,31 @@
 using System;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace NzbDrone.Core.Torrents;
+
+public class FastResumeFileEntry
+{
+    public string Path { get; set; }
+
+    public long Length { get; set; }
+
+    [JsonIgnore]
+    public long Size
+    {
+        get => Length;
+        set => Length = value;
+    }
+
+    public DateTime? Mtime { get; set; }
+
+    [JsonIgnore]
+    public DateTime? LastWriteTimeUtc
+    {
+        get => Mtime;
+        set => Mtime = value;
+    }
+}
 
 public class FastResumeData
 {
@@ -17,4 +42,8 @@ public class FastResumeData
     public string Status { get; set; }
 
     public DateTime? SavedAt { get; set; }
+
+    public string SavePath { get; set; }
+
+    public List<FastResumeFileEntry> Files { get; set; } = new();
 }

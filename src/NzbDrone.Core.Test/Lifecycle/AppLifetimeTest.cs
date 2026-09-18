@@ -366,4 +366,12 @@ public class AppLifetimeTest
         await _connectionManager.Received(1).DisconnectAllAsync();
         _mainDatabase.Received(1).Checkpoint();
     }
+
+    [Test]
+    public async Task StartAsync_should_invoke_FastResumeService_LoadAll()
+    {
+        await _subject.StartAsync(CancellationToken.None);
+
+        _fastResumeService.Received(1).LoadAll();
+    }
 }
