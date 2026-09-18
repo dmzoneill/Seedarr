@@ -1078,7 +1078,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
                 ["name"] = f.Path ?? string.Empty,
                 ["size"] = f.Size,
                 ["progress"] = Math.Round(fileProgress, 4),
-                ["priority"] = 1,
+                ["priority"] = !f.Wanted ? 0 : (f.Priority > 0 ? f.Priority : 1),
                 ["is_seed"] = isSeed,
                 ["piece_range"] = new[] { f.PieceOffset, f.PieceOffset + Math.Max(0, f.PieceCount - 1) },
             });
@@ -2415,18 +2415,90 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
     [HttpGet("torrents/filePrio")]
     public ActionResult SetFilePriority(
         [FromQuery] string hash = null,
-        [FromForm] string hashForm = null,
+        [FromForm(Name = "hash")] string hashForm = null,
         [FromQuery] string id = null,
-        [FromForm] string idForm = null,
+        [FromForm(Name = "id")] string idForm = null,
         [FromQuery] string ids = null,
-        [FromForm] string idsForm = null,
+        [FromForm(Name = "ids")] string idsForm = null,
         [FromQuery] int? priority = null,
-        [FromForm] int? priorityForm = null)
+        [FromForm(Name = "priority")] int? priorityForm = null)
     {
         var h = !string.IsNullOrWhiteSpace(hash) ? hash : hashForm;
+        if (string.IsNullOrWhiteSpace(h) && Request?.HasFormContentType == true && Request.Form.TryGetValue("hash", out var formHash))
+        {
+            h = formHash.ToString();
+        }
+
         if (string.IsNullOrWhiteSpace(h))
         {
             return BadRequest();
+        }
+
+        var prio = priority ?? priorityForm;
+        if (!prio.HasValue && Request?.HasFormContentType == true && Request.Form.TryGetValue("priority", out var formPrio) && int.TryParse(formPrio.ToString(), out var parsedPrio))
+        {
+            prio = parsedPrio;
+        }
+
+        if (!prio.HasValue)
+        {
+            return BadRequest();
+        }
+
+        var torrent = _torrentService.GetAll().FirstOrDefault(t => string.Equals(t.InfoHash, h, StringComparison.OrdinalIgnoreCase));
+        if (torrent == null)
+        {
+            return NotFound();
+        }
+
+        var rawIds = !string.IsNullOrWhiteSpace(ids) ? ids : (!string.IsNullOrWhiteSpace(idsForm) ? idsForm : (!string.IsNullOrWhiteSpace(id) ? id : idForm));
+        if (string.IsNullOrWhiteSpace(rawIds) && Request?.HasFormContentType == true)
+        {
+            if (Request.Form.TryGetValue("ids", out var formIdsVal) && !string.IsNullOrWhiteSpace(formIdsVal.ToString()))
+            {
+                rawIds = formIdsVal.ToString();
+            }
+            else if (Request.Form.TryGetValue("id", out var formIdVal) && !string.IsNullOrWhiteSpace(formIdVal.ToString()))
+            {
+                rawIds = formIdVal.ToString();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(rawIds))
+        {
+            return BadRequest();
+        }
+
+        var files = _torrentFileService.GetByTorrentId(torrent.Id);
+        if (files != null && files.Count > 0)
+        {
+            var idTokens = rawIds.Split(new[] { '|', ',' }, StringSplitOptions.RemoveEmptyEntries);
+            var modifiedFiles = new HashSet<TorrentFile>();
+
+            foreach (var token in idTokens)
+            {
+                if (int.TryParse(token.Trim(), out var index) && index >= 0 && index < files.Count)
+                {
+                    var file = files[index];
+                    if (prio.Value == 0)
+                    {
+                        file.Wanted = false;
+                        file.Priority = 0;
+                    }
+                    else if (prio.Value > 0)
+                    {
+                        file.Wanted = true;
+                        file.Priority = prio.Value;
+                    }
+
+                    modifiedFiles.Add(file);
+                }
+            }
+
+            foreach (var file in modifiedFiles)
+            {
+                _torrentFileService.Update(file);
+            }
         }
 
         return Content("Ok.", "text/plain");

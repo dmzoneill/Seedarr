@@ -929,4 +929,115 @@ public class QBittorrentApiControllerTest
         Assert.That(list, Is.Not.Null);
         Assert.That(list[0]["f_l_piece_prio"], Is.EqualTo(true));
     }
+
+    [Test]
+    public void SetFilePriority_Updates_Wanted_And_Priority_For_Single_File()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            Name = "Test Torrent",
+        };
+        var file = new TorrentFile
+        {
+            Id = 10,
+            TorrentId = 1,
+            Path = "test.mkv",
+            Size = 5000,
+            Wanted = false,
+            Priority = 0,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+        var result = _controller.SetFilePriority(hash: hash, id: "0", priority: 1);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var content = (ContentResult)result;
+        Assert.That(content.Content, Is.EqualTo("Ok."));
+        Assert.That(file.Wanted, Is.True);
+        Assert.That(file.Priority, Is.EqualTo(1));
+        _torrentFileService.Received(1).Update(file);
+    }
+
+    [Test]
+    public void SetFilePriority_Sets_Wanted_False_When_Priority_Is_Zero()
+    {
+        const string hash = "abcdef1234567890abcdef1234567890abcdef12";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = hash,
+            Name = "Test Torrent",
+        };
+        var file = new TorrentFile
+        {
+            Id = 10,
+            TorrentId = 1,
+            Path = "test.mkv",
+            Size = 5000,
+            Wanted = true,
+            Priority = 1,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+        var result = _controller.SetFilePriority(hash: hash, id: "0", priority: 0);
+
+        Assert.That(result, Is.InstanceOf<ContentResult>());
+        var content = (ContentResult)result;
+        Assert.That(content.Content, Is.EqualTo("Ok."));
+        Assert.That(file.Wanted, Is.False);
+        Assert.That(file.Priority, Is.EqualTo(0));
+        _torrentFileService.Received(1).Update(file);
+    }
+
+    [Test]
+    public void GetFiles_Returns_Accurate_Priority_Based_On_Wanted_And_Priority()
+    {
+        var torrent = new Torrent
+        {
+            Id = 10,
+            Name = "TestTorrent",
+            InfoHash = "priohash123",
+            TotalSize = 2000,
+            PieceCount = 20,
+            Progress = 0.5,
+            Status = TorrentStatus.Downloading,
+        };
+
+        var file1 = new TorrentFile
+        {
+            Id = 1,
+            TorrentId = 10,
+            Path = "File1.mkv",
+            Size = 1000,
+            Wanted = false,
+            Priority = 0,
+        };
+
+        var file2 = new TorrentFile
+        {
+            Id = 2,
+            TorrentId = 10,
+            Path = "File2.mkv",
+            Size = 1000,
+            Wanted = true,
+            Priority = 6,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentFileService.GetByTorrentId(10).Returns(new List<TorrentFile> { file1, file2 });
+
+        var result = _controller.GetFiles("priohash123");
+        var files = ((OkObjectResult)result.Result).Value as List<Dictionary<string, object>>;
+
+        Assert.That(files, Is.Not.Null);
+        Assert.That(files[0]["priority"], Is.EqualTo(0));
+        Assert.That(files[1]["priority"], Is.EqualTo(6));
+    }
 }

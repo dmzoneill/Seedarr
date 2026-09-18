@@ -180,6 +180,9 @@ export interface TorrentFileInfo {
   pieceOffset: number;
   pieceCount: number;
   isPaddingFile?: boolean;
+  wanted?: boolean;
+  priority?: number;
+  bytesCompleted?: number;
 }
 
 export interface PieceMapSpan {

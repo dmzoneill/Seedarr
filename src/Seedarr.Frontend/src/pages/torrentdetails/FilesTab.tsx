@@ -9,6 +9,7 @@ import {
   buildFileTree,
   getDescendantFileIds,
   getDirectoryPriority,
+  getDirectoryWanted,
   formatPriority,
 } from "../../utils/fileTree";
 
@@ -19,7 +20,10 @@ function FileTreeRow({
   onToggle,
   onDirectoryPriority,
   onFilePriority,
+  onDirectoryWanted,
+  onFileWanted,
   filePriorities,
+  fileWanted,
 }: {
   node: FileTreeNode;
   depth: number;
@@ -27,7 +31,10 @@ function FileTreeRow({
   onToggle: (path: string) => void;
   onDirectoryPriority: (node: FileTreeNode, priority: FilePriority) => void;
   onFilePriority: (fileId: number, priority: FilePriority) => void;
+  onDirectoryWanted: (node: FileTreeNode, wanted: boolean) => void;
+  onFileWanted: (fileId: number, wanted: boolean) => void;
   filePriorities: Record<number, FilePriority>;
+  fileWanted: Record<number, boolean>;
 }) {
   const isOpen = expanded.has(node.path);
   const indent = depth * 20;
@@ -38,6 +45,13 @@ function FileTreeRow({
     !node.isDir && node.fileId !== undefined
       ? filePriorities[node.fileId] ?? node.priority ?? "Normal"
       : "Normal";
+  const dirWanted = node.isDir
+    ? getDirectoryWanted(node, fileWanted, filePriorities)
+    : { isWanted: true, isIndeterminate: false };
+  const isWanted =
+    !node.isDir && node.fileId !== undefined
+      ? fileWanted[node.fileId] ?? node.wanted ?? (formatPriority(filePrio) !== "Do Not Download")
+      : true;
   const progressValue = node.progress ?? 100;
 
   return (
@@ -47,6 +61,36 @@ function FileTreeRow({
         style={{ cursor: node.isDir ? "pointer" : "default" }}
         onClick={() => node.isDir && onToggle(node.path)}
       >
+        <td
+          onClick={(e) => e.stopPropagation()}
+          style={{ width: 60, textAlign: "center" }}
+        >
+          {node.isDir ? (
+            <input
+              type="checkbox"
+              aria-label={`Wanted for folder ${node.name}`}
+              checked={dirWanted.isWanted}
+              ref={(el) => {
+                if (el) {
+                  el.indeterminate = dirWanted.isIndeterminate;
+                }
+              }}
+              onChange={(e) => onDirectoryWanted(node, e.target.checked)}
+              style={{ cursor: "pointer" }}
+            />
+          ) : (
+            <input
+              type="checkbox"
+              aria-label={`Wanted for file ${node.name}`}
+              checked={isWanted}
+              onChange={(e) =>
+                node.fileId !== undefined &&
+                onFileWanted(node.fileId, e.target.checked)
+              }
+              style={{ cursor: "pointer" }}
+            />
+          )}
+        </td>
         <td className="mono" style={{ paddingLeft: indent + 8 }}>
           {node.isDir ? (
             <span
@@ -173,7 +217,10 @@ function FileTreeRow({
               onToggle={onToggle}
               onDirectoryPriority={onDirectoryPriority}
               onFilePriority={onFilePriority}
+              onDirectoryWanted={onDirectoryWanted}
+              onFileWanted={onFileWanted}
               filePriorities={filePriorities}
+              fileWanted={fileWanted}
             />
           ))}
     </>
@@ -186,6 +233,7 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
   const [filePriorities, setFilePriorities] = useState<
     Record<number, FilePriority>
   >({});
+  const [fileWanted, setFileWanted] = useState<Record<number, boolean>>({});
 
   const toggleDir = useCallback((path: string) => {
     setExpanded((prev) => {
@@ -206,6 +254,14 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
         }
         return next;
       });
+      setFileWanted((prev) => {
+        const next = { ...prev };
+        const isWanted = priority !== "Do Not Download" && priority !== "Skip All";
+        for (const id of ids) {
+          next[id] = isWanted;
+        }
+        return next;
+      });
     },
     [],
   );
@@ -216,9 +272,45 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
         ...prev,
         [fileId]: priority,
       }));
+      setFileWanted((prev) => ({
+        ...prev,
+        [fileId]: formatPriority(priority) !== "Do Not Download",
+      }));
     },
     [],
   );
+
+  const handleDirectoryWanted = useCallback(
+    (dirNode: FileTreeNode, wanted: boolean) => {
+      const ids = getDescendantFileIds(dirNode);
+      setFileWanted((prev) => {
+        const next = { ...prev };
+        for (const id of ids) {
+          next[id] = wanted;
+        }
+        return next;
+      });
+      setFilePriorities((prev) => {
+        const next = { ...prev };
+        for (const id of ids) {
+          next[id] = wanted ? "Normal" : "Do Not Download";
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleFileWanted = useCallback((fileId: number, wanted: boolean) => {
+    setFileWanted((prev) => ({
+      ...prev,
+      [fileId]: wanted,
+    }));
+    setFilePriorities((prev) => ({
+      ...prev,
+      [fileId]: wanted ? "Normal" : "Do Not Download",
+    }));
+  }, []);
 
   const nonPaddingFiles = useMemo(
     () => files?.filter((f) => !f.isPaddingFile) ?? [],
@@ -246,6 +338,7 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
   const tree = nonPaddingFiles.length > 0
     ? buildFileTree(nonPaddingFiles, {
         priorities: filePriorities,
+        wanted: fileWanted,
         progress: torrentProgress,
       })
     : [];
@@ -291,6 +384,9 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
           <table className="torrent-table">
             <thead>
               <tr>
+                <th className="torrent-table-th" style={{ width: 60, textAlign: "center" }}>
+                  Wanted
+                </th>
                 <th className="torrent-table-th">Path</th>
                 <th className="torrent-table-th" style={{ width: 100 }}>
                   Size
@@ -321,7 +417,10 @@ export function FilesTab({ torrent }: { torrent: Torrent }) {
                     onToggle={toggleDir}
                     onDirectoryPriority={handleDirectoryPriority}
                     onFilePriority={handleFilePriority}
+                    onDirectoryWanted={handleDirectoryWanted}
+                    onFileWanted={handleFileWanted}
                     filePriorities={filePriorities}
+                    fileWanted={fileWanted}
                   />
                 ))}
             </tbody>
