@@ -15,31 +15,50 @@ import TrackerMultiSelectModal, {
   TrackerPickerItem,
 } from "../TrackerMultiSelectModal";
 
+function formatTrackerStatus(status: string | number | unknown): string {
+  const s = String(status ?? "");
+  if (s === "2" || s === "Announcing") return "Announcing";
+  if (s === "1" || s === "Working") return "Working";
+  if (s === "3" || s === "Failed") return "Failed";
+  if (s === "4" || s === "Disabled") return "Disabled";
+  return s;
+}
+
 function getAttachedTrackerIndicator(
-  status: string,
+  status: string | number,
   det?: { isVerified?: boolean; healthStatus?: string | number },
 ): {
   icon: string;
   badgeClass: string;
 } {
+  const s = String(status ?? "");
+  const isAnnouncing = s === "Announcing" || s === "2";
   const isWorking =
-    status === "Working" ||
-    status === "Announcing" ||
-    det?.isVerified ||
-    det?.healthStatus === "Alive" ||
-    det?.healthStatus === 1;
+    !isAnnouncing &&
+    (s === "Working" ||
+      s === "1" ||
+      Boolean(det?.isVerified) ||
+      det?.healthStatus === "Alive" ||
+      String(det?.healthStatus) === "1");
   const isFailed =
-    status === "Failed" ||
-    status === "Disabled" ||
+    s === "Failed" ||
+    s === "3" ||
+    s === "Disabled" ||
+    s === "4" ||
     det?.healthStatus === "Offline" ||
-    det?.healthStatus === 3;
-  const isSlow = det?.healthStatus === "Slow" || det?.healthStatus === 2;
+    String(det?.healthStatus) === "3";
+  const isSlow = det?.healthStatus === "Slow" || String(det?.healthStatus) === "2";
 
+  if (isAnnouncing) {
+    return {
+      icon: "🔄",
+      badgeClass: "badge-announcing",
+    };
+  }
   if (isWorking) {
     return {
       icon: "🟢",
-      badgeClass:
-        status === "Announcing" ? "badge-announcing" : "badge-seeding",
+      badgeClass: "badge-seeding",
     };
   }
   if (isFailed) {
@@ -286,8 +305,23 @@ export function TrackersTab({ torrentId }: { torrentId: number }) {
                           gap: "0.35rem",
                         }}
                       >
-                        <span style={{ fontSize: "0.85em" }}>{ind.icon}</span>
-                        <span>{t.status}</span>
+                        {ind.badgeClass === "badge-announcing" ? (
+                          <span
+                            className="spinner"
+                            style={{
+                              display: "inline-block",
+                              width: "0.75rem",
+                              height: "0.75rem",
+                              border: "2px solid rgba(56, 189, 248, 0.3)",
+                              borderTopColor: "#38bdf8",
+                              borderRadius: "50%",
+                              animation: "spin 0.6s linear infinite",
+                            }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: "0.85em" }}>{ind.icon}</span>
+                        )}
+                        <span>{formatTrackerStatus(t.status)}</span>
                       </span>
                     </td>
                     <td>{t.seeders}</td>

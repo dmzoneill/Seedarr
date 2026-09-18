@@ -7,6 +7,10 @@ using Microsoft.AspNetCore.SignalR;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.SignalR;
 
@@ -181,5 +185,106 @@ public class MessageHub : Hub
         return CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(a),
             Encoding.UTF8.GetBytes(b));
+    }
+
+    public Task TrackerUpdated(object payload)
+    {
+        return Clients.All.SendAsync("trackerUpdated", payload);
+    }
+
+    public Task TrackerAnnounced(object payload)
+    {
+        return Clients.All.SendAsync("trackerAnnounced", payload);
+    }
+}
+
+public class TrackerSignalREventHandler : IHandle<TrackerAnnounceEvent>, IHandle<TrackerStatusChangedEvent>
+{
+    private readonly IHubContext<MessageHub> _hubContext;
+    private readonly Logger _logger;
+
+    public TrackerSignalREventHandler(IHubContext<MessageHub> hubContext)
+    {
+        _hubContext = hubContext;
+        _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public void Handle(TrackerAnnounceEvent message)
+    {
+        if (message == null || _hubContext == null)
+        {
+            return;
+        }
+
+        var status = message.Status != TrackerStatus.Unknown
+            ? message.Status.ToString()
+            : (message.IsSuccess ? TrackerStatus.Working.ToString() : TrackerStatus.Failed.ToString());
+
+        var payload = new
+        {
+            torrentId = message.Torrent?.Id ?? 0,
+            trackerId = message.TrackerId,
+            url = message.TrackerUrl,
+            status = status,
+            seeders = message.Seeders,
+            leechers = message.Leechers,
+            responseTimeMs = message.ResponseTimeMs,
+            errorMessage = message.ErrorMessage
+        };
+
+        BroadcastTrackerPayload(payload);
+    }
+
+    public void Handle(TrackerStatusChangedEvent message)
+    {
+        if (message == null || _hubContext == null)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            torrentId = message.Torrent?.Id ?? message.Tracker?.TorrentId ?? 0,
+            trackerId = message.Tracker?.Id ?? 0,
+            url = message.Tracker?.Url,
+            status = message.NewStatus.ToString(),
+            seeders = message.Tracker?.Seeders ?? 0,
+            leechers = message.Tracker?.Leechers ?? 0,
+            responseTimeMs = (long)(message.Tracker?.LastResponseTime ?? 0),
+            errorMessage = message.Tracker?.ErrorMessage
+        };
+
+        BroadcastTrackerPayload(payload);
+    }
+
+    private void BroadcastTrackerPayload(object payload)
+    {
+        try
+        {
+            _hubContext.Clients?.All?.SendAsync("trackerUpdated", payload)
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast trackerUpdated"), TaskContinuationOptions.OnlyOnFaulted);
+
+            _hubContext.Clients?.All?.SendAsync("trackerAnnounced", payload)
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast trackerAnnounced"), TaskContinuationOptions.OnlyOnFaulted);
+
+            _hubContext.Clients?.All?.SendAsync("TrackerUpdated", payload)
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast TrackerUpdated"), TaskContinuationOptions.OnlyOnFaulted);
+
+            _hubContext.Clients?.All?.SendAsync("TrackerAnnounced", payload)
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast TrackerAnnounced"), TaskContinuationOptions.OnlyOnFaulted);
+
+            var message = new SignalRMessage
+            {
+                Name = "TrackerUpdated",
+                Action = ModelAction.Updated,
+                Body = payload
+            };
+            _hubContext.Clients?.All?.SendAsync("receiveMessage", message)
+                ?.ContinueWith(t => _logger.Warn(t.Exception, "Failed to broadcast tracker receiveMessage"), TaskContinuationOptions.OnlyOnFaulted);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to broadcast tracker update over SignalR");
+        }
     }
 }

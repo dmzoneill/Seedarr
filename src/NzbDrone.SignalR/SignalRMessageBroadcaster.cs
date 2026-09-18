@@ -157,7 +157,22 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
             return "PieceBatchCompleted";
         }
 
-        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandStarted" or "CommandCompleted" or "TaskStarted" or "TaskCompleted" or "AutomationExecuted" or "AutomationTriggerEvaluated" or "PieceCompleted" or "PieceBatchCompleted")
+        if (string.Equals(message.Name, "Tracker", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "Trackers", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "TrackerUpdated", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "trackerUpdated", StringComparison.OrdinalIgnoreCase))
+        {
+            return "trackerUpdated";
+        }
+
+        if (string.Equals(message.Name, "TrackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "trackerAnnounced", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(message.Name, "TrackerAnnounceEvent", StringComparison.OrdinalIgnoreCase))
+        {
+            return "trackerAnnounced";
+        }
+
+        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandStarted" or "CommandCompleted" or "TaskStarted" or "TaskCompleted" or "AutomationExecuted" or "AutomationTriggerEvaluated" or "PieceCompleted" or "PieceBatchCompleted" or "TrackerUpdated" or "trackerUpdated" or "TrackerAnnounced" or "trackerAnnounced" or "TrackerAnnounceEvent")
         {
             return message.Name;
         }

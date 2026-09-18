@@ -1097,6 +1097,11 @@ body {
   color: #38bdf8;
 }
 
+.badge-announcing {
+  background-color: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+}
+
 .badge-queuedforchecking {
   background-color: rgba(245, 158, 11, 0.15);
   color: #f59e0b;
@@ -4582,4 +4587,13 @@ html[dir="rtl"] .topbar-getting-started {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border-width: 0;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }

@@ -351,9 +351,30 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             new() { entry.Url }
         };
 
+        var previousStatus = entry.Status;
+        entry.Status = TrackerStatus.Announcing;
+        _trackerEntryService.Update(entry);
+        _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, previousStatus, TrackerStatus.Announcing));
+
+        TrackerAnnounceResponse response;
         var sw = Stopwatch.StartNew();
-        var response = _multiTracker.Announce(request, announceList);
-        sw.Stop();
+        try
+        {
+            response = _multiTracker.Announce(request, announceList);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Exception announcing to {0}", entry.Url);
+            response = new TrackerAnnounceResponse
+            {
+                Success = false,
+                FailureReason = ex.Message
+            };
+        }
+        finally
+        {
+            sw.Stop();
+        }
 
         _trackerMetricService?.RecordAnnounce(
             entry.Url,
@@ -411,6 +432,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             _eventAggregator?.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Paused, $"Circuit breaker tripped: {warningText}"));
             _eventAggregator?.PublishEvent(new HealthIssueEvent(torrent, "TrackerSafety", $"Circuit breaker tripped on {entry.Url}: {warningText}", isResolved: false));
             _eventAggregator?.PublishEvent(new TrackerWarningEvent(torrent, entry.Url, warningText));
+            _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, TrackerStatus.Disabled));
 
             result.Success = false;
             result.FailureReason = $"Circuit breaker tripped: {warningText}";
@@ -436,6 +458,7 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
             entry.ErrorMessage = null;
             entry.WarningMessage = null;
             _trackerEntryService.Update(entry);
+            _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, TrackerStatus.Working));
 
             result.AnnounceInterval = interval;
             result.LastAnnouncedUploaded = request.Uploaded;
@@ -471,9 +494,10 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
                 $"Tracker announce failed: {entry.Url} -> {response.FailureReason ?? "Unreachable"} (failure #{entry.ConsecutiveFailures}, next retry in {(int)backoffSeconds}s)");
 
             _eventAggregator?.PublishEvent(new TrackerUnreachableEvent(torrent, entry.Url, response.FailureReason ?? "Unreachable"));
+            _eventAggregator?.PublishEvent(new TrackerStatusChangedEvent(torrent, entry, TrackerStatus.Announcing, TrackerStatus.Failed));
         }
 
-        _eventAggregator?.PublishEvent(new TrackerAnnounceEvent(torrent, entry.Url, response.Complete, response.Incomplete, response.Peers?.Count ?? 0, sw.ElapsedMilliseconds, response.Success, response.FailureReason));
+        _eventAggregator?.PublishEvent(new TrackerAnnounceEvent(torrent, entry.Url, response.Complete, response.Incomplete, response.Peers?.Count ?? 0, sw.ElapsedMilliseconds, response.Success, response.FailureReason, entry.Id, entry.Status));
 
         return result;
     }

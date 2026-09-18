@@ -5,6 +5,8 @@ using Microsoft.AspNetCore.SignalR;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Datastore;
+using NzbDrone.Core.Torrents;
+using NzbDrone.Core.Trackers;
 using NzbDrone.SignalR;
 
 namespace Seedarr.Http.Test.SignalR;
@@ -182,5 +184,56 @@ public class SignalRMessageBroadcasterTest
 
         _clientProxy.Received(1).SendCoreAsync("TaskStarted", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
         _clientProxy.Received(1).SendCoreAsync("TaskCompleted", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void BroadcastMessage_broadcasts_trackerUpdated_and_trackerAnnounced_events()
+    {
+        var updatedMsg = new SignalRMessage
+        {
+            Name = "TrackerUpdated",
+            Action = ModelAction.Updated,
+            Body = new { TorrentId = 1, TrackerId = 2, Url = "http://tracker.org/announce", Status = "Working" }
+        };
+
+        var announcedMsg = new SignalRMessage
+        {
+            Name = "TrackerAnnounced",
+            Action = ModelAction.Updated,
+            Body = new { TorrentId = 1, TrackerId = 2, Url = "http://tracker.org/announce", Status = "Working" }
+        };
+
+        _broadcaster.BroadcastMessage(updatedMsg);
+        _broadcaster.BroadcastMessage(announcedMsg);
+
+        _clientProxy.Received(1).SendCoreAsync("trackerUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        _clientProxy.Received(1).SendCoreAsync("trackerAnnounced", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void TrackerSignalREventHandler_handles_TrackerAnnounceEvent_and_broadcasts()
+    {
+        var handler = new TrackerSignalREventHandler(_hubContext);
+        var torrent = new Torrent { Id = 10, Name = "Test Torrent" };
+        var announceEvent = new TrackerAnnounceEvent(torrent, "http://tr.com/announce", 25, 5, 30, 150, true, null, 7, TrackerStatus.Working);
+
+        handler.Handle(announceEvent);
+
+        _clientProxy.Received(1).SendCoreAsync("trackerUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        _clientProxy.Received(1).SendCoreAsync("trackerAnnounced", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public void TrackerSignalREventHandler_handles_TrackerStatusChangedEvent_and_broadcasts()
+    {
+        var handler = new TrackerSignalREventHandler(_hubContext);
+        var torrent = new Torrent { Id = 11, Name = "Test Torrent 2" };
+        var tracker = new TrackerEntry { Id = 8, TorrentId = 11, Url = "http://tr.com/announce", Status = TrackerStatus.Announcing };
+        var statusEvent = new TrackerStatusChangedEvent(torrent, tracker, TrackerStatus.Unknown, TrackerStatus.Announcing);
+
+        handler.Handle(statusEvent);
+
+        _clientProxy.Received(1).SendCoreAsync("trackerUpdated", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
+        _clientProxy.Received(1).SendCoreAsync("trackerAnnounced", Arg.Any<object[]>(), Arg.Any<CancellationToken>());
     }
 }
