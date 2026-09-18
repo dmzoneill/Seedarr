@@ -208,8 +208,32 @@ public class DbFactoryTest
 
         Assert.That(result, Does.Contain("Default Timeout=30"));
         Assert.That(result, Does.Contain("Foreign Keys=True"));
-        Assert.That(result, Does.Contain("Cache=Shared"));
+        Assert.That(result, Does.Not.Contain("Cache=Shared"));
         Assert.That(result, Does.Not.Contain("Busy Timeout"));
+    }
+
+    [Test]
+    public void CleanSqliteConnectionString_strips_cache_shared_when_present()
+    {
+        var input = "Data Source=seedarr.db;Cache=Shared;Foreign Keys=True;";
+        var result = DbFactory.CleanSqliteConnectionString(input);
+
+        Assert.That(result, Does.Not.Contain("Cache=Shared"));
+        Assert.That(result, Does.Contain("Data Source=seedarr.db"));
+        Assert.That(result, Does.Contain("Foreign Keys=True"));
+        Assert.That(result, Does.Contain("Default Timeout=30"));
+    }
+
+    [Test]
+    public void CleanSqliteConnectionString_strips_cache_shared_without_trailing_semicolon()
+    {
+        var input = "Data Source=seedarr.db;Cache=Shared";
+        var result = DbFactory.CleanSqliteConnectionString(input);
+
+        Assert.That(result, Does.Not.Contain("Cache=Shared"));
+        Assert.That(result, Does.Contain("Data Source=seedarr.db"));
+        Assert.That(result, Does.Contain("Foreign Keys=True"));
+        Assert.That(result, Does.Contain("Default Timeout=30"));
     }
 
     [Test]
