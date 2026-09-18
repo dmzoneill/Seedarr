@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSeedingConfig, useSaveSeedingConfig } from "../../api/hooks";
 import { formatBytes } from "../../utils/formatters";
+import type { SeedingConfig } from "../../api/types";
 
 export function BandwidthCard() {
   const { data: config, isLoading } = useSeedingConfig();
@@ -12,34 +13,113 @@ export function BandwidthCard() {
 
   useEffect(() => {
     if (config) {
-      setDownloadLimit(config.maxDownloadSpeedKbps ?? 0);
-      setUploadLimit(config.maxUploadSpeedKbps ?? 0);
-      setTurtleMode(config.alternativeSpeedEnabled ?? false);
+      const isTurtle = config.alternativeSpeedEnabled ?? false;
+      setTurtleMode(isTurtle);
+      setDownloadLimit(
+        isTurtle
+          ? (config.altDownloadSpeedKbps ?? 0)
+          : (config.maxDownloadSpeedKbps ?? 0),
+      );
+      setUploadLimit(
+        isTurtle
+          ? (config.altUploadSpeedKbps ?? 0)
+          : (config.maxUploadSpeedKbps ?? 0),
+      );
     }
   }, [config]);
 
-  const handleUpdate = (
-    updates: Partial<{
-      maxDownloadSpeedKbps: number;
-      maxUploadSpeedKbps: number;
-      alternativeSpeedEnabled: boolean;
-    }>,
-  ) => {
+  const handleUpdate = (updates: Partial<SeedingConfig>) => {
     if (!config) return;
-    const newConfig = {
+    const newConfig: SeedingConfig = {
       ...config,
       ...updates,
     };
-    if (updates.maxDownloadSpeedKbps !== undefined) {
-      setDownloadLimit(updates.maxDownloadSpeedKbps);
-    }
-    if (updates.maxUploadSpeedKbps !== undefined) {
-      setUploadLimit(updates.maxUploadSpeedKbps);
+    if (turtleMode) {
+      if (updates.altDownloadSpeedKbps !== undefined) {
+        setDownloadLimit(updates.altDownloadSpeedKbps);
+      }
+      if (updates.altUploadSpeedKbps !== undefined) {
+        setUploadLimit(updates.altUploadSpeedKbps);
+      }
+    } else {
+      if (updates.maxDownloadSpeedKbps !== undefined) {
+        setDownloadLimit(updates.maxDownloadSpeedKbps);
+      }
+      if (updates.maxUploadSpeedKbps !== undefined) {
+        setUploadLimit(updates.maxUploadSpeedKbps);
+      }
     }
     if (updates.alternativeSpeedEnabled !== undefined) {
       setTurtleMode(updates.alternativeSpeedEnabled);
     }
     save.mutate(newConfig);
+  };
+
+  const handleToggleTurtle = () => {
+    if (!config) return;
+    const nextTurtle = !turtleMode;
+    setTurtleMode(nextTurtle);
+    const nextDl = nextTurtle
+      ? (config.altDownloadSpeedKbps ?? 0)
+      : (config.maxDownloadSpeedKbps ?? 0);
+    const nextUl = nextTurtle
+      ? (config.altUploadSpeedKbps ?? 0)
+      : (config.maxUploadSpeedKbps ?? 0);
+    setDownloadLimit(nextDl);
+    setUploadLimit(nextUl);
+    handleUpdate({ alternativeSpeedEnabled: nextTurtle });
+  };
+
+  const commitDownload = (val?: number) => {
+    const valueToCommit = val !== undefined ? val : downloadLimit;
+    if (val !== undefined) {
+      setDownloadLimit(val);
+    }
+    const currentVal = turtleMode
+      ? config?.altDownloadSpeedKbps
+      : config?.maxDownloadSpeedKbps;
+    if (currentVal === valueToCommit) {
+      return;
+    }
+    if (turtleMode) {
+      handleUpdate({ altDownloadSpeedKbps: valueToCommit });
+    } else {
+      handleUpdate({ maxDownloadSpeedKbps: valueToCommit });
+    }
+  };
+
+  const commitUpload = (val?: number) => {
+    const valueToCommit = val !== undefined ? val : uploadLimit;
+    if (val !== undefined) {
+      setUploadLimit(val);
+    }
+    const currentVal = turtleMode
+      ? config?.altUploadSpeedKbps
+      : config?.maxUploadSpeedKbps;
+    if (currentVal === valueToCommit) {
+      return;
+    }
+    if (turtleMode) {
+      handleUpdate({ altUploadSpeedKbps: valueToCommit });
+    } else {
+      handleUpdate({ maxUploadSpeedKbps: valueToCommit });
+    }
+  };
+
+  const handlePresetClick = (dl: number, ul: number) => {
+    setDownloadLimit(dl);
+    setUploadLimit(ul);
+    if (turtleMode) {
+      handleUpdate({
+        altDownloadSpeedKbps: dl,
+        altUploadSpeedKbps: ul,
+      });
+    } else {
+      handleUpdate({
+        maxDownloadSpeedKbps: dl,
+        maxUploadSpeedKbps: ul,
+      });
+    }
   };
 
   const formatLimit = (kbps: number) => {
@@ -75,7 +155,7 @@ export function BandwidthCard() {
         <button
           type="button"
           className={`quick-settings-turtle-btn ${turtleMode ? "active" : ""}`}
-          onClick={() => handleUpdate({ alternativeSpeedEnabled: !turtleMode })}
+          onClick={handleToggleTurtle}
           title="Toggle Turtle Mode (Alternative Rate Limits)"
         >
           🐢 {turtleMode ? "Turtle ON" : "Turtle Mode"}
@@ -99,24 +179,23 @@ export function BandwidthCard() {
             step={100}
             value={downloadLimit}
             onChange={(e) => setDownloadLimit(Number(e.target.value))}
-            onMouseUp={() =>
-              handleUpdate({ maxDownloadSpeedKbps: downloadLimit })
-            }
-            onTouchEnd={() =>
-              handleUpdate({ maxDownloadSpeedKbps: downloadLimit })
-            }
+            onMouseUp={() => commitDownload()}
+            onTouchEnd={() => commitDownload()}
+            onKeyUp={() => commitDownload()}
+            onBlur={() => commitDownload()}
+            aria-label="Max Download Speed"
           />
           <div className="quick-settings-slider-ticks">
-            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 0 })}>
+            <span onClick={() => commitDownload(0)}>
               0 (∞)
             </span>
-            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 1250 })}>
+            <span onClick={() => commitDownload(1250)}>
               1.2M
             </span>
-            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 10240 })}>
+            <span onClick={() => commitDownload(10240)}>
               10M
             </span>
-            <span onClick={() => handleUpdate({ maxDownloadSpeedKbps: 50000 })}>
+            <span onClick={() => commitDownload(50000)}>
               50M
             </span>
           </div>
@@ -138,20 +217,23 @@ export function BandwidthCard() {
             step={50}
             value={uploadLimit}
             onChange={(e) => setUploadLimit(Number(e.target.value))}
-            onMouseUp={() => handleUpdate({ maxUploadSpeedKbps: uploadLimit })}
-            onTouchEnd={() => handleUpdate({ maxUploadSpeedKbps: uploadLimit })}
+            onMouseUp={() => commitUpload()}
+            onTouchEnd={() => commitUpload()}
+            onKeyUp={() => commitUpload()}
+            onBlur={() => commitUpload()}
+            aria-label="Max Upload Speed"
           />
           <div className="quick-settings-slider-ticks">
-            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 0 })}>
+            <span onClick={() => commitUpload(0)}>
               0 (∞)
             </span>
-            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 625 })}>
+            <span onClick={() => commitUpload(625)}>
               625K
             </span>
-            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 5120 })}>
+            <span onClick={() => commitUpload(5120)}>
               5M
             </span>
-            <span onClick={() => handleUpdate({ maxUploadSpeedKbps: 50000 })}>
+            <span onClick={() => commitUpload(50000)}>
               50M
             </span>
           </div>
@@ -170,12 +252,7 @@ export function BandwidthCard() {
                     ? "selected"
                     : ""
                 }`}
-                onClick={() =>
-                  handleUpdate({
-                    maxDownloadSpeedKbps: p.dl,
-                    maxUploadSpeedKbps: p.ul,
-                  })
-                }
+                onClick={() => handlePresetClick(p.dl, p.ul)}
               >
                 {p.label}
               </button>
