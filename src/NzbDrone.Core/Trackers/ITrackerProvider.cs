@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NzbDrone.Core.ThingiProvider;
 
 namespace NzbDrone.Core.Trackers;
@@ -6,4 +7,5 @@ public interface ITrackerProvider : IProvider
 {
     TrackerAnnounceResponse Announce(TrackerAnnounceRequest request);
     TrackerScrapeResponse Scrape(string infoHash, string trackerUrl);
+    Dictionary<string, TrackerScrapeResponse> BatchScrape(IEnumerable<string> infoHashes, string trackerUrl);
 }

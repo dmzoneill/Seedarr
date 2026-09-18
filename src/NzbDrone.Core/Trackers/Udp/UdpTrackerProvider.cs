@@ -1,5 +1,7 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
@@ -19,6 +21,7 @@ public class UdpTrackerProvider : ITrackerProvider
     private const int ActionScrape = 2;
     private const int ActionError = 3;
     public const int DefaultMaxRetries = 4;
+    public const int MaxScrapeHashesPerBatch = 74;
 
     private readonly IConfigService _configService;
     private readonly Logger _logger;
@@ -179,57 +182,126 @@ public class UdpTrackerProvider : ITrackerProvider
             var connectionId = await ConnectAsync(client, cancellationToken);
             var transactionId = GenerateTransactionId();
 
-            var hashBytes = Convert.FromHexString(infoHash);
-            var packet = new byte[36];
-            WriteInt64BigEndian(packet, 0, connectionId);
-            WriteInt32BigEndian(packet, 8, ActionScrape);
-            WriteInt32BigEndian(packet, 12, transactionId);
-            Array.Copy(hashBytes, 0, packet, 16, 20);
+            var packet = BuildScrapePacket(connectionId, transactionId, new[] { infoHash });
 
             var receiveResult = await SendAndReceiveAsync(client, packet, transactionId, cancellationToken);
             var response = receiveResult.Buffer;
 
-            if (response.Length >= 8)
-            {
-                var responseAction = ReadInt32BigEndian(response, 0);
-                if (responseAction == ActionError)
-                {
-                    var errorReason = ParseErrorMessage(response);
-                    return new TrackerScrapeResponse { Success = false, FailureReason = errorReason };
-                }
-            }
-
-            if (response.Length < 20)
-            {
-                return new TrackerScrapeResponse { Success = false, FailureReason = "Response too short" };
-            }
-
-            var scrapeResponseAction = ReadInt32BigEndian(response, 0);
-            var scrapeResponseTxId = ReadInt32BigEndian(response, 4);
-
-            if (scrapeResponseAction != ActionScrape)
-            {
-                return new TrackerScrapeResponse { Success = false, FailureReason = $"Unexpected scrape response action: {scrapeResponseAction}" };
-            }
-
-            if (scrapeResponseTxId != transactionId)
-            {
-                return new TrackerScrapeResponse { Success = false, FailureReason = "Scrape response transaction ID mismatch" };
-            }
-
-            return new TrackerScrapeResponse
-            {
-                Success = true,
-                Complete = ReadInt32BigEndian(response, 8),
-                Downloaded = ReadInt32BigEndian(response, 12),
-                Incomplete = ReadInt32BigEndian(response, 16)
-            };
+            var results = ParseScrapeResponse(response, transactionId, new[] { infoHash });
+            return results.TryGetValue(infoHash, out var scrapeResponse)
+                ? scrapeResponse
+                : new TrackerScrapeResponse { Success = false, FailureReason = "Unknown scrape error" };
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "UDP scrape failed for {0}", trackerUrl);
             return new TrackerScrapeResponse { Success = false, FailureReason = ex.Message };
         }
+    }
+
+    public Dictionary<string, TrackerScrapeResponse> BatchScrape(IEnumerable<string> infoHashes, string trackerUrl)
+    {
+        return BatchScrapeAsync(infoHashes, trackerUrl).GetAwaiter().GetResult();
+    }
+
+    public async Task<Dictionary<string, TrackerScrapeResponse>> BatchScrapeAsync(
+        IEnumerable<string> infoHashes,
+        string trackerUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new Dictionary<string, TrackerScrapeResponse>(StringComparer.OrdinalIgnoreCase);
+        if (infoHashes == null)
+        {
+            return result;
+        }
+
+        var hashList = new List<string>();
+        foreach (var hash in infoHashes)
+        {
+            if (string.IsNullOrWhiteSpace(hash))
+            {
+                continue;
+            }
+
+            var trimmed = hash.Trim();
+            if (trimmed.Length != 40 || !IsHexString(trimmed))
+            {
+                result[trimmed] = new TrackerScrapeResponse
+                {
+                    Success = false,
+                    FailureReason = "Invalid info_hash"
+                };
+                continue;
+            }
+
+            if (!hashList.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
+            {
+                hashList.Add(trimmed);
+            }
+        }
+
+        if (hashList.Count == 0)
+        {
+            return result;
+        }
+
+        try
+        {
+            var timeoutMs = _configService.UdpTrackerTimeoutSeconds * 1000;
+            var uri = new Uri(trackerUrl);
+            using var client = CreateClient(timeoutMs);
+
+            client.Connect(uri.Host, uri.Port);
+
+            var connectionId = await ConnectAsync(client, cancellationToken);
+
+            for (var i = 0; i < hashList.Count; i += MaxScrapeHashesPerBatch)
+            {
+                var batch = hashList.Skip(i).Take(MaxScrapeHashesPerBatch).ToList();
+                try
+                {
+                    var transactionId = GenerateTransactionId();
+                    var packet = BuildScrapePacket(connectionId, transactionId, batch);
+
+                    var receiveResult = await SendAndReceiveAsync(client, packet, transactionId, cancellationToken);
+                    var batchResponses = ParseScrapeResponse(receiveResult.Buffer, transactionId, batch);
+
+                    foreach (var kvp in batchResponses)
+                    {
+                        result[kvp.Key] = kvp.Value;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex, "UDP batch scrape chunk failed for {0}", trackerUrl);
+                    foreach (var hash in batch)
+                    {
+                        result[hash] = new TrackerScrapeResponse
+                        {
+                            Success = false,
+                            FailureReason = ex.Message
+                        };
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "UDP batch scrape failed for {0}", trackerUrl);
+            foreach (var hash in hashList)
+            {
+                if (!result.ContainsKey(hash))
+                {
+                    result[hash] = new TrackerScrapeResponse
+                    {
+                        Success = false,
+                        FailureReason = ex.Message
+                    };
+                }
+            }
+        }
+
+        return result;
     }
 
     internal virtual async Task<long> ConnectAsync(UdpClient client, CancellationToken cancellationToken = default)
@@ -426,5 +498,124 @@ public class UdpTrackerProvider : ITrackerProvider
         }
 
         return string.IsNullOrWhiteSpace(message) ? "Unknown error" : message;
+    }
+
+    internal static byte[] BuildScrapePacket(long connectionId, int transactionId, IReadOnlyList<string> infoHashes)
+    {
+        if (infoHashes == null || infoHashes.Count == 0)
+        {
+            throw new ArgumentException("At least one info_hash is required to build a scrape packet", nameof(infoHashes));
+        }
+
+        var packet = new byte[16 + (20 * infoHashes.Count)];
+        WriteInt64BigEndian(packet, 0, connectionId);
+        WriteInt32BigEndian(packet, 8, ActionScrape);
+        WriteInt32BigEndian(packet, 12, transactionId);
+
+        for (var i = 0; i < infoHashes.Count; i++)
+        {
+            var hashBytes = Convert.FromHexString(infoHashes[i]);
+            if (hashBytes.Length != 20)
+            {
+                throw new ArgumentException($"Info-hash at index {i} must be 20 bytes (40 hex characters)", nameof(infoHashes));
+            }
+
+            Array.Copy(hashBytes, 0, packet, 16 + (20 * i), 20);
+        }
+
+        return packet;
+    }
+
+    internal static Dictionary<string, TrackerScrapeResponse> ParseScrapeResponse(
+        byte[] response,
+        int transactionId,
+        IReadOnlyList<string> infoHashes)
+    {
+        var result = new Dictionary<string, TrackerScrapeResponse>(StringComparer.OrdinalIgnoreCase);
+        if (infoHashes == null || infoHashes.Count == 0)
+        {
+            return result;
+        }
+
+        if (response == null || response.Length < 8)
+        {
+            foreach (var hash in infoHashes)
+            {
+                result[hash] = new TrackerScrapeResponse { Success = false, FailureReason = "Response too short" };
+            }
+
+            return result;
+        }
+
+        var action = ReadInt32BigEndian(response, 0);
+        if (action == ActionError)
+        {
+            var errorReason = ParseErrorMessage(response);
+            foreach (var hash in infoHashes)
+            {
+                result[hash] = new TrackerScrapeResponse { Success = false, FailureReason = errorReason };
+            }
+
+            return result;
+        }
+
+        if (action != ActionScrape)
+        {
+            foreach (var hash in infoHashes)
+            {
+                result[hash] = new TrackerScrapeResponse { Success = false, FailureReason = $"Unexpected scrape response action: {action}" };
+            }
+
+            return result;
+        }
+
+        var responseTxId = ReadInt32BigEndian(response, 4);
+        if (responseTxId != transactionId)
+        {
+            foreach (var hash in infoHashes)
+            {
+                result[hash] = new TrackerScrapeResponse { Success = false, FailureReason = "Scrape response transaction ID mismatch" };
+            }
+
+            return result;
+        }
+
+        var expectedMinLength = 8 + (12 * infoHashes.Count);
+        if (response.Length < expectedMinLength)
+        {
+            foreach (var hash in infoHashes)
+            {
+                result[hash] = new TrackerScrapeResponse { Success = false, FailureReason = "Response too short" };
+            }
+
+            return result;
+        }
+
+        for (var i = 0; i < infoHashes.Count; i++)
+        {
+            var baseOffset = 8 + (12 * i);
+            result[infoHashes[i]] = new TrackerScrapeResponse
+            {
+                Success = true,
+                Complete = ReadInt32BigEndian(response, baseOffset),
+                Downloaded = ReadInt32BigEndian(response, baseOffset + 4),
+                Incomplete = ReadInt32BigEndian(response, baseOffset + 8)
+            };
+        }
+
+        return result;
+    }
+
+    private static bool IsHexString(string s)
+    {
+        foreach (var c in s)
+        {
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
