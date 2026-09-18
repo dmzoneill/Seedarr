@@ -33,9 +33,10 @@ public class GatewayDiscoveryServiceTests
     [Test]
     public void ParseRouteTable_should_parse_valid_hex_gateway()
     {
-        var routeContent = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n" +
-                           "wlp9s0f0\t00000000\tFE01A8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n" +
-                           "virbr1\t000A0A0A\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0\n";
+        var routeContent =
+            "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n" +
+            "wlp9s0f0\t00000000\tFE01A8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n" +
+            "virbr1\t000A0A0A\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0\n";
 
         var gateway = GatewayDiscoveryService.ParseRouteTable(routeContent);
 
@@ -46,9 +47,10 @@ public class GatewayDiscoveryServiceTests
     [Test]
     public void ParseRouteTable_should_select_default_route_ignoring_non_default_routes()
     {
-        var routeContent = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n" +
-                           "eth0\t0001A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n" +
-                           "eth0\t00000000\t010010AC\t0003\t0\t0\t100\t00000000\t0\t0\t0\n";
+        var routeContent =
+            "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n" +
+            "eth0\t0001A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n" +
+            "eth0\t00000000\t010010AC\t0003\t0\t0\t100\t00000000\t0\t0\t0\n";
 
         var gateway = GatewayDiscoveryService.ParseRouteTable(routeContent);
 
@@ -59,9 +61,10 @@ public class GatewayDiscoveryServiceTests
     [Test]
     public void ParseRouteTable_should_select_default_route_with_lowest_metric()
     {
-        var routeContent = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n" +
-                           "wlan0\t00000000\tFE01A8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n" +
-                           "eth0\t00000000\t0101A8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n";
+        var routeContent =
+            "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n" +
+            "wlan0\t00000000\tFE01A8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n" +
+            "eth0\t00000000\t0101A8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n";
 
         var gateway = GatewayDiscoveryService.ParseRouteTable(routeContent);
 
@@ -72,8 +75,9 @@ public class GatewayDiscoveryServiceTests
     [Test]
     public void ParseRouteTable_should_ignore_destination_00000000_with_gateway_00000000()
     {
-        var routeContent = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n" +
-                           "eth0\t00000000\t00000000\t0001\t0\t0\t0\t00000000\t0\t0\t0\n";
+        var routeContent =
+            "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n" +
+            "eth0\t00000000\t00000000\t0001\t0\t0\t0\t00000000\t0\t0\t0\n";
 
         var gateway = GatewayDiscoveryService.ParseRouteTable(routeContent);
 
@@ -91,9 +95,10 @@ public class GatewayDiscoveryServiceTests
     [Test]
     public void ParseRouteTable_should_return_null_when_no_default_route_exists()
     {
-        var routeContent = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n" +
-                           "virbr1\t000A0A0A\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0\n" +
-                           "virbr0\t007AA8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0\n";
+        var routeContent =
+            "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n" +
+            "virbr1\t000A0A0A\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0\n" +
+            "virbr0\t007AA8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0\n";
 
         var gateway = GatewayDiscoveryService.ParseRouteTable(routeContent);
 
