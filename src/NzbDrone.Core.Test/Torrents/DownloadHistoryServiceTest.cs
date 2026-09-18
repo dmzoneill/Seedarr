@@ -472,5 +472,29 @@ namespace NzbDrone.Core.Test.Torrents
             Assert.That(entry.DataJson, Does.Contain("errorMessage"));
             _historyRepository.Received(1).Update(entry);
         }
+
+        [Test]
+        public void PruneHistory_should_call_repository_DeleteOlderThan_with_calculated_cutoff()
+        {
+            var retentionDays = 30;
+            _historyRepository.DeleteOlderThan(Arg.Any<DateTime>()).Returns(5);
+
+            var before = DateTime.UtcNow.AddDays(-retentionDays);
+            var pruned = _subject.PruneHistory(retentionDays);
+            var after = DateTime.UtcNow.AddDays(-retentionDays);
+
+            Assert.That(pruned, Is.EqualTo(5));
+            _historyRepository.Received(1).DeleteOlderThan(Arg.Is<DateTime>(d => d >= before.AddSeconds(-2) && d <= after.AddSeconds(2)));
+        }
+
+        [TestCase(0)]
+        [TestCase(-1)]
+        public void PruneHistory_when_retention_days_is_zero_or_negative_should_return_zero_and_not_call_repository(int retentionDays)
+        {
+            var pruned = _subject.PruneHistory(retentionDays);
+
+            Assert.That(pruned, Is.EqualTo(0));
+            _historyRepository.DidNotReceive().DeleteOlderThan(Arg.Any<DateTime>());
+        }
     }
 }

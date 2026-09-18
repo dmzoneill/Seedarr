@@ -116,7 +116,12 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
                     $@"DELETE FROM ""{_table}""
                        WHERE ""Id"" IN (
                            SELECT ""Id"" FROM ""{_table}""
-                           WHERE ""DateAdded"" < @Cutoff AND ""DateRemoved"" IS NOT NULL
+                           WHERE ""DateAdded"" < @Cutoff
+                             AND (""Status"" IS NULL OR LOWER(""Status"") NOT IN ('active', 'seeding'))
+                             AND (
+                                 (""DateRemoved"" IS NOT NULL AND ""DateRemoved"" < @Cutoff)
+                                 OR (""DateRemoved"" IS NULL AND (""TorrentId"" IS NULL OR LOWER(""Status"") IN ('removed', 'inactive')))
+                             )
                            LIMIT 500
                        )",
                     new { Cutoff = cutoffDate });
