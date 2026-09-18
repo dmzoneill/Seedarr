@@ -18,4 +18,12 @@ public class UpdateStatusResource
     public string BackupDirectory { get; set; }
 
     public string ErrorMessage { get; set; }
+
+    public string Mechanism { get; set; }
+
+    public string PackageUrl { get; set; }
+
+    public string PackageFileName { get; set; }
+
+    public string ReleaseChannel { get; set; }
 }

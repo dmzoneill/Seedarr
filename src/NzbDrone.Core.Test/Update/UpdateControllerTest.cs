@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Update;
 using Seedarr.Api.V1.Update;
 
@@ -310,5 +311,66 @@ public class UpdateControllerTest
         Assert.That(status, Is.Not.Null);
         Assert.That(status.State, Is.EqualTo(UpdateLifecycleState.RolledBack));
         Assert.That(status.ErrorMessage, Is.EqualTo("Health check failed: DB corrupted"));
+    }
+
+    [Test]
+    public async Task GetUpdates_should_populate_mechanism_and_package_info()
+    {
+        var packageProvider = new UpdatePackageProvider(platformOverride: "linux-x64", isDockerOverride: true);
+        var controller = new UpdateController(_updateService, _postUpdateVerificationService, packageProvider);
+
+        var updateInfo = new UpdateInfo
+        {
+            CurrentVersion = "1.0.0",
+            LatestVersion = "2.0.0",
+            UpdateAvailable = true,
+            Releases = new List<ReleaseInfo>
+            {
+                new()
+                {
+                    Version = "2.0.0",
+                    PublishedAt = DateTime.UtcNow,
+                    Body = "notes",
+                    Assets = new List<ReleaseAsset>
+                    {
+                        new("seedarr-linux-x64.tar.gz", "https://github.com/test/seedarr-linux-x64.tar.gz", 50000000),
+                        new("seedarr-linux-x64.tar.gz.sha256", "https://github.com/test/seedarr-linux-x64.tar.gz.sha256", 64),
+                    },
+                },
+            },
+        };
+
+        _updateService.CheckForUpdateAsync(false, Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult(updateInfo));
+
+        var actionResult = await controller.GetUpdates();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var results = okResult.Value as List<UpdateResource>;
+        Assert.That(results, Is.Not.Null);
+        Assert.That(results[0].Mechanism, Is.EqualTo("Docker"));
+        Assert.That(results[0].PackageUrl, Is.EqualTo("https://github.com/test/seedarr-linux-x64.tar.gz"));
+        Assert.That(results[0].PackageFileName, Is.EqualTo("seedarr-linux-x64.tar.gz"));
+        Assert.That(results[0].ReleaseChannel, Is.EqualTo("main"));
+    }
+
+    [Test]
+    public void GetStatus_should_populate_mechanism_and_release_channel()
+    {
+        var packageProvider = new UpdatePackageProvider(isDockerOverride: true);
+        var configService = Substitute.For<IConfigService>();
+        configService.UpdateBranch.Returns("develop");
+
+        var controller = new UpdateController(_updateService, _postUpdateVerificationService, packageProvider, configService);
+
+        var actionResult = controller.GetStatus();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var status = okResult.Value as UpdateStatusResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.Mechanism, Is.EqualTo("Docker"));
+        Assert.That(status.ReleaseChannel, Is.EqualTo("develop"));
     }
 }

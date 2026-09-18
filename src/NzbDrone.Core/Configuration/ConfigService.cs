@@ -244,6 +244,9 @@ public interface IConfigService
     // Backup
     int BackupRetentionDays { get; set; }
     int MaxBackups { get; set; }
+
+    // Update
+    string UpdateBranch { get; set; }
 }
 
 public class ConfigModel : ModelBase
@@ -663,6 +666,13 @@ public class ConfigService : IConfigService
     {
         get => GetValueInt("MaxBackups", 10);
         set => SaveConfigDictionary(new Dictionary<string, object> { { "MaxBackups", value } });
+    }
+
+    // Update
+    public string UpdateBranch
+    {
+        get => GetValue("UpdateBranch", "main");
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "UpdateBranch", value } });
     }
 }
 
