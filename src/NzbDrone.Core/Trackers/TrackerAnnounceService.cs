@@ -557,15 +557,15 @@ public class TrackerAnnounceService : ITrackerAnnounceService,
 
         var text = message.ToLowerInvariant();
         return text.Contains("unrealistic") ||
-               text.Contains("anti-cheat") ||
-               text.Contains("anticheat") ||
-               text.Contains("speed throttled") ||
-               text.Contains("throttled") ||
-               text.Contains("ratio review") ||
-               text.Contains("flagged") ||
-               text.Contains("banned") ||
-               text.Contains("blacklisted") ||
-               text.Contains("cheat");
+            text.Contains("anti-cheat") ||
+            text.Contains("anticheat") ||
+            text.Contains("speed throttled") ||
+            text.Contains("throttled") ||
+            text.Contains("ratio review") ||
+            text.Contains("flagged") ||
+            text.Contains("banned") ||
+            text.Contains("blacklisted") ||
+            text.Contains("cheat");
     }
 
     public void Handle(TorrentFinishedEvent message)
