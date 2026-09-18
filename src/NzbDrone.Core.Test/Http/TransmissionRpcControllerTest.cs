@@ -854,6 +854,46 @@ public class TransmissionRpcControllerTest
     }
 
     [Test]
+    public async Task HandleRpc_TorrentSet_Persists_PriorityNormal()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Transmission Test Normal Prio",
+            InfoHash = "1122334455667788990011223344556677889900",
+        };
+
+        var file = new TorrentFile
+        {
+            Id = 101,
+            TorrentId = 1,
+            Path = "file1.mkv",
+            Size = 6000,
+            Wanted = true,
+            Priority = 1,
+        };
+
+        _torrentService.Get(1).Returns(torrent);
+        _torrentFileService.GetByTorrentId(1).Returns(new List<TorrentFile> { file });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-set",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[1]").RootElement,
+                ["priority-normal"] = JsonDocument.Parse("[0]").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+
+        Assert.That(file.Priority, Is.EqualTo(0));
+        _torrentFileService.Received(1).Update(file);
+    }
+
+    [Test]
     public async Task HandleRpc_FreeSpace_Returns_Drive_FreeSpace()
     {
         var request = new TransmissionRpcRequest

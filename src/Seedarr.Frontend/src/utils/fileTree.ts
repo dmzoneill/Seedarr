@@ -20,11 +20,14 @@ export interface FileTreeNode {
   fileIndex?: number;
   priority?: FilePriority;
   progress?: number;
+  wanted?: boolean;
+  bytesCompleted?: number;
   cascadePriority?: (priority: FilePriority) => void;
 }
 
 export interface BuildFileTreeOptions {
   priorities?: Record<number, FilePriority>;
+  wanted?: Record<number, boolean>;
   progress?: Record<number, number> | number;
   defaultPriority?: FilePriority;
 }
@@ -69,15 +72,29 @@ export function buildFileTree(
         const priority = isLast
           ? (fileId !== undefined && options?.priorities?.[fileId] !== undefined
               ? options.priorities[fileId]
-              : defaultPriority)
+              : (file.wanted === false || file.priority === 0
+                  ? "Do Not Download"
+                  : (file.priority === 6 || file.priority === 7 || file.priority === 2
+                      ? "High"
+                      : defaultPriority)))
           : defaultPriority;
+
+        const wanted = isLast
+          ? (fileId !== undefined && options?.wanted?.[fileId] !== undefined
+              ? options.wanted[fileId]
+              : (file.wanted !== undefined
+                  ? file.wanted
+                  : formatPriority(priority) !== "Do Not Download"))
+          : true;
 
         let nodeProgress: number | undefined = undefined;
         if (isLast) {
-          if (typeof options?.progress === "number") {
-            nodeProgress = options.progress;
-          } else if (fileId !== undefined && options?.progress?.[fileId] !== undefined) {
+          if (file.bytesCompleted !== undefined && file.size !== undefined && file.size > 0) {
+            nodeProgress = Math.min(100, Math.max(0, (file.bytesCompleted / file.size) * 100));
+          } else if (fileId !== undefined && options?.progress && typeof options.progress !== "number" && options.progress[fileId] !== undefined) {
             nodeProgress = options.progress[fileId];
+          } else if (typeof options?.progress === "number") {
+            nodeProgress = options.progress;
           } else {
             nodeProgress = 100;
           }
@@ -93,6 +110,8 @@ export function buildFileTree(
           fileIndex: isLast ? fileIndex : undefined,
           priority,
           progress: nodeProgress,
+          wanted,
+          bytesCompleted: isLast ? file.bytesCompleted : undefined,
         };
 
         existing.cascadePriority = function (p: FilePriority) {
@@ -257,8 +276,38 @@ export function formatPriority(prio: FilePriority | string | undefined): string 
   if (str === "0" || str === "skip" || str === "do not download" || str === "skip all") {
     return "Do Not Download";
   }
-  if (str === "2" || str === "high") {
+  if (str === "2" || str === "6" || str === "7" || str === "high" || str === "max" || str === "maximal") {
     return "High";
   }
   return "Normal";
+}
+
+/**
+ * Calculates overall directory wanted status based on descendant files.
+ */
+export function getDirectoryWanted(
+  node: FileTreeNode,
+  wanted?: Record<number, boolean>,
+  priorities?: Record<number, FilePriority>,
+): { isWanted: boolean; isIndeterminate: boolean } {
+  const files = getDescendantFiles(node);
+  if (files.length === 0) return { isWanted: true, isIndeterminate: false };
+
+  let wantedCount = 0;
+  for (const f of files) {
+    let w: boolean;
+    if (f.fileId !== undefined && wanted?.[f.fileId] !== undefined) {
+      w = wanted[f.fileId];
+    } else if (f.fileId !== undefined && priorities?.[f.fileId] !== undefined) {
+      w = formatPriority(priorities[f.fileId]) !== "Do Not Download";
+    } else {
+      w = f.wanted ?? (formatPriority(f.priority) !== "Do Not Download");
+    }
+    if (w) wantedCount++;
+  }
+
+  return {
+    isWanted: wantedCount === files.length,
+    isIndeterminate: wantedCount > 0 && wantedCount < files.length,
+  };
 }

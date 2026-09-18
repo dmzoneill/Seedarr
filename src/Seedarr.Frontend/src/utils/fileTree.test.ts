@@ -7,6 +7,7 @@ import {
   getDescendantFileIds,
   getDescendantFiles,
   getDirectoryPriority,
+  getDirectoryWanted,
   formatPriority,
 } from "./fileTree";
 
@@ -164,5 +165,48 @@ describe("fileTree: buildFileTree and cascading priority", () => {
     assert.equal(formatPriority("normal"), "Normal");
     assert.equal(formatPriority(1), "Normal");
     assert.equal(formatPriority(undefined), "Normal");
+  });
+
+  it("should calculate per-file progress from bytesCompleted and size", () => {
+    const files = [
+      { id: 1, path: "Movie/video.mkv", size: 1000, bytesCompleted: 500 },
+      { id: 2, path: "Movie/sub.srt", size: 200, bytesCompleted: 200 },
+      { id: 3, path: "Movie/extra.mp4", size: 500, bytesCompleted: 0 },
+    ];
+
+    const tree = buildFileTree(files);
+    const movieDir = tree[0];
+    const videoNode = movieDir.children.find((c) => c.name === "video.mkv");
+    const subNode = movieDir.children.find((c) => c.name === "sub.srt");
+    const extraNode = movieDir.children.find((c) => c.name === "extra.mp4");
+
+    assert.equal(videoNode?.progress, 50);
+    assert.equal(subNode?.progress, 100);
+    assert.equal(extraNode?.progress, 0);
+  });
+
+  it("should calculate directory wanted state as wanted, unwanted, or indeterminate", () => {
+    const files = [
+      { id: 1, path: "Show/ep1.mkv", size: 1000, wanted: true },
+      { id: 2, path: "Show/ep2.mkv", size: 1000, wanted: true },
+    ];
+
+    const tree = buildFileTree(files);
+    const showDir = tree[0];
+
+    // All wanted
+    let state = getDirectoryWanted(showDir, { 1: true, 2: true });
+    assert.equal(state.isWanted, true);
+    assert.equal(state.isIndeterminate, false);
+
+    // Mixed / indeterminate
+    state = getDirectoryWanted(showDir, { 1: true, 2: false });
+    assert.equal(state.isWanted, false);
+    assert.equal(state.isIndeterminate, true);
+
+    // All unwanted
+    state = getDirectoryWanted(showDir, { 1: false, 2: false });
+    assert.equal(state.isWanted, false);
+    assert.equal(state.isIndeterminate, false);
   });
 });
