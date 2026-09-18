@@ -20,9 +20,39 @@ public class MainDatabase : IMainDatabase
     private readonly IDatabase _database;
     private readonly Logger _logger;
 
+    internal Action<string, string, bool> FileMoveAction { get; set; } = (source, destination, overwrite) => File.Move(source, destination, overwrite);
+    internal Action<string, string, bool> FileCopyAction { get; set; } = (source, destination, overwrite) => File.Copy(source, destination, overwrite);
+    internal Action<string> FileDeleteAction { get; set; } = path => File.Delete(path);
+
     public MainDatabase(IDbFactory dbFactory, IConnectionStringFactory connectionStringFactory, IAppFolderInfo appFolderInfo)
+        : this(dbFactory, connectionStringFactory, appFolderInfo, null, null, null)
+    {
+    }
+
+    internal MainDatabase(
+        IDbFactory dbFactory,
+        IConnectionStringFactory connectionStringFactory,
+        IAppFolderInfo appFolderInfo,
+        Action<string, string, bool> fileMove,
+        Action<string, string, bool> fileCopy = null,
+        Action<string> fileDelete = null)
     {
         _logger = LogManager.GetCurrentClassLogger();
+
+        if (fileMove != null)
+        {
+            FileMoveAction = fileMove;
+        }
+
+        if (fileCopy != null)
+        {
+            FileCopyAction = fileCopy;
+        }
+
+        if (fileDelete != null)
+        {
+            FileDeleteAction = fileDelete;
+        }
 
         if (connectionStringFactory.DatabaseType == DatabaseType.SQLite)
         {
@@ -75,7 +105,7 @@ public class MainDatabase : IMainDatabase
         }
     }
 
-    private void ApplyPendingRestore(string appDataFolder)
+    internal void ApplyPendingRestore(string appDataFolder)
     {
         var dbPath = Path.Combine(appDataFolder, DbFileName);
         var dbRestorePath = dbPath + ".restore";
@@ -87,31 +117,64 @@ public class MainDatabase : IMainDatabase
 
         _logger.Warn("Pending database restore found at {0}; applying before opening connections", dbRestorePath);
 
+        string walRestorePath = null;
+        string shmRestorePath = null;
+
         try
         {
             if (File.Exists(dbPath))
             {
                 var backupPath = Path.Combine(appDataFolder, $"{DbFileName}.bak-{DateTime.UtcNow:yyyyMMddHHmmss}");
-                File.Copy(dbPath, backupPath, overwrite: true);
+                FileCopyAction(dbPath, backupPath, true);
                 _logger.Info("Created backup of existing database at {0}", backupPath);
             }
 
             var walPath = dbPath + "-wal";
             if (File.Exists(walPath))
             {
-                File.Delete(walPath);
+                FileDeleteAction(walPath);
                 _logger.Info("Deleted WAL file {0} prior to restore", walPath);
             }
 
             var shmPath = dbPath + "-shm";
             if (File.Exists(shmPath))
             {
-                File.Delete(shmPath);
+                FileDeleteAction(shmPath);
                 _logger.Info("Deleted SHM file {0} prior to restore", shmPath);
             }
 
-            File.Move(dbRestorePath, dbPath, overwrite: true);
+            if (File.Exists(walPath + ".restore"))
+            {
+                walRestorePath = walPath + ".restore";
+            }
+            else if (File.Exists(dbRestorePath + "-wal"))
+            {
+                walRestorePath = dbRestorePath + "-wal";
+            }
+
+            if (File.Exists(shmPath + ".restore"))
+            {
+                shmRestorePath = shmPath + ".restore";
+            }
+            else if (File.Exists(dbRestorePath + "-shm"))
+            {
+                shmRestorePath = dbRestorePath + "-shm";
+            }
+
+            MoveWithFallback(dbRestorePath, dbPath);
             _logger.Info("Database restore applied successfully from {0}", dbRestorePath);
+
+            if (walRestorePath != null)
+            {
+                MoveWithFallback(walRestorePath, walPath);
+                _logger.Info("Database WAL restore applied successfully from {0}", walRestorePath);
+            }
+
+            if (shmRestorePath != null)
+            {
+                MoveWithFallback(shmRestorePath, shmPath);
+                _logger.Info("Database SHM restore applied successfully from {0}", shmRestorePath);
+            }
         }
         catch (Exception ex)
         {
@@ -119,12 +182,50 @@ public class MainDatabase : IMainDatabase
 
             try
             {
-                File.Delete(dbRestorePath);
+                FileDeleteAction(dbRestorePath);
             }
             catch
             {
                 // best-effort cleanup
             }
+
+            if (walRestorePath != null)
+            {
+                try
+                {
+                    FileDeleteAction(walRestorePath);
+                }
+                catch
+                {
+                    // best-effort cleanup
+                }
+            }
+
+            if (shmRestorePath != null)
+            {
+                try
+                {
+                    FileDeleteAction(shmRestorePath);
+                }
+                catch
+                {
+                    // best-effort cleanup
+                }
+            }
+        }
+    }
+
+    private void MoveWithFallback(string sourcePath, string destinationPath)
+    {
+        try
+        {
+            FileMoveAction(sourcePath, destinationPath, true);
+        }
+        catch (IOException ex)
+        {
+            _logger.Warn(ex, "Atomic move failed from {0} to {1}; falling back to copy and delete", sourcePath, destinationPath);
+            FileCopyAction(sourcePath, destinationPath, true);
+            FileDeleteAction(sourcePath);
         }
     }
 }
