@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -36,6 +37,8 @@ public interface IUpdateService
     UpdateInfo CheckForUpdate(bool force = false);
     Task<UpdateInfo> CheckForUpdateAsync(bool force = false, CancellationToken cancellationToken = default);
     Version GetLatestVersion();
+    UpdateInfo CachedUpdateInfo { get; }
+    bool IsCacheExpired { get; }
 }
 
 public class UpdateService : IUpdateService
@@ -50,12 +53,37 @@ public class UpdateService : IUpdateService
     private readonly object _cacheLock = new();
     private UpdateInfo _cachedResult;
     private DateTime _cacheExpiry = DateTime.MinValue;
+    private Task<UpdateInfo> _ongoingAsyncFetch;
+
+    internal static Func<List<ReleaseInfo>> ChangelogProvider { get; set; }
 
     public UpdateService(HttpClient httpClient = null, ISystemClock clock = null)
     {
         _client = httpClient ?? new HttpClient { Timeout = DefaultTimeout };
         _clock = clock ?? new SystemClock();
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public UpdateInfo CachedUpdateInfo
+    {
+        get
+        {
+            lock (_cacheLock)
+            {
+                return _cachedResult;
+            }
+        }
+    }
+
+    public bool IsCacheExpired
+    {
+        get
+        {
+            lock (_cacheLock)
+            {
+                return _cachedResult == null || _clock.UtcNow >= _cacheExpiry;
+            }
+        }
     }
 
     public UpdateInfo CheckForUpdate(bool force = false)
@@ -68,74 +96,159 @@ public class UpdateService : IUpdateService
             }
         }
 
-        var result = FetchUpdateInfo();
-
-        lock (_cacheLock)
-        {
-            if (result.Releases.Count > 0)
-            {
-                _cachedResult = result;
-                _cacheExpiry = _clock.UtcNow.Add(CacheDuration);
-            }
-            else if (_cachedResult != null && _cachedResult.Releases.Count > 0)
-            {
-                return _cachedResult;
-            }
-            else
-            {
-                _cachedResult = result;
-                _cacheExpiry = _clock.UtcNow.AddSeconds(5);
-            }
-        }
-
-        return result;
+        var fetchResult = FetchUpdateInfo();
+        return UpdateCacheWithFetchResult(fetchResult);
     }
 
-    public async Task<UpdateInfo> CheckForUpdateAsync(bool force = false, CancellationToken cancellationToken = default)
+    public Task<UpdateInfo> CheckForUpdateAsync(bool force = false, CancellationToken cancellationToken = default)
     {
         lock (_cacheLock)
         {
-            if (!force && _cachedResult != null && _cachedResult.Releases.Count > 0 && _clock.UtcNow < _cacheExpiry)
+            if (!force && _cachedResult != null && _clock.UtcNow < _cacheExpiry)
             {
-                return _cachedResult;
+                return Task.FromResult(_cachedResult);
+            }
+
+            if (_ongoingAsyncFetch != null && !_ongoingAsyncFetch.IsCompleted)
+            {
+                return _ongoingAsyncFetch;
+            }
+
+            _ongoingAsyncFetch = ExecuteAsyncFetch(cancellationToken);
+            return _ongoingAsyncFetch;
+        }
+    }
+
+    private async Task<UpdateInfo> ExecuteAsyncFetch(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var fetchResult = await FetchUpdateInfoAsync(cancellationToken).ConfigureAwait(false);
+            return UpdateCacheWithFetchResult(fetchResult);
+        }
+        finally
+        {
+            lock (_cacheLock)
+            {
+                _ongoingAsyncFetch = null;
             }
         }
+    }
 
-        var result = await FetchUpdateInfoAsync(cancellationToken).ConfigureAwait(false);
-
+    private UpdateInfo UpdateCacheWithFetchResult(FetchResult fetchResult)
+    {
         lock (_cacheLock)
         {
-            if (result.Releases.Count > 0)
+            if (fetchResult.IsSuccess && fetchResult.Info.Releases.Count > 0)
             {
-                _cachedResult = result;
+                _cachedResult = fetchResult.Info;
                 _cacheExpiry = _clock.UtcNow.Add(CacheDuration);
-            }
-            else if (_cachedResult != null && _cachedResult.Releases.Count > 0)
-            {
                 return _cachedResult;
             }
-            else
-            {
-                _cachedResult = result;
-                _cacheExpiry = _clock.UtcNow.AddSeconds(5);
-            }
-        }
 
-        return result;
+            if (fetchResult.IsRateLimited || !fetchResult.IsSuccess)
+            {
+                _cacheExpiry = fetchResult.RateLimitExpiry ?? _clock.UtcNow.AddMinutes(30);
+
+                if (_cachedResult != null && _cachedResult.Releases.Count > 0)
+                {
+                    return _cachedResult;
+                }
+
+                _cachedResult = fetchResult.Info;
+                return _cachedResult;
+            }
+
+            _cachedResult = fetchResult.Info;
+            _cacheExpiry = _clock.UtcNow.Add(CacheDuration);
+            return _cachedResult;
+        }
     }
 
     public Version GetLatestVersion()
     {
         var info = CheckForUpdate();
+        if (info == null || string.IsNullOrWhiteSpace(info.LatestVersion))
+        {
+            return null;
+        }
+
         if (SemVersion.TryParse(info.LatestVersion, out var semVer))
         {
             return semVer.Core;
         }
 
+        var clean = info.LatestVersion.Trim().TrimStart('v', 'V');
+        var match = Regex.Match(clean, @"^([0-9]+(?:\.[0-9]+)*)");
+        if (match.Success)
+        {
+            var verStr = match.Groups[1].Value;
+            if (!verStr.Contains('.'))
+            {
+                verStr += ".0";
+            }
+
+            if (Version.TryParse(verStr, out var v))
+            {
+                return v;
+            }
+        }
+
         return Version.TryParse(info.LatestVersion, out var version) ? version : null;
     }
 
-    private UpdateInfo FetchUpdateInfo()
+    private DateTime CalculateRateLimitExpiry(HttpResponseMessage response)
+    {
+        if (response?.Headers == null)
+        {
+            return _clock.UtcNow.AddMinutes(30);
+        }
+
+        if (response.Headers.TryGetValues("x-ratelimit-reset", out var resetValues))
+        {
+            var resetStr = resetValues.FirstOrDefault();
+            if (long.TryParse(resetStr, out var resetEpoch))
+            {
+                var resetTime = DateTimeOffset.FromUnixTimeSeconds(resetEpoch).UtcDateTime;
+                return resetTime > _clock.UtcNow ? resetTime : _clock.UtcNow.AddMinutes(30);
+            }
+        }
+
+        if (response.Headers.RetryAfter != null)
+        {
+            if (response.Headers.RetryAfter.Delta.HasValue)
+            {
+                return _clock.UtcNow.Add(response.Headers.RetryAfter.Delta.Value);
+            }
+
+            if (response.Headers.RetryAfter.Date.HasValue)
+            {
+                var retryDate = response.Headers.RetryAfter.Date.Value.UtcDateTime;
+                return retryDate > _clock.UtcNow ? retryDate : _clock.UtcNow.AddMinutes(30);
+            }
+        }
+
+        if (response.Headers.TryGetValues("retry-after", out var retryAfterValues))
+        {
+            var retryStr = retryAfterValues.FirstOrDefault();
+            if (int.TryParse(retryStr, out var retrySeconds) && retrySeconds > 0)
+            {
+                return _clock.UtcNow.AddSeconds(retrySeconds);
+            }
+        }
+
+        return _clock.UtcNow.AddMinutes(30);
+    }
+
+    private class FetchResult
+    {
+        public UpdateInfo Info { get; set; }
+        public bool IsSuccess { get; set; }
+        public bool IsRateLimited { get; set; }
+        public DateTime? RateLimitExpiry { get; set; }
+    }
+
+    private FetchResult FetchUpdateInfo()
     {
         var currentVersion = BuildInfo.Version?.ToString() ?? "1.0.0";
 
@@ -158,7 +271,18 @@ public class UpdateService : IUpdateService
 
             if (!response.IsSuccessStatusCode)
             {
-                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden || response.StatusCode == (System.Net.HttpStatusCode)429)
+                var isRateLimited = response.StatusCode == System.Net.HttpStatusCode.Forbidden ||
+                                    response.StatusCode == (System.Net.HttpStatusCode)429;
+
+                if (!isRateLimited && response.Headers.TryGetValues("x-ratelimit-remaining", out var remValues))
+                {
+                    if (int.TryParse(remValues.FirstOrDefault(), out var rem) && rem <= 0)
+                    {
+                        isRateLimited = true;
+                    }
+                }
+
+                if (isRateLimited)
                 {
                     _logger.Debug("GitHub releases API rate limit reached ({0})", response.StatusCode);
                 }
@@ -167,31 +291,66 @@ public class UpdateService : IUpdateService
                     _logger.Warn("GitHub releases API returned {0}", response.StatusCode);
                 }
 
-                return BuildResult(currentVersion, null, new List<ReleaseInfo>());
+                var expiry = CalculateRateLimitExpiry(response);
+                var fallbackInfo = LoadFromChangelogOrFallback(currentVersion);
+
+                return new FetchResult
+                {
+                    Info = fallbackInfo,
+                    IsSuccess = false,
+                    IsRateLimited = isRateLimited,
+                    RateLimitExpiry = expiry
+                };
             }
 
             using var stream = response.Content.ReadAsStream();
             using var doc = JsonDocument.Parse(stream);
-            return ParseReleasesDocument(doc, currentVersion);
+            var info = ParseReleasesDocument(doc, currentVersion);
+
+            return new FetchResult
+            {
+                Info = info,
+                IsSuccess = true,
+                IsRateLimited = false,
+                RateLimitExpiry = null
+            };
         }
         catch (HttpRequestException ex)
         {
             _logger.Error(ex, "Failed to check for updates");
-            return BuildResult(currentVersion, null, new List<ReleaseInfo>());
+            return new FetchResult
+            {
+                Info = LoadFromChangelogOrFallback(currentVersion),
+                IsSuccess = false,
+                IsRateLimited = false,
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+            };
         }
         catch (JsonException ex)
         {
             _logger.Error(ex, "Failed to parse GitHub releases response");
-            return BuildResult(currentVersion, null, new List<ReleaseInfo>());
+            return new FetchResult
+            {
+                Info = LoadFromChangelogOrFallback(currentVersion),
+                IsSuccess = false,
+                IsRateLimited = false,
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+            };
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Unexpected error checking for updates");
-            return BuildResult(currentVersion, null, new List<ReleaseInfo>());
+            return new FetchResult
+            {
+                Info = LoadFromChangelogOrFallback(currentVersion),
+                IsSuccess = false,
+                IsRateLimited = false,
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+            };
         }
     }
 
-    private async Task<UpdateInfo> FetchUpdateInfoAsync(CancellationToken cancellationToken)
+    private async Task<FetchResult> FetchUpdateInfoAsync(CancellationToken cancellationToken)
     {
         var currentVersion = BuildInfo.Version?.ToString() ?? "1.0.0";
 
@@ -217,36 +376,90 @@ public class UpdateService : IUpdateService
 
             if (!response.IsSuccessStatusCode)
             {
-                var errorBody = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
-                _logger.Warn("GitHub releases API returned {0}: {1}", response.StatusCode, errorBody);
-                return BuildResult(currentVersion, null, new List<ReleaseInfo>());
+                var isRateLimited = response.StatusCode == System.Net.HttpStatusCode.Forbidden ||
+                                    response.StatusCode == (System.Net.HttpStatusCode)429;
+
+                if (!isRateLimited && response.Headers.TryGetValues("x-ratelimit-remaining", out var remValues))
+                {
+                    if (int.TryParse(remValues.FirstOrDefault(), out var rem) && rem <= 0)
+                    {
+                        isRateLimited = true;
+                    }
+                }
+
+                if (isRateLimited)
+                {
+                    _logger.Debug("GitHub releases API rate limit reached ({0})", response.StatusCode);
+                }
+                else
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+                    _logger.Warn("GitHub releases API returned {0}: {1}", response.StatusCode, errorBody);
+                }
+
+                var expiry = CalculateRateLimitExpiry(response);
+                var fallbackInfo = LoadFromChangelogOrFallback(currentVersion);
+
+                return new FetchResult
+                {
+                    Info = fallbackInfo,
+                    IsSuccess = false,
+                    IsRateLimited = isRateLimited,
+                    RateLimitExpiry = expiry
+                };
             }
 
             var json = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(json);
-            return ParseReleasesDocument(doc, currentVersion);
+            var info = ParseReleasesDocument(doc, currentVersion);
+
+            return new FetchResult
+            {
+                Info = info,
+                IsSuccess = true,
+                IsRateLimited = false,
+                RateLimitExpiry = null
+            };
         }
         catch (HttpRequestException ex)
         {
             _logger.Error(ex, "Failed to check for updates");
-            return BuildResult(currentVersion, null, new List<ReleaseInfo>());
+            return new FetchResult
+            {
+                Info = LoadFromChangelogOrFallback(currentVersion),
+                IsSuccess = false,
+                IsRateLimited = false,
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+            };
         }
         catch (JsonException ex)
         {
             _logger.Error(ex, "Failed to parse GitHub releases response");
-            return BuildResult(currentVersion, null, new List<ReleaseInfo>());
+            return new FetchResult
+            {
+                Info = LoadFromChangelogOrFallback(currentVersion),
+                IsSuccess = false,
+                IsRateLimited = false,
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+            };
         }
         catch (Exception ex)
         {
             _logger.Error(ex, "Unexpected error checking for updates");
-            return BuildResult(currentVersion, null, new List<ReleaseInfo>());
+            return new FetchResult
+            {
+                Info = LoadFromChangelogOrFallback(currentVersion),
+                IsSuccess = false,
+                IsRateLimited = false,
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+            };
         }
     }
 
     private static UpdateInfo LoadFromChangelogOrFallback(string currentVersion)
     {
         var changelogReleases = LoadFromChangelog();
-        if (changelogReleases.Count > 0)
+        if (changelogReleases != null && changelogReleases.Count > 0)
         {
             SemVersion? latestSemVer = null;
             string latestVersionStr = null;
@@ -267,6 +480,11 @@ public class UpdateService : IUpdateService
 
     public static List<ReleaseInfo> LoadFromChangelog()
     {
+        if (ChangelogProvider != null)
+        {
+            return ChangelogProvider();
+        }
+
         var searchPaths = new[]
         {
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "CHANGELOG.md"),
@@ -418,6 +636,17 @@ public class UpdateService : IUpdateService
                     pre = clean[(dashIdx + 1)..];
                     clean = clean[..dashIdx];
                 }
+                else
+                {
+                    var preMatch = Regex.Match(clean, @"^([0-9]+(?:\.[0-9]+)*)[-_.]?([a-zA-Z]+.*)$");
+                    if (preMatch.Success)
+                    {
+                        clean = preMatch.Groups[1].Value;
+                        pre = preMatch.Groups[2].Value;
+                    }
+                }
+
+                clean = Regex.Replace(clean, @"[-_.](beta|rc|alpha|preview).*$", "", RegexOptions.IgnoreCase);
 
                 if (!clean.Contains('.'))
                 {

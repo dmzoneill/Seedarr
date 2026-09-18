@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using NzbDrone.Core.Update;
 
 namespace NzbDrone.Core.HealthCheck.Checks;
@@ -13,7 +14,17 @@ public class UpdateCheck : IHealthCheck
 
     public HealthCheckResult Check()
     {
-        var info = _updateService.CheckForUpdate();
+        var info = _updateService.CachedUpdateInfo;
+        if (info == null)
+        {
+            _ = Task.Run(() => _updateService.CheckForUpdateAsync());
+            return HealthCheckResult.Ok("UpdateCheck");
+        }
+
+        if (_updateService.IsCacheExpired)
+        {
+            _ = Task.Run(() => _updateService.CheckForUpdateAsync());
+        }
 
         if (info.UpdateAvailable)
         {
