@@ -200,4 +200,102 @@ public class LifecycleScriptEventHandlerTest
             e.Message.Contains("failed or timed out") &&
             !e.IsResolved));
     }
+
+    [Test]
+    public async Task Handle_TorrentDownloadCompletedEvent_should_deduplicate_identical_script_paths()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.OnDownloadCompleteScript.Returns("/scripts/done.sh");
+        configService.ScriptTorrentDoneFilename.Returns("/scripts/done.sh");
+
+        var customScriptService = Substitute.For<ICustomScriptService>();
+        customScriptService.ExecuteScriptAsync(Arg.Any<string>(), Arg.Any<Torrent>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns(Task.FromResult(true));
+
+        using var handler = new LifecycleScriptEventHandler(customScriptService, configService);
+
+        var torrent = new Torrent { Id = 1, Name = "DedupeTest" };
+        handler.Handle(new TorrentDownloadCompletedEvent(torrent));
+
+        await Task.Delay(100);
+
+        await customScriptService.Received(1).ExecuteScriptAsync("/scripts/done.sh", torrent, "OnDownloadComplete");
+    }
+
+    [Test]
+    public async Task Handle_TorrentDownloadCompletedEvent_should_deduplicate_quoted_and_unquoted_same_script()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.OnDownloadCompleteScript.Returns("/scripts/done.sh");
+        configService.ScriptTorrentDoneFilename.Returns("\"/scripts/done.sh\"");
+
+        var customScriptService = Substitute.For<ICustomScriptService>();
+        customScriptService.ExecuteScriptAsync(Arg.Any<string>(), Arg.Any<Torrent>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns(Task.FromResult(true));
+
+        using var handler = new LifecycleScriptEventHandler(customScriptService, configService);
+
+        var torrent = new Torrent { Id = 2, Name = "QuotedDedupeTest" };
+        handler.Handle(new TorrentDownloadCompletedEvent(torrent));
+
+        await Task.Delay(100);
+
+        await customScriptService.Received(1).ExecuteScriptAsync("/scripts/done.sh", torrent, "OnDownloadComplete");
+    }
+
+    [Test]
+    public async Task Handle_TorrentDownloadCompletedEvent_should_run_both_when_paths_differ()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.OnDownloadCompleteScript.Returns("/scripts/done1.sh");
+        configService.ScriptTorrentDoneFilename.Returns("/scripts/done2.sh");
+
+        var customScriptService = Substitute.For<ICustomScriptService>();
+        var tcs1 = new TaskCompletionSource<bool>();
+        var tcs2 = new TaskCompletionSource<bool>();
+
+        customScriptService.ExecuteScriptAsync("/scripts/done1.sh", Arg.Any<Torrent>(), "OnDownloadComplete")
+            .Returns(callInfo =>
+            {
+                tcs1.TrySetResult(true);
+                return Task.FromResult(true);
+            });
+        customScriptService.ExecuteScriptAsync("/scripts/done2.sh", Arg.Any<Torrent>(), "OnDownloadComplete")
+            .Returns(callInfo =>
+            {
+                tcs2.TrySetResult(true);
+                return Task.FromResult(true);
+            });
+
+        using var handler = new LifecycleScriptEventHandler(customScriptService, configService);
+
+        var torrent = new Torrent { Id = 3, Name = "DifferentScriptsTest" };
+        handler.Handle(new TorrentDownloadCompletedEvent(torrent));
+
+        await Task.WhenAll(tcs1.Task, tcs2.Task);
+
+        await customScriptService.Received(1).ExecuteScriptAsync("/scripts/done1.sh", torrent, "OnDownloadComplete");
+        await customScriptService.Received(1).ExecuteScriptAsync("/scripts/done2.sh", torrent, "OnDownloadComplete");
+    }
+
+    [Test]
+    public async Task Handle_TorrentSeedGoalReachedEvent_should_deduplicate_identical_script_paths()
+    {
+        var configService = Substitute.For<IConfigService>();
+        configService.OnSeedGoalReachedScript.Returns("/scripts/seeding_done.sh");
+        configService.ScriptTorrentDoneSeedingFilename.Returns("/scripts/seeding_done.sh");
+
+        var customScriptService = Substitute.For<ICustomScriptService>();
+        customScriptService.ExecuteScriptAsync(Arg.Any<string>(), Arg.Any<Torrent>(), Arg.Any<string>(), Arg.Any<string>())
+            .Returns(Task.FromResult(true));
+
+        using var handler = new LifecycleScriptEventHandler(customScriptService, configService);
+
+        var torrent = new Torrent { Id = 4, Name = "SeedDedupeTest" };
+        handler.Handle(new TorrentSeedGoalReachedEvent(torrent));
+
+        await Task.Delay(100);
+
+        await customScriptService.Received(1).ExecuteScriptAsync("/scripts/seeding_done.sh", torrent, "OnSeedGoalReached");
+    }
 }

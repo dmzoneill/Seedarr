@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.MediaEnrichment;
+using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Notifications;
@@ -23,6 +24,7 @@ public interface ICustomScriptService
 public class CustomScriptService : ICustomScriptService
 {
     private readonly ITorrentMediaMetadataRepository _mediaMetadataRepository;
+    private readonly ITagService _tagService;
     private readonly TimeSpan _scriptTimeout;
     private readonly TimeSpan _streamDrainTimeout;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -31,10 +33,12 @@ public class CustomScriptService : ICustomScriptService
         ITorrentMediaMetadataRepository mediaMetadataRepository = null,
         IConfigService configService = null,
         IConfigFileProvider configFileProvider = null,
+        ITagService tagService = null,
         TimeSpan? scriptTimeout = null,
         TimeSpan? streamDrainTimeout = null)
     {
         _mediaMetadataRepository = mediaMetadataRepository;
+        _tagService = tagService;
         var timeoutSec = configService != null && configService.CustomScriptTimeoutSeconds > 0
             ? Math.Clamp(configService.CustomScriptTimeoutSeconds, 5, 3600)
             : 60;
@@ -45,9 +49,31 @@ public class CustomScriptService : ICustomScriptService
 
     public TimeSpan ScriptTimeout => _scriptTimeout;
 
+    public static string CleanScriptPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+
+        var cleaned = path.Trim();
+        while ((cleaned.StartsWith('"') && cleaned.EndsWith('"')) ||
+            (cleaned.StartsWith('\'') && cleaned.EndsWith('\'')))
+        {
+            if (cleaned.Length < 2)
+            {
+                break;
+            }
+
+            cleaned = cleaned.Substring(1, cleaned.Length - 2).Trim();
+        }
+
+        return cleaned;
+    }
+
     internal static (string FileName, string Arguments) ResolveInterpreter(string scriptPath, string arguments)
     {
-        var cleanPath = scriptPath?.Trim()?.Trim('"', '\'') ?? string.Empty;
+        var cleanPath = CleanScriptPath(scriptPath);
         var ext = Path.GetExtension(cleanPath).ToLowerInvariant();
         var args = arguments?.Trim() ?? string.Empty;
 
@@ -313,7 +339,12 @@ public class CustomScriptService : ICustomScriptService
             .Replace("\n", string.Empty);
     }
 
-    public static Dictionary<string, string> BuildEnvironmentVariables(string eventType, Torrent torrent, TorrentMediaMetadata meta = null)
+    public static Dictionary<string, string> BuildEnvironmentVariables(
+        string eventType,
+        Torrent torrent,
+        TorrentMediaMetadata meta = null,
+        ITagService tagService = null,
+        IEnumerable<string> tagLabels = null)
     {
         var rawEnv = new Dictionary<string, string>
         {
@@ -332,14 +363,25 @@ public class CustomScriptService : ICustomScriptService
             rawEnv["TORRENT_PATH"] = torrent.SavePath ?? torrent.SourcePath ?? string.Empty;
             rawEnv["TORRENT_SAVEPATH"] = torrent.SavePath ?? torrent.SourcePath ?? string.Empty;
             rawEnv["TORRENT_SIZE"] = torrent.TotalSize.ToString(CultureInfo.InvariantCulture);
+            rawEnv["TORRENT_SIZE_BYTES"] = torrent.TotalSize.ToString(CultureInfo.InvariantCulture);
             rawEnv["TORRENT_RATIO"] = torrent.Ratio.ToString("F2", CultureInfo.InvariantCulture);
             rawEnv["TORRENT_STATUS"] = torrent.Status.ToString();
 
             if (torrent.TagIds != null && torrent.TagIds.Count > 0)
             {
-                rawEnv["TORRENT_TAGS"] = string.Join(",", torrent.TagIds);
-                rawEnv["SEEDARR_TORRENT_TAGS"] = string.Join(",", torrent.TagIds);
-                rawEnv["LEECHARR_TORRENT_TAGS"] = string.Join(",", torrent.TagIds);
+                var resolvedLabels = tagLabels?.Where(l => !string.IsNullOrWhiteSpace(l)).ToList();
+                if (resolvedLabels == null && tagService != null)
+                {
+                    resolvedLabels = tagService.GetLabelsForTagIds(torrent.TagIds);
+                }
+
+                var tagsString = resolvedLabels != null
+                    ? string.Join(",", resolvedLabels)
+                    : string.Join(",", torrent.TagIds);
+
+                rawEnv["TORRENT_TAGS"] = tagsString;
+                rawEnv["SEEDARR_TORRENT_TAGS"] = tagsString;
+                rawEnv["LEECHARR_TORRENT_TAGS"] = tagsString;
             }
 
             rawEnv["SEEDARR_TORRENT_ID"] = torrent.Id.ToString(CultureInfo.InvariantCulture);
@@ -349,6 +391,7 @@ public class CustomScriptService : ICustomScriptService
             rawEnv["SEEDARR_TORRENT_PATH"] = torrent.SavePath ?? torrent.SourcePath ?? string.Empty;
             rawEnv["SEEDARR_TORRENT_SAVEPATH"] = torrent.SavePath ?? torrent.SourcePath ?? string.Empty;
             rawEnv["SEEDARR_TORRENT_SIZE"] = torrent.TotalSize.ToString(CultureInfo.InvariantCulture);
+            rawEnv["SEEDARR_TORRENT_SIZE_BYTES"] = torrent.TotalSize.ToString(CultureInfo.InvariantCulture);
             rawEnv["SEEDARR_TORRENT_RATIO"] = torrent.Ratio.ToString("F2", CultureInfo.InvariantCulture);
             rawEnv["SEEDARR_TORRENT_STATUS"] = torrent.Status.ToString();
 
@@ -359,6 +402,7 @@ public class CustomScriptService : ICustomScriptService
             rawEnv["LEECHARR_TORRENT_PATH"] = torrent.SavePath ?? torrent.SourcePath ?? string.Empty;
             rawEnv["LEECHARR_TORRENT_SAVEPATH"] = torrent.SavePath ?? torrent.SourcePath ?? string.Empty;
             rawEnv["LEECHARR_TORRENT_SIZE"] = torrent.TotalSize.ToString(CultureInfo.InvariantCulture);
+            rawEnv["LEECHARR_TORRENT_SIZE_BYTES"] = torrent.TotalSize.ToString(CultureInfo.InvariantCulture);
             rawEnv["LEECHARR_TORRENT_RATIO"] = torrent.Ratio.ToString("F2", CultureInfo.InvariantCulture);
             rawEnv["LEECHARR_TORRENT_STATUS"] = torrent.Status.ToString();
 
@@ -450,7 +494,7 @@ public class CustomScriptService : ICustomScriptService
 
                 if (hasPathProp)
                 {
-                    return (path ?? string.Empty, string.IsNullOrWhiteSpace(arguments) ? null : arguments);
+                    return (CleanScriptPath(path), string.IsNullOrWhiteSpace(arguments) ? null : arguments);
                 }
             }
             catch
@@ -472,11 +516,11 @@ public class CustomScriptService : ICustomScriptService
                     args = Uri.UnescapeDataString(matchArgs.Groups[1].Value);
                 }
 
-                return (path, string.IsNullOrWhiteSpace(args) ? null : args);
+                return (CleanScriptPath(path), string.IsNullOrWhiteSpace(args) ? null : args);
             }
         }
 
-        return (trimmed, null);
+        return (CleanScriptPath(trimmed), null);
     }
 
     public async Task<bool> ExecuteScriptAsync(string scriptPath, Torrent torrent, string eventType, string arguments = null)
@@ -496,6 +540,8 @@ public class CustomScriptService : ICustomScriptService
                 }
             }
         }
+
+        resolvedScriptPath = CleanScriptPath(resolvedScriptPath);
 
         if (string.IsNullOrWhiteSpace(resolvedScriptPath) || !File.Exists(resolvedScriptPath))
         {
@@ -527,7 +573,7 @@ public class CustomScriptService : ICustomScriptService
 
             // Inject Servarr / Seedarr standard environment variables
             var meta = torrent != null ? _mediaMetadataRepository?.GetByTorrentId(torrent.Id) : null;
-            var envVars = BuildEnvironmentVariables(eventType, torrent, meta);
+            var envVars = BuildEnvironmentVariables(eventType, torrent, meta, _tagService);
             foreach (var kvp in envVars)
             {
                 var cleanKey = SanitizeEnvKey(kvp.Key);
@@ -628,6 +674,8 @@ public class CustomScriptService : ICustomScriptService
             }
         }
 
+        resolvedScriptPath = CleanScriptPath(resolvedScriptPath);
+
         var scriptDir = !string.IsNullOrWhiteSpace(resolvedScriptPath) ? Path.GetDirectoryName(resolvedScriptPath) : null;
         var workingDir = !string.IsNullOrWhiteSpace(scriptDir) && Directory.Exists(scriptDir)
             ? scriptDir
@@ -672,7 +720,7 @@ public class CustomScriptService : ICustomScriptService
             SanitizeEnvironment(startInfo.EnvironmentVariables);
 
             // Inject Servarr / Seedarr standard environment variables
-            var envVars = BuildEnvironmentVariables(eventType ?? "Test", null, null);
+            var envVars = BuildEnvironmentVariables(eventType ?? "Test", null, null, _tagService);
             foreach (var kvp in envVars)
             {
                 var cleanKey = SanitizeEnvKey(kvp.Key);

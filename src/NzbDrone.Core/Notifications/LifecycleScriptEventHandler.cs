@@ -59,14 +59,27 @@ public class LifecycleScriptEventHandler :
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(_configService?.OnDownloadCompleteScript))
+        var script1 = _configService?.OnDownloadCompleteScript;
+        var script2 = _configService?.ScriptTorrentDoneFilename;
+
+        var hasScript1 = !string.IsNullOrWhiteSpace(script1);
+        var hasScript2 = !string.IsNullOrWhiteSpace(script2);
+
+        if (hasScript1)
         {
-            ExecuteThrottledScriptAsync(_configService.OnDownloadCompleteScript, message.Torrent, "OnDownloadComplete");
+            ExecuteThrottledScriptAsync(script1, message.Torrent, "OnDownloadComplete");
         }
 
-        if (!string.IsNullOrWhiteSpace(_configService?.ScriptTorrentDoneFilename))
+        if (hasScript2)
         {
-            ExecuteThrottledScriptAsync(_configService.ScriptTorrentDoneFilename, message.Torrent, "OnDownloadComplete");
+            if (!hasScript1 || !AreSameScript(script1, script2))
+            {
+                ExecuteThrottledScriptAsync(script2, message.Torrent, "OnDownloadComplete");
+            }
+            else
+            {
+                _logger.Debug("Skipping duplicate lifecycle script execution for OnDownloadComplete: '{0}' and '{1}' resolve to the same script.", script1, script2);
+            }
         }
     }
 
@@ -77,14 +90,27 @@ public class LifecycleScriptEventHandler :
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(_configService?.OnSeedGoalReachedScript))
+        var script1 = _configService?.OnSeedGoalReachedScript;
+        var script2 = _configService?.ScriptTorrentDoneSeedingFilename;
+
+        var hasScript1 = !string.IsNullOrWhiteSpace(script1);
+        var hasScript2 = !string.IsNullOrWhiteSpace(script2);
+
+        if (hasScript1)
         {
-            ExecuteThrottledScriptAsync(_configService.OnSeedGoalReachedScript, message.Torrent, "OnSeedGoalReached");
+            ExecuteThrottledScriptAsync(script1, message.Torrent, "OnSeedGoalReached");
         }
 
-        if (!string.IsNullOrWhiteSpace(_configService?.ScriptTorrentDoneSeedingFilename))
+        if (hasScript2)
         {
-            ExecuteThrottledScriptAsync(_configService.ScriptTorrentDoneSeedingFilename, message.Torrent, "OnSeedGoalReached");
+            if (!hasScript1 || !AreSameScript(script1, script2))
+            {
+                ExecuteThrottledScriptAsync(script2, message.Torrent, "OnSeedGoalReached");
+            }
+            else
+            {
+                _logger.Debug("Skipping duplicate lifecycle script execution for OnSeedGoalReached: '{0}' and '{1}' resolve to the same script.", script1, script2);
+            }
         }
     }
 
@@ -195,6 +221,52 @@ public class LifecycleScriptEventHandler :
                 _scriptSemaphore.Release();
             }
         });
+    }
+
+    internal static bool AreSameScript(string script1, string script2)
+    {
+        if (string.IsNullOrWhiteSpace(script1) || string.IsNullOrWhiteSpace(script2))
+        {
+            return false;
+        }
+
+        var norm1 = NormalizeScriptPath(script1);
+        var norm2 = NormalizeScriptPath(script2);
+
+        if (string.IsNullOrWhiteSpace(norm1) || string.IsNullOrWhiteSpace(norm2))
+        {
+            return false;
+        }
+
+        return string.Equals(norm1, norm2, StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static string NormalizeScriptPath(string scriptConfig)
+    {
+        if (string.IsNullOrWhiteSpace(scriptConfig))
+        {
+            return string.Empty;
+        }
+
+        var (parsedPath, _) = CustomScriptService.ParseSettings(scriptConfig);
+        var path = !string.IsNullOrWhiteSpace(parsedPath) ? parsedPath : scriptConfig;
+        var clean = CustomScriptService.CleanScriptPath(path);
+
+        if (string.IsNullOrWhiteSpace(clean))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            clean = System.IO.Path.GetFullPath(clean);
+        }
+        catch
+        {
+            // Ignore invalid path format and keep clean
+        }
+
+        return clean.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
     }
 
     public void Dispose()
