@@ -16,6 +16,7 @@ public interface IMainDatabase : IDatabase
 public class MainDatabase : IMainDatabase
 {
     private const string DbFileName = "seedarr.db";
+    private const string ConfigFileName = "config.xml";
 
     private readonly IDatabase _database;
     private readonly Logger _logger;
@@ -54,7 +55,7 @@ public class MainDatabase : IMainDatabase
             FileDeleteAction = fileDelete;
         }
 
-        if (connectionStringFactory.DatabaseType == DatabaseType.SQLite)
+        if (!string.IsNullOrWhiteSpace(appFolderInfo?.AppDataFolder))
         {
             ApplyPendingRestore(appFolderInfo.AppDataFolder);
         }
@@ -109,12 +110,22 @@ public class MainDatabase : IMainDatabase
     {
         var dbPath = Path.Combine(appDataFolder, DbFileName);
         var dbRestorePath = dbPath + ".restore";
+        var configPath = Path.Combine(appDataFolder, ConfigFileName);
+        var configRestorePath = configPath + ".restore";
 
-        if (!File.Exists(dbRestorePath))
+        if (File.Exists(dbRestorePath))
         {
-            return;
+            ApplyPendingDatabaseRestore(appDataFolder, dbPath, dbRestorePath);
         }
 
+        if (File.Exists(configRestorePath))
+        {
+            ApplyPendingConfigRestore(appDataFolder, configPath, configRestorePath);
+        }
+    }
+
+    private void ApplyPendingDatabaseRestore(string appDataFolder, string dbPath, string dbRestorePath)
+    {
         _logger.Warn("Pending database restore found at {0}; applying before opening connections", dbRestorePath);
 
         string walRestorePath = null;
@@ -211,6 +222,37 @@ public class MainDatabase : IMainDatabase
                 {
                     // best-effort cleanup
                 }
+            }
+        }
+    }
+
+    private void ApplyPendingConfigRestore(string appDataFolder, string configPath, string configRestorePath)
+    {
+        _logger.Warn("Pending config restore found at {0}; applying before opening connections", configRestorePath);
+
+        try
+        {
+            if (File.Exists(configPath))
+            {
+                var backupPath = Path.Combine(appDataFolder, $"{ConfigFileName}.bak-{DateTime.UtcNow:yyyyMMddHHmmss}");
+                FileCopyAction(configPath, backupPath, true);
+                _logger.Info("Created backup of existing config at {0}", backupPath);
+            }
+
+            MoveWithFallback(configRestorePath, configPath);
+            _logger.Info("Config restore applied successfully from {0}", configRestorePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to apply pending config restore from {0}; original config retained", configRestorePath);
+
+            try
+            {
+                FileDeleteAction(configRestorePath);
+            }
+            catch
+            {
+                // best-effort cleanup
             }
         }
     }

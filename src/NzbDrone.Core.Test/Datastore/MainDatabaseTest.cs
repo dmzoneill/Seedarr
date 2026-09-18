@@ -206,4 +206,157 @@ public class MainDatabaseTest
         Assert.That(backups.Length, Is.EqualTo(1), "A backup of existing DB should be created");
         Assert.That(File.ReadAllText(backups[0]), Is.EqualTo("existing-db-data"));
     }
+
+    [Test]
+    public void ApplyPendingRestore_should_swap_staged_config_and_backup_original_config()
+    {
+        var configPath = Path.Combine(_tempDir, "config.xml");
+        var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
+
+        File.WriteAllText(configPath, "original-config-content");
+        File.WriteAllText(configRestorePath, "new-restored-config-content");
+
+        var database = new MainDatabase(
+            _dbFactory,
+            _connectionStringFactory,
+            _appFolderInfo);
+
+        Assert.That(File.Exists(configPath), Is.True);
+        Assert.That(File.ReadAllText(configPath), Is.EqualTo("new-restored-config-content"));
+        Assert.That(File.Exists(configRestorePath), Is.False, "Staged config restore file should be removed");
+
+        var backups = Directory.GetFiles(_tempDir, "config.xml.bak-*");
+        Assert.That(backups.Length, Is.EqualTo(1), "A backup of existing config should be created");
+        Assert.That(File.ReadAllText(backups[0]), Is.EqualTo("original-config-content"));
+    }
+
+    [Test]
+    public void ApplyPendingRestore_should_swap_staged_config_when_no_previous_config_exists()
+    {
+        var configPath = Path.Combine(_tempDir, "config.xml");
+        var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
+
+        File.WriteAllText(configRestorePath, "fresh-restored-config-content");
+
+        var database = new MainDatabase(
+            _dbFactory,
+            _connectionStringFactory,
+            _appFolderInfo);
+
+        Assert.That(File.Exists(configPath), Is.True);
+        Assert.That(File.ReadAllText(configPath), Is.EqualTo("fresh-restored-config-content"));
+        Assert.That(File.Exists(configRestorePath), Is.False);
+
+        var backups = Directory.GetFiles(_tempDir, "config.xml.bak-*");
+        Assert.That(backups.Length, Is.EqualTo(0), "No backup should be created when no original config exists");
+    }
+
+    [Test]
+    public void ApplyPendingRestore_should_fallback_to_copy_and_delete_when_config_move_throws_ioexception()
+    {
+        var configPath = Path.Combine(_tempDir, "config.xml");
+        var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
+
+        File.WriteAllText(configRestorePath, "config-fallback-data");
+
+        var moveAttempted = false;
+        var copyAttempted = false;
+
+        var database = new MainDatabase(
+            _dbFactory,
+            _connectionStringFactory,
+            _appFolderInfo,
+            fileMove: (src, dst, overwrite) =>
+            {
+                moveAttempted = true;
+                throw new IOException("Invalid cross-device link (EXDEV)");
+            },
+            fileCopy: (src, dst, overwrite) =>
+            {
+                copyAttempted = true;
+                File.Copy(src, dst, overwrite);
+            });
+
+        Assert.That(moveAttempted, Is.True, "File.Move should have been attempted");
+        Assert.That(copyAttempted, Is.True, "File.Copy should have been called as fallback");
+        Assert.That(File.Exists(configPath), Is.True);
+        Assert.That(File.ReadAllText(configPath), Is.EqualTo("config-fallback-data"));
+        Assert.That(File.Exists(configRestorePath), Is.False);
+    }
+
+    [Test]
+    public void ApplyPendingRestore_should_clean_up_config_restore_file_when_both_move_and_copy_fail()
+    {
+        var configPath = Path.Combine(_tempDir, "config.xml");
+        var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
+
+        File.WriteAllText(configPath, "original-config-untouched");
+        File.WriteAllText(configRestorePath, "corrupted-restore-data");
+
+        var database = new MainDatabase(
+            _dbFactory,
+            _connectionStringFactory,
+            _appFolderInfo,
+            fileMove: (src, dst, overwrite) => throw new IOException("Cross-device link"),
+            fileCopy: (src, dst, overwrite) => throw new IOException("Disk full"));
+
+        Assert.That(File.ReadAllText(configPath), Is.EqualTo("original-config-untouched"), "Original config should be retained");
+        Assert.That(File.Exists(configRestorePath), Is.False, "Staged config restore file should be cleaned up on total failure");
+    }
+
+    [Test]
+    public void ApplyPendingRestore_should_restore_both_db_and_config_simultaneously()
+    {
+        var dbPath = Path.Combine(_tempDir, "seedarr.db");
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+        var configPath = Path.Combine(_tempDir, "config.xml");
+        var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
+
+        File.WriteAllText(dbPath, "old-db");
+        File.WriteAllText(dbRestorePath, "new-db");
+        File.WriteAllText(configPath, "old-config");
+        File.WriteAllText(configRestorePath, "new-config");
+
+        var database = new MainDatabase(
+            _dbFactory,
+            _connectionStringFactory,
+            _appFolderInfo);
+
+        Assert.That(File.ReadAllText(dbPath), Is.EqualTo("new-db"));
+        Assert.That(File.ReadAllText(configPath), Is.EqualTo("new-config"));
+        Assert.That(File.Exists(dbRestorePath), Is.False);
+        Assert.That(File.Exists(configRestorePath), Is.False);
+
+        var dbBackups = Directory.GetFiles(_tempDir, "seedarr.db.bak-*");
+        var configBackups = Directory.GetFiles(_tempDir, "config.xml.bak-*");
+        Assert.That(dbBackups.Length, Is.EqualTo(1));
+        Assert.That(File.ReadAllText(dbBackups[0]), Is.EqualTo("old-db"));
+        Assert.That(configBackups.Length, Is.EqualTo(1));
+        Assert.That(File.ReadAllText(configBackups[0]), Is.EqualTo("old-config"));
+    }
+
+    [Test]
+    public void ApplyPendingRestore_should_run_for_postgres_when_config_restore_exists()
+    {
+        _connectionStringFactory.DatabaseType.Returns(DatabaseType.PostgreSQL);
+        _connectionStringFactory.MainDbConnectionString.Returns("Host=localhost;Database=seedarr");
+
+        var configPath = Path.Combine(_tempDir, "config.xml");
+        var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
+
+        File.WriteAllText(configPath, "postgres-old-config");
+        File.WriteAllText(configRestorePath, "postgres-new-config");
+
+        var database = new MainDatabase(
+            _dbFactory,
+            _connectionStringFactory,
+            _appFolderInfo);
+
+        Assert.That(File.ReadAllText(configPath), Is.EqualTo("postgres-new-config"));
+        Assert.That(File.Exists(configRestorePath), Is.False);
+
+        var configBackups = Directory.GetFiles(_tempDir, "config.xml.bak-*");
+        Assert.That(configBackups.Length, Is.EqualTo(1));
+        Assert.That(File.ReadAllText(configBackups[0]), Is.EqualTo("postgres-old-config"));
+    }
 }
