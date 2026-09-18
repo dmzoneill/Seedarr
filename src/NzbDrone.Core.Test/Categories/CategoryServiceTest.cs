@@ -386,6 +386,8 @@ public class CategoryServiceTest
     {
         Assert.That(CategoryService.NormalizeSavePath("/downloads/movies/"), Is.EqualTo("/downloads/movies"));
         Assert.That(CategoryService.NormalizeSavePath("/downloads/movies///"), Is.EqualTo("/downloads/movies"));
+        Assert.That(CategoryService.NormalizeSavePath("/downloads//movies/"), Is.EqualTo("/downloads/movies"));
+        Assert.That(CategoryService.NormalizeSavePath("C:\\downloads/movies"), Is.EqualTo("C:\\downloads\\movies"));
         Assert.That(CategoryService.NormalizeSavePath("/"), Is.EqualTo("/"));
         Assert.That(CategoryService.NormalizeSavePath(""), Is.EqualTo(string.Empty));
         Assert.That(CategoryService.NormalizeSavePath(null), Is.EqualTo(string.Empty));
@@ -617,5 +619,40 @@ public class CategoryServiceTest
 
         Assert.That(promoted.Count, Is.EqualTo(2));
         Assert.That(promoted.Select(t => t.Id), Is.EqualTo(new[] { 1, 2 }));
+    }
+
+    [Test]
+    public void GetSavePathForCategory_with_configured_category_save_path_returns_category_save_path()
+    {
+        var cat = new Category { Id = 1, Name = "Movies", SavePath = "/data/movies" };
+        _repository.GetByName("Movies").Returns(cat);
+
+        var result = _subject.GetSavePathForCategory("Movies", "/default/path");
+
+        Assert.That(result, Is.EqualTo("/data/movies"));
+    }
+
+    [Test]
+    public void GetSavePathForCategory_with_empty_category_save_path_falls_back_to_default_category_save_path()
+    {
+        var cat = new Category { Id = 1, Name = "Movies", SavePath = "" };
+        var defaultCat = new Category { Id = 2, Name = "Default", SavePath = "/data/default", IsDefault = true };
+        _repository.GetByName("Movies").Returns(cat);
+        _repository.GetDefault().Returns(defaultCat);
+
+        var result = _subject.GetSavePathForCategory("Movies", "/default/path");
+
+        Assert.That(result, Is.EqualTo("/data/default"));
+    }
+
+    [Test]
+    public void GetSavePathForCategory_with_no_category_and_no_default_save_path_returns_provided_default_path()
+    {
+        _repository.GetByName("NonExistent").Returns((Category)null);
+        _repository.GetDefault().Returns((Category)null);
+
+        var result = _subject.GetSavePathForCategory("NonExistent", "/default/path");
+
+        Assert.That(result, Is.EqualTo("/default/path"));
     }
 }

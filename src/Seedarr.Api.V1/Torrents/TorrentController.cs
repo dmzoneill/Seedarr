@@ -982,6 +982,8 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
     [HttpPost]
     public ActionResult<TorrentResource> Create([FromBody] TorrentResource resource)
     {
+        var defaultPath = _configService?.TorrentSaveDirectory ?? string.Empty;
+
         if (!string.IsNullOrEmpty(resource.MagnetLink))
         {
             try
@@ -1001,9 +1003,18 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                     shouldUpdate = true;
                 }
 
-                if (!string.IsNullOrWhiteSpace(resource.SavePath))
+                var resolvedSavePath = !string.IsNullOrWhiteSpace(resource.SavePath)
+                    ? resource.SavePath
+                    : (_categoryService != null ? _categoryService.GetSavePathForCategory(imported.Category, defaultPath) : defaultPath);
+
+                if (!string.IsNullOrWhiteSpace(resolvedSavePath))
                 {
-                    imported.SavePath = resource.SavePath;
+                    imported.SavePath = resolvedSavePath;
+                    if (string.IsNullOrWhiteSpace(imported.SourcePath))
+                    {
+                        imported.SourcePath = resolvedSavePath;
+                    }
+
                     shouldUpdate = true;
                 }
 
@@ -1105,6 +1116,22 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         var torrent = TorrentResourceMapper.ToModel(resource);
         torrent.DateAdded = DateTime.UtcNow;
 
+        if (string.IsNullOrWhiteSpace(torrent.SavePath))
+        {
+            var resolvedSavePath = _categoryService != null
+                ? _categoryService.GetSavePathForCategory(torrent.Category, defaultPath)
+                : defaultPath;
+
+            if (!string.IsNullOrWhiteSpace(resolvedSavePath))
+            {
+                torrent.SavePath = resolvedSavePath;
+                if (string.IsNullOrWhiteSpace(torrent.SourcePath))
+                {
+                    torrent.SourcePath = resolvedSavePath;
+                }
+            }
+        }
+
         try
         {
             var added = _torrentService.Add(torrent);
@@ -1159,9 +1186,19 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                     shouldUpdate = true;
                 }
 
-                if (!string.IsNullOrWhiteSpace(savePath))
+                var defaultPath = _configService?.TorrentSaveDirectory ?? string.Empty;
+                var resolvedSavePath = !string.IsNullOrWhiteSpace(savePath)
+                    ? savePath
+                    : (_categoryService != null ? _categoryService.GetSavePathForCategory(torrent.Category, defaultPath) : defaultPath);
+
+                if (!string.IsNullOrWhiteSpace(resolvedSavePath))
                 {
-                    torrent.SavePath = savePath;
+                    torrent.SavePath = resolvedSavePath;
+                    if (string.IsNullOrWhiteSpace(torrent.SourcePath))
+                    {
+                        torrent.SourcePath = resolvedSavePath;
+                    }
+
                     shouldUpdate = true;
                 }
 
@@ -1345,16 +1382,24 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
         var action = resource.Action.Trim().ToLowerInvariant();
         string resolvedCategoryName = null;
         Category resolvedCategory = null;
-        if (action == "setcategory" && resource.CategoryId.HasValue && resource.CategoryId.Value > 0)
+        if (action == "setcategory")
         {
-            var cat = _categoryService?.Get(resource.CategoryId.Value);
-            if (cat == null)
+            if (!string.IsNullOrWhiteSpace(resource.Category))
             {
-                return BadRequest($"Category with ID {resource.CategoryId.Value} not found.");
+                resolvedCategoryName = resource.Category.Trim();
+                resolvedCategory = _categoryService?.GetByName(resolvedCategoryName);
             }
+            else if (resource.CategoryId.HasValue && resource.CategoryId.Value > 0)
+            {
+                var cat = _categoryService?.Get(resource.CategoryId.Value);
+                if (cat == null)
+                {
+                    return BadRequest($"Category with ID {resource.CategoryId.Value} not found.");
+                }
 
-            resolvedCategoryName = cat.Name;
-            resolvedCategory = cat;
+                resolvedCategoryName = cat.Name;
+                resolvedCategory = cat;
+            }
         }
 
         foreach (var id in resource.TorrentIds)
@@ -1459,14 +1504,14 @@ public class TorrentController : RestControllerWithSignalR<TorrentResource, Torr
                         throw new KeyNotFoundException($"Torrent {id} not found");
                     }
 
+                    var categoryName = !string.IsNullOrWhiteSpace(resource.Category)
+                        ? resource.Category.Trim()
+                        : (resource.CategoryId.HasValue && resource.CategoryId.Value > 0 && _categoryService != null
+                            ? _categoryService.Get(resource.CategoryId.Value)?.Name
+                            : resolvedCategoryName);
+
                     var category = resolvedCategory;
-                    var categoryName = resolvedCategoryName;
-                    if (category == null && resource.CategoryId.HasValue && resource.CategoryId.Value > 0 && _categoryService != null)
-                    {
-                        category = _categoryService.Get(resource.CategoryId.Value);
-                        categoryName = category?.Name;
-                    }
-                    else if (category == null && !string.IsNullOrWhiteSpace(categoryName) && _categoryService != null)
+                    if (category == null && !string.IsNullOrWhiteSpace(categoryName) && _categoryService != null)
                     {
                         category = _categoryService.GetByName(categoryName);
                     }

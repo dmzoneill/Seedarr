@@ -8,6 +8,7 @@ public class BulkTorrentActionResource
     public string Action { get; set; } = string.Empty; // "start", "stop", "delete", "recheck", "announce", "setCategory", "addTags", "removeTags", "setPriority", "setSpeedLimits"
     public bool DeleteFiles { get; set; }
     public int? CategoryId { get; set; }
+    public string Category { get; set; }
     public List<int> TagIds { get; set; }
     public int? Priority { get; set; }
     public int? UploadLimit { get; set; }

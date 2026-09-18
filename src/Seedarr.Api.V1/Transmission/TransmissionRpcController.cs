@@ -930,6 +930,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 if (!string.IsNullOrWhiteSpace(downloadDir))
                 {
                     added.SourcePath = RemapRemoteToLocal(downloadDir);
+                    added.SavePath = added.SourcePath;
                     needsUpdate = true;
                 }
                 else if (_categoryService != null)
@@ -939,6 +940,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                     if (!string.IsNullOrWhiteSpace(resolvedPath))
                     {
                         added.SourcePath = resolvedPath;
+                        added.SavePath = resolvedPath;
                         needsUpdate = true;
                     }
                 }

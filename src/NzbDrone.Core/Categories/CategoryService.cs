@@ -603,6 +603,18 @@ public class CategoryService : ICategoryService
 
     private static void VerifySavePathAccess(string savePath)
     {
+        if (string.IsNullOrWhiteSpace(savePath))
+        {
+            return;
+        }
+
+        if (!OperatingSystem.IsWindows() &&
+            ((savePath.Length >= 2 && char.IsLetter(savePath[0]) && savePath[1] == ':') ||
+                (savePath.Length >= 2 && savePath[0] == '\\' && savePath[1] == '\\')))
+        {
+            return;
+        }
+
         try
         {
             var dirInfo = Directory.CreateDirectory(savePath);
@@ -624,18 +636,44 @@ public class CategoryService : ICategoryService
         }
 
         var trimmed = path.Trim();
-        var root = Path.GetPathRoot(trimmed);
-        if (!string.IsNullOrEmpty(root) && string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
+
+        var isWindowsOnUnix = !OperatingSystem.IsWindows() &&
+            ((trimmed.Length >= 2 && char.IsLetter(trimmed[0]) && trimmed[1] == ':') ||
+                (trimmed.Length >= 2 && trimmed[0] == '\\' && trimmed[1] == '\\'));
+
+        if (isWindowsOnUnix)
         {
-            return trimmed;
+            var normalized = trimmed.Replace('/', '\\');
+            var driveRoot = normalized.Length >= 2 && char.IsLetter(normalized[0]) && normalized[1] == ':';
+            if (driveRoot && (normalized.Length == 2 || (normalized.Length == 3 && normalized[2] == '\\')))
+            {
+                return normalized.Length == 2 ? normalized + "\\" : normalized;
+            }
+
+            return normalized.TrimEnd('\\');
         }
 
-        if (trimmed.Length == 3 && char.IsLetter(trimmed[0]) && trimmed[1] == ':' && (trimmed[2] == '\\' || trimmed[2] == '/'))
+        try
         {
-            return trimmed;
-        }
+            var fullPath = Path.GetFullPath(trimmed);
+            var root = Path.GetPathRoot(fullPath);
+            if (!string.IsNullOrEmpty(root) && string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase))
+            {
+                return fullPath;
+            }
 
-        return trimmed.TrimEnd('/', '\\');
+            return fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        catch
+        {
+            var root = Path.GetPathRoot(trimmed);
+            if (!string.IsNullOrEmpty(root) && string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
+            {
+                return trimmed;
+            }
+
+            return trimmed.TrimEnd('/', '\\');
+        }
     }
 
     public bool CanDownload(Torrent torrent, IEnumerable<Torrent> activeTorrents, int? globalMaxActiveDownloads = null)

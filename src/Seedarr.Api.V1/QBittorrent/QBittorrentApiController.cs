@@ -762,6 +762,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
         if (!string.IsNullOrWhiteSpace(request.EffectiveSavePath))
         {
             added.SourcePath = RemapRemoteToLocal(request.EffectiveSavePath);
+            added.SavePath = added.SourcePath;
             needsUpdate = true;
         }
         else if (!string.IsNullOrWhiteSpace(targetCategory))
@@ -770,6 +771,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
             if (!string.IsNullOrWhiteSpace(categoryPath))
             {
                 added.SourcePath = RemapRemoteToLocal(categoryPath);
+                added.SavePath = added.SourcePath;
                 needsUpdate = true;
             }
         }
@@ -831,10 +833,10 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         if (_categoryService != null)
         {
-            var cat = _categoryService.GetByName(trimmedCategory);
-            if (cat != null && !string.IsNullOrWhiteSpace(cat.SavePath))
+            var categorySavePath = _categoryService.GetSavePathForCategory(trimmedCategory);
+            if (!string.IsNullOrWhiteSpace(categorySavePath))
             {
-                return cat.SavePath;
+                return categorySavePath;
             }
         }
 
