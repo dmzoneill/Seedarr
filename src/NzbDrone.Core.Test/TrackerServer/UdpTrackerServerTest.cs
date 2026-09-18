@@ -88,6 +88,14 @@ public class UdpTrackerServerTest
         return (byte[])method.Invoke(null, new object[] { peers, excludeIp, excludePort, maxPeers });
     }
 
+    private static byte[] InvokeBuildCompactPeers6(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
+    {
+        var method = typeof(UdpTrackerServer).GetMethod(
+            "BuildCompactPeers6",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        return (byte[])method.Invoke(null, new object[] { peers, excludeIp, excludePort, maxPeers });
+    }
+
     private static string InvokeConvertInfoHashToHex(byte[] data, int offset)
     {
         var method = typeof(UdpTrackerServer).GetMethod(
@@ -834,6 +842,150 @@ public class UdpTrackerServerTest
         var result = InvokeBuildCompactPeers(peers, "10.0.0.99", 9999, 50);
 
         Assert.That(result, Is.Empty);
+    }
+
+    // ---- BuildCompactPeers6 tests ----
+
+    [Test]
+    public void BuildCompactPeers6_should_encode_ipv6_and_port()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "2001:db8::1", Port = 6881 }
+        };
+
+        var result = InvokeBuildCompactPeers6(peers, "2001:db8::99", 9999, 50);
+
+        Assert.That(result, Has.Length.EqualTo(18));
+        var expectedIpBytes = IPAddress.Parse("2001:db8::1").GetAddressBytes();
+        Assert.That(result.AsSpan(0, 16).ToArray(), Is.EqualTo(expectedIpBytes));
+        Assert.That(result[16], Is.EqualTo(6881 >> 8));
+        Assert.That(result[17], Is.EqualTo(6881 & 0xFF));
+    }
+
+    [Test]
+    public void BuildCompactPeers6_should_skip_ipv4_address()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "192.168.1.1", Port = 6881 },
+            new TrackerPeerEntry { Ip = "2001:db8::1", Port = 6882 }
+        };
+
+        var result = InvokeBuildCompactPeers6(peers, "2001:db8::99", 9999, 50);
+
+        Assert.That(result, Has.Length.EqualTo(18));
+        var expectedIpBytes = IPAddress.Parse("2001:db8::1").GetAddressBytes();
+        Assert.That(result.AsSpan(0, 16).ToArray(), Is.EqualTo(expectedIpBytes));
+        Assert.That(result[16], Is.EqualTo(6882 >> 8));
+        Assert.That(result[17], Is.EqualTo(6882 & 0xFF));
+    }
+
+    [Test]
+    public void BuildCompactPeers6_should_exclude_requesting_peer()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "2001:db8::1", Port = 6881 },
+            new TrackerPeerEntry { Ip = "2001:db8::2", Port = 6882 }
+        };
+
+        var result = InvokeBuildCompactPeers6(peers, "2001:db8::1", 6881, 50);
+
+        Assert.That(result, Has.Length.EqualTo(18));
+        var expectedIpBytes = IPAddress.Parse("2001:db8::2").GetAddressBytes();
+        Assert.That(result.AsSpan(0, 16).ToArray(), Is.EqualTo(expectedIpBytes));
+    }
+
+    [Test]
+    public void BuildCompactPeers6_should_limit_to_max_peers()
+    {
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "2001:db8::1", Port = 6881 },
+            new TrackerPeerEntry { Ip = "2001:db8::2", Port = 6882 },
+            new TrackerPeerEntry { Ip = "2001:db8::3", Port = 6883 }
+        };
+
+        var result = InvokeBuildCompactPeers6(peers, "2001:db8::99", 9999, 2);
+
+        Assert.That(result, Has.Length.EqualTo(36));
+    }
+
+    [Test]
+    public void HandleAnnounce_with_ipv6_remote_endpoint_should_store_ipv6_peer()
+    {
+        var ipv6 = IPAddress.Parse("2001:db8::1");
+        var connId = RegisterValidConnectionId(ipv6);
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xBB);
+        var peerId = new byte[20];
+        Array.Fill(peerId, (byte)0x77);
+
+        var expectedHex = Convert.ToHexString(infoHash).ToLowerInvariant();
+        _peerDatabase.GetPeers(expectedHex).Returns(new List<TrackerPeerEntry>());
+        _peerDatabase.GetStats(expectedHex).Returns(new ScrapeStats());
+
+        var data = BuildAnnounceRequest(connId, 42, infoHash, peerId, 2, 50, 6881);
+        var result = InvokeHandleAnnounce(connId, 42, data, new IPEndPoint(ipv6, 6881));
+
+        _peerDatabase.Received(1).AddPeer(expectedHex, "2001:db8::1", 6881, Encoding.Latin1.GetString(peerId));
+        Assert.That(result, Has.Length.EqualTo(20));
+    }
+
+    [Test]
+    public void HandleAnnounce_with_ipv6_remote_endpoint_should_return_18_byte_compact_peers()
+    {
+        var ipv6 = IPAddress.Parse("2001:db8::1");
+        var connId = RegisterValidConnectionId(ipv6);
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xCC);
+        var peerId = new byte[20];
+        Array.Fill(peerId, (byte)0x88);
+
+        var expectedHex = Convert.ToHexString(infoHash).ToLowerInvariant();
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "2001:db8::2", Port = 51413 }
+        };
+        _peerDatabase.GetPeers(expectedHex).Returns(peers);
+        _peerDatabase.GetStats(expectedHex).Returns(new ScrapeStats());
+
+        var data = BuildAnnounceRequest(connId, 42, infoHash, peerId, 0, 50, 6881);
+        var result = InvokeHandleAnnounce(connId, 42, data, new IPEndPoint(ipv6, 6881));
+
+        Assert.That(result, Has.Length.EqualTo(38)); // 20 header + 18 compact peer
+        var expectedIpBytes = IPAddress.Parse("2001:db8::2").GetAddressBytes();
+        Assert.That(result.AsSpan(20, 16).ToArray(), Is.EqualTo(expectedIpBytes));
+        Assert.That(result[36], Is.EqualTo(51413 >> 8));
+        Assert.That(result[37], Is.EqualTo(51413 & 0xFF));
+    }
+
+    [Test]
+    public void HandleAnnounce_with_ipv4_remote_endpoint_in_dual_stack_should_only_return_ipv4_peers()
+    {
+        var ipv4 = IPAddress.Parse("10.0.0.1");
+        var connId = RegisterValidConnectionId(ipv4);
+        var infoHash = new byte[20];
+        Array.Fill(infoHash, (byte)0xDD);
+        var peerId = new byte[20];
+        Array.Fill(peerId, (byte)0x99);
+
+        var expectedHex = Convert.ToHexString(infoHash).ToLowerInvariant();
+        var peers = new List<TrackerPeerEntry>
+        {
+            new TrackerPeerEntry { Ip = "10.0.0.2", Port = 6882 },
+            new TrackerPeerEntry { Ip = "2001:db8::2", Port = 51413 }
+        };
+        _peerDatabase.GetPeers(expectedHex).Returns(peers);
+        _peerDatabase.GetStats(expectedHex).Returns(new ScrapeStats());
+
+        var data = BuildAnnounceRequest(connId, 42, infoHash, peerId, 0, 50, 6881);
+        var result = InvokeHandleAnnounce(connId, 42, data, new IPEndPoint(ipv4, 6881));
+
+        Assert.That(result, Has.Length.EqualTo(26)); // 20 header + 6 compact peer
+        Assert.That(result[20], Is.EqualTo(10));
+        Assert.That(result[23], Is.EqualTo(2));
     }
 
     [Test]

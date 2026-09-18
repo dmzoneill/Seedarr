@@ -160,6 +160,10 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             var port = _configService.TrackerHttpPort;
             var bindAddress = IPAddress.Parse(_configService.TrackerBindAddress);
             var listener = new TcpListener(bindAddress, port);
+            if (bindAddress.Equals(IPAddress.IPv6Any))
+            {
+                listener.Server.DualMode = true;
+            }
 
             try
             {
@@ -590,7 +594,8 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             }
         }
 
-        var peerIp = remoteEndpoint.Address.ToString();
+        var clientAddress = remoteEndpoint.Address.IsIPv4MappedToIPv6 ? remoteEndpoint.Address.MapToIPv4() : remoteEndpoint.Address;
+        var peerIp = clientAddress.ToString();
         var eventType = parameters.GetValueOrDefault("event", "");
 
         if (eventType == "stopped")
@@ -647,6 +652,8 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             peersObject = new BString(compactPeers);
         }
 
+        var compactPeers6 = BuildCompactPeers6(peers, peerIp, port, maxPeers);
+
         if (_configService.TrackerLogAnnounces)
         {
             var returningPeersCount = peersObject is BList bList ? bList.Count : ((BString)peersObject).Value.Length / 6;
@@ -665,6 +672,7 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             ["interval"] = new BNumber(interval),
             ["min interval"] = new BNumber(minInterval),
             ["peers"] = peersObject,
+            ["peers6"] = new BString(compactPeers6),
         };
 
         if (_configService.TrackerPrivateMode)
@@ -785,11 +793,36 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private static byte[] BuildCompactPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
     {
-        var filtered = peers.Where(p => p.Ip != excludeIp || p.Port != excludePort).Take(maxPeers).ToList();
-        var chunks = new List<byte>(filtered.Count * 6);
-        foreach (var peer in filtered)
+        if (maxPeers <= 0)
         {
-            if (!IPAddress.TryParse(peer.Ip, out var addr) || addr.AddressFamily != AddressFamily.InterNetwork)
+            return Array.Empty<byte>();
+        }
+
+        IPAddress.TryParse(excludeIp, out var excludeAddr);
+        if (excludeAddr != null && excludeAddr.IsIPv4MappedToIPv6)
+        {
+            excludeAddr = excludeAddr.MapToIPv4();
+        }
+
+        var chunks = new List<byte>();
+        foreach (var peer in peers)
+        {
+            if (!IPAddress.TryParse(peer.Ip, out var addr))
+            {
+                continue;
+            }
+
+            if (addr.IsIPv4MappedToIPv6)
+            {
+                addr = addr.MapToIPv4();
+            }
+
+            if (addr.AddressFamily != AddressFamily.InterNetwork)
+            {
+                continue;
+            }
+
+            if (peer.Port == excludePort && (peer.Ip == excludeIp || (excludeAddr != null && addr.Equals(excludeAddr))))
             {
                 continue;
             }
@@ -798,6 +831,52 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             chunks.AddRange(ipBytes);
             chunks.Add((byte)(peer.Port >> 8));
             chunks.Add((byte)peer.Port);
+
+            if (chunks.Count / 6 >= maxPeers)
+            {
+                break;
+            }
+        }
+
+        return chunks.ToArray();
+    }
+
+    private static byte[] BuildCompactPeers6(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
+    {
+        if (maxPeers <= 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        IPAddress.TryParse(excludeIp, out var excludeAddr);
+
+        var chunks = new List<byte>();
+        foreach (var peer in peers)
+        {
+            if (!IPAddress.TryParse(peer.Ip, out var addr))
+            {
+                continue;
+            }
+
+            if (addr.IsIPv4MappedToIPv6 || addr.AddressFamily != AddressFamily.InterNetworkV6)
+            {
+                continue;
+            }
+
+            if (peer.Port == excludePort && (peer.Ip == excludeIp || (excludeAddr != null && addr.Equals(excludeAddr))))
+            {
+                continue;
+            }
+
+            var ipBytes = addr.GetAddressBytes();
+            chunks.AddRange(ipBytes);
+            chunks.Add((byte)(peer.Port >> 8));
+            chunks.Add((byte)peer.Port);
+
+            if (chunks.Count / 18 >= maxPeers)
+            {
+                break;
+            }
         }
 
         return chunks.ToArray();
@@ -805,7 +884,43 @@ public class TrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private static BList BuildDictionaryPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
     {
-        var filtered = peers.Where(p => p.Ip != excludeIp || p.Port != excludePort).Take(maxPeers).ToList();
+        if (maxPeers <= 0)
+        {
+            return new BList();
+        }
+
+        IPAddress.TryParse(excludeIp, out var excludeAddr);
+        if (excludeAddr != null && excludeAddr.IsIPv4MappedToIPv6)
+        {
+            excludeAddr = excludeAddr.MapToIPv4();
+        }
+
+        var filtered = peers.Where(p =>
+        {
+            if (p.Port == excludePort)
+            {
+                if (p.Ip == excludeIp)
+                {
+                    return false;
+                }
+
+                if (excludeAddr != null && IPAddress.TryParse(p.Ip, out var pAddr))
+                {
+                    if (pAddr.IsIPv4MappedToIPv6)
+                    {
+                        pAddr = pAddr.MapToIPv4();
+                    }
+
+                    if (pAddr.Equals(excludeAddr))
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }).Take(maxPeers).ToList();
+
         var list = new BList();
         foreach (var peer in filtered)
         {

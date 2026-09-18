@@ -29,6 +29,7 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
     private const int InfoHashLength = 20;
     private const int PeerIdLength = 20;
     private const int CompactPeerSize = 6;
+    private const int CompactPeer6Size = 18;
     private const int ConnectionIdTtlMinutes = 2;
     private const int MaxScrapeHashes = 74;
     private const int ScrapeRequestHeaderSize = 16;
@@ -140,7 +141,16 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
             try
             {
-                client = new UdpClient(new IPEndPoint(bindAddress, port));
+                if (bindAddress.Equals(IPAddress.IPv6Any))
+                {
+                    client = new UdpClient(AddressFamily.InterNetworkV6);
+                    client.Client.DualMode = true;
+                    client.Client.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+                }
+                else
+                {
+                    client = new UdpClient(new IPEndPoint(bindAddress, port));
+                }
             }
             catch (SocketException ex)
             {
@@ -248,7 +258,8 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             var connectionId = BinaryPrimitives.ReadInt64BigEndian(data.AsSpan(0, 8));
             var action = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(8, 4));
             var transactionId = BinaryPrimitives.ReadInt32BigEndian(data.AsSpan(12, 4));
-            var clientIp = remote.Address.ToString();
+            var clientAddress = remote.Address.IsIPv4MappedToIPv6 ? remote.Address.MapToIPv4() : remote.Address;
+            var clientIp = clientAddress.ToString();
 
             string infoHash = null;
             if (action == AnnounceAction && data.Length >= 16 + InfoHashLength)
@@ -293,11 +304,13 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             return BuildErrorResponse(transactionId, "Invalid protocol magic");
         }
 
+        var clientAddress = remote.Address.IsIPv4MappedToIPv6 ? remote.Address.MapToIPv4() : remote.Address;
+
         var newConnectionId = GenerateConnectionId();
         _connectionIds[newConnectionId] = new ConnectionEntry
         {
             Created = DateTime.UtcNow,
-            RemoteAddress = remote.Address
+            RemoteAddress = clientAddress
         };
 
         var response = new byte[16];
@@ -312,7 +325,9 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private byte[] HandleAnnounce(long connectionId, int transactionId, byte[] data, IPEndPoint remote)
     {
-        if (!ValidateConnectionId(connectionId, remote.Address))
+        var clientAddress = remote.Address.IsIPv4MappedToIPv6 ? remote.Address.MapToIPv4() : remote.Address;
+
+        if (!ValidateConnectionId(connectionId, clientAddress))
         {
             return BuildErrorResponse(transactionId, "Invalid connection_id");
         }
@@ -340,7 +355,7 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         var port = BinaryPrimitives.ReadUInt16BigEndian(data.AsSpan(96, 2));
 
         // Always use the remote address; never trust client-specified IP
-        var peerIp = remote.Address.ToString();
+        var peerIp = clientAddress.ToString();
 
         var peerPort = port > 0 ? port : remote.Port;
 
@@ -371,7 +386,10 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         _peerDatabase.IncrementAnnounces();
 
         var peers = _peerDatabase.GetPeers(infoHash);
-        var compactPeers = BuildCompactPeers(peers, peerIp, peerPort, numWant);
+        var isIpv6Client = clientAddress.AddressFamily == AddressFamily.InterNetworkV6;
+        var compactPeers = isIpv6Client
+            ? BuildCompactPeers6(peers, peerIp, peerPort, numWant)
+            : BuildCompactPeers(peers, peerIp, peerPort, numWant);
         var stats = _peerDatabase.GetStats(infoHash);
 
         var announceInterval = _configService.TrackerAnnounceInterval;
@@ -386,13 +404,14 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
         if (_configService.TrackerLogAnnounces)
         {
+            var peerSize = isIpv6Client ? CompactPeer6Size : CompactPeerSize;
             _logger.Info(
                 "UDP announce for {0} from {1}:{2}, event={3}, returning {4} peers",
                 infoHash,
                 peerIp,
                 peerPort,
                 eventName,
-                compactPeers.Length / CompactPeerSize);
+                compactPeers.Length / peerSize);
         }
 
         return response;
@@ -403,7 +422,9 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private byte[] HandleScrape(long connectionId, int transactionId, byte[] data, IPEndPoint remote)
     {
-        if (!ValidateConnectionId(connectionId, remote.Address))
+        var clientAddress = remote.Address.IsIPv4MappedToIPv6 ? remote.Address.MapToIPv4() : remote.Address;
+
+        if (!ValidateConnectionId(connectionId, clientAddress))
         {
             return BuildErrorResponse(transactionId, "Invalid connection_id");
         }
@@ -463,16 +484,37 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
 
     private static byte[] BuildCompactPeers(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
     {
-        var filtered = peers
-            .Where(p => p.Ip != excludeIp || p.Port != excludePort)
-            .Take(maxPeers)
-            .ToList();
-
-        var chunks = new List<byte>(filtered.Count * CompactPeerSize);
-
-        foreach (var peer in filtered)
+        if (maxPeers <= 0)
         {
-            if (!IPAddress.TryParse(peer.Ip, out var addr) || addr.AddressFamily != AddressFamily.InterNetwork)
+            return Array.Empty<byte>();
+        }
+
+        IPAddress.TryParse(excludeIp, out var excludeAddr);
+        if (excludeAddr != null && excludeAddr.IsIPv4MappedToIPv6)
+        {
+            excludeAddr = excludeAddr.MapToIPv4();
+        }
+
+        var chunks = new List<byte>();
+
+        foreach (var peer in peers)
+        {
+            if (!IPAddress.TryParse(peer.Ip, out var addr))
+            {
+                continue;
+            }
+
+            if (addr.IsIPv4MappedToIPv6)
+            {
+                addr = addr.MapToIPv4();
+            }
+
+            if (addr.AddressFamily != AddressFamily.InterNetwork)
+            {
+                continue;
+            }
+
+            if (peer.Port == excludePort && (peer.Ip == excludeIp || (excludeAddr != null && addr.Equals(excludeAddr))))
             {
                 continue;
             }
@@ -481,6 +523,53 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
             chunks.AddRange(ipBytes);
             chunks.Add((byte)(peer.Port >> 8));
             chunks.Add((byte)peer.Port);
+
+            if (chunks.Count / CompactPeerSize >= maxPeers)
+            {
+                break;
+            }
+        }
+
+        return chunks.ToArray();
+    }
+
+    private static byte[] BuildCompactPeers6(List<TrackerPeerEntry> peers, string excludeIp, int excludePort, int maxPeers)
+    {
+        if (maxPeers <= 0)
+        {
+            return Array.Empty<byte>();
+        }
+
+        IPAddress.TryParse(excludeIp, out var excludeAddr);
+
+        var chunks = new List<byte>();
+
+        foreach (var peer in peers)
+        {
+            if (!IPAddress.TryParse(peer.Ip, out var addr))
+            {
+                continue;
+            }
+
+            if (addr.IsIPv4MappedToIPv6 || addr.AddressFamily != AddressFamily.InterNetworkV6)
+            {
+                continue;
+            }
+
+            if (peer.Port == excludePort && (peer.Ip == excludeIp || (excludeAddr != null && addr.Equals(excludeAddr))))
+            {
+                continue;
+            }
+
+            var ipBytes = addr.GetAddressBytes();
+            chunks.AddRange(ipBytes);
+            chunks.Add((byte)(peer.Port >> 8));
+            chunks.Add((byte)peer.Port);
+
+            if (chunks.Count / CompactPeer6Size >= maxPeers)
+            {
+                break;
+            }
         }
 
         return chunks.ToArray();
@@ -514,6 +603,11 @@ public class UdpTrackerServer : BackgroundService, IHandle<ConfigSavedEvent>
         if (!_connectionIds.TryGetValue(connectionId, out var entry))
         {
             return false;
+        }
+
+        if (remoteAddress != null && remoteAddress.IsIPv4MappedToIPv6)
+        {
+            remoteAddress = remoteAddress.MapToIPv4();
         }
 
         if (remoteAddress == null || entry.RemoteAddress == null || !entry.RemoteAddress.Equals(remoteAddress))
