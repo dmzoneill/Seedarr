@@ -324,23 +324,30 @@ public class SpeedScheduler : ISpeedScheduler
 
     private static SpeedLimits ResolveLimits(List<SpeedSchedule> activeSchedules)
     {
-        // Most restrictive wins: take the lowest speed from all active schedules.
-        // -1 indicates Unlimited (-1L), whereas 0 indicates an explicit 0 B/s throttle (paused).
-        var uploadSpeeds = activeSchedules
-            .Where(s => s.MaxUploadSpeed >= 0)
-            .Select(s => s.MaxUploadSpeed)
+        if (activeSchedules == null || activeSchedules.Count == 0)
+        {
+            return NoConstraint();
+        }
+
+        // Order active schedules by Priority ascending (lower numerical value = higher precedence).
+        // Ties are broken deterministically by Id and then Name.
+        var orderedSchedules = activeSchedules
+            .OrderBy(s => s.Priority)
+            .ThenBy(s => s.Id)
+            .ThenBy(s => s.Name)
             .ToList();
 
-        var downloadSpeeds = activeSchedules
-            .Where(s => s.MaxDownloadSpeed >= 0)
-            .Select(s => s.MaxDownloadSpeed)
-            .ToList();
+        var primarySchedule = orderedSchedules.First();
 
-        var effectiveUpload = uploadSpeeds.Count > 0 ? uploadSpeeds.Min() : SpeedLimits.Unlimited;
-        var effectiveDownload = downloadSpeeds.Count > 0 ? downloadSpeeds.Min() : SpeedLimits.Unlimited;
+        // The highest-priority schedule sets the limits.
+        // Explicit 0 B/s is a valid throttle (paused), not unlimited.
+        // If the highest-priority schedule leaves a direction unlimited (< 0),
+        // fallback to the next-highest-priority schedule defining a limit.
+        var effectiveUpload = orderedSchedules
+            .FirstOrDefault(s => s.MaxUploadSpeed >= 0)?.MaxUploadSpeed ?? SpeedLimits.Unlimited;
 
-        // Pick the highest-priority (lowest number) schedule for the display name
-        var primarySchedule = activeSchedules.OrderBy(s => s.Priority).First();
+        var effectiveDownload = orderedSchedules
+            .FirstOrDefault(s => s.MaxDownloadSpeed >= 0)?.MaxDownloadSpeed ?? SpeedLimits.Unlimited;
 
         return new SpeedLimits
         {

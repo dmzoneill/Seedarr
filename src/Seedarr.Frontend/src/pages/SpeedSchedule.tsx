@@ -409,8 +409,7 @@ function WeeklyCalendar({ schedules }: { schedules: SpeedScheduleEntry[] }) {
                   return isTodayEvening || isPrevDayMorning;
                 }
               });
-              active.sort((a, b) => a.priority - b.priority);
-              const top = active[0];
+              const top = [...active].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))[0];
               return (
                 <div
                   key={`${hour}-${day.value}`}
