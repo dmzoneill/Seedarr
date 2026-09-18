@@ -332,6 +332,11 @@ public class NewznabIndexer : IIndexer
             return results;
         }
 
+        if (xml.Contains("&nbsp;"))
+        {
+            xml = xml.Replace("&nbsp;", "&#160;");
+        }
+
         var doc = new XmlDocument();
         var settings = new XmlReaderSettings
         {
@@ -365,6 +370,8 @@ public class NewznabIndexer : IIndexer
             foreach (System.Xml.XmlNode item in items)
             {
                 var titleNode = item.SelectSingleNode("title");
+                var descriptionNode = item.SelectSingleNode("description");
+                var commentsNode = item.SelectSingleNode("comments") ?? item.SelectSingleNode("details");
                 var linkNode = item.SelectSingleNode("link");
                 var enclosureNode = item.SelectSingleNode("enclosure");
                 var sizeNode = item.SelectSingleNode("size");
@@ -373,12 +380,23 @@ public class NewznabIndexer : IIndexer
 
                 var downloadUrl = enclosureNode?.Attributes?["url"]?.Value ?? linkNode?.InnerText;
 
+                var rawTitle = titleNode?.InnerText ?? string.Empty;
+                var decodedTitle = TorznabIndexer.DecodeAndNormalize(rawTitle);
+
+                var rawDescription = descriptionNode?.InnerText;
+                var decodedDescription = rawDescription != null ? TorznabIndexer.DecodeAndNormalize(rawDescription) : null;
+
+                var rawComments = commentsNode?.InnerText;
+                var decodedComments = rawComments != null ? TorznabIndexer.DecodeAndNormalize(rawComments) : null;
+
                 var release = new ReleaseInfo
                 {
                     Guid = guidNode?.InnerText ?? string.Empty,
                     IndexerId = definition?.Id ?? 0,
                     Indexer = definition?.Name,
-                    Title = titleNode?.InnerText ?? string.Empty,
+                    Title = decodedTitle,
+                    Description = decodedDescription,
+                    Comments = decodedComments,
                     DownloadUrl = downloadUrl,
                     ResponseOffset = responseOffset,
                     ResponseTotal = responseTotal,
@@ -431,5 +449,10 @@ public class NewznabIndexer : IIndexer
         }
 
         return results;
+    }
+
+    public static string DecodeAndNormalize(string input)
+    {
+        return TorznabIndexer.DecodeAndNormalize(input);
     }
 }
