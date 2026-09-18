@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -114,6 +115,7 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
     private readonly IEventAggregator _eventAggregator;
     private readonly Logger _logger;
     private readonly object _lock = new();
+    private readonly ConcurrentDictionary<string, (long Uploaded, long Downloaded)> _lastSeenBytes = new();
 
     private readonly Channel<TrackerMetricSnapshot> _snapshotChannel = Channel.CreateBounded<TrackerMetricSnapshot>(
         new BoundedChannelOptions(5000)
@@ -188,6 +190,8 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
                 if (!string.IsNullOrWhiteSpace(t.TrackerUrl))
                 {
                     GetOrCreateMetric(t.TrackerUrl);
+                    var key = $"{t.TrackerUrl}_{t.Id}";
+                    _lastSeenBytes.TryAdd(key, (t.Uploaded, t.Downloaded));
                 }
             }
 
@@ -212,6 +216,10 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
 
                         _metricRepository.Update(metric);
                     }
+
+                    var key = $"{entry.Url}_{entry.TorrentId}";
+                    var uploaded = entry.LastAnnouncedUploaded > 0 ? entry.LastAnnouncedUploaded : 0;
+                    _lastSeenBytes.AddOrUpdate(key, (uploaded, entry.Downloaded), (k, old) => (Math.Max(old.Uploaded, uploaded), Math.Max(old.Downloaded, entry.Downloaded)));
                 }
             }
         }
@@ -241,6 +249,8 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
 
         var now = DateTime.UtcNow;
         TrackerMetric metric;
+        long deltaUploaded = 0;
+        long deltaDownloaded = 0;
 
         lock (_lock)
         {
@@ -251,6 +261,51 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
 
             if (success)
             {
+                var key = $"{trackerUrl}_{torrentId}";
+                if (_lastSeenBytes.TryGetValue(key, out var lastSeen))
+                {
+                    deltaUploaded = Math.Max(0, uploaded - lastSeen.Uploaded);
+                    deltaDownloaded = Math.Max(0, downloaded - lastSeen.Downloaded);
+                }
+                else
+                {
+                    long baseUploaded = 0;
+                    long baseDownloaded = 0;
+                    var isExisting = false;
+
+                    if (torrentId > 0 && _trackerEntryRepository != null)
+                    {
+                        try
+                        {
+                            var entries = _trackerEntryRepository.GetByTorrentId(torrentId);
+                            var entry = entries?.FirstOrDefault(e => string.Equals(e.Url, trackerUrl, StringComparison.OrdinalIgnoreCase));
+                            if (entry != null && (entry.LastAnnouncedUploaded > 0 || entry.Downloaded > 0 || entry.TotalAnnounces > 0))
+                            {
+                                baseUploaded = entry.LastAnnouncedUploaded;
+                                baseDownloaded = entry.Downloaded;
+                                isExisting = true;
+                            }
+                        }
+                        catch
+                        {
+                            // fallback
+                        }
+                    }
+
+                    if (isExisting)
+                    {
+                        deltaUploaded = Math.Max(0, uploaded - baseUploaded);
+                        deltaDownloaded = Math.Max(0, downloaded - baseDownloaded);
+                    }
+                    else
+                    {
+                        deltaUploaded = Math.Max(0, uploaded);
+                        deltaDownloaded = Math.Max(0, downloaded);
+                    }
+                }
+
+                _lastSeenBytes[key] = (uploaded, downloaded);
+
                 UpdateLatencyMetrics(metric, responseTimeMs);
                 metric.SuccessfulAnnounces++;
                 metric.ConsecutiveFailures = 0;
@@ -274,11 +329,11 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
                     metric.TotalPeersDiscovered += peersCount;
                 }
 
-                metric.TotalUploaded += uploaded;
-                metric.TotalDownloaded += downloaded;
+                metric.TotalUploaded += deltaUploaded;
+                metric.TotalDownloaded += deltaDownloaded;
                 metric.TotalLeft = left;
-                metric.SessionUploaded += uploaded;
-                metric.SessionDownloaded += downloaded;
+                metric.SessionUploaded += deltaUploaded;
+                metric.SessionDownloaded += deltaDownloaded;
             }
             else
             {
@@ -309,8 +364,8 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
             TrackerUrl = metric.TrackerUrl,
             Timestamp = now,
             ResponseTimeMs = responseTimeMs,
-            Uploaded = uploaded,
-            Downloaded = downloaded,
+            Uploaded = deltaUploaded,
+            Downloaded = deltaDownloaded,
             Seeders = seeders,
             Leechers = leechers,
             PeersDiscovered = peersCount,
@@ -466,11 +521,31 @@ public class TrackerMetricService : ITrackerMetricService, IDisposable, IAsyncDi
 
     public void ResetMetrics(int id)
     {
+        var metric = _metricRepository.Get(id);
+        if (metric != null && !string.IsNullOrEmpty(metric.TrackerUrl))
+        {
+            var prefix = $"{metric.TrackerUrl}_";
+            foreach (var key in _lastSeenBytes.Keys.Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                _lastSeenBytes.TryRemove(key, out _);
+            }
+        }
+
         _metricRepository.ResetStats(id);
     }
 
     public void DeleteMetric(int id)
     {
+        var metric = _metricRepository.Get(id);
+        if (metric != null && !string.IsNullOrEmpty(metric.TrackerUrl))
+        {
+            var prefix = $"{metric.TrackerUrl}_";
+            foreach (var key in _lastSeenBytes.Keys.Where(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)).ToList())
+            {
+                _lastSeenBytes.TryRemove(key, out _);
+            }
+        }
+
         _snapshotRepository.DeleteByMetricId(id);
         _metricRepository.Delete(id);
     }
