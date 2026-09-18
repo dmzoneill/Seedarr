@@ -52,6 +52,7 @@ public interface IUtpConnection : IDisposable
 public class UtpConnection : IUtpConnection
 {
     public const uint MaxBufferSize = 1024 * 1024;
+    public const int MaxOutOfOrderPackets = 64;
     private const int HeaderSize = 20;
     private const uint DefaultWindowSize = 65535;
     private const int MaxPayloadSize = 1360;
@@ -623,7 +624,10 @@ public class UtpConnection : IUtpConnection
                     }
                     else if (IsAhead(header.SequenceNumber, _expectedSeqNr))
                     {
-                        _outOfOrderBuffer[header.SequenceNumber] = payload;
+                        if (_outOfOrderBuffer.Count < MaxOutOfOrderPackets || _outOfOrderBuffer.ContainsKey(header.SequenceNumber))
+                        {
+                            _outOfOrderBuffer[header.SequenceNumber] = payload;
+                        }
                     }
                 }
 
@@ -1022,6 +1026,7 @@ public class UtpConnection : IUtpConnection
 
         lock (_receiveLock)
         {
+            _outOfOrderBuffer.Clear();
             Monitor.PulseAll(_receiveLock);
         }
 

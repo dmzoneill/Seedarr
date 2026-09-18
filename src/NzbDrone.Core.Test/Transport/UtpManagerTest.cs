@@ -519,4 +519,118 @@ public class UtpManagerTest
 
         Assert.That(dict.ContainsKey(receiveKey), Is.False);
     }
+
+    [Test]
+    public void CreateConnection_indexes_both_send_and_receive_ids_and_cleans_up_all_keys_on_close()
+    {
+        var conn = (UtpConnection)_subject.CreateConnection();
+        var activeConnectionsField = typeof(UtpManager).GetField(
+            "_activeConnections",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var dict = (ConcurrentDictionary<string, IUtpConnection>)activeConnectionsField.GetValue(_subject)!;
+
+        var recvKey = conn.ReceiveId.ToString();
+        var sendKey = conn.SendId.ToString();
+        var recvPlusOneKey = ((ushort)(conn.ReceiveId + 1)).ToString();
+
+        Assert.That(dict.ContainsKey(recvKey), Is.True);
+        Assert.That(dict.ContainsKey(sendKey), Is.True);
+        Assert.That(dict.ContainsKey(recvPlusOneKey), Is.True);
+
+        var endpoint = new IPEndPoint(IPAddress.Loopback, 54321);
+        conn.OnConnecting?.Invoke(conn, endpoint);
+
+        var endpointRecvKey = $"{endpoint}_{conn.ReceiveId}";
+        var endpointSendKey = $"{endpoint}_{conn.SendId}";
+        var endpointRecvPlusOneKey = $"{endpoint}_{(ushort)(conn.ReceiveId + 1)}";
+
+        Assert.That(dict.ContainsKey(endpointRecvKey), Is.True);
+        Assert.That(dict.ContainsKey(endpointSendKey), Is.True);
+        Assert.That(dict.ContainsKey(endpointRecvPlusOneKey), Is.True);
+
+        conn.Dispose();
+
+        Assert.That(dict.ContainsKey(recvKey), Is.False);
+        Assert.That(dict.ContainsKey(sendKey), Is.False);
+        Assert.That(dict.ContainsKey(recvPlusOneKey), Is.False);
+        Assert.That(dict.ContainsKey(endpointRecvKey), Is.False);
+        Assert.That(dict.ContainsKey(endpointSendKey), Is.False);
+        Assert.That(dict.ContainsKey(endpointRecvPlusOneKey), Is.False);
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleIncoming_inbound_connection_matches_both_connectionId_and_offset_connectionId()
+    {
+        var synData = new byte[20];
+        synData[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        synData[2] = 0x20;
+        synData[3] = 0x00; // connId = 8192
+        synData[16] = 0x00;
+        synData[17] = 0x01; // seq = 1
+
+        var sender = new IPEndPoint(IPAddress.Loopback, 50001);
+        InvokeHandleIncoming(synData, sender);
+
+        var activeConnectionsField = typeof(UtpManager).GetField(
+            "_activeConnections",
+            BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var dict = (ConcurrentDictionary<string, IUtpConnection>)activeConnectionsField.GetValue(_subject)!;
+
+        // Inbound connection should be matched whether packet uses 8192 (SendId) or 8193 (ReceiveId)
+        Assert.That(dict.ContainsKey($"{sender}_8192"), Is.True);
+        Assert.That(dict.ContainsKey($"{sender}_8193"), Is.True);
+
+        var conn = (UtpConnection)dict[$"{sender}_8192"];
+
+        // Send STATE packet with 8192
+        var statePacket = new byte[20];
+        statePacket[0] = (byte)(((byte)UtpPacketType.State) << 4 | 1);
+        statePacket[2] = 0x20;
+        statePacket[3] = 0x00; // 8192
+        statePacket[18] = 0x00;
+        statePacket[19] = 0x01; // ack = 1
+        InvokeHandleIncoming(statePacket, sender);
+
+        // Send DATA packet with 8193 (connId + 1)
+        var payload = new byte[] { 0x11, 0x22 };
+        var dataPacket = new byte[20 + payload.Length];
+        dataPacket[0] = (byte)(((byte)UtpPacketType.Data) << 4 | 1);
+        dataPacket[2] = 0x20;
+        dataPacket[3] = 0x01; // 8193
+        dataPacket[16] = 0x00;
+        dataPacket[17] = 0x02; // seq = 2
+        Array.Copy(payload, 0, dataPacket, 20, payload.Length);
+        InvokeHandleIncoming(dataPacket, sender);
+
+        var received = new byte[2];
+        var read = conn.Receive(received, 0, 2);
+        Assert.That(read, Is.EqualTo(2));
+        Assert.That(received, Is.EqualTo(payload));
+
+        conn.Dispose();
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void HandleIncoming_outbound_connection_matches_by_endpoint_and_connection_id()
+    {
+        var conn = (UtpConnection)_subject.CreateConnection();
+        var remoteEndpoint = new IPEndPoint(IPAddress.Loopback, 50002);
+        conn.OnConnecting?.Invoke(conn, remoteEndpoint);
+
+        // Simulate STATE packet from remoteEndpoint arriving at UtpManager with conn.ReceiveId
+        var statePacket = new byte[20];
+        statePacket[0] = (byte)(((byte)UtpPacketType.State) << 4 | 1);
+        statePacket[2] = (byte)(conn.ReceiveId >> 8);
+        statePacket[3] = (byte)(conn.ReceiveId & 0xFF);
+        statePacket[18] = 0x00;
+        statePacket[19] = 0x01; // ack = 1
+
+        // UtpManager should find conn and invoke HandleIncomingPacket without throwing
+        Assert.DoesNotThrow(() => InvokeHandleIncoming(statePacket, remoteEndpoint));
+
+        conn.Dispose();
+        Assert.That(_subject.ActiveConnections, Is.EqualTo(0));
+    }
 }
