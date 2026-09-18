@@ -131,4 +131,80 @@ public class FastResumeServiceTest
 
         _pieceStorage.Received(1).SetVerifiedPieces(torrent.InfoHash, Arg.Is<bool[]>(b => b.Length == 2 && b[0] && b[1]));
     }
+
+    [Test]
+    public void SaveFastResume_should_not_leave_temp_file_on_success()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            Uploaded = 100,
+            Downloaded = 200,
+            Progress = 1.0,
+            PieceCount = 1,
+            Status = TorrentStatus.Seeding
+        };
+
+        _service.SaveFastResume(torrent);
+
+        var filePath = Path.Combine(_tempAppDataFolder, "fastresume", $"{torrent.InfoHash.ToLowerInvariant()}.fastresume");
+        var tempPath = $"{filePath}.tmp";
+
+        Assert.That(File.Exists(filePath), Is.True);
+        Assert.That(File.Exists(tempPath), Is.False);
+    }
+
+    [Test]
+    public void SaveFastResume_should_overwrite_existing_target_file()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            Uploaded = 100,
+            Downloaded = 200,
+            Progress = 0.5,
+            PieceCount = 2,
+            Status = TorrentStatus.Downloading
+        };
+
+        _service.SaveFastResume(torrent);
+
+        torrent.Uploaded = 500;
+        torrent.Progress = 1.0;
+        torrent.Status = TorrentStatus.Seeding;
+
+        _service.SaveFastResume(torrent);
+
+        var loaded = _service.LoadFastResume(torrent.InfoHash);
+        Assert.That(loaded, Is.Not.Null);
+        Assert.That(loaded.Uploaded, Is.EqualTo(500));
+        Assert.That(loaded.Progress, Is.EqualTo(1.0));
+    }
+
+    [Test]
+    public void SaveFastResume_should_cleanup_temp_file_on_failure()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = "abcdefabcdefabcdefabcdefabcdefabcdefabcd",
+            Uploaded = 100,
+            Downloaded = 200,
+            Progress = 1.0,
+            PieceCount = 1,
+            Status = TorrentStatus.Seeding
+        };
+
+        var resumeDir = Path.Combine(_tempAppDataFolder, "fastresume");
+        Directory.CreateDirectory(resumeDir);
+        var filePath = Path.Combine(resumeDir, $"{torrent.InfoHash.ToLowerInvariant()}.fastresume");
+        var tempPath = $"{filePath}.tmp";
+
+        Directory.CreateDirectory(filePath);
+
+        Assert.Catch<Exception>(() => _service.SaveFastResume(torrent));
+        Assert.That(File.Exists(tempPath), Is.False);
+    }
 }

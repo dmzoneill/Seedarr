@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Serializer;
@@ -75,8 +76,35 @@ public class FastResumeService : IFastResumeService
         };
 
         var filePath = Path.Combine(resumeDir, $"{torrent.InfoHash.ToLowerInvariant()}.fastresume");
+        var tempPath = $"{filePath}.tmp";
         var json = STJson.ToJson(resumeData);
-        File.WriteAllText(filePath, json);
+        var bytes = Encoding.UTF8.GetBytes(json);
+
+        try
+        {
+            using (var fs = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            {
+                fs.Write(bytes, 0, bytes.Length);
+                fs.Flush(flushToDisk: true);
+            }
+
+            File.Move(tempPath, filePath, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch
+            {
+            }
+
+            throw;
+        }
     }
 
     public FastResumeData LoadFastResume(string infoHash)
