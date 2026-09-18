@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.DownloadClients;
+using NzbDrone.Core.Extraction;
 using NzbDrone.Core.Http;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.Validation;
@@ -50,6 +51,7 @@ public class ArrWebhookService : IArrWebhookService
     private readonly ITorrentFileService _torrentFileService;
     private readonly IDownloadClientFactory _downloadClientFactory;
     private readonly IDownloadHistoryService _downloadHistoryService;
+    private readonly IArchiveExtractorService _archiveExtractorService;
     private readonly Logger _logger;
 
     public ArrWebhookService(
@@ -59,8 +61,9 @@ public class ArrWebhookService : IArrWebhookService
         ITrackerEntryService trackerEntryService = null,
         ITorrentFileService torrentFileService = null,
         IDownloadClientFactory downloadClientFactory = null,
-        IDownloadHistoryService downloadHistoryService = null)
-        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, downloadHistoryService, null, null)
+        IDownloadHistoryService downloadHistoryService = null,
+        IArchiveExtractorService archiveExtractorService = null)
+        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, downloadHistoryService, archiveExtractorService, null, null)
     {
     }
 
@@ -70,7 +73,7 @@ public class ArrWebhookService : IArrWebhookService
         ITorrentFileParser torrentFileParser,
         HttpClient client,
         ResiliencePipeline policy)
-        : this(connectionFactory, torrentService, torrentFileParser, null, null, null, null, client, policy)
+        : this(connectionFactory, torrentService, torrentFileParser, null, null, null, null, null, client, policy)
     {
     }
 
@@ -83,7 +86,7 @@ public class ArrWebhookService : IArrWebhookService
         IDownloadClientFactory downloadClientFactory,
         HttpClient client,
         ResiliencePipeline policy)
-        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, null, client, policy)
+        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, null, null, client, policy)
     {
     }
 
@@ -97,6 +100,21 @@ public class ArrWebhookService : IArrWebhookService
         IDownloadHistoryService downloadHistoryService,
         HttpClient client,
         ResiliencePipeline policy)
+        : this(connectionFactory, torrentService, torrentFileParser, trackerEntryService, torrentFileService, downloadClientFactory, downloadHistoryService, null, client, policy)
+    {
+    }
+
+    public ArrWebhookService(
+        IArrConnectionFactory connectionFactory,
+        ITorrentService torrentService,
+        ITorrentFileParser torrentFileParser,
+        ITrackerEntryService trackerEntryService,
+        ITorrentFileService torrentFileService,
+        IDownloadClientFactory downloadClientFactory,
+        IDownloadHistoryService downloadHistoryService,
+        IArchiveExtractorService archiveExtractorService,
+        HttpClient client,
+        ResiliencePipeline policy)
     {
         _connectionFactory = connectionFactory;
         _torrentService = torrentService;
@@ -105,12 +123,15 @@ public class ArrWebhookService : IArrWebhookService
         _torrentFileService = torrentFileService;
         _downloadClientFactory = downloadClientFactory;
         _downloadHistoryService = downloadHistoryService;
+        _archiveExtractorService = archiveExtractorService;
         _logger = LogManager.GetCurrentClassLogger();
         _client = client ?? SharedClient;
         _policy = policy ?? SharedPolicy;
     }
 
     public int EnrichDelayMs { get; set; } = 5000;
+
+    public bool EnablePostImportCleanup { get; set; } = true;
 
     public ArrWebhookResult ProcessWebhook(ArrWebhookPayload payload)
     {
@@ -128,7 +149,9 @@ public class ArrWebhookService : IArrWebhookService
 
         if (string.Equals(payload.EventType, "MovieDownload", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(payload.EventType, "AlbumDownload", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(payload.EventType, "BookDownload", StringComparison.OrdinalIgnoreCase))
+            string.Equals(payload.EventType, "BookDownload", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "EpisodeDownload", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(payload.EventType, "Download", StringComparison.OrdinalIgnoreCase))
         {
             return ProcessMovieDownload(payload);
         }
@@ -297,6 +320,22 @@ public class ArrWebhookService : IArrWebhookService
         existing.Progress = 1.0;
         _torrentService.Update(existing);
         _logger.Info("Webhook {0}: marked torrent '{1}' as Seeding", payload.EventType, existing.Name);
+
+        if (EnablePostImportCleanup && _archiveExtractorService != null)
+        {
+            try
+            {
+                var prunedCount = _archiveExtractorService.CleanupExtractedFiles(existing);
+                if (prunedCount > 0)
+                {
+                    _logger.Info("Webhook {0}: pruned {1} extracted duplicate media file(s) for torrent '{2}'", payload.EventType, prunedCount, existing.Name);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Webhook {0}: failed to clean up extracted duplicate media files for torrent '{1}'", payload.EventType, existing.Name);
+            }
+        }
 
         var connection = FindConnection(payload);
         if (connection != null)

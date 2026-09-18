@@ -9,6 +9,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.ArrIntegration;
 using NzbDrone.Core.ArrIntegration.Webhook;
+using NzbDrone.Core.Extraction;
 using NzbDrone.Core.Test.TestHelpers;
 using NzbDrone.Core.Torrents;
 using Polly;
@@ -40,7 +41,7 @@ public class ArrWebhookServiceTest
     [Test]
     public void ProcessWebhook_should_ignore_non_grab_event()
     {
-        var payload = new ArrWebhookPayload { EventType = "Download" };
+        var payload = new ArrWebhookPayload { EventType = "Unknown" };
 
         var result = _service.ProcessWebhook(payload);
 
@@ -1577,6 +1578,90 @@ public class ArrWebhookServiceTest
         Assert.That(existingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
         Assert.That(existingTorrent.Progress, Is.EqualTo(1.0));
         _torrentService.Received(1).Update(existingTorrent);
+    }
+
+    [Test]
+    public void ProcessWebhook_should_process_Download_event_and_trigger_cleanup()
+    {
+        var extractorMock = Substitute.For<IArchiveExtractorService>();
+        var serviceWithExtractor = new ArrWebhookService(
+            _connectionFactory,
+            _torrentService,
+            _torrentFileParser,
+            trackerEntryService: null,
+            torrentFileService: null,
+            downloadClientFactory: null,
+            downloadHistoryService: null,
+            archiveExtractorService: extractorMock)
+        {
+            EnrichDelayMs = 0
+        };
+
+        var existingTorrent = new Torrent
+        {
+            Id = 15,
+            Name = "Show.S01E01.1080p",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Status = TorrentStatus.Downloading,
+            Progress = 0.9
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Download",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
+            InstanceName = "Sonarr"
+        };
+
+        var result = serviceWithExtractor.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Message, Does.Contain("Processed Download"));
+        Assert.That(existingTorrent.Status, Is.EqualTo(TorrentStatus.Seeding));
+        extractorMock.Received(1).CleanupExtractedFiles(existingTorrent);
+    }
+
+    [Test]
+    public void ProcessWebhook_should_not_trigger_cleanup_when_EnablePostImportCleanup_is_false()
+    {
+        var extractorMock = Substitute.For<IArchiveExtractorService>();
+        var serviceWithExtractor = new ArrWebhookService(
+            _connectionFactory,
+            _torrentService,
+            _torrentFileParser,
+            trackerEntryService: null,
+            torrentFileService: null,
+            downloadClientFactory: null,
+            downloadHistoryService: null,
+            archiveExtractorService: extractorMock)
+        {
+            EnrichDelayMs = 0,
+            EnablePostImportCleanup = false
+        };
+
+        var existingTorrent = new Torrent
+        {
+            Id = 16,
+            Name = "Show.S01E02.1080p",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Status = TorrentStatus.Downloading
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { existingTorrent });
+
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Download",
+            DownloadId = "0123456789ABCDEF0123456789ABCDEF01234567",
+            InstanceName = "Sonarr"
+        };
+
+        var result = serviceWithExtractor.ProcessWebhook(payload);
+
+        Assert.That(result.Success, Is.True);
+        extractorMock.DidNotReceive().CleanupExtractedFiles(Arg.Any<Torrent>());
     }
 
     [TestCase("SiteDelete")]

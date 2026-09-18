@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using NLog;
+using NzbDrone.Common.Disk;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Torrents;
 using SharpCompress.Archives;
@@ -15,6 +17,10 @@ namespace NzbDrone.Core.Extraction;
 
 public class ArchiveExtractorService : IArchiveExtractorService
 {
+    public const double DefaultFreeSpaceSafetyMargin = 1.15;
+    public const double DefaultMaxCompressionRatio = 100.0;
+    public const long DefaultMaxSingleFileUncompressedSize = 250L * 1024 * 1024 * 1024; // 250 GB
+
     private static readonly Regex SecondaryPartRarRegex = new(@"\.part(?!0*1\.rar$)(\d+)\.rar$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex PrimaryPartRarRegex = new(@"\.part0*1\.rar$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex SecondaryVolumeRegex = new(@"\.[r-z]\d{2,}$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -22,12 +28,20 @@ public class ArchiveExtractorService : IArchiveExtractorService
     private static readonly Regex PrimarySplitArchiveRegex = new(@"\.(?:7z|zip)\.0*1$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private readonly IEventAggregator _eventAggregator;
+    private readonly IDiskProvider _diskProvider;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-    public ArchiveExtractorService(IEventAggregator eventAggregator)
+    public ArchiveExtractorService(IEventAggregator eventAggregator, IDiskProvider diskProvider = null)
     {
         _eventAggregator = eventAggregator;
+        _diskProvider = diskProvider ?? new DiskProvider();
     }
+
+    public double FreeSpaceSafetyMargin { get; set; } = DefaultFreeSpaceSafetyMargin;
+
+    public double MaxCompressionRatio { get; set; } = DefaultMaxCompressionRatio;
+
+    public long MaxSingleFileUncompressedSize { get; set; } = DefaultMaxSingleFileUncompressedSize;
 
     public bool IsPrimaryArchive(string filePath)
     {
@@ -208,6 +222,36 @@ public class ArchiveExtractorService : IArchiveExtractorService
 
         try
         {
+            var canonicalTargetDir = Path.GetFullPath(destDir);
+            if (!canonicalTargetDir.EndsWith(Path.DirectorySeparatorChar))
+            {
+                canonicalTargetDir += Path.DirectorySeparatorChar;
+            }
+
+            // Pre-extraction validation across all primary archives (Zip-Slip, Zip-Bomb, Symlinks)
+            long totalUncompressedSize = 0;
+            foreach (var archivePath in primaryArchives)
+            {
+                ValidateArchive(archivePath, canonicalTargetDir, out var archiveSize);
+                totalUncompressedSize += archiveSize;
+            }
+
+            // Pre-extraction disk space verification with safety margin
+            var availableSpace = _diskProvider.GetAvailableFreeSpace(canonicalTargetDir);
+            var requiredSpace = (long)Math.Ceiling(totalUncompressedSize * FreeSpaceSafetyMargin);
+            if (availableSpace < requiredSpace)
+            {
+                var spaceError = $"Insufficient free disk space on '{destDir}'. Required: {requiredSpace:N0} bytes (including {(FreeSpaceSafetyMargin - 1.0) * 100:0}% safety margin for {totalUncompressedSize:N0} bytes uncompressed), Available: {availableSpace:N0} bytes.";
+                _logger.Error(spaceError);
+                _eventAggregator.PublishEvent(new ArchiveExtractionFailedEvent(torrent, spaceError));
+                return Task.FromResult(new ArchiveExtractionResult
+                {
+                    Success = false,
+                    ErrorMessage = spaceError,
+                    DestinationPath = destDir,
+                });
+            }
+
             foreach (var archivePath in primaryArchives)
             {
                 _logger.Info("Extracting archive '{0}' to '{1}'", archivePath, destDir);
@@ -300,20 +344,163 @@ public class ArchiveExtractorService : IArchiveExtractorService
         return null;
     }
 
-    private static List<string> ExtractArchiveFile(string archivePath, string destination)
+    public int CleanupExtractedFiles(Torrent torrent, string destination = null)
     {
-        var extractedFiles = new List<string>();
-        var fileName = Path.GetFileName(archivePath);
-
-        var fullDestination = Path.GetFullPath(destination);
-        if (!fullDestination.EndsWith(Path.DirectorySeparatorChar))
+        if (torrent == null)
         {
-            fullDestination += Path.DirectorySeparatorChar;
+            return 0;
         }
+
+        var rootDir = GetTorrentDirectory(torrent);
+        if (string.IsNullOrEmpty(rootDir) || !Directory.Exists(rootDir))
+        {
+            return 0;
+        }
+
+        var destDir = string.IsNullOrWhiteSpace(destination) ? rootDir : destination;
+        if (!Directory.Exists(destDir))
+        {
+            return 0;
+        }
+
+        List<string> primaryArchives;
+        try
+        {
+            primaryArchives = Directory.EnumerateFiles(rootDir, "*", SearchOption.AllDirectories)
+                .Where(IsPrimaryArchive)
+                .OrderBy(f => f)
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to enumerate archives for post-import cleanup in '{0}'", rootDir);
+            return 0;
+        }
+
+        if (primaryArchives.Count == 0)
+        {
+            return 0;
+        }
+
+        var canonicalDestDir = Path.GetFullPath(destDir);
+        if (!canonicalDestDir.EndsWith(Path.DirectorySeparatorChar))
+        {
+            canonicalDestDir += Path.DirectorySeparatorChar;
+        }
+
+        var extractedCandidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var archivePath in primaryArchives)
+        {
+            try
+            {
+                var fileName = Path.GetFileName(archivePath);
+                if (fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                {
+                    using var zipArchive = ZipFile.OpenRead(archivePath);
+                    foreach (var entry in zipArchive.Entries)
+                    {
+                        if (string.IsNullOrEmpty(entry.Name))
+                        {
+                            continue;
+                        }
+
+                        var candidate = Path.GetFullPath(Path.Combine(canonicalDestDir, entry.FullName));
+                        if (candidate.StartsWith(canonicalDestDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            extractedCandidates.Add(candidate);
+                        }
+                    }
+                }
+                else
+                {
+                    using var archive = ArchiveFactory.OpenArchive(archivePath);
+                    foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
+                    {
+                        var entryKey = entry.Key ?? Path.GetFileName(archivePath);
+                        var candidate = Path.GetFullPath(Path.Combine(canonicalDestDir, entryKey));
+                        if (candidate.StartsWith(canonicalDestDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            extractedCandidates.Add(candidate);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to inspect archive '{0}' during post-import cleanup", archivePath);
+            }
+        }
+
+        var prunedCount = 0;
+        foreach (var candidateFile in extractedCandidates)
+        {
+            try
+            {
+                if (!File.Exists(candidateFile))
+                {
+                    continue;
+                }
+
+                // Strictly preserve all archive slices, companion volumes, and verification files
+                if (IsArchiveFile(candidateFile))
+                {
+                    continue;
+                }
+
+                File.Delete(candidateFile);
+                prunedCount++;
+                _logger.Info("Post-import cleanup: pruned extracted file '{0}' for torrent '{1}'", candidateFile, torrent.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to delete extracted duplicate file '{0}' during post-import cleanup", candidateFile);
+            }
+        }
+
+        return prunedCount;
+    }
+
+    public static bool IsArchiveFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return false;
+        }
+
+        var fileName = Path.GetFileName(filePath);
+        if (string.IsNullOrEmpty(fileName))
+        {
+            return false;
+        }
+
+        if (SecondaryPartRarRegex.IsMatch(fileName) ||
+            PrimaryPartRarRegex.IsMatch(fileName) ||
+            SecondaryVolumeRegex.IsMatch(fileName) ||
+            SecondarySplitArchiveRegex.IsMatch(fileName) ||
+            PrimarySplitArchiveRegex.IsMatch(fileName))
+        {
+            return true;
+        }
+
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext is ".rar" or ".zip" or ".7z" or ".tar" or ".gz" or ".tgz" or ".bz2" or ".sfv" or ".par2" or ".nfo" or ".torrent";
+    }
+
+    internal void ValidateArchive(string archivePath, string destination, out long totalUncompressedSize)
+    {
+        var canonicalTargetDir = Path.GetFullPath(destination);
+        if (!canonicalTargetDir.EndsWith(Path.DirectorySeparatorChar))
+        {
+            canonicalTargetDir += Path.DirectorySeparatorChar;
+        }
+
+        totalUncompressedSize = 0;
+        var fileName = Path.GetFileName(archivePath);
 
         if (fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
         {
-            using var zipArchive = System.IO.Compression.ZipFile.OpenRead(archivePath);
+            using var zipArchive = ZipFile.OpenRead(archivePath);
             foreach (var entry in zipArchive.Entries)
             {
                 if (string.IsNullOrEmpty(entry.Name))
@@ -321,20 +508,163 @@ public class ArchiveExtractorService : IArchiveExtractorService
                     continue;
                 }
 
-                var outPath = Path.GetFullPath(Path.Combine(fullDestination, entry.FullName));
-                if (!outPath.StartsWith(fullDestination, StringComparison.Ordinal))
+                var fullDestinationPath = Path.GetFullPath(Path.Combine(canonicalTargetDir, entry.FullName));
+                if (!fullDestinationPath.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new IOException($"Entry '{entry.FullName}' traverses outside destination directory.");
+                    throw new SecurityException($"Zip-Slip path traversal detected: {entry.FullName}");
                 }
 
-                var parentDir = Path.GetDirectoryName(outPath);
+                const int unixSymlinkMode = 0xA000;
+                if (((entry.ExternalAttributes >> 16) & 0xF000) == unixSymlinkMode)
+                {
+                    using var reader = new StreamReader(entry.Open());
+                    var linkTarget = reader.ReadToEnd().Trim();
+                    if (!string.IsNullOrEmpty(linkTarget))
+                    {
+                        var resolvedLink = Path.IsPathRooted(linkTarget)
+                            ? Path.GetFullPath(linkTarget)
+                            : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(fullDestinationPath) ?? canonicalTargetDir, linkTarget));
+
+                        if (!resolvedLink.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new SecurityException($"Zip-Slip path traversal detected: {entry.FullName} -> {linkTarget}");
+                        }
+                    }
+                }
+
+                var uncompressedSize = entry.Length;
+                var compressedSize = entry.CompressedLength;
+
+                if (uncompressedSize > MaxSingleFileUncompressedSize)
+                {
+                    throw new InvalidOperationException($"Archive entry '{entry.FullName}' uncompressed size ({uncompressedSize} bytes) exceeds maximum single file limit of {MaxSingleFileUncompressedSize} bytes.");
+                }
+
+                if (uncompressedSize > 10 * 1024)
+                {
+                    var ratio = compressedSize > 0 ? (double)uncompressedSize / compressedSize : double.PositiveInfinity;
+                    if (ratio > MaxCompressionRatio)
+                    {
+                        throw new InvalidOperationException($"Zip-bomb detected: archive entry '{entry.FullName}' has compression ratio of {ratio:F1}:1 (uncompressed: {uncompressedSize}, compressed: {compressedSize}), exceeding limit of {MaxCompressionRatio:F1}:1.");
+                    }
+                }
+
+                totalUncompressedSize += uncompressedSize;
+            }
+
+            return;
+        }
+
+        using var archive = ArchiveFactory.OpenArchive(archivePath);
+        foreach (var entry in archive.Entries.Where(e => !e.IsDirectory))
+        {
+            var entryKey = entry.Key ?? Path.GetFileName(archivePath);
+            var fullDestinationPath = Path.GetFullPath(Path.Combine(canonicalTargetDir, entryKey));
+            if (!fullDestinationPath.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new SecurityException($"Zip-Slip path traversal detected: {entryKey}");
+            }
+
+            if (!string.IsNullOrEmpty(entry.LinkTarget))
+            {
+                var resolvedLink = Path.IsPathRooted(entry.LinkTarget)
+                    ? Path.GetFullPath(entry.LinkTarget)
+                    : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(fullDestinationPath) ?? canonicalTargetDir, entry.LinkTarget));
+
+                if (!resolvedLink.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new SecurityException($"Zip-Slip path traversal detected: {entryKey} -> {entry.LinkTarget}");
+                }
+            }
+
+            var uncompressedSize = entry.Size;
+            var compressedSize = entry.CompressedSize;
+
+            if (uncompressedSize > MaxSingleFileUncompressedSize)
+            {
+                throw new InvalidOperationException($"Archive entry '{entryKey}' uncompressed size ({uncompressedSize} bytes) exceeds maximum single file limit of {MaxSingleFileUncompressedSize} bytes.");
+            }
+
+            if (uncompressedSize > 10 * 1024)
+            {
+                var ratio = compressedSize > 0 ? (double)uncompressedSize / compressedSize : double.PositiveInfinity;
+                if (ratio > MaxCompressionRatio)
+                {
+                    throw new InvalidOperationException($"Zip-bomb detected: archive entry '{entryKey}' has compression ratio of {ratio:F1}:1 (uncompressed: {uncompressedSize}, compressed: {compressedSize}), exceeding limit of {MaxCompressionRatio:F1}:1.");
+                }
+            }
+
+            totalUncompressedSize += uncompressedSize;
+        }
+    }
+
+    internal List<string> ExtractArchiveFile(string archivePath, string destination)
+    {
+        var extractedFiles = new List<string>();
+        var fileName = Path.GetFileName(archivePath);
+
+        var canonicalTargetDir = Path.GetFullPath(destination);
+        if (!canonicalTargetDir.EndsWith(Path.DirectorySeparatorChar))
+        {
+            canonicalTargetDir += Path.DirectorySeparatorChar;
+        }
+
+        ValidateArchive(archivePath, canonicalTargetDir, out var totalUncompressedSize);
+
+        var availableSpace = _diskProvider.GetAvailableFreeSpace(canonicalTargetDir);
+        var requiredSpace = (long)Math.Ceiling(totalUncompressedSize * FreeSpaceSafetyMargin);
+        if (availableSpace < requiredSpace)
+        {
+            throw new InvalidOperationException($"Insufficient free disk space on '{canonicalTargetDir}'. Required: {requiredSpace:N0} bytes (including {(FreeSpaceSafetyMargin - 1.0) * 100:0}% safety margin for {totalUncompressedSize:N0} bytes uncompressed), Available: {availableSpace:N0} bytes.");
+        }
+
+        if (fileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            using var zipArchive = ZipFile.OpenRead(archivePath);
+            foreach (var entry in zipArchive.Entries)
+            {
+                if (string.IsNullOrEmpty(entry.Name))
+                {
+                    continue;
+                }
+
+                var fullDestinationPath = Path.GetFullPath(Path.Combine(canonicalTargetDir, entry.FullName));
+                if (!fullDestinationPath.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new SecurityException($"Zip-Slip path traversal detected: {entry.FullName}");
+                }
+
+                var parentDir = Path.GetDirectoryName(fullDestinationPath);
                 if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
                 {
                     Directory.CreateDirectory(parentDir);
                 }
 
-                entry.ExtractToFile(outPath, overwrite: true);
-                extractedFiles.Add(outPath);
+                entry.ExtractToFile(fullDestinationPath, overwrite: true);
+
+                var fileInfo = new FileInfo(fullDestinationPath);
+                if (fileInfo.LinkTarget != null)
+                {
+                    var resolvedLink = Path.IsPathRooted(fileInfo.LinkTarget)
+                        ? Path.GetFullPath(fileInfo.LinkTarget)
+                        : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(fullDestinationPath) ?? canonicalTargetDir, fileInfo.LinkTarget));
+
+                    if (!resolvedLink.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            File.Delete(fullDestinationPath);
+                        }
+                        catch
+                        {
+                            // Ignore deletion failure
+                        }
+
+                        throw new SecurityException($"Zip-Slip path traversal detected: {entry.FullName} -> {fileInfo.LinkTarget}");
+                    }
+                }
+
+                extractedFiles.Add(fullDestinationPath);
             }
 
             return extractedFiles;
@@ -349,24 +679,47 @@ public class ArchiveExtractorService : IArchiveExtractorService
                 entryKey = Path.GetFileName(archivePath);
             }
 
-            var outPath = Path.GetFullPath(Path.Combine(fullDestination, entryKey));
-            if (!outPath.StartsWith(fullDestination, StringComparison.Ordinal))
+            var fullDestinationPath = Path.GetFullPath(Path.Combine(canonicalTargetDir, entryKey));
+            if (!fullDestinationPath.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
             {
-                throw new IOException($"Entry '{entryKey}' traverses outside destination directory.");
+                throw new SecurityException($"Zip-Slip path traversal detected: {entryKey}");
             }
 
-            var parentDir = Path.GetDirectoryName(outPath);
+            var parentDir = Path.GetDirectoryName(fullDestinationPath);
             if (!string.IsNullOrEmpty(parentDir) && !Directory.Exists(parentDir))
             {
                 Directory.CreateDirectory(parentDir);
             }
 
-            entry.WriteToFile(outPath, new ExtractionOptions
+            entry.WriteToFile(fullDestinationPath, new ExtractionOptions
             {
                 ExtractFullPath = true,
                 Overwrite = true,
             });
-            extractedFiles.Add(outPath);
+
+            var fileInfo = new FileInfo(fullDestinationPath);
+            if (fileInfo.LinkTarget != null)
+            {
+                var resolvedLink = Path.IsPathRooted(fileInfo.LinkTarget)
+                    ? Path.GetFullPath(fileInfo.LinkTarget)
+                    : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(fullDestinationPath) ?? canonicalTargetDir, fileInfo.LinkTarget));
+
+                if (!resolvedLink.StartsWith(canonicalTargetDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        File.Delete(fullDestinationPath);
+                    }
+                    catch
+                    {
+                        // Ignore deletion failure
+                    }
+
+                    throw new SecurityException($"Zip-Slip path traversal detected: {entryKey} -> {fileInfo.LinkTarget}");
+                }
+            }
+
+            extractedFiles.Add(fullDestinationPath);
         }
 
         return extractedFiles;
