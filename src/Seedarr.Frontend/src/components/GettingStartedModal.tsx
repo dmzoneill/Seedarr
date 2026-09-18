@@ -237,12 +237,25 @@ export function GettingStartedModal({
   const testArrMutation = useTestDirectArrConnection();
   const createArrMutation = useCreateArrConnection();
 
-  const handleClose = useCallback(() => {
-    if (dontShowAgain) {
-      localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
-    }
-    onClose();
-  }, [dontShowAgain, onClose]);
+  const currentStepRef = useRef(currentStep);
+  currentStepRef.current = currentStep;
+  const dontShowAgainRef = useRef(dontShowAgain);
+  dontShowAgainRef.current = dontShowAgain;
+
+  const handleClose = useCallback(
+    (explicitDismissal = false) => {
+      if (
+        dontShowAgainRef.current ||
+        explicitDismissal ||
+        currentStepRef.current === steps.length - 1
+      ) {
+        localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
+        setDontShowAgain(true);
+      }
+      onClose();
+    },
+    [onClose, steps.length],
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -251,6 +264,7 @@ export function GettingStartedModal({
       .then((status) => {
         if (status.isSetupCompleted) {
           localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
+          setDontShowAgain(true);
           onClose();
         }
       })
@@ -260,13 +274,14 @@ export function GettingStartedModal({
   }, [isOpen, onClose]);
 
   const handleFinish = async (targetPath?: string) => {
+    localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
+    setDontShowAgain(true);
     try {
       await apiClient.completeSetup({});
     } catch {
       // ignore
     }
-    localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
-    handleClose();
+    handleClose(true);
     if (targetPath) {
       navigate(targetPath);
     }
@@ -277,7 +292,7 @@ export function GettingStartedModal({
   useModalRegistration({
     id: "getting-started-modal",
     isOpen,
-    onClose: handleClose,
+    onClose: () => handleClose(true),
     modalRef,
   });
 
@@ -296,6 +311,8 @@ export function GettingStartedModal({
     if (currentStep < steps.length - 1) {
       setCurrentStep((p) => p + 1);
     } else {
+      localStorage.setItem(STORAGE_KEY_HIDE_GUIDE, "true");
+      setDontShowAgain(true);
       handleFinish();
     }
   };
@@ -523,7 +540,7 @@ export function GettingStartedModal({
         padding: "1rem",
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) handleClose();
+        if (e.target === e.currentTarget) handleClose(true);
       }}
     >
       <div
@@ -640,7 +657,7 @@ export function GettingStartedModal({
                 borderRadius: "4px",
                 lineHeight: 1,
               }}
-              onClick={handleClose}
+              onClick={() => handleClose(true)}
               title={t("gettingStarted.close", undefined, "Close Setup Guide (Esc)")}
             >
               ✕
