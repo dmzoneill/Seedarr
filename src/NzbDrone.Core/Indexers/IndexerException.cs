@@ -7,6 +7,7 @@ public class IndexerException : Exception
     public string ErrorCode { get; }
     public int? StatusCode { get; }
     public bool Recorded { get; set; }
+    public TimeSpan? RetryAfter { get; }
 
     public IndexerException(string message)
         : base(message)
@@ -23,11 +24,12 @@ public class IndexerException : Exception
         }
     }
 
-    public IndexerException(string message, string errorCode, int? statusCode)
+    public IndexerException(string message, string errorCode, int? statusCode, TimeSpan? retryAfter = null)
         : base(message)
     {
         ErrorCode = errorCode;
         StatusCode = statusCode;
+        RetryAfter = retryAfter;
     }
 
     public IndexerException(string message, Exception innerException)

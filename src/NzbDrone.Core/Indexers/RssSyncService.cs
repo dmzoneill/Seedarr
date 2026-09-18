@@ -11,15 +11,21 @@ public interface IRssSyncService
     RssRule GetFirstMatchingRule(IEnumerable<RssRule> rules, ReleaseInfo release, DateTime? now = null);
 
     List<ReleaseInfo> FilterReleases(IEnumerable<ReleaseInfo> releases, IEnumerable<RssRule> rules, DateTime? now = null);
+
+    bool ShouldSyncIndexer(IndexerDefinition indexer, bool isManual = false, DateTime? now = null);
+
+    List<IndexerDefinition> FilterEligibleIndexers(IEnumerable<IndexerDefinition> indexers, bool isManual = false, DateTime? now = null);
 }
 
 public class RssSyncService : IRssSyncService
 {
     private readonly IRssRuleEvaluator _ruleEvaluator;
+    private readonly IIndexerStatusService _indexerStatusService;
 
-    public RssSyncService(IRssRuleEvaluator ruleEvaluator = null)
+    public RssSyncService(IRssRuleEvaluator ruleEvaluator = null, IIndexerStatusService indexerStatusService = null)
     {
         _ruleEvaluator = ruleEvaluator ?? new RssRuleEvaluator();
+        _indexerStatusService = indexerStatusService;
     }
 
     public bool MatchesRule(RssRule rule, ReleaseInfo release, DateTime? now = null)
@@ -93,5 +99,47 @@ public class RssSyncService : IRssSyncService
         }
 
         return matched;
+    }
+
+    public bool ShouldSyncIndexer(IndexerDefinition indexer, bool isManual = false, DateTime? now = null)
+    {
+        if (indexer == null || !indexer.Enable || !indexer.EnableRss)
+        {
+            return false;
+        }
+
+        if (isManual)
+        {
+            return true;
+        }
+
+        if (_indexerStatusService == null)
+        {
+            return true;
+        }
+
+        if (_indexerStatusService.IsDisabled(indexer.Id))
+        {
+            return false;
+        }
+
+        var status = _indexerStatusService.GetStatus(indexer.Id);
+        var current = now ?? DateTime.UtcNow;
+        if (status.NextRssSyncTimeUtc.HasValue && status.NextRssSyncTimeUtc.Value > current)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    public List<IndexerDefinition> FilterEligibleIndexers(IEnumerable<IndexerDefinition> indexers, bool isManual = false, DateTime? now = null)
+    {
+        if (indexers == null)
+        {
+            return new List<IndexerDefinition>();
+        }
+
+        return indexers.Where(i => ShouldSyncIndexer(i, isManual, now)).ToList();
     }
 }

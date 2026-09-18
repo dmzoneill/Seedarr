@@ -269,4 +269,163 @@ public class IndexerStatusServiceTest
         Assert.That(statuses[1].ConsecutiveFailures, Is.EqualTo(0));
         Assert.That(statuses[2].ConsecutiveFailures, Is.EqualTo(0));
     }
+
+    [Test]
+    public void ParseRetryAfter_should_parse_integer_seconds()
+    {
+        var res1 = IndexerStatusService.ParseRetryAfter("120");
+        Assert.That(res1, Is.EqualTo(TimeSpan.FromSeconds(120)));
+
+        var res2 = IndexerStatusService.ParseRetryAfter("Retry-After: 300");
+        Assert.That(res2, Is.EqualTo(TimeSpan.FromSeconds(300)));
+
+        var res3 = IndexerStatusService.ParseRetryAfter("Rate limit exceeded. Retry in 45 seconds");
+        Assert.That(res3, Is.EqualTo(TimeSpan.FromSeconds(45)));
+    }
+
+    [Test]
+    public void ParseRetryAfter_should_parse_http_date()
+    {
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var targetDate = new DateTime(2026, 1, 1, 12, 5, 0, DateTimeKind.Utc);
+        var httpDate = targetDate.ToString("r");
+
+        var res1 = IndexerStatusService.ParseRetryAfter(httpDate, now);
+        Assert.That(res1, Is.EqualTo(TimeSpan.FromMinutes(5)));
+
+        var res2 = IndexerStatusService.ParseRetryAfter($"Retry-After: {httpDate}", now);
+        Assert.That(res2, Is.EqualTo(TimeSpan.FromMinutes(5)));
+    }
+
+    [Test]
+    public void ParseRetryAfter_should_return_zero_when_date_in_past()
+    {
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var pastDate = new DateTime(2026, 1, 1, 11, 0, 0, DateTimeKind.Utc);
+        var httpDate = pastDate.ToString("r");
+
+        var res = IndexerStatusService.ParseRetryAfter(httpDate, now);
+        Assert.That(res, Is.EqualTo(TimeSpan.Zero));
+    }
+
+    [TestCase("")]
+    [TestCase("   ")]
+    [TestCase(null)]
+    [TestCase("no-retry-info")]
+    public void ParseRetryAfter_should_return_null_when_invalid(string input)
+    {
+        Assert.That(IndexerStatusService.ParseRetryAfter(input), Is.Null);
+    }
+
+    [Test]
+    public void RecordRssSync_should_track_last_and_next_sync_time_with_feed_ttl()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        service.RecordRssSync(1, 30);
+
+        var status = service.GetStatus(1);
+        Assert.That(status.LastRssSyncTimeUtc, Is.EqualTo(currentTime));
+        Assert.That(status.NextRssSyncTimeUtc, Is.EqualTo(currentTime.AddMinutes(30)));
+        Assert.That(status.NextSyncTimeUtc, Is.EqualTo(currentTime.AddMinutes(30)));
+    }
+
+    [Test]
+    public void RecordRssSync_should_enforce_minimum_polling_interval_of_10_minutes()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        // Feed declares 5 minute TTL, but minimum allowed polling interval is 10 minutes
+        service.RecordRssSync(1, 5);
+
+        var status = service.GetStatus(1);
+        Assert.That(status.NextRssSyncTimeUtc, Is.EqualTo(currentTime.AddMinutes(10)));
+    }
+
+    [TestCase(0)]
+    [TestCase(-5)]
+    [TestCase(null)]
+    public void RecordRssSync_should_fallback_to_15_minutes_when_ttl_is_missing_or_nonpositive(int? ttl)
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        service.RecordRssSync(1, ttl);
+
+        var status = service.GetStatus(1);
+        Assert.That(status.NextRssSyncTimeUtc, Is.EqualTo(currentTime.AddMinutes(15)));
+    }
+
+    [Test]
+    public void CanSyncRss_should_skip_automated_sync_during_ttl_cooldown()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        service.RecordRssSync(1, 20);
+
+        // Within cooldown window: automated sync should be rejected
+        Assert.That(service.CanSyncRss(1, isManual: false), Is.False);
+        Assert.That(service.ShouldSyncIndexer(1, isManual: false), Is.False);
+
+        // Advance past cooldown window
+        currentTime = currentTime.AddMinutes(21);
+
+        // After cooldown window: automated sync should be allowed
+        Assert.That(service.CanSyncRss(1, isManual: false), Is.True);
+        Assert.That(service.ShouldSyncIndexer(1, isManual: false), Is.True);
+    }
+
+    [Test]
+    public void CanSyncRss_should_allow_manual_sync_to_bypass_ttl_cooldown()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        service.RecordRssSync(1, 30);
+
+        // Automated sync rejected
+        Assert.That(service.CanSyncRss(1, isManual: false), Is.False);
+
+        // Manual sync allowed
+        Assert.That(service.CanSyncRss(1, isManual: true), Is.True);
+        Assert.That(service.ShouldSyncIndexer(1, isManual: true), Is.True);
+    }
+
+    [Test]
+    public void CanSyncRss_should_skip_disabled_or_rate_limited_indexers()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        service.RecordFailure(1, (int)HttpStatusCode.TooManyRequests, "Rate limit exceeded");
+
+        Assert.That(service.IsDisabled(1), Is.True);
+        Assert.That(service.CanSyncRss(1, isManual: false), Is.False);
+    }
+
+    [Test]
+    public void RecordFailure_HTTP_429_with_http_date_should_calculate_backoff_duration()
+    {
+        var currentTime = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var service = new IndexerStatusService(() => currentTime);
+
+        var retryTarget = currentTime.AddMinutes(10);
+        var retryAfterHeader = $"Retry-After: {retryTarget.ToString("r")}";
+
+        service.RecordFailure(1, (int)HttpStatusCode.TooManyRequests, retryAfterHeader);
+
+        Assert.That(service.IsDisabled(1), Is.True);
+        Assert.That(service.IsRateLimited(1), Is.True);
+
+        var status = service.GetStatus(1);
+        Assert.That(status.DisabledTill, Is.Not.Null);
+
+        // Base 10 minutes (600s) with +/- 15% jitter falls between 510s and 690s
+        var backoff = status.DisabledTill.Value - currentTime;
+        Assert.That(backoff.TotalSeconds, Is.GreaterThanOrEqualTo(510.0));
+        Assert.That(backoff.TotalSeconds, Is.LessThanOrEqualTo(690.0));
+    }
 }

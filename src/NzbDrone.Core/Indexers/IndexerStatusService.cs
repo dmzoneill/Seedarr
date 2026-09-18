@@ -9,6 +9,8 @@ namespace NzbDrone.Core.Indexers;
 public class IndexerStatusService : IIndexerStatusService
 {
     public const int DefaultFailureThreshold = 3;
+    public const int DefaultTtlMinutes = 15;
+    public const int MinimumPollingIntervalMinutes = 10;
 
     private readonly ConcurrentDictionary<int, IndexerStatus> _statuses = new();
     private readonly Logger _logger;
@@ -50,6 +52,8 @@ public class IndexerStatusService : IIndexerStatusService
                 status.InitialFailure = null;
                 status.LastFailureMessage = null;
                 status.LastStatusCode = null;
+                status.LastRssSyncTimeUtc = null;
+                status.NextRssSyncTimeUtc = null;
             }
         }
     }
@@ -75,13 +79,36 @@ public class IndexerStatusService : IIndexerStatusService
 
             if (!retryAfter.HasValue)
             {
-                if (ex?.Data != null && ex.Data.Contains("RetryAfter") && ex.Data["RetryAfter"] is TimeSpan ta)
+                if (ex is IndexerException ie && ie.RetryAfter.HasValue)
                 {
-                    retryAfter = ta;
+                    retryAfter = ie.RetryAfter;
                 }
-                else
+                else if (ex?.Data != null && ex.Data.Contains("RetryAfter"))
                 {
-                    retryAfter = TryParseRetryAfter(status.LastFailureMessage);
+                    var dataVal = ex.Data["RetryAfter"];
+                    if (dataVal is TimeSpan ta)
+                    {
+                        retryAfter = ta;
+                    }
+                    else if (dataVal is DateTimeOffset dto)
+                    {
+                        var diff = dto.UtcDateTime - now;
+                        retryAfter = diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
+                    }
+                    else if (dataVal is DateTime dt)
+                    {
+                        var diff = dt.ToUniversalTime() - now;
+                        retryAfter = diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
+                    }
+                    else if (dataVal is string s)
+                    {
+                        retryAfter = ParseRetryAfter(s, now);
+                    }
+                }
+
+                if (!retryAfter.HasValue)
+                {
+                    retryAfter = ParseRetryAfter(status.LastFailureMessage, now);
                 }
             }
 
@@ -185,7 +212,9 @@ public class IndexerStatusService : IIndexerStatusService
                     ConsecutiveFailures = status.ConsecutiveFailures,
                     LastFailureMessage = status.LastFailureMessage,
                     LastStatusCode = status.LastStatusCode,
-                    CurrentTime = now
+                    CurrentTime = now,
+                    LastRssSyncTimeUtc = status.LastRssSyncTimeUtc,
+                    NextRssSyncTimeUtc = status.NextRssSyncTimeUtc
                 };
             }
         }
@@ -211,7 +240,9 @@ public class IndexerStatusService : IIndexerStatusService
                     ConsecutiveFailures = kvp.Value.ConsecutiveFailures,
                     LastFailureMessage = kvp.Value.LastFailureMessage,
                     LastStatusCode = kvp.Value.LastStatusCode,
-                    CurrentTime = now
+                    CurrentTime = now,
+                    LastRssSyncTimeUtc = kvp.Value.LastRssSyncTimeUtc,
+                    NextRssSyncTimeUtc = kvp.Value.NextRssSyncTimeUtc
                 };
             }
         }
@@ -230,6 +261,8 @@ public class IndexerStatusService : IIndexerStatusService
                 status.InitialFailure = null;
                 status.LastFailureMessage = null;
                 status.LastStatusCode = null;
+                status.LastRssSyncTimeUtc = null;
+                status.NextRssSyncTimeUtc = null;
             }
         }
     }
@@ -318,23 +351,106 @@ public class IndexerStatusService : IIndexerStatusService
         }
     }
 
-    private static TimeSpan? TryParseRetryAfter(string message)
+    public void RecordRssSync(int indexerId, int? ttlMinutes = null)
     {
-        if (string.IsNullOrWhiteSpace(message))
+        var status = _statuses.GetOrAdd(indexerId, id => new IndexerStatus { IndexerId = id });
+        lock (status)
+        {
+            var now = _nowProvider();
+            status.LastRssSyncTimeUtc = now;
+            status.NextRssSyncTimeUtc = CalculateNextRssSync(ttlMinutes, now);
+        }
+    }
+
+    public void RecordFeedTtl(int indexerId, int ttlMinutes)
+    {
+        RecordRssSync(indexerId, ttlMinutes);
+    }
+
+    public DateTime CalculateNextRssSync(int? ttlMinutes = null, DateTime? syncTime = null)
+    {
+        var fromTime = syncTime ?? _nowProvider();
+        var effectiveTtl = (ttlMinutes.HasValue && ttlMinutes.Value > 0) ? ttlMinutes.Value : DefaultTtlMinutes;
+        var intervalMinutes = Math.Max(MinimumPollingIntervalMinutes, effectiveTtl);
+        return fromTime.AddMinutes(intervalMinutes);
+    }
+
+    public bool CanSyncRss(int indexerId, bool isManual = false)
+    {
+        if (isManual)
+        {
+            return true;
+        }
+
+        if (IsDisabled(indexerId))
+        {
+            return false;
+        }
+
+        var status = GetStatus(indexerId);
+        var now = _nowProvider();
+        if (status.NextRssSyncTimeUtc.HasValue && status.NextRssSyncTimeUtc.Value > now)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool ShouldSyncIndexer(int indexerId, bool isManual = false)
+    {
+        return CanSyncRss(indexerId, isManual);
+    }
+
+    public static TimeSpan? ParseRetryAfter(string messageOrHeader, DateTime? now = null)
+    {
+        if (string.IsNullOrWhiteSpace(messageOrHeader))
         {
             return null;
         }
 
+        var trimmed = messageOrHeader.Trim();
+        var current = now ?? DateTime.UtcNow;
+
+        if (int.TryParse(trimmed, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var directSeconds) && directSeconds > 0)
+        {
+            return TimeSpan.FromSeconds(directSeconds);
+        }
+
+        if (DateTimeOffset.TryParse(trimmed, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var directDate))
+        {
+            var diff = directDate.UtcDateTime - current;
+            return diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
+        }
+
         var match = Regex.Match(
-            message,
-            @"(?:retry[-_ ]?after[:= ]*|retry in )(\d+)",
+            trimmed,
+            @"(?:retry[-_ ]?after[:= ]*|retry in )(?<val>[^
+]+)",
             RegexOptions.IgnoreCase);
 
-        if (match.Success && int.TryParse(match.Groups[1].Value, out var seconds) && seconds > 0)
+        if (match.Success)
         {
-            return TimeSpan.FromSeconds(seconds);
+            var val = match.Groups["val"].Value.Trim();
+
+            var digitsMatch = Regex.Match(val, @"^(\d+)");
+            if (digitsMatch.Success && int.TryParse(digitsMatch.Groups[1].Value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var sec) && sec > 0)
+            {
+                return TimeSpan.FromSeconds(sec);
+            }
+
+            if (DateTimeOffset.TryParse(val, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var headerDate))
+            {
+                var diff = headerDate.UtcDateTime - current;
+                return diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
+            }
         }
 
         return null;
+    }
+
+    private static TimeSpan? TryParseRetryAfter(string message)
+    {
+        return ParseRetryAfter(message);
     }
 }
