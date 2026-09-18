@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 using NUnit.Framework;
 using NzbDrone.Core.Notifications.Discord;
 using NzbDrone.Core.Test.TestHelpers;
@@ -395,5 +396,33 @@ public class DiscordNotificationTest
         subject.WebhookUrl = "http://8.8.8.8/webhook";
 
         Assert.DoesNotThrow(() => subject.OnTorrentAdded("test.torrent"));
+    }
+
+    [Test]
+    public void SendEmbed_should_truncate_title_and_description_to_bounds()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.NoContent, "");
+        var subject = WithHandler(handler);
+        subject.WebhookUrl = "http://8.8.8.8/webhook";
+
+        var longTitleSource = new string('T', 300);
+        var longMessage = new string('M', 5000);
+
+        subject.OnHealthIssue(longTitleSource, longMessage);
+
+        Assert.That(handler.LastRequest, Is.Not.Null);
+        var body = handler.LastRequest.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+        using var doc = JsonDocument.Parse(body);
+        var embeds = doc.RootElement.GetProperty("embeds");
+        var firstEmbed = embeds[0];
+        var title = firstEmbed.GetProperty("title").GetString();
+        var desc = firstEmbed.GetProperty("description").GetString();
+
+        Assert.That(title.Length, Is.LessThanOrEqualTo(256));
+        Assert.That(title.EndsWith("..."), Is.True);
+        Assert.That(desc.Length, Is.LessThanOrEqualTo(4096));
+        Assert.That(desc.EndsWith("..."), Is.True);
+        Assert.That(title.Length + desc.Length + "Seedarr".Length, Is.LessThanOrEqualTo(6000));
     }
 }
