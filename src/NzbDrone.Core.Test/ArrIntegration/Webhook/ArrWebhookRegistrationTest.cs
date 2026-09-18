@@ -1303,4 +1303,52 @@ public class ArrWebhookRegistrationTest
         Assert.That(handler.Requests[0].RequestUri?.ToString(), Is.EqualTo("http://readarr:8787/api/v1/notification"));
         Assert.That(handler.Requests[1].RequestUri?.ToString(), Is.EqualTo("http://readarr:8787/api/v1/notification/55"));
     }
+
+    [Test]
+    public void RegisterWebhook_with_injected_client_uses_v1_api_for_lowercase_lidarr()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, @"[]");
+        handler.Enqueue(HttpStatusCode.Created, @"{""id"":7}");
+
+        var registration = CreateWithMockClient(handler);
+        var connection = new ArrConnectionDefinition
+        {
+            WebhookEnabled = true,
+            ArrType = "lidarr",
+            Url = "http://lidarr:8686",
+            ApiKey = "test-key"
+        };
+
+        var result = registration.RegisterWebhook(connection);
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(2));
+        Assert.That(handler.Requests[0].RequestUri?.ToString(), Is.EqualTo("http://lidarr:8686/api/v1/notification"));
+        Assert.That(handler.Requests[1].RequestUri?.ToString(), Is.EqualTo("http://lidarr:8686/api/v1/notification"));
+    }
+
+    [Test]
+    public void UnregisterWebhook_with_injected_client_uses_v1_for_lowercase_lidarr()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK,
+            @"[{""id"":11,""name"":""Seedarr"",""fields"":[{""name"":""url"",""value"":""http://localhost:9898/api/v1/webhook/arr""}]}]");
+        handler.Enqueue(HttpStatusCode.OK, @"{}");
+
+        var registration = CreateWithMockClient(handler);
+        var connection = new ArrConnectionDefinition
+        {
+            ArrType = "lidarr",
+            Url = "http://lidarr:8686",
+            ApiKey = "test-key"
+        };
+
+        var result = registration.UnregisterWebhook(connection);
+
+        Assert.That(result, Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(2));
+        Assert.That(handler.Requests[0].RequestUri?.ToString(), Is.EqualTo("http://lidarr:8686/api/v1/notification"));
+        Assert.That(handler.Requests[1].RequestUri?.ToString(), Is.EqualTo("http://lidarr:8686/api/v1/notification/11"));
+    }
 }
