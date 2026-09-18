@@ -2017,4 +2017,249 @@ public class SeedingEngineTest
 
         await _connectionManager.Received(1).DisconnectAllAsync();
     }
+
+    [Test]
+    public void Tick_should_exit_superseeding_when_peer_with_full_progress_joins()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "TestTorrent",
+            Status = TorrentStatus.Seeding,
+            SuperSeeding = true,
+            PieceCount = 4,
+            InfoHash = "hash123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        using var ms = new System.IO.MemoryStream();
+        var peer = new PeerConnection(ms, "192.168.1.10", 6881)
+        {
+            InfoHash = "hash123",
+            Progress = 1.0
+        };
+        _connectionManager.GetConnections("hash123").Returns(new List<PeerConnection> { peer });
+
+        CallTick();
+
+        Assert.That(torrent.SuperSeeding, Is.False);
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 1 && !t.SuperSeeding));
+        _eventLogService.Received(1).Info(1, "SuperSeeding", "Super-seeding completed: secondary seed joined");
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 1 && e.Reason == "secondary seed joined"));
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent.Id == 1 && !e.Torrent.SuperSeeding));
+    }
+
+    [Test]
+    public void Tick_should_exit_superseeding_when_secondary_seed_with_is_seed_flag_joins()
+    {
+        var torrent = new Torrent
+        {
+            Id = 2,
+            Name = "SeedTorrent",
+            Status = TorrentStatus.Seeding,
+            SuperSeeding = true,
+            PieceCount = 4,
+            InfoHash = "seedhash"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        using var ms = new System.IO.MemoryStream();
+        var peer = new PeerConnection(ms, "192.168.1.11", 6881)
+        {
+            InfoHash = "seedhash",
+            IsSeed = true
+        };
+        _connectionManager.GetConnections("seedhash").Returns(new List<PeerConnection> { peer });
+
+        CallTick();
+
+        Assert.That(torrent.SuperSeeding, Is.False);
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 2 && !t.SuperSeeding));
+        _eventLogService.Received(1).Info(2, "SuperSeeding", "Super-seeding completed: secondary seed joined");
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 2 && e.Reason == "secondary seed joined"));
+    }
+
+    [Test]
+    public void Tick_should_exit_superseeding_when_cumulative_leechers_bitfield_availability_reaches_one()
+    {
+        var torrent = new Torrent
+        {
+            Id = 3,
+            Name = "MultiLeecherTorrent",
+            Status = TorrentStatus.Seeding,
+            SuperSeeding = true,
+            PieceCount = 4,
+            InfoHash = "leechhash"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        using var ms1 = new System.IO.MemoryStream();
+        var leecher1 = new PeerConnection(ms1, "192.168.1.20", 6881)
+        {
+            InfoHash = "leechhash",
+            Progress = 0.5,
+            PeerPieces = new[] { true, true, false, false },
+            IsSeed = false
+        };
+
+        using var ms2 = new System.IO.MemoryStream();
+        var leecher2 = new PeerConnection(ms2, "192.168.1.21", 6881)
+        {
+            InfoHash = "leechhash",
+            Progress = 0.5,
+            PeerPieces = new[] { false, false, true, true },
+            IsSeed = false
+        };
+
+        _connectionManager.GetConnections("leechhash").Returns(new List<PeerConnection> { leecher1, leecher2 });
+
+        CallTick();
+
+        Assert.That(torrent.SuperSeeding, Is.False);
+        _torrentService.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 3 && !t.SuperSeeding));
+        _eventLogService.Received(1).Info(3, "SuperSeeding", "Super-seeding completed: swarm availability >= 1.0");
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<SuperSeedingExitedEvent>(e => e.Torrent.Id == 3 && e.Reason == "swarm availability >= 1.0"));
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentUpdatedEvent>(e => e.Torrent.Id == 3 && !e.Torrent.SuperSeeding));
+    }
+
+    [Test]
+    public void Tick_should_remain_superseeding_when_swarm_availability_is_less_than_one_and_no_other_seeds()
+    {
+        var torrent = new Torrent
+        {
+            Id = 4,
+            Name = "IncompleteTorrent",
+            Status = TorrentStatus.Seeding,
+            SuperSeeding = true,
+            PieceCount = 4,
+            InfoHash = "incompletestream"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        using var ms1 = new System.IO.MemoryStream();
+        var leecher1 = new PeerConnection(ms1, "192.168.1.30", 6881)
+        {
+            InfoHash = "incompletestream",
+            Progress = 0.25,
+            PeerPieces = new[] { true, false, false, false },
+            IsSeed = false
+        };
+
+        using var ms2 = new System.IO.MemoryStream();
+        var leecher2 = new PeerConnection(ms2, "192.168.1.31", 6881)
+        {
+            InfoHash = "incompletestream",
+            Progress = 0.25,
+            PeerPieces = new[] { false, true, false, false },
+            IsSeed = false
+        };
+
+        _connectionManager.GetConnections("incompletestream").Returns(new List<PeerConnection> { leecher1, leecher2 });
+
+        CallTick();
+
+        Assert.That(torrent.SuperSeeding, Is.True);
+        _torrentService.DidNotReceive().Update(Arg.Any<Torrent>());
+        _eventLogService.DidNotReceive().Info(Arg.Any<int>(), Arg.Is<string>("SuperSeeding"), Arg.Any<string>());
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<SuperSeedingExitedEvent>());
+    }
+
+    [Test]
+    public void Tick_should_persist_to_torrent_repository_when_repository_is_provided()
+    {
+        var torrentRepo = Substitute.For<ITorrentRepository>();
+        var engineWithRepo = new SeedingEngine(
+            _torrentService,
+            _distributionManager,
+            _speedScheduler,
+            _configService,
+            _eventAggregator,
+            _peerDatabase,
+            _connectionManager,
+            _eventLogService,
+            torrentRepository: torrentRepo);
+
+        var torrent = new Torrent
+        {
+            Id = 5,
+            Name = "RepoTorrent",
+            Status = TorrentStatus.Seeding,
+            SuperSeeding = true,
+            PieceCount = 2,
+            InfoHash = "repohash"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        using var ms = new System.IO.MemoryStream();
+        var peer = new PeerConnection(ms, "192.168.1.40", 6881)
+        {
+            InfoHash = "repohash",
+            Progress = 1.0
+        };
+        _connectionManager.GetConnections("repohash").Returns(new List<PeerConnection> { peer });
+
+        var method = typeof(SeedingEngine).GetMethod("Tick", BindingFlags.NonPublic | BindingFlags.Instance);
+        method.Invoke(engineWithRepo, null);
+
+        Assert.That(torrent.SuperSeeding, Is.False);
+        torrentRepo.Received(1).Update(Arg.Is<Torrent>(t => t.Id == 5 && !t.SuperSeeding));
+    }
+
+    [Test]
+    public void CalculateCumulativeAvailability_should_return_expected_ratios()
+    {
+        using var ms = new System.IO.MemoryStream();
+        var p1 = new PeerConnection(ms, "127.0.0.1", 1001) { PeerPieces = new[] { true, false, false, false } };
+        var p2 = new PeerConnection(ms, "127.0.0.1", 1002) { PeerPieces = new[] { false, true, false, false } };
+        var p3 = new PeerConnection(ms, "127.0.0.1", 1003) { PeerPieces = new[] { false, false, true, true } };
+
+        Assert.That(SeedingEngine.CalculateCumulativeAvailability(new[] { p1, p2 }, 4), Is.EqualTo(0.5));
+        Assert.That(SeedingEngine.CalculateCumulativeAvailability(new[] { p1, p2, p3 }, 4), Is.EqualTo(1.0));
+        Assert.That(SeedingEngine.CalculateCumulativeAvailability(null, 4), Is.EqualTo(0.0));
+        Assert.That(SeedingEngine.CalculateCumulativeAvailability(new PeerConnection[0], 4), Is.EqualTo(0.0));
+    }
+
+    [Test]
+    public void Tick_should_send_full_bitfield_or_haveall_to_connected_peers_upon_exit()
+    {
+        var torrent = new Torrent
+        {
+            Id = 6,
+            Name = "BitfieldTorrent",
+            Status = TorrentStatus.Seeding,
+            SuperSeeding = true,
+            PieceCount = 8,
+            InfoHash = "bfhash"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        using var ms1 = new System.IO.MemoryStream();
+        var regularPeer = new PeerConnection(ms1, "192.168.1.50", 6881)
+        {
+            InfoHash = "bfhash",
+            SupportsFastExtension = false
+        };
+
+        using var ms2 = new System.IO.MemoryStream();
+        var fastPeer = new PeerConnection(ms2, "192.168.1.51", 6881)
+        {
+            InfoHash = "bfhash",
+            SupportsFastExtension = true
+        };
+
+        using var ms3 = new System.IO.MemoryStream();
+        var seedPeer = new PeerConnection(ms3, "192.168.1.52", 6881)
+        {
+            InfoHash = "bfhash",
+            Progress = 1.0
+        };
+
+        _connectionManager.GetConnections("bfhash").Returns(new List<PeerConnection> { regularPeer, fastPeer, seedPeer });
+
+        CallTick();
+
+        Assert.That(torrent.SuperSeeding, Is.False);
+        Assert.That(ms1.Length, Is.GreaterThan(0));
+        Assert.That(ms2.Length, Is.GreaterThan(0));
+    }
 }
