@@ -3,6 +3,7 @@ using System.Net.Mail;
 using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.Notifications;
+using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Notifications;
 
@@ -310,5 +311,185 @@ public class EmailNotificationSenderTest
         Assert.That(capturedMessage.Headers["Auto-Submitted"], Is.EqualTo("auto-generated"));
         Assert.That(capturedMessage.Headers["X-Auto-Response-Suppress"], Is.EqualTo("All"));
         Assert.That(capturedMessage.Headers["Precedence"], Is.EqualTo("bulk"));
+    }
+
+    [TestCase("{\"useSsl\":\"true\"}", true)]
+    [TestCase("{\"useSsl\":\"false\"}", false)]
+    [TestCase("{\"ssl\":\"true\"}", true)]
+    [TestCase("{\"ssl\":\"false\"}", false)]
+    [TestCase("{\"useSsl\":true}", true)]
+    [TestCase("{\"useSsl\":false}", false)]
+    [TestCase("{\"ssl\":true}", true)]
+    [TestCase("{\"ssl\":false}", false)]
+    [TestCase("{\"useTls\":\"true\"}", true)]
+    [TestCase("{\"useTls\":\"false\"}", false)]
+    [TestCase("{\"requireTls\":\"true\"}", true)]
+    [TestCase("{\"requireTls\":\"false\"}", false)]
+    public void SendEmailNotification_should_parse_ssl_settings_including_string_booleans(string sslJsonFragment, bool expectedSsl)
+    {
+        var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":587,\"to\":\"recipient@example.com\",\"from\":\"test@example.com\",{sslJsonFragment.TrimStart('{')}";
+        var capturedSsl = !expectedSsl;
+
+        EmailNotificationSender.SendEmailNotification(
+            settings,
+            "Test",
+            null,
+            null,
+            "Test message",
+            (client, message) =>
+            {
+                capturedSsl = client.EnableSsl;
+            });
+
+        Assert.That(capturedSsl, Is.EqualTo(expectedSsl));
+    }
+
+    [TestCase("ssl=true", true)]
+    [TestCase("ssl=false", false)]
+    [TestCase("usessl=true", true)]
+    [TestCase("usessl=false", false)]
+    [TestCase("usetls=true", true)]
+    [TestCase("usetls=false", false)]
+    public void SendEmailNotification_should_parse_query_string_ssl_settings(string qsFragment, bool expectedSsl)
+    {
+        var settings = $"host={ValidPublicHost}&port=587&to=recipient@example.com&from=test@example.com&{qsFragment}";
+        var capturedSsl = !expectedSsl;
+
+        EmailNotificationSender.SendEmailNotification(
+            settings,
+            "Test",
+            null,
+            null,
+            "Test message",
+            (client, message) =>
+            {
+                capturedSsl = client.EnableSsl;
+            });
+
+        Assert.That(capturedSsl, Is.EqualTo(expectedSsl));
+    }
+
+    [Test]
+    public void SendEmailNotification_should_display_category_when_category_is_present_and_label_is_null()
+    {
+        var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":587,\"to\":\"recipient@example.com\",\"from\":\"test@example.com\"}}";
+        var torrent = new Torrent
+        {
+            Name = "Ubuntu Linux 24.04 ISO",
+            Category = "Linux",
+            Label = null,
+            Progress = 0.75,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1024 * 1024 * 500L,
+        };
+
+        MailMessage capturedMessage = null;
+
+        EmailNotificationSender.SendEmailNotification(
+            settings,
+            "Download Progress",
+            torrent,
+            null,
+            null,
+            (client, message) =>
+            {
+                capturedMessage = message;
+            });
+
+        Assert.That(capturedMessage, Is.Not.Null);
+        Assert.That(capturedMessage.Body, Does.Contain("Category: Linux"));
+    }
+
+    [Test]
+    public void SendEmailNotification_should_display_category_when_category_is_present_and_label_is_empty()
+    {
+        var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":587,\"to\":\"recipient@example.com\",\"from\":\"test@example.com\"}}";
+        var torrent = new Torrent
+        {
+            Name = "Ubuntu Linux 24.04 ISO",
+            Category = "Linux",
+            Label = "",
+            Progress = 0.75,
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1024 * 1024 * 500L,
+        };
+
+        MailMessage capturedMessage = null;
+
+        EmailNotificationSender.SendEmailNotification(
+            settings,
+            "Download Progress",
+            torrent,
+            null,
+            null,
+            (client, message) =>
+            {
+                capturedMessage = message;
+            });
+
+        Assert.That(capturedMessage, Is.Not.Null);
+        Assert.That(capturedMessage.Body, Does.Contain("Category: Linux"));
+    }
+
+    [Test]
+    public void SendEmailNotification_should_fallback_to_label_when_category_is_null_or_empty()
+    {
+        var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":587,\"to\":\"recipient@example.com\",\"from\":\"test@example.com\"}}";
+        var torrent = new Torrent
+        {
+            Name = "Ubuntu Linux 24.04 ISO",
+            Category = null,
+            Label = "Operating Systems",
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding,
+            TotalSize = 1024 * 1024 * 500L,
+        };
+
+        MailMessage capturedMessage = null;
+
+        EmailNotificationSender.SendEmailNotification(
+            settings,
+            "Download Finished",
+            torrent,
+            null,
+            null,
+            (client, message) =>
+            {
+                capturedMessage = message;
+            });
+
+        Assert.That(capturedMessage, Is.Not.Null);
+        Assert.That(capturedMessage.Body, Does.Contain("Category: Operating Systems"));
+    }
+
+    [Test]
+    public void SendEmailNotification_should_fallback_to_none_when_both_category_and_label_are_null_or_empty()
+    {
+        var settings = $"{{\"host\":\"{ValidPublicHost}\",\"port\":587,\"to\":\"recipient@example.com\",\"from\":\"test@example.com\"}}";
+        var torrent = new Torrent
+        {
+            Name = "Ubuntu Linux 24.04 ISO",
+            Category = "",
+            Label = "",
+            Progress = 1.0,
+            Status = TorrentStatus.Seeding,
+            TotalSize = 1024 * 1024 * 500L,
+        };
+
+        MailMessage capturedMessage = null;
+
+        EmailNotificationSender.SendEmailNotification(
+            settings,
+            "Download Finished",
+            torrent,
+            null,
+            null,
+            (client, message) =>
+            {
+                capturedMessage = message;
+            });
+
+        Assert.That(capturedMessage, Is.Not.Null);
+        Assert.That(capturedMessage.Body, Does.Contain("Category: None"));
     }
 }

@@ -72,6 +72,7 @@ public static class EmailNotificationSender
         string host = null;
         var port = 25;
         var ssl = false;
+        bool? auth = null;
         string user = null;
         string pass = null;
         var from = "seedarr@localhost";
@@ -98,9 +99,26 @@ public static class EmailNotificationSender
                 }
             }
 
-            if (root.TryGetProperty("useSsl", out var sslProp) || root.TryGetProperty("ssl", out sslProp))
+            if (root.TryGetProperty("useSsl", out var sslProp) ||
+                root.TryGetProperty("ssl", out sslProp) ||
+                root.TryGetProperty("useTls", out sslProp) ||
+                root.TryGetProperty("tls", out sslProp) ||
+                root.TryGetProperty("enableSsl", out sslProp) ||
+                root.TryGetProperty("requireTls", out sslProp))
             {
-                ssl = sslProp.GetBoolean();
+                if (TryParseBoolean(sslProp, out var parsedSsl))
+                {
+                    ssl = parsedSsl;
+                }
+            }
+
+            if (root.TryGetProperty("auth", out var authProp) ||
+                root.TryGetProperty("useAuth", out authProp))
+            {
+                if (TryParseBoolean(authProp, out var parsedAuth))
+                {
+                    auth = parsedAuth;
+                }
             }
 
             if (root.TryGetProperty("username", out var u) || root.TryGetProperty("user", out u))
@@ -151,9 +169,21 @@ public static class EmailNotificationSender
                         break;
                     case "ssl":
                     case "usessl":
-                        if (bool.TryParse(val, out var s))
+                    case "tls":
+                    case "usetls":
+                    case "enablessl":
+                    case "requiretls":
+                        if (TryParseBoolean(val, out var s))
                         {
                             ssl = s;
+                        }
+
+                        break;
+                    case "auth":
+                    case "useauth":
+                        if (TryParseBoolean(val, out var a))
+                        {
+                            auth = a;
                         }
 
                         break;
@@ -199,8 +229,11 @@ public static class EmailNotificationSender
 
         var torrentName = torrent?.Name ?? NotificationPayloadBuilder.ExtractMessage(genericPayload, eventType);
         var subject = $"[Seedarr] [{eventType}] {torrentName}";
+        var category = torrent != null
+            ? (!string.IsNullOrWhiteSpace(torrent.Category) ? torrent.Category : (!string.IsNullOrWhiteSpace(torrent.Label) ? torrent.Label : "None"))
+            : "None";
         var torrentDetails = torrent != null
-            ? $"Torrent: {torrent.Name}\nCategory: {torrent.Label ?? "None"}\nProgress: {torrent.Progress * 100:F1}%\nStatus: {torrent.Status}\nSize: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
+            ? $"Torrent: {torrent.Name}\nCategory: {category}\nProgress: {torrent.Progress * 100:F1}%\nStatus: {torrent.Status}\nSize: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
             : NotificationPayloadBuilder.ExtractMessage(genericPayload, $"Event: {eventType}");
         var err = NotificationPayloadBuilder.ExtractErrorMessage(genericPayload);
         if (!string.IsNullOrWhiteSpace(err))
@@ -273,7 +306,7 @@ public static class EmailNotificationSender
                         Timeout = 10000,
                     };
 
-                    if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(pass))
+                    if (auth != false && !string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(pass))
                     {
                         client.Credentials = new NetworkCredential(user, pass);
                     }
@@ -357,5 +390,51 @@ public static class EmailNotificationSender
             SmtpStatusCode.InsufficientStorage => true,    // 452
             _ => (int)ex.StatusCode is 421 or 450 or 451 or 452
         };
+    }
+
+    private static bool TryParseBoolean(JsonElement element, out bool result)
+    {
+        if (element.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            result = element.GetBoolean();
+            return true;
+        }
+
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            return TryParseBoolean(element.GetString(), out result);
+        }
+
+        if (element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out var intVal))
+        {
+            result = intVal != 0;
+            return true;
+        }
+
+        result = false;
+        return false;
+    }
+
+    private static bool TryParseBoolean(string value, out bool result)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            result = false;
+            return false;
+        }
+
+        if (bool.TryParse(value, out result))
+        {
+            return true;
+        }
+
+        if (int.TryParse(value, out var intVal))
+        {
+            result = intVal != 0;
+            return true;
+        }
+
+        result = false;
+        return false;
     }
 }
