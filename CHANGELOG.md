@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.6.9](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.9) - 2026-09-18
+
+### 🐛 Bug Fixes
+- fix(mediainspection): restrict ContainerFormat to recognized media container extensions (Closes #174)
+- fix(diskspace): resolve Linux mount points in DiskSpaceCheck via IDiskSpaceService (Closes #172)
+- fix(onboarding): mark GettingStartedModal as completed on finish (Closes #219)
+- fix(ui): prevent permanent log silencing after Clear in SystemLogs (Closes #194)
+- fix(i18n): support defaultValue in options object and fallback rendering (Closes #203)
+- fix(ui): prevent permanent event silencing after Clear in SystemEvents (Closes #238)
+- fix(fastresume): protect fastresume files against truncation via atomic write (Closes #404)
+- fix(seeding): eliminate execution-time drift in SeedingEngine tick loop (Closes #393)
+- fix(theme): persist toggleTheme to localStorage and resolve system preference (Closes #216)
+
 ## [v1.6.8](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.8) - 2026-09-17
 
 ### 🐛 Bug Fixes
