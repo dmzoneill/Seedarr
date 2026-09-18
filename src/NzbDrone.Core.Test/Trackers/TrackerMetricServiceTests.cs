@@ -379,4 +379,280 @@ public class TrackerMetricServiceTests
         Assert.That(result, Is.SameAs(expectedSnapshots));
         _snapshotRepository.Received(1).GetHistory(10, Arg.Is<DateTime>(d => d >= DateTime.UtcNow.AddHours(-25) && d <= DateTime.UtcNow.AddHours(-23)), 500);
     }
+
+    [Test]
+    public void RecordAnnounce_adds_only_incremental_delta_on_successive_announces()
+    {
+        var trackerUrl = "http://tracker.example.com:80/announce";
+        var metric = new TrackerMetric
+        {
+            Id = 1,
+            TrackerUrl = trackerUrl
+        };
+
+        _metricRepository.FindByUrl(trackerUrl).Returns(metric);
+
+        // 1. Initial announce: 1000 uploaded, 500 downloaded
+        _service.RecordAnnounce(
+            trackerUrl: trackerUrl,
+            torrentId: 1,
+            uploaded: 1000,
+            downloaded: 500,
+            left: 500,
+            responseTimeMs: 100,
+            success: true,
+            seeders: 10,
+            leechers: 5,
+            peersCount: 15);
+
+        Assert.That(metric.TotalUploaded, Is.EqualTo(1000));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(500));
+        Assert.That(metric.SessionUploaded, Is.EqualTo(1000));
+        Assert.That(metric.SessionDownloaded, Is.EqualTo(500));
+
+        // 2. Successive announce with increased cumulative bytes: 1600 uploaded (+600), 800 downloaded (+300)
+        _service.RecordAnnounce(
+            trackerUrl: trackerUrl,
+            torrentId: 1,
+            uploaded: 1600,
+            downloaded: 800,
+            left: 200,
+            responseTimeMs: 90,
+            success: true,
+            seeders: 12,
+            leechers: 4,
+            peersCount: 16);
+
+        Assert.That(metric.TotalUploaded, Is.EqualTo(1600));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(800));
+        Assert.That(metric.SessionUploaded, Is.EqualTo(1600));
+        Assert.That(metric.SessionDownloaded, Is.EqualTo(800));
+
+        // 3. Successive announce with further increased cumulative bytes: 2500 uploaded (+900), 1000 downloaded (+200)
+        _service.RecordAnnounce(
+            trackerUrl: trackerUrl,
+            torrentId: 1,
+            uploaded: 2500,
+            downloaded: 1000,
+            left: 0,
+            responseTimeMs: 95,
+            success: true,
+            seeders: 15,
+            leechers: 2,
+            peersCount: 17);
+
+        Assert.That(metric.TotalUploaded, Is.EqualTo(2500));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(1000));
+        Assert.That(metric.SessionUploaded, Is.EqualTo(2500));
+        Assert.That(metric.SessionDownloaded, Is.EqualTo(1000));
+    }
+
+    [Test]
+    public void RecordAnnounce_does_not_increment_totals_when_cumulative_bytes_remain_unchanged()
+    {
+        var trackerUrl = "http://tracker.example.com:80/announce";
+        var metric = new TrackerMetric
+        {
+            Id = 1,
+            TrackerUrl = trackerUrl
+        };
+
+        _metricRepository.FindByUrl(trackerUrl).Returns(metric);
+
+        // First announce
+        _service.RecordAnnounce(
+            trackerUrl: trackerUrl,
+            torrentId: 1,
+            uploaded: 5000,
+            downloaded: 2000,
+            left: 1000,
+            responseTimeMs: 100,
+            success: true,
+            seeders: 10,
+            leechers: 5,
+            peersCount: 15);
+
+        Assert.That(metric.TotalUploaded, Is.EqualTo(5000));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(2000));
+        Assert.That(metric.SessionUploaded, Is.EqualTo(5000));
+        Assert.That(metric.SessionDownloaded, Is.EqualTo(2000));
+
+        // Second announce with identical cumulative bytes
+        _service.RecordAnnounce(
+            trackerUrl: trackerUrl,
+            torrentId: 1,
+            uploaded: 5000,
+            downloaded: 2000,
+            left: 1000,
+            responseTimeMs: 110,
+            success: true,
+            seeders: 10,
+            leechers: 5,
+            peersCount: 15);
+
+        Assert.That(metric.TotalUploaded, Is.EqualTo(5000));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(2000));
+        Assert.That(metric.SessionUploaded, Is.EqualTo(5000));
+        Assert.That(metric.SessionDownloaded, Is.EqualTo(2000));
+
+        // Third announce with identical cumulative bytes
+        _service.RecordAnnounce(
+            trackerUrl: trackerUrl,
+            torrentId: 1,
+            uploaded: 5000,
+            downloaded: 2000,
+            left: 1000,
+            responseTimeMs: 105,
+            success: true,
+            seeders: 10,
+            leechers: 5,
+            peersCount: 15);
+
+        Assert.That(metric.TotalUploaded, Is.EqualTo(5000));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(2000));
+        Assert.That(metric.SessionUploaded, Is.EqualTo(5000));
+        Assert.That(metric.SessionDownloaded, Is.EqualTo(2000));
+    }
+
+    [Test]
+    public void RecordAnnounce_writes_delta_bytes_to_snapshots()
+    {
+        var trackerUrl = "http://tracker.example.com:80/announce";
+        var metric = new TrackerMetric
+        {
+            Id = 1,
+            TrackerUrl = trackerUrl
+        };
+
+        _metricRepository.FindByUrl(trackerUrl).Returns(metric);
+
+        IList<TrackerMetricSnapshot> capturedSnapshots = null;
+        _snapshotRepository.When(x => x.InsertMany(Arg.Any<IList<TrackerMetricSnapshot>>()))
+            .Do(callInfo => capturedSnapshots = callInfo.Arg<IList<TrackerMetricSnapshot>>().ToList());
+
+        // Announce 1: initial 1000 up, 500 down
+        _service.RecordAnnounce(
+            trackerUrl: trackerUrl,
+            torrentId: 1,
+            uploaded: 1000,
+            downloaded: 500,
+            left: 500,
+            responseTimeMs: 100,
+            success: true,
+            seeders: 10,
+            leechers: 5,
+            peersCount: 15);
+
+        // Announce 2: 1400 up (+400), 700 down (+200)
+        _service.RecordAnnounce(
+            trackerUrl: trackerUrl,
+            torrentId: 1,
+            uploaded: 1400,
+            downloaded: 700,
+            left: 300,
+            responseTimeMs: 100,
+            success: true,
+            seeders: 10,
+            leechers: 5,
+            peersCount: 15);
+
+        // Announce 3: unchanged bytes (delta 0)
+        _service.RecordAnnounce(
+            trackerUrl: trackerUrl,
+            torrentId: 1,
+            uploaded: 1400,
+            downloaded: 700,
+            left: 300,
+            responseTimeMs: 100,
+            success: true,
+            seeders: 10,
+            leechers: 5,
+            peersCount: 15);
+
+        _service.Flush();
+
+        Assert.That(capturedSnapshots, Is.Not.Null);
+        Assert.That(capturedSnapshots.Count, Is.EqualTo(3));
+        Assert.That(capturedSnapshots[0].Uploaded, Is.EqualTo(1000));
+        Assert.That(capturedSnapshots[0].Downloaded, Is.EqualTo(500));
+        Assert.That(capturedSnapshots[1].Uploaded, Is.EqualTo(400));
+        Assert.That(capturedSnapshots[1].Downloaded, Is.EqualTo(200));
+        Assert.That(capturedSnapshots[2].Uploaded, Is.EqualTo(0));
+        Assert.That(capturedSnapshots[2].Downloaded, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void RecordAnnounce_computes_delta_against_existing_tracker_entry_baseline()
+    {
+        var trackerUrl = "http://tracker.example.com:80/announce";
+        var metric = new TrackerMetric
+        {
+            Id = 1,
+            TrackerUrl = trackerUrl
+        };
+
+        _metricRepository.FindByUrl(trackerUrl).Returns(metric);
+
+        var existingEntry = new TrackerEntry
+        {
+            TorrentId = 42,
+            Url = trackerUrl,
+            LastAnnouncedUploaded = 5000,
+            Downloaded = 2000,
+            TotalAnnounces = 10
+        };
+
+        _trackerEntryRepository.GetByTorrentId(42).Returns(new List<TrackerEntry> { existingEntry });
+
+        // First announce for this torrent in current service session, but torrent already has 5500 up (+500 delta) and 2300 down (+300 delta)
+        _service.RecordAnnounce(
+            trackerUrl: trackerUrl,
+            torrentId: 42,
+            uploaded: 5500,
+            downloaded: 2300,
+            left: 1000,
+            responseTimeMs: 100,
+            success: true,
+            seeders: 10,
+            leechers: 5,
+            peersCount: 15);
+
+        Assert.That(metric.TotalUploaded, Is.EqualTo(500));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(300));
+        Assert.That(metric.SessionUploaded, Is.EqualTo(500));
+        Assert.That(metric.SessionDownloaded, Is.EqualTo(300));
+    }
+
+    [Test]
+    public void RecordAnnounce_tracks_deltas_independently_per_torrent()
+    {
+        var trackerUrl = "http://tracker.example.com:80/announce";
+        var metric = new TrackerMetric
+        {
+            Id = 1,
+            TrackerUrl = trackerUrl
+        };
+
+        _metricRepository.FindByUrl(trackerUrl).Returns(metric);
+
+        // Torrent 1 announce 1: 1000 up, 200 down
+        _service.RecordAnnounce(trackerUrl, 1, 1000, 200, 1000, 50, true, 10, 5, 10);
+        Assert.That(metric.TotalUploaded, Is.EqualTo(1000));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(200));
+
+        // Torrent 2 announce 1: 2000 up, 400 down
+        _service.RecordAnnounce(trackerUrl, 2, 2000, 400, 1000, 50, true, 10, 5, 10);
+        Assert.That(metric.TotalUploaded, Is.EqualTo(3000));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(600));
+
+        // Torrent 1 announce 2: 1500 up (+500 delta), 300 down (+100 delta)
+        _service.RecordAnnounce(trackerUrl, 1, 1500, 300, 1000, 50, true, 10, 5, 10);
+        Assert.That(metric.TotalUploaded, Is.EqualTo(3500));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(700));
+
+        // Torrent 2 announce 2: 2000 up (+0 delta), 400 down (+0 delta)
+        _service.RecordAnnounce(trackerUrl, 2, 2000, 400, 1000, 50, true, 10, 5, 10);
+        Assert.That(metric.TotalUploaded, Is.EqualTo(3500));
+        Assert.That(metric.TotalDownloaded, Is.EqualTo(700));
+    }
 }
