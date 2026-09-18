@@ -295,7 +295,7 @@ public class BackupServiceTest
     }
 
     [Test]
-    public void RestoreBackup_should_extract_config_file_without_db_file()
+    public void RestoreBackup_should_stage_config_file_without_db_file()
     {
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
@@ -311,11 +311,80 @@ public class BackupServiceTest
         _subject.RestoreBackup("restore_postgres_test.zip");
 
         var configPath = Path.Combine(_tempDir, "config.xml");
+        var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
 
-        Assert.That(File.Exists(configPath), Is.True);
-        Assert.That(File.ReadAllText(configPath), Is.EqualTo("<Config><Port>8989</Port></Config>"));
+        Assert.That(File.Exists(configRestorePath), Is.True);
+        Assert.That(File.ReadAllText(configRestorePath), Is.EqualTo("<Config><Port>8989</Port></Config>"));
+        Assert.That(File.Exists(configPath), Is.False);
         Assert.That(File.Exists(dbRestorePath), Is.False);
+    }
+
+    [Test]
+    public void RestoreBackup_should_stage_config_restore_and_not_overwrite_active_config()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        var backupPath = Path.Combine(backupDir, "restore_config_stage_test.zip");
+
+        var configPath = Path.Combine(_tempDir, "config.xml");
+        File.WriteAllText(configPath, "<Config><Port>8080</Port></Config>");
+
+        using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+        {
+            var entry = zip.CreateEntry("config.xml");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("<Config><Port>9090</Port></Config>");
+        }
+
+        _subject.RestoreBackup("restore_config_stage_test.zip");
+
+        var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
+
+        Assert.That(File.Exists(configRestorePath), Is.True);
+        Assert.That(File.ReadAllText(configRestorePath), Is.EqualTo("<Config><Port>9090</Port></Config>"));
+        Assert.That(File.Exists(configPath), Is.True);
+        Assert.That(File.ReadAllText(configPath), Is.EqualTo("<Config><Port>8080</Port></Config>"), "Active config.xml must not be overwritten prematurely");
+    }
+
+    [Test]
+    public void RestoreBackup_should_stage_both_db_and_config_restore_files()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        var backupPath = Path.Combine(backupDir, "restore_both_test.zip");
+
+        var dummyDbBytes = new byte[512];
+        var header = System.Text.Encoding.ASCII.GetBytes("SQLite format 3 ");
+        Array.Copy(header, 0, dummyDbBytes, 0, header.Length);
+
+        using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+        {
+            var dbEntry = zip.CreateEntry("seedarr.db");
+            using (var stream = dbEntry.Open())
+            {
+                stream.Write(dummyDbBytes, 0, dummyDbBytes.Length);
+            }
+
+            var configEntry = zip.CreateEntry("config.xml");
+            using (var writer = new StreamWriter(configEntry.Open()))
+            {
+                writer.Write("<Config><ApiKey>restored-key</ApiKey></Config>");
+            }
+        }
+
+        var configPath = Path.Combine(_tempDir, "config.xml");
+        File.WriteAllText(configPath, "<Config><ApiKey>original-key</ApiKey></Config>");
+
+        _subject.RestoreBackup("restore_both_test.zip");
+
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+        var configRestorePath = Path.Combine(_tempDir, "config.xml.restore");
+
+        Assert.That(File.Exists(dbRestorePath), Is.True);
+        Assert.That(File.Exists(configRestorePath), Is.True);
+        Assert.That(File.ReadAllText(configRestorePath), Is.EqualTo("<Config><ApiKey>restored-key</ApiKey></Config>"));
+        Assert.That(File.ReadAllText(configPath), Is.EqualTo("<Config><ApiKey>original-key</ApiKey></Config>"));
     }
 
     [Test]

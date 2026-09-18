@@ -280,6 +280,7 @@ public class BackupService : IBackupService
         var dbPath = Path.Combine(_appFolderInfo.AppDataFolder, DbFileName);
         var dbRestorePath = dbPath + ".restore";
         var configPath = Path.Combine(_appFolderInfo.AppDataFolder, ConfigFileName);
+        var configRestorePath = configPath + ".restore";
 
         using var zip = ZipFile.OpenRead(filePath);
 
@@ -335,8 +336,8 @@ public class BackupService : IBackupService
         var configEntry = zip.GetEntry(ConfigFileName);
         if (configEntry != null)
         {
-            configEntry.ExtractToFile(configPath, overwrite: true);
-            _logger.Info("Config restored from backup");
+            configEntry.ExtractToFile(configRestorePath, overwrite: true);
+            _logger.Info("Config restore staged at {0}; swap will occur on next startup", configRestorePath);
         }
     }
 
