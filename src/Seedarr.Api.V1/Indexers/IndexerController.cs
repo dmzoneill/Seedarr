@@ -198,10 +198,13 @@ public class IndexerController : Controller
         }
         catch (HttpRequestException ex)
         {
-            var retryAfter = ex.Data["RetryAfter"] as TimeSpan?;
-            if (definition.Id > 0 && !definition.ApiKey.Contains('*'))
+            if (!ex.Data.Contains("Recorded") || !(bool)ex.Data["Recorded"])
             {
-                _indexerStatusService.RecordFailure(definition.Id, (int?)ex.StatusCode, ex.Message, ex, retryAfter);
+                var retryAfter = ex.Data["RetryAfter"] as TimeSpan?;
+                if (definition.Id > 0 && !definition.ApiKey.Contains('*'))
+                {
+                    _indexerStatusService.RecordFailure(definition.Id, (int?)ex.StatusCode, ex.Message, ex, retryAfter);
+                }
             }
 
             return Ok(new IndexerTestResult { Success = false, Message = ex.Message, StatusCode = (int?)ex.StatusCode });
@@ -224,7 +227,7 @@ public class IndexerController : Controller
             }
             else
             {
-                _indexerStatusService.RecordFailure(definition.Id, result.StatusCode, errorMessage: result.Message);
+                _indexerStatusService.RecordFailure(definition.Id, result.StatusCode, errorMessage: result.Message, retryAfter: result.RetryAfter);
             }
         }
 
@@ -262,8 +265,12 @@ public class IndexerController : Controller
         }
         catch (HttpRequestException ex)
         {
-            var retryAfter = ex.Data["RetryAfter"] as TimeSpan?;
-            _indexerStatusService.RecordFailure(definition.Id, (int?)ex.StatusCode, ex.Message, ex, retryAfter);
+            if (!ex.Data.Contains("Recorded") || !(bool)ex.Data["Recorded"])
+            {
+                var retryAfter = ex.Data["RetryAfter"] as TimeSpan?;
+                _indexerStatusService.RecordFailure(definition.Id, (int?)ex.StatusCode, ex.Message, ex, retryAfter);
+            }
+
             return Ok(new IndexerTestResult { Success = false, Message = ex.Message, StatusCode = (int?)ex.StatusCode });
         }
         catch (Exception ex)
@@ -278,7 +285,7 @@ public class IndexerController : Controller
         }
         else
         {
-            _indexerStatusService.RecordFailure(definition.Id, result.StatusCode, errorMessage: result.Message);
+            _indexerStatusService.RecordFailure(definition.Id, result.StatusCode, errorMessage: result.Message, retryAfter: result.RetryAfter);
         }
 
         return Ok(result);
@@ -315,14 +322,17 @@ public class IndexerController : Controller
             }
             catch (HttpRequestException ex)
             {
-                var retryAfter = ex.Data["RetryAfter"] as TimeSpan?;
-                _indexerStatusService.RecordFailure(def.Id, (int?)ex.StatusCode, ex.Message, ex, retryAfter);
+                if (!ex.Data.Contains("Recorded") || !(bool)ex.Data["Recorded"])
+                {
+                    var retryAfter = ex.Data["RetryAfter"] as TimeSpan?;
+                    _indexerStatusService.RecordFailure(def.Id, (int?)ex.StatusCode, ex.Message, ex, retryAfter);
+                }
             }
             catch (IndexerException ex)
             {
                 if (!ex.Recorded)
                 {
-                    _indexerStatusService.RecordFailure(def.Id, ex.StatusCode, ex.Message, ex);
+                    _indexerStatusService.RecordFailure(def.Id, ex.StatusCode, ex.Message, ex, ex.RetryAfter);
                 }
             }
             catch (Exception ex)

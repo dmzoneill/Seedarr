@@ -18,8 +18,56 @@ public class TorznabIndexer : IIndexer
     private readonly Logger _logger;
     private readonly IIndexerStatusService _indexerStatusService;
 
+    public const int DefaultTtlMinutes = 15;
+    public const int MinimumPollingIntervalMinutes = 10;
+
     public string Name => "Torznab";
     public string IndexerType => "Torznab";
+
+    public static int ParseTtl(string xml)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+        {
+            return DefaultTtlMinutes;
+        }
+
+        try
+        {
+            var doc = new XmlDocument();
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null,
+                MaxCharactersFromEntities = 1024
+            };
+            using var reader = XmlReader.Create(new StringReader(xml), settings);
+            doc.Load(reader);
+            return ParseTtl(doc);
+        }
+        catch (XmlException)
+        {
+            return DefaultTtlMinutes;
+        }
+    }
+
+    public static int ParseTtl(XmlDocument doc)
+    {
+        if (doc == null)
+        {
+            return DefaultTtlMinutes;
+        }
+
+        var ttlNode = doc.SelectSingleNode("//channel/ttl") ?? doc.SelectSingleNode("//*[local-name()='ttl']");
+        if (ttlNode != null && !string.IsNullOrWhiteSpace(ttlNode.InnerText))
+        {
+            if (int.TryParse(ttlNode.InnerText.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var ttl) && ttl > 0)
+            {
+                return ttl;
+            }
+        }
+
+        return DefaultTtlMinutes;
+    }
 
     public static readonly Dictionary<int, List<int>> CategoryHierarchy = new()
     {
@@ -171,6 +219,36 @@ public class TorznabIndexer : IIndexer
                     Success = false,
                     Message = "Authentication failed: Invalid API Key.",
                     StatusCode = (int)response.StatusCode
+                };
+            }
+
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                TimeSpan? retryAfter = null;
+                if (response.Headers.RetryAfter != null)
+                {
+                    if (response.Headers.RetryAfter.Delta.HasValue)
+                    {
+                        retryAfter = response.Headers.RetryAfter.Delta.Value;
+                    }
+                    else if (response.Headers.RetryAfter.Date.HasValue)
+                    {
+                        var diff = response.Headers.RetryAfter.Date.Value - DateTimeOffset.UtcNow;
+                        retryAfter = diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
+                    }
+                }
+
+                if (!retryAfter.HasValue && response.Headers.TryGetValues("Retry-After", out var rawValues))
+                {
+                    retryAfter = IndexerStatusService.ParseRetryAfter(string.Join(",", rawValues));
+                }
+
+                return new IndexerTestResult
+                {
+                    Success = false,
+                    Message = $"Torznab returned HTTP 429 Too Many Requests.",
+                    StatusCode = 429,
+                    RetryAfter = retryAfter
                 };
             }
 
@@ -464,17 +542,34 @@ public class TorznabIndexer : IIndexer
             {
                 _logger.Warn("Torznab search returned status code {0}", response.StatusCode);
                 var ex = new HttpRequestException($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}", null, response.StatusCode);
+                TimeSpan? retryAfter = null;
                 if (response.Headers.RetryAfter != null)
                 {
                     if (response.Headers.RetryAfter.Delta.HasValue)
                     {
-                        ex.Data["RetryAfter"] = response.Headers.RetryAfter.Delta.Value;
+                        retryAfter = response.Headers.RetryAfter.Delta.Value;
                     }
                     else if (response.Headers.RetryAfter.Date.HasValue)
                     {
                         var diff = response.Headers.RetryAfter.Date.Value - DateTimeOffset.UtcNow;
-                        ex.Data["RetryAfter"] = diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
+                        retryAfter = diff > TimeSpan.Zero ? diff : TimeSpan.Zero;
                     }
+                }
+
+                if (!retryAfter.HasValue && response.Headers.TryGetValues("Retry-After", out var rawValues))
+                {
+                    retryAfter = IndexerStatusService.ParseRetryAfter(string.Join(",", rawValues));
+                }
+
+                if (retryAfter.HasValue)
+                {
+                    ex.Data["RetryAfter"] = retryAfter.Value;
+                }
+
+                if (definition != null && definition.Id > 0 && _indexerStatusService != null)
+                {
+                    _indexerStatusService.RecordFailure(definition.Id, (int)response.StatusCode, ex.Message, ex, retryAfter);
+                    ex.Data["Recorded"] = true;
                 }
 
                 throw ex;
@@ -532,12 +627,19 @@ public class TorznabIndexer : IIndexer
             _logger.Warn("Torznab returned error: {0}", errorMsg);
 
             int? statusCode = int.TryParse(code, out var c) ? c : null;
+            var retryAfter = IndexerStatusService.ParseRetryAfter(desc);
             if (definition != null && definition.Id > 0)
             {
-                _indexerStatusService?.RecordFailure(definition.Id, statusCode, errorMsg);
+                _indexerStatusService?.RecordFailure(definition.Id, statusCode, errorMsg, retryAfter: retryAfter);
             }
 
-            throw new IndexerException(errorMsg, code, statusCode) { Recorded = _indexerStatusService != null && definition != null && definition.Id > 0 };
+            throw new IndexerException(errorMsg, code, statusCode, retryAfter) { Recorded = _indexerStatusService != null && definition != null && definition.Id > 0 };
+        }
+
+        var ttlMinutes = ParseTtl(doc);
+        if (definition != null && definition.Id > 0)
+        {
+            _indexerStatusService?.RecordRssSync(definition.Id, ttlMinutes);
         }
 
         int? responseOffset = null;

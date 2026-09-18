@@ -382,6 +382,166 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
             statusService.Received(1).RecordFailure(42, 100, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
         }
 
+        [TestCase("30", 30)]
+        [TestCase("60", 60)]
+        [TestCase("10", 10)]
+        [TestCase("5", 5)]
+        public void ParseTtl_should_parse_valid_ttl_from_channel(string ttlValue, int expectedMinutes)
+        {
+            var xml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"">
+    <channel>
+        <title>Newznab Feed</title>
+        <ttl>{ttlValue}</ttl>
+        <item>
+            <title>Test.Item</title>
+        </item>
+    </channel>
+</rss>";
+
+            var ttl = NewznabIndexer.ParseTtl(xml);
+            Assert.That(ttl, Is.EqualTo(expectedMinutes));
+        }
+
+        [TestCase("")]
+        [TestCase("0")]
+        [TestCase("-5")]
+        [TestCase("abc")]
+        [TestCase(null)]
+        public void ParseTtl_should_fallback_to_default_15_minutes_when_ttl_is_missing_or_invalid(string ttlValue)
+        {
+            var ttlElement = ttlValue != null ? $"<ttl>{ttlValue}</ttl>" : "";
+            var xml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"">
+    <channel>
+        <title>Newznab Feed</title>
+        {ttlElement}
+        <item>
+            <title>Test.Item</title>
+        </item>
+    </channel>
+</rss>";
+
+            var ttl = NewznabIndexer.ParseTtl(xml);
+            Assert.That(ttl, Is.EqualTo(15));
+        }
+
+        [Test]
+        public void ParseResponse_should_record_rss_sync_with_parsed_ttl()
+        {
+            var statusService = Substitute.For<IIndexerStatusService>();
+            var indexer = new NewznabIndexer(indexerStatusService: statusService);
+            var definition = new IndexerDefinition { Id = 12, Name = "Newznab Test" };
+
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"">
+    <channel>
+        <title>Newznab Feed</title>
+        <ttl>45</ttl>
+        <item>
+            <title>Test.Release.2026</title>
+        </item>
+    </channel>
+</rss>";
+
+            var results = indexer.ParseResponse(xml, definition);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            statusService.Received(1).RecordRssSync(12, 45);
+        }
+
+        [Test]
+        public void ParseResponse_should_record_rss_sync_with_default_ttl_when_omitted()
+        {
+            var statusService = Substitute.For<IIndexerStatusService>();
+            var indexer = new NewznabIndexer(indexerStatusService: statusService);
+            var definition = new IndexerDefinition { Id = 12, Name = "Newznab Test" };
+
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"">
+    <channel>
+        <title>Newznab Feed</title>
+        <item>
+            <title>Test.Release.2026</title>
+        </item>
+    </channel>
+</rss>";
+
+            var results = indexer.ParseResponse(xml, definition);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            statusService.Received(1).RecordRssSync(12, 15);
+        }
+
+        [Test]
+        public void Search_HTTP_429_should_parse_retry_after_header_seconds_and_record_failure()
+        {
+            var statusService = Substitute.For<IIndexerStatusService>();
+            var handler = new NewznabTestHttpMessageHandler();
+            var indexer = new NewznabIndexer(new HttpClient(handler), statusService);
+
+            var definition = new IndexerDefinition
+            {
+                Id = 42,
+                Name = "Newznab Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "test-key"
+            };
+
+            handler.Handler = req =>
+            {
+                var resp = new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+                {
+                    ReasonPhrase = "Too Many Requests"
+                };
+                resp.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(120));
+                return resp;
+            };
+
+            var ex = Assert.Throws<HttpRequestException>(() => indexer.Search(definition, "test"));
+            Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
+            Assert.That(ex.Data.Contains("RetryAfter"), Is.True);
+            Assert.That(ex.Data["RetryAfter"], Is.EqualTo(TimeSpan.FromSeconds(120)));
+            statusService.Received(1).RecordFailure(42, 429, Arg.Any<string>(), Arg.Any<Exception>(), TimeSpan.FromSeconds(120));
+        }
+
+        [Test]
+        public void Search_HTTP_429_should_parse_retry_after_header_date_and_record_failure()
+        {
+            var statusService = Substitute.For<IIndexerStatusService>();
+            var handler = new NewznabTestHttpMessageHandler();
+            var indexer = new NewznabIndexer(new HttpClient(handler), statusService);
+
+            var definition = new IndexerDefinition
+            {
+                Id = 42,
+                Name = "Newznab Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "test-key"
+            };
+
+            var futureDate = DateTimeOffset.UtcNow.AddMinutes(5);
+
+            handler.Handler = req =>
+            {
+                var resp = new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+                {
+                    ReasonPhrase = "Too Many Requests"
+                };
+                resp.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(futureDate);
+                return resp;
+            };
+
+            var ex = Assert.Throws<HttpRequestException>(() => indexer.Search(definition, "test"));
+            Assert.That(ex.StatusCode, Is.EqualTo(HttpStatusCode.TooManyRequests));
+            Assert.That(ex.Data.Contains("RetryAfter"), Is.True);
+            var retryAfter = ex.Data["RetryAfter"] as TimeSpan?;
+            Assert.That(retryAfter.HasValue, Is.True);
+            Assert.That(retryAfter.Value.TotalSeconds, Is.GreaterThanOrEqualTo(280.0));
+            Assert.That(retryAfter.Value.TotalSeconds, Is.LessThanOrEqualTo(310.0));
+            statusService.Received(1).RecordFailure(42, 429, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Is<TimeSpan?>(t => t.HasValue && t.Value.TotalSeconds >= 280.0));
+        }
+
         private class NewznabTestHttpMessageHandler : HttpMessageHandler
         {
             public List<HttpRequestMessage> SentRequests { get; } = new();

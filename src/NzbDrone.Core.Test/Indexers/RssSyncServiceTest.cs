@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Indexers;
 
@@ -203,6 +204,98 @@ namespace NzbDrone.Core.Test.Indexers
 
             Assert.That(result, Is.False);
             Assert.That(sw.ElapsedMilliseconds, Is.LessThan(2000));
+        }
+
+        [Test]
+        public void ShouldSyncIndexer_should_skip_indexer_during_ttl_cooldown_for_automated_sync()
+        {
+            var statusService = Substitute.For<IIndexerStatusService>();
+            var service = new RssSyncService(indexerStatusService: statusService);
+            var indexer = new IndexerDefinition { Id = 1, Enable = true, EnableRss = true };
+
+            var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+            statusService.IsDisabled(1).Returns(false);
+            statusService.GetStatus(1).Returns(new IndexerStatus
+            {
+                IndexerId = 1,
+                NextRssSyncTimeUtc = now.AddMinutes(15)
+            });
+
+            var result = service.ShouldSyncIndexer(indexer, isManual: false, now: now);
+
+            Assert.That(result, Is.False);
+        }
+
+        [Test]
+        public void ShouldSyncIndexer_should_allow_indexer_during_ttl_cooldown_for_manual_sync()
+        {
+            var statusService = Substitute.For<IIndexerStatusService>();
+            var service = new RssSyncService(indexerStatusService: statusService);
+            var indexer = new IndexerDefinition { Id = 1, Enable = true, EnableRss = true };
+
+            var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+            statusService.IsDisabled(1).Returns(false);
+            statusService.GetStatus(1).Returns(new IndexerStatus
+            {
+                IndexerId = 1,
+                NextRssSyncTimeUtc = now.AddMinutes(15)
+            });
+
+            var result = service.ShouldSyncIndexer(indexer, isManual: true, now: now);
+
+            Assert.That(result, Is.True);
+        }
+
+        [Test]
+        public void ShouldSyncIndexer_should_allow_indexer_when_cooldown_elapsed()
+        {
+            var statusService = Substitute.For<IIndexerStatusService>();
+            var service = new RssSyncService(indexerStatusService: statusService);
+            var indexer = new IndexerDefinition { Id = 1, Enable = true, EnableRss = true };
+
+            var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+            statusService.IsDisabled(1).Returns(false);
+            statusService.GetStatus(1).Returns(new IndexerStatus
+            {
+                IndexerId = 1,
+                NextRssSyncTimeUtc = now.AddMinutes(-5)
+            });
+
+            var result = service.ShouldSyncIndexer(indexer, isManual: false, now: now);
+
+            Assert.That(result, Is.True);
+        }
+
+        [Test]
+        public void ShouldSyncIndexer_should_skip_disabled_rss_indexer()
+        {
+            var service = new RssSyncService();
+            var indexer = new IndexerDefinition { Id = 1, Enable = true, EnableRss = false };
+
+            Assert.That(service.ShouldSyncIndexer(indexer, isManual: false), Is.False);
+            Assert.That(service.ShouldSyncIndexer(indexer, isManual: true), Is.False);
+        }
+
+        [Test]
+        public void FilterEligibleIndexers_should_filter_out_indexers_in_cooldown_for_automated_sync()
+        {
+            var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+            var statusService = new IndexerStatusService(() => now);
+            var service = new RssSyncService(indexerStatusService: statusService);
+
+            var indexer1 = new IndexerDefinition { Id = 1, Enable = true, EnableRss = true };
+            var indexer2 = new IndexerDefinition { Id = 2, Enable = true, EnableRss = true };
+
+            // Indexer 1 synced recently with 30-min TTL
+            statusService.RecordRssSync(1, 30);
+
+            var eligibleAutomated = service.FilterEligibleIndexers(new[] { indexer1, indexer2 }, isManual: false, now: now);
+            Assert.That(eligibleAutomated, Has.Count.EqualTo(1));
+            Assert.That(eligibleAutomated[0].Id, Is.EqualTo(2));
+
+            // Manual sync should include both
+            var eligibleManual = service.FilterEligibleIndexers(new[] { indexer1, indexer2 }, isManual: true, now: now);
+            Assert.That(eligibleManual, Has.Count.EqualTo(2));
         }
     }
 }
