@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -269,6 +270,11 @@ public class NotificationEventHandler :
         return NotificationPayloadBuilder.ResolveTargetUrl(implementation, settings);
     }
 
+    public static HttpMethod ResolveHttpMethod(string implementation, string settings)
+    {
+        return NotificationPayloadBuilder.ResolveHttpMethod(implementation, settings);
+    }
+
     public static string ResolveCustomHeaders(string settings)
     {
         return NotificationPayloadBuilder.ResolveCustomHeaders(null, settings);
@@ -327,6 +333,12 @@ public class NotificationEventHandler :
         var providerPayload = NotificationPayloadBuilder.BuildProviderPayload(notif.Implementation, eventType, torrent, meta, genericPayload, notif.Settings);
         var targetUrl = NotificationPayloadBuilder.ResolveTargetUrl(notif.Implementation, notif.Settings);
         var customHeaders = NotificationPayloadBuilder.ResolveCustomHeaders(notif.Implementation, notif.Settings);
+        var httpMethod = NotificationPayloadBuilder.ResolveHttpMethod(notif.Implementation, notif.Settings);
+        if (httpMethod == HttpMethod.Put)
+        {
+            return await _webhookDispatcher.DispatchAsync(targetUrl, providerPayload, customHeaders, httpMethod).ConfigureAwait(false);
+        }
+
         return await _webhookDispatcher.DispatchAsync(targetUrl, providerPayload, customHeaders).ConfigureAwait(false);
     }
 

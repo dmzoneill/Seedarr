@@ -353,4 +353,85 @@ public class WebhookDispatcherTest
         Assert.That(strippedAnon, Is.Not.Null);
         Assert.That(strippedAnon.ContainsKey("parse_mode"), Is.False);
     }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_httpMethod_put_sends_put_request()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true },
+            customHeadersJson: null,
+            httpMethod: HttpMethod.Put);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(1));
+        Assert.That(handler.LastRequest.Method, Is.EqualTo(HttpMethod.Put));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_default_method_sends_post_request()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true });
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(1));
+        Assert.That(handler.LastRequest.Method, Is.EqualTo(HttpMethod.Post));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_string_payload_does_not_double_serialize_json()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var jsonPayload = "{\"event\":\"OnGrab\",\"name\":\"Movie\"}";
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            jsonPayload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.Requests.Count, Is.EqualTo(1));
+
+        var sentBody = await handler.LastRequest.Content.ReadAsStringAsync();
+        Assert.That(sentBody, Is.EqualTo(jsonPayload));
+        Assert.That(handler.LastRequest.Content.Headers.ContentType.MediaType, Is.EqualTo("application/json"));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_with_basic_auth_custom_headers_attaches_authorization_header()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{}");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var headersJson = "{\"Authorization\": \"Basic YWRtaW46cGFzc3dvcmQxMjM=\"}";
+        var result = await dispatcher.DispatchDetailedAsync(
+            "http://127.0.0.1/webhook",
+            new { test = true },
+            customHeadersJson: headersJson);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(handler.LastRequest.Headers.Authorization, Is.Not.Null);
+        Assert.That(handler.LastRequest.Headers.Authorization.Scheme, Is.EqualTo("Basic"));
+        Assert.That(handler.LastRequest.Headers.Authorization.Parameter, Is.EqualTo("YWRtaW46cGFzc3dvcmQxMjM="));
+    }
 }

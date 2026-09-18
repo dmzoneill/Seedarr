@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Text.Json;
 using NUnit.Framework;
 using NzbDrone.Core.Notifications;
@@ -530,5 +531,221 @@ public class NotificationPayloadBuilderTest
         var text = result["text"].ToString();
         Assert.That(text, Does.Contain(@"*Seedarr [App\.Update]*"));
         Assert.That(text, Does.Contain(@"Version 2\.0\.1\-rc1 installed\! \(See release\-notes\) \#upgrade"));
+    }
+
+    [Test]
+    public void InterpolateTemplate_supports_all_required_tokens()
+    {
+        var torrent = new Torrent
+        {
+            Id = 42,
+            Name = "Inception.2010.1080p",
+            InfoHash = "0123456789abcdef0123456789abcdef01234567",
+            Category = "Sci-Fi",
+            Status = TorrentStatus.Downloading,
+            TotalSize = 1024L * 1024L * 1536L,
+            Downloaded = 1024L * 1024L * 768L,
+            Uploaded = 1024L * 1024L * 256L,
+            Ratio = 0.33,
+            Progress = 0.50,
+            DownloadSpeed = 1024L * 1024L * 5,
+            UploadSpeed = 1024L * 1024L * 1,
+            Eta = 3600,
+            SavePath = "/downloads/complete/Inception",
+        };
+
+        var meta = new
+        {
+            Title = "Inception",
+            Year = 2010,
+            Overview = "A thief who steals corporate secrets through the use of dream-sharing technology.",
+        };
+
+        var genericPayload = new
+        {
+            Message = "Download started successfully",
+            InstanceName = "Seedarr-Custom",
+            Timestamp = "2026-09-18T19:00:00Z",
+        };
+
+        var template = "Event:{EventType}|Instance:{InstanceName}|Time:{Timestamp}|Id:{Torrent.Id}|Name:{Torrent.Name}|Hash:{Torrent.InfoHash}|Cat:{Torrent.Category}|Status:{Torrent.Status}|SizeFormatted:{Torrent.SizeFormatted}|Size:{Torrent.TotalSize}|DL:{Torrent.Downloaded}|UL:{Torrent.Uploaded}|Ratio:{Torrent.Ratio}|Prog:{Torrent.Progress}|ProgPct:{Torrent.ProgressPercent}|DLSpeed:{Torrent.DownloadSpeedFormatted}|ULSpeed:{Torrent.UploadSpeedFormatted}|Eta:{Torrent.EtaString}|Path:{Torrent.SavePath}|Title:{Media.Title}|Year:{Media.Year}|Overview:{Media.Overview}|Msg:{Message}";
+
+        var result = NotificationPayloadBuilder.InterpolateTemplate(
+            template,
+            "OnGrab",
+            torrent,
+            meta,
+            genericPayload);
+
+        Assert.That(result, Does.Contain("Event:OnGrab"));
+        Assert.That(result, Does.Contain("Instance:Seedarr-Custom"));
+        Assert.That(result, Does.Contain("Time:2026-09-18T19:00:00Z"));
+        Assert.That(result, Does.Contain("Id:42"));
+        Assert.That(result, Does.Contain("Name:Inception.2010.1080p"));
+        Assert.That(result, Does.Contain("Hash:0123456789abcdef0123456789abcdef01234567"));
+        Assert.That(result, Does.Contain("Cat:Sci-Fi"));
+        Assert.That(result, Does.Contain("Status:Downloading"));
+        Assert.That(result, Does.Contain("SizeFormatted:1.50 GB"));
+        Assert.That(result, Does.Contain("Size:1610612736"));
+        Assert.That(result, Does.Contain("DL:805306368"));
+        Assert.That(result, Does.Contain("UL:268435456"));
+        Assert.That(result, Does.Contain("Ratio:0.33"));
+        Assert.That(result, Does.Contain("Prog:0.5"));
+        Assert.That(result, Does.Contain("ProgPct:50"));
+        Assert.That(result, Does.Contain("DLSpeed:5.00 MB/s"));
+        Assert.That(result, Does.Contain("ULSpeed:1.00 MB/s"));
+        Assert.That(result, Does.Contain("Eta:01:00:00"));
+        Assert.That(result, Does.Contain("Path:/downloads/complete/Inception"));
+        Assert.That(result, Does.Contain("Title:Inception"));
+        Assert.That(result, Does.Contain("Year:2010"));
+        Assert.That(result, Does.Contain("Overview:A thief who steals corporate secrets"));
+        Assert.That(result, Does.Contain("Msg:Download started successfully"));
+    }
+
+    [Test]
+    public void InterpolateTemplate_safely_escapes_quotes_and_backslashes_in_json_templates()
+    {
+        var torrent = new Torrent
+        {
+            Id = 99,
+            Name = "Show.S01E02.\"Special.Cut\".1080p.mkv",
+            SavePath = @"D:\Torrents\Complete\Show.S01E02",
+            TotalSize = 1024L * 1024L * 500L,
+            Ratio = 1.25,
+            Progress = 0.75,
+        };
+
+        var template = "{\"event\": \"{EventType}\", \"name\": \"{Torrent.Name}\", \"path\": \"{Torrent.SavePath}\", \"size\": \"{Torrent.SizeFormatted}\", \"ratio\": {Torrent.Ratio}, \"progress\": {Torrent.Progress}}";
+
+        var result = NotificationPayloadBuilder.InterpolateTemplate(
+            template,
+            "OnDownloadComplete",
+            torrent);
+
+        Assert.That(result, Is.Not.Null);
+
+        using var doc = JsonDocument.Parse(result);
+        var root = doc.RootElement;
+
+        Assert.That(root.GetProperty("event").GetString(), Is.EqualTo("OnDownloadComplete"));
+        Assert.That(root.GetProperty("name").GetString(), Is.EqualTo("Show.S01E02.\"Special.Cut\".1080p.mkv"));
+        Assert.That(root.GetProperty("path").GetString(), Is.EqualTo(@"D:\Torrents\Complete\Show.S01E02"));
+        Assert.That(root.GetProperty("size").GetString(), Is.EqualTo("500.00 MB"));
+        Assert.That(root.GetProperty("ratio").GetDouble(), Is.EqualTo(1.25));
+        Assert.That(root.GetProperty("progress").GetDouble(), Is.EqualTo(0.75));
+    }
+
+    [Test]
+    public void InterpolateTemplate_does_not_escape_strings_for_plain_text_templates()
+    {
+        var torrent = new Torrent
+        {
+            Name = "Movie.\"Director's.Cut\".2024",
+            SavePath = @"D:\Torrents\Movies",
+        };
+
+        var template = "Torrent: {Torrent.Name} stored at {Torrent.SavePath}";
+        var result = NotificationPayloadBuilder.InterpolateTemplate(template, "OnGrab", torrent);
+
+        Assert.That(result, Is.EqualTo(@"Torrent: Movie.""Director's.Cut"".2024 stored at D:\Torrents\Movies"));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_injects_basic_auth_when_username_and_password_present()
+    {
+        var settings = "{\"url\":\"https://example.com/webhook\",\"username\":\"admin\",\"password\":\"password123\"}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Webhook", settings);
+
+        Assert.That(headers, Is.Not.Null);
+        using var doc = JsonDocument.Parse(headers);
+        var root = doc.RootElement;
+        Assert.That(root.TryGetProperty("Authorization", out var authProp), Is.True);
+        Assert.That(authProp.GetString(), Is.EqualTo("Basic YWRtaW46cGFzc3dvcmQxMjM="));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_preserves_existing_authorization_header()
+    {
+        var settings = "{\"url\":\"https://example.com/webhook\",\"headers\":{\"Authorization\":\"Bearer secret-jwt-token\"},\"username\":\"admin\",\"password\":\"password123\"}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Webhook", settings);
+
+        Assert.That(headers, Is.Not.Null);
+        using var doc = JsonDocument.Parse(headers);
+        var root = doc.RootElement;
+        Assert.That(root.GetProperty("Authorization").GetString(), Is.EqualTo("Bearer secret-jwt-token"));
+    }
+
+    [Test]
+    public void ResolveCustomHeaders_injects_basic_auth_alongside_custom_headers()
+    {
+        var settings = "{\"url\":\"https://example.com/webhook\",\"headers\":{\"X-App\":\"Seedarr\",\"X-Environment\":\"prod\"},\"username\":\"user\",\"password\":\"pass\"}";
+        var headers = NotificationPayloadBuilder.ResolveCustomHeaders("Webhook", settings);
+
+        Assert.That(headers, Is.Not.Null);
+        using var doc = JsonDocument.Parse(headers);
+        var root = doc.RootElement;
+        Assert.That(root.GetProperty("X-App").GetString(), Is.EqualTo("Seedarr"));
+        Assert.That(root.GetProperty("X-Environment").GetString(), Is.EqualTo("prod"));
+        Assert.That(root.GetProperty("Authorization").GetString(), Is.EqualTo("Basic dXNlcjpwYXNz"));
+    }
+
+    [Test]
+    public void BuildProviderPayload_webhook_returns_interpolated_template_when_configured()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Test.Movie.2024",
+            TotalSize = 1024L * 1024L * 100L,
+            Ratio = 1.0,
+        };
+
+        var settings = "{\"url\": \"https://example.com/webhook\", \"payloadTemplate\": \"{\\\"event\\\": \\\"{EventType}\\\", \\\"title\\\": \\\"{Torrent.Name}\\\"}\"}";
+
+        var payload = NotificationPayloadBuilder.BuildProviderPayload(
+            "Webhook",
+            "OnGrab",
+            torrent,
+            null,
+            new { generic = true },
+            settings);
+
+        Assert.That(payload, Is.InstanceOf<string>());
+        var jsonStr = (string)payload;
+        using var doc = JsonDocument.Parse(jsonStr);
+        Assert.That(doc.RootElement.GetProperty("event").GetString(), Is.EqualTo("OnGrab"));
+        Assert.That(doc.RootElement.GetProperty("title").GetString(), Is.EqualTo("Test.Movie.2024"));
+    }
+
+    [Test]
+    public void BuildProviderPayload_webhook_falls_back_to_genericPayload_when_no_template()
+    {
+        var genericPayload = new { eventType = "OnGrab", name = "Test" };
+        var settings = "{\"url\": \"https://example.com/webhook\"}";
+
+        var payload = NotificationPayloadBuilder.BuildProviderPayload(
+            "Webhook",
+            "OnGrab",
+            null,
+            null,
+            genericPayload,
+            settings);
+
+        Assert.That(payload, Is.SameAs(genericPayload));
+    }
+
+    [TestCase("{\"method\":\"PUT\"}", "PUT")]
+    [TestCase("{\"method\":\"put\"}", "PUT")]
+    [TestCase("{\"httpMethod\":\"PUT\"}", "PUT")]
+    [TestCase("method=PUT", "PUT")]
+    [TestCase("{\"method\":\"POST\"}", "POST")]
+    [TestCase("{\"method\":\"post\"}", "POST")]
+    [TestCase("{\"url\":\"http://test\"}", "POST")]
+    [TestCase(null, "POST")]
+    [TestCase("", "POST")]
+    public void ResolveHttpMethod_resolves_put_vs_post(string settings, string expectedMethod)
+    {
+        var method = NotificationPayloadBuilder.ResolveHttpMethod("Webhook", settings);
+        Assert.That(method.Method, Is.EqualTo(expectedMethod));
     }
 }

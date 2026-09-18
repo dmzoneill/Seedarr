@@ -27,7 +27,9 @@ public class WebhookDispatchResult
 public interface IWebhookDispatcher
 {
     Task<bool> DispatchAsync(string targetUrl, object payload, string customHeadersJson = null, CancellationToken cancellationToken = default);
+    Task<bool> DispatchAsync(string targetUrl, object payload, string customHeadersJson, HttpMethod httpMethod, CancellationToken cancellationToken = default);
     Task<WebhookDispatchResult> DispatchDetailedAsync(string targetUrl, object payload, string customHeadersJson = null, CancellationToken cancellationToken = default);
+    Task<WebhookDispatchResult> DispatchDetailedAsync(string targetUrl, object payload, string customHeadersJson, HttpMethod httpMethod, CancellationToken cancellationToken = default);
 }
 
 public class WebhookDispatcher : IWebhookDispatcher
@@ -268,11 +270,21 @@ public class WebhookDispatcher : IWebhookDispatcher
 
     public async Task<bool> DispatchAsync(string targetUrl, object payload, string customHeadersJson = null, CancellationToken cancellationToken = default)
     {
-        var result = await DispatchDetailedAsync(targetUrl, payload, customHeadersJson, cancellationToken).ConfigureAwait(false);
+        return await DispatchAsync(targetUrl, payload, customHeadersJson, HttpMethod.Post, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<bool> DispatchAsync(string targetUrl, object payload, string customHeadersJson, HttpMethod httpMethod, CancellationToken cancellationToken = default)
+    {
+        var result = await DispatchDetailedAsync(targetUrl, payload, customHeadersJson, httpMethod ?? HttpMethod.Post, cancellationToken).ConfigureAwait(false);
         return result.Success;
     }
 
     public async Task<WebhookDispatchResult> DispatchDetailedAsync(string targetUrl, object payload, string customHeadersJson = null, CancellationToken cancellationToken = default)
+    {
+        return await DispatchDetailedAsync(targetUrl, payload, customHeadersJson, HttpMethod.Post, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<WebhookDispatchResult> DispatchDetailedAsync(string targetUrl, object payload, string customHeadersJson, HttpMethod httpMethod, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(targetUrl))
         {
@@ -298,7 +310,7 @@ public class WebhookDispatcher : IWebhookDispatcher
             using var response = await _retryPolicy.ExecuteAsync(
                 async (ct) =>
                 {
-                    var request = BuildHttpRequest(targetUrl, payload, customHeadersJson);
+                    var request = BuildHttpRequest(targetUrl, payload, customHeadersJson, httpMethod);
                     return await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
                 },
                 cancellationToken).ConfigureAwait(false);
@@ -328,7 +340,7 @@ public class WebhookDispatcher : IWebhookDispatcher
                     using var fallbackResponse = await _retryPolicy.ExecuteAsync(
                         async (ct) =>
                         {
-                            var fallbackRequest = BuildHttpRequest(targetUrl, fallbackPayload, customHeadersJson);
+                            var fallbackRequest = BuildHttpRequest(targetUrl, fallbackPayload, customHeadersJson, httpMethod);
                             return await _httpClient.SendAsync(fallbackRequest, ct).ConfigureAwait(false);
                         },
                         cancellationToken).ConfigureAwait(false);
@@ -484,7 +496,7 @@ public class WebhookDispatcher : IWebhookDispatcher
         return payload;
     }
 
-    private HttpRequestMessage BuildHttpRequest(string targetUrl, object payload, string customHeadersJson)
+    private HttpRequestMessage BuildHttpRequest(string targetUrl, object payload, string customHeadersJson, HttpMethod httpMethod = null)
     {
         HttpContent content;
 
@@ -500,13 +512,22 @@ public class WebhookDispatcher : IWebhookDispatcher
         {
             content = new FormUrlEncodedContent(stringDict);
         }
+        else if (payload is string strPayload)
+        {
+            var trimmed = strPayload.TrimStart();
+            var mediaType = (trimmed.StartsWith("{") || trimmed.StartsWith("["))
+                ? "application/json"
+                : "text/plain";
+            content = new StringContent(strPayload, Encoding.UTF8, mediaType);
+        }
         else
         {
             var json = JsonSerializer.Serialize(payload, DefaultJsonOptions);
             content = new StringContent(json, Encoding.UTF8, "application/json");
         }
 
-        var request = new HttpRequestMessage(HttpMethod.Post, targetUrl)
+        var method = httpMethod ?? HttpMethod.Post;
+        var request = new HttpRequestMessage(method, targetUrl)
         {
             Content = content,
         };
