@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useLocation } from "react-router";
+import React, { useState, useEffect, useCallback } from "react";
+import { useBlocker, type BlockerFunction } from "react-router";
 
 export function SaveFeedback({
   isPending: _isPending,
@@ -48,13 +48,18 @@ export function PendingChangesModal({
   onSave,
   onDiscard,
   onCancel,
+  isPending = false,
 }: {
   onSave: () => void;
   onDiscard: () => void;
   onCancel: () => void;
+  isPending?: boolean;
 }) {
   return (
-    <div className="modal-overlay" onClick={onCancel}>
+    <div
+      className="modal-overlay"
+      onClick={isPending ? undefined : onCancel}
+    >
       <div
         className="modal"
         onClick={(e) => e.stopPropagation()}
@@ -83,6 +88,7 @@ export function PendingChangesModal({
           <button
             className="btn btn-outline btn-small"
             onClick={onCancel}
+            disabled={isPending}
             type="button"
           >
             Stay on Page
@@ -90,6 +96,7 @@ export function PendingChangesModal({
           <button
             className="btn btn-danger btn-small"
             onClick={onDiscard}
+            disabled={isPending}
             type="button"
           >
             Discard Changes
@@ -97,9 +104,10 @@ export function PendingChangesModal({
           <button
             className="btn btn-primary btn-small"
             onClick={onSave}
+            disabled={isPending}
             type="button"
           >
-            Save Changes
+            {isPending ? "Saving..." : "Save and Proceed"}
           </button>
         </div>
       </div>
@@ -108,29 +116,28 @@ export function PendingChangesModal({
 }
 
 export function useUnsavedGuard(dirty: boolean) {
-  const location = useLocation();
-  const [pendingNav, setPendingNav] = useState(false);
-  const prevPathRef = useRef(location.pathname);
+  const shouldBlock = useCallback<BlockerFunction>(
+    ({ currentLocation, nextLocation }) =>
+      Boolean(
+        dirty &&
+          (currentLocation.pathname !== nextLocation.pathname ||
+            currentLocation.search !== nextLocation.search),
+      ),
+    [dirty],
+  );
+  const blocker = useBlocker(shouldBlock);
 
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault();
+      e.returnValue = "";
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [dirty]);
 
-  useEffect(() => {
-    if (dirty && location.pathname !== prevPathRef.current) {
-      setPendingNav(true);
-    }
-  }, [dirty, location.pathname]);
-
-  return {
-    blocked: pendingNav,
-    dismiss: () => setPendingNav(false),
-  };
+  return blocker;
 }
 
 export function SaveBar({
@@ -146,9 +153,53 @@ export function SaveBar({
   isError: boolean;
   isSuccess: boolean;
   error: Error | null;
-  onSave: () => void;
+  onSave: () => void | Promise<void>;
 }) {
-  const guard = useUnsavedGuard(dirty);
+  const blocker = useUnsavedGuard(dirty);
+  const [savingToProceed, setSavingToProceed] = useState(false);
+
+  const handleSaveAndProceed = async () => {
+    setSavingToProceed(true);
+    try {
+      const result = onSave();
+      if (result && typeof (result as Promise<unknown>).then === "function") {
+        await result;
+        if (blocker.state === "blocked") {
+          setSavingToProceed(false);
+          blocker.proceed();
+        }
+      }
+    } catch {
+      setSavingToProceed(false);
+    }
+  };
+
+  useEffect(() => {
+    if (savingToProceed) {
+      if (isError) {
+        setSavingToProceed(false);
+      } else if (isSuccess && !isPending && blocker.state === "blocked") {
+        setSavingToProceed(false);
+        blocker.proceed();
+      }
+    }
+  }, [savingToProceed, isSuccess, isPending, isError, blocker]);
+
+  const handleDiscard = () => {
+    setSavingToProceed(false);
+    if (blocker.state === "blocked") {
+      blocker.proceed();
+    }
+  };
+
+  const handleCancel = () => {
+    setSavingToProceed(false);
+    if (blocker.state === "blocked") {
+      blocker.reset();
+    }
+  };
+
+  const isSaving = isPending || savingToProceed;
 
   return (
     <>
@@ -183,17 +234,17 @@ export function SaveBar({
           <button
             className={`btn ${dirty ? "btn-primary" : "btn-outline"}`}
             onClick={onSave}
-            disabled={!dirty || isPending}
+            disabled={!dirty || isSaving}
             style={{ minWidth: "120px" }}
           >
-            {isPending
+            {isSaving
               ? "Saving Changes..."
               : dirty
                 ? "💾 Save Changes"
                 : "✓ No Changes"}
           </button>
           <SaveFeedback
-            isPending={isPending}
+            isPending={isSaving}
             isError={isError}
             isSuccess={isSuccess}
             error={error}
@@ -209,14 +260,12 @@ export function SaveBar({
           </span>
         )}
       </div>
-      {guard.blocked && (
+      {blocker.state === "blocked" && (
         <PendingChangesModal
-          onSave={() => {
-            onSave();
-            guard.dismiss();
-          }}
-          onDiscard={guard.dismiss}
-          onCancel={guard.dismiss}
+          onSave={handleSaveAndProceed}
+          onDiscard={handleDiscard}
+          onCancel={handleCancel}
+          isPending={isSaving}
         />
       )}
     </>

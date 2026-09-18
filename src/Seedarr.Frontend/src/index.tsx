@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router";
+import { createBrowserRouter, RouterProvider } from "react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ToastProvider } from "./context/ToastContext";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -18,6 +18,13 @@ const queryClient = new QueryClient({
   },
 });
 
+const router = createBrowserRouter([
+  {
+    path: "*",
+    element: <App />,
+  },
+]);
+
 const container = document.getElementById("root");
 if (!container) {
   throw new Error("Root element not found");
@@ -27,17 +34,15 @@ const root = createRoot(container);
 root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ThemeProvider>
-          <ToastProvider>
-            <ModalProvider>
-              <ErrorBoundary>
-                <App />
-              </ErrorBoundary>
-            </ModalProvider>
-          </ToastProvider>
-        </ThemeProvider>
-      </BrowserRouter>
+      <ThemeProvider>
+        <ToastProvider>
+          <ModalProvider>
+            <ErrorBoundary>
+              <RouterProvider router={router} />
+            </ErrorBoundary>
+          </ModalProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   </React.StrictMode>,
 );
