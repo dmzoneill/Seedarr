@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -53,6 +54,7 @@ public class SeedingEngine : BackgroundService
     private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _downloadSpeedHistory = new();
     private readonly HashSet<int> _stalledTorrentIds = new();
     private bool _speedThresholdExceededState;
+    private long _lastTickTimestamp;
 
     private string _localPeerId;
 
@@ -142,6 +144,8 @@ public class SeedingEngine : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            var tickStart = Stopwatch.GetTimestamp();
+
             try
             {
                 Tick();
@@ -151,7 +155,13 @@ public class SeedingEngine : BackgroundService
                 _logger.Error(ex, "Seeding engine tick error");
             }
 
-            await Task.Delay(TickInterval, stoppingToken);
+            var elapsedMs = (long)((Stopwatch.GetTimestamp() - tickStart) * 1000.0 / Stopwatch.Frequency);
+            var remainingDelay = Math.Max(0, (int)TickInterval.TotalMilliseconds - (int)elapsedMs);
+
+            if (remainingDelay > 0)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(remainingDelay), stoppingToken);
+            }
         }
     }
 
@@ -175,6 +185,22 @@ public class SeedingEngine : BackgroundService
 
     private void Tick()
     {
+        var now = Stopwatch.GetTimestamp();
+        TimeSpan actualDelta;
+
+        if (_lastTickTimestamp == 0)
+        {
+            actualDelta = TickInterval;
+        }
+        else
+        {
+            var elapsedSeconds = (double)(now - _lastTickTimestamp) / Stopwatch.Frequency;
+            elapsedSeconds = Math.Clamp(elapsedSeconds, 0.1, 10.0);
+            actualDelta = TimeSpan.FromSeconds(elapsedSeconds);
+        }
+
+        _lastTickTimestamp = now;
+
         var allTorrents = _torrentService.GetAll();
         var autoStart = _configService.AutoStart;
 
@@ -299,12 +325,12 @@ public class SeedingEngine : BackgroundService
 
         if (downloadingTorrents.Count > 0)
         {
-            _speedPolicy.ProcessDownloading(downloadingTorrents, limits, TickInterval);
+            _speedPolicy.ProcessDownloading(downloadingTorrents, limits, actualDelta);
         }
 
         if (seedingTorrents.Count > 0)
         {
-            _speedPolicy.ProcessSeeding(seedingTorrents, limits, TickInterval);
+            _speedPolicy.ProcessSeeding(seedingTorrents, limits, actualDelta);
         }
 
         var globalRatioLimit = _configService.GlobalSeedRatioLimit;
