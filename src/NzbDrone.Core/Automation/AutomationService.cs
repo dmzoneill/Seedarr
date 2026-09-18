@@ -14,6 +14,7 @@ using NzbDrone.Core.Extraction;
 using NzbDrone.Core.Messaging.Commands;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
+using NzbDrone.Core.Peers;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerBoost;
@@ -42,6 +43,7 @@ public class AutomationService : IAutomationService
     private readonly IArchiveExtractorService? _archiveExtractorService;
     private readonly ITrackerBoostService? _trackerBoostService;
     private readonly ITrackerAnnounceService? _trackerAnnounceService;
+    private readonly IConnectionManager? _connectionManager;
     private readonly Logger _logger;
     private readonly JintScriptRunner _jintRunner;
     private readonly YamlScriptRunner _yamlRunner;
@@ -58,7 +60,8 @@ public class AutomationService : IAutomationService
         IWebhookDispatcher? webhookDispatcher = null,
         IArchiveExtractorService? archiveExtractorService = null,
         ITrackerBoostService? trackerBoostService = null,
-        ITrackerAnnounceService? trackerAnnounceService = null)
+        ITrackerAnnounceService? trackerAnnounceService = null,
+        IConnectionManager? connectionManager = null)
     {
         _scriptRepository = scriptRepository;
         _torrentRepository = torrentRepository;
@@ -71,6 +74,7 @@ public class AutomationService : IAutomationService
         _archiveExtractorService = archiveExtractorService;
         _trackerBoostService = trackerBoostService;
         _trackerAnnounceService = trackerAnnounceService;
+        _connectionManager = connectionManager;
         _logger = LogManager.GetCurrentClassLogger();
         _jintRunner = new JintScriptRunner(commandQueue, configFileProvider);
         _yamlRunner = new YamlScriptRunner(commandQueue);
@@ -338,8 +342,24 @@ public class AutomationService : IAutomationService
                 {
                     if (!string.IsNullOrWhiteSpace(peerIp))
                     {
-                        _logger.Info("Banning peer IP '{0}' for torrent '{1}' from automation script", peerIp, torrent?.Name);
-                        _eventAggregator.PublishEvent(new PeerBannedEvent(peerIp.Trim(), "Banned by automation script", torrent?.InfoHash ?? string.Empty));
+                        var trimmedIp = peerIp.Trim();
+                        _logger.Info("Banning peer IP '{0}' for torrent '{1}' from automation script", trimmedIp, torrent?.Name);
+
+                        if (_connectionManager != null)
+                        {
+                            var matchingConnections = _connectionManager.GetAllConnections()
+                                ?.Where(c => !string.IsNullOrWhiteSpace(c.RemoteIp) && string.Equals(c.RemoteIp.Trim(), trimmedIp, StringComparison.OrdinalIgnoreCase))
+                                .ToList() ?? new List<PeerConnection>();
+
+                            _connectionManager.BanPeer(trimmedIp);
+
+                            foreach (var conn in matchingConnections)
+                            {
+                                _connectionManager.Remove(conn);
+                            }
+                        }
+
+                        _eventAggregator.PublishEvent(new PeerBannedEvent(trimmedIp, "Banned by automation script", torrent?.InfoHash ?? string.Empty));
                     }
                 }
             }

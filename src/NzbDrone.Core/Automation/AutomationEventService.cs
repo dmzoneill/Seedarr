@@ -270,7 +270,20 @@ public class AutomationEventService :
 
     public void Handle(PeerBannedEvent message)
     {
-        DispatchTrigger(AutomationTrigger.PeerBanned, null);
+        Torrent? torrent = null;
+        if (!string.IsNullOrWhiteSpace(message?.InfoHash) && _torrentRepository != null)
+        {
+            try
+            {
+                torrent = _torrentRepository.FindByInfoHash(message.InfoHash);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to resolve torrent for InfoHash {0}", message.InfoHash);
+            }
+        }
+
+        DispatchTrigger(AutomationTrigger.PeerBanned, torrent);
     }
 
     public void Handle(TrackerUnreachableEvent message)

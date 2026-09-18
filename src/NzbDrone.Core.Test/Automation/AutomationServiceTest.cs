@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using NSubstitute;
@@ -8,6 +9,7 @@ using NzbDrone.Core.Automation;
 using NzbDrone.Core.Extraction;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
+using NzbDrone.Core.Peers;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using NzbDrone.Core.TrackerBoost;
@@ -422,6 +424,37 @@ for (var i = 0; i < 2000; i++) {
         var result = _subject.ExecuteScript(script, torrent);
 
         Assert.That(result.Success, Is.True);
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<PeerBannedEvent>(e => e.PeerIp == "192.168.1.100" && e.InfoHash == "peerhash"));
+    }
+
+    [Test]
+    public void ExecuteScript_should_ban_peer_disconnect_active_connections_and_publish_event()
+    {
+        var connectionManager = Substitute.For<IConnectionManager>();
+        var subject = new AutomationService(
+            _scriptRepository,
+            _torrentRepository,
+            _tagService,
+            _eventAggregator,
+            connectionManager: connectionManager);
+
+        var activeConnection = new PeerConnection(new MemoryStream(), "192.168.1.100", 6881);
+        connectionManager.GetAllConnections().Returns(new List<PeerConnection> { activeConnection });
+
+        var torrent = new Torrent { Id = 17, Name = "Ban Peer Torrent", InfoHash = "peerhash" };
+        var script = new AutomationScript
+        {
+            Id = 6,
+            Name = "Ban Peer Script",
+            Language = AutomationLanguage.Yaml,
+            Code = "steps:\n  - name: Ban\n    actions:\n      - banPeer: '192.168.1.100'\n",
+        };
+
+        var result = subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        connectionManager.Received(1).BanPeer("192.168.1.100", Arg.Any<TimeSpan?>());
+        connectionManager.Received(1).Remove(activeConnection);
         _eventAggregator.Received(1).PublishEvent(Arg.Is<PeerBannedEvent>(e => e.PeerIp == "192.168.1.100" && e.InfoHash == "peerhash"));
     }
 }

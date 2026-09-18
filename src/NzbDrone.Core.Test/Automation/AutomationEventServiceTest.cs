@@ -77,4 +77,55 @@ public class AutomationEventServiceTest
         torrentRepository.Received(1).Get(10);
         _automationService.Received(1).ExecuteScript(script, torrent);
     }
+
+    [Test]
+    public void Handle_PeerBannedEvent_should_resolve_torrent_and_dispatch_PeerBanned_trigger()
+    {
+        var torrentRepository = Substitute.For<ITorrentRepository>();
+        var subject = new AutomationEventService(_automationService, torrentRepository);
+
+        var script = new AutomationScript
+        {
+            Id = 7,
+            Name = "On Peer Banned",
+            Trigger = AutomationTrigger.PeerBanned,
+            IsEnabled = true,
+        };
+
+        _automationService.GetAll()
+            .Returns(new List<AutomationScript> { script });
+
+        var torrent = new Torrent
+        {
+            Id = 25,
+            InfoHash = "peerbanhash",
+            Name = "Peer Ban Torrent",
+        };
+
+        torrentRepository.FindByInfoHash("peerbanhash").Returns(torrent);
+
+        subject.Handle(new PeerBannedEvent("192.168.1.100", "Automation test", "peerbanhash"));
+
+        torrentRepository.Received(1).FindByInfoHash("peerbanhash");
+        _automationService.Received(1).ExecuteScript(script, torrent);
+    }
+
+    [Test]
+    public void Handle_PeerBannedEvent_without_torrent_should_dispatch_PeerBanned_trigger_with_null()
+    {
+        var script = new AutomationScript
+        {
+            Id = 8,
+            Name = "On Peer Banned Global",
+            Trigger = AutomationTrigger.PeerBanned,
+            IsEnabled = true,
+        };
+
+        _automationService.GetAll()
+            .Returns(new List<AutomationScript> { script });
+
+        _subject.Handle(new PeerBannedEvent("192.168.1.100", "Automation test"));
+
+        _automationService.Received(1).ExecuteScript(script, null);
+    }
 }

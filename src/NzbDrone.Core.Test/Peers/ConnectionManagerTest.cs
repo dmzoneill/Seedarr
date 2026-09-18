@@ -1110,4 +1110,79 @@ public class ConnectionManagerTest
         Assert.That(_manager.GetForTorrent("hashBeta").Count, Is.EqualTo(1));
         Assert.That(_manager.GetForTorrent("hashBeta")[0], Is.SameAs(conn2));
     }
+
+    [Test]
+    public void BanPeer_should_track_peer_as_banned_with_ttl()
+    {
+        _manager.BanPeer("192.168.1.100", TimeSpan.FromMinutes(10));
+
+        Assert.That(_manager.IsPeerBanned("192.168.1.100"), Is.True);
+        Assert.That(_manager.IsPeerBanned("192.168.1.101"), Is.False);
+        Assert.That(_manager.GetBannedPeers(), Does.Contain("192.168.1.100"));
+    }
+
+    [Test]
+    public void BanPeer_should_forcibly_disconnect_and_remove_active_connections_for_ip()
+    {
+        var conn = CreateTestConnection();
+        _manager.Add(conn);
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(1));
+
+        _manager.BanPeer(conn.RemoteIp);
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(0));
+        _connectionLogService.Received(1).LogDisconnected(conn, Arg.Any<string>());
+    }
+
+    [Test]
+    public void TryAdd_should_reject_connection_from_banned_peer()
+    {
+        var conn = CreateTestConnection();
+        _manager.BanPeer(conn.RemoteIp);
+
+        var added = _manager.TryAdd(conn, null);
+
+        Assert.That(added, Is.False);
+        Assert.That(_manager.ActiveCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void IsPeerBanned_should_return_false_after_ttl_expires()
+    {
+        _manager.BanPeer("192.168.1.200", TimeSpan.FromMilliseconds(-1));
+
+        Assert.That(_manager.IsPeerBanned("192.168.1.200"), Is.False);
+    }
+
+    [Test]
+    public void Handle_PeerBannedEvent_should_ban_peer_and_disconnect_connections()
+    {
+        var conn = CreateTestConnection();
+        _manager.Add(conn);
+
+        _manager.Handle(new PeerBannedEvent(conn.RemoteIp, "Banned by automation"));
+
+        Assert.That(_manager.IsPeerBanned(conn.RemoteIp), Is.True);
+        Assert.That(_manager.ActiveCount, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void BanPeer_should_support_cidr_subnets()
+    {
+        _manager.BanPeer("10.0.0.0/24");
+
+        Assert.That(_manager.IsPeerBanned("10.0.0.50"), Is.True);
+        Assert.That(_manager.IsPeerBanned("10.0.1.50"), Is.False);
+    }
+
+    [Test]
+    public void UnbanPeer_should_remove_ban()
+    {
+        _manager.BanPeer("192.168.1.50");
+        Assert.That(_manager.IsPeerBanned("192.168.1.50"), Is.True);
+
+        _manager.UnbanPeer("192.168.1.50");
+        Assert.That(_manager.IsPeerBanned("192.168.1.50"), Is.False);
+    }
 }
