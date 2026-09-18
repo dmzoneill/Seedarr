@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -1264,5 +1266,367 @@ public class UdpTrackerProviderTest
             var multiplier = 1 << Math.Min(attempt, 30);
             return BaseTimeout * multiplier;
         }
+    }
+
+    [Test]
+    public void BuildScrapePacket_should_create_36_byte_packet_for_single_hash()
+    {
+        var hash = "AABBCCDDEE112233445566778899AABBCCDDEEFF";
+        var packet = UdpTrackerProvider.BuildScrapePacket(0x0102030405060708L, 0x12345678, new[] { hash });
+
+        Assert.That(packet.Length, Is.EqualTo(36));
+        Assert.That(ReadInt64BigEndian(packet, 0), Is.EqualTo(0x0102030405060708L));
+        Assert.That(ReadInt32BigEndian(packet, 8), Is.EqualTo(2));
+        Assert.That(ReadInt32BigEndian(packet, 12), Is.EqualTo(0x12345678));
+        Assert.That(Convert.ToHexString(packet.AsSpan(16, 20)), Is.EqualTo(hash));
+    }
+
+    [Test]
+    public void BuildScrapePacket_should_create_packet_for_multiple_hashes()
+    {
+        var hashes = new[]
+        {
+            "00112233445566778899AABBCCDDEEFF00112233",
+            "112233445566778899AABBCCDDEEFF0011223344",
+            "2233445566778899AABBCCDDEEFF001122334455"
+        };
+
+        var packet = UdpTrackerProvider.BuildScrapePacket(0x42L, 0x9999, hashes);
+
+        Assert.That(packet.Length, Is.EqualTo(16 + (20 * 3)));
+        Assert.That(ReadInt64BigEndian(packet, 0), Is.EqualTo(0x42L));
+        Assert.That(ReadInt32BigEndian(packet, 8), Is.EqualTo(2));
+        Assert.That(ReadInt32BigEndian(packet, 12), Is.EqualTo(0x9999));
+
+        for (var i = 0; i < hashes.Length; i++)
+        {
+            Assert.That(Convert.ToHexString(packet.AsSpan(16 + (20 * i), 20)), Is.EqualTo(hashes[i]));
+        }
+    }
+
+    [Test]
+    public void BuildScrapePacket_should_create_1496_byte_packet_for_74_hashes()
+    {
+        var hashes = new List<string>();
+        for (var i = 0; i < 74; i++)
+        {
+            hashes.Add($"{i:D40}");
+        }
+
+        var packet = UdpTrackerProvider.BuildScrapePacket(100L, 200, hashes);
+
+        Assert.That(packet.Length, Is.EqualTo(1496));
+        Assert.That(ReadInt64BigEndian(packet, 0), Is.EqualTo(100L));
+        Assert.That(ReadInt32BigEndian(packet, 8), Is.EqualTo(2));
+        Assert.That(ReadInt32BigEndian(packet, 12), Is.EqualTo(200));
+        Assert.That(Convert.ToHexString(packet.AsSpan(16, 20)), Is.EqualTo(hashes[0]));
+        Assert.That(Convert.ToHexString(packet.AsSpan(16 + (20 * 73), 20)), Is.EqualTo(hashes[73]));
+    }
+
+    [Test]
+    public void BuildScrapePacket_should_throw_when_hashes_null_or_empty()
+    {
+        Assert.Throws<ArgumentException>(() => UdpTrackerProvider.BuildScrapePacket(1L, 1, null));
+        Assert.Throws<ArgumentException>(() => UdpTrackerProvider.BuildScrapePacket(1L, 1, Array.Empty<string>()));
+    }
+
+    [Test]
+    public void BuildScrapePacket_should_throw_when_hash_has_invalid_length()
+    {
+        var hashes = new[] { "ABCD" };
+        Assert.Throws<ArgumentException>(() => UdpTrackerProvider.BuildScrapePacket(1L, 1, hashes));
+    }
+
+    [Test]
+    public void ParseScrapeResponse_should_parse_single_metric_triplet()
+    {
+        var hash = "AABBCCDDEE112233445566778899AABBCCDDEEFF";
+        var response = new byte[20];
+        WriteInt32BigEndian(response, 0, 2);
+        WriteInt32BigEndian(response, 4, 1234);
+        WriteInt32BigEndian(response, 8, 50);
+        WriteInt32BigEndian(response, 12, 100);
+        WriteInt32BigEndian(response, 16, 5);
+
+        var result = UdpTrackerProvider.ParseScrapeResponse(response, 1234, new[] { hash });
+
+        Assert.That(result.Count, Is.EqualTo(1));
+        Assert.That(result.ContainsKey(hash), Is.True);
+        Assert.That(result[hash].Success, Is.True);
+        Assert.That(result[hash].Complete, Is.EqualTo(50));
+        Assert.That(result[hash].Downloaded, Is.EqualTo(100));
+        Assert.That(result[hash].Incomplete, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void ParseScrapeResponse_should_parse_multiple_metric_triplets()
+    {
+        var hashes = new[]
+        {
+            "00112233445566778899AABBCCDDEEFF00112233",
+            "112233445566778899AABBCCDDEEFF0011223344",
+            "2233445566778899AABBCCDDEEFF001122334455"
+        };
+
+        var response = new byte[8 + (12 * 3)];
+        WriteInt32BigEndian(response, 0, 2);
+        WriteInt32BigEndian(response, 4, 5555);
+
+        WriteInt32BigEndian(response, 8, 10);
+        WriteInt32BigEndian(response, 12, 20);
+        WriteInt32BigEndian(response, 16, 30);
+
+        WriteInt32BigEndian(response, 20, 100);
+        WriteInt32BigEndian(response, 24, 200);
+        WriteInt32BigEndian(response, 28, 300);
+
+        WriteInt32BigEndian(response, 32, 1);
+        WriteInt32BigEndian(response, 36, 2);
+        WriteInt32BigEndian(response, 40, 3);
+
+        var result = UdpTrackerProvider.ParseScrapeResponse(response, 5555, hashes);
+
+        Assert.That(result.Count, Is.EqualTo(3));
+        Assert.That(result[hashes[0]].Success, Is.True);
+        Assert.That(result[hashes[0]].Complete, Is.EqualTo(10));
+        Assert.That(result[hashes[0]].Downloaded, Is.EqualTo(20));
+        Assert.That(result[hashes[0]].Incomplete, Is.EqualTo(30));
+
+        Assert.That(result[hashes[1]].Success, Is.True);
+        Assert.That(result[hashes[1]].Complete, Is.EqualTo(100));
+        Assert.That(result[hashes[1]].Downloaded, Is.EqualTo(200));
+        Assert.That(result[hashes[1]].Incomplete, Is.EqualTo(300));
+
+        Assert.That(result[hashes[2]].Success, Is.True);
+        Assert.That(result[hashes[2]].Complete, Is.EqualTo(1));
+        Assert.That(result[hashes[2]].Downloaded, Is.EqualTo(2));
+        Assert.That(result[hashes[2]].Incomplete, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void ParseScrapeResponse_should_return_failure_when_response_is_too_short()
+    {
+        var hashes = new[]
+        {
+            "00112233445566778899AABBCCDDEEFF00112233",
+            "112233445566778899AABBCCDDEEFF0011223344"
+        };
+
+        var response = new byte[20];
+        WriteInt32BigEndian(response, 0, 2);
+        WriteInt32BigEndian(response, 4, 1234);
+
+        var result = UdpTrackerProvider.ParseScrapeResponse(response, 1234, hashes);
+
+        Assert.That(result.Count, Is.EqualTo(2));
+        Assert.That(result[hashes[0]].Success, Is.False);
+        Assert.That(result[hashes[0]].FailureReason, Is.EqualTo("Response too short"));
+        Assert.That(result[hashes[1]].Success, Is.False);
+        Assert.That(result[hashes[1]].FailureReason, Is.EqualTo("Response too short"));
+    }
+
+    [Test]
+    public void ParseScrapeResponse_should_return_failure_when_action_is_error()
+    {
+        var hashes = new[] { "00112233445566778899AABBCCDDEEFF00112233" };
+        var errorBytes = Encoding.UTF8.GetBytes("scrape rate limit reached");
+        var response = new byte[8 + errorBytes.Length];
+        WriteInt32BigEndian(response, 0, 3);
+        WriteInt32BigEndian(response, 4, 999);
+        Array.Copy(errorBytes, 0, response, 8, errorBytes.Length);
+
+        var result = UdpTrackerProvider.ParseScrapeResponse(response, 999, hashes);
+
+        Assert.That(result[hashes[0]].Success, Is.False);
+        Assert.That(result[hashes[0]].FailureReason, Is.EqualTo("scrape rate limit reached"));
+    }
+
+    [Test]
+    public void ParseScrapeResponse_should_return_failure_when_transaction_id_mismatches()
+    {
+        var hashes = new[] { "00112233445566778899AABBCCDDEEFF00112233" };
+        var response = new byte[20];
+        WriteInt32BigEndian(response, 0, 2);
+        WriteInt32BigEndian(response, 4, 1111);
+
+        var result = UdpTrackerProvider.ParseScrapeResponse(response, 2222, hashes);
+
+        Assert.That(result[hashes[0]].Success, Is.False);
+        Assert.That(result[hashes[0]].FailureReason, Is.EqualTo("Scrape response transaction ID mismatch"));
+    }
+
+    [Test]
+    public void ParseScrapeResponse_should_return_failure_when_action_is_unexpected()
+    {
+        var hashes = new[] { "00112233445566778899AABBCCDDEEFF00112233" };
+        var response = new byte[20];
+        WriteInt32BigEndian(response, 0, 1);
+        WriteInt32BigEndian(response, 4, 1111);
+
+        var result = UdpTrackerProvider.ParseScrapeResponse(response, 1111, hashes);
+
+        Assert.That(result[hashes[0]].Success, Is.False);
+        Assert.That(result[hashes[0]].FailureReason, Does.Contain("Unexpected scrape response action"));
+    }
+
+    [Test]
+    public void BatchScrape_should_automatically_chunk_into_sequential_batches_when_exceeding_74_hashes()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var totalHashes = 80;
+        var hashes = new List<string>();
+        for (var i = 0; i < totalHashes; i++)
+        {
+            hashes.Add($"{i:D40}");
+        }
+
+        var scrapeRequestLengths = new List<int>();
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            var connectReq = server.Receive(ref ep);
+            var connectResp = new byte[16];
+            WriteInt32BigEndian(connectResp, 0, 0);
+            Array.Copy(connectReq, 12, connectResp, 4, 4);
+            WriteInt64BigEndian(connectResp, 8, 777L);
+            server.Send(connectResp, connectResp.Length, ep);
+
+            var scrapeReq1 = server.Receive(ref ep);
+            scrapeRequestLengths.Add(scrapeReq1.Length);
+            var batch1Count = 74;
+            var scrapeResp1 = new byte[8 + (12 * batch1Count)];
+            WriteInt32BigEndian(scrapeResp1, 0, 2);
+            Array.Copy(scrapeReq1, 12, scrapeResp1, 4, 4);
+            for (var i = 0; i < batch1Count; i++)
+            {
+                var offset = 8 + (12 * i);
+                WriteInt32BigEndian(scrapeResp1, offset, 10 + i);
+                WriteInt32BigEndian(scrapeResp1, offset + 4, 20 + i);
+                WriteInt32BigEndian(scrapeResp1, offset + 8, 30 + i);
+            }
+
+            server.Send(scrapeResp1, scrapeResp1.Length, ep);
+
+            var scrapeReq2 = server.Receive(ref ep);
+            scrapeRequestLengths.Add(scrapeReq2.Length);
+            var batch2Count = 6;
+            var scrapeResp2 = new byte[8 + (12 * batch2Count)];
+            WriteInt32BigEndian(scrapeResp2, 0, 2);
+            Array.Copy(scrapeReq2, 12, scrapeResp2, 4, 4);
+            for (var i = 0; i < batch2Count; i++)
+            {
+                var offset = 8 + (12 * i);
+                WriteInt32BigEndian(scrapeResp2, offset, 100 + i);
+                WriteInt32BigEndian(scrapeResp2, offset + 4, 200 + i);
+                WriteInt32BigEndian(scrapeResp2, offset + 8, 300 + i);
+            }
+
+            server.Send(scrapeResp2, scrapeResp2.Length, ep);
+        });
+
+        var results = _provider.BatchScrape(hashes, $"udp://127.0.0.1:{serverPort}/announce");
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(results.Count, Is.EqualTo(80));
+        Assert.That(scrapeRequestLengths.Count, Is.EqualTo(2));
+        Assert.That(scrapeRequestLengths[0], Is.EqualTo(1496));
+        Assert.That(scrapeRequestLengths[1], Is.EqualTo(136));
+
+        Assert.That(results[hashes[0]].Success, Is.True);
+        Assert.That(results[hashes[0]].Complete, Is.EqualTo(10));
+        Assert.That(results[hashes[0]].Downloaded, Is.EqualTo(20));
+        Assert.That(results[hashes[0]].Incomplete, Is.EqualTo(30));
+
+        Assert.That(results[hashes[73]].Success, Is.True);
+        Assert.That(results[hashes[73]].Complete, Is.EqualTo(10 + 73));
+        Assert.That(results[hashes[73]].Downloaded, Is.EqualTo(20 + 73));
+        Assert.That(results[hashes[73]].Incomplete, Is.EqualTo(30 + 73));
+
+        Assert.That(results[hashes[74]].Success, Is.True);
+        Assert.That(results[hashes[74]].Complete, Is.EqualTo(100));
+        Assert.That(results[hashes[74]].Downloaded, Is.EqualTo(200));
+        Assert.That(results[hashes[74]].Incomplete, Is.EqualTo(300));
+
+        Assert.That(results[hashes[79]].Success, Is.True);
+        Assert.That(results[hashes[79]].Complete, Is.EqualTo(105));
+        Assert.That(results[hashes[79]].Downloaded, Is.EqualTo(205));
+        Assert.That(results[hashes[79]].Incomplete, Is.EqualTo(305));
+    }
+
+    [Test]
+    public void BatchScrape_should_return_empty_dictionary_when_infohashes_is_null_or_empty()
+    {
+        var resNull = _provider.BatchScrape(null, "udp://127.0.0.1:8080/announce");
+        var resEmpty = _provider.BatchScrape(Array.Empty<string>(), "udp://127.0.0.1:8080/announce");
+        var resWhitespace = _provider.BatchScrape(new[] { "   ", "" }, "udp://127.0.0.1:8080/announce");
+
+        Assert.That(resNull, Is.Empty);
+        Assert.That(resEmpty, Is.Empty);
+        Assert.That(resWhitespace, Is.Empty);
+    }
+
+    [Test]
+    public void BatchScrape_should_mark_invalid_infohash_without_failing_valid_hashes()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var validHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF";
+        var invalidHash = "not-a-valid-hex-hash";
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            var connectReq = server.Receive(ref ep);
+            var connectResp = new byte[16];
+            WriteInt32BigEndian(connectResp, 0, 0);
+            Array.Copy(connectReq, 12, connectResp, 4, 4);
+            WriteInt64BigEndian(connectResp, 8, 1L);
+            server.Send(connectResp, connectResp.Length, ep);
+
+            var scrapeReq = server.Receive(ref ep);
+            var scrapeResp = new byte[20];
+            WriteInt32BigEndian(scrapeResp, 0, 2);
+            Array.Copy(scrapeReq, 12, scrapeResp, 4, 4);
+            WriteInt32BigEndian(scrapeResp, 8, 42);
+            WriteInt32BigEndian(scrapeResp, 12, 100);
+            WriteInt32BigEndian(scrapeResp, 16, 7);
+            server.Send(scrapeResp, scrapeResp.Length, ep);
+        });
+
+        var results = _provider.BatchScrape(new[] { validHash, invalidHash }, $"udp://127.0.0.1:{serverPort}/announce");
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(results.Count, Is.EqualTo(2));
+        Assert.That(results[invalidHash].Success, Is.False);
+        Assert.That(results[invalidHash].FailureReason, Is.EqualTo("Invalid info_hash"));
+        Assert.That(results[validHash].Success, Is.True);
+        Assert.That(results[validHash].Complete, Is.EqualTo(42));
+    }
+
+    [Test]
+    public void BatchScrape_should_handle_server_unreachable_gracefully()
+    {
+        var hashes = new[]
+        {
+            "00112233445566778899AABBCCDDEEFF00112233",
+            "112233445566778899AABBCCDDEEFF0011223344"
+        };
+
+        var provider = new FastTimeoutUdpTrackerProvider(_configService)
+        {
+            MaxRetries = 0
+        };
+
+        var results = provider.BatchScrape(hashes, "udp://127.0.0.1:1/announce");
+
+        Assert.That(results.Count, Is.EqualTo(2));
+        Assert.That(results[hashes[0]].Success, Is.False);
+        Assert.That(results[hashes[1]].Success, Is.False);
     }
 }

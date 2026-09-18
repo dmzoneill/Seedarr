@@ -298,6 +298,22 @@ public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
         }
     }
 
+    public Dictionary<string, TrackerScrapeResponse> BatchScrape(IEnumerable<string> infoHashes, string trackerUrl)
+    {
+        var result = new Dictionary<string, TrackerScrapeResponse>(StringComparer.OrdinalIgnoreCase);
+        if (infoHashes == null)
+        {
+            return result;
+        }
+
+        foreach (var hash in infoHashes)
+        {
+            result[hash] = Scrape(hash, trackerUrl);
+        }
+
+        return result;
+    }
+
     private static string RedactUrl(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || string.IsNullOrEmpty(uri.UserInfo))
