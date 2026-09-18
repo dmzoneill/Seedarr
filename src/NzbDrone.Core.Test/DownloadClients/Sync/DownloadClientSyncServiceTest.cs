@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using NLog;
@@ -557,6 +558,96 @@ public class DownloadClientSyncServiceTest
         mockClient.Received(1).GetItems();
         _torrentService.Received(1).GetAll();
         _torrentService.Received(1).Add(Arg.Is<Torrent>(t => t.InfoHash == newHash));
+    }
+
+    [TestCase("qbittorrent")]
+    [TestCase("qBittorrent")]
+    [TestCase("transmission")]
+    [TestCase("deluge")]
+    public void ImportTorrents_should_create_client_successfully_with_case_insensitive_client_type(string clientType)
+    {
+        var hash = "cccc000022223333444455556666777788889999";
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.GetTorrentFile(hash).Returns(new byte[] { 0x64, 0x38, 0x3a });
+        mockClient.GetItems().Returns(new List<DownloadClientItem>
+        {
+            new() { Title = "Test Torrent", InfoHash = hash, TotalSize = 1000, RemainingSize = 0 }
+        });
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+        {
+            Name = "Test Torrent",
+            TotalSize = 1000,
+            PieceCount = 10,
+            PieceLength = 100
+        });
+
+        _service.InjectedClient = null;
+        var def = new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Dynamic Client",
+            ClientType = clientType,
+            Enable = true
+        };
+        _downloadClientFactory.Get(1).Returns(def);
+        _downloadClientFactory.CreateClient(def).Returns(mockClient);
+        _torrentService.GetAll().Returns(new List<Torrent>());
+
+        var result = _service.ImportTorrents(1, new List<string> { hash });
+
+        Assert.That(result.Added, Is.EqualTo(1));
+        Assert.That(result.Failed, Is.EqualTo(0));
+        _downloadClientFactory.Received(1).CreateClient(def);
+    }
+
+    [Test]
+    public void ImportTorrents_should_execute_bulk_import_efficiently_without_per_item_queries()
+    {
+        var hashes = Enumerable.Range(1, 50)
+            .Select(i => $"{i:D4}000022223333444455556666777788889999")
+            .ToList();
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        var items = hashes.Select(h => new DownloadClientItem
+        {
+            Title = $"Item {h}",
+            InfoHash = h,
+            TotalSize = 1000,
+            RemainingSize = 0
+        }).ToList();
+
+        mockClient.GetTorrentFile(Arg.Any<string>()).Returns(new byte[] { 0x64, 0x38, 0x3a });
+        mockClient.GetItems().Returns(items);
+
+        _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(callInfo => new ParsedTorrent
+        {
+            Name = "Parsed Item",
+            TotalSize = 1000,
+            PieceCount = 10,
+            PieceLength = 100
+        });
+
+        _service.InjectedClient = mockClient;
+        _torrentService.GetAll().Returns(new List<Torrent>());
+        _downloadClientFactory.Get(1).Returns(new DownloadClientDefinition
+        {
+            Id = 1,
+            Name = "Bulk Client",
+            ClientType = "QBitTorrent",
+            Enable = true
+        });
+
+        var result = _service.ImportTorrents(1, hashes);
+
+        Assert.That(result.Added, Is.EqualTo(50));
+        Assert.That(result.Skipped, Is.EqualTo(0));
+        Assert.That(result.Failed, Is.EqualTo(0));
+
+        // GetItems() and GetAll() MUST only be called ONCE upfront for the entire batch of 50
+        mockClient.Received(1).GetItems();
+        _torrentService.Received(1).GetAll();
+        _torrentService.Received(50).Add(Arg.Any<Torrent>());
     }
 
     [Test]

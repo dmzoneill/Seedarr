@@ -749,11 +749,11 @@ public class DownloadClientSyncService : IDownloadClientSyncService, IDisposable
 
     protected virtual IIndexer CreateIndexer(IndexerDefinition definition)
     {
-        return definition.IndexerType switch
+        return definition.IndexerType?.Trim().ToLowerInvariant() switch
         {
-            "Prowlarr" => new NzbDrone.Core.Indexers.Prowlarr.ProwlarrIndexer(),
-            "Torznab" => new NzbDrone.Core.Indexers.Torznab.TorznabIndexer(),
-            "Newznab" => new NzbDrone.Core.Indexers.Newznab.NewznabIndexer(),
+            "prowlarr" => new NzbDrone.Core.Indexers.Prowlarr.ProwlarrIndexer(),
+            "torznab" => new NzbDrone.Core.Indexers.Torznab.TorznabIndexer(),
+            "newznab" => new NzbDrone.Core.Indexers.Newznab.NewznabIndexer(),
             _ => null
         };
     }

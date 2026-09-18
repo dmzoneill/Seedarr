@@ -428,4 +428,53 @@ public class DownloadClientControllerTest
         Assert.That(badRequest.Value, Is.EqualTo("Target host/URL is not permitted."));
         _downloadClientFactory.DidNotReceive().CreateClient(Arg.Any<DownloadClientDefinition>());
     }
+
+    [TestCase("qbittorrent", "QBitTorrent", "QBitTorrentClient", "QBitTorrentSettings")]
+    [TestCase("transmission", "Transmission", "TransmissionClient", "TransmissionSettings")]
+    [TestCase("deluge", "Deluge", "DelugeClient", "DelugeSettings")]
+    public void Create_should_normalize_client_type_and_implementation(string inputType, string expectedType, string expectedImpl, string expectedContract)
+    {
+        var def = new DownloadClientDefinition
+        {
+            Name = "Normalized Client",
+            Host = "localhost",
+            Port = 8080,
+            ClientType = inputType,
+        };
+
+        _downloadClientFactory.Create(Arg.Any<DownloadClientDefinition>()).Returns(callInfo => callInfo.Arg<DownloadClientDefinition>());
+
+        var result = _controller.Create(def);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result.Result;
+        var created = (DownloadClientDefinition)ok.Value;
+        Assert.That(created.ClientType, Is.EqualTo(expectedType));
+        Assert.That(created.Implementation, Is.EqualTo(expectedImpl));
+        Assert.That(created.ConfigContract, Is.EqualTo(expectedContract));
+    }
+
+    [TestCase("qbittorrent")]
+    [TestCase("qBittorrent")]
+    [TestCase("transmission")]
+    [TestCase("deluge")]
+    public void TestDirect_should_delegate_to_factory_for_various_client_type_casings(string clientType)
+    {
+        var def = new DownloadClientDefinition
+        {
+            Name = "Direct Client",
+            Host = "8.8.8.8",
+            Port = 8080,
+            ClientType = clientType,
+        };
+
+        var mockClient = Substitute.For<IDownloadClient>();
+        mockClient.TestConnectionDetailed().Returns(DownloadClientTestResult.Ok("Connected"));
+        _downloadClientFactory.CreateClient(Arg.Is<DownloadClientDefinition>(d => d.ClientType == clientType)).Returns(mockClient);
+
+        var result = _controller.TestDirect(def);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        _downloadClientFactory.Received(1).CreateClient(Arg.Is<DownloadClientDefinition>(d => d.ClientType == clientType));
+    }
 }
