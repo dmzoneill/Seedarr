@@ -240,6 +240,10 @@ public interface IConfigService
     // Discord
     string DiscordPublicKey { get; }
     string DiscordApplicationId { get; }
+
+    // Backup
+    int BackupRetentionDays { get; set; }
+    int MaxBackups { get; set; }
 }
 
 public class ConfigModel : ModelBase
@@ -647,6 +651,19 @@ public class ConfigService : IConfigService
     // Discord
     public string DiscordPublicKey => GetValue("DiscordPublicKey", "");
     public string DiscordApplicationId => GetValue("DiscordApplicationId", "");
+
+    // Backup
+    public int BackupRetentionDays
+    {
+        get => GetValueInt("BackupRetentionDays", 28);
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "BackupRetentionDays", value } });
+    }
+
+    public int MaxBackups
+    {
+        get => GetValueInt("MaxBackups", 10);
+        set => SaveConfigDictionary(new Dictionary<string, object> { { "MaxBackups", value } });
+    }
 }
 
 public class ConfigSavedEvent : IEvent

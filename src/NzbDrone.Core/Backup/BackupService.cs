@@ -4,10 +4,10 @@ using System.Data;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
-using System.Text;
 using Microsoft.Data.Sqlite;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using Polly;
@@ -29,6 +29,7 @@ public class BackupService : IBackupService
     private const string BackupFolderName = "Backups";
     private const string DbFileName = "seedarr.db";
     private const string ConfigFileName = "config.xml";
+    private static readonly byte[] SqliteMagicHeader = { 0x53, 0x51, 0x4C, 0x69, 0x74, 0x65, 0x20, 0x66, 0x6F, 0x72, 0x6D, 0x61, 0x74, 0x20, 0x33, 0x00 };
 
     private static readonly RetryPolicy DefaultVacuumRetryPolicy = Policy
         .Handle<SqliteException>(ex => ex.SqliteErrorCode is 5 or 6)
@@ -47,10 +48,11 @@ public class BackupService : IBackupService
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly IConnectionStringFactory _connectionStringFactory;
     private readonly IEventAggregator _eventAggregator;
+    private readonly IConfigService _configService;
     private readonly Logger _logger;
 
     public BackupService(IAppFolderInfo appFolderInfo, IConnectionStringFactory connectionStringFactory)
-        : this(appFolderInfo, connectionStringFactory, null)
+        : this(appFolderInfo, connectionStringFactory, null, null)
     {
     }
 
@@ -58,10 +60,28 @@ public class BackupService : IBackupService
         IAppFolderInfo appFolderInfo,
         IConnectionStringFactory connectionStringFactory,
         IEventAggregator eventAggregator)
+        : this(appFolderInfo, connectionStringFactory, eventAggregator, null)
+    {
+    }
+
+    public BackupService(
+        IAppFolderInfo appFolderInfo,
+        IConnectionStringFactory connectionStringFactory,
+        IConfigService configService)
+        : this(appFolderInfo, connectionStringFactory, null, configService)
+    {
+    }
+
+    public BackupService(
+        IAppFolderInfo appFolderInfo,
+        IConnectionStringFactory connectionStringFactory,
+        IEventAggregator eventAggregator,
+        IConfigService configService)
     {
         _appFolderInfo = appFolderInfo;
         _connectionStringFactory = connectionStringFactory;
         _eventAggregator = eventAggregator;
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -202,6 +222,8 @@ public class BackupService : IBackupService
                 Time = fileInfo.CreationTimeUtc
             };
 
+            PruneBackups();
+
             _eventAggregator?.PublishEvent(new BackupCreatedEvent(backupInfo.Path, backupInfo.Name, type, backupInfo.Size));
 
             return backupInfo;
@@ -284,7 +306,14 @@ public class BackupService : IBackupService
 
         using var zip = ZipFile.OpenRead(filePath);
 
+        var isSqlite = _connectionStringFactory == null || _connectionStringFactory.DatabaseType == DatabaseType.SQLite;
         var dbEntry = zip.GetEntry(DbFileName);
+
+        if (isSqlite && dbEntry == null)
+        {
+            throw new InvalidOperationException("Database file not found in backup archive");
+        }
+
         if (dbEntry != null)
         {
             if (dbEntry.Length <= 100)
@@ -307,13 +336,14 @@ public class BackupService : IBackupService
                 {
                     var headerBytes = new byte[16];
                     var read = fs.Read(headerBytes, 0, headerBytes.Length);
-                    var headerStr = Encoding.ASCII.GetString(headerBytes, 0, read);
 
-                    if (!headerStr.StartsWith("SQLite format 3", StringComparison.Ordinal))
+                    if (read < 16 || !headerBytes.SequenceEqual(SqliteMagicHeader))
                     {
                         throw new InvalidDataException($"Database entry in backup archive '{fileName}' does not contain a valid SQLite database header.");
                     }
                 }
+
+                VerifySqliteIntegrity(tempRestorePath, fileName);
 
                 File.Move(tempRestorePath, dbRestorePath, overwrite: true);
                 _logger.Info("Database restore staged at {0}; swap will occur on next startup", dbRestorePath);
@@ -350,6 +380,87 @@ public class BackupService : IBackupService
     {
         var safeName = Path.GetFileName(fileName);
         return Path.Combine(GetBackupFolder(), safeName);
+    }
+
+    private void PruneBackups()
+    {
+        try
+        {
+            var maxBackups = _configService?.MaxBackups ?? 10;
+            var retentionDays = _configService?.BackupRetentionDays ?? 28;
+
+            var allBackups = GetBackups();
+            var toDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (maxBackups > 0 && allBackups.Count > maxBackups)
+            {
+                foreach (var backup in allBackups.Skip(maxBackups))
+                {
+                    toDelete.Add(backup.Name);
+                }
+            }
+
+            if (retentionDays > 0)
+            {
+                var cutoffTime = DateTime.UtcNow.AddDays(-retentionDays);
+                foreach (var backup in allBackups)
+                {
+                    if (backup.Time < cutoffTime)
+                    {
+                        toDelete.Add(backup.Name);
+                    }
+                }
+            }
+
+            foreach (var fileName in toDelete)
+            {
+                _logger.Info("Pruning old backup: {0}", fileName);
+                DeleteBackup(fileName);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to prune old backups");
+        }
+    }
+
+    private static void VerifySqliteIntegrity(string dbPath, string fileName)
+    {
+        var connStr = new SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false
+        }.ToString();
+
+        try
+        {
+            using var conn = new SqliteConnection(connStr);
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA quick_check;";
+            using var reader = cmd.ExecuteReader();
+
+            var checkResults = new List<string>();
+            while (reader.Read())
+            {
+                checkResults.Add(reader.GetString(0));
+            }
+
+            if (checkResults.Count == 0 || !checkResults.All(r => string.Equals(r, "ok", StringComparison.OrdinalIgnoreCase)))
+            {
+                var error = checkResults.Count == 0 ? "No result returned" : string.Join("; ", checkResults);
+                throw new InvalidDataException($"SQLite integrity check failed for backup archive '{fileName}': {error}");
+            }
+        }
+        catch (SqliteException ex)
+        {
+            throw new InvalidDataException($"SQLite integrity check failed for backup archive '{fileName}': {ex.Message}", ex);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+        }
     }
 }
 
