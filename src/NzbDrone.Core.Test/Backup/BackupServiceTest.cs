@@ -355,7 +355,7 @@ public class BackupServiceTest
         var backupPath = Path.Combine(backupDir, "restore_both_test.zip");
 
         var dummyDbBytes = new byte[512];
-        var header = System.Text.Encoding.ASCII.GetBytes("SQLite format 3 ");
+        var header = System.Text.Encoding.ASCII.GetBytes("SQLite format 3");
         Array.Copy(header, 0, dummyDbBytes, 0, header.Length);
 
         using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
