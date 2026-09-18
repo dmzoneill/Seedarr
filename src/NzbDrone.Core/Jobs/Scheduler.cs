@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using NLog;
+using NzbDrone.Core.Datastore;
+using NzbDrone.SignalR;
 
 namespace NzbDrone.Core.Jobs;
 
@@ -15,6 +17,7 @@ public class Scheduler : BackgroundService
     private readonly TimeSpan _startupDelay;
     private readonly TimeSpan _minJitter;
     private readonly TimeSpan _maxJitter;
+    private readonly IBroadcastSignalRMessage _signalRBroadcaster;
     private readonly Random _random = new();
     private readonly Logger _logger;
 
@@ -22,8 +25,8 @@ public class Scheduler : BackgroundService
     public TimeSpan MinJitter => _minJitter;
     public TimeSpan MaxJitter => _maxJitter;
 
-    public Scheduler(ITaskManager taskManager, IEnumerable<IScheduledTask> scheduledTasks)
-        : this(taskManager, scheduledTasks, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15))
+    public Scheduler(ITaskManager taskManager, IEnumerable<IScheduledTask> scheduledTasks, IBroadcastSignalRMessage signalRBroadcaster = null)
+        : this(taskManager, scheduledTasks, TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), signalRBroadcaster)
     {
     }
 
@@ -32,13 +35,15 @@ public class Scheduler : BackgroundService
         IEnumerable<IScheduledTask> scheduledTasks,
         TimeSpan startupDelay,
         TimeSpan minJitter,
-        TimeSpan maxJitter)
+        TimeSpan maxJitter,
+        IBroadcastSignalRMessage signalRBroadcaster = null)
     {
         _taskManager = taskManager;
         _scheduledTasks = scheduledTasks;
         _startupDelay = startupDelay;
         _minJitter = minJitter;
         _maxJitter = maxJitter;
+        _signalRBroadcaster = signalRBroadcaster;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -104,12 +109,26 @@ public class Scheduler : BackgroundService
                         cts.CancelAfter(TimeSpan.FromMinutes(10));
                         _taskManager.RecordTaskStarted(next.TypeName, cts, null, ScheduledTaskTriggerSource.Scheduler);
 
+                        var taskInstance = _scheduledTasks.FirstOrDefault(t =>
+                            string.Equals(t.GetType().FullName, next.TypeName, StringComparison.OrdinalIgnoreCase) ||
+                            string.Equals(t.GetType().Name, next.TypeName, StringComparison.OrdinalIgnoreCase));
+
+                        var taskInfo = new
+                        {
+                            TypeName = next.TypeName,
+                            Name = taskInstance?.GetType().Name ?? next.TypeName,
+                            TriggerSource = ScheduledTaskTriggerSource.Scheduler.ToString()
+                        };
+
+                        _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                        {
+                            Name = "TaskStarted",
+                            Action = ModelAction.Created,
+                            Body = taskInfo
+                        });
+
                         try
                         {
-                            var taskInstance = _scheduledTasks.FirstOrDefault(t =>
-                                string.Equals(t.GetType().FullName, next.TypeName, StringComparison.OrdinalIgnoreCase) ||
-                                string.Equals(t.GetType().Name, next.TypeName, StringComparison.OrdinalIgnoreCase));
-
                             if (taskInstance != null)
                             {
                                 await Task.Run(() => taskInstance.Execute(cts.Token), cts.Token);
@@ -133,13 +152,20 @@ public class Scheduler : BackgroundService
                         {
                             _taskManager.UpdateLastExecution(next.TypeName);
                             _taskManager.RecordTaskFinished(next.TypeName, startTime, ScheduledTaskTriggerSource.Scheduler);
+
+                            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                            {
+                                Name = "TaskCompleted",
+                                Action = ModelAction.Updated,
+                                Body = taskInfo
+                            });
                         }
 
                         // Stagger consecutive/overdue task runs with jitter to prevent CPU/IO spikes
                         var nextPending = _taskManager.GetNextScheduled();
                         var isNextOverdue = nextPending != null &&
                             (nextPending.LastExecution == DateTime.MinValue ||
-                             nextPending.LastExecution.AddMinutes(nextPending.Interval) <= DateTime.UtcNow);
+                            nextPending.LastExecution.AddMinutes(nextPending.Interval) <= DateTime.UtcNow);
 
                         if (isNextOverdue)
                         {

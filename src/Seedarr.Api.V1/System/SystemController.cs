@@ -12,6 +12,7 @@ using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Datastore.Migration;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
+using NzbDrone.SignalR;
 using Seedarr.Http;
 
 namespace Seedarr.Api.V1.System;
@@ -32,6 +33,7 @@ public class SystemController : ControllerBase
     private readonly IConfigService _configService;
     private readonly IMainDatabase _mainDatabase;
     private readonly IScheduledTaskHistoryRepository _taskHistoryRepository;
+    private readonly IBroadcastSignalRMessage _signalRBroadcaster;
 
     public SystemController(
         ITaskManager taskManager,
@@ -41,7 +43,8 @@ public class SystemController : ControllerBase
         IHostApplicationLifetime lifetime,
         IConfigService configService = null,
         IMainDatabase mainDatabase = null,
-        IScheduledTaskHistoryRepository taskHistoryRepository = null)
+        IScheduledTaskHistoryRepository taskHistoryRepository = null,
+        IBroadcastSignalRMessage signalRBroadcaster = null)
     {
         _taskManager = taskManager;
         _scheduledTasks = scheduledTasks ?? Enumerable.Empty<IScheduledTask>();
@@ -51,6 +54,7 @@ public class SystemController : ControllerBase
         _configService = configService;
         _mainDatabase = mainDatabase;
         _taskHistoryRepository = taskHistoryRepository;
+        _signalRBroadcaster = signalRBroadcaster;
     }
 
     /// <summary>
@@ -251,15 +255,65 @@ public class SystemController : ControllerBase
             return Conflict(new { message = $"Task {task.TypeName} is already running" });
         }
 
-        var command = _commandQueueManager.Push(
-            new ScheduledTaskCommand
-            {
-                TaskName = task.TypeName,
-                TriggerSource = ScheduledTaskTriggerSource.Manual
-            },
-            CommandTrigger.Manual);
+        var simpleName = taskInstance != null
+            ? taskInstance.GetType().Name
+            : (task.TypeName.Contains('.') ? task.TypeName.Substring(task.TypeName.LastIndexOf('.') + 1) : task.TypeName);
 
-        return Ok(new { message = $"Task {task.TypeName} execution started", commandId = command.Id });
+        var taskInfo = new
+        {
+            Id = task.Id,
+            TypeName = task.TypeName,
+            Name = simpleName
+        };
+
+        if (_commandQueueManager != null)
+        {
+            var command = _commandQueueManager.Push(
+                new ScheduledTaskCommand
+                {
+                    TaskName = task.TypeName,
+                    TriggerSource = ScheduledTaskTriggerSource.Manual
+                },
+                CommandTrigger.Manual);
+
+            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+            {
+                Name = "TaskStarted",
+                Action = ModelAction.Created,
+                Body = taskInfo
+            });
+
+            return Ok(new { message = $"Task {task.TypeName} execution started", commandId = command?.Id ?? 0 });
+        }
+
+        global::System.Threading.Tasks.Task.Run(() =>
+        {
+            var startTime = DateTime.UtcNow;
+            _taskManager.RecordTaskStarted(task.TypeName);
+            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+            {
+                Name = "TaskStarted",
+                Action = ModelAction.Created,
+                Body = taskInfo
+            });
+
+            try
+            {
+                taskInstance.Execute();
+            }
+            finally
+            {
+                _taskManager.RecordTaskFinished(task.TypeName, startTime);
+                _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+                {
+                    Name = "TaskCompleted",
+                    Action = ModelAction.Updated,
+                    Body = taskInfo
+                });
+            }
+        });
+
+        return Ok(new { message = $"Task {task.TypeName} execution started" });
     }
 
     /// <summary>

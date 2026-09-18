@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using NLog;
 using NzbDrone.Core.Messaging.Commands;
+using NzbDrone.SignalR;
 
 namespace NzbDrone.Core.Jobs;
 
@@ -11,14 +12,17 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
 {
     private readonly IEnumerable<IScheduledTask> _scheduledTasks;
     private readonly ITaskManager _taskManager;
+    private readonly IBroadcastSignalRMessage _signalRBroadcaster;
     private readonly Logger _logger;
 
     public ScheduledTaskCommandExecutor(
         IEnumerable<IScheduledTask> scheduledTasks,
-        ITaskManager taskManager)
+        ITaskManager taskManager,
+        IBroadcastSignalRMessage signalRBroadcaster = null)
     {
         _scheduledTasks = scheduledTasks ?? Enumerable.Empty<IScheduledTask>();
         _taskManager = taskManager;
+        _signalRBroadcaster = signalRBroadcaster;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -48,6 +52,20 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
         _taskManager.RecordTaskStarted(command.TaskName, cts, null, command.TriggerSource);
 
+        var taskInfo = new
+        {
+            TypeName = command.TaskName,
+            Name = taskInstance.GetType().Name,
+            TriggerSource = command.TriggerSource.ToString()
+        };
+
+        _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+        {
+            Name = "TaskStarted",
+            Action = Datastore.ModelAction.Created,
+            Body = taskInfo
+        });
+
         try
         {
             taskInstance.Execute(cts.Token);
@@ -67,6 +85,13 @@ public class ScheduledTaskCommandExecutor : IExecute<ScheduledTaskCommand>
         {
             _taskManager.UpdateLastExecution(command.TaskName);
             _taskManager.RecordTaskFinished(command.TaskName, startTime, command.TriggerSource);
+
+            _signalRBroadcaster?.BroadcastMessage(new SignalRMessage
+            {
+                Name = "TaskCompleted",
+                Action = Datastore.ModelAction.Updated,
+                Body = taskInfo
+            });
         }
     }
 }

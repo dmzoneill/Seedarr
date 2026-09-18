@@ -9,7 +9,10 @@ const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
   TorrentDeleted: [["torrents"]],
   SeedingStatsUpdated: [["seeding", "stats"]],
   HealthCheckCompleted: [["health"]],
-  CommandCompleted: [["system", "status"]],
+  CommandStarted: [["system", "status"], ["system", "commands"]],
+  CommandCompleted: [["system", "status"], ["system", "commands"]],
+  TaskStarted: [["system", "tasks"], ["system", "status"]],
+  TaskCompleted: [["system", "tasks"], ["system", "status"]],
   AutomationExecuted: [["automation", "scripts"], ["automation"]],
   AutomationTriggerEvaluated: [["automation", "scripts"], ["automation"]],
 };
@@ -57,6 +60,10 @@ export default function SignalRProvider() {
       } else if (name.includes("health")) {
         queryClient.invalidateQueries({ queryKey: ["health"] });
       } else if (name.includes("command") || name.includes("system")) {
+        queryClient.invalidateQueries({ queryKey: ["system", "status"] });
+        queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
+      } else if (name.includes("task")) {
+        queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
         queryClient.invalidateQueries({ queryKey: ["system", "status"] });
       } else if (name.includes("automation")) {
         queryClient.invalidateQueries({ queryKey: ["automation", "scripts"] });
@@ -112,6 +119,8 @@ export default function SignalRProvider() {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
       queryClient.invalidateQueries({ queryKey: ["health"] });
       queryClient.invalidateQueries({ queryKey: ["system", "status"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
+      queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
       queryClient.invalidateQueries({ queryKey: ["diskspace"] });
       queryClient.invalidateQueries({ queryKey: ["automation"] });
       queryClient.invalidateQueries({ queryKey: ["automation", "scripts"] });

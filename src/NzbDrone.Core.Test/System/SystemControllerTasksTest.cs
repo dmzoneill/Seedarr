@@ -9,6 +9,7 @@ using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Jobs;
 using NzbDrone.Core.Messaging.Commands;
+using NzbDrone.SignalR;
 using Seedarr.Api.V1.System;
 
 namespace NzbDrone.Core.Test.Controllers;
@@ -22,6 +23,7 @@ public class SystemControllerTasksTest
     private ITaskManager _taskManager;
     private IScheduledTask _sampleTask;
     private IManageCommandQueue _commandQueueManager;
+    private IBroadcastSignalRMessage _signalRBroadcaster;
     private SystemController _controller;
 
     private class SampleScheduledTask : IScheduledTask
@@ -39,6 +41,7 @@ public class SystemControllerTasksTest
         _taskManager = Substitute.For<ITaskManager>();
         _sampleTask = new SampleScheduledTask();
         _commandQueueManager = Substitute.For<IManageCommandQueue>();
+        _signalRBroadcaster = Substitute.For<IBroadcastSignalRMessage>();
 
         _controller = new SystemController(
             _taskManager,
@@ -46,7 +49,8 @@ public class SystemControllerTasksTest
             _commandQueueManager,
             _appFolderInfo,
             _lifetime,
-            _configService);
+            _configService,
+            signalRBroadcaster: _signalRBroadcaster);
     }
 
     [Test]
@@ -419,5 +423,28 @@ public class SystemControllerTasksTest
         Assert.That(resources[0].Status, Is.EqualTo("Failed"));
         Assert.That(resources[0].TriggerSource, Is.EqualTo("Manual"));
         Assert.That(resources[0].ErrorMessage, Is.EqualTo("Task error"));
+    }
+
+    [Test]
+    public void ExecuteTask_broadcasts_task_started_when_queued()
+    {
+        var task = new ScheduledTask
+        {
+            Id = 1,
+            TypeName = typeof(SampleScheduledTask).FullName,
+            Interval = 15,
+            LastExecution = DateTime.UtcNow
+        };
+        _taskManager.GetAll().Returns(new List<ScheduledTask> { task });
+        _taskManager.IsRunning(task.TypeName).Returns(false);
+        _commandQueueManager.Push(Arg.Any<ScheduledTaskCommand>(), CommandTrigger.Manual)
+            .Returns(new CommandModel { Id = 10, Name = "ScheduledTaskCommand" });
+
+        var result = _controller.ExecuteTask(1);
+
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        _signalRBroadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "TaskStarted" &&
+            m.Action == NzbDrone.Core.Datastore.ModelAction.Created));
     }
 }
