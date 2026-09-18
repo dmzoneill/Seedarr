@@ -2,6 +2,7 @@ using System;
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using NLog;
@@ -16,6 +17,7 @@ public class UdpTrackerProvider : ITrackerProvider
     private const int ActionConnect = 0;
     private const int ActionAnnounce = 1;
     private const int ActionScrape = 2;
+    private const int ActionError = 3;
     public const int DefaultMaxRetries = 4;
 
     private readonly IConfigService _configService;
@@ -187,6 +189,16 @@ public class UdpTrackerProvider : ITrackerProvider
             var receiveResult = await SendAndReceiveAsync(client, packet, transactionId, cancellationToken);
             var response = receiveResult.Buffer;
 
+            if (response.Length >= 8)
+            {
+                var responseAction = ReadInt32BigEndian(response, 0);
+                if (responseAction == ActionError)
+                {
+                    var errorReason = ParseErrorMessage(response);
+                    return new TrackerScrapeResponse { Success = false, FailureReason = errorReason };
+                }
+            }
+
             if (response.Length < 20)
             {
                 return new TrackerScrapeResponse { Success = false, FailureReason = "Response too short" };
@@ -220,7 +232,7 @@ public class UdpTrackerProvider : ITrackerProvider
         }
     }
 
-    private async Task<long> ConnectAsync(UdpClient client, CancellationToken cancellationToken = default)
+    internal virtual async Task<long> ConnectAsync(UdpClient client, CancellationToken cancellationToken = default)
     {
         var transactionId = GenerateTransactionId();
         var packet = new byte[16];
@@ -231,17 +243,27 @@ public class UdpTrackerProvider : ITrackerProvider
         var receiveResult = await SendAndReceiveAsync(client, packet, transactionId, cancellationToken);
         var response = receiveResult.Buffer;
 
+        if (response.Length >= 8)
+        {
+            var responseAction = ReadInt32BigEndian(response, 0);
+            if (responseAction == ActionError)
+            {
+                var errorReason = ParseErrorMessage(response);
+                throw new InvalidOperationException($"UDP connect failed: {errorReason}");
+            }
+        }
+
         if (response.Length < 16)
         {
             throw new InvalidOperationException("UDP connect response too short");
         }
 
-        var responseAction = ReadInt32BigEndian(response, 0);
+        var responseActionValue = ReadInt32BigEndian(response, 0);
         var responseTxId = ReadInt32BigEndian(response, 4);
 
-        if (responseAction != ActionConnect)
+        if (responseActionValue != ActionConnect)
         {
-            throw new InvalidOperationException($"UDP connect response has unexpected action: {responseAction}");
+            throw new InvalidOperationException($"UDP connect response has unexpected action: {responseActionValue}");
         }
 
         if (responseTxId != transactionId)
@@ -287,17 +309,27 @@ public class UdpTrackerProvider : ITrackerProvider
 
     internal static TrackerAnnounceResponse ParseAnnounceResponse(byte[] response, int transactionId, AddressFamily addressFamily = AddressFamily.Unspecified)
     {
+        if (response.Length >= 8)
+        {
+            var responseAction = ReadInt32BigEndian(response, 0);
+            if (responseAction == ActionError)
+            {
+                var errorReason = ParseErrorMessage(response);
+                return new TrackerAnnounceResponse { Success = false, FailureReason = errorReason };
+            }
+        }
+
         if (response.Length < 20)
         {
             return new TrackerAnnounceResponse { Success = false, FailureReason = "Response too short" };
         }
 
-        var responseAction = ReadInt32BigEndian(response, 0);
+        var action = ReadInt32BigEndian(response, 0);
         var responseTxId = ReadInt32BigEndian(response, 4);
 
-        if (responseAction != ActionAnnounce)
+        if (action != ActionAnnounce)
         {
-            return new TrackerAnnounceResponse { Success = false, FailureReason = $"Unexpected announce response action: {responseAction}" };
+            return new TrackerAnnounceResponse { Success = false, FailureReason = $"Unexpected announce response action: {action}" };
         }
 
         if (responseTxId != transactionId)
@@ -367,5 +399,32 @@ public class UdpTrackerProvider : ITrackerProvider
     private static int ReadInt32BigEndian(byte[] buffer, int offset)
     {
         return BinaryPrimitives.ReadInt32BigEndian(buffer.AsSpan(offset, 4));
+    }
+
+    private static string ParseErrorMessage(byte[] response)
+    {
+        if (response.Length <= 8)
+        {
+            return "Unknown error";
+        }
+
+        string message;
+        try
+        {
+            message = Encoding.UTF8.GetString(response, 8, response.Length - 8).Trim().Trim('\0').Trim();
+        }
+        catch
+        {
+            try
+            {
+                message = Encoding.ASCII.GetString(response, 8, response.Length - 8).Trim().Trim('\0').Trim();
+            }
+            catch
+            {
+                message = string.Empty;
+            }
+        }
+
+        return string.IsNullOrWhiteSpace(message) ? "Unknown error" : message;
     }
 }
