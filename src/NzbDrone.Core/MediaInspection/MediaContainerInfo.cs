@@ -71,11 +71,17 @@ public class MediaContainerInspector : IMediaContainerInspector
                 "mkv" => "Matroska",
                 "mp4" or "m4v" => "MPEG-4",
                 "avi" => "AVI",
+                "mov" => "QuickTime",
+                "wmv" => "Windows Media",
+                "flv" => "Flash Video",
+                "webm" => "WebM",
+                "ts" or "m2ts" => "MPEG-TS",
                 "flac" => "FLAC",
                 "mp3" => "MP3",
                 "aac" => "AAC",
-                "ts" or "m2ts" => "MPEG-TS",
-                _ => ext.ToUpperInvariant(),
+                "ogg" or "oga" => "Ogg",
+                "wav" => "WAV",
+                _ => null,
             };
         }
 
