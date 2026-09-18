@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "../i18n";
 import {
   useTorrents,
@@ -194,16 +194,32 @@ function saveVisibleColumns(cols: Set<string>) {
 
 type SortKey = ColumnKey;
 
+const STRING_COLUMNS: ReadonlySet<ColumnKey> = new Set([
+  "name",
+  "status",
+  "trackerUrl",
+  "dateAdded",
+  "lastActive",
+  "creationDate",
+  "createdBy",
+  "comment",
+  "label",
+  "infoHash",
+]);
+
 interface ContextMenuState {
   x: number;
   y: number;
   torrent: Torrent | null;
 }
 
-function getSortValue(t: Torrent, key: SortKey): string | number {
+function getSortValue(
+  t: Torrent,
+  key: SortKey,
+): string | number | null | undefined {
   switch (key) {
     case "#":
-      return t.id;
+      return t.sortOrder ?? t.id;
     case "trackerUrl":
       return t.trackerUrl ?? "";
     case "lastActive":
@@ -217,7 +233,7 @@ function getSortValue(t: Torrent, key: SortKey): string | number {
     case "label":
       return t.label ?? "";
     case "infoHash":
-      return t.infoHash;
+      return t.infoHash ?? "";
     case "isPrivate":
       return t.isPrivate ? 1 : 0;
     case "superSeeding":
@@ -229,7 +245,11 @@ function getSortValue(t: Torrent, key: SortKey): string | number {
     case "active":
       return t.active ? 1 : 0;
     default:
-      return t[key] as string | number;
+      return (t as unknown as Record<string, unknown>)[key] as
+        | string
+        | number
+        | null
+        | undefined;
   }
 }
 
@@ -275,7 +295,7 @@ function TorrentTable({
   const announceTorrent = useAnnounceTorrent();
   const recheckTorrent = useRecheckTorrent();
   const moveTorrentQueue = useMoveTorrentQueue();
-  const [sortKey, setSortKey] = useState<SortKey>("name");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
   const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
   const [focusedIndex, setFocusedIndex] = useState<number>(0);
@@ -304,15 +324,67 @@ function TorrentTable({
     tagFilter,
   });
 
-  const sorted = [...filtered].sort((a, b) => {
-    const va = getSortValue(a, sortKey);
-    const vb = getSortValue(b, sortKey);
-    const cmp =
-      typeof va === "string" && typeof vb === "string"
-        ? va.localeCompare(vb)
-        : Number(va) - Number(vb);
-    return sortAsc ? cmp : -cmp;
-  });
+  const sorted = useMemo(() => {
+    if (!sortKey) {
+      return [...filtered].sort((a, b) => {
+        const orderA = a.sortOrder ?? 0;
+        const orderB = b.sortOrder ?? 0;
+        if (orderA !== orderB) return orderA - orderB;
+        return (a.id ?? 0) - (b.id ?? 0);
+      });
+    }
+
+    return [...filtered].sort((a, b) => {
+      if (sortKey === "eta") {
+        const parseEta = (t: Torrent): number => {
+          if (t.eta == null) return 0;
+          const num = typeof t.eta === "number" ? t.eta : Number(t.eta);
+          return Number.isNaN(num) ? 0 : num;
+        };
+
+        const etaA = parseEta(a);
+        const etaB = parseEta(b);
+
+        if (sortAsc) {
+          const valA = etaA <= 0 ? Number.POSITIVE_INFINITY : etaA;
+          const valB = etaB <= 0 ? Number.POSITIVE_INFINITY : etaB;
+          if (valA === valB) return 0;
+          if (valA === Number.POSITIVE_INFINITY) return 1;
+          if (valB === Number.POSITIVE_INFINITY) return -1;
+          return valA - valB;
+        } else {
+          const valA = etaA <= 0 ? 0 : etaA;
+          const valB = etaB <= 0 ? 0 : etaB;
+          return valB - valA;
+        }
+      }
+
+      const va = getSortValue(a, sortKey);
+      const vb = getSortValue(b, sortKey);
+
+      let cmp = 0;
+      if (
+        STRING_COLUMNS.has(sortKey) ||
+        typeof va === "string" ||
+        typeof vb === "string"
+      ) {
+        const sa = va != null ? String(va) : "";
+        const sb = vb != null ? String(vb) : "";
+        cmp = sa.localeCompare(sb);
+      } else {
+        const parseNum = (val: unknown): number => {
+          if (val == null) return 0;
+          const num = typeof val === "number" ? val : Number(val);
+          return Number.isNaN(num) ? 0 : num;
+        };
+        const na = parseNum(va);
+        const nb = parseNum(vb);
+        cmp = na - nb;
+      }
+
+      return sortAsc ? cmp : -cmp;
+    });
+  }, [filtered, sortKey, sortAsc]);
 
   useEffect(() => {
     if (selectedTorrentId != null && sorted.length > 0) {
@@ -560,8 +632,14 @@ function TorrentTable({
   }
 
   function handleSort(key: SortKey) {
-    if (sortKey === key) setSortAsc(!sortAsc);
-    else {
+    if (sortKey === key) {
+      if (sortAsc) {
+        setSortAsc(false);
+      } else {
+        setSortKey(null);
+        setSortAsc(true);
+      }
+    } else {
       setSortKey(key);
       setSortAsc(true);
     }
