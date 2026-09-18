@@ -543,7 +543,32 @@ export function useSeedingConfig() {
 }
 
 export function useSaveSeedingConfig() {
-  return useConfigMutation<SeedingConfig>("seeding");
+  const queryClient = useQueryClient();
+  return useMutation<
+    SeedingConfig,
+    Error,
+    SeedingConfig,
+    { previousConfig?: SeedingConfig }
+  >({
+    mutationFn: (config) => apiClient.put(`/config/seeding/1`, config),
+    onMutate: async (newConfig) => {
+      await queryClient.cancelQueries({ queryKey: ["config", "seeding"] });
+      const previousConfig = queryClient.getQueryData<SeedingConfig>([
+        "config",
+        "seeding",
+      ]);
+      queryClient.setQueryData(["config", "seeding"], newConfig);
+      return { previousConfig };
+    },
+    onError: (_err, _newConfig, context) => {
+      if (context?.previousConfig) {
+        queryClient.setQueryData(["config", "seeding"], context.previousConfig);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["config", "seeding"] });
+    },
+  });
 }
 
 export function useNetworkConfig() {
