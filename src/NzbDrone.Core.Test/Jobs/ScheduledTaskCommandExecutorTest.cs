@@ -4,6 +4,7 @@ using System.Threading;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Jobs;
+using NzbDrone.SignalR;
 
 namespace NzbDrone.Core.Test.Jobs;
 
@@ -77,5 +78,23 @@ public class ScheduledTaskCommandExecutorTest
         var command = new ScheduledTaskCommand { TaskName = typeof(SampleTask).FullName };
 
         Assert.Throws<InvalidOperationException>(() => _subject.Execute(command));
+    }
+
+    [Test]
+    public void Execute_should_broadcast_TaskStarted_and_TaskCompleted()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var subject = new ScheduledTaskCommandExecutor(new[] { _fakeTask }, _taskManager, broadcaster);
+        var command = new ScheduledTaskCommand { TaskName = typeof(SampleTask).FullName };
+
+        subject.Execute(command);
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "TaskStarted" &&
+            m.Action == NzbDrone.Core.Datastore.ModelAction.Created));
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "TaskCompleted" &&
+            m.Action == NzbDrone.Core.Datastore.ModelAction.Updated));
     }
 }

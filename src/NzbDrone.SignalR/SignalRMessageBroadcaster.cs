@@ -91,10 +91,47 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
             return "HealthCheckCompleted";
         }
 
-        if (string.Equals(message.Name, "Command", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(message.Name, "System", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(message.Name, "Command", StringComparison.OrdinalIgnoreCase))
+        {
+            return message.Action switch
+            {
+                ModelAction.Created => "CommandStarted",
+                _ => "CommandCompleted"
+            };
+        }
+
+        if (string.Equals(message.Name, "System", StringComparison.OrdinalIgnoreCase))
         {
             return "CommandCompleted";
+        }
+
+        if (string.Equals(message.Name, "Task", StringComparison.OrdinalIgnoreCase))
+        {
+            return message.Action switch
+            {
+                ModelAction.Created => "TaskStarted",
+                _ => "TaskCompleted"
+            };
+        }
+
+        if (string.Equals(message.Name, "CommandStarted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "CommandStarted";
+        }
+
+        if (string.Equals(message.Name, "CommandCompleted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "CommandCompleted";
+        }
+
+        if (string.Equals(message.Name, "TaskStarted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "TaskStarted";
+        }
+
+        if (string.Equals(message.Name, "TaskCompleted", StringComparison.OrdinalIgnoreCase))
+        {
+            return "TaskCompleted";
         }
 
         if (string.Equals(message.Name, "Automation", StringComparison.OrdinalIgnoreCase) ||
@@ -120,7 +157,7 @@ public class SignalRMessageBroadcaster : IBroadcastSignalRMessage
             return "PieceBatchCompleted";
         }
 
-        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandCompleted" or "AutomationExecuted" or "AutomationTriggerEvaluated" or "PieceCompleted" or "PieceBatchCompleted")
+        if (message.Name is "TorrentAdded" or "TorrentUpdated" or "TorrentDeleted" or "SeedingStatsUpdated" or "HealthCheckCompleted" or "CommandStarted" or "CommandCompleted" or "TaskStarted" or "TaskCompleted" or "AutomationExecuted" or "AutomationTriggerEvaluated" or "PieceCompleted" or "PieceBatchCompleted")
         {
             return message.Name;
         }

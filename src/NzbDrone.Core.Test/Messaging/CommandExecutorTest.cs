@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Commands;
+using NzbDrone.SignalR;
 
 namespace NzbDrone.Core.Test.Messaging;
 
@@ -241,5 +243,25 @@ public class CommandExecutorTest
         Assert.That(CommandExecutor.FindCommandType("NonExistentCommand"), Is.Null);
         Assert.That(CommandExecutor.FindCommandType(string.Empty), Is.Null);
         Assert.That(CommandExecutor.FindCommandType(null), Is.Null);
+    }
+
+    [Test]
+    public void Execute_should_broadcast_CommandStarted_and_CommandCompleted()
+    {
+        var broadcaster = Substitute.For<IBroadcastSignalRMessage>();
+        var subject = new CommandExecutor(_serviceFactory, _repository, broadcaster);
+        var command = new CommandModel { Id = 42, Name = "SampleCommand", Body = "{}" };
+
+        subject.Execute(command);
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "CommandStarted" &&
+            m.Action == ModelAction.Created &&
+            m.Body == command));
+
+        broadcaster.Received(1).BroadcastMessage(Arg.Is<SignalRMessage>(m =>
+            m.Name == "CommandCompleted" &&
+            m.Action == ModelAction.Updated &&
+            m.Body == command));
     }
 }

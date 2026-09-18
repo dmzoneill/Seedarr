@@ -7,6 +7,7 @@ using NLog;
 using NzbDrone.Common;
 using NzbDrone.Common.Serializer;
 using NzbDrone.Core.Datastore;
+using NzbDrone.SignalR;
 
 namespace NzbDrone.Core.Messaging.Commands;
 
@@ -21,12 +22,17 @@ public class CommandExecutor : ICommandExecutor
 
     private readonly IServiceFactory _serviceFactory;
     private readonly IBasicRepository<CommandModel> _repository;
+    private readonly IBroadcastSignalRMessage _signalRBroadcaster;
     private readonly Logger _logger;
 
-    public CommandExecutor(IServiceFactory serviceFactory, IBasicRepository<CommandModel> repository)
+    public CommandExecutor(
+        IServiceFactory serviceFactory,
+        IBasicRepository<CommandModel> repository,
+        IBroadcastSignalRMessage signalRBroadcaster = null)
     {
         _serviceFactory = serviceFactory;
         _repository = repository;
+        _signalRBroadcaster = signalRBroadcaster;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -46,6 +52,7 @@ public class CommandExecutor : ICommandExecutor
             command.Status = CommandStatus.Started;
             command.StartedAt = DateTime.UtcNow;
             _repository.Update(command);
+            BroadcastCommand("CommandStarted", ModelAction.Created, command);
 
             var commandType = FindCommandType(command.Name);
             if (commandType == null)
@@ -107,6 +114,30 @@ public class CommandExecutor : ICommandExecutor
                 command.EndedAt = DateTime.UtcNow;
                 _repository.Update(command);
             }
+
+            BroadcastCommand("CommandCompleted", ModelAction.Updated, command);
+        }
+    }
+
+    private void BroadcastCommand(string eventName, ModelAction action, CommandModel command)
+    {
+        if (_signalRBroadcaster == null)
+        {
+            return;
+        }
+
+        try
+        {
+            _signalRBroadcaster.BroadcastMessage(new SignalRMessage
+            {
+                Name = eventName,
+                Action = action,
+                Body = command
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to broadcast {0} for command {1}", eventName, command?.Name);
         }
     }
 
@@ -154,9 +185,9 @@ public class CommandExecutor : ICommandExecutor
                         : typeName;
 
                     return string.Equals(typeName, trimmed, StringComparison.OrdinalIgnoreCase) ||
-                           string.Equals(typeName, trimmed + "Command", StringComparison.OrdinalIgnoreCase) ||
-                           string.Equals(typeNameWithoutSuffix, trimmed, StringComparison.OrdinalIgnoreCase) ||
-                           string.Equals(typeNameWithoutSuffix, nameWithoutSuffix, StringComparison.OrdinalIgnoreCase);
+                        string.Equals(typeName, trimmed + "Command", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(typeNameWithoutSuffix, trimmed, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(typeNameWithoutSuffix, nameWithoutSuffix, StringComparison.OrdinalIgnoreCase);
                 });
         });
     }
