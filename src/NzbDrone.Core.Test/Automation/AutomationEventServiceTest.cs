@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Automation;
+using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Automation;
@@ -42,6 +43,38 @@ public class AutomationEventServiceTest
 
         _subject.Handle(new TorrentStallResolvedEvent(torrent));
 
+        _automationService.Received(1).ExecuteScript(script, torrent);
+    }
+
+    [Test]
+    public void Handle_MediaEnrichedEvent_should_resolve_torrent_from_repository_and_dispatch_MediaEnriched_trigger()
+    {
+        var torrentRepository = Substitute.For<ITorrentRepository>();
+        var subject = new AutomationEventService(_automationService, torrentRepository);
+
+        var script = new AutomationScript
+        {
+            Id = 5,
+            Name = "On Media Enriched",
+            Trigger = AutomationTrigger.MediaEnriched,
+            IsEnabled = true,
+        };
+
+        _automationService.GetAll()
+            .Returns(new List<AutomationScript> { script });
+
+        var torrent = new Torrent
+        {
+            Id = 10,
+            Name = "Media.Torrent.1080p",
+            Status = TorrentStatus.Downloading,
+        };
+
+        torrentRepository.Get(10).Returns(torrent);
+
+        subject.Handle(new MediaEnrichedEvent { TorrentId = 10 });
+
+        torrentRepository.Received(1).Get(10);
         _automationService.Received(1).ExecuteScript(script, torrent);
     }
 }

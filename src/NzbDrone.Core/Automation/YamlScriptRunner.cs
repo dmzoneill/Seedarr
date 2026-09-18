@@ -106,6 +106,7 @@ public class YamlScriptRunner : IScriptRunner
                 variableContext["torrent.tracker"] = torrentCtx.tracker;
                 variableContext["torrent.status"] = torrentCtx.status;
                 variableContext["torrent.progress"] = torrentCtx.progress;
+                variableContext["torrent.progressPercent"] = torrent.Progress * 100.0;
                 variableContext["torrent.isPrivate"] = torrent.IsPrivate;
                 variableContext["torrent.isComplete"] = torrent.Progress >= 1.0f || torrent.Progress >= 0.999f || torrent.Status == TorrentStatus.Seeding;
                 variableContext["torrent.downloadSpeed"] = torrent.DownloadSpeed;
@@ -808,6 +809,12 @@ public class YamlScriptRunner : IScriptRunner
                                             torrentCtx.extractArchive(dest, del);
                                             logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] extractArchive (dest: {dest ?? "default"}, delete: {del})");
                                         }
+                                        else if (extractVal is string strVal && !string.IsNullOrWhiteSpace(strVal) && !bool.TryParse(strVal, out _))
+                                        {
+                                            var dest = SubstituteVariables(strVal, variableContext);
+                                            torrentCtx.extractArchive(dest);
+                                            logBuilder.AppendLine($"[{DateTime.UtcNow:HH:mm:ss}] [ACTION] extractArchive (dest: {dest})");
+                                        }
                                         else
                                         {
                                             torrentCtx.extractArchive();
@@ -815,7 +822,7 @@ public class YamlScriptRunner : IScriptRunner
                                         }
                                     }
 
-                                    if (action.TryGetValue("cleanUnwantedFiles", out var cleanVal) && cleanVal != null)
+                                    if ((action.TryGetValue("cleanFiles", out var cleanVal) || action.TryGetValue("cleanUnwantedFiles", out cleanVal)) && cleanVal != null)
                                     {
                                         if (cleanVal is IEnumerable<object> cleanList)
                                         {
@@ -1050,12 +1057,15 @@ public class YamlScriptRunner : IScriptRunner
             return !IsFalsy(trimmed);
         }
 
+        var isProgressCheck = condition.Contains("torrent.progress", StringComparison.OrdinalIgnoreCase) &&
+                                !condition.Contains("torrent.progressPercent", StringComparison.OrdinalIgnoreCase);
+
         if (substituted.Contains("=="))
         {
             var parts = substituted.Split(new[] { "==" }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2)
             {
-                return AreEqual(parts[0], parts[1]);
+                return AreEqual(parts[0], parts[1], isProgressCheck);
             }
         }
         else if (substituted.Contains("!="))
@@ -1063,7 +1073,7 @@ public class YamlScriptRunner : IScriptRunner
             var parts = substituted.Split(new[] { "!=" }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2)
             {
-                return !AreEqual(parts[0], parts[1]);
+                return !AreEqual(parts[0], parts[1], isProgressCheck);
             }
         }
         else if (substituted.Contains(">="))
@@ -1071,6 +1081,7 @@ public class YamlScriptRunner : IScriptRunner
             var parts = substituted.Split(new[] { ">=" }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
+                NormalizeProgress(ref l, ref r, isProgressCheck);
                 return l >= r;
             }
         }
@@ -1079,6 +1090,7 @@ public class YamlScriptRunner : IScriptRunner
             var parts = substituted.Split(new[] { "<=" }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
+                NormalizeProgress(ref l, ref r, isProgressCheck);
                 return l <= r;
             }
         }
@@ -1087,6 +1099,7 @@ public class YamlScriptRunner : IScriptRunner
             var parts = substituted.Split(new[] { '>' }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
+                NormalizeProgress(ref l, ref r, isProgressCheck);
                 return l > r;
             }
         }
@@ -1095,6 +1108,7 @@ public class YamlScriptRunner : IScriptRunner
             var parts = substituted.Split(new[] { '<' }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
+                NormalizeProgress(ref l, ref r, isProgressCheck);
                 return l < r;
             }
         }
@@ -1119,7 +1133,24 @@ public class YamlScriptRunner : IScriptRunner
             || string.Equals(clean, "null", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool AreEqual(string leftRaw, string rightRaw)
+    private static void NormalizeProgress(ref double left, ref double right, bool isProgressCheck)
+    {
+        if (!isProgressCheck)
+        {
+            return;
+        }
+
+        if (left <= 1.0 && right > 1.0)
+        {
+            left *= 100.0;
+        }
+        else if (right <= 1.0 && left > 1.0)
+        {
+            right *= 100.0;
+        }
+    }
+
+    private static bool AreEqual(string leftRaw, string rightRaw, bool isProgressCheck = false)
     {
         var left = leftRaw.Trim('\'', '"', ' ');
         var right = rightRaw.Trim('\'', '"', ' ');
@@ -1138,6 +1169,7 @@ public class YamlScriptRunner : IScriptRunner
         // Check numeric equivalence (e.g. 5.0 == 5)
         if (TryParseNumber(left, out var nLeft) && TryParseNumber(right, out var nRight))
         {
+            NormalizeProgress(ref nLeft, ref nRight, isProgressCheck);
             return Math.Abs(nLeft - nRight) < 0.000001;
         }
 

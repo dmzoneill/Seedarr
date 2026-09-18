@@ -54,11 +54,15 @@ public class AutomationEventService :
     IHandle<TaskFailedEvent>
 {
     private readonly IAutomationService _automationService;
+    private readonly ITorrentRepository? _torrentRepository;
     private readonly Logger _logger;
 
-    public AutomationEventService(IAutomationService automationService)
+    public AutomationEventService(
+        IAutomationService automationService,
+        ITorrentRepository? torrentRepository = null)
     {
         _automationService = automationService;
+        _torrentRepository = torrentRepository;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -135,9 +139,20 @@ public class AutomationEventService :
 
     public void Handle(MediaEnrichedEvent message)
     {
-        if (message?.TorrentId > 0)
+        if (message == null)
         {
-            DispatchTrigger(AutomationTrigger.MediaEnriched, null);
+            return;
+        }
+
+        var torrent = message.Torrent;
+        if (torrent == null && message.TorrentId > 0 && _torrentRepository != null)
+        {
+            torrent = _torrentRepository.Get(message.TorrentId);
+        }
+
+        if (torrent != null || message.TorrentId > 0)
+        {
+            DispatchTrigger(AutomationTrigger.MediaEnriched, torrent);
         }
     }
 

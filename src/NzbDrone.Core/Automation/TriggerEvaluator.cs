@@ -55,6 +55,7 @@ public static class TriggerEvaluator
             context["torrent.trackerUrl"] = torrent.TrackerUrl ?? string.Empty;
             context["torrent.status"] = torrent.Status.ToString();
             context["torrent.progress"] = torrent.Progress;
+            context["torrent.progressPercent"] = torrent.Progress * 100.0;
             context["torrent.isPrivate"] = torrent.IsPrivate;
             context["torrent.isComplete"] = torrent.Progress >= 1.0 || torrent.Progress >= 0.999 || torrent.ForceCompleted || torrent.Status == TorrentStatus.Seeding;
             context["torrent.seeders"] = torrent.Seeders;
@@ -170,12 +171,15 @@ public static class TriggerEvaluator
             return !IsFalsy(trimmed);
         }
 
+        var isProgressCheck = condition.Contains("torrent.progress", StringComparison.OrdinalIgnoreCase) &&
+                                !condition.Contains("torrent.progressPercent", StringComparison.OrdinalIgnoreCase);
+
         if (substituted.Contains("=="))
         {
             var parts = substituted.Split(new[] { "==" }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2)
             {
-                return AreEqual(parts[0], parts[1]);
+                return AreEqual(parts[0], parts[1], isProgressCheck);
             }
         }
         else if (substituted.Contains("!="))
@@ -183,7 +187,7 @@ public static class TriggerEvaluator
             var parts = substituted.Split(new[] { "!=" }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2)
             {
-                return !AreEqual(parts[0], parts[1]);
+                return !AreEqual(parts[0], parts[1], isProgressCheck);
             }
         }
         else if (substituted.Contains(">="))
@@ -191,6 +195,7 @@ public static class TriggerEvaluator
             var parts = substituted.Split(new[] { ">=" }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
+                NormalizeProgress(ref l, ref r, isProgressCheck);
                 return l >= r;
             }
         }
@@ -199,6 +204,7 @@ public static class TriggerEvaluator
             var parts = substituted.Split(new[] { "<=" }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
+                NormalizeProgress(ref l, ref r, isProgressCheck);
                 return l <= r;
             }
         }
@@ -207,6 +213,7 @@ public static class TriggerEvaluator
             var parts = substituted.Split(new[] { '>' }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
+                NormalizeProgress(ref l, ref r, isProgressCheck);
                 return l > r;
             }
         }
@@ -215,6 +222,7 @@ public static class TriggerEvaluator
             var parts = substituted.Split(new[] { '<' }, StringSplitOptions.TrimEntries);
             if (parts.Length == 2 && TryParseNumber(parts[0], out var l) && TryParseNumber(parts[1], out var r))
             {
+                NormalizeProgress(ref l, ref r, isProgressCheck);
                 return l < r;
             }
         }
@@ -239,7 +247,24 @@ public static class TriggerEvaluator
             || string.Equals(clean, "null", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool AreEqual(string leftRaw, string rightRaw)
+    private static void NormalizeProgress(ref double left, ref double right, bool isProgressCheck)
+    {
+        if (!isProgressCheck)
+        {
+            return;
+        }
+
+        if (left <= 1.0 && right > 1.0)
+        {
+            left *= 100.0;
+        }
+        else if (right <= 1.0 && left > 1.0)
+        {
+            right *= 100.0;
+        }
+    }
+
+    private static bool AreEqual(string leftRaw, string rightRaw, bool isProgressCheck = false)
     {
         var left = leftRaw.Trim('\'', '"', ' ');
         var right = rightRaw.Trim('\'', '"', ' ');
@@ -256,6 +281,7 @@ public static class TriggerEvaluator
 
         if (TryParseNumber(left, out var nLeft) && TryParseNumber(right, out var nRight))
         {
+            NormalizeProgress(ref nLeft, ref nRight, isProgressCheck);
             return Math.Abs(nLeft - nRight) < 0.000001;
         }
 

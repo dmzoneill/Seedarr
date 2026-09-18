@@ -7,8 +7,11 @@ using NUnit.Framework;
 using NzbDrone.Core.Automation;
 using NzbDrone.Core.Extraction;
 using NzbDrone.Core.Messaging.Events;
+using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.TrackerBoost;
+using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Test.Automation;
 
@@ -225,5 +228,200 @@ for (var i = 0; i < 2000; i++) {
 
         Task.Delay(100).Wait();
         extractor.Received(1).ExtractTorrentArchiveAsync(torrent, "/dest", true);
+    }
+
+    [Test]
+    public void ExecuteScript_should_recheck_torrent_and_publish_status_changed_event()
+    {
+        var torrent = new Torrent
+        {
+            Id = 10,
+            Name = "Recheck Torrent",
+            Status = TorrentStatus.Downloading,
+            Progress = 0.85,
+        };
+
+        var script = new AutomationScript
+        {
+            Id = 1,
+            Name = "Recheck Script",
+            Language = AutomationLanguage.Yaml,
+            Code = "steps:\n  - name: Recheck\n    actions:\n      - recheck: true\n",
+        };
+
+        var result = _subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Checking));
+        Assert.That(torrent.Progress, Is.EqualTo(0));
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStatusChangedEvent>(e => e.Torrent == torrent && e.NewStatus == TorrentStatus.Checking));
+        _torrentRepository.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public void ExecuteScript_should_remove_matching_tracker_from_torrent()
+    {
+        var torrent = new Torrent
+        {
+            Id = 11,
+            Name = "Tracker Remove Torrent",
+            TrackerUrl = "http://tracker.dead.org:6969/announce",
+        };
+
+        var script = new AutomationScript
+        {
+            Id = 2,
+            Name = "Remove Tracker Script",
+            Language = AutomationLanguage.Yaml,
+            Code = "steps:\n  - name: Remove Tracker\n    actions:\n      - removeTracker: 'tracker.dead.org'\n",
+        };
+
+        var result = _subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(torrent.TrackerUrl, Is.Empty);
+        _torrentRepository.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public void ExecuteScript_should_dispatch_direct_webhooks()
+    {
+        var webhookDispatcher = Substitute.For<IWebhookDispatcher>();
+        var subject = new AutomationService(
+            _scriptRepository,
+            _torrentRepository,
+            _tagService,
+            _eventAggregator,
+            webhookDispatcher: webhookDispatcher);
+
+        var torrent = new Torrent { Id = 12, Name = "Webhook Torrent" };
+        var script = new AutomationScript
+        {
+            Id = 3,
+            Name = "Webhook Script",
+            Language = AutomationLanguage.Yaml,
+            Code = "steps:\n" +
+                "  - name: Send Webhooks\n" +
+                "    actions:\n" +
+                "      - sendDiscordWebhook:\n" +
+                "          url: 'https://discord.com/api/webhooks/123/token'\n" +
+                "          title: 'Discord Title'\n" +
+                "      - sendTelegramMessage:\n" +
+                "          token: '12345:bottoken'\n" +
+                "          chatId: '987654'\n" +
+                "          message: 'Telegram Message'\n" +
+                "      - sendNtfy:\n" +
+                "          server: 'https://ntfy.sh'\n" +
+                "          topic: 'my-topic'\n" +
+                "          message: 'Ntfy Message'\n" +
+                "      - sendPushover:\n" +
+                "          token: 'apptoken'\n" +
+                "          user: 'userkey'\n" +
+                "          message: 'Pushover Message'\n",
+        };
+
+        var result = subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Task.Delay(100).Wait();
+
+        webhookDispatcher.Received(1).DispatchAsync(
+            Arg.Is<string>(u => u == "https://discord.com/api/webhooks/123/token"),
+            Arg.Any<object>(),
+            Arg.Any<string>(),
+            Arg.Any<System.Threading.CancellationToken>());
+
+        webhookDispatcher.Received(1).DispatchAsync(
+            Arg.Is<string>(u => u == "https://api.telegram.org/bot12345:bottoken/sendMessage"),
+            Arg.Any<object>(),
+            Arg.Any<string>(),
+            Arg.Any<System.Threading.CancellationToken>());
+
+        webhookDispatcher.Received(1).DispatchAsync(
+            Arg.Is<string>(u => u == "https://ntfy.sh/my-topic"),
+            Arg.Any<object>(),
+            Arg.Any<string>(),
+            Arg.Any<System.Threading.CancellationToken>());
+
+        webhookDispatcher.Received(1).DispatchAsync(
+            Arg.Is<string>(u => u == "https://api.pushover.net/1/messages.json"),
+            Arg.Any<object>(),
+            Arg.Any<string>(),
+            Arg.Any<System.Threading.CancellationToken>());
+    }
+
+    [Test]
+    public void ExecuteScript_should_boost_tracker_when_requested()
+    {
+        var trackerBoost = Substitute.For<ITrackerBoostService>();
+        var subject = new AutomationService(
+            _scriptRepository,
+            _torrentRepository,
+            _tagService,
+            _eventAggregator,
+            trackerBoostService: trackerBoost);
+
+        var torrent = new Torrent { Id = 15, Name = "Boost Torrent" };
+        var script = new AutomationScript
+        {
+            Id = 4,
+            Name = "Boost Script",
+            Language = AutomationLanguage.Yaml,
+            Code = "steps:\n  - name: Boost\n    actions:\n      - boostTracker: true\n",
+        };
+
+        var result = subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Task.Delay(100).Wait();
+        trackerBoost.Received(1).BoostTorrentAsync(15);
+    }
+
+    [Test]
+    public void ExecuteScript_should_reannounce_when_requested()
+    {
+        var trackerAnnounce = Substitute.For<ITrackerAnnounceService>();
+        var trackerBoost = Substitute.For<ITrackerBoostService>();
+        var subject = new AutomationService(
+            _scriptRepository,
+            _torrentRepository,
+            _tagService,
+            _eventAggregator,
+            trackerAnnounceService: trackerAnnounce,
+            trackerBoostService: trackerBoost);
+
+        var torrent = new Torrent { Id = 16, Name = "Reannounce Torrent", InfoHash = "abc123hash" };
+        var script = new AutomationScript
+        {
+            Id = 5,
+            Name = "Reannounce Script",
+            Language = AutomationLanguage.Yaml,
+            Code = "steps:\n  - name: Reannounce\n    actions:\n      - reannounce: true\n",
+        };
+
+        var result = subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        Task.Delay(100).Wait();
+        trackerAnnounce.Received(1).AnnounceTorrent(torrent, force: true);
+        trackerBoost.Received(1).ReannounceDownloadClients("abc123hash");
+    }
+
+    [Test]
+    public void ExecuteScript_should_ban_peer_and_publish_event()
+    {
+        var torrent = new Torrent { Id = 17, Name = "Ban Peer Torrent", InfoHash = "peerhash" };
+        var script = new AutomationScript
+        {
+            Id = 6,
+            Name = "Ban Peer Script",
+            Language = AutomationLanguage.Yaml,
+            Code = "steps:\n  - name: Ban\n    actions:\n      - banPeer: '192.168.1.100'\n",
+        };
+
+        var result = _subject.ExecuteScript(script, torrent);
+
+        Assert.That(result.Success, Is.True);
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<PeerBannedEvent>(e => e.PeerIp == "192.168.1.100" && e.InfoHash == "peerhash"));
     }
 }
