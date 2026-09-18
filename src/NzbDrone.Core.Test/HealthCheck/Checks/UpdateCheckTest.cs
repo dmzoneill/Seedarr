@@ -4,49 +4,92 @@ using NzbDrone.Core.HealthCheck;
 using NzbDrone.Core.HealthCheck.Checks;
 using NzbDrone.Core.Update;
 
-namespace NzbDrone.Core.Test.HealthCheck.Checks
+namespace NzbDrone.Core.Test.HealthCheck.Checks;
+
+[TestFixture]
+public class UpdateCheckTest
 {
-    [TestFixture]
-    public class UpdateCheckTest
+    private UpdateCheck _subject;
+    private IUpdateService _updateService;
+
+    [SetUp]
+    public void SetUp()
     {
-        private UpdateCheck _subject;
-        private IUpdateService _updateService;
+        _updateService = Substitute.For<IUpdateService>();
+        _subject = new UpdateCheck(_updateService);
+    }
 
-        [SetUp]
-        public void SetUp()
+    [Test]
+    public void Check_should_return_ok_when_no_update_available()
+    {
+        _updateService.CachedUpdateInfo.Returns(new UpdateInfo
         {
-            _updateService = Substitute.For<IUpdateService>();
-            _subject = new UpdateCheck(_updateService);
-        }
+            CurrentVersion = "1.0.0",
+            LatestVersion = "1.0.0",
+            UpdateAvailable = false
+        });
 
-        [Test]
-        public void Check_should_return_ok_when_no_update_available()
+        var result = _subject.Check();
+
+        Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
+    }
+
+    [Test]
+    public void Check_should_return_notice_when_update_available()
+    {
+        _updateService.CachedUpdateInfo.Returns(new UpdateInfo
         {
-            _updateService.CheckForUpdate().Returns(new UpdateInfo
-            {
-                CurrentVersion = "1.0.0",
-                LatestVersion = "1.0.0",
-                UpdateAvailable = false
-            });
+            CurrentVersion = "1.0.0",
+            LatestVersion = "2.0.0",
+            UpdateAvailable = true
+        });
 
-            var result = _subject.Check();
+        var result = _subject.Check();
 
-            Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
-        }
+        Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Notice));
+    }
 
-        [Test]
-        public void Check_should_return_notice_when_update_available()
+    [Test]
+    public void Check_should_not_call_synchronous_CheckForUpdate()
+    {
+        _updateService.CachedUpdateInfo.Returns(new UpdateInfo
         {
-            _updateService.CheckForUpdate().Returns(new UpdateInfo
-            {
-                CurrentVersion = "1.0.0",
-                LatestVersion = "2.0.0",
-                UpdateAvailable = true
-            });
+            CurrentVersion = "1.0.0",
+            LatestVersion = "1.0.0",
+            UpdateAvailable = false
+        });
 
-            var result = _subject.Check();
+        _subject.Check();
 
-            Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Notice));
-        }
+        _updateService.DidNotReceive().CheckForUpdate(Arg.Any<bool>());
+    }
+
+    [Test]
+    public void Check_should_trigger_background_update_and_return_ok_when_cache_is_null()
+    {
+        _updateService.CachedUpdateInfo.Returns((UpdateInfo)null);
+
+        var result = _subject.Check();
+
+        Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
+        _updateService.Received().CheckForUpdateAsync(Arg.Any<bool>());
+        _updateService.DidNotReceive().CheckForUpdate(Arg.Any<bool>());
+    }
+
+    [Test]
+    public void Check_should_trigger_background_update_when_cache_is_expired()
+    {
+        _updateService.CachedUpdateInfo.Returns(new UpdateInfo
+        {
+            CurrentVersion = "1.0.0",
+            LatestVersion = "1.0.0",
+            UpdateAvailable = false
+        });
+        _updateService.IsCacheExpired.Returns(true);
+
+        var result = _subject.Check();
+
+        Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
+        _updateService.Received().CheckForUpdateAsync(Arg.Any<bool>());
     }
 }

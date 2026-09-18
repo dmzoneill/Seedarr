@@ -52,6 +52,15 @@ public readonly struct SemVersion : IComparable<SemVersion>, IComparable, IEquat
             prerelease = clean[(dashIndex + 1)..];
             clean = clean[..dashIndex];
         }
+        else
+        {
+            var match = Regex.Match(clean, @"^([0-9]+(?:\.[0-9]+)*)[-_.]?([a-zA-Z]+[0-9A-Za-z.-]*)$");
+            if (match.Success)
+            {
+                clean = match.Groups[1].Value;
+                prerelease = match.Groups[2].Value;
+            }
+        }
 
         if (string.IsNullOrWhiteSpace(clean))
         {

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Reflection;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using NzbDrone.Core.Test.TestHelpers;
 using NzbDrone.Core.Update;
@@ -1087,5 +1088,336 @@ public class UpdateServiceTest
     {
         var result = InvokeBuildResult("1.0.0", "1.1.0", new List<ReleaseInfo>());
         Assert.That(result.IsContainerized, Is.EqualTo(UpdateService.IsRunningInContainer()));
+    }
+
+    // --- Issue #187 Rate Limiting, Changelog Fallback, and Prerelease Tests ---
+
+    [Test]
+    public void CheckForUpdate_should_set_cache_expiry_from_x_ratelimit_reset_header_on_403()
+    {
+        var resetTime = DateTime.UtcNow.AddMinutes(45);
+        var resetEpoch = new DateTimeOffset(resetTime).ToUnixTimeSeconds();
+        var handler = new MockHttpMessageHandler();
+        handler.EnqueueWithHeaders(
+            HttpStatusCode.Forbidden,
+            "{\"message\": \"API rate limit exceeded\"}",
+            new Dictionary<string, string>
+            {
+                ["x-ratelimit-reset"] = resetEpoch.ToString(),
+                ["x-ratelimit-remaining"] = "0"
+            });
+        var subject = CreateWithHandler(handler);
+
+        subject.CheckForUpdate();
+
+        var expiryField = typeof(UpdateService).GetField("_cacheExpiry", BindingFlags.NonPublic | BindingFlags.Instance);
+        var expiry = (DateTime)expiryField.GetValue(subject);
+
+        Assert.That(Math.Abs((expiry - DateTimeOffset.FromUnixTimeSeconds(resetEpoch).UtcDateTime).TotalSeconds), Is.LessThan(2));
+    }
+
+    [Test]
+    public void CheckForUpdate_should_set_cache_expiry_from_retry_after_header_on_429()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.EnqueueWithHeaders(
+            (HttpStatusCode)429,
+            "{\"message\": \"Too Many Requests\"}",
+            new Dictionary<string, string>
+            {
+                ["retry-after"] = "1800"
+            });
+        var subject = CreateWithHandler(handler);
+
+        var before = DateTime.UtcNow;
+        subject.CheckForUpdate();
+        var after = DateTime.UtcNow;
+
+        var expiryField = typeof(UpdateService).GetField("_cacheExpiry", BindingFlags.NonPublic | BindingFlags.Instance);
+        var expiry = (DateTime)expiryField.GetValue(subject);
+
+        Assert.That(expiry, Is.GreaterThanOrEqualTo(before.AddSeconds(1800)));
+        Assert.That(expiry, Is.LessThanOrEqualTo(after.AddSeconds(1805)));
+    }
+
+    [Test]
+    public void CheckForUpdate_should_default_cache_expiry_to_30_minutes_on_403_without_headers()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.Forbidden, "Forbidden");
+        var subject = CreateWithHandler(handler);
+
+        var before = DateTime.UtcNow;
+        subject.CheckForUpdate();
+        var after = DateTime.UtcNow;
+
+        var expiryField = typeof(UpdateService).GetField("_cacheExpiry", BindingFlags.NonPublic | BindingFlags.Instance);
+        var expiry = (DateTime)expiryField.GetValue(subject);
+
+        Assert.That(expiry, Is.GreaterThanOrEqualTo(before.AddMinutes(29)));
+        Assert.That(expiry, Is.LessThanOrEqualTo(after.AddMinutes(31)));
+    }
+
+    [Test]
+    public void CheckForUpdate_should_default_cache_expiry_to_30_minutes_on_network_failure()
+    {
+        var subject = CreateWithThrowingHandler(new HttpRequestException("network down"));
+
+        var before = DateTime.UtcNow;
+        subject.CheckForUpdate();
+        var after = DateTime.UtcNow;
+
+        var expiryField = typeof(UpdateService).GetField("_cacheExpiry", BindingFlags.NonPublic | BindingFlags.Instance);
+        var expiry = (DateTime)expiryField.GetValue(subject);
+
+        Assert.That(expiry, Is.GreaterThanOrEqualTo(before.AddMinutes(29)));
+        Assert.That(expiry, Is.LessThanOrEqualTo(after.AddMinutes(31)));
+    }
+
+    [Test]
+    public void CheckForUpdate_should_preserve_last_known_valid_releases_on_403_rate_limit()
+    {
+        var handler = new MockHttpMessageHandler();
+        var validJson = """
+            [
+                {
+                    "tag_name": "v2.0.0",
+                    "draft": false,
+                    "published_at": "2024-05-01T00:00:00Z",
+                    "body": "Valid release",
+                    "html_url": "https://github.com/test/releases/tag/v2.0.0"
+                }
+            ]
+            """;
+        handler.Enqueue(HttpStatusCode.OK, validJson);
+        var subject = CreateWithHandler(handler);
+
+        var firstResult = subject.CheckForUpdate();
+        Assert.That(firstResult.Releases, Has.Count.EqualTo(1));
+
+        var expiryField = typeof(UpdateService).GetField("_cacheExpiry", BindingFlags.NonPublic | BindingFlags.Instance);
+        expiryField.SetValue(subject, DateTime.UtcNow.AddMinutes(-5));
+
+        var resetTime = DateTime.UtcNow.AddMinutes(45);
+        var resetEpoch = new DateTimeOffset(resetTime).ToUnixTimeSeconds();
+        handler.EnqueueWithHeaders(
+            HttpStatusCode.Forbidden,
+            "{\"message\": \"API rate limit exceeded\"}",
+            new Dictionary<string, string>
+            {
+                ["x-ratelimit-reset"] = resetEpoch.ToString()
+            });
+
+        var secondResult = subject.CheckForUpdate();
+
+        Assert.That(secondResult.Releases, Has.Count.EqualTo(1));
+        Assert.That(secondResult.Releases[0].Version, Is.EqualTo("2.0.0"));
+        var newExpiry = (DateTime)expiryField.GetValue(subject);
+        Assert.That(newExpiry, Is.GreaterThan(DateTime.UtcNow.AddMinutes(30)));
+    }
+
+    [Test]
+    public void CheckForUpdate_should_preserve_last_known_valid_releases_on_network_failure()
+    {
+        var handler = new MockHttpMessageHandler();
+        var validJson = """
+            [
+                {
+                    "tag_name": "v3.0.0",
+                    "draft": false,
+                    "published_at": "2024-05-01T00:00:00Z",
+                    "body": "Valid release",
+                    "html_url": "https://github.com/test/releases/tag/v3.0.0"
+                }
+            ]
+            """;
+        handler.Enqueue(HttpStatusCode.OK, validJson);
+        handler.Enqueue(HttpStatusCode.ServiceUnavailable, "Service Unavailable");
+        var subject = CreateWithHandler(handler);
+
+        var firstResult = subject.CheckForUpdate();
+        Assert.That(firstResult.Releases, Has.Count.EqualTo(1));
+
+        var expiryField = typeof(UpdateService).GetField("_cacheExpiry", BindingFlags.NonPublic | BindingFlags.Instance);
+        expiryField.SetValue(subject, DateTime.UtcNow.AddMinutes(-5));
+
+        var secondResult = subject.CheckForUpdate();
+
+        Assert.That(secondResult.Releases, Has.Count.EqualTo(1));
+        Assert.That(secondResult.Releases[0].Version, Is.EqualTo("3.0.0"));
+    }
+
+    [Test]
+    public void SemVersion_TryParse_should_parse_prerelease_without_dash()
+    {
+        var success1 = SemVersion.TryParse("v1.6.7beta1", out var v1);
+        Assert.That(success1, Is.True);
+        Assert.That(v1.Major, Is.EqualTo(1));
+        Assert.That(v1.Minor, Is.EqualTo(6));
+        Assert.That(v1.Patch, Is.EqualTo(7));
+        Assert.That(v1.Prerelease, Is.EqualTo("beta1"));
+
+        var success2 = SemVersion.TryParse("v2.0.0rc2", out var v2);
+        Assert.That(success2, Is.True);
+        Assert.That(v2.Major, Is.EqualTo(2));
+        Assert.That(v2.Minor, Is.EqualTo(0));
+        Assert.That(v2.Patch, Is.EqualTo(0));
+        Assert.That(v2.Prerelease, Is.EqualTo("rc2"));
+    }
+
+    [Test]
+    public void CheckForUpdate_should_parse_prereleases_without_dash_and_not_discard_them()
+    {
+        var json = """
+            [
+                {
+                    "tag_name": "v1.6.7beta1",
+                    "draft": false,
+                    "published_at": "2024-06-01T00:00:00Z",
+                    "body": "Beta release",
+                    "html_url": "https://github.com/test/releases/tag/v1.6.7beta1"
+                },
+                {
+                    "tag_name": "v2.0.0rc1",
+                    "draft": false,
+                    "published_at": "2024-07-01T00:00:00Z",
+                    "body": "RC release",
+                    "html_url": "https://github.com/test/releases/tag/v2.0.0rc1"
+                }
+            ]
+            """;
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, json);
+        var subject = CreateWithHandler(handler);
+
+        var result = subject.CheckForUpdate();
+
+        Assert.That(result.Releases, Has.Count.EqualTo(2));
+        Assert.That(result.Releases[0].Version, Is.EqualTo("1.6.7beta1"));
+        Assert.That(result.Releases[1].Version, Is.EqualTo("2.0.0rc1"));
+        Assert.That(result.LatestVersion, Is.EqualTo("2.0.0rc1"));
+    }
+
+    [Test]
+    public void GetLatestVersion_should_extract_core_version_for_prerelease()
+    {
+        var cached = new UpdateInfo
+        {
+            CurrentVersion = "1.0.0",
+            LatestVersion = "1.6.7-beta1",
+            Releases = new List<ReleaseInfo>(),
+        };
+        SetCachedResult(cached, DateTime.UtcNow.AddHours(5));
+
+        var result = _subject.GetLatestVersion();
+
+        Assert.That(result, Is.EqualTo(new Version(1, 6, 7)));
+    }
+
+    [Test]
+    public void CheckForUpdate_should_invoke_changelog_fallback_when_remote_fetch_fails()
+    {
+        var changelogReleases = new List<ReleaseInfo>
+        {
+            new() { Version = "1.5.0", Body = "Local changelog release", PublishedAt = DateTime.UtcNow }
+        };
+        UpdateService.ChangelogProvider = () => changelogReleases;
+
+        try
+        {
+            var handler = new MockHttpMessageHandler();
+            handler.Enqueue(HttpStatusCode.ServiceUnavailable, "Service Unavailable");
+            var subject = CreateWithHandler(handler);
+
+            var result = subject.CheckForUpdate();
+
+            Assert.That(result.Releases, Has.Count.EqualTo(1));
+            Assert.That(result.Releases[0].Version, Is.EqualTo("1.5.0"));
+            Assert.That(result.LatestVersion, Is.EqualTo("1.5.0"));
+        }
+        finally
+        {
+            UpdateService.ChangelogProvider = null;
+        }
+    }
+
+    [Test]
+    public void CheckForUpdate_should_invoke_changelog_fallback_on_rate_limit_when_no_cached_releases()
+    {
+        var changelogReleases = new List<ReleaseInfo>
+        {
+            new() { Version = "1.4.0", Body = "Changelog release", PublishedAt = DateTime.UtcNow }
+        };
+        UpdateService.ChangelogProvider = () => changelogReleases;
+
+        try
+        {
+            var handler = new MockHttpMessageHandler();
+            handler.Enqueue(HttpStatusCode.Forbidden, "Rate limit");
+            var subject = CreateWithHandler(handler);
+
+            var result = subject.CheckForUpdate();
+
+            Assert.That(result.Releases, Has.Count.EqualTo(1));
+            Assert.That(result.Releases[0].Version, Is.EqualTo("1.4.0"));
+        }
+        finally
+        {
+            UpdateService.ChangelogProvider = null;
+        }
+    }
+
+    [Test]
+    public async Task CheckForUpdateAsync_should_invoke_changelog_fallback_when_remote_fetch_fails()
+    {
+        var changelogReleases = new List<ReleaseInfo>
+        {
+            new() { Version = "1.7.0", Body = "Async changelog release", PublishedAt = DateTime.UtcNow }
+        };
+        UpdateService.ChangelogProvider = () => changelogReleases;
+
+        try
+        {
+            var handler = new MockHttpMessageHandler();
+            handler.Enqueue(HttpStatusCode.InternalServerError, "Error");
+            var subject = CreateWithHandler(handler);
+
+            var result = await subject.CheckForUpdateAsync();
+
+            Assert.That(result.Releases, Has.Count.EqualTo(1));
+            Assert.That(result.Releases[0].Version, Is.EqualTo("1.7.0"));
+        }
+        finally
+        {
+            UpdateService.ChangelogProvider = null;
+        }
+    }
+
+    [Test]
+    public void CachedUpdateInfo_should_return_cached_instance_without_network_call()
+    {
+        var cached = new UpdateInfo
+        {
+            CurrentVersion = "1.0.0",
+            LatestVersion = "2.0.0",
+            UpdateAvailable = true
+        };
+        SetCachedResult(cached, DateTime.UtcNow.AddHours(1));
+
+        Assert.That(_subject.CachedUpdateInfo, Is.SameAs(cached));
+    }
+
+    [Test]
+    public void IsCacheExpired_should_return_true_when_expired_or_null()
+    {
+        SetCachedResult(null, DateTime.MinValue);
+        Assert.That(_subject.IsCacheExpired, Is.True);
+
+        var cached = new UpdateInfo();
+        SetCachedResult(cached, DateTime.UtcNow.AddMinutes(-10));
+        Assert.That(_subject.IsCacheExpired, Is.True);
+
+        SetCachedResult(cached, DateTime.UtcNow.AddMinutes(10));
+        Assert.That(_subject.IsCacheExpired, Is.False);
     }
 }
