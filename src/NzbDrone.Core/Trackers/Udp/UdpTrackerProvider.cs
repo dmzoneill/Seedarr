@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -22,18 +23,104 @@ public class UdpTrackerProvider : ITrackerProvider
     private const int ActionError = 3;
     public const int DefaultMaxRetries = 4;
     public const int MaxScrapeHashesPerBatch = 74;
+    public const int ConnectionIdExpirySeconds = 60;
 
+    private readonly ConcurrentDictionary<string, (long ConnectionId, DateTime ExpiresAtUtc)> _connectionCache = new();
     private readonly IConfigService _configService;
     private readonly Logger _logger;
 
     public string Name => "UDP";
 
     internal int MaxRetries { get; set; } = DefaultMaxRetries;
+    internal Func<DateTime> UtcNow { get; set; } = () => DateTime.UtcNow;
 
     public UdpTrackerProvider(IConfigService configService)
     {
         _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
+    }
+
+    public void ClearConnectionCache()
+    {
+        _connectionCache.Clear();
+    }
+
+    public bool InvalidateConnection(string trackerUrl)
+    {
+        if (string.IsNullOrWhiteSpace(trackerUrl))
+        {
+            return false;
+        }
+
+        if (Uri.TryCreate(trackerUrl, UriKind.Absolute, out var uri))
+        {
+            return InvalidateConnection(uri);
+        }
+
+        return _connectionCache.TryRemove(trackerUrl.Trim().ToLowerInvariant(), out _);
+    }
+
+    public bool InvalidateConnection(Uri trackerUri)
+    {
+        if (trackerUri == null)
+        {
+            return false;
+        }
+
+        return _connectionCache.TryRemove(GetCacheKey(trackerUri), out _);
+    }
+
+    internal void EvictConnection(string cacheKey)
+    {
+        if (!string.IsNullOrEmpty(cacheKey))
+        {
+            _connectionCache.TryRemove(cacheKey, out _);
+        }
+    }
+
+    internal bool TryGetCachedConnection(string trackerUrl, out (long ConnectionId, DateTime ExpiresAtUtc) entry)
+    {
+        if (Uri.TryCreate(trackerUrl, UriKind.Absolute, out var uri))
+        {
+            return _connectionCache.TryGetValue(GetCacheKey(uri), out entry);
+        }
+
+        return _connectionCache.TryGetValue(trackerUrl.Trim().ToLowerInvariant(), out entry);
+    }
+
+    internal void SetCachedConnection(string trackerUrl, long connectionId, DateTime expiresAtUtc)
+    {
+        var key = Uri.TryCreate(trackerUrl, UriKind.Absolute, out var uri)
+            ? GetCacheKey(uri)
+            : trackerUrl.Trim().ToLowerInvariant();
+
+        _connectionCache[key] = (connectionId, expiresAtUtc);
+    }
+
+    private static string GetCacheKey(Uri uri)
+    {
+        return uri.Port > 0
+            ? $"{uri.Host}:{uri.Port}".ToLowerInvariant()
+            : uri.Host.ToLowerInvariant();
+    }
+
+    private async Task<long> GetConnectionIdAsync(UdpClient client, Uri uri, CancellationToken cancellationToken = default)
+    {
+        var cacheKey = GetCacheKey(uri);
+        var now = UtcNow();
+
+        if (_connectionCache.TryGetValue(cacheKey, out var entry) && now < entry.ExpiresAtUtc)
+        {
+            _logger.Debug("Reusing cached UDP connection ID for {0}", cacheKey);
+            return entry.ConnectionId;
+        }
+
+        var connectionId = await ConnectAsync(client, cancellationToken);
+        var expiresAtUtc = UtcNow().AddSeconds(ConnectionIdExpirySeconds);
+        _connectionCache[cacheKey] = (connectionId, expiresAtUtc);
+        _logger.Debug("Cached new UDP connection ID for {0} (expires in {1}s)", cacheKey, ConnectionIdExpirySeconds);
+
+        return connectionId;
     }
 
     internal virtual UdpClient CreateClient(int timeoutMs)
@@ -129,15 +216,17 @@ public class UdpTrackerProvider : ITrackerProvider
 
     public async Task<TrackerAnnounceResponse> AnnounceAsync(TrackerAnnounceRequest request, CancellationToken cancellationToken = default)
     {
+        string cacheKey = null;
         try
         {
             var timeoutMs = _configService.UdpTrackerTimeoutSeconds * 1000;
             var uri = new Uri(request.TrackerUrl);
+            cacheKey = GetCacheKey(uri);
             using var client = CreateClient(timeoutMs);
 
             client.Connect(uri.Host, uri.Port);
 
-            var connectionId = await ConnectAsync(client, cancellationToken);
+            var connectionId = await GetConnectionIdAsync(client, uri, cancellationToken);
 
             var transactionId = GenerateTransactionId();
             var announceRequest = BuildAnnouncePacket(connectionId, transactionId, request);
@@ -151,10 +240,17 @@ public class UdpTrackerProvider : ITrackerProvider
                 addressFamily = AddressFamily.InterNetworkV6;
             }
 
-            return ParseAnnounceResponse(response, transactionId, addressFamily);
+            var announceResponse = ParseAnnounceResponse(response, transactionId, addressFamily);
+            if (!announceResponse.Success)
+            {
+                EvictConnection(cacheKey);
+            }
+
+            return announceResponse;
         }
         catch (Exception ex)
         {
+            EvictConnection(cacheKey);
             _logger.Error(ex, "UDP announce failed for {0}", request.TrackerUrl);
             return new TrackerAnnounceResponse
             {
@@ -171,15 +267,17 @@ public class UdpTrackerProvider : ITrackerProvider
 
     public async Task<TrackerScrapeResponse> ScrapeAsync(string infoHash, string trackerUrl, CancellationToken cancellationToken = default)
     {
+        string cacheKey = null;
         try
         {
             var timeoutMs = _configService.UdpTrackerTimeoutSeconds * 1000;
             var uri = new Uri(trackerUrl);
+            cacheKey = GetCacheKey(uri);
             using var client = CreateClient(timeoutMs);
 
             client.Connect(uri.Host, uri.Port);
 
-            var connectionId = await ConnectAsync(client, cancellationToken);
+            var connectionId = await GetConnectionIdAsync(client, uri, cancellationToken);
             var transactionId = GenerateTransactionId();
 
             var packet = BuildScrapePacket(connectionId, transactionId, new[] { infoHash });
@@ -188,12 +286,17 @@ public class UdpTrackerProvider : ITrackerProvider
             var response = receiveResult.Buffer;
 
             var results = ParseScrapeResponse(response, transactionId, new[] { infoHash });
-            return results.TryGetValue(infoHash, out var scrapeResponse)
-                ? scrapeResponse
-                : new TrackerScrapeResponse { Success = false, FailureReason = "Unknown scrape error" };
+            if (!results.TryGetValue(infoHash, out var scrapeResponse) || !scrapeResponse.Success)
+            {
+                EvictConnection(cacheKey);
+                return scrapeResponse ?? new TrackerScrapeResponse { Success = false, FailureReason = "Unknown scrape error" };
+            }
+
+            return scrapeResponse;
         }
         catch (Exception ex)
         {
+            EvictConnection(cacheKey);
             _logger.Error(ex, "UDP scrape failed for {0}", trackerUrl);
             return new TrackerScrapeResponse { Success = false, FailureReason = ex.Message };
         }
@@ -245,15 +348,17 @@ public class UdpTrackerProvider : ITrackerProvider
             return result;
         }
 
+        string cacheKey = null;
         try
         {
             var timeoutMs = _configService.UdpTrackerTimeoutSeconds * 1000;
             var uri = new Uri(trackerUrl);
+            cacheKey = GetCacheKey(uri);
             using var client = CreateClient(timeoutMs);
 
             client.Connect(uri.Host, uri.Port);
 
-            var connectionId = await ConnectAsync(client, cancellationToken);
+            var connectionId = await GetConnectionIdAsync(client, uri, cancellationToken);
 
             for (var i = 0; i < hashList.Count; i += MaxScrapeHashesPerBatch)
             {
@@ -266,13 +371,24 @@ public class UdpTrackerProvider : ITrackerProvider
                     var receiveResult = await SendAndReceiveAsync(client, packet, transactionId, cancellationToken);
                     var batchResponses = ParseScrapeResponse(receiveResult.Buffer, transactionId, batch);
 
+                    var anyFailed = false;
                     foreach (var kvp in batchResponses)
                     {
                         result[kvp.Key] = kvp.Value;
+                        if (!kvp.Value.Success)
+                        {
+                            anyFailed = true;
+                        }
+                    }
+
+                    if (anyFailed)
+                    {
+                        EvictConnection(cacheKey);
                     }
                 }
                 catch (Exception ex)
                 {
+                    EvictConnection(cacheKey);
                     _logger.Error(ex, "UDP batch scrape chunk failed for {0}", trackerUrl);
                     foreach (var hash in batch)
                     {
@@ -287,6 +403,7 @@ public class UdpTrackerProvider : ITrackerProvider
         }
         catch (Exception ex)
         {
+            EvictConnection(cacheKey);
             _logger.Error(ex, "UDP batch scrape failed for {0}", trackerUrl);
             foreach (var hash in hashList)
             {

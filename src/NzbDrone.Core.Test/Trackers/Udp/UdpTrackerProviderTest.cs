@@ -1629,4 +1629,463 @@ public class UdpTrackerProviderTest
         Assert.That(results[hashes[0]].Success, Is.False);
         Assert.That(results[hashes[1]].Success, Is.False);
     }
+
+    [Test]
+    public void Announce_should_cache_connection_id_and_reuse_for_subsequent_announces_within_60s()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var connectCount = 0;
+        var announceCount = 0;
+        var receivedConnectionIds = new List<long>();
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            // First request should be Connect (action=0)
+            var p1 = server.Receive(ref ep);
+            var action1 = ReadInt32BigEndian(p1, 8);
+            if (action1 == 0)
+            {
+                connectCount++;
+                var connectResp = new byte[16];
+                WriteInt32BigEndian(connectResp, 0, 0);
+                Array.Copy(p1, 12, connectResp, 4, 4);
+                WriteInt64BigEndian(connectResp, 8, 424242L);
+                server.Send(connectResp, connectResp.Length, ep);
+            }
+
+            // First announce (action=1)
+            var p2 = server.Receive(ref ep);
+            var action2 = ReadInt32BigEndian(p2, 8);
+            if (action2 == 1)
+            {
+                announceCount++;
+                receivedConnectionIds.Add(ReadInt64BigEndian(p2, 0));
+                var announceResp = new byte[20];
+                WriteInt32BigEndian(announceResp, 0, 1);
+                Array.Copy(p2, 12, announceResp, 4, 4);
+                WriteInt32BigEndian(announceResp, 8, 1800);
+                server.Send(announceResp, announceResp.Length, ep);
+            }
+
+            // Second request must be Announce directly (no connect packet)
+            var p3 = server.Receive(ref ep);
+            var action3 = ReadInt32BigEndian(p3, 8);
+            if (action3 == 0)
+            {
+                connectCount++;
+            }
+            else if (action3 == 1)
+            {
+                announceCount++;
+                receivedConnectionIds.Add(ReadInt64BigEndian(p3, 0));
+                var announceResp = new byte[20];
+                WriteInt32BigEndian(announceResp, 0, 1);
+                Array.Copy(p3, 12, announceResp, 4, 4);
+                WriteInt32BigEndian(announceResp, 8, 1800);
+                server.Send(announceResp, announceResp.Length, ep);
+            }
+        });
+
+        var request1 = new TrackerAnnounceRequest
+        {
+            TrackerUrl = $"udp://127.0.0.1:{serverPort}/announce",
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            PeerId = "-qB4420-abcdefghijkl",
+            Port = 6881
+        };
+
+        var request2 = new TrackerAnnounceRequest
+        {
+            TrackerUrl = $"udp://127.0.0.1:{serverPort}/announce",
+            InfoHash = "00112233445566778899AABBCCDDEEFF00112233",
+            PeerId = "-qB4420-abcdefghijkl",
+            Port = 6881
+        };
+
+        var result1 = _provider.Announce(request1);
+        var result2 = _provider.Announce(request2);
+
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result1.Success, Is.True);
+        Assert.That(result2.Success, Is.True);
+        Assert.That(connectCount, Is.EqualTo(1));
+        Assert.That(announceCount, Is.EqualTo(2));
+        Assert.That(receivedConnectionIds[0], Is.EqualTo(424242L));
+        Assert.That(receivedConnectionIds[1], Is.EqualTo(424242L));
+    }
+
+    [Test]
+    public void Scrape_should_cache_connection_id_and_reuse_for_subsequent_scrapes_within_60s()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var connectCount = 0;
+        var scrapeCount = 0;
+        var receivedConnectionIds = new List<long>();
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            // Connect packet
+            var p1 = server.Receive(ref ep);
+            var action1 = ReadInt32BigEndian(p1, 8);
+            if (action1 == 0)
+            {
+                connectCount++;
+                var connectResp = new byte[16];
+                WriteInt32BigEndian(connectResp, 0, 0);
+                Array.Copy(p1, 12, connectResp, 4, 4);
+                WriteInt64BigEndian(connectResp, 8, 98765L);
+                server.Send(connectResp, connectResp.Length, ep);
+            }
+
+            // First scrape
+            var p2 = server.Receive(ref ep);
+            var action2 = ReadInt32BigEndian(p2, 8);
+            if (action2 == 2)
+            {
+                scrapeCount++;
+                receivedConnectionIds.Add(ReadInt64BigEndian(p2, 0));
+                var scrapeResp = new byte[20];
+                WriteInt32BigEndian(scrapeResp, 0, 2);
+                Array.Copy(p2, 12, scrapeResp, 4, 4);
+                WriteInt32BigEndian(scrapeResp, 8, 10);
+                WriteInt32BigEndian(scrapeResp, 12, 20);
+                WriteInt32BigEndian(scrapeResp, 16, 30);
+                server.Send(scrapeResp, scrapeResp.Length, ep);
+            }
+
+            // Second scrape directly (no connect packet)
+            var p3 = server.Receive(ref ep);
+            var action3 = ReadInt32BigEndian(p3, 8);
+            if (action3 == 0)
+            {
+                connectCount++;
+            }
+            else if (action3 == 2)
+            {
+                scrapeCount++;
+                receivedConnectionIds.Add(ReadInt64BigEndian(p3, 0));
+                var scrapeResp = new byte[20];
+                WriteInt32BigEndian(scrapeResp, 0, 2);
+                Array.Copy(p3, 12, scrapeResp, 4, 4);
+                WriteInt32BigEndian(scrapeResp, 8, 15);
+                WriteInt32BigEndian(scrapeResp, 12, 25);
+                WriteInt32BigEndian(scrapeResp, 16, 35);
+                server.Send(scrapeResp, scrapeResp.Length, ep);
+            }
+        });
+
+        var trackerUrl = $"udp://127.0.0.1:{serverPort}/announce";
+        var result1 = _provider.Scrape("AABBCCDDEE112233445566778899AABBCCDDEEFF", trackerUrl);
+        var result2 = _provider.Scrape("00112233445566778899AABBCCDDEEFF00112233", trackerUrl);
+
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result1.Success, Is.True);
+        Assert.That(result2.Success, Is.True);
+        Assert.That(connectCount, Is.EqualTo(1));
+        Assert.That(scrapeCount, Is.EqualTo(2));
+        Assert.That(receivedConnectionIds[0], Is.EqualTo(98765L));
+        Assert.That(receivedConnectionIds[1], Is.EqualTo(98765L));
+    }
+
+    [Test]
+    public void Announce_should_send_fresh_connect_request_when_cached_connection_id_expires()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var connectCount = 0;
+        var receivedConnectionIds = new List<long>();
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            // Connect 1
+            var p1 = server.Receive(ref ep);
+            connectCount++;
+            var connectResp1 = new byte[16];
+            WriteInt32BigEndian(connectResp1, 0, 0);
+            Array.Copy(p1, 12, connectResp1, 4, 4);
+            WriteInt64BigEndian(connectResp1, 8, 11111L);
+            server.Send(connectResp1, connectResp1.Length, ep);
+
+            // Announce 1
+            var p2 = server.Receive(ref ep);
+            receivedConnectionIds.Add(ReadInt64BigEndian(p2, 0));
+            var announceResp1 = new byte[20];
+            WriteInt32BigEndian(announceResp1, 0, 1);
+            Array.Copy(p2, 12, announceResp1, 4, 4);
+            WriteInt32BigEndian(announceResp1, 8, 1800);
+            server.Send(announceResp1, announceResp1.Length, ep);
+
+            // Connect 2 (after expiry)
+            var p3 = server.Receive(ref ep);
+            connectCount++;
+            var connectResp2 = new byte[16];
+            WriteInt32BigEndian(connectResp2, 0, 0);
+            Array.Copy(p3, 12, connectResp2, 4, 4);
+            WriteInt64BigEndian(connectResp2, 8, 22222L);
+            server.Send(connectResp2, connectResp2.Length, ep);
+
+            // Announce 2
+            var p4 = server.Receive(ref ep);
+            receivedConnectionIds.Add(ReadInt64BigEndian(p4, 0));
+            var announceResp2 = new byte[20];
+            WriteInt32BigEndian(announceResp2, 0, 1);
+            Array.Copy(p4, 12, announceResp2, 4, 4);
+            WriteInt32BigEndian(announceResp2, 8, 1800);
+            server.Send(announceResp2, announceResp2.Length, ep);
+        });
+
+        var request = new TrackerAnnounceRequest
+        {
+            TrackerUrl = $"udp://127.0.0.1:{serverPort}/announce",
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            PeerId = "-qB4420-abcdefghijkl",
+            Port = 6881
+        };
+
+        var result1 = _provider.Announce(request);
+        Assert.That(result1.Success, Is.True);
+
+        // Advance time past 60s window
+        var baseTime = DateTime.UtcNow;
+        _provider.UtcNow = () => baseTime.AddSeconds(61);
+
+        var result2 = _provider.Announce(request);
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result2.Success, Is.True);
+        Assert.That(connectCount, Is.EqualTo(2));
+        Assert.That(receivedConnectionIds[0], Is.EqualTo(11111L));
+        Assert.That(receivedConnectionIds[1], Is.EqualTo(22222L));
+    }
+
+    [Test]
+    public void Announce_failure_should_evict_cached_connection_id()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+        var trackerUrl = $"udp://127.0.0.1:{serverPort}/announce";
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            // Connect 1
+            var p1 = server.Receive(ref ep);
+            var connectResp = new byte[16];
+            WriteInt32BigEndian(connectResp, 0, 0);
+            Array.Copy(p1, 12, connectResp, 4, 4);
+            WriteInt64BigEndian(connectResp, 8, 5555L);
+            server.Send(connectResp, connectResp.Length, ep);
+
+            // Announce 1 (success)
+            var p2 = server.Receive(ref ep);
+            var announceResp = new byte[20];
+            WriteInt32BigEndian(announceResp, 0, 1);
+            Array.Copy(p2, 12, announceResp, 4, 4);
+            WriteInt32BigEndian(announceResp, 8, 1800);
+            server.Send(announceResp, announceResp.Length, ep);
+
+            // Announce 2 (failure - error packet)
+            var p3 = server.Receive(ref ep);
+            var errorBytes = Encoding.UTF8.GetBytes("Connection ID expired or invalid");
+            var errorResp = new byte[8 + errorBytes.Length];
+            WriteInt32BigEndian(errorResp, 0, 3);
+            Array.Copy(p3, 12, errorResp, 4, 4);
+            Array.Copy(errorBytes, 0, errorResp, 8, errorBytes.Length);
+            server.Send(errorResp, errorResp.Length, ep);
+
+            // Connect 3 (reconnect after eviction)
+            var p4 = server.Receive(ref ep);
+            var connectResp2 = new byte[16];
+            WriteInt32BigEndian(connectResp2, 0, 0);
+            Array.Copy(p4, 12, connectResp2, 4, 4);
+            WriteInt64BigEndian(connectResp2, 8, 6666L);
+            server.Send(connectResp2, connectResp2.Length, ep);
+
+            // Announce 3 (success)
+            var p5 = server.Receive(ref ep);
+            var announceResp2 = new byte[20];
+            WriteInt32BigEndian(announceResp2, 0, 1);
+            Array.Copy(p5, 12, announceResp2, 4, 4);
+            WriteInt32BigEndian(announceResp2, 8, 1800);
+            server.Send(announceResp2, announceResp2.Length, ep);
+        });
+
+        var request = new TrackerAnnounceRequest
+        {
+            TrackerUrl = trackerUrl,
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            PeerId = "-qB4420-abcdefghijkl",
+            Port = 6881
+        };
+
+        var result1 = _provider.Announce(request);
+        Assert.That(result1.Success, Is.True);
+        Assert.That(_provider.TryGetCachedConnection(trackerUrl, out var entry), Is.True);
+        Assert.That(entry.ConnectionId, Is.EqualTo(5555L));
+
+        var result2 = _provider.Announce(request);
+        Assert.That(result2.Success, Is.False);
+        Assert.That(_provider.TryGetCachedConnection(trackerUrl, out _), Is.False);
+
+        var result3 = _provider.Announce(request);
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result3.Success, Is.True);
+        Assert.That(_provider.TryGetCachedConnection(trackerUrl, out var entry2), Is.True);
+        Assert.That(entry2.ConnectionId, Is.EqualTo(6666L));
+    }
+
+    [Test]
+    public void Scrape_failure_should_evict_cached_connection_id()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+        var trackerUrl = $"udp://127.0.0.1:{serverPort}/announce";
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            // Connect
+            var p1 = server.Receive(ref ep);
+            var connectResp = new byte[16];
+            WriteInt32BigEndian(connectResp, 0, 0);
+            Array.Copy(p1, 12, connectResp, 4, 4);
+            WriteInt64BigEndian(connectResp, 8, 7777L);
+            server.Send(connectResp, connectResp.Length, ep);
+
+            // Scrape 1 (success)
+            var p2 = server.Receive(ref ep);
+            var scrapeResp = new byte[20];
+            WriteInt32BigEndian(scrapeResp, 0, 2);
+            Array.Copy(p2, 12, scrapeResp, 4, 4);
+            WriteInt32BigEndian(scrapeResp, 8, 1);
+            server.Send(scrapeResp, scrapeResp.Length, ep);
+
+            // Scrape 2 (failure - action=3 error)
+            var p3 = server.Receive(ref ep);
+            var errorBytes = Encoding.UTF8.GetBytes("Bad connection ID");
+            var errorResp = new byte[8 + errorBytes.Length];
+            WriteInt32BigEndian(errorResp, 0, 3);
+            Array.Copy(p3, 12, errorResp, 4, 4);
+            Array.Copy(errorBytes, 0, errorResp, 8, errorBytes.Length);
+            server.Send(errorResp, errorResp.Length, ep);
+        });
+
+        var hash = "AABBCCDDEE112233445566778899AABBCCDDEEFF";
+        var res1 = _provider.Scrape(hash, trackerUrl);
+        Assert.That(res1.Success, Is.True);
+        Assert.That(_provider.TryGetCachedConnection(trackerUrl, out _), Is.True);
+
+        var res2 = _provider.Scrape(hash, trackerUrl);
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(res2.Success, Is.False);
+        Assert.That(_provider.TryGetCachedConnection(trackerUrl, out _), Is.False);
+    }
+
+    [Test]
+    public void ClearConnectionCache_and_InvalidateConnection_should_remove_entries()
+    {
+        var url1 = "udp://tracker1.example.com:6969/announce";
+        var url2 = "udp://tracker2.example.com:1337/announce";
+
+        _provider.SetCachedConnection(url1, 111L, DateTime.UtcNow.AddMinutes(1));
+        _provider.SetCachedConnection(url2, 222L, DateTime.UtcNow.AddMinutes(1));
+
+        Assert.That(_provider.TryGetCachedConnection(url1, out _), Is.True);
+        Assert.That(_provider.TryGetCachedConnection(url2, out _), Is.True);
+
+        var removed1 = _provider.InvalidateConnection(url1);
+        Assert.That(removed1, Is.True);
+        Assert.That(_provider.TryGetCachedConnection(url1, out _), Is.False);
+        Assert.That(_provider.TryGetCachedConnection(url2, out _), Is.True);
+
+        _provider.ClearConnectionCache();
+        Assert.That(_provider.TryGetCachedConnection(url2, out _), Is.False);
+    }
+
+    [Test]
+    public void Announce_and_Scrape_should_share_cached_connection_id_for_same_tracker()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var connectCount = 0;
+        var announceCount = 0;
+        var scrapeCount = 0;
+        var connIds = new List<long>();
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            // Connect
+            var p1 = server.Receive(ref ep);
+            connectCount++;
+            var connectResp = new byte[16];
+            WriteInt32BigEndian(connectResp, 0, 0);
+            Array.Copy(p1, 12, connectResp, 4, 4);
+            WriteInt64BigEndian(connectResp, 8, 33333L);
+            server.Send(connectResp, connectResp.Length, ep);
+
+            // Announce
+            var p2 = server.Receive(ref ep);
+            announceCount++;
+            connIds.Add(ReadInt64BigEndian(p2, 0));
+            var announceResp = new byte[20];
+            WriteInt32BigEndian(announceResp, 0, 1);
+            Array.Copy(p2, 12, announceResp, 4, 4);
+            WriteInt32BigEndian(announceResp, 8, 1800);
+            server.Send(announceResp, announceResp.Length, ep);
+
+            // Scrape (should reuse connection ID 33333, no connect packet)
+            var p3 = server.Receive(ref ep);
+            scrapeCount++;
+            connIds.Add(ReadInt64BigEndian(p3, 0));
+            var scrapeResp = new byte[20];
+            WriteInt32BigEndian(scrapeResp, 0, 2);
+            Array.Copy(p3, 12, scrapeResp, 4, 4);
+            WriteInt32BigEndian(scrapeResp, 8, 10);
+            WriteInt32BigEndian(scrapeResp, 12, 20);
+            WriteInt32BigEndian(scrapeResp, 16, 30);
+            server.Send(scrapeResp, scrapeResp.Length, ep);
+        });
+
+        var trackerUrl = $"udp://127.0.0.1:{serverPort}/announce";
+        var request = new TrackerAnnounceRequest
+        {
+            TrackerUrl = trackerUrl,
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            PeerId = "-qB4420-abcdefghijkl",
+            Port = 6881
+        };
+
+        var announceResult = _provider.Announce(request);
+        var scrapeResult = _provider.Scrape("AABBCCDDEE112233445566778899AABBCCDDEEFF", trackerUrl);
+
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(announceResult.Success, Is.True);
+        Assert.That(scrapeResult.Success, Is.True);
+        Assert.That(connectCount, Is.EqualTo(1));
+        Assert.That(announceCount, Is.EqualTo(1));
+        Assert.That(scrapeCount, Is.EqualTo(1));
+        Assert.That(connIds[0], Is.EqualTo(33333L));
+        Assert.That(connIds[1], Is.EqualTo(33333L));
+    }
 }
