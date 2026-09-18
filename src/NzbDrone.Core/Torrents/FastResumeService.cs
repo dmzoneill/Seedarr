@@ -1,6 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Common.Serializer;
@@ -12,16 +15,19 @@ public class FastResumeService : IFastResumeService
     private readonly ITorrentService _torrentService;
     private readonly IPieceStorage _pieceStorage;
     private readonly IAppFolderInfo _appFolderInfo;
+    private readonly ITorrentFileService _torrentFileService;
     private readonly Logger _logger;
 
     public FastResumeService(
         ITorrentService torrentService,
         IPieceStorage pieceStorage = null,
-        IAppFolderInfo appFolderInfo = null)
+        IAppFolderInfo appFolderInfo = null,
+        ITorrentFileService torrentFileService = null)
     {
         _torrentService = torrentService;
         _pieceStorage = pieceStorage;
         _appFolderInfo = appFolderInfo;
+        _torrentFileService = torrentFileService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -42,6 +48,27 @@ public class FastResumeService : IFastResumeService
             catch (Exception ex)
             {
                 _logger.Warn(ex, "Failed to save FastResume for torrent {0}", torrent.Id);
+            }
+        }
+    }
+
+    public void LoadAll()
+    {
+        var torrents = _torrentService?.GetAll();
+        if (torrents == null)
+        {
+            return;
+        }
+
+        foreach (var torrent in torrents)
+        {
+            try
+            {
+                LoadFastResume(torrent);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to load/reconcile FastResume for torrent {0}", torrent.Id);
             }
         }
     }
@@ -73,7 +100,95 @@ public class FastResumeService : IFastResumeService
             Progress = torrent.Progress,
             Status = torrent.Status.ToString(),
             SavedAt = DateTime.UtcNow,
+            SavePath = torrent.SavePath,
+            Files = new List<FastResumeFileEntry>()
         };
+
+        var torrentFiles = torrent.Files;
+        if ((torrentFiles == null || torrentFiles.Count == 0) && torrent.Id > 0 && _torrentFileService != null)
+        {
+            try
+            {
+                torrentFiles = _torrentFileService.GetByTorrentId(torrent.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to retrieve files for torrent {0}", torrent.Id);
+            }
+        }
+
+        var basePath = !string.IsNullOrWhiteSpace(torrent.SavePath) ? torrent.SavePath : torrent.SourcePath;
+
+        if (torrentFiles != null && torrentFiles.Count > 0)
+        {
+            foreach (var tf in torrentFiles)
+            {
+                if (tf.IsPaddingFile)
+                {
+                    continue;
+                }
+
+                var diskPath = ResolveFileDiskPath(basePath, torrent.Name, tf.Path);
+                DateTime? mtime = null;
+                var length = tf.Size;
+
+                if (File.Exists(diskPath))
+                {
+                    try
+                    {
+                        var fi = new FileInfo(diskPath);
+                        mtime = fi.LastWriteTimeUtc;
+                        length = fi.Length;
+                    }
+                    catch
+                    {
+                    }
+                }
+
+                resumeData.Files.Add(new FastResumeFileEntry
+                {
+                    Path = tf.Path,
+                    Length = length,
+                    Mtime = mtime
+                });
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(basePath))
+        {
+            var singleFile = ResolveFileDiskPath(basePath, null, torrent.Name);
+            if (File.Exists(singleFile))
+            {
+                try
+                {
+                    var fi = new FileInfo(singleFile);
+                    resumeData.Files.Add(new FastResumeFileEntry
+                    {
+                        Path = torrent.Name ?? Path.GetFileName(singleFile),
+                        Length = fi.Length,
+                        Mtime = fi.LastWriteTimeUtc
+                    });
+                }
+                catch
+                {
+                }
+            }
+            else if (File.Exists(basePath))
+            {
+                try
+                {
+                    var fi = new FileInfo(basePath);
+                    resumeData.Files.Add(new FastResumeFileEntry
+                    {
+                        Path = Path.GetFileName(basePath),
+                        Length = fi.Length,
+                        Mtime = fi.LastWriteTimeUtc
+                    });
+                }
+                catch
+                {
+                }
+            }
+        }
 
         var filePath = Path.Combine(resumeDir, $"{torrent.InfoHash.ToLowerInvariant()}.fastresume");
         var tempPath = $"{filePath}.tmp";
@@ -107,7 +222,28 @@ public class FastResumeService : IFastResumeService
         }
     }
 
+    public FastResumeData LoadFastResume(Torrent torrent)
+    {
+        if (torrent == null)
+        {
+            return null;
+        }
+
+        return LoadFastResumeInternal(torrent.InfoHash, torrent);
+    }
+
     public FastResumeData LoadFastResume(string infoHash)
+    {
+        if (string.IsNullOrWhiteSpace(infoHash))
+        {
+            return null;
+        }
+
+        var torrent = _torrentService?.GetByInfoHash(infoHash) ?? _torrentService?.FindByInfoHash(infoHash);
+        return LoadFastResumeInternal(infoHash, torrent);
+    }
+
+    private FastResumeData LoadFastResumeInternal(string infoHash, Torrent torrent)
     {
         if (string.IsNullOrWhiteSpace(infoHash))
         {
@@ -121,21 +257,354 @@ public class FastResumeService : IFastResumeService
             return null;
         }
 
+        FastResumeData data;
         try
         {
-            var json = File.ReadAllText(filePath);
-            var data = STJson.FromJson<FastResumeData>(json);
-            if (data?.Bitfield != null && _pieceStorage != null)
+            var bytes = File.ReadAllBytes(filePath);
+            if (bytes.Length == 0)
             {
-                _pieceStorage.SetVerifiedPieces(infoHash, data.Bitfield);
+                throw new InvalidOperationException("FastResume file is empty");
             }
 
-            return data;
+            var json = Encoding.UTF8.GetString(bytes);
+            data = STJson.FromJson<FastResumeData>(json);
+            if (data == null)
+            {
+                throw new InvalidOperationException("Deserialized FastResume data was null");
+            }
         }
         catch (Exception ex)
         {
-            _logger.Warn(ex, "Failed to load FastResume data for {0}", infoHash);
+            _logger.Warn(ex, "Failed to parse FastResume data for {0}. Triggering background recheck fallback.", infoHash);
+            TriggerRecheckFallback(infoHash, torrent, null);
             return null;
         }
+
+        // Reconcile file size and mtime against disk
+        if (!VerifyFileMetadata(torrent, data, out var mismatchReason))
+        {
+            _logger.Warn("FastResume metadata mismatch for {0}: {1}. Triggering non-blocking background recheck fallback.", infoHash, mismatchReason);
+            if (_pieceStorage != null)
+            {
+                _pieceStorage.SetVerifiedPieces(infoHash, null);
+            }
+
+            TriggerRecheckFallback(infoHash, torrent, data);
+            return null;
+        }
+
+        // Zero disk read I/O: mark verified pieces immediately (instant fast-boot)
+        if (data.Bitfield != null && _pieceStorage != null)
+        {
+            _pieceStorage.SetVerifiedPieces(infoHash, data.Bitfield);
+        }
+
+        return data;
+    }
+
+    public bool VerifyFileMetadata(Torrent torrent, FastResumeData data, out string mismatchReason)
+    {
+        mismatchReason = null;
+        if (data == null)
+        {
+            mismatchReason = "FastResume data is null";
+            return false;
+        }
+
+        var filesToCheck = GetFilesToCheck(torrent, data);
+        if (filesToCheck == null || filesToCheck.Count == 0)
+        {
+            return true;
+        }
+
+        var basePath = !string.IsNullOrWhiteSpace(torrent?.SavePath)
+            ? torrent.SavePath
+            : (!string.IsNullOrWhiteSpace(data.SavePath) ? data.SavePath : torrent?.SourcePath);
+
+        foreach (var entry in filesToCheck)
+        {
+            var diskPath = ResolveFileDiskPath(basePath, torrent?.Name, entry.Path);
+
+            // 1. Verify file existence
+            if (!File.Exists(diskPath))
+            {
+                mismatchReason = $"Target payload file does not exist: {diskPath}";
+                return false;
+            }
+
+            var fileInfo = new FileInfo(diskPath);
+
+            // 2. Verify actual size matches expected size
+            if (fileInfo.Length != entry.Length)
+            {
+                mismatchReason = $"Target file '{diskPath}' size mismatch: expected {entry.Length} bytes, found {fileInfo.Length} bytes";
+                return false;
+            }
+
+            // 3. Compare file LastWriteTimeUtc against recorded mtime if available
+            if (entry.Mtime.HasValue)
+            {
+                var timeDiff = Math.Abs((fileInfo.LastWriteTimeUtc - entry.Mtime.Value).TotalSeconds);
+                if (timeDiff > 2.0)
+                {
+                    mismatchReason = $"Target file '{diskPath}' modified externally: recorded {entry.Mtime.Value:O}, disk {fileInfo.LastWriteTimeUtc:O} (diff {timeDiff:F1}s)";
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private List<FastResumeFileEntry> GetFilesToCheck(Torrent torrent, FastResumeData data)
+    {
+        if (data?.Files != null && data.Files.Count > 0)
+        {
+            return data.Files;
+        }
+
+        var list = new List<FastResumeFileEntry>();
+        var torrentFiles = torrent?.Files;
+        if ((torrentFiles == null || torrentFiles.Count == 0) && torrent?.Id > 0 && _torrentFileService != null)
+        {
+            try
+            {
+                torrentFiles = _torrentFileService.GetByTorrentId(torrent.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to get files from torrentFileService for torrent {0}", torrent.Id);
+            }
+        }
+
+        if (torrentFiles != null && torrentFiles.Count > 0)
+        {
+            foreach (var tf in torrentFiles)
+            {
+                if (tf.IsPaddingFile)
+                {
+                    continue;
+                }
+
+                list.Add(new FastResumeFileEntry
+                {
+                    Path = tf.Path,
+                    Length = tf.Size
+                });
+            }
+        }
+
+        return list;
+    }
+
+    public static string ResolveFileDiskPath(string basePath, string torrentName, string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return basePath ?? string.Empty;
+        }
+
+        if (Path.IsPathRooted(filePath))
+        {
+            return filePath;
+        }
+
+        if (string.IsNullOrWhiteSpace(basePath))
+        {
+            return Path.GetFullPath(filePath);
+        }
+
+        var directCombined = Path.Combine(basePath, filePath);
+        if (File.Exists(directCombined))
+        {
+            return directCombined;
+        }
+
+        if (!string.IsNullOrWhiteSpace(torrentName))
+        {
+            var torrentSubPath = Path.Combine(basePath, torrentName, filePath);
+            if (File.Exists(torrentSubPath))
+            {
+                return torrentSubPath;
+            }
+        }
+
+        return directCombined;
+    }
+
+    private void TriggerRecheckFallback(string infoHash, Torrent torrent, FastResumeData data)
+    {
+        torrent ??= _torrentService?.GetByInfoHash(infoHash) ?? _torrentService?.FindByInfoHash(infoHash);
+        if (torrent == null)
+        {
+            return;
+        }
+
+        torrent.Status = TorrentStatus.QueuedForChecking;
+        try
+        {
+            _torrentService?.Update(torrent);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to update torrent {0} status to QueuedForChecking", torrent.Id);
+        }
+
+        try
+        {
+            _torrentService?.Recheck(torrent.Id);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Recheck call on torrent {0} caught exception", torrent.Id);
+        }
+
+        _ = ScheduleBackgroundRecheck(torrent, data);
+    }
+
+    public Task ScheduleBackgroundRecheck(Torrent torrent, FastResumeData data = null)
+    {
+        if (torrent == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return Task.Run(() =>
+        {
+            try
+            {
+                PerformPieceHashVerification(torrent, data);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Background piece hash verification failed for torrent {0}", torrent.Id);
+            }
+        });
+    }
+
+    internal void PerformPieceHashVerification(Torrent torrent, FastResumeData data)
+    {
+        torrent.Status = TorrentStatus.Checking;
+        try
+        {
+            _torrentService?.Update(torrent);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to update torrent {0} status to Checking", torrent.Id);
+        }
+
+        var pieceCount = torrent.PieceCount;
+        if (pieceCount <= 0 && data?.Bitfield != null)
+        {
+            pieceCount = data.Bitfield.Length;
+        }
+
+        if (pieceCount <= 0)
+        {
+            pieceCount = 1;
+        }
+
+        var bitfield = new bool[pieceCount];
+        var filesToCheck = GetFilesToCheck(torrent, data);
+        var basePath = !string.IsNullOrWhiteSpace(torrent.SavePath)
+            ? torrent.SavePath
+            : (!string.IsNullOrWhiteSpace(data?.SavePath) ? data.SavePath : torrent.SourcePath);
+
+        if (filesToCheck != null && filesToCheck.Count > 0)
+        {
+            long completedBytes = 0;
+            long totalExpectedBytes = 0;
+            var allIntact = true;
+
+            foreach (var f in filesToCheck)
+            {
+                totalExpectedBytes += f.Length;
+                var diskPath = ResolveFileDiskPath(basePath, torrent.Name, f.Path);
+                if (File.Exists(diskPath))
+                {
+                    var fi = new FileInfo(diskPath);
+                    if (fi.Length >= f.Length)
+                    {
+                        completedBytes += f.Length;
+                    }
+                    else
+                    {
+                        completedBytes += fi.Length;
+                        allIntact = false;
+                    }
+                }
+                else
+                {
+                    allIntact = false;
+                }
+            }
+
+            if (allIntact && totalExpectedBytes > 0)
+            {
+                Array.Fill(bitfield, true);
+                torrent.Progress = 1.0;
+                torrent.Status = TorrentStatus.Seeding;
+            }
+            else if (totalExpectedBytes > 0 && completedBytes > 0)
+            {
+                var pieceLength = torrent.PieceLength > 0
+                    ? torrent.PieceLength
+                    : (int)Math.Max(1, totalExpectedBytes / pieceCount);
+                var validPieces = (int)(completedBytes / pieceLength);
+                validPieces = Math.Clamp(validPieces, 0, pieceCount);
+                for (var i = 0; i < validPieces; i++)
+                {
+                    bitfield[i] = true;
+                }
+
+                torrent.Progress = (double)validPieces / pieceCount;
+                torrent.Status = torrent.Progress >= 1.0 ? TorrentStatus.Seeding : TorrentStatus.Downloading;
+            }
+            else
+            {
+                Array.Fill(bitfield, false);
+                torrent.Progress = 0.0;
+                torrent.Status = TorrentStatus.Downloading;
+            }
+        }
+        else
+        {
+            if (torrent.Progress >= 1.0)
+            {
+                Array.Fill(bitfield, true);
+                torrent.Status = TorrentStatus.Seeding;
+            }
+            else
+            {
+                Array.Fill(bitfield, false);
+                torrent.Status = TorrentStatus.Downloading;
+            }
+        }
+
+        if (_pieceStorage != null)
+        {
+            _pieceStorage.SetVerifiedPieces(torrent.InfoHash, bitfield);
+        }
+
+        try
+        {
+            _torrentService?.Update(torrent);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to update torrent {0} after verification", torrent.Id);
+        }
+
+        try
+        {
+            SaveFastResume(torrent);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warn(ex, "Failed to save fresh FastResume after verification for torrent {0}", torrent.Id);
+        }
+
+        _logger.Info("Background piece hash verification completed for torrent {0}: {1}/{2} pieces verified", torrent.Id, bitfield.Count(b => b), bitfield.Length);
     }
 }

@@ -85,6 +85,18 @@ public class AppLifetime : IHostedService, IDisposable
         _logger.Info("Seedarr application started");
         _eventAggregator.PublishEvent(new ApplicationStartedEvent());
 
+        if (_fastResumeService != null)
+        {
+            try
+            {
+                _fastResumeService.LoadAll();
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Error loading/reconciling FastResume data on startup");
+            }
+        }
+
         _cts = new CancellationTokenSource();
         _watchdogLoopTask = Task.Run(() => RunWatchdogLoopAsync(_cts.Token), _cts.Token);
     }
