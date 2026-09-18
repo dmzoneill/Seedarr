@@ -19,6 +19,9 @@ export function LanguageSelector() {
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
         setIsOpen(false);
       }
     }

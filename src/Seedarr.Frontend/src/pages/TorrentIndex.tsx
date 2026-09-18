@@ -11,6 +11,7 @@ import { TorrentFilterPanel } from "./torrentindex/TorrentFilterPanel";
 import { useTorrentIndexState } from "./torrentindex/useTorrentIndexState";
 import { useAnnounceTorrent, useRecheckTorrent, useBulkTorrentAction } from "../api/hooks";
 import { useToast } from "../context/ToastContext";
+import { useModalStack } from "../components/ModalProvider";
 
 function TorrentIndex() {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ function TorrentIndex() {
   const announceTorrent = useAnnounceTorrent();
   const recheckTorrent = useRecheckTorrent();
   const bulkAction = useBulkTorrentAction();
+  const { modalCount } = useModalStack();
   const {
     torrents,
     filteredTorrents,
@@ -259,6 +261,21 @@ function TorrentIndex() {
         return;
       }
 
+      // Suppress all page-level shortcuts and Escape processing when any modal is open
+      if (
+        deleteModalState?.isOpen ||
+        showAddModal ||
+        modalCount > 0 ||
+        (typeof document !== "undefined" &&
+          Boolean(
+            document.querySelector(
+              'dialog[open], [role="dialog"], [aria-modal="true"], .modal-overlay, .modal-backdrop',
+            ),
+          ))
+      ) {
+        return;
+      }
+
       // 'q' / 'Q' toggles quick controls drawer
       if (e.key === "q" || e.key === "Q") {
         e.preventDefault();
@@ -362,6 +379,9 @@ function TorrentIndex() {
     handleBulkDelete,
     handleSelectAll,
     handleSelectRange,
+    modalCount,
+    deleteModalState?.isOpen,
+    showAddModal,
   ]);
 
   const count = torrents?.length ?? 0;

@@ -39,7 +39,7 @@ import AriaLiveAnnouncer from "./components/AriaLiveAnnouncer";
 import ErrorBoundary from "./components/ErrorBoundary";
 import SignalRProvider from "./components/SignalRProvider";
 import { useSignalR } from "./api/signalr";
-import { ModalProvider } from "./components/ModalProvider";
+import { useModalStack } from "./components/ModalProvider";
 import AddTorrentModal from "./components/AddTorrentModal";
 import CommandPalette from "./components/CommandPalette";
 import KeyboardShortcutsModal from "./components/KeyboardShortcutsModal";
@@ -196,12 +196,37 @@ function App() {
     });
   }, [closeOtherModals]);
 
+  const { modalCount } = useModalStack();
+
+  const isAnyModalOpen = useCallback(() => {
+    if (
+      showAddTorrentModal ||
+      showShortcutsModal ||
+      showGettingStartedModal ||
+      showCommandPalette
+    ) {
+      return true;
+    }
+    if (modalCount > 0) {
+      return true;
+    }
+    if (typeof document !== "undefined") {
+      const activeModal = document.querySelector(
+        'dialog[open], [role="dialog"], [aria-modal="true"], .modal-overlay, .modal-backdrop',
+      );
+      if (activeModal) return true;
+    }
+    return false;
+  }, [
+    showAddTorrentModal,
+    showShortcutsModal,
+    showGettingStartedModal,
+    showCommandPalette,
+    modalCount,
+  ]);
+
   const isAnyModalOpenRef = useRef(false);
-  isAnyModalOpenRef.current =
-    showAddTorrentModal ||
-    showShortcutsModal ||
-    showGettingStartedModal ||
-    showCommandPalette;
+  isAnyModalOpenRef.current = isAnyModalOpen();
   const [openSettingsGroups, setOpenSettingsGroups] = useState<
     Record<string, boolean>
   >(() => {
@@ -337,8 +362,18 @@ function App() {
           activeEl.tagName === "SELECT" ||
           (activeEl as HTMLElement).isContentEditable);
 
+      const isModalActive =
+        isAnyModalOpenRef.current ||
+        (typeof document !== "undefined" &&
+          Boolean(
+            document.querySelector(
+              'dialog[open], [role="dialog"], [aria-modal="true"], .modal-overlay, .modal-backdrop',
+            ),
+          ));
+
       // Alt+M toggles sidebar collapse
       if (e.altKey && e.key.toLowerCase() === "m") {
+        if (isModalActive) return;
         e.preventDefault();
         toggleSidebar();
         return;
@@ -354,8 +389,15 @@ function App() {
       // If typing inside an input/textarea, do not intercept single-key shortcuts
       if (isInputActive) return;
 
-      // Gate single-key navigation and modal triggers when any modal is active
-      if (isAnyModalOpenRef.current) return;
+      // Gate single-key navigation and multi-key sequence when any modal is active
+      if (isModalActive) {
+        pendingGKey = false;
+        if (pendingGTimer) {
+          clearTimeout(pendingGTimer);
+          pendingGTimer = null;
+        }
+        return;
+      }
 
       // "/" opens search / command palette
       if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
@@ -432,8 +474,7 @@ function App() {
   }
 
   return (
-    <ModalProvider>
-      <div className={`app ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+    <div className={`app ${isSidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar" aria-label="Main Navigation">
         <div className="sidebar-header">
           <a
@@ -1291,7 +1332,6 @@ function App() {
         onClose={() => setShowGettingStartedModal(false)}
       />
     </div>
-    </ModalProvider>
   );
 }
 

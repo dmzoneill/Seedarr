@@ -139,11 +139,19 @@ export function SecurityTab() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (showRegenerateModal) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
           setShowRegenerateModal(false);
+          return;
         }
         if (editingProvider) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
           setEditingProvider(null);
           setShowSecret(false);
+          return;
         }
       }
     };

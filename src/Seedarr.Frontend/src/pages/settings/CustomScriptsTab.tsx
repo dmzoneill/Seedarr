@@ -85,6 +85,9 @@ export function CustomScriptsTab() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && testModalData) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
         setTestModalData(null);
       }
     };
