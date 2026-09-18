@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { useParams } from "react-router";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SeedingTab } from "./settings/SeedingTab";
@@ -114,16 +113,7 @@ function Settings() {
     "Manage Seedarr application and operational parameters";
 
   const tabKey = activeSection === "watch-folder" ? "general" : activeSection;
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([tabKey]));
-
-  useEffect(() => {
-    setVisitedTabs((prev) => {
-      if (prev.has(tabKey)) return prev;
-      const next = new Set(prev);
-      next.add(tabKey);
-      return next;
-    });
-  }, [tabKey]);
+  const ActiveComponent = TAB_COMPONENTS[tabKey];
 
   return (
     <div className="content-area" style={{ padding: "1.5rem" }}>
@@ -163,24 +153,7 @@ function Settings() {
         </div>
       </div>
 
-      {Array.from(visitedTabs).map((key) => {
-        const Comp = TAB_COMPONENTS[key];
-        if (!Comp) return null;
-
-        const isVisible =
-          key === "general"
-            ? activeSection === "general" || activeSection === "watch-folder"
-            : activeSection === key;
-
-        return (
-          <div
-            key={key}
-            style={{ display: isVisible ? "block" : "none" }}
-          >
-            <Comp />
-          </div>
-        );
-      })}
+      {ActiveComponent ? <ActiveComponent /> : null}
     </div>
   );
 }
