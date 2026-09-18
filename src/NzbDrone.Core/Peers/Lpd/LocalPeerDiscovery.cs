@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -270,16 +271,15 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                     continue;
                 }
 
-                foreach (var torrent in torrents)
-                {
-                    if (string.IsNullOrEmpty(torrent.InfoHash))
-                    {
-                        continue;
-                    }
+                var activeTorrents = torrents
+                    .Where(t => t != null && !t.IsPrivate && !string.IsNullOrEmpty(t.InfoHash) && (t.Status == TorrentStatus.Downloading || t.Status == TorrentStatus.Seeding))
+                    .ToList();
 
+                foreach (var torrent in activeTorrents)
+                {
                     var port = _configService.ListeningPort > 0 ? _configService.ListeningPort : PeerPort;
                     var data = BuildAnnouncement(torrent.InfoHash, port);
-                    await sender.SendAsync(data, endpoint, stoppingToken);
+                    await SendAnnouncementAsync(sender, data, endpoint, stoppingToken);
                     _logger.Debug("LPD: announced {0}", torrent.InfoHash);
                 }
             }
@@ -298,6 +298,11 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
     {
         var message = $"BT-SEARCH * HTTP/1.1\r\nHost: {MulticastAddress}:{MulticastPort}\r\nPort: {port}\r\nInfohash: {infoHash}\r\n\r\n\r\n";
         return Encoding.ASCII.GetBytes(message);
+    }
+
+    protected virtual async Task SendAnnouncementAsync(UdpClient client, byte[] data, IPEndPoint endpoint, CancellationToken stoppingToken)
+    {
+        await client.SendAsync(data, endpoint, stoppingToken);
     }
 
     private void ParseAnnouncement(string message, IPEndPoint sender)
@@ -343,6 +348,13 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
         if (!IsPrivateSubnet(sender.Address))
         {
             _logger.Debug("LPD: rejected announcement from non-private IP {0}", sender.Address);
+            return;
+        }
+
+        var torrent = _torrentService?.FindByInfoHash(infoHash);
+        if (torrent == null || torrent.IsPrivate)
+        {
+            _logger.Debug("LPD: Discarding announcement for unknown or private torrent: {0}", infoHash);
             return;
         }
 
