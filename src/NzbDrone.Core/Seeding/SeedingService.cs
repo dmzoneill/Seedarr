@@ -49,7 +49,8 @@ public class SeedingService : ISeedingService
             return;
         }
 
-        torrent.Status = TorrentStatus.Seeding;
+        torrent.Resume();
+        torrent.Active = true;
         torrent.ForceStart = true;
         torrent.LastActive = DateTime.UtcNow;
         _torrentService.Update(torrent);
@@ -67,6 +68,7 @@ public class SeedingService : ISeedingService
         }
 
         torrent.Stop();
+        torrent.ForceStart = false;
         _torrentService.Update(torrent);
 
         _logger.Info("Stopped seeding: {0}", torrent.Name);
@@ -82,11 +84,14 @@ public class SeedingService : ISeedingService
         }
 
         var torrents = _torrentService.GetAll()
-            .Where(t => t.Status == TorrentStatus.Stopped || t.Status == TorrentStatus.Queued);
+            .Where(t => t.Status == TorrentStatus.Stopped ||
+                        t.Status == TorrentStatus.Queued ||
+                        t.Status == TorrentStatus.Paused);
 
         foreach (var torrent in torrents)
         {
-            torrent.Status = TorrentStatus.Seeding;
+            torrent.Resume();
+            torrent.Active = true;
             torrent.LastActive = DateTime.UtcNow;
             _torrentService.Update(torrent);
 
@@ -106,7 +111,9 @@ public class SeedingService : ISeedingService
         }
 
         var torrents = _torrentService.GetAll()
-            .Where(t => t.Status == TorrentStatus.Seeding);
+            .Where(t => t.Status == TorrentStatus.Seeding ||
+                        t.Status == TorrentStatus.Downloading ||
+                        t.Active);
 
         foreach (var torrent in torrents)
         {
