@@ -2802,15 +2802,16 @@ public class PeerServerTest
         _connectionManager.DidNotReceive().TryAdd(Arg.Any<PeerConnection>(), Arg.Any<IConnectionReservation>());
     }
 
-    private Task InvokeConnectToPeerAsync(Torrent torrent, DiscoveredPeer candidate, CancellationToken ct)
+    private Task InvokeConnectToPeerAsync(Torrent torrent, DiscoveredPeer candidate, CancellationToken ct, PeerServer server = null)
     {
+        var target = server ?? _server;
         var method = typeof(PeerServer).GetMethod(
             "ConnectToPeerAsync",
             BindingFlags.NonPublic | BindingFlags.Instance,
             null,
             new[] { typeof(Torrent), typeof(DiscoveredPeer), typeof(CancellationToken), typeof(IConnectionReservation) },
             null)!;
-        return (Task)method.Invoke(_server, new object[] { torrent, candidate, ct, null })!;
+        return (Task)method.Invoke(target, new object[] { torrent, candidate, ct, null })!;
     }
 
     [Test]
@@ -3109,5 +3110,284 @@ public class PeerServerTest
 
         Assert.DoesNotThrowAsync(async () => await server.ProcessIncomingUtpConnectionAsync(mockConn));
         mockConn.Received().Dispose();
+    }
+
+    [Test]
+    [CancelAfter(5000)]
+    public async Task Outbound_connection_releases_half_open_semaphore_immediately_after_handshake_before_session_completion()
+    {
+        _configService.EncryptionMode.Returns("disabled");
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        var halfOpen = GetHalfOpenSemaphore();
+        var initialCount = halfOpen.CurrentCount;
+
+        const string infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = infoHash,
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = port,
+            Source = "Tracker"
+        };
+
+        using var cts = new CancellationTokenSource();
+        TcpClient remotePeer = null;
+
+        var serverTask = Task.Run(async () =>
+        {
+            remotePeer = await listener.AcceptTcpClientAsync(cts.Token);
+            _clients.Add(remotePeer);
+            var stream = remotePeer.GetStream();
+
+            var recvBuf = new byte[68];
+            var readTotal = 0;
+            while (readTotal < 68)
+            {
+                var r = await stream.ReadAsync(recvBuf.AsMemory(readTotal, 68 - readTotal), cts.Token);
+                if (r == 0)
+                {
+                    break;
+                }
+
+                readTotal += r;
+            }
+
+            var replyHandshake = BuildBtHandshake(infoHash, "-SD0001-999999999999");
+            await stream.WriteAsync(replyHandshake, cts.Token);
+            await stream.FlushAsync(cts.Token);
+        });
+
+        var connectTask = InvokeConnectToPeerAsync(torrent, candidate, cts.Token);
+
+        // Wait for handshake to succeed and connection to be established
+        for (var i = 0; i < 50 && halfOpen.CurrentCount < initialCount; i++)
+        {
+            await Task.Delay(20);
+        }
+
+        await serverTask;
+
+        // The half-open permit must be released immediately upon handshake completion
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(initialCount));
+
+        // However, the peer session must still be active (not completed) because the peer is still connected
+        Assert.That(connectTask.IsCompleted, Is.False);
+
+        // Terminate the connection to allow session cleanup
+        remotePeer?.Close();
+        await cts.CancelAsync();
+        try
+        {
+            await connectTask;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    [Test]
+    [CancelAfter(5000)]
+    public async Task Outbound_connection_releases_half_open_semaphore_when_connection_attempt_fails()
+    {
+        _configService.EncryptionMode.Returns("disabled");
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        var halfOpen = GetHalfOpenSemaphore();
+        var initialCount = halfOpen.CurrentCount;
+
+        const string infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = infoHash,
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = port,
+            Source = "Tracker"
+        };
+
+        using var cts = new CancellationTokenSource();
+
+        var serverTask = Task.Run(async () =>
+        {
+            using var remotePeer = await listener.AcceptTcpClientAsync(cts.Token);
+            // Immediately close the connection so the handshake fails
+            remotePeer.Close();
+        });
+
+        await InvokeConnectToPeerAsync(torrent, candidate, cts.Token);
+        await serverTask;
+
+        // The half-open permit must be released even when the connection fails
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(initialCount));
+    }
+
+    [Test]
+    [CancelAfter(10000)]
+    public async Task Multiple_subsequent_outbound_connections_are_not_starved_by_established_active_sessions()
+    {
+        const int maxHalfOpen = 1;
+        var config = Substitute.For<IConfigService>();
+        config.MaxGlobalConnections.Returns(200);
+        config.MaximumHalfOpenConnections.Returns(maxHalfOpen);
+        config.MaxConnectionsPerIp.Returns(10);
+        config.ListeningPort.Returns(0);
+        config.EncryptionMode.Returns("disabled");
+        config.HandshakeTimeoutSeconds.Returns(5);
+        config.MessageReadTimeoutSeconds.Returns(60);
+        config.KeepAliveIntervalSeconds.Returns(120);
+        config.PeerRequestCount.Returns(200);
+        config.PeerIdleChance.Returns(0.0);
+        config.PeerContactIntervalSeconds.Returns(300);
+
+        var connectionManager = Substitute.For<IConnectionManager>();
+        connectionManager.TryReserveSlot(Arg.Any<string>(), Arg.Any<bool>(), out Arg.Any<IConnectionReservation>())
+            .Returns(x =>
+            {
+                x[2] = Substitute.For<IConnectionReservation>();
+                return true;
+            });
+        connectionManager.TryAdd(Arg.Any<PeerConnection>(), Arg.Any<IConnectionReservation>())
+            .Returns(true);
+
+        using var server = new PeerServer(
+            config,
+            _torrentService,
+            connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            mseSkeyRegistry: _mseSkeyRegistry);
+
+        var halfOpen = GetHalfOpenSemaphore(server);
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(1));
+
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        _listeners.Add(listener);
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+
+        const string infoHash = "0102030405060708091011121314151617181920";
+        var torrent = new Torrent
+        {
+            Id = 1,
+            InfoHash = infoHash,
+            Name = "TestTorrent",
+            PieceCount = 10
+        };
+
+        var candidate = new DiscoveredPeer
+        {
+            Ip = "127.0.0.1",
+            Port = port,
+            Source = "Tracker"
+        };
+
+        using var cts = new CancellationTokenSource();
+        TcpClient client1 = null;
+        TcpClient client2 = null;
+
+        var serverTask = Task.Run(async () =>
+        {
+            client1 = await listener.AcceptTcpClientAsync(cts.Token);
+            _clients.Add(client1);
+            var stream1 = client1.GetStream();
+            var buf1 = new byte[68];
+            var readTotal1 = 0;
+            while (readTotal1 < 68)
+            {
+                var r = await stream1.ReadAsync(buf1.AsMemory(readTotal1, 68 - readTotal1), cts.Token);
+                if (r == 0)
+                {
+                    break;
+                }
+
+                readTotal1 += r;
+            }
+
+            var reply1 = BuildBtHandshake(infoHash, "-SD0001-111111111111");
+            await stream1.WriteAsync(reply1, cts.Token);
+            await stream1.FlushAsync(cts.Token);
+
+            client2 = await listener.AcceptTcpClientAsync(cts.Token);
+            _clients.Add(client2);
+            var stream2 = client2.GetStream();
+            var buf2 = new byte[68];
+            var readTotal2 = 0;
+            while (readTotal2 < 68)
+            {
+                var r = await stream2.ReadAsync(buf2.AsMemory(readTotal2, 68 - readTotal2), cts.Token);
+                if (r == 0)
+                {
+                    break;
+                }
+
+                readTotal2 += r;
+            }
+
+            var reply2 = BuildBtHandshake(infoHash, "-SD0001-222222222222");
+            await stream2.WriteAsync(reply2, cts.Token);
+            await stream2.FlushAsync(cts.Token);
+        });
+
+        // Start first outbound connection
+        var connectTask1 = InvokeConnectToPeerAsync(torrent, candidate, cts.Token, server);
+
+        // Wait for first handshake to complete and its half-open permit to be released
+        for (var i = 0; i < 50 && halfOpen.CurrentCount < 1; i++)
+        {
+            await Task.Delay(20);
+        }
+
+        // Connection 1 is still actively running its session loop
+        Assert.That(connectTask1.IsCompleted, Is.False);
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(1));
+
+        // Start second outbound connection - with MaximumHalfOpenConnections=1, this would starve and fail
+        // if connection 1 had held the permit for its session duration
+        var connectTask2 = InvokeConnectToPeerAsync(torrent, candidate, cts.Token, server);
+
+        // Wait for second handshake to complete and release its permit
+        for (var i = 0; i < 50 && halfOpen.CurrentCount < 1; i++)
+        {
+            await Task.Delay(20);
+        }
+
+        await serverTask;
+
+        // Both connections established successfully despite MaximumHalfOpenConnections = 1
+        Assert.That(halfOpen.CurrentCount, Is.EqualTo(1));
+        Assert.That(connectTask1.IsCompleted, Is.False);
+        Assert.That(connectTask2.IsCompleted, Is.False);
+
+        // Clean up connections
+        client1?.Close();
+        client2?.Close();
+        await cts.CancelAsync();
+        try
+        {
+            await Task.WhenAll(connectTask1, connectTask2);
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 }
