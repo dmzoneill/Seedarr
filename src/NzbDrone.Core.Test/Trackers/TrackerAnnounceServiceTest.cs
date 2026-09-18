@@ -204,7 +204,7 @@ public class TrackerAnnounceServiceTest
         Assert.That(tracker.ErrorMessage, Is.Null);
         Assert.That(tracker.LastAnnounce, Is.Not.Null);
 
-        _trackerEntryService.Received(1).Update(tracker);
+        _trackerEntryService.Received(2).Update(tracker);
     }
 
     [Test]
@@ -247,7 +247,7 @@ public class TrackerAnnounceServiceTest
         Assert.That(tracker.TotalAnnounces, Is.EqualTo(7));
         Assert.That(tracker.SuccessfulAnnounces, Is.EqualTo(5));
 
-        _trackerEntryService.Received(1).Update(tracker);
+        _trackerEntryService.Received(2).Update(tracker);
     }
 
     [Test]
@@ -959,5 +959,126 @@ public class TrackerAnnounceServiceTest
         Assert.That(tracker.NextAnnounce.Value, Is.GreaterThanOrEqualTo(beforeAnnounce.AddSeconds(1705)));
         // 1800 * 1.05 = 1890s, with small buffer
         Assert.That(tracker.NextAnnounce.Value, Is.LessThanOrEqualTo(DateTime.UtcNow.AddSeconds(1895)));
+    }
+
+    [Test]
+    public void AnnounceTracker_should_set_status_to_Announcing_and_publish_status_changed_event_before_io()
+    {
+        var torrent = new Torrent
+        {
+            Id = 90,
+            Name = "Status.Test.Movie",
+            InfoHash = "1111222233334444555566667777888899990000",
+            Status = TorrentStatus.Seeding
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 42,
+            TorrentId = 90,
+            Url = "http://tracker.example.com/announce",
+            Enabled = true,
+            Status = TrackerStatus.Unknown
+        };
+
+        TrackerStatus? statusDuringIo = null;
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(x =>
+            {
+                statusDuringIo = tracker.Status;
+                return new TrackerAnnounceResponse
+                {
+                    Success = true,
+                    Complete = 20,
+                    Incomplete = 5,
+                    Interval = 1800
+                };
+            });
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(statusDuringIo, Is.EqualTo(TrackerStatus.Announcing));
+        Assert.That(tracker.Status, Is.EqualTo(TrackerStatus.Working));
+
+        _trackerEntryService.Received(2).Update(tracker);
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TrackerStatusChangedEvent>(e =>
+            e.Torrent.Id == 90 &&
+            e.Tracker.Id == 42 &&
+            e.PreviousStatus == TrackerStatus.Unknown &&
+            e.NewStatus == TrackerStatus.Announcing));
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TrackerStatusChangedEvent>(e =>
+            e.Torrent.Id == 90 &&
+            e.Tracker.Id == 42 &&
+            e.PreviousStatus == TrackerStatus.Announcing &&
+            e.NewStatus == TrackerStatus.Working));
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TrackerAnnounceEvent>(e =>
+            e.Torrent.Id == 90 &&
+            e.TrackerId == 42 &&
+            e.Status == TrackerStatus.Working &&
+            e.IsSuccess));
+    }
+
+    [Test]
+    public void AnnounceTracker_should_transition_from_Announcing_to_Failed_on_failure_and_publish_events()
+    {
+        var torrent = new Torrent
+        {
+            Id = 91,
+            Name = "Failed.Status.Test",
+            InfoHash = "2222333344445555666677778888999900001111",
+            Status = TorrentStatus.Downloading
+        };
+
+        var tracker = new TrackerEntry
+        {
+            Id = 43,
+            TorrentId = 91,
+            Url = "http://badtracker.example.com/announce",
+            Enabled = true,
+            Status = TrackerStatus.Working
+        };
+
+        TrackerStatus? statusDuringIo = null;
+        _multiTracker.Announce(Arg.Any<TrackerAnnounceRequest>(), Arg.Any<List<List<string>>>())
+            .Returns(x =>
+            {
+                statusDuringIo = tracker.Status;
+                return new TrackerAnnounceResponse
+                {
+                    Success = false,
+                    FailureReason = "Connection timed out"
+                };
+            });
+
+        var result = _service.AnnounceTracker(torrent, tracker, force: true);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(statusDuringIo, Is.EqualTo(TrackerStatus.Announcing));
+        Assert.That(tracker.Status, Is.EqualTo(TrackerStatus.Failed));
+
+        _trackerEntryService.Received(2).Update(tracker);
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TrackerStatusChangedEvent>(e =>
+            e.Torrent.Id == 91 &&
+            e.Tracker.Id == 43 &&
+            e.PreviousStatus == TrackerStatus.Working &&
+            e.NewStatus == TrackerStatus.Announcing));
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TrackerStatusChangedEvent>(e =>
+            e.Torrent.Id == 91 &&
+            e.Tracker.Id == 43 &&
+            e.PreviousStatus == TrackerStatus.Announcing &&
+            e.NewStatus == TrackerStatus.Failed));
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TrackerAnnounceEvent>(e =>
+            e.Torrent.Id == 91 &&
+            e.TrackerId == 43 &&
+            e.Status == TrackerStatus.Failed &&
+            !e.IsSuccess &&
+            e.ErrorMessage == "Connection timed out"));
     }
 }

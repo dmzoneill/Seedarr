@@ -14,11 +14,14 @@ public class TrackerAnnounceEvent : IEvent
     public bool IsSuccess { get; set; }
     public string ErrorMessage { get; set; }
 
+    public int TrackerId { get; set; }
+    public TrackerStatus Status { get; set; }
+
     public TrackerAnnounceEvent()
     {
     }
 
-    public TrackerAnnounceEvent(Torrent torrent, string trackerUrl, int seeders, int leechers, int peersCount, long responseTimeMs, bool isSuccess, string errorMessage = null)
+    public TrackerAnnounceEvent(Torrent torrent, string trackerUrl, int seeders, int leechers, int peersCount, long responseTimeMs, bool isSuccess, string errorMessage = null, int trackerId = 0, TrackerStatus status = TrackerStatus.Unknown)
     {
         Torrent = torrent;
         TrackerUrl = trackerUrl;
@@ -28,6 +31,8 @@ public class TrackerAnnounceEvent : IEvent
         ResponseTimeMs = responseTimeMs;
         IsSuccess = isSuccess;
         ErrorMessage = errorMessage;
+        TrackerId = trackerId;
+        Status = status;
     }
 }
 
@@ -94,5 +99,25 @@ public class TrackerWarningEvent : IEvent
         Torrent = torrent;
         TrackerUrl = trackerUrl;
         WarningMessage = warningMessage;
+    }
+}
+
+public class TrackerStatusChangedEvent : IEvent
+{
+    public Torrent Torrent { get; set; }
+    public TrackerEntry Tracker { get; set; }
+    public TrackerStatus PreviousStatus { get; set; }
+    public TrackerStatus NewStatus { get; set; }
+
+    public TrackerStatusChangedEvent()
+    {
+    }
+
+    public TrackerStatusChangedEvent(Torrent torrent, TrackerEntry tracker, TrackerStatus previousStatus, TrackerStatus newStatus)
+    {
+        Torrent = torrent;
+        Tracker = tracker;
+        PreviousStatus = previousStatus;
+        NewStatus = newStatus;
     }
 }

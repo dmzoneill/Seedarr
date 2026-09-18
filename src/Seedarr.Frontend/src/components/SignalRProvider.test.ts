@@ -38,6 +38,12 @@ describe("SignalRProvider: isHandledByNamedEvent", () => {
     assert.equal(isHandledByNamedEvent("Automation"), true);
     assert.equal(isHandledByNamedEvent("AutomationExecuted"), true);
     assert.equal(isHandledByNamedEvent("AutomationTriggerEvaluated"), true);
+
+    // Tracker events
+    assert.equal(isHandledByNamedEvent("TrackerUpdated"), true);
+    assert.equal(isHandledByNamedEvent("TrackerAnnounced"), true);
+    assert.equal(isHandledByNamedEvent("trackerUpdated"), true);
+    assert.equal(isHandledByNamedEvent("trackerAnnounced"), true);
   });
 
   it("returns false for generic messages that are NOT dispatched via named events", () => {
@@ -56,6 +62,8 @@ describe("SignalRProvider: configuration maps", () => {
     assert.ok(EVENT_INVALIDATION_MAP.TorrentDeleted);
     assert.ok(EVENT_INVALIDATION_MAP.SeedingStatsUpdated);
     assert.ok(EVENT_INVALIDATION_MAP.HealthCheckCompleted);
+    assert.ok(EVENT_INVALIDATION_MAP.TrackerUpdated);
+    assert.ok(EVENT_INVALIDATION_MAP.TrackerAnnounced);
 
     // Ensure torrent events invalidate torrents and trackerboost
     const torrentUpdatedKeys = EVENT_INVALIDATION_MAP.TorrentUpdated.map((k) => k.join("/"));

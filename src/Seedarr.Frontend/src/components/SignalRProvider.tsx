@@ -15,6 +15,11 @@ export const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
   TaskCompleted: [["system", "tasks"], ["system", "status"]],
   AutomationExecuted: [["automation", "scripts"], ["automation"]],
   AutomationTriggerEvaluated: [["automation", "scripts"], ["automation"]],
+  TrackerUpdated: [["trackerboost"]],
+  TrackerAnnounced: [["trackerboost"]],
+  trackerUpdated: [["trackerboost"]],
+  trackerAnnounced: [["trackerboost"]],
+  TrackerAnnounceEvent: [["trackerboost"]],
 };
 
 export const RECONNECT_QUERY_KEYS: string[][] = [
@@ -48,7 +53,10 @@ export function isHandledByNamedEvent(name?: string): boolean {
     lower.includes("command") ||
     lower.includes("system") ||
     lower.includes("task") ||
-    lower.includes("automation")
+    lower.includes("automation") ||
+    lower === "trackerupdated" ||
+    lower === "trackerannounced" ||
+    lower === "trackerannounceevent"
   );
 }
 
@@ -78,6 +86,18 @@ export default function SignalRProvider() {
       if (name.includes("tracker")) {
         queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
         queryClient.invalidateQueries({ queryKey: ["torrents"] });
+        const bodyObj = message.body as Record<string, unknown> | undefined;
+        const torrentId =
+          typeof bodyObj?.torrentId === "number"
+            ? bodyObj.torrentId
+            : typeof bodyObj?.TorrentId === "number"
+            ? bodyObj.TorrentId
+            : undefined;
+        if (torrentId) {
+          queryClient.invalidateQueries({
+            queryKey: ["torrents", torrentId, "trackers"],
+          });
+        }
       } else if (name.includes("category")) {
         queryClient.invalidateQueries({ queryKey: ["categories"] });
       } else if (name.includes("tag")) {
@@ -109,6 +129,29 @@ export default function SignalRProvider() {
             });
             queryClient.invalidateQueries({
               queryKey: ["torrents", bodyObj.id, "trackers"],
+            });
+          }
+        }
+
+        // Entity-specific invalidations for trackers
+        if (
+          event === "TrackerUpdated" ||
+          event === "TrackerAnnounced" ||
+          event === "trackerUpdated" ||
+          event === "trackerAnnounced" ||
+          event === "TrackerAnnounceEvent"
+        ) {
+          const bodyObj = data as Record<string, unknown> | undefined;
+          const torrentId =
+            typeof bodyObj?.torrentId === "number"
+              ? bodyObj.torrentId
+              : typeof bodyObj?.TorrentId === "number"
+              ? bodyObj.TorrentId
+              : undefined;
+
+          if (torrentId) {
+            queryClient.invalidateQueries({
+              queryKey: ["torrents", torrentId, "trackers"],
             });
           }
         }
