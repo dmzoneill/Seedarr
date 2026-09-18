@@ -25,6 +25,7 @@ public interface ISpeedDistributionManager
 public class SpeedDistributionManager : ISpeedDistributionManager
 {
     public const long MinimumFloorBytesPerSec = 5 * 1024;
+    public const long MinimumTransmissionQuantum = 1024;
     private const long DefaultBytesPerSecond = 1_048_576;
 
     private readonly IEnumerable<ISpeedDistributor> _distributors;
@@ -286,7 +287,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
         var saturated = new bool[count];
         var totalFloorRequired = (long)count * floorBytesPerSec;
 
-        if (totalOriginal < totalFloorRequired || floorBytesPerSec <= 0)
+        if (floorBytesPerSec > 0 && totalOriginal < totalFloorRequired)
         {
             // Tier 1: If total bandwidth is less than N * floor, divide total bandwidth equally with surplus reallocation.
             var remainingBandwidth = totalOriginal;
@@ -373,21 +374,20 @@ public class SpeedDistributionManager : ISpeedDistributionManager
             return allocated;
         }
 
-        // Tier 1: Guarantee minimum floor to all active torrents.
+        var effectiveFloor = floorBytesPerSec > 0
+            ? floorBytesPerSec
+            : (totalOriginal >= (long)count * MinimumTransmissionQuantum
+                ? MinimumTransmissionQuantum
+                : (totalOriginal >= count ? Math.Max(1L, totalOriginal / count) : 0L));
+
+        // Tier 1: Guarantee minimum floor or transmission quantum to all active torrents to prevent peer starvation.
         for (var i = 0; i < count; i++)
         {
-            if (effectiveCaps[i] < floorBytesPerSec)
+            var floorToApply = Math.Min(effectiveCaps[i], effectiveFloor);
+            allocated[i] = floorToApply;
+            if (allocated[i] >= effectiveCaps[i])
             {
-                allocated[i] = effectiveCaps[i];
                 saturated[i] = true;
-            }
-            else
-            {
-                allocated[i] = floorBytesPerSec;
-                if (allocated[i] >= effectiveCaps[i])
-                {
-                    saturated[i] = true;
-                }
             }
         }
 
@@ -399,7 +399,7 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
         var spareBandwidth = totalOriginal - allocatedSoFar;
 
-        // Tier 2: Distribute remaining spare bandwidth proportionally based on priority weights with surplus reallocation.
+        // Tier 2: Distribute remaining spare bandwidth proportionally based on priority weights with Largest-Remainder (Hamilton-Hare) allocation.
         while (spareBandwidth > 0)
         {
             var eligible = new List<int>();
@@ -432,12 +432,15 @@ public class SpeedDistributionManager : ISpeedDistributionManager
                 activeWeightSum = eligible.Count;
             }
 
+            var exactShares = new double[count];
             var tentativeShare = new long[count];
             var cappedAny = false;
 
             foreach (var i in eligible)
             {
-                var share = (long)(spareBandwidth * (sanitizedWeights[i] / activeWeightSum));
+                var exact = spareBandwidth * (sanitizedWeights[i] / activeWeightSum);
+                exactShares[i] = exact;
+                var share = (long)exact;
                 tentativeShare[i] = share;
                 if (allocated[i] + share >= effectiveCaps[i])
                 {
@@ -460,16 +463,20 @@ public class SpeedDistributionManager : ISpeedDistributionManager
             }
             else
             {
+                var allocatedInRound = 0L;
                 foreach (var i in eligible)
                 {
                     allocated[i] += tentativeShare[i];
-                    spareBandwidth -= tentativeShare[i];
+                    allocatedInRound += tentativeShare[i];
                 }
+
+                spareBandwidth -= allocatedInRound;
 
                 if (spareBandwidth > 0)
                 {
                     var sortedEligible = eligible
-                        .OrderByDescending(i => sanitizedWeights[i])
+                        .OrderByDescending(i => exactShares[i] - tentativeShare[i])
+                        .ThenByDescending(i => sanitizedWeights[i])
                         .ThenBy(i => i)
                         .ToList();
 
@@ -515,12 +522,35 @@ public class SpeedDistributionManager : ISpeedDistributionManager
 
         if (spreadPercentage < 100 && torrentCount > 0)
         {
-            var equalShare = effectiveSpeed / torrentCount;
+            var equalShare = (double)effectiveSpeed / torrentCount;
             var spreadFactor = spreadPercentage / 100.0;
+            var exactShares = new double[torrentCount];
 
             for (var i = 0; i < torrentCount; i++)
             {
-                speeds[i] = (long)(equalShare + ((speeds[i] - equalShare) * spreadFactor));
+                var exact = equalShare + ((speeds[i] - equalShare) * spreadFactor);
+                exactShares[i] = exact;
+                speeds[i] = (long)exact;
+            }
+
+            var allocated = 0L;
+            for (var i = 0; i < torrentCount; i++)
+            {
+                allocated += speeds[i];
+            }
+
+            var remainder = effectiveSpeed - allocated;
+            if (remainder > 0)
+            {
+                var sortedIndices = Enumerable.Range(0, torrentCount)
+                    .OrderByDescending(i => exactShares[i] - speeds[i])
+                    .ThenBy(i => i)
+                    .ToList();
+
+                for (var r = 0; r < remainder; r++)
+                {
+                    speeds[sortedIndices[r % torrentCount]]++;
+                }
             }
         }
 

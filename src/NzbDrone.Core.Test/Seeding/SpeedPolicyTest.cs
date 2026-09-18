@@ -849,4 +849,96 @@ public class SpeedPolicyTest
 
         Assert.That(torrent.Uploaded, Is.EqualTo(0));
     }
+
+    [Test]
+    public void ProcessSeeding_incorporates_protocol_overhead_into_rate_limiting_so_wire_usage_does_not_exceed_limits()
+    {
+        var torrent1 = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Leechers = 5,
+            SeedingTime = 300
+        };
+        var torrent2 = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Leechers = 5,
+            SeedingTime = 300
+        };
+        var torrents = new List<Torrent> { torrent1, torrent2 };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(2, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 80_000, 80_000 }); // Unclamped sum 160_000
+
+        // Configure 5% protocol framing and transport overhead
+        _subject.ProtocolOverheadFactor = 0.05;
+        const long wireLimitBps = 100_000L;
+        var maxExpectedPayload = (long)Math.Floor(wireLimitBps / 1.05); // 95_238 bytes
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = wireLimitBps }, TimeSpan.FromSeconds(1));
+
+        var totalPayload = torrent1.Uploaded + torrent2.Uploaded;
+        Assert.That(totalPayload, Is.EqualTo(maxExpectedPayload));
+
+        var wireUsage = (long)Math.Ceiling(totalPayload * 1.05);
+        Assert.That(wireUsage, Is.LessThanOrEqualTo(wireLimitBps));
+    }
+
+    [Test]
+    public void ProcessDownloading_incorporates_protocol_overhead_into_distribution_allowance()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Downloaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 0.0
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectDownloadStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _subject.ProtocolOverheadFactor = 0.10; // 10% overhead
+
+        const long wireLimit = 110_000L;
+        const long expectedPayloadLimit = 100_000L; // 110_000 / 1.10
+
+        _distributionManager.DistributeDownloadSpeeds(1, expectedPayloadLimit, Arg.Any<double[]>())
+            .Returns(new long[] { expectedPayloadLimit });
+
+        _subject.ProcessDownloading(torrents, new SpeedLimits { MaxDownloadSpeed = wireLimit }, TimeSpan.FromSeconds(1));
+
+        _distributionManager.Received(1).DistributeDownloadSpeeds(1, expectedPayloadLimit, Arg.Any<double[]>());
+        Assert.That(torrent.Downloaded, Is.EqualTo(expectedPayloadLimit));
+    }
+
+    [Test]
+    public void EstimateFramingAndTransportOverhead_calculates_piece_and_datagram_headers_correctly()
+    {
+        // 16 KiB piece chunk:
+        // Framing: 13 bytes
+        // Packets: ceil((16384 + 13) / 1460) = 12 packets
+        // TCP Headers: 12 * 40 = 480 bytes
+        // Total = 493 bytes overhead
+        var overhead = SpeedPolicy.EstimateFramingAndTransportOverhead(16_384);
+        Assert.That(overhead, Is.EqualTo(493L));
+
+        var factor = SpeedPolicy.CalculateOverheadFactor();
+        Assert.That(factor, Is.EqualTo(493.0 / 16_384.0).Within(1e-6));
+
+        var wireUsage = SpeedPolicy.CalculateWireUsage(100_000, 0.05);
+        Assert.That(wireUsage, Is.EqualTo(105_000L));
+
+        var maxPayload = SpeedPolicy.CalculateMaxPayloadAllowance(105_000, 0.05);
+        Assert.That(maxPayload, Is.EqualTo(100_000L));
+    }
 }
