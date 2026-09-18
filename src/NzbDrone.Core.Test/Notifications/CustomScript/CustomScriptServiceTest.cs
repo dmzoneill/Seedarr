@@ -7,6 +7,7 @@ using NUnit.Framework;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.MediaEnrichment;
 using NzbDrone.Core.Notifications;
+using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Test.Notifications.CustomScript;
@@ -329,6 +330,94 @@ public class CustomScriptServiceTest
             Assert.That(result.Success, Is.False);
             Assert.That(result.ExitCode, Is.EqualTo(-1));
             Assert.That(result.Stderr, Does.Contain("timed out"));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Test]
+    public void CleanScriptPath_should_trim_whitespace_and_surrounding_quotes()
+    {
+        Assert.That(CustomScriptService.CleanScriptPath(null), Is.EqualTo(string.Empty));
+        Assert.That(CustomScriptService.CleanScriptPath(string.Empty), Is.EqualTo(string.Empty));
+        Assert.That(CustomScriptService.CleanScriptPath("   "), Is.EqualTo(string.Empty));
+        Assert.That(CustomScriptService.CleanScriptPath("/scripts/done.sh"), Is.EqualTo("/scripts/done.sh"));
+        Assert.That(CustomScriptService.CleanScriptPath("\"/scripts/done.sh\""), Is.EqualTo("/scripts/done.sh"));
+        Assert.That(CustomScriptService.CleanScriptPath("'/scripts/done.sh'"), Is.EqualTo("/scripts/done.sh"));
+        Assert.That(CustomScriptService.CleanScriptPath("  \"/scripts/done.sh\"  "), Is.EqualTo("/scripts/done.sh"));
+        Assert.That(CustomScriptService.CleanScriptPath("\"'/scripts/done.sh'\""), Is.EqualTo("/scripts/done.sh"));
+        Assert.That(CustomScriptService.CleanScriptPath("\"C:\\Scripts\\run.bat\""), Is.EqualTo("C:\\Scripts\\run.bat"));
+    }
+
+    [Test]
+    public void BuildEnvironmentVariables_should_map_tag_ids_to_labels_using_tag_service()
+    {
+        var torrent = new Torrent
+        {
+            Id = 101,
+            Name = "Test Torrent",
+            TotalSize = 5368709120,
+            TagIds = new List<int> { 1, 3 }
+        };
+
+        var tagService = Substitute.For<ITagService>();
+        tagService.GetLabelsForTagIds(torrent.TagIds).Returns(new List<string> { "4k", "verified" });
+
+        var env = CustomScriptService.BuildEnvironmentVariables("OnDownloadComplete", torrent, null, tagService);
+
+        Assert.That(env["SEEDARR_TORRENT_TAGS"], Is.EqualTo("4k,verified"));
+        Assert.That(env["LEECHARR_TORRENT_TAGS"], Is.EqualTo("4k,verified"));
+        Assert.That(env["TORRENT_TAGS"], Is.EqualTo("4k,verified"));
+        Assert.That(env["SEEDARR_TORRENT_SIZE_BYTES"], Is.EqualTo("5368709120"));
+        Assert.That(env["LEECHARR_TORRENT_SIZE_BYTES"], Is.EqualTo("5368709120"));
+        Assert.That(env["SEEDARR_TORRENT_SIZE"], Is.EqualTo("5368709120"));
+        Assert.That(env["LEECHARR_TORRENT_SIZE"], Is.EqualTo("5368709120"));
+    }
+
+    [Test]
+    public void BuildEnvironmentVariables_should_fallback_to_tag_ids_when_tag_service_is_null()
+    {
+        var torrent = new Torrent
+        {
+            Id = 102,
+            Name = "Fallback Torrent",
+            TotalSize = 1048576,
+            TagIds = new List<int> { 7, 9 }
+        };
+
+        var env = CustomScriptService.BuildEnvironmentVariables("OnDownloadComplete", torrent, null, null);
+
+        Assert.That(env["SEEDARR_TORRENT_TAGS"], Is.EqualTo("7,9"));
+        Assert.That(env["LEECHARR_TORRENT_TAGS"], Is.EqualTo("7,9"));
+        Assert.That(env["TORRENT_TAGS"], Is.EqualTo("7,9"));
+    }
+
+    [Test]
+    public async Task ExecuteScriptAsync_should_succeed_with_quoted_script_path()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var isWindows = OperatingSystem.IsWindows();
+            var scriptFile = Path.Combine(tempDir, isWindows ? "success.bat" : "success.sh");
+            var scriptContent = isWindows
+                ? "@echo off\r\nexit /b 0\r\n"
+                : "#!/bin/sh\nexit 0\n";
+            await File.WriteAllTextAsync(scriptFile, scriptContent);
+
+            if (!isWindows)
+            {
+                File.SetUnixFileMode(scriptFile, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            var quotedPath = $"\"{scriptFile}\"";
+            var service = new CustomScriptService();
+            var result = await service.ExecuteScriptAsync(quotedPath, null, "Test");
+
+            Assert.That(result, Is.True);
         }
         finally
         {
