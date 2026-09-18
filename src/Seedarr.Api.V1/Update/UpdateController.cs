@@ -15,10 +15,35 @@ namespace Seedarr.Api.V1.Update;
 public class UpdateController : Controller
 {
     private readonly IUpdateService _updateService;
+    private readonly IPostUpdateVerificationService _postUpdateVerificationService;
 
-    public UpdateController(IUpdateService updateService = null)
+    public UpdateController(
+        IUpdateService updateService = null,
+        IPostUpdateVerificationService postUpdateVerificationService = null)
     {
         _updateService = updateService ?? new UpdateService();
+        _postUpdateVerificationService = postUpdateVerificationService;
+    }
+
+    [HttpGet("status")]
+    public ActionResult<UpdateStatusResource> GetStatus()
+    {
+        var state = _postUpdateVerificationService?.GetUpdateState() ?? new UpdateState
+        {
+            PreviousVersion = BuildInfo.Version?.ToString() ?? "1.0.0",
+            State = UpdateLifecycleState.Idle,
+        };
+
+        return Ok(new UpdateStatusResource
+        {
+            PreviousVersion = state.PreviousVersion,
+            TargetVersion = state.TargetVersion,
+            State = state.State,
+            InitiatedAt = state.InitiatedAt,
+            VerificationTimeoutSeconds = state.VerificationTimeoutSeconds,
+            BackupDirectory = state.BackupDirectory,
+            ErrorMessage = state.ErrorMessage,
+        });
     }
 
     [HttpGet]
@@ -109,9 +134,9 @@ public class UpdateController : Controller
         }
 
         return a.Major == b.Major &&
-               a.Minor == b.Minor &&
-               Math.Max(0, a.Build) == Math.Max(0, b.Build) &&
-               Math.Max(0, a.Revision) == Math.Max(0, b.Revision);
+            a.Minor == b.Minor &&
+            Math.Max(0, a.Build) == Math.Max(0, b.Build) &&
+            Math.Max(0, a.Revision) == Math.Max(0, b.Revision);
     }
 
     private static SemVersion ParseSemVersionOrFallback(string versionStr)

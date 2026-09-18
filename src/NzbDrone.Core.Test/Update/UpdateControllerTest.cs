@@ -16,13 +16,15 @@ namespace NzbDrone.Core.Test.Update;
 public class UpdateControllerTest
 {
     private IUpdateService _updateService;
+    private IPostUpdateVerificationService _postUpdateVerificationService;
     private UpdateController _controller;
 
     [SetUp]
     public void SetUp()
     {
         _updateService = Substitute.For<IUpdateService>();
-        _controller = new UpdateController(_updateService);
+        _postUpdateVerificationService = Substitute.For<IPostUpdateVerificationService>();
+        _controller = new UpdateController(_updateService, _postUpdateVerificationService);
     }
 
     private static bool InvokeAreVersionsEqual(Version a, Version b)
@@ -224,5 +226,89 @@ public class UpdateControllerTest
         }));
         Assert.That(results[0].Latest, Is.True);
         Assert.That(results[1].Latest, Is.False);
+    }
+
+    [Test]
+    public void GetStatus_should_return_status_from_verification_service()
+    {
+        var state = new UpdateState
+        {
+            PreviousVersion = "1.0.0",
+            TargetVersion = "1.1.0",
+            State = UpdateLifecycleState.PendingVerification,
+            InitiatedAt = DateTime.UtcNow,
+            VerificationTimeoutSeconds = 90,
+            BackupDirectory = "/path/to/backup",
+            ErrorMessage = null,
+        };
+
+        _postUpdateVerificationService.GetUpdateState().Returns(state);
+
+        var actionResult = _controller.GetStatus();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var status = okResult.Value as UpdateStatusResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.PreviousVersion, Is.EqualTo("1.0.0"));
+        Assert.That(status.TargetVersion, Is.EqualTo("1.1.0"));
+        Assert.That(status.State, Is.EqualTo(UpdateLifecycleState.PendingVerification));
+        Assert.That(status.VerificationTimeoutSeconds, Is.EqualTo(90));
+        Assert.That(status.BackupDirectory, Is.EqualTo("/path/to/backup"));
+    }
+
+    [Test]
+    public void GetStatus_should_return_default_idle_status_when_verification_service_returns_idle()
+    {
+        _postUpdateVerificationService.GetUpdateState().Returns(new UpdateState
+        {
+            PreviousVersion = "1.0.0",
+            State = UpdateLifecycleState.Idle,
+        });
+
+        var actionResult = _controller.GetStatus();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var status = okResult.Value as UpdateStatusResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.State, Is.EqualTo(UpdateLifecycleState.Idle));
+    }
+
+    [Test]
+    public void GetStatus_should_return_default_idle_status_when_verification_service_is_null()
+    {
+        var controller = new UpdateController(_updateService, null);
+
+        var actionResult = controller.GetStatus();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var status = okResult.Value as UpdateStatusResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.State, Is.EqualTo(UpdateLifecycleState.Idle));
+    }
+
+    [Test]
+    public void GetStatus_should_return_rolled_back_status_with_error_message()
+    {
+        var state = new UpdateState
+        {
+            PreviousVersion = "1.0.0",
+            TargetVersion = "1.1.0",
+            State = UpdateLifecycleState.RolledBack,
+            ErrorMessage = "Health check failed: DB corrupted",
+        };
+
+        _postUpdateVerificationService.GetUpdateState().Returns(state);
+
+        var actionResult = _controller.GetStatus();
+        var okResult = actionResult.Result as OkObjectResult;
+        Assert.That(okResult, Is.Not.Null);
+
+        var status = okResult.Value as UpdateStatusResource;
+        Assert.That(status, Is.Not.Null);
+        Assert.That(status.State, Is.EqualTo(UpdateLifecycleState.RolledBack));
+        Assert.That(status.ErrorMessage, Is.EqualTo("Health check failed: DB corrupted"));
     }
 }
