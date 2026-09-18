@@ -1,6 +1,8 @@
 using System;
 using NUnit.Framework;
 using NzbDrone.Core.Peers.Encryption;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Math;
 
 namespace NzbDrone.Core.Test.Peers.Encryption;
 
@@ -189,5 +191,137 @@ public class MseKeyDerivationTest
         var secret13 = kd1.ComputeSharedSecret(kd3.GetPublicKeyBytes());
 
         Assert.That(secret12, Is.Not.EqualTo(secret13));
+    }
+
+    [Test]
+    public void PrivateKey_should_be_configured_to_160_bits_per_bep8()
+    {
+        var kd = new MseKeyDerivation();
+
+        Assert.That(kd.PrivateKey.Parameters.L, Is.EqualTo(160));
+        Assert.That(kd.PrivateKey.X.BitLength, Is.LessThanOrEqualTo(160));
+        Assert.That(kd.PrivateKey.X.BitLength, Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void NormalizeTo96Bytes_should_return_same_array_when_already_96_bytes()
+    {
+        var input = new byte[96];
+        new Random(42).NextBytes(input);
+
+        var result = MseKeyDerivation.NormalizeTo96Bytes(input);
+
+        Assert.That(result, Is.SameAs(input));
+        Assert.That(result, Has.Length.EqualTo(96));
+    }
+
+    [Test]
+    public void NormalizeTo96Bytes_should_left_pad_with_zeros_when_less_than_96_bytes()
+    {
+        var input = new byte[94];
+        Array.Fill<byte>(input, 0xAB);
+
+        var result = MseKeyDerivation.NormalizeTo96Bytes(input);
+
+        Assert.That(result, Has.Length.EqualTo(96));
+        Assert.That(result[0], Is.EqualTo(0));
+        Assert.That(result[1], Is.EqualTo(0));
+        Assert.That(result[2], Is.EqualTo(0xAB));
+        Assert.That(result[95], Is.EqualTo(0xAB));
+    }
+
+    [Test]
+    public void NormalizeTo96Bytes_should_trim_to_trailing_96_bytes_when_greater_than_96_bytes()
+    {
+        var input = new byte[97];
+        input[0] = 0x00;
+        for (var i = 1; i < 97; i++)
+        {
+            input[i] = (byte)(i & 0xFF);
+        }
+
+        var result = MseKeyDerivation.NormalizeTo96Bytes(input);
+
+        Assert.That(result, Has.Length.EqualTo(96));
+        for (var i = 0; i < 96; i++)
+        {
+            Assert.That(result[i], Is.EqualTo(input[i + 1]));
+        }
+    }
+
+    [Test]
+    public void NormalizeTo96Bytes_should_throw_when_null()
+    {
+        Assert.That(() => MseKeyDerivation.NormalizeTo96Bytes(null), Throws.TypeOf<ArgumentNullException>());
+    }
+
+    [Test]
+    public void ComputeSharedSecret_should_throw_for_null_remote_key()
+    {
+        var kd = new MseKeyDerivation();
+
+        Assert.That(() => kd.ComputeSharedSecret(null), Throws.TypeOf<ArgumentNullException>());
+    }
+
+    [Test]
+    [TestCase(0)]
+    [TestCase(95)]
+    [TestCase(97)]
+    [TestCase(128)]
+    public void ComputeSharedSecret_should_throw_for_invalid_remote_key_length(int length)
+    {
+        var kd = new MseKeyDerivation();
+        var invalidKey = new byte[length];
+
+        Assert.That(() => kd.ComputeSharedSecret(invalidKey), Throws.TypeOf<ArgumentException>());
+    }
+
+    [Test]
+    public void ComputeSharedSecret_should_throw_for_p_minus_one_key()
+    {
+        var kd = new MseKeyDerivation();
+        var pMinusOne = MseKeyDerivation.PrimeModulus.Subtract(BigInteger.One).ToByteArrayUnsigned();
+        var pMinusOneKey = MseKeyDerivation.NormalizeTo96Bytes(pMinusOne);
+
+        Assert.That(() => kd.ComputeSharedSecret(pMinusOneKey), Throws.TypeOf<InvalidOperationException>());
+    }
+
+    [Test]
+    public void ComputeSharedSecret_should_throw_for_key_greater_than_or_equal_to_p()
+    {
+        var kd = new MseKeyDerivation();
+        var primeBytes = MseKeyDerivation.PrimeModulus.ToByteArrayUnsigned();
+        var primeKey = MseKeyDerivation.NormalizeTo96Bytes(primeBytes);
+
+        Assert.That(() => kd.ComputeSharedSecret(primeKey), Throws.TypeOf<InvalidOperationException>());
+    }
+
+    [Test]
+    public void ComputeSharedSecret_should_succeed_for_valid_boundary_keys()
+    {
+        var kd = new MseKeyDerivation();
+
+        // Smallest valid public key: Y = 2
+        var twoKey = new byte[96];
+        twoKey[95] = 0x02;
+        var secretTwo = kd.ComputeSharedSecret(twoKey);
+        Assert.That(secretTwo, Has.Length.EqualTo(96));
+
+        // Largest valid public key: Y = P - 2
+        var pMinusTwo = MseKeyDerivation.PrimeModulus.Subtract(BigInteger.Two).ToByteArrayUnsigned();
+        var pMinusTwoKey = MseKeyDerivation.NormalizeTo96Bytes(pMinusTwo);
+        var secretPMinusTwo = kd.ComputeSharedSecret(pMinusTwoKey);
+        Assert.That(secretPMinusTwo, Has.Length.EqualTo(96));
+    }
+
+    [Test]
+    public void GetPublicKeyBytes_consistently_returns_strictly_96_bytes()
+    {
+        for (var i = 0; i < 20; i++)
+        {
+            var kd = new MseKeyDerivation();
+            var pk = kd.GetPublicKeyBytes();
+            Assert.That(pk, Has.Length.EqualTo(96));
+        }
     }
 }

@@ -32,9 +32,12 @@ public class MseKeyDerivation
     private readonly DHPrivateKeyParameters _privateKey;
     private readonly DHPublicKeyParameters _publicKey;
 
+    internal DHPrivateKeyParameters PrivateKey => _privateKey;
+    internal static Org.BouncyCastle.Math.BigInteger PrimeModulus => Prime;
+
     public MseKeyDerivation()
     {
-        var dhParams = new DHParameters(Prime, Generator);
+        var dhParams = new DHParameters(Prime, Generator, null, 160);
         var keyGen = new DHKeyPairGenerator();
         keyGen.Init(new DHKeyGenerationParameters(new SecureRandom(), dhParams));
         var keyPair = keyGen.GenerateKeyPair();
@@ -45,42 +48,54 @@ public class MseKeyDerivation
     public byte[] GetPublicKeyBytes()
     {
         var bytes = _publicKey.Y.ToByteArrayUnsigned();
-        if (bytes.Length < 96)
-        {
-            var padded = new byte[96];
-            Array.Copy(bytes, 0, padded, 96 - bytes.Length, bytes.Length);
-            return padded;
-        }
-
-        return bytes;
+        return NormalizeTo96Bytes(bytes);
     }
 
     public byte[] ComputeSharedSecret(byte[] remotePublicKeyBytes)
     {
+        ArgumentNullException.ThrowIfNull(remotePublicKeyBytes);
+
+        if (remotePublicKeyBytes.Length != 96)
+        {
+            throw new ArgumentException("Remote public key must be exactly 96 bytes.", nameof(remotePublicKeyBytes));
+        }
+
         var remoteY = new Org.BouncyCastle.Math.BigInteger(1, remotePublicKeyBytes);
 
-        // Validate DH public key to prevent small subgroup attacks
+        // Validate DH public key to prevent small subgroup attacks (1 < Y < P - 1)
         if (remoteY.CompareTo(Org.BouncyCastle.Math.BigInteger.One) <= 0 ||
             remoteY.CompareTo(Prime.Subtract(Org.BouncyCastle.Math.BigInteger.One)) >= 0)
         {
             throw new InvalidOperationException("Invalid DH public key");
         }
 
-        var remotePublicKey = new DHPublicKeyParameters(remoteY, new DHParameters(Prime, Generator));
+        var remotePublicKey = new DHPublicKeyParameters(remoteY, _privateKey.Parameters);
 
         var agreement = new DHBasicAgreement();
         agreement.Init(_privateKey);
         var sharedSecret = agreement.CalculateAgreement(remotePublicKey);
         var secretBytes = sharedSecret.ToByteArrayUnsigned();
 
-        if (secretBytes.Length < 96)
+        return NormalizeTo96Bytes(secretBytes);
+    }
+
+    internal static byte[] NormalizeTo96Bytes(byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+
+        if (bytes.Length == 96)
         {
-            var padded = new byte[96];
-            Array.Copy(secretBytes, 0, padded, 96 - secretBytes.Length, secretBytes.Length);
-            return padded;
+            return bytes;
         }
 
-        return secretBytes;
+        if (bytes.Length > 96)
+        {
+            return bytes[^96..];
+        }
+
+        var padded = new byte[96];
+        Array.Copy(bytes, 0, padded, 96 - bytes.Length, bytes.Length);
+        return padded;
     }
 
     public static byte[] DeriveKey(byte[] sharedSecret, byte[] prefix)
