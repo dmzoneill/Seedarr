@@ -1848,6 +1848,100 @@ public class SeedingEngineTest
     }
 
     [Test]
+    public void Tick_should_not_increment_seeding_time_when_status_is_downloading()
+    {
+        _configService.UiRefreshRateSec.Returns(5);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            SeedingTime = 100,
+            InfoHash = "abc123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        CallTick();
+
+        Assert.That(torrent.SeedingTime, Is.EqualTo(100));
+    }
+
+    [Test]
+    public void Tick_should_not_flood_TorrentStalledEvent_on_consecutive_ticks()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Downloading,
+            Progress = 0.5,
+            DownloadSpeed = 0,
+            DateAdded = DateTime.UtcNow.AddMinutes(-10),
+            IsVpnPaused = false
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        CallTick();
+        CallTick();
+        CallTick();
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentStalledEvent>(e => e.Torrent.Id == 1));
+    }
+
+    [Test]
+    public void Tick_should_publish_TorrentSeedingTimeReachedEvent_once_when_threshold_reached_and_not_flood_on_subsequent_ticks()
+    {
+        _configService.UiRefreshRateSec.Returns(1);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            SeedingTime = 59,
+            SeedingTimeLimit = 60,
+            InfoHash = "abc123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        // Tick 1: SeedingTime increments to 60, reaching limit of 60 -> event published
+        CallTick();
+        _eventAggregator.Received(1).PublishEvent(Arg.Is<TorrentSeedingTimeReachedEvent>(e => e.Torrent.Id == 1 && e.SeedingTime.TotalSeconds == 60));
+
+        // Tick 2: SeedingTime increments to 61 -> event should not be published again
+        CallTick();
+
+        // Tick 3: SeedingTime increments to 62 -> event should not be published again
+        CallTick();
+
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentSeedingTimeReachedEvent>());
+    }
+
+    [Test]
+    public void Tick_should_not_publish_TorrentSeedingTimeReachedEvent_when_limit_not_configured_or_not_reached()
+    {
+        _configService.UiRefreshRateSec.Returns(1);
+        var torrentWithoutLimit = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            SeedingTime = 100,
+            SeedingTimeLimit = null,
+            InfoHash = "abc123"
+        };
+        var torrentBelowLimit = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Seeding,
+            SeedingTime = 10,
+            SeedingTimeLimit = 60,
+            InfoHash = "def456"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrentWithoutLimit, torrentBelowLimit });
+
+        CallTick();
+
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentSeedingTimeReachedEvent>());
+    }
+
+    [Test]
     public async Task StopAsync_should_disconnect_active_peer_connections()
     {
         await _engine.StopAsync(CancellationToken.None);
