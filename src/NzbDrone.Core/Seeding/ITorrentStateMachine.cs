@@ -7,5 +7,5 @@ public interface ITorrentStateMachine
 {
     bool HandleForceCompleted(Torrent torrent);
     bool CheckDownloadThreshold(Torrent torrent, double defaultThreshold);
-    void ApplyRatioLimit(List<Torrent> seedingTorrents, double globalRatioLimit, string action = "Stop");
+    List<Torrent> ApplyRatioLimit(List<Torrent> seedingTorrents, double globalRatioLimit, string action = "Stop");
 }

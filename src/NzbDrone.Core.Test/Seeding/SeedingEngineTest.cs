@@ -221,6 +221,75 @@ public class SeedingEngineTest
         Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
         Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
         Assert.That(torrent.Active, Is.False);
+        _torrentService.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(torrents =>
+            torrents.Any(t => t.Id == 1 && t.Status == TorrentStatus.Stopped)));
+    }
+
+    [Test]
+    public void Tick_should_persist_stopped_status_and_not_retrigger_on_subsequent_tick()
+    {
+        _configService.GlobalSeedRatioLimit.Returns(2.0);
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            TotalSize = 1000,
+            Uploaded = 2500,
+            Downloaded = 1000,
+            Ratio = 2.5,
+            Progress = 1.0,
+            InfoHash = "abc123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 100 });
+
+        CallTick();
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Stopped));
+        _torrentService.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(torrents =>
+            torrents.Any(t => t.Id == 1 && t.Status == TorrentStatus.Stopped)));
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentSeedGoalReachedEvent>());
+        _eventAggregator.Received(1).PublishEvent(Arg.Any<TorrentRatioReachedEvent>());
+
+        // Simulate subsequent tick where database returns the updated Stopped torrent
+        _eventAggregator.ClearReceivedCalls();
+        _torrentService.ClearReceivedCalls();
+
+        CallTick();
+
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentSeedGoalReachedEvent>());
+        _eventAggregator.DidNotReceive().PublishEvent(Arg.Any<TorrentRatioReachedEvent>());
+        _torrentService.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+    }
+
+    [Test]
+    public void Tick_should_pause_torrent_and_persist_when_action_is_pause()
+    {
+        _configService.GlobalSeedRatioLimit.Returns(2.0);
+        _configService.SeedGoalReachedAction.Returns("Pause");
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            TotalSize = 1000,
+            Uploaded = 2500,
+            Downloaded = 1000,
+            Ratio = 2.5,
+            Progress = 1.0,
+            InfoHash = "abc123"
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 100 });
+
+        CallTick();
+
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+        Assert.That(torrent.UploadSpeed, Is.EqualTo(0));
+        Assert.That(torrent.Active, Is.False);
+        _torrentService.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(torrents =>
+            torrents.Any(t => t.Id == 1 && t.Status == TorrentStatus.Paused)));
     }
 
     [Test]
