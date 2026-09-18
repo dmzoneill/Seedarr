@@ -235,4 +235,57 @@ public class DownloadClientFactoryTest
         Assert.That(client1Again, Is.Not.SameAs(client1));
         Assert.That(client2Again, Is.Not.SameAs(client2));
     }
+
+    [TestCase("qbittorrent", typeof(QBitTorrentClient))]
+    [TestCase("QBitTorrent", typeof(QBitTorrentClient))]
+    [TestCase("qBittorrent", typeof(QBitTorrentClient))]
+    [TestCase("transmission", typeof(TransmissionClient))]
+    [TestCase("Transmission", typeof(TransmissionClient))]
+    [TestCase("TRANSMISSION", typeof(TransmissionClient))]
+    [TestCase("deluge", typeof(DelugeClient))]
+    [TestCase("Deluge", typeof(DelugeClient))]
+    [TestCase("DELUGE", typeof(DelugeClient))]
+    public void CreateClient_should_support_case_insensitive_client_type(string clientType, Type expectedType)
+    {
+        var def = new DownloadClientDefinition
+        {
+            Id = 1,
+            ClientType = clientType,
+            Host = "localhost",
+            Port = 8080,
+        };
+
+        var client = _factory.CreateClient(def);
+
+        Assert.That(client, Is.Not.Null);
+        Assert.That(client, Is.InstanceOf(expectedType));
+    }
+
+    [TestCase("qbittorrent", "QBitTorrent")]
+    [TestCase("transmission", "Transmission")]
+    [TestCase("deluge", "Deluge")]
+    public void CreateClient_should_reuse_cached_instance_across_different_casing_of_client_type(string type1, string type2)
+    {
+        var def1 = new DownloadClientDefinition
+        {
+            Id = 1,
+            ClientType = type1,
+            Host = "localhost",
+            Port = 8080,
+        };
+
+        var def2 = new DownloadClientDefinition
+        {
+            Id = 1,
+            ClientType = type2,
+            Host = "localhost",
+            Port = 8080,
+        };
+
+        var client1 = _factory.CreateClient(def1);
+        var client2 = _factory.CreateClient(def2);
+
+        Assert.That(client1, Is.Not.Null);
+        Assert.That(client2, Is.SameAs(client1));
+    }
 }

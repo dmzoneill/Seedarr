@@ -58,6 +58,11 @@ public class DownloadClientController : Controller
             return BadRequest(validationError);
         }
 
+        if (!string.IsNullOrWhiteSpace(definition.ClientType))
+        {
+            definition.ClientType = NormalizeClientType(definition.ClientType);
+        }
+
         if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
             definition.Implementation = $"{definition.ClientType}Client";
@@ -93,6 +98,11 @@ public class DownloadClientController : Controller
         }
 
         definition.Id = id;
+
+        if (!string.IsNullOrWhiteSpace(definition.ClientType))
+        {
+            definition.ClientType = NormalizeClientType(definition.ClientType);
+        }
 
         if (string.IsNullOrWhiteSpace(definition.Implementation))
         {
@@ -257,6 +267,17 @@ public class DownloadClientController : Controller
         var clone = definition.Clone();
         clone.Password = string.IsNullOrEmpty(clone.Password) ? "" : PasswordMask;
         return clone;
+    }
+
+    private static string NormalizeClientType(string clientType)
+    {
+        return clientType?.Trim().ToLowerInvariant() switch
+        {
+            "qbittorrent" => "QBitTorrent",
+            "transmission" => "Transmission",
+            "deluge" => "Deluge",
+            _ => clientType?.Trim(),
+        };
     }
 
     private static string ValidateDefinition(DownloadClientDefinition definition)

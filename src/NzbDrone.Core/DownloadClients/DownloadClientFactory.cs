@@ -163,14 +163,14 @@ public class DownloadClientFactory : ProviderFactory<IDownloadClient, DownloadCl
 
     private static string GetConfigKey(DownloadClientDefinition definition)
     {
-        return $"{definition.ClientType}|{definition.Host}|{definition.Port}|{definition.UseSsl}|{definition.UrlBase}|{definition.Username}|{definition.Password}|{definition.Category}";
+        return $"{definition.ClientType?.Trim().ToLowerInvariant()}|{definition.Host}|{definition.Port}|{definition.UseSsl}|{definition.UrlBase}|{definition.Username}|{definition.Password}|{definition.Category}";
     }
 
     private IDownloadClient BuildClient(DownloadClientDefinition definition)
     {
-        return definition.ClientType switch
+        return definition.ClientType?.Trim().ToLowerInvariant() switch
         {
-            "QBitTorrent" => new NzbDrone.Core.DownloadClients.QBitTorrent.QBitTorrentClient
+            "qbittorrent" => new NzbDrone.Core.DownloadClients.QBitTorrent.QBitTorrentClient
             {
                 Host = definition.Host,
                 Port = definition.Port,
@@ -179,7 +179,7 @@ public class DownloadClientFactory : ProviderFactory<IDownloadClient, DownloadCl
                 Password = definition.Password,
                 Category = definition.Category,
             },
-            "Transmission" => new NzbDrone.Core.DownloadClients.Transmission.TransmissionClient
+            "transmission" => new NzbDrone.Core.DownloadClients.Transmission.TransmissionClient
             {
                 Host = definition.Host,
                 Port = definition.Port,
@@ -189,7 +189,7 @@ public class DownloadClientFactory : ProviderFactory<IDownloadClient, DownloadCl
                 Category = definition.Category,
                 RemotePathMappingService = _remotePathMappingService,
             },
-            "Deluge" => new NzbDrone.Core.DownloadClients.Deluge.DelugeClient
+            "deluge" => new NzbDrone.Core.DownloadClients.Deluge.DelugeClient
             {
                 Host = definition.Host,
                 Port = definition.Port,
