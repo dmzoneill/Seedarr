@@ -205,6 +205,9 @@ public class SeedingEngine : BackgroundService
         _lastTickTimestamp = now;
 
         var allTorrents = _torrentService.GetAll();
+        var initialStatuses = allTorrents
+            .GroupBy(t => t.Id)
+            .ToDictionary(g => g.Key, g => g.First().Status);
         var autoStart = _configService.AutoStart;
 
         foreach (var torrent in allTorrents)
@@ -338,9 +341,10 @@ public class SeedingEngine : BackgroundService
         }
 
         var globalRatioLimit = _configService.GlobalSeedRatioLimit;
+        List<Torrent> stoppedByRatio = null;
         if (globalRatioLimit > 0)
         {
-            _stateMachine.ApplyRatioLimit(seedingTorrents, globalRatioLimit, _configService.SeedGoalReachedAction);
+            stoppedByRatio = _stateMachine.ApplyRatioLimit(seedingTorrents, globalRatioLimit, _configService.SeedGoalReachedAction);
         }
 
         var thresholdPercent = _configService.DownloadThresholdPercent;
@@ -353,16 +357,33 @@ public class SeedingEngine : BackgroundService
         var dirtyTorrents = new List<Torrent>();
         dirtyTorrents.AddRange(activeTorrents);
 
+        if (stoppedByRatio != null && stoppedByRatio.Count > 0)
+        {
+            foreach (var t in stoppedByRatio)
+            {
+                _uploadSpeedHistory.Remove(t.Id);
+                _downloadSpeedHistory.Remove(t.Id);
+                if (!dirtyTorrents.Any(d => d.Id == t.Id))
+                {
+                    dirtyTorrents.Add(t);
+                }
+            }
+        }
+
         foreach (var t in allTorrents.Where(t => t.Status != TorrentStatus.Seeding && t.Status != TorrentStatus.Downloading))
         {
-            if (t.UploadSpeed != 0 || t.DownloadSpeed != 0 || t.Active)
+            var statusChanged = initialStatuses.TryGetValue(t.Id, out var initialStatus) && initialStatus != t.Status;
+            if (t.UploadSpeed != 0 || t.DownloadSpeed != 0 || t.Active || statusChanged)
             {
                 t.UploadSpeed = 0;
                 t.DownloadSpeed = 0;
                 t.Active = false;
                 _uploadSpeedHistory.Remove(t.Id);
                 _downloadSpeedHistory.Remove(t.Id);
-                dirtyTorrents.Add(t);
+                if (!dirtyTorrents.Any(d => d.Id == t.Id))
+                {
+                    dirtyTorrents.Add(t);
+                }
             }
         }
 

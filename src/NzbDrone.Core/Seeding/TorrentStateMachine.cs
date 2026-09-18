@@ -59,11 +59,13 @@ public class TorrentStateMachine : ITorrentStateMachine
         return false;
     }
 
-    public void ApplyRatioLimit(List<Torrent> seedingTorrents, double globalRatioLimit, string action = "Stop")
+    public List<Torrent> ApplyRatioLimit(List<Torrent> seedingTorrents, double globalRatioLimit, string action = "Stop")
     {
-        if (globalRatioLimit <= 0)
+        var stoppedTorrents = new List<Torrent>();
+
+        if (seedingTorrents == null || seedingTorrents.Count == 0 || globalRatioLimit <= 0)
         {
-            return;
+            return stoppedTorrents;
         }
 
         for (var i = seedingTorrents.Count - 1; i >= 0; i--)
@@ -96,7 +98,13 @@ public class TorrentStateMachine : ITorrentStateMachine
                 {
                     _torrentService?.Delete(torrent.Id, true);
                 }
+                else
+                {
+                    stoppedTorrents.Add(torrent);
+                }
             }
         }
+
+        return stoppedTorrents;
     }
 }
