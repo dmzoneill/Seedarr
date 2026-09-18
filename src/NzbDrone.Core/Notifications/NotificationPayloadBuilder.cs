@@ -77,6 +77,77 @@ public static class NotificationPayloadBuilder
         return (chatId, token, user);
     }
 
+    public static (string Username, string AvatarUrl) ExtractDiscordSettings(string settings)
+    {
+        var username = "Seedarr";
+        string avatarUrl = null;
+
+        if (string.IsNullOrWhiteSpace(settings))
+        {
+            return (username, avatarUrl);
+        }
+
+        var trimmed = settings.Trim();
+        if (trimmed.StartsWith("{"))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("username", out var u) ||
+                    root.TryGetProperty("Username", out u) ||
+                    root.TryGetProperty("user", out u) ||
+                    root.TryGetProperty("User", out u))
+                {
+                    var uVal = u.GetString() ?? u.ToString();
+                    if (!string.IsNullOrWhiteSpace(uVal))
+                    {
+                        username = uVal.Trim();
+                    }
+                }
+
+                if (root.TryGetProperty("avatarUrl", out var a) ||
+                    root.TryGetProperty("avatar_url", out a) ||
+                    root.TryGetProperty("AvatarUrl", out a) ||
+                    root.TryGetProperty("avatar", out a))
+                {
+                    var aVal = a.GetString() ?? a.ToString();
+                    if (!string.IsNullOrWhiteSpace(aVal))
+                    {
+                        avatarUrl = aVal.Trim();
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+        else
+        {
+            var uMatch = Regex.Match(trimmed, @"(?:^|[&?])(?:username|Username|user)=([^&]+)", RegexOptions.IgnoreCase);
+            if (uMatch.Success)
+            {
+                var val = Uri.UnescapeDataString(uMatch.Groups[1].Value).Trim();
+                if (!string.IsNullOrWhiteSpace(val))
+                {
+                    username = val;
+                }
+            }
+
+            var aMatch = Regex.Match(trimmed, @"(?:^|[&?])(?:avatarUrl|avatar_url|AvatarUrl|avatar)=([^&]+)", RegexOptions.IgnoreCase);
+            if (aMatch.Success)
+            {
+                var val = Uri.UnescapeDataString(aMatch.Groups[1].Value).Trim();
+                if (!string.IsNullOrWhiteSpace(val))
+                {
+                    avatarUrl = val;
+                }
+            }
+        }
+
+        return (username, avatarUrl);
+    }
+
     public static string ResolveTargetUrl(string implementation, string settings)
     {
         if (string.IsNullOrWhiteSpace(settings))
@@ -261,6 +332,7 @@ public static class NotificationPayloadBuilder
 
         if (string.Equals(implementation, "Discord", StringComparison.OrdinalIgnoreCase))
         {
+            var (discordUsername, avatarUrl) = ExtractDiscordSettings(settings);
             var title = Truncate($"[{eventType}] {torrentName}", 256);
             var torrentDetails = torrent != null
                 ? $"Category: {torrent.Category ?? torrent.Label ?? "None"} | Status: {torrent.Status} | Progress: {torrent.Progress * 100:F1}% | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB"
@@ -275,22 +347,35 @@ public static class NotificationPayloadBuilder
             var rawDesc = !string.IsNullOrWhiteSpace(overview)
                 ? $"{torrentDetails}\n\n{overview}"
                 : torrentDetails;
-            var desc = Truncate(rawDesc, 4096);
+
+            var maxDescLength = Math.Min(4096, 6000 - (title?.Length ?? 0));
+            if (maxDescLength < 0)
+            {
+                maxDescLength = 0;
+            }
+
+            var desc = Truncate(rawDesc, maxDescLength);
+            var color = GetDiscordColor(eventType);
 
             var payloadDict = new Dictionary<string, object>
             {
-                ["username"] = "Seedarr",
+                ["username"] = discordUsername,
                 ["embeds"] = new object[]
                 {
                     new
                     {
                         title,
                         description = desc,
-                        color = 16765286,
+                        color,
                         timestamp = DateTime.UtcNow.ToString("o"),
                     },
                 },
             };
+
+            if (!string.IsNullOrWhiteSpace(avatarUrl))
+            {
+                payloadDict["avatar_url"] = avatarUrl;
+            }
 
             if (torrent != null)
             {
@@ -326,10 +411,18 @@ public static class NotificationPayloadBuilder
         if (string.Equals(implementation, "Slack", StringComparison.OrdinalIgnoreCase))
         {
             var err = ExtractErrorMessage(genericPayload);
-            var errSuffix = !string.IsNullOrWhiteSpace(err) ? $"\nError: {err}" : string.Empty;
+            var escapedErr = EscapeSlackMrkdwn(err);
+            var errSuffix = !string.IsNullOrWhiteSpace(escapedErr) ? $"\nError: {escapedErr}" : string.Empty;
+            var escapedEventType = EscapeSlackMrkdwn(eventType);
+            var escapedTorrentName = torrent != null ? EscapeSlackMrkdwn(torrent.Name) : string.Empty;
+            var category = torrent?.Category ?? torrent?.Label ?? "None";
+            var escapedCategory = EscapeSlackMrkdwn(category);
+            var genericMsg = ExtractMessage(genericPayload, eventType);
+            var escapedGenericMsg = EscapeSlackMrkdwn(genericMsg);
+
             var fallbackText = torrent != null
-                ? $"*Seedarr [{eventType}]* - *{torrent.Name}*\nCategory: {torrent.Category ?? torrent.Label ?? "None"} | Status: {torrent.Status} | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB{errSuffix}"
-                : $"*Seedarr [{eventType}]*\n{ExtractMessage(genericPayload, eventType)}";
+                ? $"*Seedarr [{escapedEventType}]* - *{escapedTorrentName}*\nCategory: {escapedCategory} | Status: {torrent.Status} | Size: {torrent.TotalSize / (1024.0 * 1024.0):F2} MB{errSuffix}"
+                : $"*Seedarr [{escapedEventType}]*\n{escapedGenericMsg}";
 
             var blocks = new List<object>
             {
@@ -355,7 +448,7 @@ public static class NotificationPayloadBuilder
                 sectionBlock["text"] = new Dictionary<string, object>
                 {
                     ["type"] = "mrkdwn",
-                    ["text"] = Truncate($"*{torrent.Name}*{errSuffix}", 3000),
+                    ["text"] = Truncate($"*{escapedTorrentName}*{errSuffix}", 3000),
                 };
 
                 var ratioOrEta = torrent.Eta > 0
@@ -364,7 +457,7 @@ public static class NotificationPayloadBuilder
 
                 sectionBlock["fields"] = new object[]
                 {
-                    new Dictionary<string, object> { ["type"] = "mrkdwn", ["text"] = $"*Category:*\n{torrent.Category ?? torrent.Label ?? "None"}" },
+                    new Dictionary<string, object> { ["type"] = "mrkdwn", ["text"] = $"*Category:*\n{escapedCategory}" },
                     new Dictionary<string, object> { ["type"] = "mrkdwn", ["text"] = $"*Status:*\n{torrent.Status}" },
                     new Dictionary<string, object> { ["type"] = "mrkdwn", ["text"] = $"*Size:*\n{torrent.TotalSize / (1024.0 * 1024.0):F2} MB" },
                     new Dictionary<string, object> { ["type"] = "mrkdwn", ["text"] = $"*Ratio/ETA:*\n{ratioOrEta}" },
@@ -372,11 +465,10 @@ public static class NotificationPayloadBuilder
             }
             else
             {
-                var msg = ExtractMessage(genericPayload, eventType);
                 sectionBlock["text"] = new Dictionary<string, object>
                 {
                     ["type"] = "mrkdwn",
-                    ["text"] = Truncate(!string.IsNullOrWhiteSpace(msg) ? msg : $"Event: {eventType}", 3000),
+                    ["text"] = Truncate(!string.IsNullOrWhiteSpace(escapedGenericMsg) ? escapedGenericMsg : $"Event: {escapedEventType}", 3000),
                 };
             }
 
@@ -455,7 +547,17 @@ public static class NotificationPayloadBuilder
         {
             var err = ExtractErrorMessage(genericPayload);
             var errSuffix = !string.IsNullOrWhiteSpace(err) ? $" - Error: {err}" : string.Empty;
-            var priority = ExtractPriority(settings, 5);
+            var isHealthIssue = eventType != null && (
+                eventType.Contains("HealthIssue", StringComparison.OrdinalIgnoreCase) ||
+                eventType.Contains("Failed", StringComparison.OrdinalIgnoreCase) ||
+                eventType.Contains("Error", StringComparison.OrdinalIgnoreCase) ||
+                eventType.Contains("Issue", StringComparison.OrdinalIgnoreCase));
+            var defaultPriority = isHealthIssue ? 8 : 5;
+            var priority = ExtractPriority(settings, defaultPriority);
+            if (isHealthIssue && priority < 8)
+            {
+                priority = 8;
+            }
 
             return new Dictionary<string, object>
             {
@@ -658,7 +760,17 @@ public static class NotificationPayloadBuilder
             return value ?? string.Empty;
         }
 
-        return value.Length > maxLength ? string.Concat(value.AsSpan(0, maxLength - 3), "...") : value;
+        if (maxLength <= 0)
+        {
+            return string.Empty;
+        }
+
+        if (maxLength <= 3)
+        {
+            return value[..maxLength];
+        }
+
+        return string.Concat(value.AsSpan(0, maxLength - 3), "...");
     }
 
     internal static string ExtractOverview(object meta)
@@ -703,6 +815,68 @@ public static class NotificationPayloadBuilder
         }
 
         return "#3AA3E3";
+    }
+
+    public static int GetDiscordColor(string eventType)
+    {
+        if (string.IsNullOrWhiteSpace(eventType))
+        {
+            return 16765286;
+        }
+
+        var normalized = eventType.StartsWith("On", StringComparison.OrdinalIgnoreCase)
+            ? eventType[2..]
+            : eventType;
+
+        if (normalized.Equals("Grab", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("DownloadComplete", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("Complete", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("SeedGoalReached", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("HealthRestored", StringComparison.OrdinalIgnoreCase))
+        {
+            return 3066993;
+        }
+
+        if (normalized.Equals("HealthIssue", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("ArchiveExtractionFailed", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("ExtractionFailed", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("Error", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("Failed", StringComparison.OrdinalIgnoreCase))
+        {
+            return 15158332;
+        }
+
+        if (normalized.Equals("ManualInteractionRequired", StringComparison.OrdinalIgnoreCase))
+        {
+            return 15105570;
+        }
+
+        if (normalized.Equals("ApplicationUpdate", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("MediaInspected", StringComparison.OrdinalIgnoreCase))
+        {
+            return 3447003;
+        }
+
+        if (normalized.Equals("TorrentDeleted", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Equals("Deleted", StringComparison.OrdinalIgnoreCase))
+        {
+            return 9807270;
+        }
+
+        return 16765286;
+    }
+
+    public static string EscapeSlackMrkdwn(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text ?? string.Empty;
+        }
+
+        return text
+            .Replace("&", "&amp;")
+            .Replace("<", "&lt;")
+            .Replace(">", "&gt;");
     }
 
     public static int ExtractPriority(string settings, int defaultPriority = 5)

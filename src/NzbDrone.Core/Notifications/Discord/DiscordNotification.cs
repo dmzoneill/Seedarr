@@ -54,14 +54,23 @@ public class DiscordNotification : INotificationService
 
         try
         {
+            var truncatedTitle = title != null ? NotificationPayloadBuilder.Truncate(title, 256) : null;
+            var maxDescLength = Math.Min(4096, 6000 - (truncatedTitle?.Length ?? 0) - "Seedarr".Length);
+            if (maxDescLength < 0)
+            {
+                maxDescLength = 0;
+            }
+
+            var truncatedDescription = description != null ? NotificationPayloadBuilder.Truncate(description, maxDescLength) : null;
+
             var payload = new
             {
                 embeds = new[]
                 {
                     new
                     {
-                        title,
-                        description,
+                        title = truncatedTitle,
+                        description = truncatedDescription,
                         color,
                         footer = new { text = "Seedarr" },
                         timestamp = DateTime.UtcNow.ToString("o")
