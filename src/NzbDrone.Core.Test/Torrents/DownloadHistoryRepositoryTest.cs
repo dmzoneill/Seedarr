@@ -117,4 +117,91 @@ public class DownloadHistoryRepositoryTest
         Assert.That(remaining.Any(r => r.InfoHash == "active_old_hash"), Is.True);
         Assert.That(remaining.Any(r => r.InfoHash == "recent_removed_hash"), Is.True);
     }
+
+    [Test]
+    public void DeleteOlderThan_should_preserve_active_and_seeding_torrents_and_delete_removed_torrents()
+    {
+        var now = DateTime.UtcNow;
+        var cutoff = now.AddDays(-30);
+        var oldDate = now.AddDays(-60);
+
+        var entries = new List<DownloadHistory>
+        {
+            // Active torrent older than cutoff - must NOT be deleted
+            new()
+            {
+                TorrentId = 1,
+                Title = "Active Old Torrent",
+                InfoHash = "active_hash",
+                DateAdded = oldDate,
+                DateRemoved = null,
+                Status = "Active"
+            },
+            // Seeding torrent older than cutoff - must NOT be deleted
+            new()
+            {
+                TorrentId = 2,
+                Title = "Seeding Old Torrent",
+                InfoHash = "seeding_hash",
+                DateAdded = oldDate,
+                DateRemoved = null,
+                Status = "Seeding"
+            },
+            // Completed torrent still active in library older than cutoff - must NOT be deleted
+            new()
+            {
+                TorrentId = 3,
+                Title = "Completed In Library Old Torrent",
+                InfoHash = "completed_lib_hash",
+                DateAdded = oldDate,
+                DateRemoved = null,
+                Status = "Completed"
+            },
+            // Removed torrent older than cutoff with DateRemoved < cutoff - MUST be deleted
+            new()
+            {
+                TorrentId = null,
+                Title = "Removed Old Torrent",
+                InfoHash = "removed_hash",
+                DateAdded = oldDate,
+                DateRemoved = oldDate.AddDays(5),
+                Status = "Removed"
+            },
+            // Inactive torrent older than cutoff with null DateRemoved and null TorrentId - MUST be deleted
+            new()
+            {
+                TorrentId = null,
+                Title = "Inactive Old Torrent",
+                InfoHash = "inactive_hash",
+                DateAdded = oldDate,
+                DateRemoved = null,
+                Status = "Inactive"
+            },
+            // Recently removed torrent older than cutoff DateAdded - must NOT be deleted
+            new()
+            {
+                TorrentId = null,
+                Title = "Recently Removed Old Torrent",
+                InfoHash = "recent_removed_hash",
+                DateAdded = oldDate,
+                DateRemoved = now.AddDays(-2),
+                Status = "Removed"
+            }
+        };
+
+        _subject.InsertMany(entries);
+
+        var deleted = _subject.DeleteOlderThan(cutoff);
+
+        Assert.That(deleted, Is.EqualTo(2));
+
+        var remaining = _subject.All().ToList();
+        Assert.That(remaining, Has.Count.EqualTo(4));
+        Assert.That(remaining.Any(r => r.InfoHash == "active_hash"), Is.True);
+        Assert.That(remaining.Any(r => r.InfoHash == "seeding_hash"), Is.True);
+        Assert.That(remaining.Any(r => r.InfoHash == "completed_lib_hash"), Is.True);
+        Assert.That(remaining.Any(r => r.InfoHash == "recent_removed_hash"), Is.True);
+        Assert.That(remaining.Any(r => r.InfoHash == "removed_hash"), Is.False);
+        Assert.That(remaining.Any(r => r.InfoHash == "inactive_hash"), Is.False);
+    }
 }
