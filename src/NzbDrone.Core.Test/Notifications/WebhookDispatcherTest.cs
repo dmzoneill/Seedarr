@@ -253,4 +253,104 @@ public class WebhookDispatcherTest
         var sanitized = WebhookDispatcher.SanitizeUrlForLogging(url);
         Assert.That(sanitized, Is.EqualTo(url));
     }
+
+    [Test]
+    public async Task DispatchDetailedAsync_when_telegram_returns_cant_parse_entities_retries_without_parse_mode_and_succeeds()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.BadRequest, """{"ok":false,"error_code":400,"description":"Bad Request: can't parse entities: Character '.' is reserved and must be escaped with the preceding '\\'"}""");
+        handler.Enqueue(HttpStatusCode.OK, """{"ok":true,"result":{"message_id":123}}""");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var payload = new Dictionary<string, object>
+        {
+            ["chat_id"] = "123456",
+            ["text"] = "*Seedarr* Test message with dot.",
+            ["parse_mode"] = "Markdown",
+        };
+
+        var result = await dispatcher.DispatchDetailedAsync("https://api.telegram.org/bot123456:ABC/sendMessage", payload);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(handler.Requests.Count, Is.EqualTo(2));
+
+        var firstBody = await handler.Requests[0].Content.ReadAsStringAsync();
+        Assert.That(firstBody, Does.Contain("parse_mode"));
+
+        var secondBody = await handler.Requests[1].Content.ReadAsStringAsync();
+        Assert.That(secondBody, Does.Not.Contain("parse_mode"));
+        Assert.That(secondBody, Does.Contain("123456"));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_when_telegram_returns_cant_parse_entities_and_fallback_fails_returns_failure()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.BadRequest, """{"ok":false,"description":"Bad Request: can't parse entities"}""");
+        handler.Enqueue(HttpStatusCode.BadRequest, """{"ok":false,"description":"Bad Request: chat not found"}""");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var payload = new Dictionary<string, object>
+        {
+            ["chat_id"] = "invalid_chat",
+            ["text"] = "Test",
+            ["parse_mode"] = "Markdown",
+        };
+
+        var result = await dispatcher.DispatchDetailedAsync("https://api.telegram.org/bot123456:ABC/sendMessage", payload);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(handler.Requests.Count, Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task DispatchDetailedAsync_when_400_without_cant_parse_entities_does_not_retry()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.BadRequest, """{"ok":false,"description":"Bad Request: chat not found"}""");
+
+        var client = new HttpClient(handler);
+        var dispatcher = new WebhookDispatcher(client, timeout: TimeSpan.FromSeconds(5), allowLoopback: true);
+
+        var payload = new Dictionary<string, object>
+        {
+            ["chat_id"] = "invalid_chat",
+            ["text"] = "Test",
+            ["parse_mode"] = "Markdown",
+        };
+
+        var result = await dispatcher.DispatchDetailedAsync("https://api.telegram.org/bot123456:ABC/sendMessage", payload);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(handler.Requests.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void RemoveParseMode_should_remove_parse_mode_from_dictionary_and_anonymous_types()
+    {
+        var dictPayload = new Dictionary<string, object>
+        {
+            ["chat_id"] = "123",
+            ["text"] = "hello",
+            ["parse_mode"] = "Markdown",
+        };
+
+        var strippedDict = WebhookDispatcher.RemoveParseMode(dictPayload) as Dictionary<string, object>;
+        Assert.That(strippedDict, Is.Not.Null);
+        Assert.That(strippedDict.ContainsKey("parse_mode"), Is.False);
+        Assert.That(strippedDict["chat_id"], Is.EqualTo("123"));
+        Assert.That(strippedDict["text"], Is.EqualTo("hello"));
+
+        var anonPayload = new { chat_id = "456", text = "world", parse_mode = "MarkdownV2" };
+        var strippedAnon = WebhookDispatcher.RemoveParseMode(anonPayload) as Dictionary<string, object>;
+        Assert.That(strippedAnon, Is.Not.Null);
+        Assert.That(strippedAnon.ContainsKey("parse_mode"), Is.False);
+    }
 }

@@ -453,4 +453,82 @@ public class NotificationPayloadBuilderTest
         var categoryField = fields[0] as Dictionary<string, object>;
         Assert.That(categoryField["text"].ToString(), Does.Contain("TV &amp; Anime"));
     }
+
+    [Test]
+    public void BuildProviderPayload_telegram_escapes_dotted_version_numbers_and_progress_percentages()
+    {
+        var torrent = new Torrent
+        {
+            Id = 42,
+            Name = "Ubuntu.24.04-LTS-Desktop.amd64-(Seedarr)!",
+            Category = "Linux-ISOs.v2",
+            Status = TorrentStatus.Downloading,
+            Progress = 0.452, // 45.2%
+        };
+
+        var result = NotificationPayloadBuilder.BuildProviderPayload(
+            "Telegram",
+            "OnGrab",
+            torrent,
+            null,
+            null,
+            """{"chat_id":"987654321"}""") as Dictionary<string, object>;
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result["chat_id"], Is.EqualTo("987654321"));
+        Assert.That(result["parse_mode"], Is.EqualTo("Markdown"));
+
+        var text = result["text"].ToString();
+        Assert.That(text, Does.Contain(@"Ubuntu\.24\.04\-LTS\-Desktop\.amd64\-\(Seedarr\)\!"));
+        Assert.That(text, Does.Contain(@"Category: Linux\-ISOs\.v2"));
+        Assert.That(text, Does.Contain(@"Progress: 45\.2%"));
+        Assert.That(text, Does.Contain("Status: Downloading"));
+        Assert.That(result.ContainsKey("reply_markup"), Is.True);
+    }
+
+    [Test]
+    public void BuildProviderPayload_telegram_escapes_special_characters_in_error_message()
+    {
+        var torrent = new Torrent
+        {
+            Id = 10,
+            Name = "My.Release.2024",
+            Status = TorrentStatus.Error,
+            Progress = 1.0,
+        };
+
+        var genericPayload = new { ErrorMessage = "Error: File.part-01! (corrupt) #crc-fail" };
+
+        var result = NotificationPayloadBuilder.BuildProviderPayload(
+            "Telegram",
+            "OnError",
+            torrent,
+            null,
+            genericPayload,
+            """{"chat_id":"12345"}""") as Dictionary<string, object>;
+
+        Assert.That(result, Is.Not.Null);
+        var text = result["text"].ToString();
+        Assert.That(text, Does.Contain(@"Error: Error: File\.part\-01\! \(corrupt\) \#crc\-fail"));
+        Assert.That(text, Does.Contain(@"Progress: 100\.0%"));
+    }
+
+    [Test]
+    public void BuildProviderPayload_telegram_escapes_non_torrent_event_message()
+    {
+        var genericPayload = new { Message = "Version 2.0.1-rc1 installed! (See release-notes) #upgrade" };
+
+        var result = NotificationPayloadBuilder.BuildProviderPayload(
+            "Telegram",
+            "App.Update",
+            null,
+            null,
+            genericPayload,
+            """{"chat_id":"12345"}""") as Dictionary<string, object>;
+
+        Assert.That(result, Is.Not.Null);
+        var text = result["text"].ToString();
+        Assert.That(text, Does.Contain(@"*Seedarr [App\.Update]*"));
+        Assert.That(text, Does.Contain(@"Version 2\.0\.1\-rc1 installed\! \(See release\-notes\) \#upgrade"));
+    }
 }

@@ -314,6 +314,46 @@ public class WebhookDispatcher : IWebhookDispatcher
                 };
             }
 
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                var responseBody = response.Content != null
+                    ? await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)
+                    : string.Empty;
+
+                if (responseBody.Contains("can't parse entities", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.Warn("Telegram entity parse failure for {0}: {1}. Retrying once with plain text without parse_mode.", SanitizeUrlForLogging(targetUrl), responseBody);
+
+                    var fallbackPayload = RemoveParseMode(payload);
+                    using var fallbackResponse = await _retryPolicy.ExecuteAsync(
+                        async (ct) =>
+                        {
+                            var fallbackRequest = BuildHttpRequest(targetUrl, fallbackPayload, customHeadersJson);
+                            return await _httpClient.SendAsync(fallbackRequest, ct).ConfigureAwait(false);
+                        },
+                        cancellationToken).ConfigureAwait(false);
+
+                    if (fallbackResponse.IsSuccessStatusCode)
+                    {
+                        _logger.Info("Webhook successfully dispatched to {0} on plain text retry (Status: {1})", SanitizeUrlForLogging(targetUrl), fallbackResponse.StatusCode);
+                        return new WebhookDispatchResult
+                        {
+                            Success = true,
+                            StatusCode = fallbackResponse.StatusCode,
+                            Message = $"Webhook dispatched successfully (HTTP {(int)fallbackResponse.StatusCode} {fallbackResponse.StatusCode}).",
+                        };
+                    }
+
+                    _logger.Warn("Webhook plain text retry to {0} returned non-success status code: {1}", SanitizeUrlForLogging(targetUrl), fallbackResponse.StatusCode);
+                    return new WebhookDispatchResult
+                    {
+                        Success = false,
+                        StatusCode = fallbackResponse.StatusCode,
+                        Message = $"Webhook endpoint returned HTTP {(int)fallbackResponse.StatusCode} ({fallbackResponse.ReasonPhrase ?? fallbackResponse.StatusCode.ToString()}).",
+                    };
+                }
+            }
+
             _logger.Warn("Webhook dispatch to {0} returned non-success status code: {1}", SanitizeUrlForLogging(targetUrl), response.StatusCode);
             return new WebhookDispatchResult
             {
@@ -357,6 +397,92 @@ public class WebhookDispatcher : IWebhookDispatcher
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals,
     };
+
+    internal static object RemoveParseMode(object payload)
+    {
+        if (payload == null)
+        {
+            return null;
+        }
+
+        if (payload is IDictionary<string, object> dict)
+        {
+            var newDict = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in dict)
+            {
+                if (!string.Equals(kvp.Key, "parse_mode", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(kvp.Key, "parseMode", StringComparison.OrdinalIgnoreCase))
+                {
+                    newDict[kvp.Key] = kvp.Value;
+                }
+            }
+
+            return newDict;
+        }
+
+        if (payload is IDictionary<string, string> stringDict)
+        {
+            var newDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in stringDict)
+            {
+                if (!string.Equals(kvp.Key, "parse_mode", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(kvp.Key, "parseMode", StringComparison.OrdinalIgnoreCase))
+                {
+                    newDict[kvp.Key] = kvp.Value;
+                }
+            }
+
+            return newDict;
+        }
+
+        if (payload is string jsonStr && jsonStr.TrimStart().StartsWith("{"))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(jsonStr);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    var dictFromJson = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        if (!prop.NameEquals("parse_mode") && !prop.NameEquals("parseMode"))
+                        {
+                            dictFromJson[prop.Name] = prop.Value.Clone();
+                        }
+                    }
+
+                    return dictFromJson;
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        try
+        {
+            var json = JsonSerializer.Serialize(payload, DefaultJsonOptions);
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                var dictFromJson = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    if (!prop.NameEquals("parse_mode") && !prop.NameEquals("parseMode"))
+                    {
+                        dictFromJson[prop.Name] = prop.Value.Clone();
+                    }
+                }
+
+                return dictFromJson;
+            }
+        }
+        catch
+        {
+        }
+
+        return payload;
+    }
 
     private HttpRequestMessage BuildHttpRequest(string targetUrl, object payload, string customHeadersJson)
     {

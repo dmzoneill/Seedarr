@@ -240,4 +240,56 @@ public class EpisodicParserTest
         Assert.That(info.Edition, Is.EqualTo(expectedEdition));
         Assert.That(edition, Is.EqualTo(expectedEdition));
     }
+
+    [TestCase("_", @"\_")]
+    [TestCase("*", @"\*")]
+    [TestCase("[", @"\[")]
+    [TestCase("]", @"\]")]
+    [TestCase("(", @"\(")]
+    [TestCase(")", @"\)")]
+    [TestCase("~", @"\~")]
+    [TestCase("`", @"\`")]
+    [TestCase(">", @"\>")]
+    [TestCase("#", @"\#")]
+    [TestCase("+", @"\+")]
+    [TestCase("-", @"\-")]
+    [TestCase("=", @"\=")]
+    [TestCase("|", @"\|")]
+    [TestCase("{", @"\{")]
+    [TestCase("}", @"\}")]
+    [TestCase(".", @"\.")]
+    [TestCase("!", @"\!")]
+    [TestCase(@"\", @"\\")]
+    public void EscapeMarkdown_should_escape_all_telegram_markdownv2_reserved_characters(string input, string expected)
+    {
+        Assert.That(_subject.EscapeMarkdown(input), Is.EqualTo(expected));
+        Assert.That(EpisodicParser.EscapeMarkdownStatic(input), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void EscapeMarkdown_should_escape_complex_release_names_and_versions()
+    {
+        var input = "Ubuntu.24.04-LTS-Desktop.amd64-(Seedarr)!";
+        var expected = @"Ubuntu\.24\.04\-LTS\-Desktop\.amd64\-\(Seedarr\)\!";
+
+        Assert.That(_subject.EscapeMarkdown(input), Is.EqualTo(expected));
+        Assert.That(EpisodicParser.EscapeMarkdownStatic(input), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void EscapeMarkdown_should_escape_progress_percentages_and_punctuation()
+    {
+        var input = "Progress: 45.2% [Status: Seeding-Active] #1 + {OK} = |~test~| `code` >quote!";
+        var expected = @"Progress: 45\.2% \[Status: Seeding\-Active\] \#1 \+ \{OK\} \= \|\~test\~\| \`code\` \>quote\!";
+
+        Assert.That(_subject.EscapeMarkdown(input), Is.EqualTo(expected));
+    }
+
+    [TestCase(null, "")]
+    [TestCase("", "")]
+    public void EscapeMarkdown_should_return_empty_for_null_or_empty(string input, string expected)
+    {
+        Assert.That(_subject.EscapeMarkdown(input), Is.EqualTo(expected));
+        Assert.That(EpisodicParser.EscapeMarkdownStatic(input), Is.EqualTo(expected));
+    }
 }

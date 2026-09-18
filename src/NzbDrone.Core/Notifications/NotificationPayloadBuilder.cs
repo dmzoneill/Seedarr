@@ -508,8 +508,10 @@ public static class NotificationPayloadBuilder
         {
             var err = ExtractErrorMessage(genericPayload);
             var errSuffix = !string.IsNullOrWhiteSpace(err) ? $"\nError: {EpisodicParser.EscapeMarkdownStatic(err)}" : string.Empty;
+            var progress = torrent != null ? EpisodicParser.EscapeMarkdownStatic($"{torrent.Progress * 100:F1}%") : string.Empty;
+            var status = torrent != null ? EpisodicParser.EscapeMarkdownStatic(torrent.Status.ToString()) : string.Empty;
             var text = torrent != null
-                ? $"*Seedarr [{EpisodicParser.EscapeMarkdownStatic(eventType)}]*\n*{EpisodicParser.EscapeMarkdownStatic(torrent.Name)}*\nCategory: {EpisodicParser.EscapeMarkdownStatic(torrent.Category ?? torrent.Label ?? "None")}\nProgress: {torrent.Progress * 100:F1}%\nStatus: {torrent.Status}{errSuffix}"
+                ? $"*Seedarr [{EpisodicParser.EscapeMarkdownStatic(eventType)}]*\n*{EpisodicParser.EscapeMarkdownStatic(torrent.Name)}*\nCategory: {EpisodicParser.EscapeMarkdownStatic(torrent.Category ?? torrent.Label ?? "None")}\nProgress: {progress}\nStatus: {status}{errSuffix}"
                 : $"*Seedarr [{EpisodicParser.EscapeMarkdownStatic(eventType)}]*\n{EpisodicParser.EscapeMarkdownStatic(ExtractMessage(genericPayload, eventType))}";
 
             var payloadDict = new Dictionary<string, object>
