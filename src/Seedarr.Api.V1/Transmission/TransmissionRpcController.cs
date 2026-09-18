@@ -8,6 +8,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -15,6 +16,7 @@ using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Tags;
@@ -974,9 +976,60 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                 });
             }
         }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+        catch (Exception ex) when (ex is DuplicateTorrentException ||
+            ex.InnerException is DuplicateTorrentException ||
+            (ex is InvalidOperationException && ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase)))
         {
-            var existing = _torrentService.GetAll().FirstOrDefault();
+            var targetHash = TryExtractInfoHash(filename, metainfo);
+
+            if (string.IsNullOrWhiteSpace(targetHash) && request.Arguments != null)
+            {
+                if (request.Arguments.TryGetValue("hash", out var h) && h.ValueKind == JsonValueKind.String)
+                {
+                    targetHash = h.GetString();
+                }
+                else if (request.Arguments.TryGetValue("infoHash", out var ih) && ih.ValueKind == JsonValueKind.String)
+                {
+                    targetHash = ih.GetString();
+                }
+                else if (request.Arguments.TryGetValue("hashString", out var hs) && hs.ValueKind == JsonValueKind.String)
+                {
+                    targetHash = hs.GetString();
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(targetHash))
+            {
+                if (ex is DuplicateTorrentException dtex && !string.IsNullOrWhiteSpace(dtex.InfoHash))
+                {
+                    targetHash = dtex.InfoHash.ToLowerInvariant();
+                }
+                else if (ex.InnerException is DuplicateTorrentException innerDtex && !string.IsNullOrWhiteSpace(innerDtex.InfoHash))
+                {
+                    targetHash = innerDtex.InfoHash.ToLowerInvariant();
+                }
+                else
+                {
+                    var match = Regex.Match(ex.Message, @"\b[0-9a-fA-F]{40}\b");
+                    if (match.Success)
+                    {
+                        targetHash = match.Value.ToLowerInvariant();
+                    }
+                }
+            }
+
+            Torrent existing = null;
+            if (!string.IsNullOrWhiteSpace(targetHash))
+            {
+                existing = _torrentService.GetByInfoHash(targetHash)
+                    ?? _torrentService.GetAll()?.FirstOrDefault(t => string.Equals(t.InfoHash, targetHash, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (existing == null)
+            {
+                existing = _torrentService.GetAll()?.FirstOrDefault();
+            }
+
             return Ok(new TransmissionRpcResponse
             {
                 Result = "success",
@@ -986,7 +1039,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
                     {
                         ["id"] = existing?.Id ?? 1,
                         ["name"] = existing?.Name ?? "Torrent",
-                        ["hashString"] = (existing?.InfoHash ?? string.Empty).ToLowerInvariant(),
+                        ["hashString"] = (existing?.InfoHash ?? targetHash ?? string.Empty).ToLowerInvariant(),
                     }
                 },
                 Tag = tag,
@@ -999,6 +1052,97 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
         }
 
         return Ok(new TransmissionRpcResponse { Result = "invalid or missing torrent", Tag = tag });
+    }
+
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Transmission RPC intentionally imports torrent files from local filesystem paths")]
+    private string TryExtractInfoHash(string filename, string metainfo)
+    {
+        if (!string.IsNullOrWhiteSpace(filename) && filename.StartsWith("magnet:?", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var parsed = MagnetLinkParser.Parse(filename);
+                if (!string.IsNullOrWhiteSpace(parsed?.InfoHash))
+                {
+                    return parsed.InfoHash.ToLowerInvariant();
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(metainfo))
+        {
+            try
+            {
+                var bytes = Convert.FromBase64String(metainfo);
+                ParsedTorrent parsed = null;
+                try
+                {
+                    parsed = _torrentFileParser?.Parse(bytes);
+                }
+                catch
+                {
+                    // ignored
+                }
+
+                if (parsed == null)
+                {
+                    try
+                    {
+                        using var ms = new MemoryStream(bytes);
+                        parsed = _torrentFileParser?.Parse(ms);
+                    }
+                    catch
+                    {
+                        // ignored
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(parsed?.InfoHash))
+                {
+                    return parsed.InfoHash.ToLowerInvariant();
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(filename))
+        {
+            if (filename.Length == 40 && filename.All(Uri.IsHexDigit))
+            {
+                return filename.ToLowerInvariant();
+            }
+
+            try
+            {
+                var localPath = filename;
+                if (localPath.StartsWith("file://", StringComparison.OrdinalIgnoreCase) && Uri.TryCreate(localPath, UriKind.Absolute, out var fileUri))
+                {
+                    localPath = fileUri.LocalPath;
+                }
+
+                if (global::System.IO.File.Exists(localPath))
+                {
+                    var parsed = _torrentFileParser?.Parse(localPath);
+                    if (!string.IsNullOrWhiteSpace(parsed?.InfoHash))
+                    {
+                        return parsed.InfoHash.ToLowerInvariant();
+                    }
+                }
+            }
+            catch
+            {
+                // ignored
+            }
+        }
+
+        return null;
     }
 
     private IActionResult HandleFreeSpace(TransmissionRpcRequest request, object tag)
@@ -1367,6 +1511,11 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             ? t.Label.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Trim()).ToList()
             : new List<string>();
 
+        if (labelList.Count == 0 && !string.IsNullOrWhiteSpace(t.Category))
+        {
+            labelList.Add(t.Category.Trim());
+        }
+
         var fullDict = new Dictionary<string, object>
         {
             ["id"] = t.Id,
@@ -1387,7 +1536,7 @@ public class TransmissionRpcController : ControllerBase, IHandle<TorrentDeletedE
             ["peersTotal"] = t.Leechers + t.Seeders,
             ["seeders"] = t.Seeders,
             ["leechers"] = t.Leechers,
-            ["downloadDir"] = RemapLocalToRemote(!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads")),
+            ["downloadDir"] = RemapLocalToRemote(!string.IsNullOrWhiteSpace(t.SavePath) ? t.SavePath : (!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads"))),
             ["isFinished"] = t.Progress >= 1.0,
             ["isStalled"] = t.Status == TorrentStatus.Downloading && t.DownloadSpeed == 0,
             ["error"] = t.Status == TorrentStatus.Error ? 1 : 0,
