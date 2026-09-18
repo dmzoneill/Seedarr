@@ -496,8 +496,8 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         {
             if (_configService == null || _configService.AutoPruneRemovedArtwork)
             {
-                DeleteLocalFile(metadata.PosterLocalPath);
-                DeleteLocalFile(metadata.BackdropLocalPath);
+                DeleteLocalFile(metadata.PosterLocalPath, _appFolderInfo?.AppDataFolder);
+                DeleteLocalFile(metadata.BackdropLocalPath, _appFolderInfo?.AppDataFolder);
             }
 
             _repository.DeleteByTorrentId(torrentId);
@@ -1334,18 +1334,32 @@ public class MediaEnrichmentService : IMediaEnrichmentService, IHandle<TorrentDe
         return mediaType;
     }
 
-    private static void DeleteLocalFile(string path)
+    private void DeleteLocalFile(string path, string allowedBaseFolder = null)
     {
+        var baseDir = allowedBaseFolder ?? _appFolderInfo?.AppDataFolder;
+        if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(baseDir))
+        {
+            return;
+        }
+
         try
         {
-            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+            var fullPath = Path.GetFullPath(path);
+            var allowedBase = Path.GetFullPath(baseDir);
+            if (!allowedBase.EndsWith(Path.DirectorySeparatorChar) &&
+                !allowedBase.EndsWith(Path.AltDirectorySeparatorChar))
             {
-                File.Delete(path);
+                allowedBase += Path.DirectorySeparatorChar;
+            }
+
+            if (fullPath.StartsWith(allowedBase, StringComparison.OrdinalIgnoreCase) && File.Exists(fullPath))
+            {
+                File.Delete(fullPath);
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Suppress cleanup failure
+            _logger.Debug(ex, "Failed to delete local file {0}", path);
         }
     }
 
