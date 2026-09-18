@@ -156,8 +156,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme, accent]);
 
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
-  }, []);
+    let resolvedTheme: "light" | "dark";
+    if (theme === "system") {
+      resolvedTheme = window.matchMedia("(prefers-color-scheme: light)").matches
+        ? "light"
+        : "dark";
+    } else if (theme === "light" || theme === "dark") {
+      resolvedTheme = theme;
+    } else {
+      resolvedTheme = "dark";
+    }
+
+    const nextTheme: Theme = resolvedTheme === "dark" ? "light" : "dark";
+    setThemeState(nextTheme);
+    try {
+      localStorage.setItem(STORAGE_THEME_KEY, nextTheme);
+    } catch {
+      // localStorage may be unavailable
+    }
+  }, [theme]);
 
   return (
     <ThemeContext.Provider
