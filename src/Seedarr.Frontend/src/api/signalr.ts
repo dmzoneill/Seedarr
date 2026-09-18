@@ -8,8 +8,51 @@ import {
   type RetryContext,
 } from "@microsoft/signalr";
 import type { QueryClient } from "@tanstack/react-query";
+import { apiClient } from "./client";
+import { useAppStore } from "../store/app";
 
 export type ConnectionStatus = "connected" | "disconnected" | "reconnecting";
+
+/**
+ * Checks if the given error indicates an authentication / authorization failure (HTTP 401 or 403).
+ */
+export function isUnauthorizedOrForbidden(error?: unknown): boolean {
+  if (!error) return false;
+  const anyErr = error as { statusCode?: number; status?: number; message?: string };
+  if (
+    anyErr.statusCode === 401 ||
+    anyErr.statusCode === 403 ||
+    anyErr.status === 401 ||
+    anyErr.status === 403
+  ) {
+    return true;
+  }
+  const errorMsg =
+    anyErr.message || (typeof error === "string" ? error : String(error)) || "";
+  const lower = errorMsg.toLowerCase();
+  return (
+    lower.includes("401") ||
+    lower.includes("403") ||
+    lower.includes("unauthorized") ||
+    lower.includes("forbidden")
+  );
+}
+
+/**
+ * Resolves the active access token or API key from API client, Zustand app store, or localStorage.
+ */
+export function getAccessToken(): string {
+  return (
+    apiClient.getStoredApiKey?.() ||
+    useAppStore.getState?.().apiKey ||
+    (typeof window !== "undefined" && window.localStorage
+      ? localStorage.getItem("seedarr_api_key") ||
+        localStorage.getItem("seedarr_token") ||
+        ""
+      : "") ||
+    ""
+  );
+}
 
 /**
  * Exponential backoff retry policy with randomized jitter and HTTP 401/403 guards.
@@ -31,15 +74,8 @@ export class ExponentialBackoffRetryPolicy implements IRetryPolicy {
   }
 
   nextRetryDelayInMilliseconds(retryContext: RetryContext): number | null {
-    const errorMsg = retryContext.retryReason?.message || "";
-
     // 401/403 HTTP error guards: do not retry if unauthorized or forbidden
-    if (
-      errorMsg.includes("401") ||
-      errorMsg.includes("403") ||
-      errorMsg.includes("Unauthorized") ||
-      errorMsg.includes("Forbidden")
-    ) {
+    if (isUnauthorizedOrForbidden(retryContext.retryReason)) {
       return null;
     }
 
@@ -132,7 +168,20 @@ export function getHubUrl(): string {
 export function getSignalRConnection(): HubConnection {
   if (!connection) {
     connection = new HubConnectionBuilder()
-      .withUrl(getHubUrl())
+      .withUrl(getHubUrl(), {
+        accessTokenFactory: () => {
+          return (
+            apiClient.getStoredApiKey?.() ||
+            useAppStore.getState?.().apiKey ||
+            (typeof window !== "undefined" && window.localStorage
+              ? localStorage.getItem("seedarr_api_key") ||
+                localStorage.getItem("seedarr_token") ||
+                ""
+              : "") ||
+            ""
+          );
+        },
+      })
       .withAutomaticReconnect(new ExponentialBackoffRetryPolicy())
       .configureLogging(LogLevel.Warning)
       .build();
@@ -145,14 +194,7 @@ export function getSignalRConnection(): HubConnection {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
-      const errorMsg =
-        error?.message || (typeof error === "string" ? error : "") || "";
-      if (
-        errorMsg.includes("401") ||
-        errorMsg.includes("403") ||
-        errorMsg.includes("Unauthorized") ||
-        errorMsg.includes("Forbidden")
-      ) {
+      if (isUnauthorizedOrForbidden(error)) {
         return;
       }
       // If closed, trigger reconnection after a short delay

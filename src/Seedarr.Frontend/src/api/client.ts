@@ -22,6 +22,10 @@ class ApiClient {
     this.apiKey = key;
   }
 
+  getStoredApiKey(): string | null {
+    return this.apiKey;
+  }
+
   private async parseError(response: Response): Promise<string> {
     let errorMessage = `API error: ${response.status} ${response.statusText}`;
     try {
