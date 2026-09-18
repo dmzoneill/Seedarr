@@ -247,46 +247,55 @@ public class TorrentService : ITorrentService,
 
     public void MoveQueue(int id, string position)
     {
-        var all = _repository.All().OrderBy(t => t.SortOrder).ToList();
-        var torrent = all.FirstOrDefault(t => t.Id == id);
-        if (torrent == null)
+        lock (_sortOrderLock)
         {
-            return;
-        }
-
-        var currentIndex = all.IndexOf(torrent);
-
-        _logger.Info("Moving torrent {0} queue position: {1}", torrent.Name, position);
-
-        all.RemoveAt(currentIndex);
-
-        switch (position.ToLowerInvariant())
-        {
-            case "top":
-                all.Insert(0, torrent);
-                break;
-            case "up":
-                var upIndex = Math.Max(0, currentIndex - 1);
-                all.Insert(upIndex, torrent);
-                break;
-            case "down":
-                var downIndex = Math.Min(all.Count, currentIndex + 1);
-                all.Insert(downIndex, torrent);
-                break;
-            case "bottom":
-                all.Add(torrent);
-                break;
-            default:
-                all.Insert(currentIndex, torrent);
-                return;
-        }
-
-        for (var i = 0; i < all.Count; i++)
-        {
-            if (all[i].SortOrder != i)
+            var all = _repository.All().OrderBy(t => t.SortOrder).ThenBy(t => t.Id).ToList();
+            var torrent = all.FirstOrDefault(t => t.Id == id);
+            if (torrent == null)
             {
-                all[i].SortOrder = i;
-                _repository.Update(all[i]);
+                return;
+            }
+
+            var currentIndex = all.IndexOf(torrent);
+
+            _logger.Info("Moving torrent {0} queue position: {1}", torrent.Name, position);
+
+            all.RemoveAt(currentIndex);
+
+            switch (position.ToLowerInvariant())
+            {
+                case "top":
+                    all.Insert(0, torrent);
+                    break;
+                case "up":
+                    var upIndex = Math.Max(0, currentIndex - 1);
+                    all.Insert(upIndex, torrent);
+                    break;
+                case "down":
+                    var downIndex = Math.Min(all.Count, currentIndex + 1);
+                    all.Insert(downIndex, torrent);
+                    break;
+                case "bottom":
+                    all.Add(torrent);
+                    break;
+                default:
+                    all.Insert(currentIndex, torrent);
+                    return;
+            }
+
+            var toUpdate = new List<Torrent>();
+            for (var i = 0; i < all.Count; i++)
+            {
+                if (all[i].SortOrder != i)
+                {
+                    all[i].SortOrder = i;
+                    toUpdate.Add(all[i]);
+                }
+            }
+
+            if (toUpdate.Count > 0)
+            {
+                _repository.UpdateMany(toUpdate);
             }
         }
     }
@@ -306,7 +315,7 @@ public class TorrentService : ITorrentService,
 
         lock (_sortOrderLock)
         {
-            var all = _repository.All().OrderBy(t => t.SortOrder).ToList();
+            var all = _repository.All().OrderBy(t => t.SortOrder).ThenBy(t => t.Id).ToList();
             if (all.Count == 0)
             {
                 return;

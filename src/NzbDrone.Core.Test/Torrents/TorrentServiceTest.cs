@@ -443,6 +443,7 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.MoveQueue(999, "top");
 
             _repository.DidNotReceive().Update(Arg.Any<Torrent>());
+            _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
         }
 
         [Test]
@@ -459,9 +460,14 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.MoveQueue(3, "top");
 
             Assert.That(torrents[2].SortOrder, Is.EqualTo(0));
-            _repository.Received().Update(Arg.Is<Torrent>(t => t.Id == 3 && t.SortOrder == 0));
-            _repository.Received().Update(Arg.Is<Torrent>(t => t.Id == 1 && t.SortOrder == 1));
-            _repository.Received().Update(Arg.Is<Torrent>(t => t.Id == 2 && t.SortOrder == 2));
+            Assert.That(torrents[0].SortOrder, Is.EqualTo(1));
+            Assert.That(torrents[1].SortOrder, Is.EqualTo(2));
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+                items.Count() == 3 &&
+                items.Any(t => t.Id == 3 && t.SortOrder == 0) &&
+                items.Any(t => t.Id == 1 && t.SortOrder == 1) &&
+                items.Any(t => t.Id == 2 && t.SortOrder == 2)));
+            _repository.DidNotReceive().Update(Arg.Any<Torrent>());
         }
 
         [Test]
@@ -478,8 +484,14 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.MoveQueue(2, "up");
 
             Assert.That(torrents[1].SortOrder, Is.EqualTo(0));
-            _repository.Received().Update(Arg.Is<Torrent>(t => t.Id == 2 && t.SortOrder == 0));
-            _repository.Received().Update(Arg.Is<Torrent>(t => t.Id == 1 && t.SortOrder == 1));
+            Assert.That(torrents[0].SortOrder, Is.EqualTo(1));
+            Assert.That(torrents[2].SortOrder, Is.EqualTo(2));
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+                items.Count() == 2 &&
+                items.Any(t => t.Id == 2 && t.SortOrder == 0) &&
+                items.Any(t => t.Id == 1 && t.SortOrder == 1) &&
+                !items.Any(t => t.Id == 3)));
+            _repository.DidNotReceive().Update(Arg.Any<Torrent>());
         }
 
         [Test]
@@ -496,8 +508,14 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.MoveQueue(2, "down");
 
             Assert.That(torrents[1].SortOrder, Is.EqualTo(2));
-            _repository.Received().Update(Arg.Is<Torrent>(t => t.Id == 2 && t.SortOrder == 2));
-            _repository.Received().Update(Arg.Is<Torrent>(t => t.Id == 3 && t.SortOrder == 1));
+            Assert.That(torrents[0].SortOrder, Is.EqualTo(0));
+            Assert.That(torrents[2].SortOrder, Is.EqualTo(1));
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+                items.Count() == 2 &&
+                items.Any(t => t.Id == 2 && t.SortOrder == 2) &&
+                items.Any(t => t.Id == 3 && t.SortOrder == 1) &&
+                !items.Any(t => t.Id == 1)));
+            _repository.DidNotReceive().Update(Arg.Any<Torrent>());
         }
 
         [Test]
@@ -514,9 +532,14 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.MoveQueue(1, "bottom");
 
             Assert.That(torrents[0].SortOrder, Is.EqualTo(2));
-            _repository.Received().Update(Arg.Is<Torrent>(t => t.Id == 1 && t.SortOrder == 2));
-            _repository.Received().Update(Arg.Is<Torrent>(t => t.Id == 2 && t.SortOrder == 0));
-            _repository.Received().Update(Arg.Is<Torrent>(t => t.Id == 3 && t.SortOrder == 1));
+            Assert.That(torrents[1].SortOrder, Is.EqualTo(0));
+            Assert.That(torrents[2].SortOrder, Is.EqualTo(1));
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+                items.Count() == 3 &&
+                items.Any(t => t.Id == 1 && t.SortOrder == 2) &&
+                items.Any(t => t.Id == 2 && t.SortOrder == 0) &&
+                items.Any(t => t.Id == 3 && t.SortOrder == 1)));
+            _repository.DidNotReceive().Update(Arg.Any<Torrent>());
         }
 
         [Test]
@@ -532,6 +555,56 @@ namespace NzbDrone.Core.Test.Torrents
             _subject.MoveQueue(1, "invalid");
 
             _repository.DidNotReceive().Update(Arg.Any<Torrent>());
+            _repository.DidNotReceive().UpdateMany(Arg.Any<IEnumerable<Torrent>>());
+        }
+
+        [Test]
+        public void MoveQueue_with_colliding_sort_orders_should_stabilize_order_by_id_and_batch_update()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 30, SortOrder = 5 },
+                new Torrent { Id = 10, SortOrder = 5 },
+                new Torrent { Id = 20, SortOrder = 5 }
+            };
+            _repository.All().Returns(torrents.AsQueryable());
+
+            _subject.MoveQueue(30, "top");
+
+            Assert.That(torrents.First(t => t.Id == 30).SortOrder, Is.EqualTo(0));
+            Assert.That(torrents.First(t => t.Id == 10).SortOrder, Is.EqualTo(1));
+            Assert.That(torrents.First(t => t.Id == 20).SortOrder, Is.EqualTo(2));
+
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+                items.Count() == 3 &&
+                items.Any(t => t.Id == 30 && t.SortOrder == 0) &&
+                items.Any(t => t.Id == 10 && t.SortOrder == 1) &&
+                items.Any(t => t.Id == 20 && t.SortOrder == 2)));
+            _repository.DidNotReceive().Update(Arg.Any<Torrent>());
+        }
+
+        [Test]
+        public void BatchMoveQueue_with_colliding_sort_orders_should_stabilize_order_by_id_and_batch_update()
+        {
+            var torrents = new List<Torrent>
+            {
+                new Torrent { Id = 30, SortOrder = 5 },
+                new Torrent { Id = 10, SortOrder = 5 },
+                new Torrent { Id = 20, SortOrder = 5 }
+            };
+            _repository.All().Returns(torrents.AsQueryable());
+
+            _subject.BatchMoveQueue(new[] { 20, 30 }, "top");
+
+            Assert.That(torrents.First(t => t.Id == 20).SortOrder, Is.EqualTo(0));
+            Assert.That(torrents.First(t => t.Id == 30).SortOrder, Is.EqualTo(1));
+            Assert.That(torrents.First(t => t.Id == 10).SortOrder, Is.EqualTo(2));
+
+            _repository.Received(1).UpdateMany(Arg.Is<IEnumerable<Torrent>>(items =>
+                items.Count() == 3 &&
+                items.Any(t => t.Id == 20 && t.SortOrder == 0) &&
+                items.Any(t => t.Id == 30 && t.SortOrder == 1) &&
+                items.Any(t => t.Id == 10 && t.SortOrder == 2)));
         }
 
         [Test]

@@ -2460,7 +2460,7 @@ public class QBittorrentApiController : ControllerBase, IActionFilter
 
         if (string.Equals(hashes.Trim(), "all", StringComparison.OrdinalIgnoreCase))
         {
-            return _torrentService.GetAll().OrderBy(t => t.SortOrder).ToList();
+            return _torrentService.GetAll().OrderBy(t => t.SortOrder).ThenBy(t => t.Id).ToList();
         }
 
         var hashList = hashes.Split('|', StringSplitOptions.RemoveEmptyEntries)

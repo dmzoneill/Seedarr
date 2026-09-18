@@ -233,6 +233,7 @@ public class SeedingEngine : BackgroundService
             var queuedTorrents = allTorrents
                 .Where(t => t.Status == TorrentStatus.Queued)
                 .OrderBy(t => t.SortOrder)
+                .ThenBy(t => t.Id)
                 .ToList();
 
             if (queuedTorrents.Count > 0)
