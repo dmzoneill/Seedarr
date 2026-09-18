@@ -24,6 +24,7 @@ import { getMediaDeepLink } from "../utils/arrLinks";
 import { filterTorrents } from "../utils/filterUtils";
 import TorrentContextMenu from "./TorrentContextMenu";
 import AddTorrentModal from "./AddTorrentModal";
+import DeleteTorrentModal from "./DeleteTorrentModal";
 import MediaArtwork from "./MediaArtwork";
 import type { Torrent } from "../api/types";
 
@@ -69,6 +70,7 @@ function TorrentGrid({
     torrent: Torrent;
   } | null>(null);
   const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
+  const [torrentToDelete, setTorrentToDelete] = useState<Torrent | null>(null);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, t: Torrent) => {
     e.preventDefault();
@@ -577,10 +579,9 @@ function TorrentGrid({
                   }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete "${torrent.name}"?`)) {
-                      deleteTorrent.mutate({ id: torrent.id });
-                    }
+                    setTorrentToDelete(torrent);
                   }}
+                  disabled={deleteTorrent.isPending}
                   title="Delete torrent"
                 >
                   <span>{t("common.delete", undefined, "Delete")}</span>
@@ -633,6 +634,29 @@ function TorrentGrid({
           initialMode="search"
           initialQuery={searchModalQuery}
           onClose={() => setSearchModalQuery(null)}
+        />
+      )}
+
+      {torrentToDelete && (
+        <DeleteTorrentModal
+          isOpen={true}
+          count={1}
+          torrentName={torrentToDelete.name}
+          isPending={deleteTorrent.isPending}
+          onClose={() => {
+            if (!deleteTorrent.isPending) setTorrentToDelete(null);
+          }}
+          onConfirm={async (deleteFiles: boolean) => {
+            try {
+              await deleteTorrent.mutateAsync({
+                id: torrentToDelete.id,
+                deleteFiles,
+              });
+              setTorrentToDelete(null);
+            } catch {
+              // Mutation error handled by query client
+            }
+          }}
         />
       )}
     </div>

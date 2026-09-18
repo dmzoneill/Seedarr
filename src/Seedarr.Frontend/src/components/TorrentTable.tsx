@@ -27,6 +27,7 @@ import { filterTorrents } from "../utils/filterUtils";
 import { SkeletonTableRow } from "./Skeleton";
 import TorrentContextMenu from "./TorrentContextMenu";
 import AddTorrentModal from "./AddTorrentModal";
+import DeleteTorrentModal from "./DeleteTorrentModal";
 import TrackerFavicon from "./TrackerFavicon";
 import type { Torrent } from "../api/types";
 
@@ -282,6 +283,11 @@ function TorrentTable({
   const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [searchModalQuery, setSearchModalQuery] = useState<string | null>(null);
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    ids: number[];
+    torrentName?: string;
+  } | null>(null);
   const [visibleColumns, setVisibleColumns] =
     useState<Set<string>>(loadVisibleColumns);
 
@@ -420,12 +426,29 @@ function TorrentTable({
             ? [sorted[focusedIndex].id]
             : [];
     if (ids.length === 0) return;
-    if (confirm(`Delete ${ids.length} torrent(s)?`)) {
-      for (const id of ids) {
-        deleteTorrent.mutate({ id });
+    const torrentName =
+      ids.length === 1 ? sorted.find((t) => t.id === ids[0])?.name : undefined;
+    setDeleteModalState({
+      isOpen: true,
+      ids,
+      torrentName,
+    });
+  }, [selectedIds, selectedTorrentId, sorted, focusedIndex]);
+
+  const handleConfirmDefaultDelete = useCallback(
+    async (deleteFiles: boolean) => {
+      if (!deleteModalState || deleteModalState.ids.length === 0) return;
+      try {
+        for (const id of deleteModalState.ids) {
+          await deleteTorrent.mutateAsync({ id, deleteFiles });
+        }
+        setDeleteModalState(null);
+      } catch {
+        // Handled by query client
       }
-    }
-  }, [selectedIds, selectedTorrentId, sorted, focusedIndex, deleteTorrent]);
+    },
+    [deleteModalState, deleteTorrent],
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -955,6 +978,19 @@ function TorrentTable({
           initialMode="search"
           initialQuery={searchModalQuery}
           onClose={() => setSearchModalQuery(null)}
+        />
+      )}
+
+      {deleteModalState?.isOpen && (
+        <DeleteTorrentModal
+          isOpen={deleteModalState.isOpen}
+          count={deleteModalState.ids.length}
+          torrentName={deleteModalState.torrentName}
+          isPending={deleteTorrent.isPending}
+          onClose={() => {
+            if (!deleteTorrent.isPending) setDeleteModalState(null);
+          }}
+          onConfirm={handleConfirmDefaultDelete}
         />
       )}
     </div>
