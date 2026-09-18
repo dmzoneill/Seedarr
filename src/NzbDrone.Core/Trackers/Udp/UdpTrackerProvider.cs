@@ -2,6 +2,8 @@ using System;
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Network;
@@ -14,11 +16,14 @@ public class UdpTrackerProvider : ITrackerProvider
     private const int ActionConnect = 0;
     private const int ActionAnnounce = 1;
     private const int ActionScrape = 2;
+    public const int DefaultMaxRetries = 4;
 
     private readonly IConfigService _configService;
     private readonly Logger _logger;
 
     public string Name => "UDP";
+
+    internal int MaxRetries { get; set; } = DefaultMaxRetries;
 
     public UdpTrackerProvider(IConfigService configService)
     {
@@ -35,7 +40,89 @@ public class UdpTrackerProvider : ITrackerProvider
         return client;
     }
 
+    internal virtual TimeSpan GetTimeout(int attempt)
+    {
+        var baseSeconds = _configService.UdpTrackerTimeoutSeconds > 0
+            ? _configService.UdpTrackerTimeoutSeconds
+            : 5;
+
+        var multiplier = 1 << Math.Min(attempt, 30);
+        return TimeSpan.FromSeconds(baseSeconds * multiplier);
+    }
+
+    internal virtual async Task<UdpReceiveResult> SendAndReceiveAsync(
+        UdpClient client,
+        byte[] packet,
+        int transactionId,
+        CancellationToken cancellationToken = default)
+    {
+        for (var attempt = 0; attempt <= MaxRetries; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var timeout = GetTimeout(attempt);
+            using var attemptCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            attemptCts.CancelAfter(timeout);
+
+            _logger.Debug(
+                "Sending UDP tracker packet (transactionId: {0}, attempt {1}/{2})",
+                transactionId,
+                attempt + 1,
+                MaxRetries + 1);
+
+            await client.SendAsync(packet.AsMemory(), attemptCts.Token);
+
+            while (!attemptCts.IsCancellationRequested)
+            {
+                UdpReceiveResult receiveResult;
+                try
+                {
+                    receiveResult = await client.ReceiveAsync(attemptCts.Token);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    _logger.Debug(
+                        "UDP tracker request timed out after {0}s (transactionId: {1}, attempt {2}/{3})",
+                        timeout.TotalSeconds,
+                        transactionId,
+                        attempt + 1,
+                        MaxRetries + 1);
+                    break;
+                }
+
+                var response = receiveResult.Buffer;
+
+                if (response.Length >= 8)
+                {
+                    var responseTxId = ReadInt32BigEndian(response, 4);
+                    if (responseTxId != transactionId)
+                    {
+                        _logger.Debug(
+                            "Discarding UDP packet with mismatched transaction ID {0} (expected {1})",
+                            responseTxId,
+                            transactionId);
+                        continue;
+                    }
+                }
+
+                return receiveResult;
+            }
+        }
+
+        _logger.Warn(
+            "UDP tracker request timed out after {0} retries (transactionId: {1})",
+            MaxRetries,
+            transactionId);
+
+        throw new TimeoutException($"UDP tracker request timed out after {MaxRetries} retries");
+    }
+
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request)
+    {
+        return AnnounceAsync(request).GetAwaiter().GetResult();
+    }
+
+    public async Task<TrackerAnnounceResponse> AnnounceAsync(TrackerAnnounceRequest request, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -43,17 +130,17 @@ public class UdpTrackerProvider : ITrackerProvider
             var uri = new Uri(request.TrackerUrl);
             using var client = CreateClient(timeoutMs);
 
-            var endpoint = new IPEndPoint(IPAddress.Any, 0);
             client.Connect(uri.Host, uri.Port);
 
-            var connectionId = Connect(client, ref endpoint);
+            var connectionId = await ConnectAsync(client, cancellationToken);
 
             var transactionId = GenerateTransactionId();
             var announceRequest = BuildAnnouncePacket(connectionId, transactionId, request);
-            client.Send(announceRequest, announceRequest.Length);
 
-            var response = client.Receive(ref endpoint);
-            var addressFamily = endpoint.AddressFamily;
+            var receiveResult = await SendAndReceiveAsync(client, announceRequest, transactionId, cancellationToken);
+            var response = receiveResult.Buffer;
+
+            var addressFamily = receiveResult.RemoteEndPoint.AddressFamily;
             if (addressFamily != AddressFamily.InterNetworkV6 && uri.HostNameType == UriHostNameType.IPv6)
             {
                 addressFamily = AddressFamily.InterNetworkV6;
@@ -74,16 +161,20 @@ public class UdpTrackerProvider : ITrackerProvider
 
     public TrackerScrapeResponse Scrape(string infoHash, string trackerUrl)
     {
+        return ScrapeAsync(infoHash, trackerUrl).GetAwaiter().GetResult();
+    }
+
+    public async Task<TrackerScrapeResponse> ScrapeAsync(string infoHash, string trackerUrl, CancellationToken cancellationToken = default)
+    {
         try
         {
             var timeoutMs = _configService.UdpTrackerTimeoutSeconds * 1000;
             var uri = new Uri(trackerUrl);
             using var client = CreateClient(timeoutMs);
 
-            var endpoint = new IPEndPoint(IPAddress.Any, 0);
             client.Connect(uri.Host, uri.Port);
 
-            var connectionId = Connect(client, ref endpoint);
+            var connectionId = await ConnectAsync(client, cancellationToken);
             var transactionId = GenerateTransactionId();
 
             var hashBytes = Convert.FromHexString(infoHash);
@@ -93,8 +184,8 @@ public class UdpTrackerProvider : ITrackerProvider
             WriteInt32BigEndian(packet, 12, transactionId);
             Array.Copy(hashBytes, 0, packet, 16, 20);
 
-            client.Send(packet, packet.Length);
-            var response = client.Receive(ref endpoint);
+            var receiveResult = await SendAndReceiveAsync(client, packet, transactionId, cancellationToken);
+            var response = receiveResult.Buffer;
 
             if (response.Length < 20)
             {
@@ -129,7 +220,7 @@ public class UdpTrackerProvider : ITrackerProvider
         }
     }
 
-    private long Connect(UdpClient client, ref IPEndPoint endpoint)
+    private async Task<long> ConnectAsync(UdpClient client, CancellationToken cancellationToken = default)
     {
         var transactionId = GenerateTransactionId();
         var packet = new byte[16];
@@ -137,8 +228,8 @@ public class UdpTrackerProvider : ITrackerProvider
         WriteInt32BigEndian(packet, 8, ActionConnect);
         WriteInt32BigEndian(packet, 12, transactionId);
 
-        client.Send(packet, packet.Length);
-        var response = client.Receive(ref endpoint);
+        var receiveResult = await SendAndReceiveAsync(client, packet, transactionId, cancellationToken);
+        var response = receiveResult.Buffer;
 
         if (response.Length < 16)
         {
