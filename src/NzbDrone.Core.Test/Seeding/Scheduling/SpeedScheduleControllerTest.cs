@@ -274,4 +274,92 @@ public class SpeedScheduleControllerTest
         Assert.That(result.Value.StartTime, Is.EqualTo("09:00"));
         Assert.That(result.Value.EndTime, Is.EqualTo("18:00"));
     }
+
+    [Test]
+    public void GetActiveLimits_when_schedule_is_active_with_speed_boost_does_not_clamp_to_base_config()
+    {
+        _configService.AlternativeSpeedEnabled.Returns(false);
+        _configService.MaxUploadSpeedKbps.Returns(5000);
+        _configService.MaxDownloadSpeedKbps.Returns(10000);
+
+        _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
+        {
+            IsScheduleActive = true,
+            ActiveScheduleName = "Night Boost",
+            MaxUploadSpeed = 20_000_000,
+            MaxDownloadSpeed = 50_000_000
+        });
+
+        var result = _controller.GetActiveLimits();
+
+        Assert.That(result.Value, Is.Not.Null);
+        Assert.That(result.Value.IsScheduleActive, Is.True);
+        Assert.That(result.Value.MaxUploadSpeed, Is.EqualTo(20_000_000));
+        Assert.That(result.Value.MaxDownloadSpeed, Is.EqualTo(50_000_000));
+    }
+
+    [Test]
+    public void GetActiveLimits_when_schedule_is_active_and_alternative_speed_enabled_clamps_to_alt_limits()
+    {
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        _configService.AltUploadSpeedKbps.Returns(50);
+        _configService.AltDownloadSpeedKbps.Returns(100);
+
+        _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
+        {
+            IsScheduleActive = true,
+            ActiveScheduleName = "Night Boost",
+            MaxUploadSpeed = 20_000_000,
+            MaxDownloadSpeed = 50_000_000
+        });
+
+        var result = _controller.GetActiveLimits();
+
+        Assert.That(result.Value, Is.Not.Null);
+        Assert.That(result.Value.MaxUploadSpeed, Is.EqualTo(50 * 1024));
+        Assert.That(result.Value.MaxDownloadSpeed, Is.EqualTo(100 * 1024));
+    }
+
+    [Test]
+    public void GetActiveLimits_when_schedule_does_not_override_falls_back_to_base_config()
+    {
+        _configService.AlternativeSpeedEnabled.Returns(false);
+        _configService.MaxUploadSpeedKbps.Returns(5000);
+        _configService.MaxDownloadSpeedKbps.Returns(10000);
+
+        _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
+        {
+            IsScheduleActive = true,
+            ActiveScheduleName = "Active Schedule",
+            MaxUploadSpeed = SpeedLimits.Unlimited,
+            MaxDownloadSpeed = SpeedLimits.Unlimited
+        });
+
+        var result = _controller.GetActiveLimits();
+
+        Assert.That(result.Value, Is.Not.Null);
+        Assert.That(result.Value.MaxUploadSpeed, Is.EqualTo(5000 * 1024));
+        Assert.That(result.Value.MaxDownloadSpeed, Is.EqualTo(10000 * 1024));
+    }
+
+    [Test]
+    public void GetActiveLimits_when_schedule_is_inactive_applies_base_config()
+    {
+        _configService.AlternativeSpeedEnabled.Returns(false);
+        _configService.MaxUploadSpeedKbps.Returns(5000);
+        _configService.MaxDownloadSpeedKbps.Returns(10000);
+
+        _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
+        {
+            IsScheduleActive = false,
+            MaxUploadSpeed = SpeedLimits.Unlimited,
+            MaxDownloadSpeed = SpeedLimits.Unlimited
+        });
+
+        var result = _controller.GetActiveLimits();
+
+        Assert.That(result.Value, Is.Not.Null);
+        Assert.That(result.Value.MaxUploadSpeed, Is.EqualTo(5000 * 1024));
+        Assert.That(result.Value.MaxDownloadSpeed, Is.EqualTo(10000 * 1024));
+    }
 }

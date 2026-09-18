@@ -117,4 +117,84 @@ public class SpeedLimitMergerTest
         Assert.That(result.MaxUploadSpeed, Is.EqualTo(0));
         Assert.That(result.MaxDownloadSpeed, Is.EqualTo(0));
     }
+
+    [Test]
+    public void Apply_with_active_schedule_and_higher_scheduled_speed_preserves_scheduled_boost()
+    {
+        var limits = new SpeedLimits
+        {
+            IsScheduleActive = true,
+            MaxUploadSpeed = 20_000_000,
+            MaxDownloadSpeed = 50_000_000
+        };
+
+        var result = SpeedLimitMerger.Apply(limits, 5_000_000, 10_000_000, false);
+
+        Assert.That(result.MaxUploadSpeed, Is.EqualTo(20_000_000));
+        Assert.That(result.MaxDownloadSpeed, Is.EqualTo(50_000_000));
+    }
+
+    [Test]
+    public void Apply_with_active_schedule_and_alternative_speed_enabled_clamps_to_alt_limit()
+    {
+        var limits = new SpeedLimits
+        {
+            IsScheduleActive = true,
+            MaxUploadSpeed = 20_000_000,
+            MaxDownloadSpeed = 50_000_000
+        };
+
+        var result = SpeedLimitMerger.Apply(limits, 50_000, 100_000, true);
+
+        Assert.That(result.MaxUploadSpeed, Is.EqualTo(50_000));
+        Assert.That(result.MaxDownloadSpeed, Is.EqualTo(100_000));
+    }
+
+    [Test]
+    public void Apply_with_active_schedule_and_unlimited_scheduled_speed_falls_back_to_config()
+    {
+        var limits = new SpeedLimits
+        {
+            IsScheduleActive = true,
+            MaxUploadSpeed = SpeedLimits.Unlimited,
+            MaxDownloadSpeed = SpeedLimits.Unlimited
+        };
+
+        var result = SpeedLimitMerger.Apply(limits, 5_000_000, 10_000_000, false);
+
+        Assert.That(result.MaxUploadSpeed, Is.EqualTo(5_000_000));
+        Assert.That(result.MaxDownloadSpeed, Is.EqualTo(10_000_000));
+    }
+
+    [Test]
+    public void Apply_with_active_schedule_and_zero_scheduled_speed_keeps_zero_pause()
+    {
+        var limits = new SpeedLimits
+        {
+            IsScheduleActive = true,
+            MaxUploadSpeed = 0,
+            MaxDownloadSpeed = 0
+        };
+
+        var result = SpeedLimitMerger.Apply(limits, 5_000_000, 10_000_000, false);
+
+        Assert.That(result.MaxUploadSpeed, Is.EqualTo(0));
+        Assert.That(result.MaxDownloadSpeed, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void Apply_with_inactive_schedule_uses_config_limits()
+    {
+        var limits = new SpeedLimits
+        {
+            IsScheduleActive = false,
+            MaxUploadSpeed = SpeedLimits.Unlimited,
+            MaxDownloadSpeed = SpeedLimits.Unlimited
+        };
+
+        var result = SpeedLimitMerger.Apply(limits, 5_000_000, 10_000_000, false);
+
+        Assert.That(result.MaxUploadSpeed, Is.EqualTo(5_000_000));
+        Assert.That(result.MaxDownloadSpeed, Is.EqualTo(10_000_000));
+    }
 }

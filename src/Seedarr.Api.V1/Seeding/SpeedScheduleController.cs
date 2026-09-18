@@ -43,17 +43,18 @@ public class SpeedScheduleController : Controller
     {
         var limits = _speedScheduler.GetCurrentLimits();
 
-        var uploadKbps = _configService.AlternativeSpeedEnabled
+        var isAltEnabled = _configService.AlternativeSpeedEnabled;
+        var uploadKbps = isAltEnabled
             ? _configService.AltUploadSpeedKbps
             : _configService.MaxUploadSpeedKbps;
-        var downloadKbps = _configService.AlternativeSpeedEnabled
+        var downloadKbps = isAltEnabled
             ? _configService.AltDownloadSpeedKbps
             : _configService.MaxDownloadSpeedKbps;
 
         var uploadLimitBps = uploadKbps > 0 ? (long)uploadKbps * 1024 : SpeedLimits.Unlimited;
         var downloadLimitBps = downloadKbps > 0 ? (long)downloadKbps * 1024 : SpeedLimits.Unlimited;
 
-        return SpeedLimitMerger.Apply(limits, uploadLimitBps, downloadLimitBps);
+        return SpeedLimitMerger.Apply(limits, uploadLimitBps, downloadLimitBps, isAltEnabled);
     }
 
     [HttpPost]

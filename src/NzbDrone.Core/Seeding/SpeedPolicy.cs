@@ -68,19 +68,23 @@ public class SpeedPolicy : ISpeedPolicy,
     public SpeedLimits GetEffectiveLimits()
     {
         var limits = _speedScheduler.GetCurrentLimits();
+        if (limits == null)
+        {
+            return null;
+        }
 
-        var configUploadSpeedKbps = _configService.AlternativeSpeedEnabled
+        var isAltEnabled = _configService.AlternativeSpeedEnabled;
+        var configUploadSpeedKbps = isAltEnabled
             ? _configService.AltUploadSpeedKbps
             : _configService.MaxUploadSpeedKbps;
-        var configDownloadSpeedKbps = _configService.AlternativeSpeedEnabled
+        var configDownloadSpeedKbps = isAltEnabled
             ? _configService.AltDownloadSpeedKbps
             : _configService.MaxDownloadSpeedKbps;
 
         var uploadLimitBps = configUploadSpeedKbps > 0 ? (long)configUploadSpeedKbps * 1024 : SpeedLimits.Unlimited;
         var downloadLimitBps = configDownloadSpeedKbps > 0 ? (long)configDownloadSpeedKbps * 1024 : SpeedLimits.Unlimited;
 
-        SpeedLimitMerger.Apply(limits, uploadLimitBps, downloadLimitBps);
-        return limits;
+        return SpeedLimitMerger.Apply(limits, uploadLimitBps, downloadLimitBps, isAltEnabled);
     }
 
     public void ProcessDownloading(List<Torrent> torrents, SpeedLimits limits, TimeSpan tickInterval)
@@ -194,6 +198,7 @@ public class SpeedPolicy : ISpeedPolicy,
         }
 
         var activeIndex = 0;
+        var uploadBytesPerTorrent = new long[torrents.Count];
 
         for (var i = 0; i < torrents.Count; i++)
         {
@@ -284,6 +289,56 @@ public class SpeedPolicy : ISpeedPolicy,
             {
                 uploadBytesThisTick = 0;
             }
+
+            uploadBytesPerTorrent[i] = uploadBytesThisTick;
+        }
+
+        if (limits != null && limits.MaxUploadSpeed != SpeedLimits.Unlimited && limits.MaxUploadSpeed >= 0)
+        {
+            var maxAllowedBytes = (long)Math.Round(limits.MaxUploadSpeed * tickInterval.TotalSeconds);
+            if (maxAllowedBytes <= 0)
+            {
+                Array.Clear(uploadBytesPerTorrent, 0, uploadBytesPerTorrent.Length);
+            }
+            else
+            {
+                var totalAllocated = 0L;
+                for (var i = 0; i < uploadBytesPerTorrent.Length; i++)
+                {
+                    totalAllocated += uploadBytesPerTorrent[i];
+                }
+
+                if (totalAllocated > maxAllowedBytes)
+                {
+                    var scale = (double)maxAllowedBytes / totalAllocated;
+                    var scaledTotal = 0L;
+                    for (var i = 0; i < uploadBytesPerTorrent.Length; i++)
+                    {
+                        uploadBytesPerTorrent[i] = (long)(uploadBytesPerTorrent[i] * scale);
+                        scaledTotal += uploadBytesPerTorrent[i];
+                    }
+
+                    var remainder = maxAllowedBytes - scaledTotal;
+                    if (remainder > 0)
+                    {
+                        var eligibleIndices = Enumerable.Range(0, uploadBytesPerTorrent.Length)
+                            .Where(idx => uploadBytesPerTorrent[idx] > 0)
+                            .OrderByDescending(idx => uploadBytesPerTorrent[idx])
+                            .ToList();
+
+                        for (var r = 0; r < remainder && eligibleIndices.Count > 0; r++)
+                        {
+                            uploadBytesPerTorrent[eligibleIndices[r % eligibleIndices.Count]]++;
+                        }
+                    }
+                }
+            }
+        }
+
+        for (var i = 0; i < torrents.Count; i++)
+        {
+            var torrent = torrents[i];
+            var uploadBytesThisTick = uploadBytesPerTorrent[i];
 
             torrent.Uploaded += uploadBytesThisTick;
 

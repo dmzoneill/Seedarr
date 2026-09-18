@@ -27,4 +27,33 @@ public static class SpeedLimitMerger
 
         return limits;
     }
+
+    public static SpeedLimits Apply(
+        SpeedLimits limits,
+        long configUploadBps,
+        long configDownloadBps,
+        bool alternativeSpeedEnabled)
+    {
+        if (limits == null)
+        {
+            return null;
+        }
+
+        if (limits.IsScheduleActive && !alternativeSpeedEnabled)
+        {
+            if (limits.MaxUploadSpeed == SpeedLimits.Unlimited && configUploadBps >= 0)
+            {
+                limits.MaxUploadSpeed = configUploadBps;
+            }
+
+            if (limits.MaxDownloadSpeed == SpeedLimits.Unlimited && configDownloadBps >= 0)
+            {
+                limits.MaxDownloadSpeed = configDownloadBps;
+            }
+
+            return limits;
+        }
+
+        return Apply(limits, configUploadBps, configDownloadBps);
+    }
 }
