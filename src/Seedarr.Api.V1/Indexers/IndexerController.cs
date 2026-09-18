@@ -318,6 +318,13 @@ public class IndexerController : Controller
                 var retryAfter = ex.Data["RetryAfter"] as TimeSpan?;
                 _indexerStatusService.RecordFailure(def.Id, (int?)ex.StatusCode, ex.Message, ex, retryAfter);
             }
+            catch (IndexerException ex)
+            {
+                if (!ex.Recorded)
+                {
+                    _indexerStatusService.RecordFailure(def.Id, ex.StatusCode, ex.Message, ex);
+                }
+            }
             catch (Exception ex)
             {
                 _indexerStatusService.RecordFailure(def.Id, null, ex.Message, ex);
@@ -510,8 +517,8 @@ public class IndexerController : Controller
         return definition.IndexerType switch
         {
             "Prowlarr" => new ProwlarrIndexer(_httpClient),
-            "Torznab" => new TorznabIndexer(_httpClient),
-            "Newznab" => new NewznabIndexer(_httpClient),
+            "Torznab" => new TorznabIndexer(_httpClient, _indexerStatusService),
+            "Newznab" => new NewznabIndexer(_httpClient, _indexerStatusService),
             _ => throw new ArgumentException($"Unknown indexer type: {definition.IndexerType}"),
         };
     }

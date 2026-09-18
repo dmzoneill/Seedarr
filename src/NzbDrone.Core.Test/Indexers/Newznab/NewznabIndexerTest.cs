@@ -1,3 +1,10 @@
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Indexers;
 using NzbDrone.Core.Indexers.Newznab;
@@ -296,6 +303,101 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
             Assert.That(results, Has.Count.EqualTo(1));
             Assert.That(results[0].Title, Is.EqualTo("Fast & Furious's\"Cut\""));
             Assert.That(results[0].Description, Is.EqualTo("Fast & Furious's\"Cut\""));
+        }
+
+        [TestCase("100", "Incorrect user credentials")]
+        [TestCase("101", "Account suspended")]
+        [TestCase("102", "Insufficient privileges / VIP required")]
+        [TestCase("200", "Missing parameter")]
+        [TestCase("500", "Request limit reached")]
+        public void TestConnectionDetailed_should_return_false_when_http_200_returns_xml_error(string code, string description)
+        {
+            var handler = new NewznabTestHttpMessageHandler();
+            var indexer = new NewznabIndexer(new HttpClient(handler));
+
+            var definition = new IndexerDefinition
+            {
+                Id = 1,
+                Name = "Newznab Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "test-key",
+                ApiPath = "/api"
+            };
+
+            var errorXml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
+<error code=""{code}"" description=""{description}""/>";
+
+            handler.Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(errorXml)
+            };
+
+            var result = indexer.TestConnectionDetailed(definition);
+
+            Assert.That(result.Success, Is.False);
+            Assert.That(result.Message, Does.Contain($"Indexer authentication/access error (code {code}): {description}"));
+            Assert.That(indexer.TestConnection(definition), Is.False);
+        }
+
+        [TestCase("100", "Incorrect user credentials")]
+        [TestCase("101", "Account suspended")]
+        [TestCase("102", "Insufficient privileges / VIP required")]
+        [TestCase("200", "Missing parameter")]
+        [TestCase("500", "Request limit reached")]
+        public void ParseResponse_should_throw_IndexerException_when_xml_contains_error(string code, string description)
+        {
+            var errorXml = $@"<?xml version=""1.0"" encoding=""UTF-8""?>
+<error code=""{code}"" description=""{description}""/>";
+
+            var ex = Assert.Throws<IndexerException>(() => _subject.ParseResponse(errorXml));
+            Assert.That(ex.Message, Does.Contain($"Indexer authentication/access error (code {code}): {description}"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(code));
+        }
+
+        [Test]
+        public void Search_should_record_failure_and_throw_IndexerException_when_xml_contains_error()
+        {
+            var statusService = Substitute.For<IIndexerStatusService>();
+            var handler = new NewznabTestHttpMessageHandler();
+            var indexer = new NewznabIndexer(new HttpClient(handler), statusService);
+
+            var definition = new IndexerDefinition
+            {
+                Id = 42,
+                Name = "Newznab Test",
+                Url = "http://8.8.8.8:9696",
+                ApiKey = "test-key"
+            };
+
+            var errorXml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<error code=""100"" description=""Incorrect user credentials""/>";
+
+            handler.Handler = req => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(errorXml)
+            };
+
+            var ex = Assert.Throws<IndexerException>(() => indexer.Search(definition, "test"));
+            Assert.That(ex.ErrorCode, Is.EqualTo("100"));
+            statusService.Received(1).RecordFailure(42, 100, Arg.Any<string>(), Arg.Any<Exception>(), Arg.Any<TimeSpan?>());
+        }
+
+        private class NewznabTestHttpMessageHandler : HttpMessageHandler
+        {
+            public List<HttpRequestMessage> SentRequests { get; } = new();
+            public Func<HttpRequestMessage, HttpResponseMessage> Handler { get; set; }
+
+            protected override HttpResponseMessage Send(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                SentRequests.Add(request);
+                return Handler?.Invoke(request) ?? new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                SentRequests.Add(request);
+                return Task.FromResult(Handler?.Invoke(request) ?? new HttpResponseMessage(HttpStatusCode.NotFound));
+            }
         }
     }
 }
