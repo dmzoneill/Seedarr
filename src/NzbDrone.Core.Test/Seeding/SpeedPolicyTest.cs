@@ -720,4 +720,133 @@ public class SpeedPolicyTest
 
         Assert.That(torrent.Uploaded, Is.EqualTo(0));
     }
+
+    [Test]
+    public void GetEffectiveLimits_when_schedule_is_active_with_speed_boost_does_not_clamp_to_base_config()
+    {
+        _configService.AlternativeSpeedEnabled.Returns(false);
+        _configService.MaxUploadSpeedKbps.Returns(100);
+        _configService.MaxDownloadSpeedKbps.Returns(200);
+
+        _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
+        {
+            IsScheduleActive = true,
+            ActiveScheduleName = "Night Boost",
+            MaxUploadSpeed = 2_000_000,
+            MaxDownloadSpeed = 4_000_000
+        });
+
+        var limits = _subject.GetEffectiveLimits();
+
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(2_000_000));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(4_000_000));
+    }
+
+    [Test]
+    public void GetEffectiveLimits_when_schedule_is_active_and_alternative_speed_enabled_clamps_to_alt_limits()
+    {
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        _configService.AltUploadSpeedKbps.Returns(50);
+        _configService.AltDownloadSpeedKbps.Returns(100);
+
+        _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
+        {
+            IsScheduleActive = true,
+            ActiveScheduleName = "Night Boost",
+            MaxUploadSpeed = 2_000_000,
+            MaxDownloadSpeed = 4_000_000
+        });
+
+        var limits = _subject.GetEffectiveLimits();
+
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(50 * 1024));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(100 * 1024));
+    }
+
+    [Test]
+    public void ProcessSeeding_enforces_aggregate_bandwidth_cap_when_superseeding_boost_applied()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Leechers = 10,
+            SeedingTime = 300,
+            SuperSeeding = true
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 250_000, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        // 250_000 boosted by 1.5x is 375_000, but global cap is 250_000.
+        Assert.That(torrent.Uploaded, Is.EqualTo(250_000));
+    }
+
+    [Test]
+    public void ProcessSeeding_enforces_aggregate_bandwidth_cap_with_multiple_boosted_torrents()
+    {
+        var torrent1 = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Leechers = 10,
+            SeedingTime = 300,
+            SuperSeeding = true
+        };
+        var torrent2 = new Torrent
+        {
+            Id = 2,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Leechers = 10,
+            SeedingTime = 300,
+            SuperSeeding = true
+        };
+        var torrents = new List<Torrent> { torrent1, torrent2 };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(2, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 500_000, 500_000 });
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 1_000_000, MaxDownloadSpeed = 2_000_000 }, TimeSpan.FromSeconds(1));
+
+        // Each torrent boosted to 750_000 (sum 1_500_000), clamped to aggregate cap 1_000_000.
+        Assert.That(torrent1.Uploaded + torrent2.Uploaded, Is.EqualTo(1_000_000));
+    }
+
+    [Test]
+    public void ProcessSeeding_when_upload_limit_is_zero_halts_all_upload_traffic()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Status = TorrentStatus.Seeding,
+            Uploaded = 0,
+            TotalSize = 10_000_000,
+            Progress = 1.0,
+            Leechers = 10,
+            SeedingTime = 300
+        };
+        var torrents = new List<Torrent> { torrent };
+
+        _stopPolicy.SelectStoppedTorrents(torrents).Returns(new HashSet<int>());
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 250_000 });
+
+        _subject.ProcessSeeding(torrents, new SpeedLimits { MaxUploadSpeed = 0, MaxDownloadSpeed = 500_000 }, TimeSpan.FromSeconds(1));
+
+        Assert.That(torrent.Uploaded, Is.EqualTo(0));
+    }
 }
