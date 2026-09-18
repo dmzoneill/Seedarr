@@ -33,6 +33,12 @@ public class LocalPeerDiscoveryTest
         _torrentService = Substitute.For<ITorrentService>();
         _peerDiscovery = Substitute.For<IPeerDiscoveryService>();
         _configService.EnableLpd.Returns(true);
+        _torrentService.FindByInfoHash(Arg.Any<string>()).Returns(callInfo => new Torrent
+        {
+            InfoHash = callInfo.Arg<string>(),
+            IsPrivate = false,
+            Status = TorrentStatus.Downloading
+        });
         _lpd = new LocalPeerDiscovery(_configService, _torrentService, _peerDiscovery);
     }
 
@@ -129,9 +135,11 @@ public class LocalPeerDiscoveryTest
     public void ParseAnnouncement_should_extract_infohash_and_port()
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
-            Substitute.For<ITorrentService>(),
+            torrentService,
             peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
@@ -257,9 +265,11 @@ public class LocalPeerDiscoveryTest
     public void ParseAnnouncement_should_parse_case_insensitive_headers()
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("abc123").Returns(new Torrent { InfoHash = "abc123", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
-            Substitute.For<ITorrentService>(),
+            torrentService,
             peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nport: 6881\r\ninfohash: abc123\r\n\r\n";
@@ -324,10 +334,26 @@ public class LocalPeerDiscoveryTest
     // can be exercised in tests without waiting 300 seconds.
     private sealed class FastAnnouncingLpd : LocalPeerDiscovery
     {
+        public List<string> AnnouncedInfoHashes { get; } = new();
+
         public FastAnnouncingLpd(IConfigService configService, ITorrentService torrentService, IPeerDiscoveryService peerDiscovery)
             : base(configService, torrentService, peerDiscovery) { }
 
         protected override int AnnounceIntervalSeconds => 0;
+
+        protected override Task SendAnnouncementAsync(UdpClient client, byte[] data, IPEndPoint endpoint, CancellationToken stoppingToken)
+        {
+            var message = Encoding.ASCII.GetString(data);
+            foreach (var line in message.Split("\r\n", StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (line.StartsWith("Infohash:", StringComparison.OrdinalIgnoreCase))
+                {
+                    AnnouncedInfoHashes.Add(line[9..].Trim());
+                }
+            }
+
+            return Task.CompletedTask;
+        }
     }
 
     // ExecuteAsync and background-loop tests
@@ -384,7 +410,12 @@ public class LocalPeerDiscoveryTest
     [Test]
     public async Task AnnounceLoop_announces_valid_torrents_after_delay()
     {
-        var torrent = new Torrent { InfoHash = "deadbeef1234567890abcdef12345678deadbeef" };
+        var torrent = new Torrent
+        {
+            InfoHash = "deadbeef1234567890abcdef12345678deadbeef",
+            Status = TorrentStatus.Downloading,
+            IsPrivate = false
+        };
         _torrentService.GetAll().Returns(new List<Torrent> { torrent });
 
         var fastLpd = new FastAnnouncingLpd(_configService, _torrentService, _peerDiscovery);
@@ -399,6 +430,7 @@ public class LocalPeerDiscoveryTest
 
         Assert.That(task.IsCompleted, Is.True);
         _torrentService.Received().GetAll();
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Contain(torrent.InfoHash));
     }
 
     [Test]
@@ -554,9 +586,11 @@ public class LocalPeerDiscoveryTest
     public void ParseAnnouncement_should_accept_private_ipv4_addresses(string ip)
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
-            Substitute.For<ITorrentService>(),
+            torrentService,
             peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
@@ -578,9 +612,11 @@ public class LocalPeerDiscoveryTest
     public void ParseAnnouncement_should_accept_link_local_addresses(string ip)
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
-            Substitute.For<ITorrentService>(),
+            torrentService,
             peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
@@ -602,9 +638,11 @@ public class LocalPeerDiscoveryTest
     public void ParseAnnouncement_should_accept_unique_local_ipv6_addresses(string ip)
     {
         var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
         var lpd = new LocalPeerDiscovery(
             Substitute.For<IConfigService>(),
-            Substitute.For<ITorrentService>(),
+            torrentService,
             peerDiscovery);
 
         var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
@@ -723,5 +761,183 @@ public class LocalPeerDiscoveryTest
             peerDiscovery.DidNotReceive().AddPeers(
                 Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
         }
+    }
+
+    [Test]
+    public async Task AnnounceLoop_should_not_announce_private_torrents()
+    {
+        var downloadingPrivate = new Torrent
+        {
+            InfoHash = "private1",
+            Status = TorrentStatus.Downloading,
+            IsPrivate = true
+        };
+        var seedingPrivate = new Torrent
+        {
+            InfoHash = "private2",
+            Status = TorrentStatus.Seeding,
+            IsPrivate = true
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { downloadingPrivate, seedingPrivate });
+
+        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService, _peerDiscovery);
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "AnnounceLoop",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var task = (Task)method.Invoke(fastLpd, new object[] { cts.Token });
+
+        await task.WaitAsync(TimeSpan.FromSeconds(4));
+
+        Assert.That(task.IsCompleted, Is.True);
+        Assert.That(fastLpd.AnnouncedInfoHashes, Is.Empty);
+    }
+
+    [Test]
+    public async Task AnnounceLoop_should_not_announce_stopped_or_paused_torrents()
+    {
+        var stoppedTorrent = new Torrent
+        {
+            InfoHash = "stopped1",
+            Status = TorrentStatus.Stopped,
+            IsPrivate = false
+        };
+        var pausedTorrent = new Torrent
+        {
+            InfoHash = "paused1",
+            Status = TorrentStatus.Paused,
+            IsPrivate = false
+        };
+        _torrentService.GetAll().Returns(new List<Torrent> { stoppedTorrent, pausedTorrent });
+
+        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService, _peerDiscovery);
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "AnnounceLoop",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var task = (Task)method.Invoke(fastLpd, new object[] { cts.Token });
+
+        await task.WaitAsync(TimeSpan.FromSeconds(4));
+
+        Assert.That(task.IsCompleted, Is.True);
+        Assert.That(fastLpd.AnnouncedInfoHashes, Is.Empty);
+    }
+
+    [Test]
+    public async Task AnnounceLoop_should_only_announce_active_non_private_torrents()
+    {
+        var downloading = new Torrent { InfoHash = "active_dl", Status = TorrentStatus.Downloading, IsPrivate = false };
+        var seeding = new Torrent { InfoHash = "active_seed", Status = TorrentStatus.Seeding, IsPrivate = false };
+        var privateDl = new Torrent { InfoHash = "private_dl", Status = TorrentStatus.Downloading, IsPrivate = true };
+        var stopped = new Torrent { InfoHash = "stopped", Status = TorrentStatus.Stopped, IsPrivate = false };
+        var paused = new Torrent { InfoHash = "paused", Status = TorrentStatus.Paused, IsPrivate = false };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { downloading, seeding, privateDl, stopped, paused });
+
+        var fastLpd = new FastAnnouncingLpd(_configService, _torrentService, _peerDiscovery);
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "AnnounceLoop",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        var task = (Task)method.Invoke(fastLpd, new object[] { cts.Token });
+
+        await task.WaitAsync(TimeSpan.FromSeconds(4));
+
+        Assert.That(task.IsCompleted, Is.True);
+        Assert.That(fastLpd.AnnouncedInfoHashes, Contains.Item("active_dl"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Contains.Item("active_seed"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("private_dl"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("stopped"));
+        Assert.That(fastLpd.AnnouncedInfoHashes, Does.Not.Contain("paused"));
+    }
+
+    [Test]
+    public void ParseAnnouncement_should_discard_announcement_when_torrent_is_private()
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("private_hash").Returns(new Torrent
+        {
+            InfoHash = "private_hash",
+            IsPrivate = true,
+            Status = TorrentStatus.Downloading
+        });
+
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: private_hash\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void ParseAnnouncement_should_discard_announcement_when_torrent_is_not_found()
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("unknown_hash").Returns((Torrent)null);
+
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: unknown_hash\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void ParseAnnouncement_should_add_peers_for_legitimate_non_private_torrent()
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("public_hash").Returns(new Torrent
+        {
+            InfoHash = "public_hash",
+            IsPrivate = false,
+            Status = TorrentStatus.Downloading
+        });
+
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: public_hash\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            "public_hash",
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == "192.168.1.50" && peers.Single().Port == 6881),
+            "lpd");
     }
 }
