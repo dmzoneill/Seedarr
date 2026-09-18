@@ -827,6 +827,176 @@ public class UdpTrackerProviderTest
     }
 
     [Test]
+    public void ConnectAsync_should_throw_exception_containing_tracker_error_string()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+            var req = server.Receive(ref ep);
+
+            var errorBytes = Encoding.UTF8.GetBytes("connection limit exceeded");
+            var resp = new byte[8 + errorBytes.Length];
+            WriteInt32BigEndian(resp, 0, 3);
+            Array.Copy(req, 12, resp, 4, 4);
+            Array.Copy(errorBytes, 0, resp, 8, errorBytes.Length);
+            server.Send(resp, resp.Length, ep);
+        });
+
+        using var client = new UdpClient();
+        client.Connect(IPAddress.Loopback, serverPort);
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await _provider.ConnectAsync(client));
+
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(ex, Is.Not.Null);
+        Assert.That(ex.Message, Is.EqualTo("UDP connect failed: connection limit exceeded"));
+    }
+
+    [Test]
+    public void ParseAnnounceResponse_should_return_failure_with_tracker_error_string_when_action_is_error()
+    {
+        var errorBytes = Encoding.UTF8.GetBytes("torrent unauthorized");
+        var response = new byte[8 + errorBytes.Length];
+        WriteInt32BigEndian(response, 0, 3);
+        WriteInt32BigEndian(response, 4, 12345);
+        Array.Copy(errorBytes, 0, response, 8, errorBytes.Length);
+
+        var result = UdpTrackerProvider.ParseAnnounceResponse(response, 12345);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo("torrent unauthorized"));
+    }
+
+    [Test]
+    public void ParseAnnounceResponse_should_fallback_to_unknown_error_when_error_packet_has_empty_message()
+    {
+        var response = new byte[8];
+        WriteInt32BigEndian(response, 0, 3);
+        WriteInt32BigEndian(response, 4, 12345);
+
+        var result = UdpTrackerProvider.ParseAnnounceResponse(response, 12345);
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo("Unknown error"));
+    }
+
+    [Test]
+    public void Announce_should_return_failure_with_tracker_error_string_when_announce_returns_error()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            var connectReq = server.Receive(ref ep);
+            var connectResp = new byte[16];
+            WriteInt32BigEndian(connectResp, 0, 0);
+            Array.Copy(connectReq, 12, connectResp, 4, 4);
+            WriteInt64BigEndian(connectResp, 8, 42L);
+            server.Send(connectResp, connectResp.Length, ep);
+
+            var announceReq = server.Receive(ref ep);
+            var errorBytes = Encoding.UTF8.GetBytes("torrent not registered with tracker");
+            var announceResp = new byte[8 + errorBytes.Length];
+            WriteInt32BigEndian(announceResp, 0, 3);
+            Array.Copy(announceReq, 12, announceResp, 4, 4);
+            Array.Copy(errorBytes, 0, announceResp, 8, errorBytes.Length);
+            server.Send(announceResp, announceResp.Length, ep);
+        });
+
+        var request = new TrackerAnnounceRequest
+        {
+            TrackerUrl = $"udp://127.0.0.1:{serverPort}/announce",
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            PeerId = "-qB4420-abcdefghijkl",
+            Port = 6881
+        };
+
+        var result = _provider.Announce(request);
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo("torrent not registered with tracker"));
+    }
+
+    [Test]
+    public void Announce_should_return_failure_when_connect_returns_error_packet()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+            var connectReq = server.Receive(ref ep);
+
+            var errorBytes = Encoding.UTF8.GetBytes("tracker offline for maintenance");
+            var connectResp = new byte[8 + errorBytes.Length];
+            WriteInt32BigEndian(connectResp, 0, 3);
+            Array.Copy(connectReq, 12, connectResp, 4, 4);
+            Array.Copy(errorBytes, 0, connectResp, 8, errorBytes.Length);
+            server.Send(connectResp, connectResp.Length, ep);
+        });
+
+        var request = new TrackerAnnounceRequest
+        {
+            TrackerUrl = $"udp://127.0.0.1:{serverPort}/announce",
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            PeerId = "-qB4420-abcdefghijkl",
+            Port = 6881
+        };
+
+        var result = _provider.Announce(request);
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo("UDP connect failed: tracker offline for maintenance"));
+    }
+
+    [Test]
+    public void Scrape_should_return_failure_with_tracker_error_string_when_scrape_returns_error()
+    {
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            var connectReq = server.Receive(ref ep);
+            var connectResp = new byte[16];
+            WriteInt32BigEndian(connectResp, 0, 0);
+            Array.Copy(connectReq, 12, connectResp, 4, 4);
+            WriteInt64BigEndian(connectResp, 8, 42L);
+            server.Send(connectResp, connectResp.Length, ep);
+
+            var scrapeReq = server.Receive(ref ep);
+            var errorBytes = Encoding.UTF8.GetBytes("scrape disabled on this tracker");
+            var scrapeResp = new byte[8 + errorBytes.Length];
+            WriteInt32BigEndian(scrapeResp, 0, 3);
+            Array.Copy(scrapeReq, 12, scrapeResp, 4, 4);
+            Array.Copy(errorBytes, 0, scrapeResp, 8, errorBytes.Length);
+            server.Send(scrapeResp, scrapeResp.Length, ep);
+        });
+
+        var result = _provider.Scrape(
+            "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            $"udp://127.0.0.1:{serverPort}/announce");
+
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Is.EqualTo("scrape disabled on this tracker"));
+    }
+
+    [Test]
     public void CreateClient_should_initialize_socket_with_bound_interface()
     {
         _configService.BindInterface.Returns("tun0");
