@@ -285,7 +285,7 @@ public class SpeedSchedulerTest
     }
 
     [Test]
-    public void GetLimitsAt_should_pick_most_restrictive_from_overlapping_schedules()
+    public void GetLimitsAt_should_prioritize_higher_priority_schedule_over_more_restrictive_schedule()
     {
         var schedule1 = new SpeedSchedule
         {
@@ -314,7 +314,146 @@ public class SpeedSchedulerTest
         var limits = _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
 
         Assert.That(limits.MaxUploadSpeed, Is.EqualTo(200_000));
-        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(300_000));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(400_000));
+        Assert.That(limits.ActiveScheduleName, Is.EqualTo("S2"));
+    }
+
+    [Test]
+    public void GetLimitsAt_should_respect_high_priority_rule_when_overlapping_with_lower_priority_lower_speed_rule()
+    {
+        var p1 = new SpeedSchedule
+        {
+            Name = "P1-Boost",
+            Days = ScheduleDays.All,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(23, 59),
+            MaxUploadSpeed = 200 * 1024L,
+            MaxDownloadSpeed = 200 * 1024L,
+            IsEnabled = true,
+            Priority = 1
+        };
+        var p5 = new SpeedSchedule
+        {
+            Name = "P5-Throttle",
+            Days = ScheduleDays.All,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(23, 59),
+            MaxUploadSpeed = 100 * 1024L,
+            MaxDownloadSpeed = 100 * 1024L,
+            IsEnabled = true,
+            Priority = 5
+        };
+        _repository.GetEnabled().Returns(new List<SpeedSchedule> { p5, p1 });
+
+        var limits = _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(200 * 1024L));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(200 * 1024L));
+        Assert.That(limits.ActiveScheduleName, Is.EqualTo("P1-Boost"));
+    }
+
+    [Test]
+    public void GetLimitsAt_should_respect_explicit_zero_bps_pause_on_high_priority_schedule_when_overlapping()
+    {
+        var p1 = new SpeedSchedule
+        {
+            Name = "P1-Pause",
+            Days = ScheduleDays.All,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(23, 59),
+            MaxUploadSpeed = 0,
+            MaxDownloadSpeed = 0,
+            IsEnabled = true,
+            Priority = 1
+        };
+        var p5 = new SpeedSchedule
+        {
+            Name = "P5-Throttle",
+            Days = ScheduleDays.All,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(23, 59),
+            MaxUploadSpeed = 100 * 1024L,
+            MaxDownloadSpeed = 100 * 1024L,
+            IsEnabled = true,
+            Priority = 5
+        };
+        _repository.GetEnabled().Returns(new List<SpeedSchedule> { p5, p1 });
+
+        var limits = _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(0));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(0));
+        Assert.That(limits.ActiveScheduleName, Is.EqualTo("P1-Pause"));
+    }
+
+    [Test]
+    public void GetLimitsAt_should_fallback_to_lower_priority_rule_when_primary_leaves_direction_unlimited()
+    {
+        var p1 = new SpeedSchedule
+        {
+            Name = "P1-UploadOnly",
+            Days = ScheduleDays.All,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(23, 59),
+            MaxUploadSpeed = 500 * 1024L,
+            MaxDownloadSpeed = -1,
+            IsEnabled = true,
+            Priority = 1
+        };
+        var p2 = new SpeedSchedule
+        {
+            Name = "P2-DownloadThrottle",
+            Days = ScheduleDays.All,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(23, 59),
+            MaxUploadSpeed = 100 * 1024L,
+            MaxDownloadSpeed = 250 * 1024L,
+            IsEnabled = true,
+            Priority = 2
+        };
+        _repository.GetEnabled().Returns(new List<SpeedSchedule> { p2, p1 });
+
+        var limits = _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(500 * 1024L));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(250 * 1024L));
+        Assert.That(limits.ActiveScheduleName, Is.EqualTo("P1-UploadOnly"));
+    }
+
+    [Test]
+    public void GetLimitsAt_should_break_priority_ties_by_id_and_name()
+    {
+        var s1 = new SpeedSchedule
+        {
+            Id = 2,
+            Name = "RuleB",
+            Days = ScheduleDays.All,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(23, 59),
+            MaxUploadSpeed = 200_000,
+            MaxDownloadSpeed = 200_000,
+            IsEnabled = true,
+            Priority = 1
+        };
+        var s2 = new SpeedSchedule
+        {
+            Id = 1,
+            Name = "RuleA",
+            Days = ScheduleDays.All,
+            StartTime = new TimeOnly(0, 0),
+            EndTime = new TimeOnly(23, 59),
+            MaxUploadSpeed = 100_000,
+            MaxDownloadSpeed = 100_000,
+            IsEnabled = true,
+            Priority = 1
+        };
+        _repository.GetEnabled().Returns(new List<SpeedSchedule> { s1, s2 });
+
+        var limits = _scheduler.GetLimitsAt(new DateTime(2026, 8, 14, 12, 0, 0, DateTimeKind.Utc));
+
+        Assert.That(limits.ActiveScheduleName, Is.EqualTo("RuleA"));
+        Assert.That(limits.MaxUploadSpeed, Is.EqualTo(100_000));
+        Assert.That(limits.MaxDownloadSpeed, Is.EqualTo(100_000));
     }
 
     [Test]
