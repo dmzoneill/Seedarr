@@ -11,6 +11,7 @@ using BencodeNET.Parsing;
 using NLog;
 using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Http;
+using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Network;
 using NzbDrone.Core.Simulation.ClientBehavior;
 using NzbDrone.Core.Simulation.ClientBehavior.Profiles;
@@ -18,14 +19,36 @@ using Polly;
 
 namespace NzbDrone.Core.Trackers.Http;
 
-public class HttpTrackerProvider : ITrackerProvider
+public class HttpTrackerProvider : ITrackerProvider, IHandle<ConfigSavedEvent>
 {
     public ResiliencePipeline ResiliencePipeline { get; set; } = ResiliencePolicies.GetTrackerPolicy();
 
+    private readonly object _syncLock = new();
     private readonly IConfigService _configService;
     private readonly IProxySettingsProvider _proxySettingsProvider;
-    private readonly HttpClient _client;
     private readonly Logger _logger;
+
+    private HttpClient _client;
+    private HttpMessageHandler _handler;
+    private ProxyConfigState _lastProxyState;
+
+    internal HttpMessageHandler Handler
+    {
+        get
+        {
+            EnsureClientUpdated();
+            return _handler;
+        }
+    }
+
+    internal HttpClient Client
+    {
+        get
+        {
+            EnsureClientUpdated();
+            return _client;
+        }
+    }
 
     public string Name => "HTTP";
 
@@ -33,17 +56,91 @@ public class HttpTrackerProvider : ITrackerProvider
     {
         _configService = configService;
         _proxySettingsProvider = proxySettingsProvider;
-        HttpMessageHandler handler = proxySettingsProvider != null && proxySettingsProvider.IsEnabled
-            ? proxySettingsProvider.CreateHandler()
-            : new SocketsHttpHandler
-            {
-                PooledConnectionLifetime = TimeSpan.FromMinutes(10)
-            };
-        _client = new HttpClient(handler)
-        {
-            Timeout = TimeSpan.FromSeconds(configService.HttpTrackerTimeoutSeconds)
-        };
         _logger = LogManager.GetCurrentClassLogger();
+
+        RebuildClient();
+    }
+
+    public void Handle(ConfigSavedEvent message)
+    {
+        _logger.Debug("ConfigSavedEvent received, updating HTTP tracker client");
+        RebuildClient();
+    }
+
+    internal void ReconfigureClient()
+    {
+        RebuildClient();
+    }
+
+    private void EnsureClientUpdated()
+    {
+        if (_proxySettingsProvider == null)
+        {
+            return;
+        }
+
+        var currentState = new ProxyConfigState(_proxySettingsProvider, _configService);
+        if (!currentState.Equals(_lastProxyState))
+        {
+            lock (_syncLock)
+            {
+                if (!currentState.Equals(_lastProxyState))
+                {
+                    RebuildClient();
+                }
+            }
+        }
+    }
+
+    private void RebuildClient()
+    {
+        lock (_syncLock)
+        {
+            _handler = CreateHandler();
+            var timeoutSeconds = _configService?.HttpTrackerTimeoutSeconds ?? 10;
+            if (timeoutSeconds <= 0)
+            {
+                timeoutSeconds = 10;
+            }
+
+            _client = new HttpClient(_handler)
+            {
+                Timeout = TimeSpan.FromSeconds(timeoutSeconds)
+            };
+
+            _lastProxyState = new ProxyConfigState(_proxySettingsProvider, _configService);
+            _logger.Debug("Rebuilt HTTP tracker client (proxy enabled: {0})", _proxySettingsProvider?.IsEnabled == true);
+        }
+    }
+
+    private HttpMessageHandler CreateHandler()
+    {
+        try
+        {
+            if (_proxySettingsProvider != null && _proxySettingsProvider.IsEnabled)
+            {
+                var handler = _proxySettingsProvider.CreateHandler();
+                if (handler != null)
+                {
+                    return handler;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Failed to create proxy handler; falling back to direct connection");
+        }
+
+        return new SocketsHttpHandler
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10)
+        };
+    }
+
+    private HttpClient GetClient()
+    {
+        EnsureClientUpdated();
+        return _client;
     }
 
     public TrackerAnnounceResponse Announce(TrackerAnnounceRequest request)
@@ -53,6 +150,8 @@ public class HttpTrackerProvider : ITrackerProvider
             var url = BuildAnnounceUrl(request);
             _logger.Debug("HTTP announce: {0}", RedactUrl(url));
 
+            var client = GetClient();
+
             var responseBytes = (ResiliencePipeline ?? ResiliencePipeline.Empty).Execute(ct =>
             {
                 using var req = new HttpRequestMessage(HttpMethod.Get, url);
@@ -60,7 +159,7 @@ public class HttpTrackerProvider : ITrackerProvider
                     ? request.UserAgent
                     : _configService.BitTorrentUserAgent;
                 req.Headers.TryAddWithoutValidation("User-Agent", userAgent);
-                using var response = _client.Send(req, ct);
+                using var response = client.Send(req, ct);
                 response.EnsureSuccessStatusCode();
                 using var ms = new MemoryStream();
                 response.Content.ReadAsStream(ct).CopyTo(ms);
@@ -146,11 +245,13 @@ public class HttpTrackerProvider : ITrackerProvider
 
             _logger.Debug("HTTP scrape: {0}", RedactUrl(scrapeUrl));
 
+            var client = GetClient();
+
             var responseBytes = (ResiliencePipeline ?? ResiliencePipeline.Empty).Execute(ct =>
             {
                 using var req = new HttpRequestMessage(HttpMethod.Get, scrapeUrl);
                 req.Headers.TryAddWithoutValidation("User-Agent", _configService.BitTorrentUserAgent);
-                using var response = _client.Send(req, ct);
+                using var response = client.Send(req, ct);
                 response.EnsureSuccessStatusCode();
                 using var ms = new MemoryStream();
                 response.Content.ReadAsStream(ct).CopyTo(ms);
@@ -418,5 +519,69 @@ public class HttpTrackerProvider : ITrackerProvider
     {
         var keyVal = RandomNumberGenerator.GetInt32(int.MinValue, int.MaxValue);
         return keyVal.ToString("X8", CultureInfo.InvariantCulture);
+    }
+
+    private readonly struct ProxyConfigState : IEquatable<ProxyConfigState>
+    {
+        public bool IsEnabled { get; }
+        public ProxyType Type { get; }
+        public string Host { get; }
+        public int Port { get; }
+        public string Username { get; }
+        public string Password { get; }
+        public bool ProxyAuthEnabled { get; }
+        public int TimeoutSeconds { get; }
+
+        public ProxyConfigState(IProxySettingsProvider proxyProvider, IConfigService configService)
+        {
+            TimeoutSeconds = configService?.HttpTrackerTimeoutSeconds ?? 10;
+            ProxyAuthEnabled = configService?.ProxyAuthEnabled ?? false;
+
+            if (proxyProvider != null && proxyProvider.IsEnabled)
+            {
+                IsEnabled = true;
+                Type = proxyProvider.Type;
+                Host = proxyProvider.Host ?? string.Empty;
+                Port = proxyProvider.Port;
+                Username = proxyProvider.Username ?? string.Empty;
+                Password = proxyProvider.Password ?? string.Empty;
+            }
+            else
+            {
+                IsEnabled = false;
+                Type = ProxyType.None;
+                Host = string.Empty;
+                Port = 0;
+                Username = string.Empty;
+                Password = string.Empty;
+            }
+        }
+
+        public bool Equals(ProxyConfigState other)
+        {
+            return IsEnabled == other.IsEnabled &&
+                Type == other.Type &&
+                string.Equals(Host, other.Host, StringComparison.Ordinal) &&
+                Port == other.Port &&
+                string.Equals(Username, other.Username, StringComparison.Ordinal) &&
+                string.Equals(Password, other.Password, StringComparison.Ordinal) &&
+                ProxyAuthEnabled == other.ProxyAuthEnabled &&
+                TimeoutSeconds == other.TimeoutSeconds;
+        }
+
+        public override bool Equals(object obj) => obj is ProxyConfigState other && Equals(other);
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(
+                IsEnabled,
+                (int)Type,
+                Host,
+                Port,
+                Username,
+                Password,
+                ProxyAuthEnabled,
+                TimeoutSeconds);
+        }
     }
 }

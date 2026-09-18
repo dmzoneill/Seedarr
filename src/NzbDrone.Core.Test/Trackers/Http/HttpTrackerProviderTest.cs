@@ -7,6 +7,7 @@ using BencodeNET.Objects;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Network;
 using NzbDrone.Core.Trackers;
 using NzbDrone.Core.Trackers.Http;
 
@@ -951,6 +952,126 @@ public class HttpTrackerProviderTest
         var client = (HttpClient)clientField!.GetValue(provider);
 
         Assert.That(client!.DefaultRequestHeaders.UserAgent.ToString(), Is.Empty);
+    }
+
+    [Test]
+    public void When_proxy_settings_transition_from_disabled_to_enabled_updates_handler_and_client()
+    {
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(false);
+
+        var provider = new HttpTrackerProvider(_configService, proxySettingsProvider);
+        var initialClient = provider.Client;
+        var initialHandler = provider.Handler;
+
+        Assert.That(initialHandler, Is.InstanceOf<SocketsHttpHandler>());
+
+        var proxyHandler = new SocketsHttpHandler();
+        proxySettingsProvider.IsEnabled.Returns(true);
+        proxySettingsProvider.Type.Returns(ProxyType.Http);
+        proxySettingsProvider.Host.Returns("127.0.0.1");
+        proxySettingsProvider.Port.Returns(8080);
+        proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+        provider.Handle(new ConfigSavedEvent());
+
+        Assert.That(provider.Handler, Is.SameAs(proxyHandler));
+        Assert.That(provider.Client, Is.Not.SameAs(initialClient));
+    }
+
+    [Test]
+    public void When_proxy_host_or_port_changes_updates_handler_and_client()
+    {
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(true);
+        proxySettingsProvider.Type.Returns(ProxyType.Http);
+        proxySettingsProvider.Host.Returns("proxy1.local");
+        proxySettingsProvider.Port.Returns(8080);
+
+        var proxyHandler1 = new SocketsHttpHandler();
+        proxySettingsProvider.CreateHandler().Returns(proxyHandler1);
+
+        var provider = new HttpTrackerProvider(_configService, proxySettingsProvider);
+        var initialClient = provider.Client;
+
+        Assert.That(provider.Handler, Is.SameAs(proxyHandler1));
+
+        var proxyHandler2 = new SocketsHttpHandler();
+        proxySettingsProvider.Host.Returns("proxy2.local");
+        proxySettingsProvider.Port.Returns(9090);
+        proxySettingsProvider.CreateHandler().Returns(proxyHandler2);
+
+        provider.Handle(new ConfigSavedEvent());
+
+        Assert.That(provider.Handler, Is.SameAs(proxyHandler2));
+        Assert.That(provider.Client, Is.Not.SameAs(initialClient));
+    }
+
+    [Test]
+    public void When_proxy_settings_are_disabled_returns_to_direct_unproxied_handler()
+    {
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(true);
+        proxySettingsProvider.Type.Returns(ProxyType.Http);
+        proxySettingsProvider.Host.Returns("127.0.0.1");
+        proxySettingsProvider.Port.Returns(8080);
+
+        var proxyHandler = new SocketsHttpHandler();
+        proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+        var provider = new HttpTrackerProvider(_configService, proxySettingsProvider);
+        Assert.That(provider.Handler, Is.SameAs(proxyHandler));
+        var proxyClient = provider.Client;
+
+        proxySettingsProvider.IsEnabled.Returns(false);
+
+        provider.Handle(new ConfigSavedEvent());
+
+        Assert.That(provider.Handler, Is.Not.SameAs(proxyHandler));
+        Assert.That(provider.Handler, Is.InstanceOf<SocketsHttpHandler>());
+        Assert.That(provider.Client, Is.Not.SameAs(proxyClient));
+    }
+
+    [Test]
+    public void When_proxy_settings_change_dynamically_updates_handler_without_explicit_event()
+    {
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(false);
+
+        var provider = new HttpTrackerProvider(_configService, proxySettingsProvider);
+        var initialClient = provider.Client;
+
+        var proxyHandler = new SocketsHttpHandler();
+        proxySettingsProvider.IsEnabled.Returns(true);
+        proxySettingsProvider.Type.Returns(ProxyType.Socks5);
+        proxySettingsProvider.Host.Returns("10.0.0.5");
+        proxySettingsProvider.Port.Returns(1080);
+        proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+        Assert.That(provider.Handler, Is.SameAs(proxyHandler));
+        Assert.That(provider.Client, Is.Not.SameAs(initialClient));
+    }
+
+    [Test]
+    public void When_proxy_reconfigured_in_flight_client_reference_does_not_crash()
+    {
+        var proxySettingsProvider = Substitute.For<IProxySettingsProvider>();
+        proxySettingsProvider.IsEnabled.Returns(false);
+
+        var provider = new HttpTrackerProvider(_configService, proxySettingsProvider);
+        var inFlightClient = provider.Client;
+
+        proxySettingsProvider.IsEnabled.Returns(true);
+        var proxyHandler = new SocketsHttpHandler();
+        proxySettingsProvider.CreateHandler().Returns(proxyHandler);
+
+        provider.Handle(new ConfigSavedEvent());
+
+        Assert.That(provider.Client, Is.Not.SameAs(inFlightClient));
+        Assert.DoesNotThrow(() =>
+        {
+            _ = inFlightClient.Timeout;
+        });
     }
 
     // ---- private mock handler ----
