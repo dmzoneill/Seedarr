@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Net.Http;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Web;
 using NzbDrone.Core.Torrents;
 
 namespace NzbDrone.Core.Notifications;
@@ -214,6 +218,179 @@ public static class NotificationPayloadBuilder
         return candidateUrl;
     }
 
+    public static (string Username, string Password) ExtractBasicAuthSettings(string settings)
+    {
+        string username = null;
+        string password = null;
+
+        if (string.IsNullOrWhiteSpace(settings))
+        {
+            return (username, password);
+        }
+
+        var trimmed = settings.Trim();
+        if (trimmed.StartsWith("{"))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+
+                var userProps = new[] { "username", "Username", "basicAuthUsername", "BasicAuthUsername" };
+                foreach (var prop in userProps)
+                {
+                    if (root.TryGetProperty(prop, out var u) && u.ValueKind == JsonValueKind.String)
+                    {
+                        username = u.GetString()?.Trim();
+                        if (!string.IsNullOrEmpty(username))
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                var passProps = new[] { "password", "Password", "basicAuthPassword", "BasicAuthPassword" };
+                foreach (var prop in passProps)
+                {
+                    if (root.TryGetProperty(prop, out var p) && p.ValueKind == JsonValueKind.String)
+                    {
+                        password = p.GetString();
+                        if (password != null)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        if (string.IsNullOrEmpty(username) && settings.Contains("username=", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = Regex.Match(settings, @"(?:^|[&?])(?:username|Username|basicAuthUsername)=([^&]+)", RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                username = Uri.UnescapeDataString(match.Groups[1].Value).Trim();
+            }
+        }
+
+        if (password == null && settings.Contains("password=", StringComparison.OrdinalIgnoreCase))
+        {
+            var match = Regex.Match(settings, @"(?:^|[&?])(?:password|Password|basicAuthPassword)=([^&]+)", RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                password = Uri.UnescapeDataString(match.Groups[1].Value);
+            }
+        }
+
+        return (username, password);
+    }
+
+    public static HttpMethod ResolveHttpMethod(string implementation, string settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings))
+        {
+            return HttpMethod.Post;
+        }
+
+        var trimmed = settings.Trim();
+        string methodStr = null;
+
+        if (trimmed.StartsWith("{"))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+                var methodProps = new[] { "method", "Method", "httpMethod", "HttpMethod" };
+                foreach (var prop in methodProps)
+                {
+                    if (root.TryGetProperty(prop, out var m) && m.ValueKind == JsonValueKind.String)
+                    {
+                        methodStr = m.GetString()?.Trim();
+                        if (!string.IsNullOrEmpty(methodStr))
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        if (string.IsNullOrEmpty(methodStr))
+        {
+            var match = Regex.Match(settings, @"(?:^|[&?])(?:method|Method|httpMethod|HttpMethod)=([^&]+)", RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                methodStr = Uri.UnescapeDataString(match.Groups[1].Value).Trim();
+            }
+        }
+
+        if (string.Equals(methodStr, "PUT", StringComparison.OrdinalIgnoreCase))
+        {
+            return HttpMethod.Put;
+        }
+
+        return HttpMethod.Post;
+    }
+
+    public static string ExtractPayloadTemplate(string settings)
+    {
+        if (string.IsNullOrWhiteSpace(settings))
+        {
+            return null;
+        }
+
+        var trimmed = settings.Trim();
+        if (trimmed.StartsWith("{"))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+                var templateProps = new[] { "payloadTemplate", "PayloadTemplate", "bodyTemplate", "BodyTemplate", "template", "Template" };
+                foreach (var prop in templateProps)
+                {
+                    if (root.TryGetProperty(prop, out var p) && p.ValueKind == JsonValueKind.String)
+                    {
+                        var val = p.GetString();
+                        if (!string.IsNullOrWhiteSpace(val))
+                        {
+                            return val;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        var matchKeys = new[] { "payloadTemplate=", "PayloadTemplate=", "bodyTemplate=", "BodyTemplate=", "template=" };
+        foreach (var key in matchKeys)
+        {
+            if (settings.Contains(key, StringComparison.OrdinalIgnoreCase))
+            {
+                var match = Regex.Match(settings, $@"{key}([^&]+)", RegexOptions.IgnoreCase);
+                if (match.Success)
+                {
+                    var val = Uri.UnescapeDataString(match.Groups[1].Value);
+                    if (!string.IsNullOrWhiteSpace(val))
+                    {
+                        return val;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
     public static string ResolveCustomHeaders(string implementation, string settings)
     {
         if (string.IsNullOrWhiteSpace(settings))
@@ -319,6 +496,59 @@ public static class NotificationPayloadBuilder
                 }
 
                 return $"{explicitHeaders}\nX-Gotify-Key: {token}";
+            }
+        }
+
+        var (username, password) = ExtractBasicAuthSettings(trimmed);
+        if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password) &&
+            !string.Equals(implementation, "Pushover", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(implementation, "Telegram", StringComparison.OrdinalIgnoreCase))
+        {
+            var authBytes = Encoding.UTF8.GetBytes($"{username}:{password}");
+            var basicAuth = $"Basic {Convert.ToBase64String(authBytes)}";
+
+            if (string.IsNullOrWhiteSpace(explicitHeaders))
+            {
+                return $"{{\"Authorization\":\"{basicAuth}\"}}";
+            }
+
+            if (explicitHeaders.StartsWith("{"))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(explicitHeaders);
+                    if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    {
+                        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var p in doc.RootElement.EnumerateObject())
+                        {
+                            dict[p.Name] = p.Value.GetString() ?? p.Value.GetRawText();
+                        }
+
+                        if (!dict.ContainsKey("Authorization"))
+                        {
+                            dict["Authorization"] = basicAuth;
+                        }
+
+                        return JsonSerializer.Serialize(dict);
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            var lines = explicitHeaders.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            var hasAuth = lines.Any(l =>
+            {
+                var clean = l.Trim();
+                return clean.StartsWith("Authorization:", StringComparison.OrdinalIgnoreCase) ||
+                    clean.StartsWith("Authorization=", StringComparison.OrdinalIgnoreCase);
+            });
+
+            if (!hasAuth)
+            {
+                return $"{explicitHeaders}\nAuthorization: {basicAuth}";
             }
         }
 
@@ -644,6 +874,12 @@ public static class NotificationPayloadBuilder
                 body,
                 type = isWarning ? "warning" : "info",
             };
+        }
+
+        var template = ExtractPayloadTemplate(settings);
+        if (!string.IsNullOrWhiteSpace(template))
+        {
+            return InterpolateTemplate(template, eventType, torrent, meta, genericPayload);
         }
 
         return genericPayload;
@@ -1039,5 +1275,414 @@ public static class NotificationPayloadBuilder
 
         priority = Math.Clamp(priority, -2, 2);
         return (priority, retry, expire, device, sound);
+    }
+
+    public static bool IsLikelyJson(string template)
+    {
+        if (string.IsNullOrWhiteSpace(template))
+        {
+            return false;
+        }
+
+        var trimmed = template.Trim();
+        if ((trimmed.StartsWith("{") && trimmed.EndsWith("}")) ||
+            (trimmed.StartsWith("[") && trimmed.EndsWith("]")))
+        {
+            if (trimmed.StartsWith("{") && trimmed.EndsWith("}") && !trimmed.Contains(':') && !trimmed.Contains(','))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    public static string EscapeJsonString(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        return HttpUtility.JavaScriptStringEncode(value);
+    }
+
+    public static string FormatBytes(long bytes)
+    {
+        if (bytes < 0)
+        {
+            return "0 B";
+        }
+
+        return bytes switch
+        {
+            >= 1024L * 1024L * 1024L * 1024L => $"{(double)bytes / (1024L * 1024L * 1024L * 1024L):F2} TB",
+            >= 1024L * 1024L * 1024L => $"{(double)bytes / (1024L * 1024L * 1024L):F2} GB",
+            >= 1024L * 1024L => $"{(double)bytes / (1024L * 1024L):F2} MB",
+            >= 1024L => $"{(double)bytes / 1024L:F2} KB",
+            _ => $"{bytes} B"
+        };
+    }
+
+    public static string FormatSpeed(long bytesPerSec)
+    {
+        return $"{FormatBytes(bytesPerSec)}/s";
+    }
+
+    public static string InterpolateTemplate(
+        string template,
+        string eventType = null,
+        Torrent torrent = null,
+        object meta = null,
+        object genericPayload = null,
+        bool? isJson = null)
+    {
+        if (string.IsNullOrEmpty(template))
+        {
+            return template ?? string.Empty;
+        }
+
+        var isJsonTemplate = isJson ?? IsLikelyJson(template);
+
+        return Regex.Replace(template, @"\{([A-Za-z0-9_.]+)\}", match =>
+        {
+            var token = match.Groups[1].Value;
+            var lower = token.ToLowerInvariant();
+
+            string ResolveString(string s) => isJsonTemplate ? EscapeJsonString(s) : (s ?? string.Empty);
+
+            switch (lower)
+            {
+                case "eventtype":
+                    return ResolveString(eventType ?? ExtractPropertyString(genericPayload, "eventType") ?? string.Empty);
+
+                case "instancename":
+                    return ResolveString(ExtractPropertyString(genericPayload, "instanceName") ?? "Seedarr");
+
+                case "timestamp":
+                    return ResolveString(ExtractPropertyString(genericPayload, "timestamp") ?? DateTime.UtcNow.ToString("o"));
+
+                case "torrent.id":
+                    var id = torrent?.Id ?? ExtractPropertyLong(genericPayload, "torrent", "id") ?? 0;
+                    return id.ToString(CultureInfo.InvariantCulture);
+
+                case "torrent.name":
+                    var tName = torrent?.Name ?? ExtractPropertyString(genericPayload, "torrent", "name") ?? ExtractMessage(genericPayload, eventType ?? string.Empty) ?? string.Empty;
+                    return ResolveString(tName);
+
+                case "torrent.infohash":
+                    var hash = torrent?.InfoHash ?? ExtractPropertyString(genericPayload, "torrent", "infoHash") ?? string.Empty;
+                    return ResolveString(hash);
+
+                case "torrent.category":
+                    var cat = torrent?.Category ?? torrent?.Label ?? ExtractPropertyString(genericPayload, "torrent", "category") ?? string.Empty;
+                    return ResolveString(cat);
+
+                case "torrent.status":
+                    var stat = torrent != null ? torrent.Status.ToString() : (ExtractPropertyString(genericPayload, "torrent", "status") ?? ExtractPropertyString(genericPayload, "torrent", "state") ?? string.Empty);
+                    return ResolveString(stat);
+
+                case "torrent.sizeformatted":
+                    var sfBytes = torrent?.TotalSize ?? ExtractPropertyLong(genericPayload, "torrent", "totalSize") ?? 0;
+                    return ResolveString(FormatBytes(sfBytes));
+
+                case "torrent.totalsize":
+                    var ts = torrent?.TotalSize ?? ExtractPropertyLong(genericPayload, "torrent", "totalSize") ?? 0;
+                    return ts.ToString(CultureInfo.InvariantCulture);
+
+                case "torrent.downloaded":
+                    var dl = torrent?.Downloaded ?? ExtractPropertyLong(genericPayload, "torrent", "downloaded") ?? 0;
+                    return dl.ToString(CultureInfo.InvariantCulture);
+
+                case "torrent.uploaded":
+                    var ul = torrent?.Uploaded ?? ExtractPropertyLong(genericPayload, "torrent", "uploaded") ?? 0;
+                    return ul.ToString(CultureInfo.InvariantCulture);
+
+                case "torrent.ratio":
+                    var ratio = torrent != null ? (double.IsFinite(torrent.Ratio) ? torrent.Ratio : 0.0) : (ExtractPropertyDouble(genericPayload, "torrent", "ratio") ?? 0.0);
+                    return ratio.ToString("0.##", CultureInfo.InvariantCulture);
+
+                case "torrent.progress":
+                    var rawProg = torrent != null ? (double.IsFinite(torrent.Progress) ? torrent.Progress : 0.0) : (ExtractPropertyDouble(genericPayload, "torrent", "progress") ?? 0.0);
+                    var progRatio = rawProg > 1.0 ? rawProg / 100.0 : rawProg;
+                    return progRatio.ToString("0.####", CultureInfo.InvariantCulture);
+
+                case "torrent.progresspercent":
+                    var rawProgPct = torrent != null ? (double.IsFinite(torrent.Progress) ? torrent.Progress : 0.0) : (ExtractPropertyDouble(genericPayload, "torrent", "progress") ?? 0.0);
+                    var progPct = rawProgPct <= 1.0 ? rawProgPct * 100.0 : rawProgPct;
+                    return progPct.ToString("0.##", CultureInfo.InvariantCulture);
+
+                case "torrent.downloadspeedformatted":
+                    var dSpeed = torrent?.DownloadSpeed ?? ExtractPropertyLong(genericPayload, "torrent", "downloadSpeed") ?? 0;
+                    return ResolveString(FormatSpeed(dSpeed));
+
+                case "torrent.uploadspeedformatted":
+                    var uSpeed = torrent?.UploadSpeed ?? ExtractPropertyLong(genericPayload, "torrent", "uploadSpeed") ?? 0;
+                    return ResolveString(FormatSpeed(uSpeed));
+
+                case "torrent.downloadspeed":
+                    var rawDSpeed = torrent?.DownloadSpeed ?? ExtractPropertyLong(genericPayload, "torrent", "downloadSpeed") ?? 0;
+                    return rawDSpeed.ToString(CultureInfo.InvariantCulture);
+
+                case "torrent.uploadspeed":
+                    var rawUSpeed = torrent?.UploadSpeed ?? ExtractPropertyLong(genericPayload, "torrent", "uploadSpeed") ?? 0;
+                    return rawUSpeed.ToString(CultureInfo.InvariantCulture);
+
+                case "torrent.etastring":
+                    var etaStr = ExtractPropertyString(genericPayload, "torrent", "etaString") ?? (torrent != null ? EpisodicParser.FormatEtaStatic(torrent.Eta) : "00:00:00");
+                    return ResolveString(etaStr);
+
+                case "torrent.eta":
+                    var rawEta = torrent != null ? torrent.Eta : (ExtractPropertyLong(genericPayload, "torrent", "eta") ?? 0);
+                    return rawEta.ToString(CultureInfo.InvariantCulture);
+
+                case "torrent.savepath":
+                    var savePath = torrent?.SavePath ?? torrent?.SourcePath ?? ExtractPropertyString(genericPayload, "torrent", "savePath") ?? ExtractPropertyString(genericPayload, "torrent", "downloadPath") ?? string.Empty;
+                    return ResolveString(savePath);
+
+                case "media.title":
+                    var mTitle = ExtractMediaTitle(meta) ?? ExtractPropertyString(genericPayload, "media", "title") ?? torrent?.Name ?? string.Empty;
+                    return ResolveString(mTitle);
+
+                case "media.year":
+                    var mYear = ExtractMediaYear(meta) ?? ExtractPropertyInt(genericPayload, "media", "year") ?? 0;
+                    return mYear.ToString(CultureInfo.InvariantCulture);
+
+                case "media.overview":
+                    var mOverview = ExtractOverview(meta) ?? ExtractPropertyString(genericPayload, "media", "overview") ?? string.Empty;
+                    return ResolveString(mOverview);
+
+                case "message":
+                    var msg = ExtractMessage(genericPayload, string.Empty);
+                    return ResolveString(msg);
+
+                default:
+                    return match.Value;
+            }
+        });
+    }
+
+    internal static object GetNestedProperty(object obj, params string[] propertyNames)
+    {
+        if (obj == null || propertyNames == null || propertyNames.Length == 0)
+        {
+            return null;
+        }
+
+        var current = obj;
+        foreach (var propName in propertyNames)
+        {
+            if (current == null)
+            {
+                return null;
+            }
+
+            current = GetSingleProperty(current, propName);
+        }
+
+        return current;
+    }
+
+    private static object GetSingleProperty(object obj, string propName)
+    {
+        if (obj == null || string.IsNullOrWhiteSpace(propName))
+        {
+            return null;
+        }
+
+        if (obj is IDictionary<string, object> dict)
+        {
+            foreach (var kvp in dict)
+            {
+                if (string.Equals(kvp.Key, propName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return kvp.Value;
+                }
+            }
+
+            return null;
+        }
+
+        if (obj is JsonElement jsonElem)
+        {
+            if (jsonElem.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in jsonElem.EnumerateObject())
+                {
+                    if (string.Equals(prop.Name, propName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return prop.Value;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        var propInfo = obj.GetType().GetProperty(propName, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+        return propInfo?.GetValue(obj);
+    }
+
+    internal static string ExtractPropertyString(object obj, params string[] path)
+    {
+        var val = GetNestedProperty(obj, path);
+        if (val == null)
+        {
+            return null;
+        }
+
+        if (val is JsonElement elem)
+        {
+            return elem.ValueKind == JsonValueKind.String ? elem.GetString() : elem.GetRawText();
+        }
+
+        return val.ToString();
+    }
+
+    internal static long? ExtractPropertyLong(object obj, params string[] path)
+    {
+        var val = GetNestedProperty(obj, path);
+        if (val == null)
+        {
+            return null;
+        }
+
+        if (val is long l)
+        {
+            return l;
+        }
+
+        if (val is int i)
+        {
+            return i;
+        }
+
+        if (val is double d)
+        {
+            return (long)d;
+        }
+
+        if (val is JsonElement elem)
+        {
+            if (elem.ValueKind == JsonValueKind.Number && elem.TryGetInt64(out var jsonLong))
+            {
+                return jsonLong;
+            }
+
+            if (elem.ValueKind == JsonValueKind.String && long.TryParse(elem.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedLong))
+            {
+                return parsedLong;
+            }
+        }
+
+        if (long.TryParse(val.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
+
+    internal static double? ExtractPropertyDouble(object obj, params string[] path)
+    {
+        var val = GetNestedProperty(obj, path);
+        if (val == null)
+        {
+            return null;
+        }
+
+        if (val is double d)
+        {
+            return d;
+        }
+
+        if (val is float f)
+        {
+            return f;
+        }
+
+        if (val is int i)
+        {
+            return i;
+        }
+
+        if (val is long l)
+        {
+            return l;
+        }
+
+        if (val is JsonElement elem)
+        {
+            if (elem.ValueKind == JsonValueKind.Number && elem.TryGetDouble(out var jsonDouble))
+            {
+                return jsonDouble;
+            }
+
+            if (elem.ValueKind == JsonValueKind.String && double.TryParse(elem.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedDouble))
+            {
+                return parsedDouble;
+            }
+        }
+
+        if (double.TryParse(val.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+        {
+            return parsed;
+        }
+
+        return null;
+    }
+
+    internal static int? ExtractPropertyInt(object obj, params string[] path)
+    {
+        var l = ExtractPropertyLong(obj, path);
+        return l.HasValue ? (int)l.Value : null;
+    }
+
+    internal static string ExtractMediaTitle(object meta)
+    {
+        if (meta == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var prop = meta.GetType().GetProperty("Title", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            return prop?.GetValue(meta)?.ToString();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    internal static int? ExtractMediaYear(object meta)
+    {
+        if (meta == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var prop = meta.GetType().GetProperty("Year", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+            var val = prop?.GetValue(meta);
+            if (val is int i && i > 0)
+            {
+                return i;
+            }
+
+            if (val is string s && int.TryParse(s, out var parsed) && parsed > 0)
+            {
+                return parsed;
+            }
+        }
+        catch
+        {
+        }
+
+        return null;
     }
 }

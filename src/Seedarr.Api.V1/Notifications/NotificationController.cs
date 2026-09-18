@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -488,7 +489,10 @@ public class NotificationController : Controller
                 });
             }
 
-            var result = await _webhookDispatcher.DispatchDetailedAsync(targetUrl, payload, customHeaders);
+            var httpMethod = NotificationEventHandler.ResolveHttpMethod(notif.Implementation, notif.Settings);
+            var result = httpMethod == HttpMethod.Put
+                ? await _webhookDispatcher.DispatchDetailedAsync(targetUrl, payload, customHeaders, httpMethod)
+                : await _webhookDispatcher.DispatchDetailedAsync(targetUrl, payload, customHeaders);
             return Ok(new NotificationTestResult
             {
                 Success = result.Success,
