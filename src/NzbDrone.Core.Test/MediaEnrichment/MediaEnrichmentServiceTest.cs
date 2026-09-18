@@ -200,6 +200,115 @@ public class MediaEnrichmentServiceTest
     }
 
     [Test]
+    public async Task DeleteMetadata_DoesNotDeleteFiles_WhenLocatedOutsideAppDataFolder()
+    {
+        var outsideDirectory = Path.Combine(Path.GetTempPath(), "seedarr_external_media_test_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDirectory);
+
+        try
+        {
+            var externalPosterPath = Path.Combine(outsideDirectory, "poster.jpg");
+            var externalBackdropPath = Path.Combine(outsideDirectory, "backdrop.jpg");
+
+            await File.WriteAllBytesAsync(externalPosterPath, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+            await File.WriteAllBytesAsync(externalBackdropPath, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+            var meta = new TorrentMediaMetadata
+            {
+                Id = 2,
+                TorrentId = 43,
+                PosterLocalPath = externalPosterPath,
+                BackdropLocalPath = externalBackdropPath,
+            };
+
+            _repository.GetByTorrentId(43).Returns(meta);
+
+            _service.DeleteMetadata(43);
+
+            _repository.Received(1).DeleteByTorrentId(43);
+            Assert.That(File.Exists(externalPosterPath), Is.True);
+            Assert.That(File.Exists(externalBackdropPath), Is.True);
+        }
+        finally
+        {
+            if (Directory.Exists(outsideDirectory))
+            {
+                Directory.Delete(outsideDirectory, true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task DeleteMetadata_DoesNotDeleteFiles_WhenPathTraversesOutsideAppDataFolder()
+    {
+        var outsideDirectory = Path.Combine(Path.GetTempPath(), "seedarr_traversal_test_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outsideDirectory);
+
+        try
+        {
+            var externalFile = Path.Combine(outsideDirectory, "traversal.jpg");
+            await File.WriteAllBytesAsync(externalFile, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+            var relativeTraversalPath = Path.Combine(_tempDirectory, "..", Path.GetFileName(outsideDirectory), "traversal.jpg");
+
+            var meta = new TorrentMediaMetadata
+            {
+                Id = 3,
+                TorrentId = 44,
+                PosterLocalPath = relativeTraversalPath,
+            };
+
+            _repository.GetByTorrentId(44).Returns(meta);
+
+            _service.DeleteMetadata(44);
+
+            _repository.Received(1).DeleteByTorrentId(44);
+            Assert.That(File.Exists(externalFile), Is.True);
+        }
+        finally
+        {
+            if (Directory.Exists(outsideDirectory))
+            {
+                Directory.Delete(outsideDirectory, true);
+            }
+        }
+    }
+
+    [Test]
+    public async Task DeleteMetadata_DoesNotDeleteFiles_WhenAppDataFolderIsNull()
+    {
+        var appFolderInfo = Substitute.For<IAppFolderInfo>();
+        appFolderInfo.AppDataFolder.Returns((string)null);
+
+        var service = new MediaEnrichmentService(
+            _repository,
+            _inspector,
+            _configService,
+            appFolderInfo,
+            _eventAggregator,
+            _arrRepository,
+            _connectionFactory,
+            _tmdbProvider);
+
+        var filePath = Path.Combine(_tempDirectory, "poster_null_appdata.jpg");
+        await File.WriteAllBytesAsync(filePath, new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+        var meta = new TorrentMediaMetadata
+        {
+            Id = 4,
+            TorrentId = 45,
+            PosterLocalPath = filePath,
+        };
+
+        _repository.GetByTorrentId(45).Returns(meta);
+
+        service.DeleteMetadata(45);
+
+        _repository.Received(1).DeleteByTorrentId(45);
+        Assert.That(File.Exists(filePath), Is.True);
+    }
+
+    [Test]
     public void Handle_TorrentDeletedEvent_DeletesMetadata()
     {
         var meta = new TorrentMediaMetadata { Id = 1, TorrentId = 77 };
