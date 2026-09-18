@@ -284,14 +284,20 @@ function SpeedGraph({ maxPoints }: SpeedGraphProps) {
 
         ringBufferRef.current.push(now, uploadSpeed, downloadSpeed);
         setHistory(ringBufferRef.current.getPoints(currentRangeConfig.points));
-      }
-    }
 
-    prevRef.current = {
-      totalUploaded: stats.totalUploaded,
-      totalDownloaded: stats.totalDownloaded,
-      timestamp: now,
-    };
+        prevRef.current = {
+          totalUploaded: stats.totalUploaded,
+          totalDownloaded: stats.totalDownloaded,
+          timestamp: now,
+        };
+      }
+    } else {
+      prevRef.current = {
+        totalUploaded: stats.totalUploaded,
+        totalDownloaded: stats.totalDownloaded,
+        timestamp: now,
+      };
+    }
   }, [stats, currentRangeConfig.points]);
 
   const handleRangeChange = (range: TimeRange) => {

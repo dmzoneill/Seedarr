@@ -304,9 +304,29 @@ export function useSignalR(queryClient?: QueryClient) {
       startSignalR();
     }
 
+    const handleReconnected = () => {
+      const qc = queryClientRef.current;
+      if (qc) {
+        qc.invalidateQueries({ queryKey: ["torrents"] });
+        qc.invalidateQueries({ queryKey: ["seeding", "stats"] });
+        qc.invalidateQueries({ queryKey: ["health"] });
+      }
+    };
+
+    conn.onreconnected(handleReconnected);
+
     return () => {
       isMounted = false;
       statusListeners.delete(handleStatusChange);
+      const callbacks = (
+        conn as unknown as { _reconnectedCallbacks?: Array<unknown> }
+      )._reconnectedCallbacks;
+      if (callbacks) {
+        const idx = callbacks.indexOf(handleReconnected);
+        if (idx !== -1) {
+          callbacks.splice(idx, 1);
+        }
+      }
     };
   }, [conn]);
 

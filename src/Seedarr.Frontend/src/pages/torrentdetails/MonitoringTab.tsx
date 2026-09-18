@@ -47,14 +47,20 @@ export function MonitoringTab({ torrent }: { torrent: Torrent }) {
         h.uploadSpeed = push(h.uploadSpeed, upSpeed);
         h.downloadSpeed = push(h.downloadSpeed, downSpeed);
         setTick((t) => t + 1);
-      }
-    }
 
-    prevRef.current = {
-      uploaded: torrent.uploaded,
-      downloaded: torrent.downloaded,
-      timestamp: now,
-    };
+        prevRef.current = {
+          uploaded: torrent.uploaded,
+          downloaded: torrent.downloaded,
+          timestamp: now,
+        };
+      }
+    } else {
+      prevRef.current = {
+        uploaded: torrent.uploaded,
+        downloaded: torrent.downloaded,
+        timestamp: now,
+      };
+    }
   }, [torrent.uploaded, torrent.downloaded]);
 
   const h = historyRef.current;

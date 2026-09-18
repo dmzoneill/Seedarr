@@ -64,14 +64,20 @@ export function StatusBar({ connected = true, isReconnecting = false }: StatusBa
             (stats.totalDownloaded - prev.totalDownloaded) / timeDelta,
           ),
         });
-      }
-    }
 
-    prevRef.current = {
-      totalUploaded: stats.totalUploaded,
-      totalDownloaded: stats.totalDownloaded,
-      timestamp: now,
-    };
+        prevRef.current = {
+          totalUploaded: stats.totalUploaded,
+          totalDownloaded: stats.totalDownloaded,
+          timestamp: now,
+        };
+      }
+    } else {
+      prevRef.current = {
+        totalUploaded: stats.totalUploaded,
+        totalDownloaded: stats.totalDownloaded,
+        timestamp: now,
+      };
+    }
   }, [stats]);
 
   const { uploadSpeed, downloadSpeed } = speed;

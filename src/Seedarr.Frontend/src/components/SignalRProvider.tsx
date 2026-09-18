@@ -3,10 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useSignalR } from "../api/signalr";
 import { useToast } from "../context/ToastContext";
 
-const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
-  TorrentAdded: [["torrents"]],
-  TorrentUpdated: [["torrents"]],
-  TorrentDeleted: [["torrents"]],
+export const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
+  TorrentAdded: [["torrents"], ["trackerboost"]],
+  TorrentUpdated: [["torrents"], ["trackerboost"]],
+  TorrentDeleted: [["torrents"], ["trackerboost"]],
   SeedingStatsUpdated: [["seeding", "stats"]],
   HealthCheckCompleted: [["health"]],
   CommandStarted: [["system", "status"], ["system", "commands"]],
@@ -17,6 +17,41 @@ const EVENT_INVALIDATION_MAP: Record<string, string[][]> = {
   AutomationTriggerEvaluated: [["automation", "scripts"], ["automation"]],
 };
 
+export const RECONNECT_QUERY_KEYS: string[][] = [
+  ["torrents"],
+  ["trackerboost"],
+  ["seeding", "stats"],
+  ["seeding", "history"],
+  ["categories"],
+  ["tags"],
+  ["health"],
+  ["system", "status"],
+  ["system", "commands"],
+  ["system", "tasks"],
+  ["diskspace"],
+  ["automation"],
+  ["automation", "scripts"],
+];
+
+/**
+ * Determines whether a SignalR message name is handled by dedicated named event handlers
+ * (e.g. TorrentAdded, SeedingStatsUpdated, HealthCheckCompleted, CommandStarted, etc.)
+ * to avoid duplicate query invalidation storms from generic receiveMessage dispatch.
+ */
+export function isHandledByNamedEvent(name?: string): boolean {
+  if (!name) return false;
+  const lower = name.toLowerCase();
+  return (
+    lower.includes("torrent") ||
+    lower.includes("seeding") ||
+    lower.includes("health") ||
+    lower.includes("command") ||
+    lower.includes("system") ||
+    lower.includes("task") ||
+    lower.includes("automation")
+  );
+}
+
 export default function SignalRProvider() {
   const queryClient = useQueryClient();
   const { connection, status } = useSignalR(queryClient);
@@ -25,7 +60,7 @@ export default function SignalRProvider() {
   showToastRef.current = showToast;
 
   useEffect(() => {
-    // 1. Generic receiveMessage dispatcher from Seedarr REST controller SignalR broadcasts
+    // 1. Generic receiveMessage dispatcher for unmapped events only (e.g. tracker, category, tag)
     const onReceiveMessage = (msg: unknown) => {
       if (!msg || typeof msg !== "object") return;
       const message = msg as {
@@ -35,39 +70,18 @@ export default function SignalRProvider() {
       };
       const name = (message.name ?? "").toLowerCase();
 
-      if (name === "torrent" || name.includes("torrent")) {
-        queryClient.invalidateQueries({ queryKey: ["torrents"] });
+      // Eliminate duplicate invalidations for events already handled by named event listeners
+      if (isHandledByNamedEvent(name)) {
+        return;
+      }
+
+      if (name.includes("tracker")) {
         queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
-        const bodyObj = message.body as Record<string, unknown> | undefined;
-        if (bodyObj?.id && typeof bodyObj.id === "number") {
-          queryClient.invalidateQueries({
-            queryKey: ["torrents", bodyObj.id],
-          });
-          queryClient.invalidateQueries({
-            queryKey: ["torrents", bodyObj.id, "trackers"],
-          });
-        }
-      } else if (name.includes("tracker")) {
-        queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
-        queryClient.invalidateQueries({ queryKey: ["torrents"] });
-      } else if (name.includes("seeding")) {
-        queryClient.invalidateQueries({ queryKey: ["seeding", "stats"] });
         queryClient.invalidateQueries({ queryKey: ["torrents"] });
       } else if (name.includes("category")) {
         queryClient.invalidateQueries({ queryKey: ["categories"] });
       } else if (name.includes("tag")) {
         queryClient.invalidateQueries({ queryKey: ["tags"] });
-      } else if (name.includes("health")) {
-        queryClient.invalidateQueries({ queryKey: ["health"] });
-      } else if (name.includes("command") || name.includes("system")) {
-        queryClient.invalidateQueries({ queryKey: ["system", "status"] });
-        queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
-      } else if (name.includes("task")) {
-        queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
-        queryClient.invalidateQueries({ queryKey: ["system", "status"] });
-      } else if (name.includes("automation")) {
-        queryClient.invalidateQueries({ queryKey: ["automation", "scripts"] });
-        queryClient.invalidateQueries({ queryKey: ["automation"] });
       }
     };
 
@@ -80,6 +94,23 @@ export default function SignalRProvider() {
       const handler = (data?: unknown) => {
         for (const key of queryKeys) {
           queryClient.invalidateQueries({ queryKey: key });
+        }
+
+        // Entity-specific invalidations for torrents
+        if (
+          event === "TorrentAdded" ||
+          event === "TorrentUpdated" ||
+          event === "TorrentDeleted"
+        ) {
+          const bodyObj = data as Record<string, unknown> | undefined;
+          if (bodyObj?.id && typeof bodyObj.id === "number") {
+            queryClient.invalidateQueries({
+              queryKey: ["torrents", bodyObj.id],
+            });
+            queryClient.invalidateQueries({
+              queryKey: ["torrents", bodyObj.id, "trackers"],
+            });
+          }
         }
 
         // Fire toast notifications for key events
@@ -111,19 +142,9 @@ export default function SignalRProvider() {
 
     // 3. Reconnection query cache synchronization
     const handleReconnected = () => {
-      queryClient.invalidateQueries({ queryKey: ["torrents"] });
-      queryClient.invalidateQueries({ queryKey: ["trackerboost"] });
-      queryClient.invalidateQueries({ queryKey: ["seeding", "stats"] });
-      queryClient.invalidateQueries({ queryKey: ["seeding", "history"] });
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      queryClient.invalidateQueries({ queryKey: ["tags"] });
-      queryClient.invalidateQueries({ queryKey: ["health"] });
-      queryClient.invalidateQueries({ queryKey: ["system", "status"] });
-      queryClient.invalidateQueries({ queryKey: ["system", "commands"] });
-      queryClient.invalidateQueries({ queryKey: ["system", "tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["diskspace"] });
-      queryClient.invalidateQueries({ queryKey: ["automation"] });
-      queryClient.invalidateQueries({ queryKey: ["automation", "scripts"] });
+      for (const key of RECONNECT_QUERY_KEYS) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
     };
 
     connection.onreconnected(handleReconnected);
