@@ -76,6 +76,24 @@ public class LocalPeerDiscoveryTest
     }
 
     [Test]
+    public void BuildAnnouncement_should_contain_cookie_header()
+    {
+        var bytes = LocalPeerDiscovery.BuildAnnouncement("abc123", 6881, "12345678");
+        var message = Encoding.ASCII.GetString(bytes);
+
+        Assert.That(message, Does.Contain("cookie: 12345678"));
+    }
+
+    [Test]
+    public void BuildAnnouncement_without_cookie_parameter_should_generate_cookie_header()
+    {
+        var bytes = LocalPeerDiscovery.BuildAnnouncement("abc123", 6881);
+        var message = Encoding.ASCII.GetString(bytes);
+
+        Assert.That(message, Does.Contain("cookie: "));
+    }
+
+    [Test]
     public void BuildAnnouncement_should_contain_multicast_host()
     {
         var bytes = LocalPeerDiscovery.BuildAnnouncement("abc123", 6881);
@@ -335,6 +353,7 @@ public class LocalPeerDiscoveryTest
     private sealed class FastAnnouncingLpd : LocalPeerDiscovery
     {
         public List<string> AnnouncedInfoHashes { get; } = new();
+        public List<string> AnnouncedCookies { get; } = new();
 
         public FastAnnouncingLpd(IConfigService configService, ITorrentService torrentService, IPeerDiscoveryService peerDiscovery)
             : base(configService, torrentService, peerDiscovery) { }
@@ -349,6 +368,10 @@ public class LocalPeerDiscoveryTest
                 if (line.StartsWith("Infohash:", StringComparison.OrdinalIgnoreCase))
                 {
                     AnnouncedInfoHashes.Add(line[9..].Trim());
+                }
+                else if (line.StartsWith("cookie:", StringComparison.OrdinalIgnoreCase))
+                {
+                    AnnouncedCookies.Add(line[7..].Trim());
                 }
             }
 
@@ -431,6 +454,7 @@ public class LocalPeerDiscoveryTest
         Assert.That(task.IsCompleted, Is.True);
         _torrentService.Received().GetAll();
         Assert.That(fastLpd.AnnouncedInfoHashes, Does.Contain(torrent.InfoHash));
+        Assert.That(fastLpd.AnnouncedCookies, Contains.Item(fastLpd.ClientCookie));
     }
 
     [Test]
@@ -939,5 +963,119 @@ public class LocalPeerDiscoveryTest
             "public_hash",
             Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == "192.168.1.50" && peers.Single().Port == 6881),
             "lpd");
+    }
+
+    [Test]
+    public void ParseAnnouncement_should_discard_announcement_matching_client_cookie()
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        var cookie = lpd.ClientCookie;
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\ncookie: {cookie}\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void ParseAnnouncement_should_discard_announcement_matching_client_cookie_case_insensitively()
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        var cookie = lpd.ClientCookie.ToUpperInvariant();
+        var announcement = $"BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\ncookie: {cookie}\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.DidNotReceive().AddPeers(
+            Arg.Any<string>(), Arg.Any<IEnumerable<TrackerPeer>>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void ParseAnnouncement_should_accept_announcement_with_different_cookie()
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        lpd.ClientCookie = "deadbeef";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\ncookie: feedface\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            "abc123def456",
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == "192.168.1.50" && peers.Single().Port == 6881),
+            "lpd");
+    }
+
+    [Test]
+    public void ParseAnnouncement_should_accept_announcement_with_absent_cookie()
+    {
+        var peerDiscovery = Substitute.For<IPeerDiscoveryService>();
+        var torrentService = Substitute.For<ITorrentService>();
+        torrentService.FindByInfoHash("abc123def456").Returns(new Torrent { InfoHash = "abc123def456", IsPrivate = false });
+        var lpd = new LocalPeerDiscovery(
+            Substitute.For<IConfigService>(),
+            torrentService,
+            peerDiscovery);
+
+        lpd.ClientCookie = "deadbeef";
+        var announcement = "BT-SEARCH * HTTP/1.1\r\nHost: 239.192.152.143:6771\r\nPort: 6881\r\nInfohash: abc123def456\r\n\r\n";
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.50"), 12345);
+
+        var method = typeof(LocalPeerDiscovery).GetMethod(
+            "ParseAnnouncement",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        method.Invoke(lpd, new object[] { announcement, sender });
+
+        peerDiscovery.Received(1).AddPeers(
+            "abc123def456",
+            Arg.Is<IEnumerable<TrackerPeer>>(peers => peers.Single().Ip == "192.168.1.50" && peers.Single().Port == 6881),
+            "lpd");
+    }
+
+    [Test]
+    public void GetActiveNetworkInterfaces_should_only_return_operational_non_loopback_interfaces()
+    {
+        var interfaces = LocalPeerDiscovery.GetActiveNetworkInterfaces();
+
+        Assert.That(interfaces, Is.Not.Null);
+        Assert.That(interfaces.All(nic => nic.OperationalStatus == OperationalStatus.Up), Is.True);
+        Assert.That(interfaces.All(nic => nic.NetworkInterfaceType != NetworkInterfaceType.Loopback), Is.True);
     }
 }

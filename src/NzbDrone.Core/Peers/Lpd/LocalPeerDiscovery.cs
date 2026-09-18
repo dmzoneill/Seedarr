@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,6 +31,7 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
     private readonly Logger _logger;
     private readonly object _stateLock = new();
 
+    private string _clientCookie = RandomNumberGenerator.GetHexString(8).ToLowerInvariant();
     private UdpClient _client;
     private CancellationTokenSource _workerCts;
     private Task _workerTask;
@@ -37,6 +39,12 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
     private CancellationToken _stoppingToken;
 
     public bool IsRunning => _client != null;
+
+    internal string ClientCookie
+    {
+        get => _clientCookie;
+        set => _clientCookie = value;
+    }
 
     public LocalPeerDiscovery(IConfigService configService, ITorrentService torrentService, IPeerDiscoveryService peerDiscovery)
     {
@@ -123,11 +131,64 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
             try
             {
                 client = new UdpClient(MulticastPort);
-                client.JoinMulticastGroup(IPAddress.Parse(MulticastAddress));
             }
             catch (SocketException ex)
             {
-                _logger.Warn(ex, "Local Peer Discovery failed to join multicast group, skipping");
+                _logger.Warn(ex, "Local Peer Discovery failed to bind multicast port {0}, skipping", MulticastPort);
+                return;
+            }
+
+            var multicastAddress = IPAddress.Parse(MulticastAddress);
+            var joinedAny = false;
+
+            try
+            {
+                client.JoinMulticastGroup(multicastAddress);
+                joinedAny = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Local Peer Discovery failed to join default multicast group");
+            }
+
+            var activeInterfaces = GetActiveNetworkInterfaces();
+            foreach (var nic in activeInterfaces)
+            {
+                var ipProps = nic.GetIPProperties();
+                if (ipProps == null)
+                {
+                    continue;
+                }
+
+                foreach (var unicast in ipProps.UnicastAddresses)
+                {
+                    if (unicast.Address.AddressFamily == AddressFamily.InterNetwork)
+                    {
+                        try
+                        {
+                            client.JoinMulticastGroup(multicastAddress, unicast.Address);
+                            joinedAny = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Debug(ex, "Local Peer Discovery failed to join multicast group on {0} ({1})", nic.Name, unicast.Address);
+                        }
+                    }
+                }
+            }
+
+            if (!joinedAny)
+            {
+                _logger.Warn("Local Peer Discovery failed to join multicast group on any interface, skipping");
+                try
+                {
+                    client.Close();
+                    client.Dispose();
+                }
+                catch (Exception)
+                {
+                }
+
                 return;
             }
 
@@ -278,7 +339,7 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
                 foreach (var torrent in activeTorrents)
                 {
                     var port = _configService.ListeningPort > 0 ? _configService.ListeningPort : PeerPort;
-                    var data = BuildAnnouncement(torrent.InfoHash, port);
+                    var data = BuildAnnouncement(torrent.InfoHash, port, _clientCookie);
                     await SendAnnouncementAsync(sender, data, endpoint, stoppingToken);
                     _logger.Debug("LPD: announced {0}", torrent.InfoHash);
                 }
@@ -294,15 +355,59 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
         }
     }
 
-    public static byte[] BuildAnnouncement(string infoHash, int port)
+    public static byte[] BuildAnnouncement(string infoHash, int port, string cookie = null)
     {
-        var message = $"BT-SEARCH * HTTP/1.1\r\nHost: {MulticastAddress}:{MulticastPort}\r\nPort: {port}\r\nInfohash: {infoHash}\r\n\r\n\r\n";
+        var cookieValue = cookie ?? RandomNumberGenerator.GetHexString(8).ToLowerInvariant();
+        var message = $"BT-SEARCH * HTTP/1.1\r\nHost: {MulticastAddress}:{MulticastPort}\r\nPort: {port}\r\nInfohash: {infoHash}\r\ncookie: {cookieValue}\r\n\r\n\r\n";
         return Encoding.ASCII.GetBytes(message);
     }
 
     protected virtual async Task SendAnnouncementAsync(UdpClient client, byte[] data, IPEndPoint endpoint, CancellationToken stoppingToken)
     {
-        await client.SendAsync(data, endpoint, stoppingToken);
+        var sentAny = false;
+        var activeInterfaces = GetActiveNetworkInterfaces();
+
+        foreach (var nic in activeInterfaces)
+        {
+            var ipProps = nic.GetIPProperties();
+            if (ipProps == null)
+            {
+                continue;
+            }
+
+            foreach (var unicast in ipProps.UnicastAddresses)
+            {
+                if (unicast.Address.AddressFamily != AddressFamily.InterNetwork)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    using var ifSender = new UdpClient(new IPEndPoint(unicast.Address, 0));
+                    ifSender.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 1);
+                    try
+                    {
+                        ifSender.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastInterface, unicast.Address.GetAddressBytes());
+                    }
+                    catch
+                    {
+                    }
+
+                    await ifSender.SendAsync(data, endpoint, stoppingToken);
+                    sentAny = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "LPD: failed to send announcement on interface {0} ({1})", nic.Name, unicast.Address);
+                }
+            }
+        }
+
+        if (!sentAny)
+        {
+            await client.SendAsync(data, endpoint, stoppingToken);
+        }
     }
 
     private void ParseAnnouncement(string message, IPEndPoint sender)
@@ -314,6 +419,7 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
 
         string infoHash = null;
         var port = 0;
+        string cookie = null;
 
         foreach (var line in message.Split("\r\n", StringSplitOptions.RemoveEmptyEntries))
         {
@@ -325,10 +431,21 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
             {
                 int.TryParse(line[5..].Trim(), out port);
             }
+            else if (line.StartsWith("cookie:", StringComparison.OrdinalIgnoreCase))
+            {
+                cookie = line[7..].Trim();
+            }
         }
 
         if (string.IsNullOrEmpty(infoHash) || port <= 0)
         {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(cookie) && !string.IsNullOrEmpty(_clientCookie) &&
+            string.Equals(cookie, _clientCookie, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.Debug("LPD: rejected self-announcement with matching cookie {0}", cookie);
             return;
         }
 
@@ -459,5 +576,19 @@ public class LocalPeerDiscovery : BackgroundService, IHandle<ConfigSavedEvent>
         }
 
         return false;
+    }
+
+    internal static List<NetworkInterface> GetActiveNetworkInterfaces()
+    {
+        try
+        {
+            return NetworkInterface.GetAllNetworkInterfaces()
+                .Where(nic => nic.OperationalStatus == OperationalStatus.Up && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
+                .ToList();
+        }
+        catch
+        {
+            return new List<NetworkInterface>();
+        }
     }
 }
