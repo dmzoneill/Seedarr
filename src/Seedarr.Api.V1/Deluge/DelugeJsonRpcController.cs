@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using NLog;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Exceptions;
 using NzbDrone.Core.RemotePathMappings;
 using NzbDrone.Core.Tags;
@@ -50,6 +51,7 @@ public class DelugeJsonRpcController : ControllerBase
     private readonly ICallerHostResolver _callerHostResolver;
     private readonly ICategoryService _categoryService;
     private readonly ITrackerEntryService _trackerService;
+    private readonly IDiskSpaceService _diskSpaceService;
     private readonly Logger _logger;
 
     public static bool IsWebConnected
@@ -71,7 +73,8 @@ public class DelugeJsonRpcController : ControllerBase
         IRemotePathMappingService remotePathMappingService = null,
         ICallerHostResolver callerHostResolver = null,
         ICategoryService categoryService = null,
-        ITrackerEntryService trackerService = null)
+        ITrackerEntryService trackerService = null,
+        IDiskSpaceService diskSpaceService = null)
     {
         _torrentService = torrentService;
         _torrentFileService = torrentFileService;
@@ -86,6 +89,7 @@ public class DelugeJsonRpcController : ControllerBase
         _callerHostResolver = callerHostResolver;
         _categoryService = categoryService;
         _trackerService = trackerService;
+        _diskSpaceService = diskSpaceService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -824,7 +828,7 @@ public class DelugeJsonRpcController : ControllerBase
                     num_connections = allTorrents.Sum(t => t.Leechers + t.Seeders),
                     upload_rate = allTorrents.Sum(t => t.UploadSpeed),
                     download_rate = allTorrents.Sum(t => t.DownloadSpeed),
-                    free_space = 100L * 1024 * 1024 * 1024,
+                    free_space = GetAvailableFreeSpace(),
                 },
             },
             error = (object)null,
@@ -953,6 +957,21 @@ public class DelugeJsonRpcController : ControllerBase
                     cfgUpdates["MaxPerTorrentConnections"] = mcptVal;
                 }
 
+                if (cfgElem.TryGetProperty("max_active_limit", out var malProp) && malProp.ValueKind == JsonValueKind.Number && malProp.TryGetInt32(out var malVal))
+                {
+                    cfgUpdates["MaxActiveLimit"] = malVal;
+                }
+
+                if (cfgElem.TryGetProperty("max_active_downloading", out var madProp) && madProp.ValueKind == JsonValueKind.Number && madProp.TryGetInt32(out var madVal))
+                {
+                    cfgUpdates["MaxActiveDownloads"] = madVal;
+                }
+
+                if (cfgElem.TryGetProperty("max_active_seeding", out var masProp) && masProp.ValueKind == JsonValueKind.Number && masProp.TryGetInt32(out var masVal))
+                {
+                    cfgUpdates["MaxActiveUploads"] = masVal;
+                }
+
                 if (cfgUpdates.Count > 0)
                 {
                     _configService.SaveConfigDictionary(cfgUpdates);
@@ -984,9 +1003,86 @@ public class DelugeJsonRpcController : ControllerBase
         return DelugeResult(new { result = sessionStatus, error = (object)null, id });
     }
 
+    private long GetAvailableFreeSpace(string path = null)
+    {
+        var targetPath = path;
+        if (!string.IsNullOrWhiteSpace(targetPath))
+        {
+            targetPath = RemapRemoteToLocal(targetPath);
+        }
+
+        if (string.IsNullOrWhiteSpace(targetPath))
+        {
+            targetPath = _configService?.DefaultSavePath;
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                targetPath = _configService?.WatchFolderPath;
+            }
+
+            if (string.IsNullOrWhiteSpace(targetPath))
+            {
+                targetPath = AppContext.BaseDirectory;
+            }
+        }
+
+        if (_diskSpaceService != null)
+        {
+            try
+            {
+                var disk = _diskSpaceService.GetDiskSpaceForPath(targetPath);
+                if (disk != null)
+                {
+                    return disk.FreeSpace;
+                }
+
+                var allDrives = _diskSpaceService.GetDiskSpace();
+                if (allDrives != null && allDrives.Count > 0)
+                {
+                    return allDrives[0].FreeSpace;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to resolve disk space from IDiskSpaceService for path: {0}", targetPath);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(targetPath))
+        {
+            try
+            {
+                var root = Path.GetPathRoot(Path.GetFullPath(targetPath));
+                if (!string.IsNullOrEmpty(root))
+                {
+                    var driveInfo = new DriveInfo(root);
+                    if (driveInfo.IsReady)
+                    {
+                        return driveInfo.AvailableFreeSpace;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Warn(ex, "Failed to resolve disk space via DriveInfo for path: {0}", targetPath);
+            }
+        }
+
+        return 100L * 1024 * 1024 * 1024;
+    }
+
     private IActionResult HandleCoreGetFreeSpace(JsonElement paramsElem, object id)
     {
-        var freeBytes = 100L * 1024 * 1024 * 1024;
+        string path = null;
+        if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() > 0 && paramsElem[0].ValueKind == JsonValueKind.String)
+        {
+            path = paramsElem[0].GetString();
+        }
+        else if (paramsElem.ValueKind == JsonValueKind.String)
+        {
+            path = paramsElem.GetString();
+        }
+
+        var freeBytes = GetAvailableFreeSpace(path);
         return DelugeResult(new { result = freeBytes, error = (object)null, id });
     }
 
@@ -1233,6 +1329,52 @@ public class DelugeJsonRpcController : ControllerBase
         return DelugeResult(new { result = (object)null, error = CreateDelugeError("Invalid upload arguments"), id });
     }
 
+    private static Dictionary<string, object> BuildFilesTree(ParsedTorrent parsed)
+    {
+        var root = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        if (parsed == null)
+        {
+            return root;
+        }
+
+        if (parsed.Files == null || parsed.Files.Count == 0)
+        {
+            var fileName = !string.IsNullOrWhiteSpace(parsed.Name) ? parsed.Name : "file";
+            root[fileName] = new object[] { 0, parsed.TotalSize, true };
+            return root;
+        }
+
+        for (var i = 0; i < parsed.Files.Count; i++)
+        {
+            var file = parsed.Files[i];
+            var rawPath = file.Path ?? parsed.Name ?? $"file_{i}";
+            var parts = rawPath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length == 0)
+            {
+                parts = new[] { $"file_{i}" };
+            }
+
+            var current = root;
+            for (var p = 0; p < parts.Length - 1; p++)
+            {
+                var part = parts[p];
+                if (!current.TryGetValue(part, out var nextObj) || nextObj is not Dictionary<string, object> nextDir)
+                {
+                    nextDir = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+                    current[part] = nextDir;
+                }
+
+                current = nextDir;
+            }
+
+            var leafName = parts[^1];
+            current[leafName] = new object[] { i, file.Size, true };
+        }
+
+        return root;
+    }
+
+    [SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "Deluge Web API intentionally inspects torrent files from local filesystem paths")]
     private async Task<IActionResult> HandleWebGetTorrentInfoAsync(JsonElement paramsElem, object id)
     {
         if (paramsElem.ValueKind == JsonValueKind.Array && paramsElem.GetArrayLength() > 0)
@@ -1242,27 +1384,51 @@ public class DelugeJsonRpcController : ControllerBase
             {
                 try
                 {
-                    var bytes = Convert.FromBase64String(pathOrDump);
-                    using var ms = new MemoryStream(bytes);
-                    var parsed = _torrentFileParser.Parse(ms);
-                    if (parsed != null)
+                    byte[] bytes = null;
+                    var localPath = RemapRemoteToLocal(pathOrDump);
+                    if (global::System.IO.File.Exists(pathOrDump))
                     {
-                        return DelugeResult(new
+                        bytes = await global::System.IO.File.ReadAllBytesAsync(pathOrDump);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(localPath) && global::System.IO.File.Exists(localPath))
+                    {
+                        bytes = await global::System.IO.File.ReadAllBytesAsync(localPath);
+                    }
+                    else
+                    {
+                        try
                         {
-                            result = new
+                            bytes = Convert.FromBase64String(pathOrDump);
+                        }
+                        catch (FormatException)
+                        {
+                            // Not base64
+                        }
+                    }
+
+                    if (bytes != null && bytes.Length > 0)
+                    {
+                        using var ms = new MemoryStream(bytes);
+                        var parsed = _torrentFileParser.Parse(ms);
+                        if (parsed != null)
+                        {
+                            return DelugeResult(new
                             {
-                                name = parsed.Name,
-                                size = parsed.TotalSize,
-                                files_tree = new Dictionary<string, object>(),
-                            },
-                            error = (object)null,
-                            id,
-                        });
+                                result = new
+                                {
+                                    name = parsed.Name ?? "torrent",
+                                    size = parsed.TotalSize,
+                                    files_tree = BuildFilesTree(parsed),
+                                },
+                                error = (object)null,
+                                id,
+                            });
+                        }
                     }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Ignore
+                    _logger.Warn(ex, "Failed to parse torrent in web.get_torrent_info for: {0}", pathOrDump);
                 }
             }
         }
@@ -1352,15 +1518,23 @@ public class DelugeJsonRpcController : ControllerBase
         var needsUpdate = false;
         string explicitDownloadLocation = null;
 
-        if (options.TryGetProperty("download_location", out var dlProp) && dlProp.ValueKind == JsonValueKind.String)
+        string rawPath = null;
+        if (options.TryGetProperty("save_path", out var spProp) && spProp.ValueKind == JsonValueKind.String)
         {
-            var rawDl = dlProp.GetString();
-            if (!string.IsNullOrWhiteSpace(rawDl))
-            {
-                explicitDownloadLocation = RemapRemoteToLocal(rawDl);
-                added.SourcePath = explicitDownloadLocation;
-                needsUpdate = true;
-            }
+            rawPath = spProp.GetString();
+        }
+
+        if (string.IsNullOrWhiteSpace(rawPath) && options.TryGetProperty("download_location", out var dlProp) && dlProp.ValueKind == JsonValueKind.String)
+        {
+            rawPath = dlProp.GetString();
+        }
+
+        if (!string.IsNullOrWhiteSpace(rawPath))
+        {
+            explicitDownloadLocation = RemapRemoteToLocal(rawPath);
+            added.SavePath = explicitDownloadLocation;
+            added.SourcePath = explicitDownloadLocation;
+            needsUpdate = true;
         }
 
         if (string.IsNullOrWhiteSpace(explicitDownloadLocation) &&
@@ -1370,6 +1544,7 @@ public class DelugeJsonRpcController : ControllerBase
             if (!string.IsNullOrWhiteSpace(rawMcp))
             {
                 explicitDownloadLocation = RemapRemoteToLocal(rawMcp);
+                added.SavePath = explicitDownloadLocation;
                 added.SourcePath = explicitDownloadLocation;
                 needsUpdate = true;
             }
@@ -1378,6 +1553,35 @@ public class DelugeJsonRpcController : ControllerBase
         if (options.TryGetProperty("add_paused", out var apProp) && apProp.ValueKind == JsonValueKind.True)
         {
             added.Pause();
+            needsUpdate = true;
+        }
+
+        if (options.TryGetProperty("prioritize_first_last_pieces", out var pflpProp) && (pflpProp.ValueKind == JsonValueKind.True || pflpProp.ValueKind == JsonValueKind.False))
+        {
+            added.FirstLastPiecePrio = pflpProp.GetBoolean();
+            needsUpdate = true;
+        }
+        else if (options.TryGetProperty("prioritize_first_last", out var pflProp) && (pflProp.ValueKind == JsonValueKind.True || pflProp.ValueKind == JsonValueKind.False))
+        {
+            added.FirstLastPiecePrio = pflProp.GetBoolean();
+            needsUpdate = true;
+        }
+
+        if (options.TryGetProperty("sequential_download", out var seqProp) && (seqProp.ValueKind == JsonValueKind.True || seqProp.ValueKind == JsonValueKind.False))
+        {
+            added.SequentialDownload = seqProp.GetBoolean();
+            needsUpdate = true;
+        }
+
+        if (options.TryGetProperty("max_download_speed", out var mdsProp) && mdsProp.ValueKind == JsonValueKind.Number && mdsProp.TryGetDouble(out var mdsVal))
+        {
+            added.DownloadLimit = (int)Math.Round(mdsVal);
+            needsUpdate = true;
+        }
+
+        if (options.TryGetProperty("max_upload_speed", out var musProp) && musProp.ValueKind == JsonValueKind.Number && musProp.TryGetDouble(out var musVal))
+        {
+            added.UploadLimit = (int)Math.Round(musVal);
             needsUpdate = true;
         }
 
@@ -1400,6 +1604,7 @@ public class DelugeJsonRpcController : ControllerBase
             var categoryPath = _categoryService.GetSavePathForCategory(added.Category, defaultPath);
             if (!string.IsNullOrWhiteSpace(categoryPath))
             {
+                added.SavePath = categoryPath;
                 added.SourcePath = categoryPath;
                 needsUpdate = true;
             }
@@ -1709,9 +1914,9 @@ public class DelugeJsonRpcController : ControllerBase
             ["max_connections_global"] = _configService?.MaxGlobalConnections ?? 200,
             ["max_connections_per_torrent"] = _configService?.MaxPerTorrentConnections ?? 50,
             ["max_upload_slots_global"] = 4,
-            ["max_active_limit"] = 10,
-            ["max_active_downloading"] = 5,
-            ["max_active_seeding"] = 5,
+            ["max_active_limit"] = _configService?.GetValueInt("MaxActiveLimit", 10) ?? 10,
+            ["max_active_downloading"] = (_configService?.MaxActiveDownloads ?? 0) > 0 ? _configService.MaxActiveDownloads : 5,
+            ["max_active_seeding"] = (_configService?.MaxActiveUploads ?? 0) > 0 ? _configService.MaxActiveUploads : 5,
             ["listen_ports"] = new[] { _configService?.ListeningPort ?? 6881, _configService?.ListeningPort ?? 6881 },
             ["dht"] = _configService?.EnableDht ?? true,
             ["upnp"] = true,
@@ -1815,8 +2020,10 @@ public class DelugeJsonRpcController : ControllerBase
             ["total_uploaded"] = t.Uploaded,
             ["total_payload_download"] = t.Downloaded,
             ["total_payload_upload"] = t.Uploaded,
-            ["save_path"] = RemapLocalToRemote(!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads")),
-            ["download_location"] = RemapLocalToRemote(!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads")),
+            ["save_path"] = RemapLocalToRemote(!string.IsNullOrWhiteSpace(t.SavePath) ? t.SavePath : (!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads"))),
+            ["download_location"] = RemapLocalToRemote(!string.IsNullOrWhiteSpace(t.SavePath) ? t.SavePath : (!string.IsNullOrWhiteSpace(t.SourcePath) ? t.SourcePath : (_configService?.WatchFolderPath ?? "/downloads"))),
+            ["prioritize_first_last_pieces"] = t.FirstLastPiecePrio,
+            ["sequential_download"] = t.SequentialDownload,
             ["label"] = t.Label ?? string.Empty,
             ["time_since_transfer"] = 0,
             ["time_added"] = new DateTimeOffset(t.DateAdded).ToUnixTimeSeconds(),
