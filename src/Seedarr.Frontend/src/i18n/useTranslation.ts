@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useI18nStore } from "./i18nStore";
+import { extractDefaultValue, useI18nStore } from "./i18nStore";
 import { SUPPORTED_LANGUAGES, getLanguageMetadata } from "./languages";
 import { LocaleCode, TranslationParams } from "./types";
 
@@ -10,7 +10,11 @@ export function useTranslation() {
 
   const t = useCallback(
     (key: string, params?: TranslationParams, defaultVal?: string) => {
-      return rawT(key, params, defaultVal);
+      const { fallbackDefault, interpolationParams } = extractDefaultValue(
+        params,
+        defaultVal,
+      );
+      return rawT(key, interpolationParams, fallbackDefault);
     },
     [rawT, locale],
   );
@@ -31,5 +35,9 @@ export function translate(
   params?: TranslationParams,
   defaultVal?: string,
 ): string {
-  return useI18nStore.getState().t(key, params, defaultVal);
+  const { fallbackDefault, interpolationParams } = extractDefaultValue(
+    params,
+    defaultVal,
+  );
+  return useI18nStore.getState().t(key, interpolationParams, fallbackDefault);
 }

@@ -55,6 +55,26 @@ function syncDomAttributes(locale: LocaleCode) {
   document.documentElement.dir = meta.rtl ? "rtl" : "ltr";
 }
 
+export function extractDefaultValue(
+  params?: TranslationParams,
+  defaultVal?: string,
+): { fallbackDefault?: string; interpolationParams?: TranslationParams } {
+  let fallbackDefault = defaultVal;
+  let interpolationParams = params;
+  if (
+    params &&
+    typeof params === "object" &&
+    !Array.isArray(params) &&
+    "defaultValue" in params
+  ) {
+    fallbackDefault =
+      (params as { defaultValue?: string }).defaultValue ?? defaultVal;
+    const { defaultValue: _, ...rest } = params as Record<string, any>;
+    interpolationParams = rest;
+  }
+  return { fallbackDefault, interpolationParams };
+}
+
 export interface I18nState {
   locale: LocaleCode;
   setLocale: (locale: LocaleCode) => void;
@@ -77,6 +97,10 @@ export const useI18nStore = create<I18nState>((set, get) => ({
     set({ locale });
   },
   t: (key: string, params?: TranslationParams, defaultVal?: string): string => {
+    const { fallbackDefault, interpolationParams } = extractDefaultValue(
+      params,
+      defaultVal,
+    );
     const currentLocale = get().locale;
     const currentDict = dictionaries[currentLocale];
     const defaultDict = dictionaries[DEFAULT_LOCALE];
@@ -89,11 +113,11 @@ export const useI18nStore = create<I18nState>((set, get) => ({
       template = getNestedValue(defaultDict, key);
     }
 
-    // 3. Fallback to defaultVal or key itself
+    // 3. Fallback to fallbackDefault or key itself
     if (template === undefined) {
-      template = defaultVal !== undefined ? defaultVal : key;
+      template = fallbackDefault !== undefined ? fallbackDefault : key;
     }
 
-    return interpolate(template, params);
+    return interpolate(template, interpolationParams);
   },
 }));

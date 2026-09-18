@@ -28,8 +28,14 @@ export interface Language {
   rtl?: boolean;
 }
 
+export interface TranslationOptions {
+  defaultValue?: string;
+  [key: string]: any;
+}
+
 export type TranslationParams =
-  Record<string, string | number> | (string | number)[];
+  | TranslationOptions
+  | (string | number)[];
 
 export type TranslationDictionary = {
   [key: string]: string | TranslationDictionary;
