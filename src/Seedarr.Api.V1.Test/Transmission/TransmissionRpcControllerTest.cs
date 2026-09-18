@@ -486,7 +486,7 @@ public class TransmissionRpcControllerTest
             Method = "torrent-add",
             Arguments = new Dictionary<string, JsonElement>
             {
-                ["filename"] = JsonDocument.Parse($""{magnet}"").RootElement,
+                ["filename"] = JsonDocument.Parse($"\"{magnet}\"").RootElement,
             },
         };
 
