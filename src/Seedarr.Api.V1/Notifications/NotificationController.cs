@@ -862,8 +862,8 @@ public class NotificationController : Controller
         }
 
         if (isPushover && (string.Equals(key, "user", StringComparison.OrdinalIgnoreCase) ||
-                           string.Equals(key, "userKey", StringComparison.OrdinalIgnoreCase) ||
-                           string.Equals(key, "user_key", StringComparison.OrdinalIgnoreCase)))
+                string.Equals(key, "userKey", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(key, "user_key", StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
@@ -901,17 +901,17 @@ public class NotificationController : Controller
     private static bool HasActiveTrigger(NotificationResource resource)
     {
         return resource.OnGrab ||
-               resource.OnDownloadComplete ||
-               resource.OnMediaInspected ||
-               resource.OnExtractComplete ||
-               resource.OnSeedGoalReached ||
-               resource.OnTorrentDeleted ||
-               resource.OnHealthIssue ||
-               resource.OnHealthRestored ||
-               resource.OnManualInteractionRequired ||
-               resource.OnApplicationUpdate ||
-               resource.OnBackupComplete ||
-               resource.OnBackupFailed;
+            resource.OnDownloadComplete ||
+            resource.OnMediaInspected ||
+            resource.OnExtractComplete ||
+            resource.OnSeedGoalReached ||
+            resource.OnTorrentDeleted ||
+            resource.OnHealthIssue ||
+            resource.OnHealthRestored ||
+            resource.OnManualInteractionRequired ||
+            resource.OnApplicationUpdate ||
+            resource.OnBackupComplete ||
+            resource.OnBackupFailed;
     }
 
     private static string ExtractSetting(string settings, params string[] propertyNames)
