@@ -644,4 +644,69 @@ public class SpeedDistributionManagerTest
         Assert.That(speeds[0], Is.EqualTo(20_000L));
         Assert.That(speeds[1], Is.EqualTo(80_000L));
     }
+
+    [Test]
+    public void ApplyPriorityWeights_low_bandwidth_across_many_items_distributes_full_quota_without_discarding_remainder()
+    {
+        const int count = 50;
+        const long totalBandwidth = 3_333L; // Non-divisible number across 50 items
+        var speeds = new long[count];
+        Array.Fill(speeds, totalBandwidth / count);
+        speeds[0] += totalBandwidth - speeds.Sum();
+
+        var weights = new double[count];
+        weights[0] = 50.0;
+        for (var i = 1; i < count; i++)
+        {
+            weights[i] = 0.05 * ((i % 5) + 1);
+        }
+
+        var result = SpeedDistributionManager.ApplyPriorityWeights(speeds, weights, null, floorBytesPerSec: 0);
+
+        Assert.That(result, Has.Length.EqualTo(count));
+        Assert.That(result.Sum(), Is.EqualTo(totalBandwidth));
+        for (var i = 0; i < count; i++)
+        {
+            Assert.That(result[i], Is.GreaterThan(0L), $"Item {i} starved with 0 bytes");
+        }
+    }
+
+    [Test]
+    public void ApplyPriorityWeights_active_low_priority_items_receive_non_zero_quantum_and_do_not_starve()
+    {
+        const int count = 50;
+        const long totalBandwidth = 51_200L; // 50 KB/s across 50 torrents
+        var speeds = new long[count];
+        Array.Fill(speeds, 1_024L);
+
+        // One super high-priority item, 49 very low-priority items
+        var weights = new double[count];
+        weights[0] = 100.0;
+        for (var i = 1; i < count; i++)
+        {
+            weights[i] = 0.01;
+        }
+
+        var result = SpeedDistributionManager.ApplyPriorityWeights(speeds, weights, null, floorBytesPerSec: 0);
+
+        Assert.That(result, Has.Length.EqualTo(count));
+        Assert.That(result.Sum(), Is.EqualTo(totalBandwidth));
+        for (var i = 1; i < count; i++)
+        {
+            Assert.That(result[i], Is.GreaterThanOrEqualTo(SpeedDistributionManager.MinimumTransmissionQuantum), $"Low priority item {i} starved below transmission quantum");
+        }
+    }
+
+    [Test]
+    public void ApplyPriorityWeights_largest_remainder_redistributes_fractional_tokens_accurately()
+    {
+        var speeds = new long[] { 50, 50, 50 };
+        var total = 100L;
+        var weights = new double[] { 1.0, 1.0, 1.0 }; // 100 / 3 = 33.333 each -> remainder 1
+
+        var result = SpeedDistributionManager.ApplyPriorityWeights(speeds, weights, null, floorBytesPerSec: 0);
+
+        Assert.That(result.Sum(), Is.EqualTo(total));
+        Assert.That(result[0] + result[1] + result[2], Is.EqualTo(100L));
+    }
 }

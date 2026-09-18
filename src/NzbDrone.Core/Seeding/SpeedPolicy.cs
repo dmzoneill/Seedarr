@@ -24,6 +24,73 @@ public class SpeedPolicy : ISpeedPolicy,
     public const double WarmUpWindowSeconds = 180.0;
     private const double SuperSeedingBoost = 1.5;
 
+    public const int TcpIpHeaderBytes = 40;
+    public const int UdpHeaderBytes = 28;
+    public const int BitTorrentPieceFramingBytes = 13;
+    public const int StandardPieceChunkBytes = 16 * 1024;
+    public const int StandardMssBytes = 1460;
+
+    public double ProtocolOverheadFactor { get; set; }
+    public long OutOfBandOverheadBytesPerSec { get; set; }
+
+    private double EffectiveOverheadFactor =>
+        ProtocolOverheadFactor > 0 ? ProtocolOverheadFactor : (_configService?.ProtocolOverheadFactor ?? 0.0);
+
+    public static long EstimateFramingAndTransportOverhead(
+        long payloadBytes,
+        int chunkSizeBytes = StandardPieceChunkBytes,
+        int framingBytes = BitTorrentPieceFramingBytes,
+        int headerBytes = TcpIpHeaderBytes,
+        int mssBytes = StandardMssBytes)
+    {
+        if (payloadBytes <= 0)
+        {
+            return 0;
+        }
+
+        var chunks = (long)Math.Ceiling((double)payloadBytes / chunkSizeBytes);
+        var framingOverhead = chunks * framingBytes;
+        var packets = (long)Math.Ceiling((double)(payloadBytes + framingOverhead) / mssBytes);
+        var transportOverhead = packets * headerBytes;
+
+        return framingOverhead + transportOverhead;
+    }
+
+    public static double CalculateOverheadFactor(
+        int chunkSizeBytes = StandardPieceChunkBytes,
+        int framingBytes = BitTorrentPieceFramingBytes,
+        int headerBytes = TcpIpHeaderBytes,
+        int mssBytes = StandardMssBytes)
+    {
+        var overhead = EstimateFramingAndTransportOverhead(chunkSizeBytes, chunkSizeBytes, framingBytes, headerBytes, mssBytes);
+        return (double)overhead / chunkSizeBytes;
+    }
+
+    public static long CalculateWireUsage(long payloadBytes, double overheadFactor)
+    {
+        if (payloadBytes <= 0)
+        {
+            return 0;
+        }
+
+        return (long)Math.Ceiling(payloadBytes * (1.0 + Math.Max(0.0, overheadFactor)));
+    }
+
+    public static long CalculateMaxPayloadAllowance(long wireLimit, double overheadFactor)
+    {
+        if (wireLimit <= 0)
+        {
+            return 0;
+        }
+
+        if (overheadFactor <= 0.0)
+        {
+            return wireLimit;
+        }
+
+        return (long)Math.Floor(wireLimit / (1.0 + overheadFactor));
+    }
+
     private readonly ConcurrentDictionary<int, DateTime> _seedingStartTimes = new();
     private readonly ISpeedDistributionManager _distributionManager;
     private readonly ISpeedScheduler _speedScheduler;
@@ -95,7 +162,16 @@ public class SpeedPolicy : ISpeedPolicy,
         var variationMax = _configService.SpeedVariationMax;
         var thresholdPercent = _configService.DownloadThresholdPercent;
         var threshold = thresholdPercent / 100.0;
+        var effectiveFactor = EffectiveOverheadFactor;
         var maxDownloadSpeed = limits.MaxDownloadSpeed;
+        if (maxDownloadSpeed != SpeedLimits.Unlimited && effectiveFactor > 0)
+        {
+            maxDownloadSpeed = (long)Math.Floor(maxDownloadSpeed / (1.0 + effectiveFactor));
+            if (OutOfBandOverheadBytesPerSec > 0)
+            {
+                maxDownloadSpeed = Math.Max(0L, maxDownloadSpeed - OutOfBandOverheadBytesPerSec);
+            }
+        }
 
         var speeds = (maxDownloadSpeed == SpeedLimits.Unlimited
             ? Enumerable.Repeat(1_000_000_000L, torrents.Count).ToArray()
@@ -178,6 +254,7 @@ public class SpeedPolicy : ISpeedPolicy,
             activePriorityWeights[j] = GetPriorityWeight(torrents[activeTorrentIndices[j]].Priority);
         }
 
+        var effectiveFactor = EffectiveOverheadFactor;
         long[] speeds;
         if (activeCount > 0)
         {
@@ -188,7 +265,16 @@ public class SpeedPolicy : ISpeedPolicy,
             }
             else
             {
-                speeds = _distributionManager.DistributeUploadSpeeds(activeCount, limits.MaxUploadSpeed, activePriorityWeights)
+                var effectiveUploadSpeed = effectiveFactor > 0
+                    ? (long)Math.Floor(limits.MaxUploadSpeed / (1.0 + effectiveFactor))
+                    : limits.MaxUploadSpeed;
+
+                if (OutOfBandOverheadBytesPerSec > 0)
+                {
+                    effectiveUploadSpeed = Math.Max(0L, effectiveUploadSpeed - OutOfBandOverheadBytesPerSec);
+                }
+
+                speeds = _distributionManager.DistributeUploadSpeeds(activeCount, effectiveUploadSpeed, activePriorityWeights)
                     ?? Array.Empty<long>();
             }
         }
@@ -302,15 +388,25 @@ public class SpeedPolicy : ISpeedPolicy,
             }
             else
             {
+                var maxPayloadBytes = effectiveFactor > 0
+                    ? (long)Math.Floor(maxAllowedBytes / (1.0 + effectiveFactor))
+                    : maxAllowedBytes;
+
+                if (OutOfBandOverheadBytesPerSec > 0)
+                {
+                    var oobBytesThisTick = (long)Math.Round(OutOfBandOverheadBytesPerSec * tickInterval.TotalSeconds);
+                    maxPayloadBytes = Math.Max(0L, maxPayloadBytes - oobBytesThisTick);
+                }
+
                 var totalAllocated = 0L;
                 for (var i = 0; i < uploadBytesPerTorrent.Length; i++)
                 {
                     totalAllocated += uploadBytesPerTorrent[i];
                 }
 
-                if (totalAllocated > maxAllowedBytes)
+                if (totalAllocated > maxPayloadBytes)
                 {
-                    var scale = (double)maxAllowedBytes / totalAllocated;
+                    var scale = maxPayloadBytes == 0 ? 0.0 : (double)maxPayloadBytes / totalAllocated;
                     var scaledTotal = 0L;
                     for (var i = 0; i < uploadBytesPerTorrent.Length; i++)
                     {
@@ -318,7 +414,7 @@ public class SpeedPolicy : ISpeedPolicy,
                         scaledTotal += uploadBytesPerTorrent[i];
                     }
 
-                    var remainder = maxAllowedBytes - scaledTotal;
+                    var remainder = maxPayloadBytes - scaledTotal;
                     if (remainder > 0)
                     {
                         var eligibleIndices = Enumerable.Range(0, uploadBytesPerTorrent.Length)
