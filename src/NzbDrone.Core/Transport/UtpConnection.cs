@@ -511,6 +511,36 @@ public class UtpConnection : IUtpConnection
 
         ProcessAck(header.AckNumber);
 
+        var payloadOffset = HeaderSize;
+        if (header.Extension != 0)
+        {
+            var extOffset = HeaderSize;
+            var currentExt = header.Extension;
+
+            while (currentExt != 0 && extOffset + 2 <= data.Length)
+            {
+                var nextExt = data[extOffset];
+                var extLen = data[extOffset + 1];
+                extOffset += 2;
+
+                if (extOffset + extLen > data.Length)
+                {
+                    extOffset = data.Length;
+                    break;
+                }
+
+                if (currentExt == 1)
+                {
+                    ProcessSackBitmask(header.AckNumber, data.AsSpan(extOffset, extLen));
+                }
+
+                extOffset += extLen;
+                currentExt = nextExt;
+            }
+
+            payloadOffset = extOffset;
+        }
+
         if (header.Type == UtpPacketType.Reset)
         {
             IsConnected = false;
@@ -549,13 +579,12 @@ public class UtpConnection : IUtpConnection
 
         if (header.Type == UtpPacketType.Data)
         {
-            var payloadLen = data.Length - HeaderSize;
+            var payloadLen = Math.Max(0, data.Length - payloadOffset);
             lock (_receiveLock)
             {
                 if (payloadLen > 0)
                 {
-                    var payload = new byte[payloadLen];
-                    Array.Copy(data, HeaderSize, payload, 0, payloadLen);
+                    var payload = data.AsSpan(payloadOffset, payloadLen).ToArray();
 
                     if (!_hasReceivedFirstPacket)
                     {
@@ -751,9 +780,10 @@ public class UtpConnection : IUtpConnection
                 if (_duplicateAckCount == 3)
                 {
                     var lostSeq = (ushort)(ackNr + 1);
-                    if (_inFlightPackets.TryGetValue(lostSeq, out var lostPacket))
+                    if (_inFlightPackets.TryGetValue(lostSeq, out var lostPacket) && !lostPacket.FastRetransmitted)
                     {
                         _logger.Debug("Fast Retransmit triggered for packet {0} on 3 duplicate ACKs", lostSeq);
+                        lostPacket.FastRetransmitted = true;
                         lostPacket.Retries++;
                         lostPacket.SentTimestamp = Environment.TickCount64;
                         SendUdpPacket(lostPacket.PacketData, lostPacket.PacketData.Length, _remoteEndpoint);
@@ -790,6 +820,81 @@ public class UtpConnection : IUtpConnection
         if (anyRemoved)
         {
             _ackReceivedEvent.Set();
+        }
+    }
+
+    private void ProcessSackBitmask(ushort ackNr, ReadOnlySpan<byte> bitmask)
+    {
+        var anyRemoved = false;
+        var newlyAckedSeqNrs = new List<ushort>();
+
+        for (var byteIdx = 0; byteIdx < bitmask.Length; byteIdx++)
+        {
+            var b = bitmask[byteIdx];
+            for (var bitIdx = 0; bitIdx < 8; bitIdx++)
+            {
+                if ((b & (1 << bitIdx)) != 0)
+                {
+                    var sackSeq = (ushort)(ackNr + 2 + (byteIdx * 8) + bitIdx);
+                    if (_inFlightPackets.TryRemove(sackSeq, out _))
+                    {
+                        anyRemoved = true;
+                        newlyAckedSeqNrs.Add(sackSeq);
+                        _logger.Trace("SACK acknowledged in-flight packet {0}", sackSeq);
+                    }
+                }
+            }
+        }
+
+        if (anyRemoved)
+        {
+            _ackReceivedEvent.Set();
+        }
+
+        if (newlyAckedSeqNrs.Count > 0 && !_inFlightPackets.IsEmpty)
+        {
+            CheckSackFastRetransmit(newlyAckedSeqNrs);
+        }
+    }
+
+    private void CheckSackFastRetransmit(List<ushort> newlyAckedSeqNrs)
+    {
+        if (_remoteEndpoint == null)
+        {
+            return;
+        }
+
+        var packetsToRetransmit = new List<InFlightPacket>();
+
+        foreach (var inFlight in _inFlightPackets.Values)
+        {
+            foreach (var sackSeq in newlyAckedSeqNrs)
+            {
+                if (IsAhead(sackSeq, inFlight.SequenceNumber))
+                {
+                    inFlight.SackAckedHigherCount++;
+                }
+            }
+
+            if (inFlight.SackAckedHigherCount >= 3 && !inFlight.FastRetransmitted)
+            {
+                inFlight.FastRetransmitted = true;
+                packetsToRetransmit.Add(inFlight);
+            }
+        }
+
+        if (packetsToRetransmit.Count > 0)
+        {
+            packetsToRetransmit.Sort((a, b) => (short)(a.SequenceNumber - b.SequenceNumber));
+            var now = Environment.TickCount64;
+            foreach (var packet in packetsToRetransmit)
+            {
+                _logger.Debug("Fast Retransmit triggered for packet {0} on SACK", packet.SequenceNumber);
+                packet.Retries++;
+                packet.SentTimestamp = now;
+                SendUdpPacket(packet.PacketData, packet.PacketData.Length, _remoteEndpoint);
+                _fastRetransmitCount++;
+            }
         }
     }
 
@@ -951,5 +1056,7 @@ public class UtpConnection : IUtpConnection
         public int PayloadLength { get; set; }
         public long SentTimestamp { get; set; }
         public int Retries { get; set; }
+        public int SackAckedHigherCount { get; set; }
+        public bool FastRetransmitted { get; set; }
     }
 }
