@@ -53,7 +53,13 @@ public class UdpTrackerProvider : ITrackerProvider
             client.Send(announceRequest, announceRequest.Length);
 
             var response = client.Receive(ref endpoint);
-            return ParseAnnounceResponse(response, transactionId);
+            var addressFamily = endpoint.AddressFamily;
+            if (addressFamily != AddressFamily.InterNetworkV6 && uri.HostNameType == UriHostNameType.IPv6)
+            {
+                addressFamily = AddressFamily.InterNetworkV6;
+            }
+
+            return ParseAnnounceResponse(response, transactionId, addressFamily);
         }
         catch (Exception ex)
         {
@@ -188,7 +194,7 @@ public class UdpTrackerProvider : ITrackerProvider
         return packet;
     }
 
-    private static TrackerAnnounceResponse ParseAnnounceResponse(byte[] response, int transactionId)
+    internal static TrackerAnnounceResponse ParseAnnounceResponse(byte[] response, int transactionId, AddressFamily addressFamily = AddressFamily.Unspecified)
     {
         if (response.Length < 20)
         {
@@ -216,11 +222,27 @@ public class UdpTrackerProvider : ITrackerProvider
             Complete = ReadInt32BigEndian(response, 16)
         };
 
-        for (var i = 20; i + 5 < response.Length; i += 6)
+        var remaining = response.Length - 20;
+        var isIPv6 = addressFamily == AddressFamily.InterNetworkV6 ||
+            (remaining > 0 && remaining % 18 == 0 && remaining % 6 != 0);
+
+        if (isIPv6)
         {
-            var ip = $"{response[i]}.{response[i + 1]}.{response[i + 2]}.{response[i + 3]}";
-            var port = (response[i + 4] << 8) | response[i + 5];
-            result.Peers.Add(new TrackerPeer { Ip = ip, Port = port });
+            for (var i = 20; i + 17 < response.Length; i += 18)
+            {
+                var ip = new IPAddress(response.AsSpan(i, 16)).ToString();
+                var port = BinaryPrimitives.ReadUInt16BigEndian(response.AsSpan(i + 16, 2));
+                result.Peers.Add(new TrackerPeer { Ip = ip, Port = port });
+            }
+        }
+        else
+        {
+            for (var i = 20; i + 5 < response.Length; i += 6)
+            {
+                var ip = new IPAddress(response.AsSpan(i, 4)).ToString();
+                var port = BinaryPrimitives.ReadUInt16BigEndian(response.AsSpan(i + 4, 2));
+                result.Peers.Add(new TrackerPeer { Ip = ip, Port = port });
+            }
         }
 
         return result;

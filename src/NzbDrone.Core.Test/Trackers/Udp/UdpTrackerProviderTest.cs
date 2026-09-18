@@ -161,7 +161,7 @@ public class UdpTrackerProviderTest
     {
         var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { new byte[10], 0 });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { new byte[10], 0, AddressFamily.Unspecified });
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.FailureReason, Is.EqualTo("Response too short"));
@@ -177,7 +177,7 @@ public class UdpTrackerProviderTest
         WriteInt32BigEndian(response, 12, 5);
         WriteInt32BigEndian(response, 16, 10);
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0 });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0, AddressFamily.Unspecified });
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Interval, Is.EqualTo(1800));
@@ -199,7 +199,7 @@ public class UdpTrackerProviderTest
         response[24] = (byte)(6881 >> 8);
         response[25] = (byte)(6881 & 0xFF);
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0 });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0, AddressFamily.InterNetwork });
 
         Assert.That(result.Peers.Count, Is.EqualTo(1));
         Assert.That(result.Peers[0].Ip, Is.EqualTo("192.168.1.1"));
@@ -384,7 +384,7 @@ public class UdpTrackerProviderTest
         WriteInt32BigEndian(response, 12, 3);
         WriteInt32BigEndian(response, 16, 7);
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0 });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0, AddressFamily.Unspecified });
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Peers.Count, Is.EqualTo(0));
@@ -417,7 +417,7 @@ public class UdpTrackerProviderTest
         response[30] = (byte)(51413 >> 8);
         response[31] = (byte)(51413 & 0xFF);
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0 });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0, AddressFamily.InterNetwork });
 
         Assert.That(result.Peers.Count, Is.EqualTo(2));
         Assert.That(result.Peers[0].Ip, Is.EqualTo("10.0.0.1"));
@@ -439,10 +439,130 @@ public class UdpTrackerProviderTest
         response[23] = 1;
         response[24] = 0x1A;
 
-        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0 });
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0, AddressFamily.InterNetwork });
 
         Assert.That(result.Success, Is.True);
         Assert.That(result.Peers.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ParseAnnounceResponse_should_parse_ipv6_peers_from_response()
+    {
+        var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
+        var response = new byte[38]; // 20 header + 18 peer
+        WriteInt32BigEndian(response, 0, 1); // ActionAnnounce
+        WriteInt32BigEndian(response, 8, 1800);
+
+        // 2001:db8::1 in bytes (16 bytes)
+        var ipv6Address = IPAddress.Parse("2001:db8::1");
+        ipv6Address.GetAddressBytes().CopyTo(response, 20);
+
+        // Port 51413
+        response[36] = (byte)(51413 >> 8);
+        response[37] = (byte)(51413 & 0xFF);
+
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0, AddressFamily.InterNetworkV6 });
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Peers.Count, Is.EqualTo(1));
+        Assert.That(result.Peers[0].Ip, Is.EqualTo("2001:db8::1"));
+        Assert.That(result.Peers[0].Port, Is.EqualTo(51413));
+    }
+
+    [Test]
+    public void ParseAnnounceResponse_should_parse_multiple_ipv6_peers()
+    {
+        var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
+        var response = new byte[56]; // 20 header + 18 + 18
+        WriteInt32BigEndian(response, 0, 1); // ActionAnnounce
+        WriteInt32BigEndian(response, 8, 1800);
+
+        // Peer 1: 2001:db8::1:51413
+        IPAddress.Parse("2001:db8::1").GetAddressBytes().CopyTo(response, 20);
+        response[36] = (byte)(51413 >> 8);
+        response[37] = (byte)(51413 & 0xFF);
+
+        // Peer 2: fe80::1:8080
+        IPAddress.Parse("fe80::1").GetAddressBytes().CopyTo(response, 38);
+        response[54] = (byte)(8080 >> 8);
+        response[55] = (byte)(8080 & 0xFF);
+
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0, AddressFamily.InterNetworkV6 });
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Peers.Count, Is.EqualTo(2));
+        Assert.That(result.Peers[0].Ip, Is.EqualTo("2001:db8::1"));
+        Assert.That(result.Peers[0].Port, Is.EqualTo(51413));
+        Assert.That(result.Peers[1].Ip, Is.EqualTo("fe80::1"));
+        Assert.That(result.Peers[1].Port, Is.EqualTo(8080));
+    }
+
+    [Test]
+    public void ParseAnnounceResponse_should_skip_partial_ipv6_peer_at_end()
+    {
+        var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
+        var response = new byte[48]; // 20 header + 18 valid peer + 10 partial bytes
+        WriteInt32BigEndian(response, 0, 1); // ActionAnnounce
+        WriteInt32BigEndian(response, 8, 1800);
+
+        IPAddress.Parse("2001:db8::1").GetAddressBytes().CopyTo(response, 20);
+        response[36] = (byte)(51413 >> 8);
+        response[37] = (byte)(51413 & 0xFF);
+
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0, AddressFamily.InterNetworkV6 });
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Peers.Count, Is.EqualTo(1));
+        Assert.That(result.Peers[0].Ip, Is.EqualTo("2001:db8::1"));
+        Assert.That(result.Peers[0].Port, Is.EqualTo(51413));
+    }
+
+    [Test]
+    public void ParseAnnounceResponse_should_handle_boundary_payload_for_ipv6()
+    {
+        var method = typeof(UdpTrackerProvider).GetMethod("ParseAnnounceResponse", BindingFlags.NonPublic | BindingFlags.Static);
+        // Response with only 17 bytes of peer data (less than required 18 bytes for IPv6)
+        var response = new byte[37]; // 20 header + 17 bytes
+        WriteInt32BigEndian(response, 0, 1);
+        WriteInt32BigEndian(response, 8, 1800);
+
+        var result = (TrackerAnnounceResponse)method.Invoke(null, new object[] { response, 0, AddressFamily.InterNetworkV6 });
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Peers.Count, Is.EqualTo(0));
+    }
+
+    [Test]
+    public void ParseAnnounceResponse_should_support_direct_internal_call_for_ipv4_and_ipv6()
+    {
+        var responseV4 = new byte[26];
+        WriteInt32BigEndian(responseV4, 0, 1);
+        WriteInt32BigEndian(responseV4, 8, 1800);
+        responseV4[20] = 192;
+        responseV4[21] = 168;
+        responseV4[22] = 0;
+        responseV4[23] = 10;
+        responseV4[24] = (byte)(6881 >> 8);
+        responseV4[25] = (byte)(6881 & 0xFF);
+
+        var resV4 = UdpTrackerProvider.ParseAnnounceResponse(responseV4, 0);
+        Assert.That(resV4.Success, Is.True);
+        Assert.That(resV4.Peers.Count, Is.EqualTo(1));
+        Assert.That(resV4.Peers[0].Ip, Is.EqualTo("192.168.0.10"));
+        Assert.That(resV4.Peers[0].Port, Is.EqualTo(6881));
+
+        var responseV6 = new byte[38];
+        WriteInt32BigEndian(responseV6, 0, 1);
+        WriteInt32BigEndian(responseV6, 8, 1800);
+        IPAddress.Parse("::1").GetAddressBytes().CopyTo(responseV6, 20);
+        responseV6[36] = (byte)(6881 >> 8);
+        responseV6[37] = (byte)(6881 & 0xFF);
+
+        var resV6 = UdpTrackerProvider.ParseAnnounceResponse(responseV6, 0, AddressFamily.InterNetworkV6);
+        Assert.That(resV6.Success, Is.True);
+        Assert.That(resV6.Peers.Count, Is.EqualTo(1));
+        Assert.That(resV6.Peers[0].Ip, Is.EqualTo("::1"));
+        Assert.That(resV6.Peers[0].Port, Is.EqualTo(6881));
     }
 
     private static TrackerAnnounceRequest CreateRequest()
