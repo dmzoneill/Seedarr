@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -168,85 +167,21 @@ public class CategoryController : RestControllerWithSignalR<CategoryResource, Ca
             return true;
         }
 
-        if (savePath.Contains('\0'))
-        {
-            errorMessage = "Save path cannot contain null bytes.";
-            return false;
-        }
-
-        if (savePath.Contains(".."))
-        {
-            errorMessage = "Save path cannot contain directory traversal sequences ('..').";
-            return false;
-        }
-
-        if (savePath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
-        {
-            errorMessage = "Save path contains invalid path characters.";
-            return false;
-        }
-
-        if (!IsPathRooted(savePath))
-        {
-            errorMessage = "Save path must be an absolute path (e.g. '/downloads/movies' or 'D:\\Downloads\\Movies').";
-            return false;
-        }
-
         try
         {
-            _ = Path.GetFullPath(savePath);
+            CategoryService.ValidateSavePath(savePath);
+            return true;
         }
-        catch (Exception ex)
+        catch (ArgumentException ex)
         {
-            errorMessage = $"Invalid save path format: {ex.Message}";
+            errorMessage = ex.Message;
             return false;
         }
-
-        return true;
-    }
-
-    private static bool IsPathRooted(string path)
-    {
-        if (Path.IsPathRooted(path))
-        {
-            return true;
-        }
-
-        // Support Windows drive roots (e.g. D:\path or C:/path) on non-Windows platforms
-        if (path.Length >= 3 && char.IsLetter(path[0]) && path[1] == ':' && (path[2] == '\\' || path[2] == '/'))
-        {
-            return true;
-        }
-
-        // Support UNC paths (\\server\share) on non-Windows platforms
-        if (path.Length >= 2 && path[0] == '\\' && path[1] == '\\')
-        {
-            return true;
-        }
-
-        return false;
     }
 
     public static string NormalizeSavePath(string path)
     {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return string.Empty;
-        }
-
-        var trimmed = path.Trim();
-        var root = Path.GetPathRoot(trimmed);
-        if (!string.IsNullOrEmpty(root) && string.Equals(trimmed, root, StringComparison.OrdinalIgnoreCase))
-        {
-            return trimmed;
-        }
-
-        if (trimmed.Length == 3 && char.IsLetter(trimmed[0]) && trimmed[1] == ':' && (trimmed[2] == '\\' || trimmed[2] == '/'))
-        {
-            return trimmed;
-        }
-
-        return trimmed.TrimEnd('/', '\\');
+        return CategoryService.NormalizeSavePath(path);
     }
 
     protected override CategoryResource GetResourceById(Category model)

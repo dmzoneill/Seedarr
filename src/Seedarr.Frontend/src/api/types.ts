@@ -1320,6 +1320,7 @@ export interface BulkTorrentActionResource {
   action: string;
   deleteFiles?: boolean;
   categoryId?: number;
+  category?: string;
   tagIds?: number[];
   priority?: number;
   uploadLimit?: number;

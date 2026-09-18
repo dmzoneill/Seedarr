@@ -396,6 +396,142 @@ public class TorrentControllerTest
     }
 
     [Test]
+    public void BulkAction_setCategory_with_string_category_updates_category_and_propagates_limits()
+    {
+        var category = new Category
+        {
+            Id = 5,
+            Name = "Movies",
+            DefaultDownloadLimit = 5000,
+            DefaultUploadLimit = 2000,
+        };
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Torrent 1",
+            DownloadLimit = 0,
+            UploadLimit = -1,
+        };
+
+        _categoryService.GetByName("Movies").Returns(category);
+        _torrentService.Get(1).Returns(torrent);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "setCategory",
+            Category = "Movies",
+            TorrentIds = new List<int> { 1 },
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(torrent.Category, Is.EqualTo("Movies"));
+        Assert.That(torrent.DownloadLimit, Is.EqualTo(5000));
+        Assert.That(torrent.UploadLimit, Is.EqualTo(2000));
+        _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public void BulkAction_setCategory_with_string_category_and_no_matching_category_still_sets_category()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Torrent 1",
+        };
+
+        _categoryService.GetByName("CustomCategory").Returns((Category)null);
+        _torrentService.Get(1).Returns(torrent);
+
+        var resource = new BulkTorrentActionResource
+        {
+            Action = "setCategory",
+            Category = "CustomCategory",
+            TorrentIds = new List<int> { 1 },
+        };
+
+        var result = _controller.BulkAction(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<OkObjectResult>());
+        Assert.That(torrent.Category, Is.EqualTo("CustomCategory"));
+        _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public void Create_with_category_and_no_save_path_resolves_category_save_path()
+    {
+        _configService.TorrentSaveDirectory.Returns("/downloads/default");
+        _categoryService.GetSavePathForCategory("Movies", "/downloads/default").Returns("/downloads/movies");
+        _torrentService.GetByInfoHash(Arg.Any<string>()).Returns((Torrent)null);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
+
+        var resource = new TorrentResource
+        {
+            Name = "Movie Torrent",
+            InfoHash = "1234567890abcdef1234567890abcdef12345678",
+            Category = "Movies",
+            SavePath = null,
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<CreatedResult>());
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Category == "Movies" &&
+            t.SavePath == "/downloads/movies" &&
+            t.SourcePath == "/downloads/movies"));
+    }
+
+    [Test]
+    public void Create_with_custom_save_path_overrides_category_save_path()
+    {
+        _configService.TorrentSaveDirectory.Returns("/downloads/default");
+        _categoryService.GetSavePathForCategory("Movies", "/downloads/default").Returns("/downloads/movies");
+        _torrentService.GetByInfoHash(Arg.Any<string>()).Returns((Torrent)null);
+        _torrentService.Add(Arg.Any<Torrent>()).Returns(callInfo => callInfo.Arg<Torrent>());
+
+        var resource = new TorrentResource
+        {
+            Name = "Movie Torrent",
+            InfoHash = "1234567890abcdef1234567890abcdef12345678",
+            Category = "Movies",
+            SavePath = "/custom/movies/dir",
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<CreatedResult>());
+        _torrentService.Received(1).Add(Arg.Is<Torrent>(t =>
+            t.Category == "Movies" &&
+            t.SavePath == "/custom/movies/dir"));
+    }
+
+    [Test]
+    public void Create_magnet_with_category_and_no_save_path_resolves_category_save_path()
+    {
+        var imported = new Torrent { Id = 1, Name = "Imported Magnet" };
+        _torrentImportService.ImportFromMagnet(Arg.Any<string>()).Returns(imported);
+        _configService.TorrentSaveDirectory.Returns("/downloads/default");
+        _categoryService.GetSavePathForCategory("TV", "/downloads/default").Returns("/downloads/tv");
+
+        var resource = new TorrentResource
+        {
+            MagnetLink = "magnet:?xt=urn:btih:1234567890abcdef1234567890abcdef12345678&dn=Test",
+            Category = "TV",
+            SavePath = null,
+        };
+
+        var result = _controller.Create(resource);
+
+        Assert.That(result.Result, Is.InstanceOf<CreatedResult>());
+        Assert.That(imported.Category, Is.EqualTo("TV"));
+        Assert.That(imported.SavePath, Is.EqualTo("/downloads/tv"));
+        Assert.That(imported.SourcePath, Is.EqualTo("/downloads/tv"));
+        _torrentService.Received(1).Update(imported);
+    }
+
+    [Test]
     public void Handle_rapid_consecutive_torrent_updates_coalesce_into_throttled_broadcasts()
     {
         _signalRBroadcaster.IsConnected.Returns(true);
