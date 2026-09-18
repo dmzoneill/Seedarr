@@ -297,5 +297,129 @@ namespace NzbDrone.Core.Test.Indexers
             var eligibleManual = service.FilterEligibleIndexers(new[] { indexer1, indexer2 }, isManual: true, now: now);
             Assert.That(eligibleManual, Has.Count.EqualTo(2));
         }
+
+        [Test]
+        public void FilterNewReleases_should_return_all_releases_when_repository_is_null()
+        {
+            var service = new RssSyncService();
+            var releases = new List<ReleaseInfo>
+            {
+                new() { Guid = "g1", Title = "Movie 1" },
+                new() { Guid = "g2", Title = "Movie 2" }
+            };
+
+            var result = service.FilterNewReleases(1, releases);
+
+            Assert.That(result, Has.Count.EqualTo(2));
+        }
+
+        [Test]
+        public void FilterNewReleases_should_filter_out_releases_matching_seen_guids()
+        {
+            var repo = Substitute.For<IRssSeenReleaseRepository>();
+            repo.GetSeenGuids(1).Returns(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "seen-guid" });
+            repo.GetSeenInfoHashes(1).Returns(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+            var service = new RssSyncService(seenReleaseRepository: repo);
+            var releases = new List<ReleaseInfo>
+            {
+                new() { Guid = "seen-guid", Title = "Old Release" },
+                new() { Guid = "new-guid", Title = "New Release" }
+            };
+
+            var result = service.FilterNewReleases(1, releases);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].Guid, Is.EqualTo("new-guid"));
+        }
+
+        [Test]
+        public void FilterNewReleases_should_filter_out_releases_matching_seen_infohashes_case_insensitively()
+        {
+            var repo = Substitute.For<IRssSeenReleaseRepository>();
+            repo.GetSeenGuids(1).Returns(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            repo.GetSeenInfoHashes(1).Returns(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "0123456789abcdef0123456789abcdef01234567" });
+
+            var service = new RssSyncService(seenReleaseRepository: repo);
+            var releases = new List<ReleaseInfo>
+            {
+                new() { Guid = "guid-1", InfoHash = "0123456789ABCDEF0123456789ABCDEF01234567", Title = "Old Hash" },
+                new() { Guid = "guid-2", InfoHash = "fedcba9876543210fedcba9876543210fedcba98", Title = "New Hash" }
+            };
+
+            var result = service.FilterNewReleases(1, releases);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].Guid, Is.EqualTo("guid-2"));
+        }
+
+        [Test]
+        public void FilterNewReleases_should_deduplicate_items_within_same_batch()
+        {
+            var repo = Substitute.For<IRssSeenReleaseRepository>();
+            repo.GetSeenGuids(1).Returns(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            repo.GetSeenInfoHashes(1).Returns(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+            var service = new RssSyncService(seenReleaseRepository: repo);
+            var releases = new List<ReleaseInfo>
+            {
+                new() { Guid = "dup-guid", Title = "Release First" },
+                new() { Guid = "dup-guid", Title = "Release Duplicate" },
+                new() { Guid = "unique-1", InfoHash = "hash1", Title = "Release 1" },
+                new() { Guid = "unique-2", InfoHash = "hash1", Title = "Release 2 Duplicate Hash" }
+            };
+
+            var result = service.FilterNewReleases(1, releases);
+
+            Assert.That(result, Has.Count.EqualTo(2));
+            Assert.That(result[0].Title, Is.EqualTo("Release First"));
+            Assert.That(result[1].Title, Is.EqualTo("Release 1"));
+        }
+
+        [Test]
+        public void FilterReleases_with_indexerId_should_filter_new_releases_before_evaluating_rules()
+        {
+            var repo = Substitute.For<IRssSeenReleaseRepository>();
+            repo.GetSeenGuids(1).Returns(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "seen-guid" });
+            repo.GetSeenInfoHashes(1).Returns(new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+
+            var service = new RssSyncService(seenReleaseRepository: repo);
+            var rule = new RssRule
+            {
+                Name = "Match All",
+                IsEnabled = true,
+                AllowUnknownSeeders = true
+            };
+
+            var releases = new List<ReleaseInfo>
+            {
+                new() { Guid = "seen-guid", Title = "Seen Movie" },
+                new() { Guid = "new-guid", Title = "New Movie" }
+            };
+
+            var matched = service.FilterReleases(1, releases, new[] { rule });
+
+            Assert.That(matched, Has.Count.EqualTo(1));
+            Assert.That(matched[0].Guid, Is.EqualTo("new-guid"));
+        }
+
+        [Test]
+        public void RecordSeen_and_PurgeSeenReleases_should_delegate_to_seen_repository()
+        {
+            var repo = Substitute.For<IRssSeenReleaseRepository>();
+            var service = new RssSyncService(seenReleaseRepository: repo);
+            var release = new ReleaseInfo { Guid = "g1" };
+
+            service.RecordSeen(1, release, RssSeenStatus.Grabbed, 10);
+            repo.Received(1).MarkSeen(1, release, RssSeenStatus.Grabbed, 10);
+
+            var batch = new List<ReleaseInfo> { release };
+            service.RecordSeenBatch(1, batch, RssSeenStatus.Ignored);
+            repo.Received(1).MarkSeenBatch(1, batch, RssSeenStatus.Ignored);
+
+            repo.PurgeOlderThan(TimeSpan.FromDays(14)).Returns(5);
+            var purged = service.PurgeSeenReleases(TimeSpan.FromDays(14));
+            Assert.That(purged, Is.EqualTo(5));
+        }
     }
 }
