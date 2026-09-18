@@ -459,4 +459,162 @@ public class TransmissionRpcControllerTest
         Assert.That(args["seedRatioLimit"], Is.EqualTo(3.25));
         Assert.That(args["seedRatioLimited"], Is.EqualTo(true));
     }
+    [Test]
+    public async Task HandleRpc_TorrentAdd_DuplicateTorrent_Returns_Matching_Duplicate_Not_Unrelated_First_Torrent()
+    {
+        var torrent1 = new Torrent
+        {
+            Id = 1,
+            Name = "Unrelated First Torrent",
+            InfoHash = "1111111111111111111111111111111111111111",
+        };
+        var torrent2 = new Torrent
+        {
+            Id = 2,
+            Name = "Target Duplicate Torrent",
+            InfoHash = "2222222222222222222222222222222222222222",
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent1, torrent2 });
+        _torrentService.GetByInfoHash("2222222222222222222222222222222222222222").Returns(torrent2);
+        _torrentImportService.ImportFromMagnet(Arg.Is<string>(s => s.Contains("2222222222222222222222222222222222222222")))
+            .Returns(_ => throw new InvalidOperationException("Torrent with infohash 2222222222222222222222222222222222222222 already exists"));
+
+        var magnet = "magnet:?xt=urn:btih:2222222222222222222222222222222222222222&dn=TargetDuplicate";
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-add",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["filename"] = JsonDocument.Parse($""{magnet}"").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+
+        var args = response.Arguments as Dictionary<string, object>;
+        Assert.That(args, Is.Not.Null);
+        var duplicate = args["torrent-duplicate"] as Dictionary<string, object>;
+        Assert.That(duplicate, Is.Not.Null);
+        Assert.That(duplicate["id"], Is.EqualTo(2));
+        Assert.That(duplicate["name"], Is.EqualTo("Target Duplicate Torrent"));
+        Assert.That(duplicate["hashString"], Is.EqualTo("2222222222222222222222222222222222222222"));
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentSet_WithEmptyLabelsArray_Clears_Labels_And_TagIds()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Label Test",
+            Label = "movies,hd",
+            Category = "movies",
+            TagIds = new List<int> { 10, 20 },
+        };
+
+        _torrentService.Get(1).Returns(torrent);
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-set",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["ids"] = JsonDocument.Parse("[1]").RootElement,
+                ["labels"] = JsonDocument.Parse("[]").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+
+        Assert.That(torrent.Label, Is.Empty);
+        Assert.That(torrent.TagIds, Is.Empty);
+        _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentGet_Returns_SavePath_As_DownloadDir_When_SavePath_Set_And_SourcePath_Empty()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "SavePath Test",
+            SavePath = "/media/torrents/custom_save",
+            SourcePath = null,
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-get",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["fields"] = JsonDocument.Parse("["id", "downloadDir"]").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+
+        var args = response.Arguments as Dictionary<string, object>;
+        Assert.That(args, Is.Not.Null);
+        var torrents = args["torrents"] as List<Dictionary<string, object>>;
+        Assert.That(torrents, Is.Not.Null);
+        Assert.That(torrents.Count, Is.EqualTo(1));
+        Assert.That(torrents[0]["downloadDir"], Is.EqualTo("/media/torrents/custom_save"));
+    }
+
+    [Test]
+    public async Task HandleRpc_TorrentGet_Returns_Category_In_Labels_When_Label_Is_Empty()
+    {
+        var torrent = new Torrent
+        {
+            Id = 1,
+            Name = "Category Fallback Test",
+            Label = null,
+            Category = "sonarr-tv",
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var request = new TransmissionRpcRequest
+        {
+            Method = "torrent-get",
+            Arguments = new Dictionary<string, JsonElement>
+            {
+                ["fields"] = JsonDocument.Parse("["id", "labels"]").RootElement,
+            },
+        };
+
+        var result = await _controller.HandleRpc(request);
+        Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        var ok = (OkObjectResult)result;
+        var response = ok.Value as TransmissionRpcResponse;
+        Assert.That(response, Is.Not.Null);
+        Assert.That(response.Result, Is.EqualTo("success"));
+
+        var args = response.Arguments as Dictionary<string, object>;
+        Assert.That(args, Is.Not.Null);
+        var torrents = args["torrents"] as List<Dictionary<string, object>>;
+        Assert.That(torrents, Is.Not.Null);
+        Assert.That(torrents.Count, Is.EqualTo(1));
+        var labels = torrents[0]["labels"] as List<string>;
+        Assert.That(labels, Is.Not.Null);
+        Assert.That(labels, Is.EqualTo(new List<string> { "sonarr-tv" }));
+    }
 }
