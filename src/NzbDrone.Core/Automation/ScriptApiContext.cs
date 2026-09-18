@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
+using NLog;
 using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Automation;
@@ -9,17 +10,90 @@ namespace NzbDrone.Core.Automation;
 #pragma warning disable SA1300 // Element should begin with upper-case letter (DSL wrapper)
 public class ScriptApiContext
 {
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
+    private static readonly HashSet<string> DisallowedEndpointPrefixes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "config",
+        "auth",
+        "identityprovider",
+        "customscript",
+        "backup",
+        "filesystem",
+        "directory",
+        "setup",
+        "update",
+        "automation",
+        "system/restart",
+        "system/shutdown",
+    };
+
     private readonly IConfigFileProvider? _configFileProvider;
     private readonly ScriptHttpContext _http;
 
     public ScriptApiContext(IConfigFileProvider? configFileProvider = null, ScriptHttpContext? http = null)
     {
         _configFileProvider = configFileProvider;
-        _http = http ?? new ScriptHttpContext();
+        _http = http ?? new ScriptHttpContext(allowLoopback: true);
+    }
+
+    public static string NormalizeApiPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return string.Empty;
+        }
+
+        var cleanPath = path.Trim().TrimStart('/');
+        if (cleanPath.StartsWith("api/v1/", StringComparison.OrdinalIgnoreCase))
+        {
+            cleanPath = cleanPath.Substring(7);
+        }
+
+        return cleanPath;
+    }
+
+    public static bool IsDisallowedEndpoint(string path)
+    {
+        var cleanPath = NormalizeApiPath(path);
+        if (string.IsNullOrWhiteSpace(cleanPath))
+        {
+            return true;
+        }
+
+        if (cleanPath.Contains(".."))
+        {
+            return true;
+        }
+
+        foreach (var prefix in DisallowedEndpointPrefixes)
+        {
+            if (cleanPath.Equals(prefix, StringComparison.OrdinalIgnoreCase) ||
+                cleanPath.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void ValidateAndAuditRequest(string method, string path)
+    {
+        var cleanPath = NormalizeApiPath(path);
+
+        if (IsDisallowedEndpoint(cleanPath))
+        {
+            _logger.Warn("Blocked unauthorized automation script attempt to access administrative API endpoint: {0} {1}", method, path);
+            throw new UnauthorizedAccessException($"Access to administrative endpoint '{cleanPath}' is disallowed in automation scripts.");
+        }
+
+        _logger.Info("Automation script API dispatch: {0} {1}", method, cleanPath);
     }
 
     public object get(string path, object? options = null)
     {
+        ValidateAndAuditRequest("GET", path);
         var url = BuildApiUrl(path);
         var opts = AttachAuthHeaders(options);
         return _http.get(url, opts);
@@ -27,6 +101,7 @@ public class ScriptApiContext
 
     public object post(string path, object? body = null, object? options = null)
     {
+        ValidateAndAuditRequest("POST", path);
         var url = BuildApiUrl(path);
         var opts = AttachAuthHeaders(options);
         return _http.post(url, body, opts);
@@ -34,6 +109,7 @@ public class ScriptApiContext
 
     public object put(string path, object? body = null, object? options = null)
     {
+        ValidateAndAuditRequest("PUT", path);
         var url = BuildApiUrl(path);
         var opts = AttachAuthHeaders(options);
         return _http.put(url, body, opts);
@@ -41,6 +117,7 @@ public class ScriptApiContext
 
     public object delete(string path, object? options = null)
     {
+        ValidateAndAuditRequest("DELETE", path);
         var url = BuildApiUrl(path);
         var opts = AttachAuthHeaders(options);
         return _http.delete(url, opts);
@@ -112,13 +189,17 @@ public class ScriptApiContext
             }
         }
 
+        headers["X-Automation-Script"] = "true";
+        headers["X-Seedarr-Audited"] = "automation-engine";
+
         var apiKey = _configFileProvider?.ApiKey;
-        if (!string.IsNullOrWhiteSpace(apiKey))
+        if (!string.IsNullOrWhiteSpace(apiKey) && !headers.ContainsKey("X-Api-Key") && !headers.ContainsKey("Authorization"))
         {
             headers["X-Api-Key"] = apiKey;
         }
 
         opts["headers"] = headers;
+        opts["allowLoopback"] = true;
         return opts;
     }
 }

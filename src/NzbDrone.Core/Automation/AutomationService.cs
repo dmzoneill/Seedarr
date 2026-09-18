@@ -44,6 +44,7 @@ public class AutomationService : IAutomationService
     private readonly ITrackerBoostService? _trackerBoostService;
     private readonly ITrackerAnnounceService? _trackerAnnounceService;
     private readonly IConnectionManager? _connectionManager;
+    private readonly IConfigService? _configService;
     private readonly Logger _logger;
     private readonly JintScriptRunner _jintRunner;
     private readonly YamlScriptRunner _yamlRunner;
@@ -61,7 +62,8 @@ public class AutomationService : IAutomationService
         IArchiveExtractorService? archiveExtractorService = null,
         ITrackerBoostService? trackerBoostService = null,
         ITrackerAnnounceService? trackerAnnounceService = null,
-        IConnectionManager? connectionManager = null)
+        IConnectionManager? connectionManager = null,
+        IConfigService? configService = null)
     {
         _scriptRepository = scriptRepository;
         _torrentRepository = torrentRepository;
@@ -75,8 +77,9 @@ public class AutomationService : IAutomationService
         _trackerBoostService = trackerBoostService;
         _trackerAnnounceService = trackerAnnounceService;
         _connectionManager = connectionManager;
+        _configService = configService;
         _logger = LogManager.GetCurrentClassLogger();
-        _jintRunner = new JintScriptRunner(commandQueue, configFileProvider);
+        _jintRunner = new JintScriptRunner(commandQueue, configFileProvider, configService);
         _yamlRunner = new YamlScriptRunner(commandQueue);
     }
 
@@ -223,7 +226,7 @@ public class AutomationService : IAutomationService
                 foreach (var scriptToRun in result.ScriptsToRun)
                 {
                     var argsStr = scriptToRun.Arguments != null && scriptToRun.Arguments.Count > 0
-                        ? string.Join(" ", scriptToRun.Arguments)
+                        ? string.Join(" ", scriptToRun.Arguments.Select(SanitizeShellArgument))
                         : null;
                     Task.Run(async () =>
                     {
@@ -922,5 +925,21 @@ public class AutomationService : IAutomationService
             log.AsSpan(0, headLength),
             notice,
             log.AsSpan(log.Length - tailLength, tailLength));
+    }
+
+    private static string SanitizeShellArgument(string arg)
+    {
+        if (string.IsNullOrEmpty(arg))
+        {
+            return "\"\"";
+        }
+
+        var clean = arg.Replace("\0", string.Empty).Replace("\r", string.Empty).Replace("\n", " ");
+        if (clean.Contains(' ') || clean.Contains('\t') || clean.Contains('"'))
+        {
+            return $"\"{clean.Replace("\"", "\\\"")}\"";
+        }
+
+        return clean;
     }
 }

@@ -1,8 +1,9 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.Json;
-using System.Threading;
+using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Core.Messaging.Commands;
 
@@ -11,21 +12,40 @@ namespace NzbDrone.Core.Automation;
 #pragma warning disable SA1300 // Element should begin with upper-case letter (DSL wrapper)
 public class ScriptSystemContext
 {
+    public static readonly HashSet<string> AllowedScriptExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".sh", ".bash", ".py", ".pyw", ".ps1", ".rb", ".js", ".cmd", ".bat"
+    };
+
     private readonly IManageCommandQueue? _commandQueue;
     private readonly AutomationExecutionResult? _result;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+    private readonly bool _allowExternalScripts;
+    private readonly string? _allowedScriptDirectory;
+
+    public bool AllowExternalScripts => _allowExternalScripts;
+    public string? AllowedScriptDirectory => _allowedScriptDirectory;
 
     public long diskFreeSpace { get; set; }
     public bool vpnActive { get; set; } = true;
     public bool isPortForwarded { get; set; } = true;
 
-    public ScriptSystemContext(IManageCommandQueue? commandQueue = null, AutomationExecutionResult? result = null, long freeSpace = 0, bool isVpnActive = true, bool isPortForward = true)
+    public ScriptSystemContext(
+        IManageCommandQueue? commandQueue = null,
+        AutomationExecutionResult? result = null,
+        long freeSpace = 0,
+        bool isVpnActive = true,
+        bool isPortForward = true,
+        bool allowExternalScripts = false,
+        string? allowedScriptDirectory = null)
     {
         _commandQueue = commandQueue;
         _result = result;
         diskFreeSpace = freeSpace;
         vpnActive = isVpnActive;
         isPortForwarded = isPortForward;
+        _allowExternalScripts = allowExternalScripts;
+        _allowedScriptDirectory = allowedScriptDirectory;
     }
 
     public object? runCommand(string commandName, object? payload = null)
@@ -93,9 +113,46 @@ public class ScriptSystemContext
 
     public void runScript(string path, object? args = null, int timeoutSeconds = 60)
     {
+        if (!_allowExternalScripts)
+        {
+            _logger.Warn("Blocked external script execution attempt: feature is disabled (AllowExternalScriptsInAutomation=false)");
+            throw new InvalidOperationException("External script execution is disabled in automation scripts.");
+        }
+
         if (string.IsNullOrWhiteSpace(path))
         {
-            return;
+            throw new ArgumentException("Script path cannot be empty.", nameof(path));
+        }
+
+        var trimmedPath = path.Trim();
+
+        if (trimmedPath.Contains(".."))
+        {
+            _logger.Warn("Blocked script execution with path traversal: {0}", trimmedPath);
+            throw new ArgumentException("Path traversal sequence '..' is prohibited in script path.", nameof(path));
+        }
+
+        if (trimmedPath.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        {
+            throw new ArgumentException("Script path contains invalid path characters.", nameof(path));
+        }
+
+        if (!string.IsNullOrWhiteSpace(_allowedScriptDirectory))
+        {
+            var fullScriptDir = Path.GetFullPath(_allowedScriptDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            var fullPath = Path.GetFullPath(trimmedPath);
+            if (!fullPath.StartsWith(fullScriptDir, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.Warn("Blocked script execution outside allowed directory '{0}': {1}", _allowedScriptDirectory, trimmedPath);
+                throw new ArgumentException($"Script path must be within the configured script directory '{_allowedScriptDirectory}'.", nameof(path));
+            }
+        }
+
+        var ext = Path.GetExtension(trimmedPath);
+        if (string.IsNullOrEmpty(ext) || !AllowedScriptExtensions.Contains(ext))
+        {
+            _logger.Warn("Blocked script execution with disallowed extension: {0}", trimmedPath);
+            throw new ArgumentException($"Script execution restricted to scripts with allowed extensions ({string.Join(", ", AllowedScriptExtensions)}).", nameof(path));
         }
 
         var argList = new List<string>();
@@ -105,23 +162,37 @@ public class ScriptSystemContext
             {
                 if (item != null)
                 {
-                    argList.Add(item.ToString()!);
+                    argList.Add(SanitizeArgument(item.ToString()!));
                 }
             }
         }
         else if (args is string argStr)
         {
-            argList.Add(argStr);
+            argList.Add(SanitizeArgument(argStr));
         }
+
+        var clampedTimeout = Math.Clamp(timeoutSeconds, 1, 300);
 
         _result?.ScriptsToRun.Add(new CustomScriptPayload
         {
-            Path = path.Trim(),
+            Path = trimmedPath,
             Arguments = argList,
-            TimeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60,
+            TimeoutSeconds = clampedTimeout,
         });
 
-        _logger.Info("Queued external script execution '{0}' from automation script", path);
+        _logger.Info("Queued external script execution '{0}' from automation script", trimmedPath);
+    }
+
+    private static string SanitizeArgument(string arg)
+    {
+        if (string.IsNullOrEmpty(arg))
+        {
+            return string.Empty;
+        }
+
+        return arg.Replace("\0", string.Empty)
+            .Replace("\r", string.Empty)
+            .Replace("\n", " ");
     }
 
     public void delay(int seconds)
@@ -131,9 +202,12 @@ public class ScriptSystemContext
 
     public void sleep(int seconds)
     {
-        var clamped = Math.Clamp(seconds, 1, 30);
-        _logger.Info("Automation script sleeping for {0} seconds", clamped);
-        Thread.Sleep(clamped * 1000);
+        var clamped = Math.Clamp(seconds, 0, 2);
+        if (clamped > 0)
+        {
+            _logger.Info("Automation script sleeping for {0} seconds", clamped);
+            Task.Delay(TimeSpan.FromSeconds(clamped)).Wait();
+        }
     }
 
     public void log(string message, string level = "info")
