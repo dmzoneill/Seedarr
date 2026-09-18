@@ -521,8 +521,7 @@ public class DownloadHistoryService : IDownloadHistoryService, IHandle<TorrentAd
             DownloadUrl = entry.DownloadUrl
         };
 
-        var all = _torrentRepository.All().ToList();
-        torrent.SortOrder = all.Count > 0 ? all.Max(t => t.SortOrder) + 1 : 0;
+        torrent.SortOrder = _torrentRepository.GetNextSortOrder();
 
         var added = _torrentRepository.Insert(torrent);
 

@@ -775,7 +775,7 @@ public class CategoryService : ICategoryService
 
         var list = allTorrents.ToList();
         var activeTorrents = list.Where(t => t.Status == TorrentStatus.Downloading).ToList();
-        var queuedTorrents = list.Where(t => t.Status == TorrentStatus.Queued).OrderBy(t => t.SortOrder).ToList();
+        var queuedTorrents = list.Where(t => t.Status == TorrentStatus.Queued).OrderBy(t => t.SortOrder).ThenBy(t => t.Id).ToList();
 
         return EvaluateDownloadQueue(queuedTorrents, activeTorrents, globalMaxActiveDownloads);
     }
