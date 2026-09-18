@@ -14,12 +14,9 @@ public interface ITrackerBoostTrackerRepository : IBasicRepository<TrackerBoostT
 
 public class TrackerBoostTrackerRepository : BasicRepository<TrackerBoostTracker>, ITrackerBoostTrackerRepository
 {
-    private readonly IDatabase _database;
-
     public TrackerBoostTrackerRepository(IDatabase database)
         : base(database)
     {
-        _database = database;
     }
 
     public TrackerBoostTracker FindByUrl(string url)
@@ -29,26 +26,26 @@ public class TrackerBoostTrackerRepository : BasicRepository<TrackerBoostTracker
             return null;
         }
 
-        using var connection = _database.OpenConnection();
-        return connection.QueryFirstOrDefault<TrackerBoostTracker>(
-            $"SELECT * FROM \"{_table}\" WHERE LOWER(\"Url\") = LOWER(@Url)",
-            new { Url = url.Trim() });
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<TrackerBoostTracker>(
+                $"SELECT * FROM \"{_table}\" WHERE LOWER(\"Url\") = LOWER(@Url)",
+                new { Url = url.Trim() }));
     }
 
     public List<TrackerBoostTracker> GetAliveTrackers()
     {
-        using var connection = _database.OpenConnection();
-        return connection.Query<TrackerBoostTracker>(
-            $"SELECT * FROM \"{_table}\" WHERE \"Enabled\" = 1 AND (\"Status\" = 1 OR \"Status\" = 2) ORDER BY \"LatencyMs\" ASC")
-            .ToList();
+        return QueryWithRetry(connection =>
+            connection.Query<TrackerBoostTracker>(
+                $"SELECT * FROM \"{_table}\" WHERE \"Enabled\" = 1 AND (\"Status\" = 1 OR \"Status\" = 2) ORDER BY \"LatencyMs\" ASC")
+                .ToList());
     }
 
     public List<TrackerBoostTracker> GetBySource(TrackerSourceType source)
     {
-        using var connection = _database.OpenConnection();
-        return connection.Query<TrackerBoostTracker>(
-            $"SELECT * FROM \"{_table}\" WHERE \"Source\" = @Source ORDER BY \"Id\" DESC",
-            new { Source = (int)source })
-            .ToList();
+        return QueryWithRetry(connection =>
+            connection.Query<TrackerBoostTracker>(
+                $"SELECT * FROM \"{_table}\" WHERE \"Source\" = @Source ORDER BY \"Id\" DESC",
+                new { Source = (int)source })
+                .ToList());
     }
 }

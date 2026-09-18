@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using Dapper;
 using Microsoft.Data.Sqlite;
+using Npgsql;
 using Polly;
 using Polly.Retry;
 
@@ -25,8 +27,10 @@ public interface IBasicRepository<TModel>
 public class BasicRepository<TModel> : IBasicRepository<TModel>
     where TModel : ModelBase, new()
 {
-    protected static readonly RetryPolicy RetryPolicy = Policy
+    protected internal static readonly RetryPolicy RetryPolicy = Policy
         .Handle<SqliteException>(ex => ex.SqliteErrorCode is 5 or 6)
+        .Or<PostgresException>(ex => ex.SqlState is "40001" or "40P01" or "08000" or "08006" || ex.IsTransient)
+        .Or<NpgsqlException>(ex => ex.IsTransient)
         .WaitAndRetry(new[]
         {
             TimeSpan.FromMilliseconds(50),
@@ -47,32 +51,42 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
         _table = TableMapping.GetTableName(typeof(TModel));
     }
 
-    public IEnumerable<TModel> All()
+    protected TResult QueryWithRetry<TResult>(Func<IDbConnection, TResult> query)
     {
         return RetryPolicy.Execute(() =>
         {
             using var connection = _database.OpenConnection();
-            return connection.Query<TModel>($"SELECT * FROM \"{_table}\"");
+            return query(connection);
         });
+    }
+
+    protected void ExecuteWithRetry(Action<IDbConnection> action)
+    {
+        RetryPolicy.Execute(() =>
+        {
+            using var connection = _database.OpenConnection();
+            action(connection);
+        });
+    }
+
+    public IEnumerable<TModel> All()
+    {
+        return QueryWithRetry(connection =>
+            connection.Query<TModel>($"SELECT * FROM \"{_table}\""));
     }
 
     public TModel Get(int id)
     {
-        return RetryPolicy.Execute(() =>
-        {
-            using var connection = _database.OpenConnection();
-            return connection.QueryFirstOrDefault<TModel>(
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<TModel>(
                 $"SELECT * FROM \"{_table}\" WHERE \"Id\" = @Id",
-                new { Id = id });
-        });
+                new { Id = id }));
     }
 
     public TModel Insert(TModel model)
     {
-        return RetryPolicy.Execute(() =>
+        return QueryWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
-
             if (_database.DatabaseType == DatabaseType.SQLite)
             {
                 var id = connection.ExecuteScalar<int>(
@@ -99,9 +113,8 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
             return;
         }
 
-        RetryPolicy.Execute(() =>
+        ExecuteWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
             try
             {
@@ -140,9 +153,8 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
 
     public TModel Update(TModel model)
     {
-        return RetryPolicy.Execute(() =>
+        return QueryWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
             connection.Execute(
                 TableMapping.GetUpdateSql<TModel>(_table, model),
                 model);
@@ -158,9 +170,8 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
             return;
         }
 
-        RetryPolicy.Execute(() =>
+        ExecuteWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
             try
             {
@@ -188,9 +199,8 @@ public class BasicRepository<TModel> : IBasicRepository<TModel>
 
     public virtual void Delete(int id)
     {
-        RetryPolicy.Execute(() =>
+        ExecuteWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
             connection.Execute(
                 $"DELETE FROM \"{_table}\" WHERE \"Id\" = @Id",
                 new { Id = id });

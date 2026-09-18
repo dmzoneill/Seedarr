@@ -6,13 +6,11 @@ namespace NzbDrone.Core.MediaEnrichment;
 
 public class TorrentMediaMetadataRepository : BasicRepository<TorrentMediaMetadata>, ITorrentMediaMetadataRepository
 {
-    private readonly IDatabase _database;
     private readonly string _upsertSql;
 
     public TorrentMediaMetadataRepository(IDatabase database)
         : base(database)
     {
-        _database = database;
         _upsertSql = $@"
 INSERT INTO ""{_table}"" (
     ""TorrentId"", ""ArrType"", ""ArrMediaId"", ""Title"", ""Year"", ""Overview"",
@@ -71,24 +69,18 @@ RETURNING ""Id"";";
 
     public TorrentMediaMetadata GetByTorrentId(int torrentId)
     {
-        return RetryPolicy.Execute(() =>
-        {
-            using var connection = _database.OpenConnection();
-            return connection.QueryFirstOrDefault<TorrentMediaMetadata>(
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<TorrentMediaMetadata>(
                 $"SELECT * FROM \"{_table}\" WHERE \"TorrentId\" = @TorrentId",
-                new { TorrentId = torrentId });
-        });
+                new { TorrentId = torrentId }));
     }
 
     public void DeleteByTorrentId(int torrentId)
     {
-        RetryPolicy.Execute(() =>
-        {
-            using var connection = _database.OpenConnection();
+        ExecuteWithRetry(connection =>
             connection.Execute(
                 $"DELETE FROM \"{_table}\" WHERE \"TorrentId\" = @TorrentId",
-                new { TorrentId = torrentId });
-        });
+                new { TorrentId = torrentId }));
     }
 
     public TorrentMediaMetadata Upsert(TorrentMediaMetadata metadata)
@@ -108,9 +100,8 @@ RETURNING ""Id"";";
             metadata.Title = string.Empty;
         }
 
-        return RetryPolicy.Execute(() =>
+        return QueryWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
             var id = connection.ExecuteScalar<int>(_upsertSql, metadata);
             if (id > 0)
             {

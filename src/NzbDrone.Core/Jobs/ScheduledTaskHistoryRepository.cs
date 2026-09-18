@@ -9,12 +9,9 @@ namespace NzbDrone.Core.Jobs;
 
 public class ScheduledTaskHistoryRepository : BasicRepository<ScheduledTaskHistory>, IScheduledTaskHistoryRepository
 {
-    private readonly IDatabase _database;
-
     public ScheduledTaskHistoryRepository(IDatabase database)
         : base(database)
     {
-        _database = database;
     }
 
     public List<ScheduledTaskHistory> GetByTaskId(int taskId, int limit = 50)
@@ -24,13 +21,10 @@ public class ScheduledTaskHistoryRepository : BasicRepository<ScheduledTaskHisto
             limit = 50;
         }
 
-        return RetryPolicy.Execute(() =>
-        {
-            using var connection = _database.OpenConnection();
-            return connection.Query<ScheduledTaskHistory>(
+        return QueryWithRetry(connection =>
+            connection.Query<ScheduledTaskHistory>(
                 $"SELECT * FROM \"{_table}\" WHERE \"TaskId\" = @TaskId ORDER BY \"StartedAt\" DESC, \"Id\" DESC LIMIT @Limit",
-                new { TaskId = taskId, Limit = limit }).ToList();
-        });
+                new { TaskId = taskId, Limit = limit }).ToList());
     }
 
     public List<ScheduledTaskHistory> GetByTypeName(string typeName, int limit = 50)
@@ -45,9 +39,8 @@ public class ScheduledTaskHistoryRepository : BasicRepository<ScheduledTaskHisto
             limit = 50;
         }
 
-        return RetryPolicy.Execute(() =>
+        return QueryWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
             var shortPattern = "%." + typeName.Trim();
             return connection.Query<ScheduledTaskHistory>(
                 $"SELECT * FROM \"{_table}\" WHERE \"TypeName\" = @TypeName OR \"TypeName\" LIKE @ShortPattern ORDER BY \"StartedAt\" DESC, \"Id\" DESC LIMIT @Limit",
@@ -62,21 +55,19 @@ public class ScheduledTaskHistoryRepository : BasicRepository<ScheduledTaskHisto
 
     public void PurgeOldHistory(int retainCount, DateTime olderThan)
     {
-        RetryPolicy.Execute(() =>
+        ExecuteWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
-
             if (olderThan > DateTime.MinValue)
             {
                 while (true)
                 {
                     var rows = connection.Execute(
                         $@"DELETE FROM ""{_table}""
-                           WHERE ""Id"" IN (
-                               SELECT ""Id"" FROM ""{_table}""
-                               WHERE ""StartedAt"" < @OlderThan
-                               LIMIT 500
-                           )",
+                        WHERE ""Id"" IN (
+                            SELECT ""Id"" FROM ""{_table}""
+                            WHERE ""StartedAt"" < @OlderThan
+                            LIMIT 500
+                        )",
                         new { OlderThan = olderThan });
 
                     if (rows == 0)
@@ -94,14 +85,14 @@ public class ScheduledTaskHistoryRepository : BasicRepository<ScheduledTaskHisto
                 {
                     var rows = connection.Execute(
                         $@"DELETE FROM ""{_table}""
-                           WHERE ""Id"" IN (
-                               SELECT ""Id"" FROM (
-                                   SELECT ""Id"", ROW_NUMBER() OVER (PARTITION BY ""TypeName"" ORDER BY ""StartedAt"" DESC, ""Id"" DESC) AS rn
-                                   FROM ""{_table}""
-                               ) sub
-                               WHERE sub.rn > @RetainCount
-                               LIMIT 500
-                           )",
+                        WHERE ""Id"" IN (
+                            SELECT ""Id"" FROM (
+                                SELECT ""Id"", ROW_NUMBER() OVER (PARTITION BY ""TypeName"" ORDER BY ""StartedAt"" DESC, ""Id"" DESC) AS rn
+                                FROM ""{_table}""
+                            ) sub
+                            WHERE sub.rn > @RetainCount
+                            LIMIT 500
+                        )",
                         new { RetainCount = retainCount });
 
                     if (rows == 0)

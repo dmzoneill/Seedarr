@@ -12,19 +12,16 @@ public interface INotificationRepository : IProviderRepository<NotificationDefin
 
 public class NotificationRepository : ProviderRepository<NotificationDefinition>, INotificationRepository
 {
-    private readonly IDatabase _database;
-
     public NotificationRepository(IDatabase database)
         : base(database)
     {
-        _database = database;
     }
 
     public IEnumerable<NotificationDefinition> GetEnabled()
     {
-        using var connection = _database.OpenConnection();
-        return connection.Query<NotificationDefinition>(
-            $"SELECT * FROM \"{_table}\" WHERE \"Enable\" = @Enable",
-            new { Enable = true });
+        return QueryWithRetry(connection =>
+            connection.Query<NotificationDefinition>(
+                $"SELECT * FROM \"{_table}\" WHERE \"Enable\" = @Enable",
+                new { Enable = true }));
     }
 }

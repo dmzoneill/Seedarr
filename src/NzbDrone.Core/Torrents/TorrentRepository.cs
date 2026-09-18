@@ -8,12 +8,9 @@ namespace NzbDrone.Core.Torrents;
 
 public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
 {
-    private readonly IDatabase _database;
-
     public TorrentRepository(IDatabase database)
         : base(database)
     {
-        _database = database;
     }
 
     public bool ExistsByInfoHash(string infoHash)
@@ -25,13 +22,10 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
 
         var normalized = infoHash.Trim().ToLowerInvariant();
 
-        return RetryPolicy.Execute(() =>
-        {
-            using var connection = _database.OpenConnection();
-            return connection.QueryFirstOrDefault<int>(
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<int>(
                 $"SELECT COUNT(1) FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash COLLATE NOCASE",
-                new { InfoHash = normalized }) > 0;
-        });
+                new { InfoHash = normalized }) > 0);
     }
 
     public Torrent GetByInfoHash(string infoHash)
@@ -43,10 +37,10 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
 
         var normalized = infoHash.Trim().ToLowerInvariant();
 
-        using var connection = _database.OpenConnection();
-        return connection.QueryFirstOrDefault<Torrent>(
-            $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash COLLATE NOCASE",
-            new { InfoHash = normalized });
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<Torrent>(
+                $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash COLLATE NOCASE",
+                new { InfoHash = normalized }));
     }
 
     public Torrent FindByInfoHash(string infoHash)
@@ -67,29 +61,28 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             return new List<Torrent>();
         }
 
-        using var connection = _database.OpenConnection();
-        var result = new List<Torrent>();
-
-        foreach (var batch in hashes.Chunk(500))
+        return QueryWithRetry(connection =>
         {
-            var records = connection.Query<Torrent>(
-                $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" COLLATE NOCASE IN @Hashes",
-                new { Hashes = batch });
+            var result = new List<Torrent>();
 
-            result.AddRange(records);
-        }
+            foreach (var batch in hashes.Chunk(500))
+            {
+                var records = connection.Query<Torrent>(
+                    $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" COLLATE NOCASE IN @Hashes",
+                    new { Hashes = batch });
 
-        return result;
+                result.AddRange(records);
+            }
+
+            return result;
+        });
     }
 
     public int GetNextSortOrder()
     {
-        return RetryPolicy.Execute(() =>
-        {
-            using var connection = _database.OpenConnection();
-            return connection.QueryFirstOrDefault<int>(
-                $"SELECT COALESCE(MAX(\"SortOrder\"), -1) + 1 FROM \"{_table}\"");
-        });
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<int>(
+                $"SELECT COALESCE(MAX(\"SortOrder\"), -1) + 1 FROM \"{_table}\""));
     }
 
     public void UpdateCategoryName(string oldCategoryName, string newCategoryName)
@@ -99,13 +92,10 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             return;
         }
 
-        RetryPolicy.Execute(() =>
-        {
-            using var connection = _database.OpenConnection();
+        ExecuteWithRetry(connection =>
             connection.Execute(
                 $"UPDATE \"{_table}\" SET \"Category\" = @NewName WHERE LOWER(\"Category\") = LOWER(@OldName)",
-                new { OldName = oldCategoryName.Trim(), NewName = newCategoryName.Trim() });
-        });
+                new { OldName = oldCategoryName.Trim(), NewName = newCategoryName.Trim() }));
     }
 
     public void ClearCategory(string categoryName)
@@ -115,13 +105,10 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             return;
         }
 
-        RetryPolicy.Execute(() =>
-        {
-            using var connection = _database.OpenConnection();
+        ExecuteWithRetry(connection =>
             connection.Execute(
                 $"UPDATE \"{_table}\" SET \"Category\" = '' WHERE LOWER(\"Category\") = LOWER(@CategoryName)",
-                new { CategoryName = categoryName.Trim() });
-        });
+                new { CategoryName = categoryName.Trim() }));
     }
 
     public void UpdateTagsAndLabels(IEnumerable<Torrent> torrents)
@@ -132,9 +119,8 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
             return;
         }
 
-        RetryPolicy.Execute(() =>
+        ExecuteWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
             try
             {
@@ -172,9 +158,8 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
 
     public override void Delete(int id)
     {
-        RetryPolicy.Execute(() =>
+        ExecuteWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
             try
             {
