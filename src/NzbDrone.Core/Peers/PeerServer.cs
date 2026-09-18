@@ -1412,168 +1412,192 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 return;
             }
 
-            _logger.Debug("Connecting to peer {0}:{1} for {2}", candidate.Ip, candidate.Port, torrent.Name);
-            _eventLogService?.Debug(torrent.Id, "Peers", $"Attempting connection to peer {candidate.Ip}:{candidate.Port} (source: {candidate.Source})");
-
-            var localBind = _vpnKillSwitchService?.GetVpnInterfaceIpAddress();
-            if (localBind == null && HasDedicatedBindInterface())
+            var addedToConnectionManager = false;
+            var connectionEstablished = false;
+            try
             {
-                localBind = ResolveDedicatedBindIp();
-            }
+                _logger.Debug("Connecting to peer {0}:{1} for {2}", candidate.Ip, candidate.Port, torrent.Name);
+                _eventLogService?.Debug(torrent.Id, "Peers", $"Attempting connection to peer {candidate.Ip}:{candidate.Port} (source: {candidate.Source})");
 
-            if (HasDedicatedBindInterface() && localBind == null)
-            {
-                _logger.Warn(
-                    "Dedicated bind interface '{0}' is configured but unplumbed/unavailable. Failing closed on outgoing connection to {1}:{2}",
-                    _configService.BindInterface,
-                    candidate.Ip,
-                    candidate.Port);
-                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
-                return;
-            }
-
-            if (_utpManager != null && _utpManager.IsEnabled)
-            {
-                try
+                var localBind = _vpnKillSwitchService?.GetVpnInterfaceIpAddress();
+                if (localBind == null && HasDedicatedBindInterface())
                 {
-                    var utp = _utpManager.CreateConnection();
-                    var endpoint = new IPEndPoint(IPAddress.Parse(candidate.Ip), candidate.Port);
-                    utp.Connect(endpoint);
-                    if (utp.IsConnected)
+                    localBind = ResolveDedicatedBindIp();
+                }
+
+                if (HasDedicatedBindInterface() && localBind == null)
+                {
+                    _logger.Warn(
+                        "Dedicated bind interface '{0}' is configured but unplumbed/unavailable. Failing closed on outgoing connection to {1}:{2}",
+                        _configService.BindInterface,
+                        candidate.Ip,
+                        candidate.Port);
+                    _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                    return;
+                }
+
+                if (_utpManager != null && _utpManager.IsEnabled)
+                {
+                    try
                     {
-                        connection = new PeerConnection(utp.GetStream(), candidate.Ip, candidate.Port, _dhKeyPool);
+                        var utp = _utpManager.CreateConnection();
+                        var endpoint = new IPEndPoint(IPAddress.Parse(candidate.Ip), candidate.Port);
+                        utp.Connect(endpoint);
+                        if (utp.IsConnected)
+                        {
+                            connection = new PeerConnection(utp.GetStream(), candidate.Ip, candidate.Port, _dhKeyPool);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Debug(ex, "uTP connection attempt to {0}:{1} failed", candidate.Ip, candidate.Port);
+                    }
+
+                    if (connection == null && _utpManager.TcpFallbackEnabled)
+                    {
+                        _logger.Debug("Falling back to TCP for peer {0}:{1}", candidate.Ip, candidate.Port);
+                        connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger.Debug(ex, "uTP connection attempt to {0}:{1} failed", candidate.Ip, candidate.Port);
-                }
-
-                if (connection == null && _utpManager.TcpFallbackEnabled)
-                {
-                    _logger.Debug("Falling back to TCP for peer {0}:{1}", candidate.Ip, candidate.Port);
                     connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
                 }
-            }
-            else
-            {
-                connection = new PeerConnection(candidate.Ip, candidate.Port, localBind, _configService.PeerDscp, _configService.PeerTos, _proxySettingsProvider, _dhKeyPool, _configService.BindInterface);
-            }
 
-            if (connection == null)
-            {
-                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
-                return;
-            }
-
-            connection.HandshakeTimeoutMs = Math.Min(_configService.HandshakeTimeoutSeconds * 1000, OutgoingConnectTimeoutMs);
-            connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
-            connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
-            connection.MaxPipelinedRequests = _configService.PeerRequestCount;
-            connection.IdleChance = _clientBehaviorSimulator != null
-                ? _clientBehaviorSimulator.GetEffectiveIdleChance(_configService.PeerIdleChance)
-                : _configService.PeerIdleChance;
-
-            if (!string.Equals(_configService.EncryptionMode, "disabled", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(_configService.EncryptionMode, "plain", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(_configService.EncryptionMode, "none", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!await connection.NegotiateEncryptionOutgoingAsync(torrent.InfoHash, GetEncryptionMode(), stoppingToken))
+                if (connection == null)
                 {
-                    _logger.Debug("Outgoing encryption failed to {0}:{1}", candidate.Ip, candidate.Port);
                     _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
-                    _eventLogService?.Debug(torrent.Id, "Peers", $"Encryption negotiation rejected by peer {candidate.Ip}:{candidate.Port}");
+                    return;
+                }
+
+                connection.HandshakeTimeoutMs = Math.Min(_configService.HandshakeTimeoutSeconds * 1000, OutgoingConnectTimeoutMs);
+                connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
+                connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
+                connection.MaxPipelinedRequests = _configService.PeerRequestCount;
+                connection.IdleChance = _clientBehaviorSimulator != null
+                    ? _clientBehaviorSimulator.GetEffectiveIdleChance(_configService.PeerIdleChance)
+                    : _configService.PeerIdleChance;
+
+                if (!string.Equals(_configService.EncryptionMode, "disabled", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(_configService.EncryptionMode, "plain", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(_configService.EncryptionMode, "none", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!await connection.NegotiateEncryptionOutgoingAsync(torrent.InfoHash, GetEncryptionMode(), stoppingToken))
+                    {
+                        _logger.Debug("Outgoing encryption failed to {0}:{1}", candidate.Ip, candidate.Port);
+                        _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                        _eventLogService?.Debug(torrent.Id, "Peers", $"Encryption negotiation rejected by peer {candidate.Ip}:{candidate.Port}");
+                        connection.Dispose();
+                        return;
+                    }
+                }
+
+                var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                    ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
+                    : null;
+                var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
+                    ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
+                    : null);
+                var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
+                var supportsFast = _configService?.ExtensionFastExtension ?? true;
+                var supportsDht = _configService?.EnableDht ?? true;
+                connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile, supportsExtensions: true, supportsFast: supportsFast, supportsDht: supportsDht);
+
+                if (!connection.ReceiveHandshake())
+                {
+                    _logger.Debug("Outgoing handshake failed from {0}:{1}", candidate.Ip, candidate.Port);
+                    _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                    _eventLogService?.Debug(torrent.Id, "Peers", $"BitTorrent handshake rejected/timed out from {candidate.Ip}:{candidate.Port}");
                     connection.Dispose();
                     return;
                 }
-            }
 
-            var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)
-                : null;
-            var profile = session?.Profile ?? ((_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
-                ? _clientBehaviorSimulator.GetProfileForTorrent(torrent.InfoHash, torrent.IsPrivate)
-                : null);
-            var peerId = session?.PeerId ?? profile?.GeneratePeerId() ?? "-SD1000-000000000000";
-            var supportsFast = _configService?.ExtensionFastExtension ?? true;
-            var supportsDht = _configService?.EnableDht ?? true;
-            connection.SendHandshake(torrent.InfoHash, peerId, torrent.IsPrivate, profile, supportsExtensions: true, supportsFast: supportsFast, supportsDht: supportsDht);
+                if (!string.Equals(connection.InfoHash, torrent.InfoHash, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.Warn(
+                        "Peer {0}:{1} returned info-hash {2}, expected {3}; closing connection",
+                        candidate.Ip,
+                        candidate.Port,
+                        connection.InfoHash,
+                        torrent.InfoHash);
+                    _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
+                    connection.Dispose();
+                    return;
+                }
 
-            if (!connection.ReceiveHandshake())
-            {
-                _logger.Debug("Outgoing handshake failed from {0}:{1}", candidate.Ip, candidate.Port);
-                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
-                _eventLogService?.Debug(torrent.Id, "Peers", $"BitTorrent handshake rejected/timed out from {candidate.Ip}:{candidate.Port}");
-                connection.Dispose();
-                return;
-            }
+                if (connection.SupportsFastExtension && _fastExtensionHandler != null && !string.IsNullOrEmpty(torrent.InfoHash))
+                {
+                    _fastExtensionHandler.RegisterFastPeer(connection, Convert.FromHexString(torrent.InfoHash), torrent.PieceCount, 10);
+                }
 
-            if (!string.Equals(connection.InfoHash, torrent.InfoHash, StringComparison.OrdinalIgnoreCase))
-            {
-                _logger.Warn(
-                    "Peer {0}:{1} returned info-hash {2}, expected {3}; closing connection",
+                SendExtensionHandshake(connection, torrent, profile);
+
+                SendInitialAvailability(connection, torrent);
+
+                _chokeManager?.PeerConnected(connection);
+                if (_chokeManager != null)
+                {
+                    if (_chokeManager.CanUnchoke(connection))
+                    {
+                        connection.AmChoking = false;
+                        connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                    }
+                }
+                else
+                {
+                    connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                    connection.AmChoking = false;
+                }
+
+                if (reservation != null)
+                {
+                    if (!_connectionManager.TryAdd(connection, reservation))
+                    {
+                        _logger.Debug("Failed to add outgoing connection for {0}", connection.InfoHash);
+                        connection.Dispose();
+                        return;
+                    }
+                }
+                else
+                {
+                    _connectionManager.Add(connection);
+                }
+
+                addedToConnectionManager = true;
+
+                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, true);
+
+                _logger.Info(
+                    "Outgoing peer connected: {0}:{1} for {2} (encrypted: {3})",
                     candidate.Ip,
                     candidate.Port,
-                    connection.InfoHash,
-                    torrent.InfoHash);
-                _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, false);
-                connection.Dispose();
-                return;
+                    torrent.Name,
+                    connection.IsEncrypted);
+
+                _eventLogService?.Info(
+                    torrent.Id,
+                    "Peers",
+                    $"Peer connected & active: {candidate.Ip}:{candidate.Port} (encrypted: {connection.IsEncrypted})");
+
+                connectionEstablished = true;
             }
-
-            if (connection.SupportsFastExtension && _fastExtensionHandler != null && !string.IsNullOrEmpty(torrent.InfoHash))
+            finally
             {
-                _fastExtensionHandler.RegisterFastPeer(connection, Convert.FromHexString(torrent.InfoHash), torrent.PieceCount, 10);
-            }
-
-            SendExtensionHandshake(connection, torrent, profile);
-
-            SendInitialAvailability(connection, torrent);
-
-            _chokeManager?.PeerConnected(connection);
-            if (_chokeManager != null)
-            {
-                if (_chokeManager.CanUnchoke(connection))
+                if (acquiredHalfOpen)
                 {
-                    connection.AmChoking = false;
-                    connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
+                    _halfOpenSemaphore.Release();
+                    acquiredHalfOpen = false;
                 }
             }
-            else
+
+            if (connectionEstablished)
             {
-                connection.SendMessage(new PeerMessage { Type = PeerMessageType.Unchoke });
-                connection.AmChoking = false;
+                HandlePeerSession(connection, torrent);
             }
-
-            if (reservation != null)
+            else if (addedToConnectionManager)
             {
-                if (!_connectionManager.TryAdd(connection, reservation))
-                {
-                    _logger.Debug("Failed to add outgoing connection for {0}", connection.InfoHash);
-                    connection.Dispose();
-                    return;
-                }
+                _connectionManager.Remove(connection);
             }
-            else
-            {
-                _connectionManager.Add(connection);
-            }
-
-            _peerDiscovery.MarkAttempted(torrent.InfoHash, candidate.Ip, candidate.Port, true);
-
-            _logger.Info(
-                "Outgoing peer connected: {0}:{1} for {2} (encrypted: {3})",
-                candidate.Ip,
-                candidate.Port,
-                torrent.Name,
-                connection.IsEncrypted);
-
-            _eventLogService?.Info(
-                torrent.Id,
-                "Peers",
-                $"Peer connected & active: {candidate.Ip}:{candidate.Port} (encrypted: {connection.IsEncrypted})");
-
-            HandlePeerSession(connection, torrent);
         }
         catch (Exception ex)
         {
