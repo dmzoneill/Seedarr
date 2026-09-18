@@ -2548,6 +2548,240 @@ public class PeerServerTest
     }
 
     [Test]
+    public void HandleExtendedMessage_handshake_should_extract_and_store_ut_pex_id_on_connection()
+    {
+        var (_, serverConn) = CreateTestPair();
+        var dict = new BDictionary
+        {
+            ["m"] = new BDictionary
+            {
+                ["ut_pex"] = new BNumber(5),
+                ["ut_metadata"] = new BNumber(2)
+            }
+        };
+
+        var handshakeBytes = dict.EncodeAsBytes();
+        var payload = new byte[1 + handshakeBytes.Length];
+        payload[0] = 0; // Extension handshake ID
+        Array.Copy(handshakeBytes, 0, payload, 1, handshakeBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload });
+
+        Assert.That(serverConn.RemoteUtPexId, Is.EqualTo(5));
+        Assert.That(serverConn.SupportsPex, Is.True);
+        Assert.That(serverConn.RemoteExtensions.ContainsKey("ut_pex"), Is.True);
+        Assert.That(serverConn.RemoteExtensions["ut_pex"], Is.EqualTo(5));
+    }
+
+    [Test]
+    public void HandleExtendedMessage_incoming_pex_matching_remote_ut_pex_id_should_parse_and_add_peers()
+    {
+        _configService.EnablePex.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 3,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "PexMatchingTest",
+            Progress = 0.5
+        };
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var (_, serverConn) = CreateTestPair();
+        serverConn.InfoHash = torrent.InfoHash;
+        serverConn.RemoteUtPexId = 7;
+
+        var peerExchange = new PeerExchange(_configService);
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x00 }
+        };
+
+        var pexBytes = peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var payload = new byte[1 + pexBytes.Length];
+        payload[0] = 7; // Matches RemoteUtPexId
+        Array.Copy(pexBytes, 0, payload, 1, pexBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload }, torrent);
+
+        _peerDiscovery.Received(1).AddPeers(torrent.InfoHash, Arg.Any<IEnumerable<PeerInfo>>(), "pex");
+    }
+
+    [Test]
+    public void HandleExtendedMessage_pex_when_disabled_in_config_should_not_add_peers()
+    {
+        _configService.EnablePex.Returns(false);
+
+        var torrent = new Torrent
+        {
+            Id = 4,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "DisabledPexTest",
+            Progress = 0.5
+        };
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var (_, serverConn) = CreateTestPair();
+        serverConn.InfoHash = torrent.InfoHash;
+        serverConn.RemoteUtPexId = 1;
+
+        var peerExchange = new PeerExchange(_configService);
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x00 }
+        };
+
+        var pexBytes = peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var payload = new byte[1 + pexBytes.Length];
+        payload[0] = 1;
+        Array.Copy(pexBytes, 0, payload, 1, pexBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload }, torrent);
+
+        _peerDiscovery.DidNotReceive().AddPeers(Arg.Any<string>(), Arg.Any<IEnumerable<PeerInfo>>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void HandleExtendedMessage_pex_when_torrent_is_private_should_not_add_peers()
+    {
+        _configService.EnablePex.Returns(true);
+
+        var torrent = new Torrent
+        {
+            Id = 5,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "PrivatePexTest",
+            IsPrivate = true,
+            Progress = 0.5
+        };
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var (_, serverConn) = CreateTestPair();
+        serverConn.InfoHash = torrent.InfoHash;
+        serverConn.RemoteUtPexId = 1;
+
+        var peerExchange = new PeerExchange(_configService);
+        var added = new List<PeerInfo>
+        {
+            new PeerInfo { Ip = "93.184.216.34", Port = 6881, Flags = 0x00 }
+        };
+
+        var pexBytes = peerExchange.BuildPexMessage(added, new List<PeerInfo>());
+        var payload = new byte[1 + pexBytes.Length];
+        payload[0] = 1;
+        Array.Copy(pexBytes, 0, payload, 1, pexBytes.Length);
+
+        InvokeHandleMessage(serverConn, new PeerMessage { Type = PeerMessageType.Extended, Payload = payload }, torrent);
+
+        _peerDiscovery.DidNotReceive().AddPeers(Arg.Any<string>(), Arg.Any<IEnumerable<PeerInfo>>(), Arg.Any<string>());
+    }
+
+    [Test]
+    public void BuildPexMessage_should_build_pex_payload_for_active_connections()
+    {
+        _configService.EnablePex.Returns(true);
+        _configService.PexMaxPeersPerMessage.Returns(50);
+
+        var torrent = new Torrent
+        {
+            Id = 6,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "BuildPexTorrent",
+            IsPrivate = false
+        };
+
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var ms1 = new MemoryStream();
+        var conn1 = new PeerConnection(ms1, "93.184.216.34", 6881) { InfoHash = torrent.InfoHash };
+        var ms2 = new MemoryStream();
+        var conn2 = new PeerConnection(ms2, "93.184.216.35", 6882) { InfoHash = torrent.InfoHash };
+
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(new List<PeerConnection> { conn1, conn2 });
+
+        var pexBytes = _server.BuildPexMessage(torrent.InfoHash);
+        Assert.That(pexBytes, Is.Not.Null);
+        Assert.That(pexBytes.Length, Is.GreaterThan(0));
+
+        var peerExchange = new PeerExchange(_configService);
+        var parsed = peerExchange.ParsePexMessage(pexBytes);
+        Assert.That(parsed.Added, Has.Count.EqualTo(2));
+    }
+
+    [Test]
+    public void BroadcastPex_should_dispatch_pex_messages_to_connected_peers_supporting_pex()
+    {
+        _configService.EnablePex.Returns(true);
+        _configService.ExtensionUtPex.Returns(true);
+        _configService.PexMaxPeersPerMessage.Returns(50);
+
+        var torrent = new Torrent
+        {
+            Id = 7,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "BroadcastPexTorrent",
+            IsPrivate = false
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+        _torrentService.GetByInfoHash(torrent.InfoHash).Returns(torrent);
+
+        var ms1 = new MemoryStream();
+        var conn1 = new PeerConnection(ms1, "93.184.216.34", 6881)
+        {
+            InfoHash = torrent.InfoHash,
+            RemoteUtPexId = 1
+        };
+
+        var ms2 = new MemoryStream();
+        var conn2 = new PeerConnection(ms2, "93.184.216.35", 6882)
+        {
+            InfoHash = torrent.InfoHash,
+            RemoteUtPexId = 1
+        };
+
+        var connections = new List<PeerConnection> { conn1, conn2 };
+        _connectionManager.GetAllConnections().Returns(connections);
+        _connectionManager.GetConnections(torrent.InfoHash).Returns(connections);
+
+        _server.BroadcastPex(torrent.InfoHash);
+
+        Assert.That(conn1.PexTracker.LastPexSent, Is.GreaterThan(DateTime.MinValue));
+        Assert.That(conn2.PexTracker.LastPexSent, Is.GreaterThan(DateTime.MinValue));
+    }
+
+    [Test]
+    public void BroadcastPex_should_not_dispatch_when_pex_is_disabled()
+    {
+        _configService.EnablePex.Returns(false);
+
+        var torrent = new Torrent
+        {
+            Id = 8,
+            InfoHash = "0102030405060708091011121314151617181920",
+            Name = "DisabledBroadcastTorrent"
+        };
+
+        _torrentService.GetAll().Returns(new List<Torrent> { torrent });
+
+        var ms = new MemoryStream();
+        var conn = new PeerConnection(ms, "93.184.216.34", 6881)
+        {
+            InfoHash = torrent.InfoHash,
+            RemoteUtPexId = 1
+        };
+
+        _connectionManager.GetAllConnections().Returns(new List<PeerConnection> { conn });
+
+        _server.BroadcastPex(torrent.InfoHash);
+
+        Assert.That(conn.PexTracker.LastPexSent, Is.EqualTo(DateTime.MinValue));
+    }
+
+    [Test]
     public void SendInitialAvailability_should_send_have_all_to_fast_peer_when_torrent_is_complete()
     {
         var ms = new MemoryStream();

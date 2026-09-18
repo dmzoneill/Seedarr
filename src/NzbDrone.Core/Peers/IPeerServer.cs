@@ -21,4 +21,8 @@ public interface IPeerServer
     void ChokePeers(string infoHash);
 
     void UnchokePeers(string infoHash);
+
+    void BroadcastPex(string infoHash = null);
+
+    byte[] BuildPexMessage(string infoHash);
 }

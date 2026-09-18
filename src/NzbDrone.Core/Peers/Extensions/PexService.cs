@@ -35,7 +35,9 @@ public class PexService : BackgroundService, IPexService
 
     public void BroadcastPexTick() => BroadcastPex();
 
-    public void BroadcastPex()
+    public void BroadcastPex() => BroadcastPex(null);
+
+    public void BroadcastPex(string infoHash)
     {
         if (_configService != null && (!_configService.EnablePex || !_configService.ExtensionUtPex))
         {
@@ -43,6 +45,10 @@ public class PexService : BackgroundService, IPexService
         }
 
         var swarms = GetActiveSwarms();
+        if (!string.IsNullOrWhiteSpace(infoHash))
+        {
+            swarms = swarms.Where(s => string.Equals(s.InfoHash, infoHash, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
 
         foreach (var swarm in swarms)
         {
@@ -160,8 +166,8 @@ public class PexService : BackgroundService, IPexService
 
             var currentSwarmPeers = activeConnections
                 .Where(c => c != recipient &&
-                            !(string.Equals(c.RemoteIp, recipient.RemoteIp, StringComparison.OrdinalIgnoreCase) &&
-                              c.RemotePort == recipient.RemotePort))
+                    !(string.Equals(c.RemoteIp, recipient.RemoteIp, StringComparison.OrdinalIgnoreCase) &&
+                        c.RemotePort == recipient.RemotePort))
                 .ToList();
 
             var currentSwarmEndpoints = new Dictionary<string, PeerConnection>(StringComparer.OrdinalIgnoreCase);
@@ -178,7 +184,7 @@ public class PexService : BackgroundService, IPexService
 
             var droppedKeys = recipient.PexTracker.PreviouslySentPeers
                 .Where(endpoint => !currentSwarmEndpoints.ContainsKey(endpoint) &&
-                                   !string.Equals(endpoint, recipientKey, StringComparison.OrdinalIgnoreCase))
+                    !string.Equals(endpoint, recipientKey, StringComparison.OrdinalIgnoreCase))
                 .Take(maxBatch)
                 .ToList();
 
@@ -223,7 +229,7 @@ public class PexService : BackgroundService, IPexService
                 }
             }
 
-            var pexMessage = _peerExchange.BuildPexMessage(addedInfo, droppedInfo, false);
+            var pexMessage = _peerExchange?.BuildPexMessage(addedInfo, droppedInfo, false);
             if (pexMessage != null && pexMessage.Length > 0)
             {
                 try

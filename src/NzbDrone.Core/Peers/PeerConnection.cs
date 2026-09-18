@@ -92,6 +92,23 @@ public class PeerConnection : IDisposable
     public bool SupportsFastExtension { get; set; }
     public bool SupportsDht { get; private set; }
     public ConcurrentDictionary<string, int> RemoteExtensions { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public int? RemoteUtPexId
+    {
+        get => RemoteExtensions.TryGetValue("ut_pex", out var id) ? id : null;
+        set
+        {
+            if (value.HasValue)
+            {
+                RemoteExtensions["ut_pex"] = value.Value;
+            }
+            else
+            {
+                RemoteExtensions.TryRemove("ut_pex", out _);
+            }
+        }
+    }
+
     public int? MetadataSize { get; set; }
     public bool IsSnubbed { get; set; }
     public bool IsOptimisticUnchoked { get; set; }

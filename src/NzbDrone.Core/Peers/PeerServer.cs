@@ -50,6 +50,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     private readonly Extensions.ISyntheticMetadataGenerator _syntheticMetadataGenerator;
     private readonly Extensions.IMagnetMetadataDownloader _magnetMetadataDownloader;
     private readonly Extensions.IPeerExchange _peerExchange;
+    private readonly Extensions.IPexService _pexService;
     private readonly PiecePicker.PiecePicker _piecePicker;
     private readonly PiecePicker.IPiecePicker _sequentialPicker;
     private readonly PiecePicker.IPiecePicker _rarestFirstPicker;
@@ -202,7 +203,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         Extensions.IMagnetMetadataDownloader magnetMetadataDownloader = null,
         Extensions.IPeerExchange peerExchange = null,
         PiecePicker.PiecePicker piecePicker = null,
-        IPieceStorage pieceStorage = null)
+        IPieceStorage pieceStorage = null,
+        Extensions.IPexService pexService = null)
     {
         _configService = configService;
         _torrentService = torrentService;
@@ -222,6 +224,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         _syntheticMetadataGenerator = syntheticMetadataGenerator ?? new Extensions.SyntheticMetadataGenerator();
         _magnetMetadataDownloader = magnetMetadataDownloader;
         _peerExchange = peerExchange ?? new Extensions.PeerExchange(_configService);
+        _pexService = pexService ?? new Extensions.PexService(_connectionManager, _peerExchange, _torrentService, _configService);
         _random = random ?? new RandomNumberGenerator();
         _rarestFirstPicker = new PiecePicker.RarestFirstPiecePicker(_random);
         _sequentialPicker = new PiecePicker.SequentialPiecePicker(_rarestFirstPicker, _random);
@@ -407,6 +410,65 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                 _logger.Debug("Unchoked peer {0}:{1} on torrent {2}", connection.RemoteIp, connection.RemotePort, infoHash);
             }
         }
+    }
+
+    public void BroadcastPex(string infoHash = null)
+    {
+        if (_configService != null && (!_configService.EnablePex || !_configService.ExtensionUtPex))
+        {
+            return;
+        }
+
+        _pexService?.BroadcastPex(infoHash);
+    }
+
+    public byte[] BuildPexMessage(string infoHash)
+    {
+        if (string.IsNullOrEmpty(infoHash) || (_configService != null && !_configService.EnablePex))
+        {
+            return Array.Empty<byte>();
+        }
+
+        var torrent = _torrentService?.GetByInfoHash(infoHash);
+        var isPrivate = torrent?.IsPrivate == true;
+        if (isPrivate)
+        {
+            return Array.Empty<byte>();
+        }
+
+        var connections = _connectionManager?.GetConnections(infoHash) ?? new List<PeerConnection>();
+        var activeConnections = connections
+            .Where(c => c.IsConnected && !string.IsNullOrWhiteSpace(c.RemoteIp) && c.RemotePort > 0)
+            .ToList();
+
+        var maxBatch = _configService?.PexMaxPeersPerMessage ?? 50;
+        if (maxBatch <= 0)
+        {
+            maxBatch = 50;
+        }
+
+        var addedInfo = activeConnections.Take(maxBatch).Select(c =>
+        {
+            byte flags = 0;
+            if (c.IsEncrypted)
+            {
+                flags |= 0x01;
+            }
+
+            if (c.IsSeed)
+            {
+                flags |= 0x02;
+            }
+
+            return new Extensions.PeerInfo
+            {
+                Ip = c.RemoteIp,
+                Port = c.RemotePort,
+                Flags = flags
+            };
+        }).ToList();
+
+        return _peerExchange.BuildPexMessage(addedInfo, new List<Extensions.PeerInfo>(), isPrivate);
     }
 
     public void UpdateLocalInterest(PeerConnection connection, Torrent torrent)
@@ -913,7 +975,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
         var listenerTask = RunListenerAsync(stoppingToken);
         var contactTask = RunPeerContactLoopAsync(stoppingToken);
-        await Task.WhenAll(listenerTask, contactTask);
+        var pexTask = RunPexLoopAsync(stoppingToken);
+        await Task.WhenAll(listenerTask, contactTask, pexTask);
     }
 
     private async Task RunListenerAsync(CancellationToken stoppingToken)
@@ -1268,6 +1331,49 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         }
         catch (OperationCanceledException)
         {
+        }
+    }
+
+    private async Task RunPexLoopAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            var interval = _configService?.PexInterval ?? 60;
+            if (interval <= 0)
+            {
+                interval = 60;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(interval), stoppingToken);
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                if (_vpnKillSwitchService?.IsFailClosedActive == true)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+                    continue;
+                }
+
+                if (_configService == null || (_configService.EnablePex && _configService.ExtensionUtPex))
+                {
+                    BroadcastPex();
+                }
+
+                var currentInterval = _configService?.PexInterval ?? 60;
+                if (currentInterval <= 0)
+                {
+                    currentInterval = 60;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(currentInterval), stoppingToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Error in PeerServer PEX broadcast loop");
         }
     }
 
@@ -2370,6 +2476,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             return false;
         }
 
+        if (_configService != null && !_configService.EnablePex)
+        {
+            return false;
+        }
+
         if (_extensionManager != null)
         {
             var localExts = _extensionManager.GetSupportedExtensions(torrent?.IsPrivate ?? false);
@@ -2377,6 +2488,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             {
                 return true;
             }
+        }
+
+        if (connection.RemoteUtPexId.HasValue && extId == connection.RemoteUtPexId.Value)
+        {
+            return true;
         }
 
         if (connection.RemoteExtensions.TryGetValue("ut_pex", out var remoteId) && extId == remoteId)
@@ -2437,6 +2553,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                             connection.RemoteExtensions[kvp.Key] = kvp.Value;
                         }
 
+                        if (handshake.Extensions.TryGetValue("ut_pex", out var utPexId))
+                        {
+                            connection.RemoteUtPexId = utPexId;
+                        }
+
                         if (handshake.MetadataSize.HasValue)
                         {
                             connection.MetadataSize = (int)handshake.MetadataSize.Value;
@@ -2456,6 +2577,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                             {
                                 connection.RemoteExtensions[kvp.Key.ToString()] = (int)num.Value;
                             }
+                        }
+
+                        if (mDict.TryGetValue("ut_pex", out var utPexNum) && utPexNum is BNumber pexNum)
+                        {
+                            connection.RemoteUtPexId = (int)pexNum.Value;
                         }
                     }
 
@@ -2495,6 +2621,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     private void HandleUtPexMessage(PeerConnection connection, byte[] extendedPayload, Torrent torrent)
     {
+        if (_configService != null && !_configService.EnablePex)
+        {
+            return;
+        }
+
         var currentTorrent = torrent ?? (!string.IsNullOrEmpty(connection.InfoHash) ? _torrentService.GetByInfoHash(connection.InfoHash) : null);
         if (currentTorrent?.IsPrivate == true)
         {
