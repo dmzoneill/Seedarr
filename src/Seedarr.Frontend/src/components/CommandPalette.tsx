@@ -9,6 +9,10 @@ import {
   useHarvestProwlarrTrackers,
   useScanTrackerBoostTrackers,
   useGeneralConfig,
+  useStartAllSeeding,
+  useStopAllSeeding,
+  useSeedingConfig,
+  useSaveSeedingConfig,
 } from "../api/hooks";
 import { useTheme } from "../context/ThemeContext";
 import { useToast } from "../context/ToastContext";
@@ -66,14 +70,40 @@ export function CommandPalette({
   const harvestSwarm = useHarvestDownloadTrackers();
   const syncProwlarr = useHarvestProwlarrTrackers();
   const scanTrackers = useScanTrackerBoostTrackers();
+  const startAll = useStartAllSeeding();
+  const stopAll = useStopAllSeeding();
+  const { data: seedingConfig } = useSeedingConfig();
+  const saveSeedingConfig = useSaveSeedingConfig();
+
+  const isKeyboardNavigating = useRef(false);
+  const lastPointerPos = useRef({ x: -1, y: -1 });
 
   useEffect(() => {
     if (isOpen) {
       setQuery("");
       setSelectedIndex(0);
+      isKeyboardNavigating.current = false;
+      lastPointerPos.current = { x: -1, y: -1 };
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown, true);
+    return () =>
+      window.removeEventListener("keydown", handleGlobalKeyDown, true);
+  }, [isOpen, onClose]);
 
   const items = useMemo<CommandItem[]>(() => {
     const list: CommandItem[] = [];
@@ -244,6 +274,73 @@ export function CommandPalette({
       onSelect: () => {
         onClose();
         onOpenAddTorrent?.();
+      },
+    });
+
+    list.push({
+      id: "act-pause-all",
+      category: "Actions",
+      title: "Pause All Seeding / Torrents",
+      subtitle: "Pause all active torrent downloads and seeding swarms",
+      icon: "⏸️",
+      onSelect: () => {
+        onClose();
+        stopAll.mutate(undefined, {
+          onSuccess: () =>
+            showToast("All torrents and seeding swarms paused", "info"),
+          onError: (err) => showToast(`Pause failed: ${err.message}`, "error"),
+        });
+      },
+    });
+
+    list.push({
+      id: "act-resume-all",
+      category: "Actions",
+      title: "Resume All Seeding / Torrents",
+      subtitle: "Resume seeding and downloading for all paused torrents",
+      icon: "▶️",
+      onSelect: () => {
+        onClose();
+        startAll.mutate(undefined, {
+          onSuccess: () =>
+            showToast("All torrents and seeding swarms resumed", "success"),
+          onError: (err) => showToast(`Resume failed: ${err.message}`, "error"),
+        });
+      },
+    });
+
+    list.push({
+      id: "act-turtle",
+      category: "Actions",
+      title: "Toggle Turtle Mode (Alternative Speed)",
+      subtitle: seedingConfig?.alternativeSpeedEnabled
+        ? "Currently active — switch back to normal speed limits"
+        : "Currently disabled — switch to throttled alternate speed limits",
+      icon: "🐢",
+      badge: seedingConfig?.alternativeSpeedEnabled ? "ACTIVE" : undefined,
+      badgeClass: "badge-warning",
+      onSelect: () => {
+        onClose();
+        if (!seedingConfig) return;
+        const nextState = !seedingConfig.alternativeSpeedEnabled;
+        saveSeedingConfig.mutate(
+          {
+            ...seedingConfig,
+            alternativeSpeedEnabled: nextState,
+          },
+          {
+            onSuccess: () =>
+              showToast(
+                `Turtle mode ${nextState ? "enabled" : "disabled"}`,
+                "info",
+              ),
+            onError: (err) =>
+              showToast(
+                `Turtle mode toggle failed: ${err.message}`,
+                "error",
+              ),
+          },
+        );
       },
     });
 
@@ -451,6 +548,10 @@ export function CommandPalette({
     harvestSwarm,
     syncProwlarr,
     scanTrackers,
+    startAll,
+    stopAll,
+    seedingConfig,
+    saveSeedingConfig,
     showToast,
   ]);
 
@@ -472,24 +573,51 @@ export function CommandPalette({
   }, [filteredItems]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      e.nativeEvent?.stopImmediatePropagation?.();
+      onClose();
+      return;
+    }
+
+    if (filteredItems.length === 0) {
+      return;
+    }
+
     if (e.key === "ArrowDown") {
       e.preventDefault();
+      isKeyboardNavigating.current = true;
       setSelectedIndex((prev) =>
         prev < filteredItems.length - 1 ? prev + 1 : 0,
       );
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
+      isKeyboardNavigating.current = true;
       setSelectedIndex((prev) =>
         prev > 0 ? prev - 1 : filteredItems.length - 1,
       );
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      isKeyboardNavigating.current = true;
+      setSelectedIndex(0);
+    } else if (e.key === "End") {
+      e.preventDefault();
+      isKeyboardNavigating.current = true;
+      setSelectedIndex(filteredItems.length - 1);
+    } else if (e.key === "PageDown") {
+      e.preventDefault();
+      isKeyboardNavigating.current = true;
+      setSelectedIndex((prev) => Math.min(prev + 5, filteredItems.length - 1));
+    } else if (e.key === "PageUp") {
+      e.preventDefault();
+      isKeyboardNavigating.current = true;
+      setSelectedIndex((prev) => Math.max(prev - 5, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
       if (filteredItems[selectedIndex]) {
         filteredItems[selectedIndex].onSelect();
       }
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      onClose();
     }
   };
 
@@ -590,6 +718,15 @@ export function CommandPalette({
           id="command-palette-results"
           role="listbox"
           ref={listRef}
+          onMouseMove={(e) => {
+            if (
+              e.clientX !== lastPointerPos.current.x ||
+              e.clientY !== lastPointerPos.current.y
+            ) {
+              lastPointerPos.current = { x: e.clientX, y: e.clientY };
+              isKeyboardNavigating.current = false;
+            }
+          }}
           style={{
             overflowY: "auto",
             padding: "0.5rem",
@@ -618,7 +755,25 @@ export function CommandPalette({
                   role="option"
                   aria-selected={isSelected}
                   onClick={item.onSelect}
-                  onMouseEnter={() => setSelectedIndex(idx)}
+                  onMouseMove={(e) => {
+                    if (
+                      isKeyboardNavigating.current &&
+                      e.clientX === lastPointerPos.current.x &&
+                      e.clientY === lastPointerPos.current.y
+                    ) {
+                      return;
+                    }
+                    if (
+                      e.clientX !== lastPointerPos.current.x ||
+                      e.clientY !== lastPointerPos.current.y
+                    ) {
+                      lastPointerPos.current = { x: e.clientX, y: e.clientY };
+                      isKeyboardNavigating.current = false;
+                    }
+                    if (selectedIndex !== idx) {
+                      setSelectedIndex(idx);
+                    }
+                  }}
                   style={{
                     display: "flex",
                     alignItems: "center",

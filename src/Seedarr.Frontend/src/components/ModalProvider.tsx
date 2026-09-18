@@ -100,6 +100,7 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
+        e.stopImmediatePropagation();
         top.onClose();
         return;
       }

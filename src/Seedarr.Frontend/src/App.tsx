@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Routes,
   Route,
@@ -174,6 +174,34 @@ function App() {
       }
       return localStorage.getItem(STORAGE_KEY_HIDE_GUIDE) !== "true";
     });
+
+  const closeOtherModals = useCallback(() => {
+    setShowAddTorrentModal(false);
+    setShowShortcutsModal(false);
+    setShowGettingStartedModal(false);
+  }, []);
+
+  const openCommandPalette = useCallback(() => {
+    closeOtherModals();
+    setShowCommandPalette(true);
+  }, [closeOtherModals]);
+
+  const toggleCommandPalette = useCallback(() => {
+    setShowCommandPalette((prev) => {
+      if (!prev) {
+        closeOtherModals();
+        return true;
+      }
+      return false;
+    });
+  }, [closeOtherModals]);
+
+  const isAnyModalOpenRef = useRef(false);
+  isAnyModalOpenRef.current =
+    showAddTorrentModal ||
+    showShortcutsModal ||
+    showGettingStartedModal ||
+    showCommandPalette;
   const [openSettingsGroups, setOpenSettingsGroups] = useState<
     Record<string, boolean>
   >(() => {
@@ -319,23 +347,27 @@ function App() {
       // Cmd+K / Ctrl+K
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setShowCommandPalette((prev) => !prev);
+        toggleCommandPalette();
         return;
       }
 
       // If typing inside an input/textarea, do not intercept single-key shortcuts
       if (isInputActive) return;
 
+      // Gate single-key navigation and modal triggers when any modal is active
+      if (isAnyModalOpenRef.current) return;
+
       // "/" opens search / command palette
       if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        setShowCommandPalette(true);
+        openCommandPalette();
         return;
       }
 
       // "?" opens Keyboard Shortcuts cheat sheet
       if (e.key === "?" || (e.shiftKey && e.key === "/")) {
         e.preventDefault();
+        setShowCommandPalette(false);
         setShowShortcutsModal(true);
         return;
       }
@@ -384,7 +416,7 @@ function App() {
       window.removeEventListener("keydown", handleKeyDown);
       if (pendingGTimer) clearTimeout(pendingGTimer);
     };
-  }, [navigate]);
+  }, [navigate, toggleCommandPalette, openCommandPalette]);
 
   if (location.pathname === "/login") {
     return (
@@ -850,7 +882,7 @@ function App() {
             </button>
             <div
               className="topbar-search"
-              onClick={() => setShowCommandPalette(true)}
+              onClick={openCommandPalette}
               style={{ cursor: "pointer" }}
               title={t(
                 "topbar.searchPlaceholder",
@@ -869,7 +901,7 @@ function App() {
                 className="topbar-search-input"
                 value=""
                 readOnly
-                onClick={() => setShowCommandPalette(true)}
+                onClick={openCommandPalette}
                 aria-label={t(
                   "topbar.searchPlaceholder",
                   undefined,
@@ -1032,7 +1064,7 @@ function App() {
                   <button
                     className="topbar-dropdown-item"
                     role="menuitem"
-                    onClick={() => setShowCommandPalette(true)}
+                    onClick={openCommandPalette}
                   >
                     {t(
                       "topbar.commandPalette",
@@ -1237,9 +1269,18 @@ function App() {
       <CommandPalette
         isOpen={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
-        onOpenShortcuts={() => setShowShortcutsModal(true)}
-        onOpenAddTorrent={() => setShowAddTorrentModal(true)}
-        onOpenGettingStarted={() => setShowGettingStartedModal(true)}
+        onOpenShortcuts={() => {
+          setShowCommandPalette(false);
+          setShowShortcutsModal(true);
+        }}
+        onOpenAddTorrent={() => {
+          setShowCommandPalette(false);
+          setShowAddTorrentModal(true);
+        }}
+        onOpenGettingStarted={() => {
+          setShowCommandPalette(false);
+          setShowGettingStartedModal(true);
+        }}
       />
       <KeyboardShortcutsModal
         isOpen={showShortcutsModal}
