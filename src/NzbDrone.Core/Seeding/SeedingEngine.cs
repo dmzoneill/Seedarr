@@ -43,6 +43,7 @@ public class SeedingEngine : BackgroundService
     private readonly IClientBehaviorSimulator _clientBehaviorSimulator;
     private readonly ISwarmAnalyzer _swarmAnalyzer;
     private readonly ICategoryService _categoryService;
+    private readonly ITagService _tagService;
     private readonly ISystemClock _clock;
     private readonly IRandomNumberGenerator _random;
     private readonly Logger _logger;
@@ -53,6 +54,7 @@ public class SeedingEngine : BackgroundService
     private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _uploadSpeedHistory = new();
     private readonly Dictionary<int, Queue<(DateTime Timestamp, long Speed)>> _downloadSpeedHistory = new();
     private readonly HashSet<int> _stalledTorrentIds = new();
+    private readonly HashSet<int> _seedingTimeReachedTorrentIds = new();
     private bool _speedThresholdExceededState;
     private long _lastTickTimestamp;
 
@@ -94,6 +96,7 @@ public class SeedingEngine : BackgroundService
         _trafficPatternSimulator = trafficPatternSimulator ?? new TrafficPatternSimulator(configService, _random, _clock);
         _clientBehaviorSimulator = clientBehaviorSimulator;
         _categoryService = categoryService;
+        _tagService = tagService;
         _speedPolicy = speedPolicy ?? new SpeedPolicy(distributionManager, speedScheduler, configService, eventLogService, _stateMachine, _stopPolicy, _random, _swarmAnalyzer, eventAggregator, categoryService, tagService);
         _logger = LogManager.GetCurrentClassLogger();
     }
@@ -378,6 +381,7 @@ public class SeedingEngine : BackgroundService
             _uploadSpeedHistory.Remove(id);
             _downloadSpeedHistory.Remove(id);
             _stalledTorrentIds.Remove(id);
+            _seedingTimeReachedTorrentIds.Remove(id);
         }
 
         var totalActive = downloadingTorrents.Count + seedingTorrents.Count;
@@ -404,6 +408,29 @@ public class SeedingEngine : BackgroundService
             }
         }
 
+        // Clean up reached state for torrents no longer seeding or whose seeding goal was reset / increased
+        var seedingTimeReachedIdsToRemove = new List<int>();
+        foreach (var reachedId in _seedingTimeReachedTorrentIds)
+        {
+            var torrent = activeTorrents.FirstOrDefault(t => t.Id == reachedId);
+            if (torrent == null || torrent.Status != TorrentStatus.Seeding)
+            {
+                seedingTimeReachedIdsToRemove.Add(reachedId);
+                continue;
+            }
+
+            var limit = GetConfiguredSeedingTimeLimitSeconds(torrent);
+            if (!limit.HasValue || torrent.SeedingTime < limit.Value)
+            {
+                seedingTimeReachedIdsToRemove.Add(reachedId);
+            }
+        }
+
+        foreach (var reachedId in seedingTimeReachedIdsToRemove)
+        {
+            _seedingTimeReachedTorrentIds.Remove(reachedId);
+        }
+
         // Evaluate metric thresholds across active torrents
         long totalDlSpeed = 0;
         long totalUlSpeed = 0;
@@ -422,9 +449,13 @@ public class SeedingEngine : BackgroundService
                 }
             }
 
-            if (torrent.Status == TorrentStatus.Seeding && torrent.SeedingTime > 0)
+            var seedingTimeThreshold = GetConfiguredSeedingTimeLimitSeconds(torrent);
+            if (torrent.Status == TorrentStatus.Seeding && seedingTimeThreshold.HasValue && torrent.SeedingTime >= seedingTimeThreshold.Value)
             {
-                _eventAggregator.PublishEvent(new TorrentSeedingTimeReachedEvent(torrent, TimeSpan.FromSeconds(torrent.SeedingTime)));
+                if (_seedingTimeReachedTorrentIds.Add(torrent.Id))
+                {
+                    _eventAggregator.PublishEvent(new TorrentSeedingTimeReachedEvent(torrent, TimeSpan.FromSeconds(torrent.SeedingTime)));
+                }
             }
         }
 
@@ -526,7 +557,10 @@ public class SeedingEngine : BackgroundService
 
             torrent.Active = true;
             torrent.LastActive = _clock.UtcNow;
-            torrent.SeedingTime += (long)tickSeconds;
+            if (torrent.Status == TorrentStatus.Seeding)
+            {
+                torrent.SeedingTime += (long)tickSeconds;
+            }
 
             if (torrent.Status == TorrentStatus.Downloading && torrent.DownloadSpeed > 0 && torrent.TotalSize > 0)
             {
@@ -548,6 +582,30 @@ public class SeedingEngine : BackgroundService
         return _torrentService.GetAll().Any(t =>
             t.ForceStart &&
             (t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading));
+    }
+
+    private int? GetConfiguredSeedingTimeLimitSeconds(Torrent torrent)
+    {
+        if (_tagService != null && torrent.TagIds != null && torrent.TagIds.Count > 0)
+        {
+            var tagLimits = torrent.TagIds
+                .Select(id => _tagService.Get(id))
+                .Where(tag => tag?.MinSeedTimeSeconds.HasValue == true && tag.MinSeedTimeSeconds.Value > 0)
+                .Select(tag => tag.MinSeedTimeSeconds.Value)
+                .ToList();
+
+            if (tagLimits.Count > 0)
+            {
+                return tagLimits.Min();
+            }
+        }
+
+        if (torrent.SeedingTimeLimit.HasValue && torrent.SeedingTimeLimit.Value > 0)
+        {
+            return torrent.SeedingTimeLimit.Value;
+        }
+
+        return null;
     }
 
     private static double GetPriorityWeight(int priority) => SpeedPolicy.GetPriorityWeight(priority);
