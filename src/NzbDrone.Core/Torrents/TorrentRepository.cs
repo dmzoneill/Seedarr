@@ -192,6 +192,11 @@ public class TorrentRepository : BasicRepository<Torrent>, ITorrentRepository
                 }
 
                 connection.Execute(
+                    "DELETE FROM \"TorrentMediaMetadata\" WHERE \"TorrentId\" = @Id",
+                    new { Id = id },
+                    transaction);
+
+                connection.Execute(
                     "DELETE FROM \"TorrentFiles\" WHERE \"TorrentId\" = @Id",
                     new { Id = id },
                     transaction);

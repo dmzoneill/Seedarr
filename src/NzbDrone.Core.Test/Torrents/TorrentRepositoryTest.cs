@@ -32,7 +32,27 @@ public class TorrentRepositoryTest
                 ""Name"" TEXT NOT NULL,
                 ""Category"" TEXT NULL,
                 ""InfoHash"" TEXT NULL
-            )";
+            );
+            CREATE TABLE ""PeerConnectionLogs"" (
+                ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
+                ""InfoHash"" TEXT NULL
+            );
+            CREATE TABLE ""TorrentMediaMetadata"" (
+                ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
+                ""TorrentId"" INTEGER NOT NULL
+            );
+            CREATE TABLE ""TorrentFiles"" (
+                ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
+                ""TorrentId"" INTEGER NOT NULL
+            );
+            CREATE TABLE ""TrackerEntries"" (
+                ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
+                ""TorrentId"" INTEGER NOT NULL
+            );
+            CREATE TABLE ""TorrentEventLogs"" (
+                ""Id"" INTEGER PRIMARY KEY AUTOINCREMENT,
+                ""TorrentId"" INTEGER NOT NULL
+            );";
         cmd.ExecuteNonQuery();
 
         _database = new Database(() => new SqliteConnection(_connectionString), DatabaseType.SQLite);
@@ -145,5 +165,51 @@ public class TorrentRepositoryTest
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Name, Is.EqualTo("Torrent 1"));
+    }
+
+    [Test]
+    public void Delete_cascades_deletion_to_TorrentMediaMetadata_and_child_tables()
+    {
+        using (var connection = _database.OpenConnection())
+        {
+            connection.Execute(
+                @"INSERT INTO ""Torrents"" (""Id"", ""Name"", ""InfoHash"") VALUES (1, 'Torrent 1', 'hash1')");
+            connection.Execute(
+                @"INSERT INTO ""Torrents"" (""Id"", ""Name"", ""InfoHash"") VALUES (2, 'Torrent 2', 'hash2')");
+
+            connection.Execute(
+                @"INSERT INTO ""TorrentMediaMetadata"" (""TorrentId"") VALUES (1), (2)");
+            connection.Execute(
+                @"INSERT INTO ""PeerConnectionLogs"" (""InfoHash"") VALUES ('hash1', 'hash2')");
+            connection.Execute(
+                @"INSERT INTO ""TorrentFiles"" (""TorrentId"") VALUES (1), (2)");
+            connection.Execute(
+                @"INSERT INTO ""TrackerEntries"" (""TorrentId"") VALUES (1), (2)");
+            connection.Execute(
+                @"INSERT INTO ""TorrentEventLogs"" (""TorrentId"") VALUES (1), (2)");
+        }
+
+        _subject.Delete(1);
+
+        using (var connection = _database.OpenConnection())
+        {
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""Torrents"" WHERE ""Id"" = 1"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""Torrents"" WHERE ""Id"" = 2"), Is.EqualTo(1));
+
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentMediaMetadata"" WHERE ""TorrentId"" = 1"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentMediaMetadata"" WHERE ""TorrentId"" = 2"), Is.EqualTo(1));
+
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""PeerConnectionLogs"" WHERE ""InfoHash"" = 'hash1'"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""PeerConnectionLogs"" WHERE ""InfoHash"" = 'hash2'"), Is.EqualTo(1));
+
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentFiles"" WHERE ""TorrentId"" = 1"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentFiles"" WHERE ""TorrentId"" = 2"), Is.EqualTo(1));
+
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TrackerEntries"" WHERE ""TorrentId"" = 1"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TrackerEntries"" WHERE ""TorrentId"" = 2"), Is.EqualTo(1));
+
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentEventLogs"" WHERE ""TorrentId"" = 1"), Is.EqualTo(0));
+            Assert.That(connection.ExecuteScalar<int>(@"SELECT COUNT(1) FROM ""TorrentEventLogs"" WHERE ""TorrentId"" = 2"), Is.EqualTo(1));
+        }
     }
 }

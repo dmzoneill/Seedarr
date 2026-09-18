@@ -4,6 +4,7 @@ import TorrentTable from "../components/TorrentTable";
 import TorrentGrid from "../components/TorrentGrid";
 import TorrentDetailPanel from "../components/TorrentDetailPanel";
 import AddTorrentModal from "../components/AddTorrentModal";
+import DeleteTorrentModal from "../components/DeleteTorrentModal";
 import { QuickSettingsDrawer } from "../components/quicksettings";
 import { TorrentToolbar } from "./torrentindex/TorrentToolbar";
 import { TorrentFilterPanel } from "./torrentindex/TorrentFilterPanel";
@@ -22,7 +23,6 @@ function TorrentIndex() {
     filteredTorrents,
     startSeeding,
     stopSeeding,
-    deleteTorrent,
     startAll,
     stopAll,
     seedingConfig,
@@ -62,6 +62,11 @@ function TorrentIndex() {
   } = useTorrentIndexState();
 
   const [bulkPending, setBulkPending] = useState(false);
+  const [deleteModalState, setDeleteModalState] = useState<{
+    isOpen: boolean;
+    targetIds: number[];
+    torrentName?: string;
+  } | null>(null);
 
   const handleBulkStart = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -135,22 +140,29 @@ function TorrentIndex() {
     }
   }, [selectedIds, bulkAction, setSelectedIds, showToast]);
 
-  const handleBulkDelete = useCallback(
-    async (deleteFilesOpt?: boolean | unknown) => {
-      const targetIds =
-        selectedIds.size > 0
-          ? Array.from(selectedIds)
-          : selectedTorrentId != null
-            ? [selectedTorrentId]
-            : [];
-      if (targetIds.length === 0) return;
-      const deleteFiles =
-        typeof deleteFilesOpt === "boolean" ? deleteFilesOpt : false;
-      const promptText = deleteFiles
-        ? `Delete ${targetIds.length} torrent(s) AND their files from disk?`
-        : `Delete ${targetIds.length} torrent(s)?`;
-      if (!confirm(promptText)) return;
+  const handleBulkDelete = useCallback(() => {
+    const targetIds =
+      selectedIds.size > 0
+        ? Array.from(selectedIds)
+        : selectedTorrentId != null
+          ? [selectedTorrentId]
+          : [];
+    if (targetIds.length === 0) return;
+    const torrentName =
+      targetIds.length === 1
+        ? (torrents ?? []).find((t) => t.id === targetIds[0])?.name
+        : undefined;
+    setDeleteModalState({
+      isOpen: true,
+      targetIds,
+      torrentName,
+    });
+  }, [selectedIds, selectedTorrentId, torrents]);
 
+  const handleConfirmBulkDelete = useCallback(
+    async (deleteFiles: boolean) => {
+      if (!deleteModalState || deleteModalState.targetIds.length === 0) return;
+      const targetIds = deleteModalState.targetIds;
       setBulkPending(true);
       try {
         const res = await bulkAction.mutateAsync({
@@ -181,17 +193,19 @@ function TorrentIndex() {
             "warning",
           );
         }
+        setDeleteModalState(null);
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : "Failed to delete torrents";
+        const msg =
+          err instanceof Error ? err.message : "Failed to delete torrents";
         showToast(msg, "error");
       } finally {
         setBulkPending(false);
       }
     },
     [
-      selectedIds,
-      selectedTorrentId,
+      deleteModalState,
       bulkAction,
+      selectedTorrentId,
       setSelectedIds,
       setSelectedTorrentId,
       showToast,
@@ -449,6 +463,18 @@ function TorrentIndex() {
       </div>
       {showAddModal && (
         <AddTorrentModal onClose={() => setShowAddModal(false)} />
+      )}
+      {deleteModalState?.isOpen && (
+        <DeleteTorrentModal
+          isOpen={deleteModalState.isOpen}
+          count={deleteModalState.targetIds.length}
+          torrentName={deleteModalState.torrentName}
+          isPending={bulkPending}
+          onClose={() => {
+            if (!bulkPending) setDeleteModalState(null);
+          }}
+          onConfirm={handleConfirmBulkDelete}
+        />
       )}
     </div>
   );
