@@ -2987,4 +2987,127 @@ public class PeerServerTest
         Assert.That(msg, Is.Not.Null);
         Assert.That(msg.Type, Is.EqualTo(PeerMessageType.NotInterested));
     }
+
+    [Test]
+    public void PeerServer_constructor_should_subscribe_to_UtpManager_OnConnectionAccepted()
+    {
+        var utpManager = Substitute.For<IUtpManager>();
+        using var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            utpManager: utpManager);
+
+        var mockConn = Substitute.For<IUtpConnection>();
+        mockConn.RemoteEndPoint.Returns(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 55123));
+        mockConn.IsConnected.Returns(true);
+        var ms = new MemoryStream();
+        mockConn.GetStream().Returns(ms);
+
+        Assert.DoesNotThrow(() =>
+        {
+            utpManager.OnConnectionAccepted += Raise.Event<Action<IUtpConnection>>(mockConn);
+        });
+    }
+
+    [Test]
+    public async Task ProcessIncomingUtpConnectionAsync_should_process_connection_and_call_stream()
+    {
+        var utpManager = Substitute.For<IUtpManager>();
+        using var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            utpManager: utpManager);
+
+        var mockConn = Substitute.For<IUtpConnection>();
+        var ep = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 55124);
+        mockConn.RemoteEndPoint.Returns(ep);
+        mockConn.IsConnected.Returns(true);
+        var ms = new MemoryStream();
+        mockConn.GetStream().Returns(ms);
+
+        await server.ProcessIncomingUtpConnectionAsync(mockConn);
+
+        mockConn.Received().GetStream();
+    }
+
+    [Test]
+    public async Task ProcessIncomingUtpConnectionAsync_should_reject_when_vpn_fail_closed_active()
+    {
+        var vpnKillSwitch = Substitute.For<IVpnKillSwitchService>();
+        vpnKillSwitch.IsFailClosedActive.Returns(true);
+
+        using var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            vpnKillSwitchService: vpnKillSwitch);
+
+        var mockConn = Substitute.For<IUtpConnection>();
+        mockConn.RemoteEndPoint.Returns(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 55125));
+        mockConn.IsConnected.Returns(true);
+
+        await server.ProcessIncomingUtpConnectionAsync(mockConn);
+
+        mockConn.Received().Dispose();
+        mockConn.DidNotReceive().GetStream();
+    }
+
+    [Test]
+    public async Task ProcessIncomingUtpConnectionAsync_should_reject_when_max_connections_per_ip_exceeded()
+    {
+        _configService.MaxConnectionsPerIp.Returns(1);
+
+        using var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker);
+
+        var mockConn1 = Substitute.For<IUtpConnection>();
+        mockConn1.RemoteEndPoint.Returns(new IPEndPoint(IPAddress.Parse("192.168.2.50"), 55126));
+        mockConn1.IsConnected.Returns(true);
+        mockConn1.GetStream().Returns(new MemoryStream());
+
+        var mockConn2 = Substitute.For<IUtpConnection>();
+        mockConn2.RemoteEndPoint.Returns(new IPEndPoint(IPAddress.Parse("192.168.2.50"), 55127));
+        mockConn2.IsConnected.Returns(true);
+
+        // Pre-fill IP count to max
+        var ipDictField = typeof(PeerServer).GetField("_connectionsPerIp", BindingFlags.NonPublic | BindingFlags.Instance);
+        var ipDict = (ConcurrentDictionary<string, int>)ipDictField.GetValue(server);
+        ipDict["192.168.2.50"] = 1;
+
+        await server.ProcessIncomingUtpConnectionAsync(mockConn2);
+
+        mockConn2.Received().Dispose();
+        mockConn2.DidNotReceive().GetStream();
+    }
+
+    [Test]
+    public async Task ProcessIncomingUtpConnectionAsync_should_handle_stream_error_gracefully()
+    {
+        using var server = new PeerServer(
+            _configService,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker);
+
+        var mockConn = Substitute.For<IUtpConnection>();
+        mockConn.RemoteEndPoint.Returns(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 55128));
+        mockConn.IsConnected.Returns(true);
+        mockConn.GetStream().Returns(_ => throw new IOException("Simulated uTP stream read failure"));
+
+        Assert.DoesNotThrowAsync(async () => await server.ProcessIncomingUtpConnectionAsync(mockConn));
+        mockConn.Received().Dispose();
+    }
 }

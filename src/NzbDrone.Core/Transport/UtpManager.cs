@@ -19,6 +19,7 @@ public interface IUtpManager
     bool IsEnabled { get; }
     bool TcpFallbackEnabled { get; }
     int ActiveConnections { get; }
+    event Action<IUtpConnection> OnConnectionAccepted;
 }
 
 public class UtpManager : BackgroundService, IUtpManager
@@ -27,6 +28,8 @@ public class UtpManager : BackgroundService, IUtpManager
     private readonly Logger _logger;
     private readonly ConcurrentDictionary<string, IUtpConnection> _activeConnections = new();
     private UdpClient _listener;
+
+    public event Action<IUtpConnection> OnConnectionAccepted;
 
     public UdpClient Listener
     {
@@ -208,20 +211,32 @@ public class UtpManager : BackgroundService, IUtpManager
                 return;
             }
 
-            var conn = new UtpConnection(_listener, sendId, sender, _configService.TransportConnectionTimeoutSeconds);
+            var conn = new UtpConnection(_listener, sendId, sender, _configService.TransportConnectionTimeoutSeconds, _configService.BindInterface);
             _activeConnections[synKey] = conn;
             _activeConnections[dataKey] = conn;
             _activeConnections[sendIdKey] = conn;
             _activeConnections[receiveIdKey] = conn;
-            conn.OnClosed = _ =>
+            var prevClosed = conn.OnClosed;
+            conn.OnClosed = c =>
             {
                 _activeConnections.TryRemove(synKey, out _);
                 _activeConnections.TryRemove(dataKey, out _);
                 _activeConnections.TryRemove(sendIdKey, out _);
                 _activeConnections.TryRemove(receiveIdKey, out _);
+                prevClosed?.Invoke(c);
             };
 
             conn.HandleIncomingPacket(data, sender);
+
+            try
+            {
+                OnConnectionAccepted?.Invoke(conn);
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Error dispatching accepted uTP connection from {0}", sender);
+            }
+
             return;
         }
 

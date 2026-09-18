@@ -63,6 +63,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
     private readonly Logger _logger;
     private readonly object _listenerLock = new();
     private readonly SemaphoreSlim _rebindSignal = new(0, 1);
+    private readonly CancellationTokenSource _serverLifecycleCts = new();
     private TcpListener _listener;
     private CancellationTokenSource _listenerCts;
 
@@ -237,6 +238,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         if (_fastExtensionHandler != null)
         {
             _fastExtensionHandler.OnRequestRejected += OnFastExtensionRequestRejected;
+        }
+
+        if (_utpManager != null)
+        {
+            _utpManager.OnConnectionAccepted += OnUtpConnectionAccepted;
         }
 
         var maxGlobal = configService.MaxGlobalConnections > 0 ? configService.MaxGlobalConnections : 200;
@@ -642,6 +648,25 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             _vpnKillSwitchService.VpnRestored -= OnVpnRestored;
         }
 
+        if (_fastExtensionHandler != null)
+        {
+            _fastExtensionHandler.OnRequestRejected -= OnFastExtensionRequestRejected;
+        }
+
+        if (_utpManager != null)
+        {
+            _utpManager.OnConnectionAccepted -= OnUtpConnectionAccepted;
+        }
+
+        try
+        {
+            _serverLifecycleCts.Cancel();
+            _serverLifecycleCts.Dispose();
+        }
+        catch
+        {
+        }
+
         StopListener();
         _connectionsPerIp.Clear();
         _rebindSignal?.Dispose();
@@ -875,6 +900,17 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        using var registration = stoppingToken.Register(() =>
+        {
+            try
+            {
+                _serverLifecycleCts.Cancel();
+            }
+            catch
+            {
+            }
+        });
+
         var listenerTask = RunListenerAsync(stoppingToken);
         var contactTask = RunPeerContactLoopAsync(stoppingToken);
         await Task.WhenAll(listenerTask, contactTask);
@@ -1608,6 +1644,176 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         }
     }
 
+    private void OnUtpConnectionAccepted(Transport.IUtpConnection conn)
+    {
+        if (conn == null)
+        {
+            return;
+        }
+
+        try
+        {
+            var token = _serverLifecycleCts.Token;
+            if (token.IsCancellationRequested)
+            {
+                conn.Dispose();
+                return;
+            }
+
+            _ = Task.Run(
+                async () =>
+                {
+                    await ProcessIncomingUtpConnectionAsync(conn, token);
+                },
+                token);
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to dispatch inbound uTP connection");
+            conn.Dispose();
+        }
+    }
+
+    internal async Task ProcessIncomingUtpConnectionAsync(Transport.IUtpConnection conn, CancellationToken stoppingToken = default)
+    {
+        string clientIp = null;
+        var ipReserved = false;
+        var acquiredConnectionSemaphore = false;
+        var acquiredHalfOpenSemaphore = false;
+
+        try
+        {
+            if (conn?.RemoteEndPoint == null || !conn.IsConnected)
+            {
+                conn?.Dispose();
+                return;
+            }
+
+            if (_vpnKillSwitchService?.IsFailClosedActive == true)
+            {
+                _logger.Debug("VPN fail-closed engaged; rejecting incoming uTP peer connection");
+                conn.Dispose();
+                return;
+            }
+
+            var endpoint = conn.RemoteEndPoint;
+            clientIp = endpoint.Address.ToString();
+            var maxPerIp = _configService.MaxConnectionsPerIp > 0 ? _configService.MaxConnectionsPerIp : 5;
+            var currentCount = _connectionsPerIp.AddOrUpdate(clientIp, 1, (_, count) => count + 1);
+            ipReserved = true;
+
+            if (currentCount > maxPerIp)
+            {
+                _logger.Debug("Maximum connections per IP exceeded for {0}; rejecting incoming uTP peer", clientIp);
+                conn.Dispose();
+                return;
+            }
+
+            try
+            {
+                if (!await _halfOpenSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                {
+                    _logger.Debug("Half-open connection quota exceeded; rejecting incoming uTP peer {0}", clientIp);
+                    conn.Dispose();
+                    return;
+                }
+
+                acquiredHalfOpenSemaphore = true;
+            }
+            catch
+            {
+                conn.Dispose();
+                return;
+            }
+
+            try
+            {
+                if (!await _connectionSemaphore.WaitAsync(TimeSpan.FromSeconds(5), stoppingToken))
+                {
+                    _logger.Debug("Global connection quota exceeded; rejecting incoming uTP peer {0}", clientIp);
+                    conn.Dispose();
+                    return;
+                }
+
+                acquiredConnectionSemaphore = true;
+            }
+            catch
+            {
+                conn.Dispose();
+                return;
+            }
+
+            var halfOpenReleased = 0;
+            void ReleaseHalfOpen()
+            {
+                if (Interlocked.Exchange(ref halfOpenReleased, 1) == 0)
+                {
+                    if (acquiredHalfOpenSemaphore)
+                    {
+                        _halfOpenSemaphore.Release();
+                        acquiredHalfOpenSemaphore = false;
+                    }
+                }
+            }
+
+            try
+            {
+                var stream = conn.GetStream();
+                await HandleInboundPeerStreamAsync(stream, endpoint, stoppingToken, ReleaseHalfOpen);
+            }
+            finally
+            {
+                ReleaseHalfOpen();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected during shutdown
+        }
+        catch (Exception ex)
+        {
+            _logger.Debug(ex, "Failed to handle incoming uTP peer connection from {0}", clientIp ?? "unknown");
+            conn?.Dispose();
+        }
+        finally
+        {
+            if (acquiredHalfOpenSemaphore)
+            {
+                _halfOpenSemaphore.Release();
+            }
+
+            if (acquiredConnectionSemaphore)
+            {
+                _connectionSemaphore.Release();
+            }
+
+            if (ipReserved && clientIp != null)
+            {
+                DecrementConnectionCount(clientIp);
+            }
+        }
+    }
+
+    internal async Task HandleInboundPeerStreamAsync(
+        Stream stream,
+        IPEndPoint remoteEndPoint,
+        CancellationToken stoppingToken = default,
+        Action onHandshakeSuccess = null)
+    {
+        if (stream == null || remoteEndPoint == null)
+        {
+            if (stream != null)
+            {
+                await stream.DisposeAsync();
+            }
+
+            return;
+        }
+
+        using var connection = new PeerConnection(stream, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, _dhKeyPool);
+        await HandleInboundPeerConnectionAsync(connection, stoppingToken, onHandshakeSuccess);
+    }
+
     private void HandleConnection(TcpClient client, CancellationToken stoppingToken)
     {
         HandleConnection(client, stoppingToken, null);
@@ -1618,16 +1824,26 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         HandleConnectionAsync(client, stoppingToken, onHandshakeSuccess).GetAwaiter().GetResult();
     }
 
+    private void HandleConnection(Transport.IUtpConnection conn, CancellationToken stoppingToken)
+    {
+        HandleConnection(conn, stoppingToken, null);
+    }
+
+    private void HandleConnection(Transport.IUtpConnection conn, CancellationToken stoppingToken, Action onHandshakeSuccess)
+    {
+        if (conn?.RemoteEndPoint == null)
+        {
+            conn?.Dispose();
+            return;
+        }
+
+        var stream = conn.GetStream();
+        HandleInboundPeerStreamAsync(stream, conn.RemoteEndPoint, stoppingToken, onHandshakeSuccess).GetAwaiter().GetResult();
+    }
+
     private async Task HandleConnectionAsync(TcpClient client, CancellationToken stoppingToken, Action onHandshakeSuccess = null)
     {
         using var connection = new PeerConnection(client, _dhKeyPool);
-        connection.HandshakeTimeoutMs = UnauthenticatedHandshakeTimeoutMs;
-        connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
-        connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
-        connection.MaxPipelinedRequests = _configService.PeerRequestCount;
-        connection.IdleChance = _clientBehaviorSimulator != null
-            ? _clientBehaviorSimulator.GetEffectiveIdleChance(_configService.PeerIdleChance)
-            : _configService.PeerIdleChance;
 
         if (client.Client != null)
         {
@@ -1639,6 +1855,39 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             {
             }
         }
+
+        await HandleInboundPeerConnectionAsync(
+            connection,
+            stoppingToken,
+            onHandshakeSuccess,
+            () =>
+            {
+                if (client.Client != null)
+                {
+                    try
+                    {
+                        client.Client.ReceiveTimeout = connection.MessageReadTimeoutMs > 0 ? connection.MessageReadTimeoutMs : 0;
+                    }
+                    catch
+                    {
+                    }
+                }
+            });
+    }
+
+    private async Task HandleInboundPeerConnectionAsync(
+        PeerConnection connection,
+        CancellationToken stoppingToken,
+        Action onHandshakeSuccess = null,
+        Action onPostHandshakeTimeout = null)
+    {
+        connection.HandshakeTimeoutMs = UnauthenticatedHandshakeTimeoutMs;
+        connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
+        connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
+        connection.MaxPipelinedRequests = _configService.PeerRequestCount;
+        connection.IdleChance = _clientBehaviorSimulator != null
+            ? _clientBehaviorSimulator.GetEffectiveIdleChance(_configService.PeerIdleChance)
+            : _configService.PeerIdleChance;
 
         _logger.Debug("Incoming peer: {0}:{1}", connection.RemoteIp, connection.RemotePort);
 
@@ -1700,16 +1949,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
                 onHandshakeSuccess?.Invoke();
 
-                if (client.Client != null)
-                {
-                    try
-                    {
-                        client.Client.ReceiveTimeout = connection.MessageReadTimeoutMs > 0 ? connection.MessageReadTimeoutMs : 0;
-                    }
-                    catch
-                    {
-                    }
-                }
+                onPostHandshakeTimeout?.Invoke();
 
                 var session = (_clientBehaviorSimulator != null && _configService.ClientBehaviorEngineEnabled && !_configService.AnonymousMode)
                     ? _clientBehaviorSimulator.GetOrCreateSession(torrent.InfoHash, torrent.IsPrivate)

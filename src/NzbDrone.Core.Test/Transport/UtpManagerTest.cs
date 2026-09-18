@@ -269,6 +269,68 @@ public class UtpManagerTest
     }
 
     [Test]
+    public void HandleIncoming_should_fire_OnConnectionAccepted_when_syn_received()
+    {
+        IUtpConnection acceptedConn = null;
+        var eventFired = 0;
+        _subject.OnConnectionAccepted += conn =>
+        {
+            eventFired++;
+            acceptedConn = conn;
+        };
+
+        var data = new byte[20];
+        data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        data[2] = 0x01;
+        data[3] = 0x23;
+
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.100"), 54321);
+        InvokeHandleIncoming(data, sender);
+
+        Assert.That(eventFired, Is.EqualTo(1));
+        Assert.That(acceptedConn, Is.Not.Null);
+        Assert.That(acceptedConn.RemoteEndPoint, Is.EqualTo(sender));
+        Assert.That(acceptedConn.IsConnected, Is.True);
+        Assert.That(acceptedConn.SendId, Is.EqualTo(0x0123));
+    }
+
+    [Test]
+    public void HandleIncoming_should_not_fire_OnConnectionAccepted_for_duplicate_syn()
+    {
+        var eventFired = 0;
+        _subject.OnConnectionAccepted += conn => eventFired++;
+
+        var data = new byte[20];
+        data[0] = (byte)(((byte)UtpPacketType.Syn) << 4 | 1);
+        data[2] = 0x02;
+        data[3] = 0x34;
+
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.101"), 54322);
+        InvokeHandleIncoming(data, sender);
+        InvokeHandleIncoming(data, sender);
+
+        Assert.That(eventFired, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void HandleIncoming_should_not_fire_OnConnectionAccepted_for_non_syn_packets()
+    {
+        var eventFired = 0;
+        _subject.OnConnectionAccepted += conn => eventFired++;
+
+        var sender = new IPEndPoint(IPAddress.Parse("192.168.1.102"), 54323);
+
+        foreach (var type in new[] { UtpPacketType.Data, UtpPacketType.Fin, UtpPacketType.State, UtpPacketType.Reset })
+        {
+            var data = new byte[20];
+            data[0] = (byte)(((byte)type) << 4 | 1);
+            InvokeHandleIncoming(data, sender);
+        }
+
+        Assert.That(eventFired, Is.EqualTo(0));
+    }
+
+    [Test]
     public void HandleIncoming_should_process_data_packet()
     {
         var data = new byte[20];
