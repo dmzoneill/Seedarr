@@ -394,9 +394,10 @@ function TorrentTable({
         if (anchorIndex === null) {
           setAnchorIndex(idx);
         }
+        rowRefs.current[idx]?.scrollIntoView({ block: "nearest" });
       }
     }
-  }, [selectedTorrentId, sorted]);
+  }, [selectedTorrentId, sorted, anchorIndex]);
 
   useEffect(() => {
     if (sorted.length > 0 && focusedIndex >= sorted.length) {

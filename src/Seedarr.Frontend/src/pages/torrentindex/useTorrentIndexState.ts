@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router";
 import {
   useTorrents,
@@ -13,6 +13,7 @@ import {
 import { extractTrackerDomain } from "../../utils/formatters";
 import { filterTorrents } from "../../utils/filterUtils";
 import { ViewMode } from "./types";
+import type { Torrent } from "../../api/types";
 
 function getInitialViewMode(): ViewMode {
   const stored = localStorage.getItem("seedarr-view-mode");
@@ -32,14 +33,28 @@ export function useTorrentIndexState() {
 
   const [filter, setFilter] = useState(() => searchParams.get("q") || "");
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => {
+    const select = searchParams.get("select");
+    if (select) {
+      const id = parseInt(select.trim(), 10);
+      if (!Number.isNaN(id) && id > 0) return new Set([id]);
+    }
+    return new Set();
+  });
   const [viewMode, setViewMode] = useState<ViewMode>(getInitialViewMode);
   const [selectedState, setSelectedState] = useState<string>("All");
   const [selectedTracker, setSelectedTracker] = useState<string>("All");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [selectedTag, setSelectedTag] = useState<string>("All");
   const [selectedTorrentId, setSelectedTorrentId] = useState<number | null>(
-    null,
+    () => {
+      const select = searchParams.get("select");
+      if (select) {
+        const id = parseInt(select.trim(), 10);
+        if (!Number.isNaN(id) && id > 0) return id;
+      }
+      return null;
+    },
   );
   const [isFilterCollapsed, setIsFilterCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("seedarr_filter_collapsed") === "true";
@@ -49,6 +64,63 @@ export function useTorrentIndexState() {
       return localStorage.getItem("seedarr_quick_controls_open") === "true";
     },
   );
+
+  const pendingSelectIdRef = useRef<number | null>(
+    (() => {
+      const select = searchParams.get("select");
+      if (select) {
+        const id = parseInt(select.trim(), 10);
+        if (!Number.isNaN(id) && id > 0) return id;
+      }
+      return null;
+    })(),
+  );
+
+  const adjustFiltersForTorrent = useCallback((target: Torrent) => {
+    setSelectedState((current) =>
+      current !== "All" && target.status !== current ? "All" : current,
+    );
+    setSelectedTracker((current) => {
+      if (current === "All") return current;
+      const urls =
+        target.trackers && target.trackers.length > 0
+          ? target.trackers
+          : target.trackerUrl
+            ? [target.trackerUrl]
+            : [];
+      const hasTracker = urls.some(
+        (u) => extractTrackerDomain(u) === current,
+      );
+      return hasTracker ? current : "All";
+    });
+    setSelectedCategory((current) => {
+      if (current === "All") return current;
+      const cat = target.category?.trim() || "Uncategorized";
+      return cat === current ? current : "All";
+    });
+    setSelectedTag((current) => {
+      if (current === "All") return current;
+      const tag = target.label?.trim() || "Untagged";
+      return tag === current ? current : "All";
+    });
+    setFilter((current) => {
+      if (!current) return current;
+      return target.name.toLowerCase().includes(current.toLowerCase())
+        ? current
+        : "";
+    });
+  }, []);
+
+  // When torrents load or update, ensure pending deep-linked selection is visible
+  useEffect(() => {
+    if (pendingSelectIdRef.current != null && torrents && torrents.length > 0) {
+      const target = torrents.find((t) => t.id === pendingSelectIdRef.current);
+      if (target) {
+        adjustFiltersForTorrent(target);
+      }
+      pendingSelectIdRef.current = null;
+    }
+  }, [torrents, adjustFiltersForTorrent]);
 
   const toggleFilterCollapse = useCallback(() => {
     setIsFilterCollapsed((prev) => {
@@ -71,14 +143,48 @@ export function useTorrentIndexState() {
     localStorage.setItem("seedarr_quick_controls_open", "false");
   }, []);
 
-  // Consume ?q= from URL then clean it so the URL stays tidy
+  // Consume ?q= and ?select= from URL then clean them so the URL stays tidy without stripping other valid params
   useEffect(() => {
     const q = searchParams.get("q");
-    if (q) {
-      setFilter(q);
-      setSearchParams({}, { replace: true });
+    const selectParam = searchParams.get("select");
+
+    if (q === null && selectParam === null) {
+      return;
     }
-  }, [searchParams, setSearchParams]);
+
+    const nextParams = new URLSearchParams(searchParams);
+    let shouldUpdateUrl = false;
+
+    if (q !== null) {
+      setFilter(q);
+      nextParams.delete("q");
+      shouldUpdateUrl = true;
+    }
+
+    if (selectParam !== null) {
+      const numericId = parseInt(selectParam.trim(), 10);
+      if (!Number.isNaN(numericId) && numericId > 0) {
+        setSelectedTorrentId(numericId);
+        setSelectedIds((prev) => new Set(prev).add(numericId));
+
+        if (torrents && torrents.length > 0) {
+          const target = torrents.find((t) => t.id === numericId);
+          if (target) {
+            adjustFiltersForTorrent(target);
+          }
+          pendingSelectIdRef.current = null;
+        } else {
+          pendingSelectIdRef.current = numericId;
+        }
+      }
+      nextParams.delete("select");
+      shouldUpdateUrl = true;
+    }
+
+    if (shouldUpdateUrl) {
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, torrents, adjustFiltersForTorrent]);
 
   const adjustSpeed = useCallback(
     (field: "maxUploadSpeedKbps" | "maxDownloadSpeedKbps", factor: number) => {
