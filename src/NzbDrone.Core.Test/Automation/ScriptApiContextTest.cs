@@ -1,7 +1,12 @@
+using System;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Http;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Automation;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.Test.TestHelpers;
 
 namespace NzbDrone.Core.Test.Automation;
 
@@ -148,5 +153,91 @@ public class ScriptApiContextTest
 
         Assert.That(url1, Is.EqualTo("http://127.0.0.1:8096/api/v1/torrents"));
         Assert.That(url2, Is.EqualTo("http://127.0.0.1:8096/api/v1/torrents"));
+    }
+
+    [Test]
+    public void Get_should_throw_UnauthorizedAccessException_when_targeting_config_endpoint()
+    {
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.get("config"));
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.get("/api/v1/config"));
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.get("config/general"));
+    }
+
+    [Test]
+    public void Post_should_throw_UnauthorizedAccessException_when_targeting_customscript_endpoint()
+    {
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.post("customscript", new { }));
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.post("/api/v1/customscript/test", new { }));
+    }
+
+    [Test]
+    public void Delete_should_throw_UnauthorizedAccessException_when_targeting_backup_endpoint()
+    {
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.delete("backup/1"));
+    }
+
+    [Test]
+    public void Get_should_throw_UnauthorizedAccessException_when_targeting_filesystem_endpoint()
+    {
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.get("filesystem"));
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.get("directory"));
+    }
+
+    [Test]
+    public void Post_should_throw_UnauthorizedAccessException_when_targeting_system_restart()
+    {
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.post("system/restart"));
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.post("system/shutdown"));
+    }
+
+    [Test]
+    public void Get_should_throw_UnauthorizedAccessException_when_targeting_automation_endpoint()
+    {
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.get("automation"));
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.post("automation", new { }));
+    }
+
+    [Test]
+    public void Get_should_throw_UnauthorizedAccessException_when_path_traversal_targets_disallowed_endpoint()
+    {
+        Assert.Throws<UnauthorizedAccessException>(() => _subject.get("torrents/../../config"));
+    }
+
+    [Test]
+    public void IsDisallowedEndpoint_should_correctly_identify_blocked_and_allowed_endpoints()
+    {
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("config"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("auth"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("identityprovider"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("customscript"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("backup"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("filesystem"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("directory"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("setup"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("update"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("automation"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("system/restart"), Is.True);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("system/shutdown"), Is.True);
+
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("torrents"), Is.False);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("system/status"), Is.False);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("categories"), Is.False);
+        Assert.That(ScriptApiContext.IsDisallowedEndpoint("tags"), Is.False);
+    }
+
+    [Test]
+    public void Get_should_attach_audit_headers_for_allowed_endpoint()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "[]");
+        using var client = new HttpClient(handler);
+        var http = new ScriptHttpContext(client, allowLoopback: true);
+        var subject = new ScriptApiContext(_configFileProvider, http);
+
+        var result = (Dictionary<string, object>)subject.get("torrents");
+
+        Assert.That(result["status"], Is.EqualTo(200));
+        Assert.That(handler.LastRequest.Headers.Contains("X-Automation-Script"), Is.True);
+        Assert.That(handler.LastRequest.Headers.Contains("X-Seedarr-Audited"), Is.True);
     }
 }

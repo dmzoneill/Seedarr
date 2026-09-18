@@ -153,6 +153,165 @@ public class ScriptHttpContextTest
         Assert.That(handler.LastRequest.Method, Is.EqualTo(HttpMethod.Delete));
     }
 
+    [Test]
+    public void ResolveClient_should_default_to_secure_client_when_allowInsecure_is_omitted()
+    {
+        var context = new ScriptHttpContext();
+        var client = context.ResolveClient();
+
+        Assert.That(client, Is.SameAs(ScriptHttpContext.DefaultSecureClient));
+        Assert.That(client, Is.Not.SameAs(ScriptHttpContext.DefaultInsecureClient));
+    }
+
+    [Test]
+    public void SendAsync_should_block_loopback_ipv4_by_default()
+    {
+        var context = new ScriptHttpContext();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+        {
+            context.get("http://127.0.0.1:8080/test");
+        });
+
+        Assert.That(ex!.Message, Does.Contain("SSRF guard"));
+    }
+
+    [Test]
+    public void SendAsync_should_block_loopback_ipv6_by_default()
+    {
+        var context = new ScriptHttpContext();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+        {
+            context.get("http://[::1]:8080/test");
+        });
+
+        Assert.That(ex!.Message, Does.Contain("SSRF guard"));
+    }
+
+    [Test]
+    public void SendAsync_should_block_localhost_by_default()
+    {
+        var context = new ScriptHttpContext();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+        {
+            context.get("http://localhost:8080/test");
+        });
+
+        Assert.That(ex!.Message, Does.Contain("SSRF guard"));
+    }
+
+    [Test]
+    public void SendAsync_should_block_cloud_metadata_by_default()
+    {
+        var context = new ScriptHttpContext();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+        {
+            context.get("http://169.254.169.254/latest/meta-data");
+        });
+
+        Assert.That(ex!.Message, Does.Contain("SSRF guard"));
+    }
+
+    [Test]
+    public void SendAsync_should_block_private_network_10_by_default()
+    {
+        var context = new ScriptHttpContext();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+        {
+            context.get("http://10.0.0.1/admin");
+        });
+
+        Assert.That(ex!.Message, Does.Contain("SSRF guard"));
+    }
+
+    [Test]
+    public void SendAsync_should_block_private_network_172_by_default()
+    {
+        var context = new ScriptHttpContext();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+        {
+            context.get("http://172.16.0.1/admin");
+        });
+
+        Assert.That(ex!.Message, Does.Contain("SSRF guard"));
+    }
+
+    [Test]
+    public void SendAsync_should_block_private_network_192_168_by_default()
+    {
+        var context = new ScriptHttpContext();
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+        {
+            context.get("http://192.168.1.1/admin");
+        });
+
+        Assert.That(ex!.Message, Does.Contain("SSRF guard"));
+    }
+
+    [Test]
+    public void SendAsync_should_allow_loopback_when_explicitly_configured_on_context()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{\"status\":\"ok\"}");
+        using var client = new HttpClient(handler);
+        var context = new ScriptHttpContext(client, allowLoopback: true);
+
+        var result = (Dictionary<string, object?>)context.get("http://127.0.0.1:8096/api/v1/system/status");
+
+        Assert.That(result["status"], Is.EqualTo(200));
+        Assert.That(result["ok"], Is.EqualTo(true));
+    }
+
+    [Test]
+    public void SendAsync_should_allow_loopback_when_explicitly_provided_in_options()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{\"status\":\"ok\"}");
+        using var client = new HttpClient(handler);
+        var context = new ScriptHttpContext(client, allowLoopback: false);
+
+        var options = new Dictionary<string, object> { ["allowLoopback"] = true };
+        var result = (Dictionary<string, object?>)context.get("http://127.0.0.1:8096/api/v1/system/status", options);
+
+        Assert.That(result["status"], Is.EqualTo(200));
+        Assert.That(result["ok"], Is.EqualTo(true));
+    }
+
+    [Test]
+    public void SendAsync_should_allow_private_network_when_explicitly_configured()
+    {
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, "{\"status\":\"ok\"}");
+        using var client = new HttpClient(handler);
+        var context = new ScriptHttpContext(client, allowPrivateNetworks: true);
+
+        var result = (Dictionary<string, object?>)context.get("http://192.168.1.100/status");
+
+        Assert.That(result["status"], Is.EqualTo(200));
+        Assert.That(result["ok"], Is.EqualTo(true));
+    }
+
+    [Test]
+    public void SendAsync_should_still_block_cloud_metadata_even_when_private_networks_are_allowed()
+    {
+        var handler = new MockHttpMessageHandler();
+        using var client = new HttpClient(handler);
+        var context = new ScriptHttpContext(client, allowPrivateNetworks: true);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+        {
+            context.get("http://169.254.169.254/latest/meta-data");
+        });
+
+        Assert.That(ex!.Message, Does.Contain("SSRF guard"));
+    }
+
     private class TokenInspectingHandler : HttpMessageHandler
     {
         public CancellationToken ObservedToken { get; private set; }

@@ -98,6 +98,8 @@ public interface IConfigService
     string OnApplicationUpdatedScript { get; }
     string OnUpgradeScript { get; }
     int CustomScriptTimeoutSeconds { get; }
+    bool AllowExternalScriptsInAutomation { get; }
+    string CustomScriptsDirectory { get; }
 
     // Speed
     int HistoryRetentionDays { get; }
@@ -490,6 +492,8 @@ public class ConfigService : IConfigService
     public string OnApplicationUpdatedScript => GetValue("OnApplicationUpdatedScript", string.Empty);
     public string OnUpgradeScript => GetValue("OnUpgradeScript", string.Empty);
     public int CustomScriptTimeoutSeconds => Math.Max(1, GetValueInt("CustomScriptTimeoutSeconds", 60));
+    public bool AllowExternalScriptsInAutomation => GetValueBoolean("AllowExternalScriptsInAutomation", false);
+    public string CustomScriptsDirectory => GetValue("CustomScriptsDirectory", string.Empty);
 
     // Speed
     public int HistoryRetentionDays => GetValueInt("HistoryRetentionDays", 30);

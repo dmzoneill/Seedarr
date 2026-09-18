@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
+using System.Threading.Tasks;
 using Jint;
 using Jint.Native;
 using Jint.Runtime;
@@ -24,12 +24,14 @@ public class JintScriptRunner : IScriptRunner
 {
     private readonly IManageCommandQueue? _commandQueue;
     private readonly IConfigFileProvider? _configFileProvider;
+    private readonly IConfigService? _configService;
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
-    public JintScriptRunner(IManageCommandQueue? commandQueue = null, IConfigFileProvider? configFileProvider = null)
+    public JintScriptRunner(IManageCommandQueue? commandQueue = null, IConfigFileProvider? configFileProvider = null, IConfigService? configService = null)
     {
         _commandQueue = commandQueue;
         _configFileProvider = configFileProvider;
+        _configService = configService;
     }
 
     public AutomationExecutionResult Execute(
@@ -54,27 +56,37 @@ public class JintScriptRunner : IScriptRunner
             // Console logging
             engine.SetValue("console", new ScriptConsoleContext(logBuilder));
 
-            // HTTP context
-            var httpContext = new ScriptHttpContext();
+            // HTTP context (strict sandboxing: no loopback, no private networks)
+            var httpContext = new ScriptHttpContext(allowLoopback: false, allowPrivateNetworks: false);
             engine.SetValue("http", httpContext);
 
-            // API context (local pre-authenticated)
-            var apiContext = new ScriptApiContext(_configFileProvider, httpContext);
+            // API context (local pre-authenticated with loopback allowed for internal Seedarr API)
+            var apiHttpContext = new ScriptHttpContext(allowLoopback: true, allowPrivateNetworks: false);
+            var apiContext = new ScriptApiContext(_configFileProvider, apiHttpContext);
             engine.SetValue("api", apiContext);
 
             // System / Command context
-            var systemContext = new ScriptSystemContext(_commandQueue, result);
+            var allowedDir = _configService?.CustomScriptsDirectory;
+            var allowExtScripts = _configService?.AllowExternalScriptsInAutomation ?? false;
+            var systemContext = new ScriptSystemContext(
+                _commandQueue,
+                result,
+                allowExternalScripts: allowExtScripts,
+                allowedScriptDirectory: allowedDir);
             engine.SetValue("system", systemContext);
 
             // HTML context
             var htmlContext = new ScriptHtmlContext();
             engine.SetValue("html", htmlContext);
 
-            // Sleep helper (clamped to max 5s)
+            // Sleep helper (clamped to max 2s, non-starving)
             engine.SetValue("sleep", new Action<int>(ms =>
             {
-                var clamped = Math.Clamp(ms, 0, 5000);
-                Thread.Sleep(clamped);
+                var clamped = Math.Clamp(ms, 0, 2000);
+                if (clamped > 0)
+                {
+                    Task.Delay(clamped).Wait();
+                }
             }));
 
             // Inputs / Secrets

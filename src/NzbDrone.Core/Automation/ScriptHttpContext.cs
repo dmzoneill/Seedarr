@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using NzbDrone.Core.Validation;
 
 namespace NzbDrone.Core.Automation;
 
@@ -20,10 +21,17 @@ public class ScriptHttpContext
     public static HttpClient DefaultSecureClient => SecureClient.Value;
 
     private readonly HttpClient? _customClient;
+    private readonly bool _allowLoopback;
+    private readonly bool _allowPrivateNetworks;
 
-    public ScriptHttpContext(HttpClient? client = null)
+    public bool AllowLoopback => _allowLoopback;
+    public bool AllowPrivateNetworks => _allowPrivateNetworks;
+
+    public ScriptHttpContext(HttpClient? client = null, bool allowLoopback = false, bool allowPrivateNetworks = false)
     {
         _customClient = client;
+        _allowLoopback = allowLoopback;
+        _allowPrivateNetworks = allowPrivateNetworks;
     }
 
     private static HttpClient CreatePooledClient(bool allowInsecure)
@@ -53,7 +61,7 @@ public class ScriptHttpContext
         return client;
     }
 
-    public HttpClient ResolveClient(bool allowInsecure)
+    public HttpClient ResolveClient(bool allowInsecure = false)
     {
         return _customClient ?? (allowInsecure ? InsecureClient.Value : SecureClient.Value);
     }
@@ -154,7 +162,10 @@ public class ScriptHttpContext
         }
 
         var timeoutSeconds = 15;
-        var allowInsecure = true;
+        var allowInsecure = false;
+        var allowLoopback = _allowLoopback;
+        var allowPrivateNetworks = _allowPrivateNetworks;
+
         if (options != null)
         {
             if (options.TryGetValue("timeoutSeconds", out var toVal) && int.TryParse(toVal?.ToString(), out var toParsed))
@@ -166,6 +177,21 @@ public class ScriptHttpContext
             {
                 allowInsecure = aiParsed;
             }
+
+            if (options.TryGetValue("allowLoopback", out var albVal) && bool.TryParse(albVal?.ToString(), out var albParsed))
+            {
+                allowLoopback = albParsed;
+            }
+
+            if (options.TryGetValue("allowPrivateNetworks", out var apnVal) && bool.TryParse(apnVal?.ToString(), out var apnParsed))
+            {
+                allowPrivateNetworks = apnParsed;
+            }
+        }
+
+        if (!ValidateUrl(url, allowLoopback, allowPrivateNetworks))
+        {
+            throw new InvalidOperationException($"SSRF guard: Destination URL '{url}' is prohibited (restricted IP, loopback, or private address range).");
         }
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds > 0 ? timeoutSeconds : 15));
@@ -205,5 +231,28 @@ public class ScriptHttpContext
             ["json"] = parsedJson,
             ["headers"] = resHeaders,
         };
+    }
+
+    private bool ValidateUrl(string url, bool allowLoopback, bool allowPrivateNetworks)
+    {
+        if (UrlValidator.IsSafeUrl(url, allowLoopback: allowLoopback, allowInternal: allowPrivateNetworks))
+        {
+            return true;
+        }
+
+        if (_customClient != null && Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            var host = uri.DnsSafeHost.Trim().Trim('[', ']');
+            if (!string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) &&
+                !host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(host, "metadata.google.internal", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(host, "instance-data", StringComparison.OrdinalIgnoreCase) &&
+                !IPAddress.TryParse(host, out _))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
