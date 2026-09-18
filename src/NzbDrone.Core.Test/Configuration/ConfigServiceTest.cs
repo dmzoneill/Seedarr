@@ -2001,5 +2001,65 @@ namespace NzbDrone.Core.Test.Configuration
 
             Assert.That(_subject.TmdbApiKey, Is.EqualTo("custom_tmdb_key_abc123"));
         }
+
+        [Test]
+        public void BackupRetentionDays_should_return_default_when_not_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.BackupRetentionDays, Is.EqualTo(28));
+        }
+
+        [Test]
+        public void BackupRetentionDays_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "BackupRetentionDays", Value = "14" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.BackupRetentionDays, Is.EqualTo(14));
+        }
+
+        [Test]
+        public void BackupRetentionDays_setter_should_save_to_repository()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            _subject.BackupRetentionDays = 21;
+
+            _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "BackupRetentionDays" && c.Value == "21"));
+        }
+
+        [Test]
+        public void MaxBackups_should_return_default_when_not_set()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            Assert.That(_subject.MaxBackups, Is.EqualTo(10));
+        }
+
+        [Test]
+        public void MaxBackups_should_return_stored_value_when_set()
+        {
+            var configs = new List<ConfigModel>
+            {
+                new ConfigModel { Key = "MaxBackups", Value = "5" }
+            };
+            _repository.All().Returns(configs.AsQueryable());
+
+            Assert.That(_subject.MaxBackups, Is.EqualTo(5));
+        }
+
+        [Test]
+        public void MaxBackups_setter_should_save_to_repository()
+        {
+            _repository.All().Returns(new List<ConfigModel>().AsQueryable());
+
+            _subject.MaxBackups = 15;
+
+            _repository.Received(1).Insert(Arg.Is<ConfigModel>(c => c.Key == "MaxBackups" && c.Value == "15"));
+        }
     }
 }

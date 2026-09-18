@@ -6,6 +6,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Common.EnvironmentInfo;
 using NzbDrone.Core.Backup;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Datastore;
 using NzbDrone.Core.Messaging.Events;
 using Polly;
@@ -18,6 +19,7 @@ public class BackupServiceTest
     private IAppFolderInfo _appFolderInfo;
     private IConnectionStringFactory _connectionStringFactory;
     private IEventAggregator _eventAggregator;
+    private IConfigService _configService;
     private BackupService _subject;
     private string _tempDir;
 
@@ -37,7 +39,11 @@ public class BackupServiceTest
 
         _eventAggregator = Substitute.For<IEventAggregator>();
 
-        _subject = new BackupService(_appFolderInfo, _connectionStringFactory, _eventAggregator);
+        _configService = Substitute.For<IConfigService>();
+        _configService.BackupRetentionDays.Returns(28);
+        _configService.MaxBackups.Returns(10);
+
+        _subject = new BackupService(_appFolderInfo, _connectionStringFactory, _eventAggregator, _configService);
     }
 
     [TearDown]
@@ -57,6 +63,23 @@ public class BackupServiceTest
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "CREATE TABLE Test (Id INT);";
         cmd.ExecuteNonQuery();
+    }
+
+    private byte[] CreateValidSqliteDatabaseBytes()
+    {
+        var testDbPath = Path.Combine(_tempDir, "temp_valid.db");
+        using (var conn = new SqliteConnection($"Data Source={testDbPath}"))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "CREATE TABLE Test (Id INT);";
+            cmd.ExecuteNonQuery();
+        }
+
+        SqliteConnection.ClearAllPools();
+        var bytes = File.ReadAllBytes(testDbPath);
+        File.Delete(testDbPath);
+        return bytes;
     }
 
     [Test]
@@ -232,22 +255,20 @@ public class BackupServiceTest
         Directory.CreateDirectory(backupDir);
         var backupPath = Path.Combine(backupDir, "restore_test.zip");
 
-        var dummyDbBytes = new byte[512];
-        var header = System.Text.Encoding.ASCII.GetBytes("SQLite format 3\0");
-        Array.Copy(header, 0, dummyDbBytes, 0, header.Length);
+        var dbBytes = CreateValidSqliteDatabaseBytes();
 
         using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
         {
             var entry = zip.CreateEntry("seedarr.db");
             using var stream = entry.Open();
-            stream.Write(dummyDbBytes, 0, dummyDbBytes.Length);
+            stream.Write(dbBytes, 0, dbBytes.Length);
         }
 
         _subject.RestoreBackup("restore_test.zip");
 
         var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
         Assert.That(File.Exists(dbRestorePath), Is.True);
-        Assert.That(File.ReadAllBytes(dbRestorePath), Is.EqualTo(dummyDbBytes));
+        Assert.That(File.ReadAllBytes(dbRestorePath), Is.EqualTo(dbBytes));
     }
 
     [Test]
@@ -297,6 +318,7 @@ public class BackupServiceTest
     [Test]
     public void RestoreBackup_should_stage_config_file_without_db_file()
     {
+        _connectionStringFactory.DatabaseType.Returns(DatabaseType.PostgreSQL);
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
         var backupPath = Path.Combine(backupDir, "restore_postgres_test.zip");
@@ -354,16 +376,14 @@ public class BackupServiceTest
         Directory.CreateDirectory(backupDir);
         var backupPath = Path.Combine(backupDir, "restore_both_test.zip");
 
-        var dummyDbBytes = new byte[512];
-        var header = System.Text.Encoding.ASCII.GetBytes("SQLite format 3");
-        Array.Copy(header, 0, dummyDbBytes, 0, header.Length);
+        var dbBytes = CreateValidSqliteDatabaseBytes();
 
         using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
         {
             var dbEntry = zip.CreateEntry("seedarr.db");
             using (var stream = dbEntry.Open())
             {
-                stream.Write(dummyDbBytes, 0, dummyDbBytes.Length);
+                stream.Write(dbBytes, 0, dbBytes.Length);
             }
 
             var configEntry = zip.CreateEntry("config.xml");
@@ -582,5 +602,138 @@ public class BackupServiceTest
 
         var stagingPath = Path.Combine(_tempDir, "seedarr.db.backup-staging");
         Assert.That(File.Exists(stagingPath), Is.False);
+    }
+
+    [Test]
+    public void CreateBackup_should_prune_backups_when_count_exceeds_max_backups()
+    {
+        CreateTestSqliteDatabase();
+        _configService.MaxBackups.Returns(2);
+        _configService.BackupRetentionDays.Returns(0);
+
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+
+        var oldestPath = Path.Combine(backupDir, "seedarr_backup_1.0_2026-01-01_00-00-00-000.zip");
+        var newerPath = Path.Combine(backupDir, "seedarr_backup_1.0_2026-01-02_00-00-00-000.zip");
+
+        File.WriteAllText(oldestPath, "dummy-oldest");
+        File.SetCreationTimeUtc(oldestPath, DateTime.UtcNow.AddDays(-5));
+        File.SetLastWriteTimeUtc(oldestPath, DateTime.UtcNow.AddDays(-5));
+
+        File.WriteAllText(newerPath, "dummy-newer");
+        File.SetCreationTimeUtc(newerPath, DateTime.UtcNow.AddDays(-3));
+        File.SetLastWriteTimeUtc(newerPath, DateTime.UtcNow.AddDays(-3));
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        var backups = _subject.GetBackups();
+        Assert.That(backups, Has.Count.EqualTo(2));
+        Assert.That(File.Exists(oldestPath), Is.False, "Oldest backup exceeding MaxBackups should be pruned");
+        Assert.That(File.Exists(newerPath), Is.True);
+        Assert.That(File.Exists(result.Path), Is.True);
+    }
+
+    [Test]
+    public void CreateBackup_should_prune_backups_when_age_exceeds_retention_days()
+    {
+        CreateTestSqliteDatabase();
+        _configService.MaxBackups.Returns(10);
+        _configService.BackupRetentionDays.Returns(7);
+
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+
+        var expiredPath = Path.Combine(backupDir, "seedarr_backup_1.0_2026-01-01_00-00-00-000.zip");
+        var validPath = Path.Combine(backupDir, "seedarr_backup_1.0_2026-01-08_00-00-00-000.zip");
+
+        File.WriteAllText(expiredPath, "dummy-expired");
+        File.SetCreationTimeUtc(expiredPath, DateTime.UtcNow.AddDays(-14));
+        File.SetLastWriteTimeUtc(expiredPath, DateTime.UtcNow.AddDays(-14));
+
+        File.WriteAllText(validPath, "dummy-valid");
+        File.SetCreationTimeUtc(validPath, DateTime.UtcNow.AddDays(-2));
+        File.SetLastWriteTimeUtc(validPath, DateTime.UtcNow.AddDays(-2));
+
+        var result = _subject.CreateBackup();
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(File.Exists(expiredPath), Is.False, "Backup older than BackupRetentionDays should be pruned");
+        Assert.That(File.Exists(validPath), Is.True);
+        Assert.That(File.Exists(result.Path), Is.True);
+    }
+
+    [Test]
+    public void RestoreBackup_sqlite_should_throw_when_database_file_missing_in_archive()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        var backupPath = Path.Combine(backupDir, "restore_missing_db.zip");
+
+        using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+        {
+            var entry = zip.CreateEntry("config.xml");
+            using var writer = new StreamWriter(entry.Open());
+            writer.Write("<Config />");
+        }
+
+        var ex = Assert.Throws<InvalidOperationException>(() => _subject.RestoreBackup("restore_missing_db.zip"));
+        Assert.That(ex.Message, Is.EqualTo("Database file not found in backup archive"));
+
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+        Assert.That(File.Exists(dbRestorePath), Is.False);
+    }
+
+    [Test]
+    public void RestoreBackup_should_throw_when_sqlite_header_is_invalid()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        var backupPath = Path.Combine(backupDir, "restore_bad_header.zip");
+
+        var badHeaderBytes = new byte[512];
+        var badHeader = System.Text.Encoding.ASCII.GetBytes("SQLite format 3\xFF");
+        Array.Copy(badHeader, 0, badHeaderBytes, 0, badHeader.Length);
+
+        using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+        {
+            var entry = zip.CreateEntry("seedarr.db");
+            using var stream = entry.Open();
+            stream.Write(badHeaderBytes, 0, badHeaderBytes.Length);
+        }
+
+        var ex = Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("restore_bad_header.zip"));
+        Assert.That(ex.Message, Does.Contain("does not contain a valid SQLite database header"));
+
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+        Assert.That(File.Exists(dbRestorePath), Is.False);
+    }
+
+    [Test]
+    public void RestoreBackup_should_throw_when_sqlite_integrity_check_fails()
+    {
+        var backupDir = Path.Combine(_tempDir, "Backups");
+        Directory.CreateDirectory(backupDir);
+        var backupPath = Path.Combine(backupDir, "restore_corrupted_integrity.zip");
+
+        var validDbBytes = CreateValidSqliteDatabaseBytes();
+        for (var i = 100; i < 200 && i < validDbBytes.Length; i++)
+        {
+            validDbBytes[i] = 0xAA;
+        }
+
+        using (var zip = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+        {
+            var entry = zip.CreateEntry("seedarr.db");
+            using var stream = entry.Open();
+            stream.Write(validDbBytes, 0, validDbBytes.Length);
+        }
+
+        var ex = Assert.Throws<InvalidDataException>(() => _subject.RestoreBackup("restore_corrupted_integrity.zip"));
+        Assert.That(ex.Message, Does.Contain("SQLite integrity check failed"));
+
+        var dbRestorePath = Path.Combine(_tempDir, "seedarr.db.restore");
+        Assert.That(File.Exists(dbRestorePath), Is.False);
     }
 }

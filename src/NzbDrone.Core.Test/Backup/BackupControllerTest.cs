@@ -225,4 +225,18 @@ public class BackupControllerTest
 
         Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
     }
+
+    [Test]
+    public void RestoreBackup_when_invalid_operation_exception_should_return_bad_request()
+    {
+        var request = new RestoreRequest { FileName = "missing_db.zip" };
+        _backupService.When(s => s.RestoreBackup("missing_db.zip"))
+            .Do(_ => throw new InvalidOperationException("Database file not found in backup archive"));
+
+        var result = _controller.RestoreBackup(request);
+
+        Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        var badRequest = (BadRequestObjectResult)result;
+        Assert.That(badRequest.Value?.ToString(), Does.Contain("Database file not found in backup archive"));
+    }
 }

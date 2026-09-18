@@ -155,6 +155,10 @@ public class BackupController : Controller
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (IOException ex)
         {
             return BadRequest(new { message = ex.Message });
