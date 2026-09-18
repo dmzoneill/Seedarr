@@ -16,6 +16,7 @@ public class TorznabIndexer : IIndexer
     private static readonly HttpClient DefaultClient = new();
     private readonly HttpClient _httpClient;
     private readonly Logger _logger;
+    private readonly IIndexerStatusService _indexerStatusService;
 
     public string Name => "Torznab";
     public string IndexerType => "Torznab";
@@ -32,9 +33,10 @@ public class TorznabIndexer : IIndexer
         { 8000, new List<int> { 8000, 8010, 8020 } } // Other
     };
 
-    public TorznabIndexer(HttpClient httpClient = null)
+    public TorznabIndexer(HttpClient httpClient = null, IIndexerStatusService indexerStatusService = null)
     {
         _httpClient = httpClient ?? DefaultClient;
+        _indexerStatusService = indexerStatusService;
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -111,6 +113,46 @@ public class TorznabIndexer : IIndexer
             }
 
             using var response = _httpClient.Send(request);
+
+            string content = null;
+            if (response.Content != null)
+            {
+                using var stream = response.Content.ReadAsStream();
+                using var reader = new StreamReader(stream);
+                content = reader.ReadToEnd();
+            }
+
+            if (!string.IsNullOrWhiteSpace(content))
+            {
+                try
+                {
+                    var doc = new XmlDocument();
+                    var settings = new XmlReaderSettings
+                    {
+                        DtdProcessing = DtdProcessing.Prohibit,
+                        XmlResolver = null,
+                        MaxCharactersFromEntities = 1024
+                    };
+                    using var xmlReader = XmlReader.Create(new StringReader(content), settings);
+                    doc.Load(xmlReader);
+
+                    var errorNode = doc.SelectSingleNode("//error") ?? doc.SelectSingleNode("//*[local-name()='error']");
+                    if (errorNode != null)
+                    {
+                        var code = errorNode.Attributes?["code"]?.Value ?? "unknown";
+                        var desc = errorNode.Attributes?["description"]?.Value ?? (string.IsNullOrWhiteSpace(errorNode.InnerText) ? "Unknown indexer error" : errorNode.InnerText.Trim());
+                        return new IndexerTestResult
+                        {
+                            Success = false,
+                            Message = $"Indexer authentication/access error (code {code}): {desc}",
+                            StatusCode = int.TryParse(code, out var c) ? c : (int)response.StatusCode
+                        };
+                    }
+                }
+                catch (XmlException)
+                {
+                }
+            }
 
             if (response.IsSuccessStatusCode)
             {
@@ -446,6 +488,10 @@ public class TorznabIndexer : IIndexer
         {
             throw;
         }
+        catch (IndexerException)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.Error(ex, "Failed to search Torznab at {0} for query '{1}'", definition.Url, searchQuery.Query);
@@ -476,6 +522,23 @@ public class TorznabIndexer : IIndexer
         };
         using var reader = XmlReader.Create(new StringReader(xml), settings);
         doc.Load(reader);
+
+        var errorNode = doc.SelectSingleNode("//error") ?? doc.SelectSingleNode("//*[local-name()='error']");
+        if (errorNode != null)
+        {
+            var code = errorNode.Attributes?["code"]?.Value ?? "unknown";
+            var desc = errorNode.Attributes?["description"]?.Value ?? (string.IsNullOrWhiteSpace(errorNode.InnerText) ? "Unknown indexer error" : errorNode.InnerText.Trim());
+            var errorMsg = $"Indexer authentication/access error (code {code}): {desc}";
+            _logger.Warn("Torznab returned error: {0}", errorMsg);
+
+            int? statusCode = int.TryParse(code, out var c) ? c : null;
+            if (definition != null && definition.Id > 0)
+            {
+                _indexerStatusService?.RecordFailure(definition.Id, statusCode, errorMsg);
+            }
+
+            throw new IndexerException(errorMsg, code, statusCode) { Recorded = _indexerStatusService != null && definition != null && definition.Id > 0 };
+        }
 
         int? responseOffset = null;
         int? responseTotal = null;
