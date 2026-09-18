@@ -5,12 +5,9 @@ namespace NzbDrone.Core.Categories;
 
 public class CategoryRepository : BasicRepository<Category>, ICategoryRepository
 {
-    private readonly IDatabase _database;
-
     public CategoryRepository(IDatabase database)
         : base(database)
     {
-        _database = database;
     }
 
     public Category GetByName(string name)
@@ -20,25 +17,24 @@ public class CategoryRepository : BasicRepository<Category>, ICategoryRepository
             return null;
         }
 
-        using var connection = _database.OpenConnection();
-        return connection.QueryFirstOrDefault<Category>(
-            $"SELECT * FROM \"{_table}\" WHERE LOWER(\"Name\") = LOWER(@Name)",
-            new { Name = name.Trim() });
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<Category>(
+                $"SELECT * FROM \"{_table}\" WHERE LOWER(\"Name\") = LOWER(@Name)",
+                new { Name = name.Trim() }));
     }
 
     public Category GetDefault()
     {
-        using var connection = _database.OpenConnection();
-        return connection.QueryFirstOrDefault<Category>(
-            $"SELECT * FROM \"{_table}\" WHERE \"IsDefault\" = @IsDefault",
-            new { IsDefault = true });
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<Category>(
+                $"SELECT * FROM \"{_table}\" WHERE \"IsDefault\" = @IsDefault",
+                new { IsDefault = true }));
     }
 
     public void SetExclusiveDefault(int categoryId)
     {
-        RetryPolicy.Execute(() =>
+        ExecuteWithRetry(connection =>
         {
-            using var connection = _database.OpenConnection();
             using var tx = connection.BeginTransaction();
             try
             {

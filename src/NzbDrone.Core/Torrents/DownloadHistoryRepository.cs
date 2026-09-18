@@ -10,28 +10,25 @@ namespace NzbDrone.Core.Torrents;
 
 public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDownloadHistoryRepository
 {
-    private readonly IDatabase _database;
-
     public DownloadHistoryRepository(IDatabase database)
         : base(database)
     {
-        _database = database;
     }
 
     public DownloadHistory FindByInfoHash(string infoHash)
     {
-        using var connection = _database.OpenConnection();
-        return connection.QueryFirstOrDefault<DownloadHistory>(
-            $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash ORDER BY \"Id\" DESC",
-            new { InfoHash = infoHash });
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<DownloadHistory>(
+                $"SELECT * FROM \"{_table}\" WHERE \"InfoHash\" = @InfoHash ORDER BY \"Id\" DESC",
+                new { InfoHash = infoHash }));
     }
 
     public DownloadHistory FindByTorrentId(int torrentId)
     {
-        using var connection = _database.OpenConnection();
-        return connection.QueryFirstOrDefault<DownloadHistory>(
-            $"SELECT * FROM \"{_table}\" WHERE \"TorrentId\" = @TorrentId ORDER BY \"Id\" DESC",
-            new { TorrentId = torrentId });
+        return QueryWithRetry(connection =>
+            connection.QueryFirstOrDefault<DownloadHistory>(
+                $"SELECT * FROM \"{_table}\" WHERE \"TorrentId\" = @TorrentId ORDER BY \"Id\" DESC",
+                new { TorrentId = torrentId }));
     }
 
     public Dictionary<string, DownloadHistory> GetLatestByInfoHashes(IEnumerable<string> infoHashes)
@@ -47,83 +44,86 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
             return new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase);
         }
 
-        using var connection = _database.OpenConnection();
-        var dict = new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var batch in hashes.Chunk(500))
+        return QueryWithRetry(connection =>
         {
-            var records = connection.Query<DownloadHistory>(
-                $"SELECT * FROM \"{_table}\" WHERE \"Id\" IN (SELECT MAX(\"Id\") FROM \"{_table}\" WHERE \"InfoHash\" IN @Hashes GROUP BY \"InfoHash\")",
-                new { Hashes = batch });
+            var dict = new Dictionary<string, DownloadHistory>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var record in records)
+            foreach (var batch in hashes.Chunk(500))
             {
-                if (!string.IsNullOrWhiteSpace(record.InfoHash))
+                var records = connection.Query<DownloadHistory>(
+                    $"SELECT * FROM \"{_table}\" WHERE \"Id\" IN (SELECT MAX(\"Id\") FROM \"{_table}\" WHERE \"InfoHash\" IN @Hashes GROUP BY \"InfoHash\")",
+                    new { Hashes = batch });
+
+                foreach (var record in records)
                 {
-                    dict[record.InfoHash] = record;
+                    if (!string.IsNullOrWhiteSpace(record.InfoHash))
+                    {
+                        dict[record.InfoHash] = record;
+                    }
                 }
             }
-        }
 
-        return dict;
+            return dict;
+        });
     }
 
     public List<DownloadHistory> GetHistory(string query = null, string status = null, int limit = 500, int offset = 0)
     {
-        using var connection = _database.OpenConnection();
-        var sql = new StringBuilder($"SELECT * FROM \"{_table}\" WHERE 1=1");
-        var parameters = new DynamicParameters();
-
-        if (!string.IsNullOrWhiteSpace(query))
+        return QueryWithRetry(connection =>
         {
-            sql.Append(" AND (\"Title\" LIKE @Query OR \"InfoHash\" LIKE @Query OR \"PrimaryTracker\" LIKE @Query OR \"IndexerName\" LIKE @Query)");
-            parameters.Add("Query", $"%{query.Trim()}%");
-        }
+            var sql = new StringBuilder($"SELECT * FROM \"{_table}\" WHERE 1=1");
+            var parameters = new DynamicParameters();
 
-        if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, "all", System.StringComparison.OrdinalIgnoreCase))
-        {
-            sql.Append(" AND \"Status\" = @Status");
-            parameters.Add("Status", status.Trim());
-        }
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                sql.Append(" AND (\"Title\" LIKE @Query OR \"InfoHash\" LIKE @Query OR \"PrimaryTracker\" LIKE @Query OR \"IndexerName\" LIKE @Query)");
+                parameters.Add("Query", $"%{query.Trim()}%");
+            }
 
-        sql.Append(" ORDER BY \"DateAdded\" DESC");
+            if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status, "all", StringComparison.OrdinalIgnoreCase))
+            {
+                sql.Append(" AND \"Status\" = @Status");
+                parameters.Add("Status", status.Trim());
+            }
 
-        if (limit > 0)
-        {
-            sql.Append(" LIMIT @Limit");
-            parameters.Add("Limit", limit);
-        }
+            sql.Append(" ORDER BY \"DateAdded\" DESC");
 
-        if (offset > 0)
-        {
-            sql.Append(" OFFSET @Offset");
-            parameters.Add("Offset", offset);
-        }
+            if (limit > 0)
+            {
+                sql.Append(" LIMIT @Limit");
+                parameters.Add("Limit", limit);
+            }
 
-        return connection.Query<DownloadHistory>(sql.ToString(), parameters).ToList();
+            if (offset > 0)
+            {
+                sql.Append(" OFFSET @Offset");
+                parameters.Add("Offset", offset);
+            }
+
+            return connection.Query<DownloadHistory>(sql.ToString(), parameters).ToList();
+        });
     }
 
     public int DeleteOlderThan(DateTime cutoffDate)
     {
-        return RetryPolicy.Execute(() =>
+        return QueryWithRetry(connection =>
         {
             var totalDeleted = 0;
-            using var connection = _database.OpenConnection();
 
             while (true)
             {
                 var rowsAffected = connection.Execute(
                     $@"DELETE FROM ""{_table}""
-                       WHERE ""Id"" IN (
-                           SELECT ""Id"" FROM ""{_table}""
-                           WHERE ""DateAdded"" < @Cutoff
-                             AND (""Status"" IS NULL OR LOWER(""Status"") NOT IN ('active', 'seeding'))
-                             AND (
-                                 (""DateRemoved"" IS NOT NULL AND ""DateRemoved"" < @Cutoff)
-                                 OR (""DateRemoved"" IS NULL AND (""TorrentId"" IS NULL OR LOWER(""Status"") IN ('removed', 'inactive')))
-                             )
-                           LIMIT 500
-                       )",
+                    WHERE ""Id"" IN (
+                        SELECT ""Id"" FROM ""{_table}""
+                        WHERE ""DateAdded"" < @Cutoff
+                            AND (""Status"" IS NULL OR LOWER(""Status"") NOT IN ('active', 'seeding'))
+                            AND (
+                                (""DateRemoved"" IS NOT NULL AND ""DateRemoved"" < @Cutoff)
+                                OR (""DateRemoved"" IS NULL AND (""TorrentId"" IS NULL OR LOWER(""Status"") IN ('removed', 'inactive')))
+                            )
+                        LIMIT 500
+                    )",
                     new { Cutoff = cutoffDate });
 
                 totalDeleted += rowsAffected;
@@ -141,7 +141,9 @@ public class DownloadHistoryRepository : BasicRepository<DownloadHistory>, IDown
 
     public void DeleteAll()
     {
-        using var connection = _database.OpenConnection();
-        connection.Execute($"DELETE FROM \"{_table}\"");
+        ExecuteWithRetry(connection =>
+        {
+            connection.Execute($"DELETE FROM \"{_table}\"");
+        });
     }
 }
