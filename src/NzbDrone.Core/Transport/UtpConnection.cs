@@ -43,7 +43,7 @@ public interface IUtpConnection : IDisposable
     ushort SendId { get; }
     void Connect(IPEndPoint endpoint);
     int Send(byte[] data, int offset, int length);
-    int Receive(byte[] buffer, int offset, int length);
+    int Receive(byte[] buffer, int offset, int length, int timeoutMs = -1);
     Stream GetStream();
     void Flush();
     void Close();
@@ -369,7 +369,7 @@ public class UtpConnection : IUtpConnection
         }
     }
 
-    public int Receive(byte[] buffer, int offset, int length)
+    public int Receive(byte[] buffer, int offset, int length, int timeoutMs = -1)
     {
         if (length <= 0)
         {
@@ -377,9 +377,11 @@ public class UtpConnection : IUtpConnection
         }
 
         var startTime = DateTime.UtcNow;
-        var timeoutMs = _ownsUdpClient && _udpClient.Client.ReceiveTimeout > 0
-            ? _udpClient.Client.ReceiveTimeout
-            : (_connectionTimeoutSeconds > 0 ? _connectionTimeoutSeconds * 1000 : 3000);
+        var effectiveTimeoutMs = timeoutMs > 0
+            ? timeoutMs
+            : (_ownsUdpClient && _udpClient.Client.ReceiveTimeout > 0
+                ? _udpClient.Client.ReceiveTimeout
+                : (_connectionTimeoutSeconds > 0 ? _connectionTimeoutSeconds * 1000 : 3000));
 
         lock (_receiveLock)
         {
@@ -426,12 +428,12 @@ public class UtpConnection : IUtpConnection
                     }
 
                     var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
-                    if (elapsed >= timeoutMs)
+                    if (elapsed >= effectiveTimeoutMs)
                     {
                         return 0;
                     }
 
-                    var waitTime = (int)Math.Min(100, timeoutMs - elapsed);
+                    var waitTime = (int)Math.Min(100, effectiveTimeoutMs - elapsed);
                     if (waitTime <= 0)
                     {
                         return 0;
@@ -462,7 +464,7 @@ public class UtpConnection : IUtpConnection
             {
                 if (_udpClient.Client.ReceiveTimeout <= 0)
                 {
-                    _udpClient.Client.ReceiveTimeout = timeoutMs;
+                    _udpClient.Client.ReceiveTimeout = effectiveTimeoutMs;
                 }
             }
             catch
@@ -473,12 +475,12 @@ public class UtpConnection : IUtpConnection
         while (IsConnected && !_hasReceivedFin)
         {
             var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
-            if (elapsed >= timeoutMs)
+            if (elapsed >= effectiveTimeoutMs)
             {
                 break;
             }
 
-            var waitMs = (int)Math.Min(100, timeoutMs - elapsed);
+            var waitMs = (int)Math.Min(100, effectiveTimeoutMs - elapsed);
             if (waitMs <= 0)
             {
                 break;
@@ -516,7 +518,7 @@ public class UtpConnection : IUtpConnection
             catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TimedOut)
             {
                 RetransmitUnackedPackets();
-                if ((DateTime.UtcNow - startTime).TotalMilliseconds >= timeoutMs)
+                if ((DateTime.UtcNow - startTime).TotalMilliseconds >= effectiveTimeoutMs)
                 {
                     break;
                 }
