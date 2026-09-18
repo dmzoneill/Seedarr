@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
@@ -8,6 +9,7 @@ using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Categories;
 using NzbDrone.Core.Configuration;
+using NzbDrone.Core.DiskSpace;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
 using Seedarr.Api.V1.Deluge;
@@ -26,6 +28,7 @@ public class DelugeJsonRpcControllerTest
     private ITagService _tagService;
     private IConfigFileProvider _configFileProvider;
     private ICategoryService _categoryService;
+    private IDiskSpaceService _diskSpaceService;
     private DelugeJsonRpcController _controller;
 
     [SetUp]
@@ -40,6 +43,7 @@ public class DelugeJsonRpcControllerTest
         _tagService = Substitute.For<ITagService>();
         _configFileProvider = Substitute.For<IConfigFileProvider>();
         _categoryService = Substitute.For<ICategoryService>();
+        _diskSpaceService = Substitute.For<IDiskSpaceService>();
 
         _configFileProvider.AuthenticationEnabled.Returns(false);
 
@@ -52,7 +56,8 @@ public class DelugeJsonRpcControllerTest
             _tagService,
             _configFileProvider,
             categoryService: _categoryService,
-            trackerService: _trackerService);
+            trackerService: _trackerService,
+            diskSpaceService: _diskSpaceService);
 
         var httpContext = new DefaultHttpContext();
         _controller.ControllerContext = new ControllerContext
@@ -376,5 +381,164 @@ public class DelugeJsonRpcControllerTest
 
         Assert.That(root.GetProperty("result").GetBoolean(), Is.False);
         Assert.That(root.GetProperty("error").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [Test]
+    public async Task CoreGetFreeSpace_WithExplicitPath_ResolvesFromDiskSpaceService()
+    {
+        var targetPath = "/media/downloads";
+        _diskSpaceService.GetDiskSpaceForPath(targetPath).Returns(new DiskSpaceInfo
+        {
+            Path = targetPath,
+            FreeSpace = 500L * 1024 * 1024 * 1024,
+            TotalSpace = 1000L * 1024 * 1024 * 1024,
+        });
+
+        var json = $"{{\"method\": \"core.get_free_space\", \"params\": [\"{targetPath}\"], \"id\": 30}}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+
+        Assert.That(resDoc.RootElement.GetProperty("result").GetInt64(), Is.EqualTo(500L * 1024 * 1024 * 1024));
+    }
+
+    [Test]
+    public async Task CoreGetFreeSpace_WithoutPath_ResolvesFromDefaultPath()
+    {
+        _configService.DefaultSavePath.Returns("/default/save/path");
+        _diskSpaceService.GetDiskSpaceForPath("/default/save/path").Returns(new DiskSpaceInfo
+        {
+            Path = "/default/save/path",
+            FreeSpace = 250L * 1024 * 1024 * 1024,
+            TotalSpace = 500L * 1024 * 1024 * 1024,
+        });
+
+        var json = "{\"method\": \"core.get_free_space\", \"params\": [], \"id\": 31}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+
+        Assert.That(resDoc.RootElement.GetProperty("result").GetInt64(), Is.EqualTo(250L * 1024 * 1024 * 1024));
+    }
+
+    [Test]
+    public async Task WebUpdateUi_ReturnsDynamicFreeSpaceFromDiskSpaceService()
+    {
+        _configService.DefaultSavePath.Returns("/downloads");
+        _diskSpaceService.GetDiskSpaceForPath("/downloads").Returns(new DiskSpaceInfo
+        {
+            Path = "/downloads",
+            FreeSpace = 420L * 1024 * 1024 * 1024,
+            TotalSpace = 1000L * 1024 * 1024 * 1024,
+        });
+
+        var json = "{\"method\": \"web.update_ui\", \"params\": [[], {}], \"id\": 32}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+        var stats = resDoc.RootElement.GetProperty("result").GetProperty("stats");
+
+        Assert.That(stats.GetProperty("free_space").GetInt64(), Is.EqualTo(420L * 1024 * 1024 * 1024));
+    }
+
+    [Test]
+    public async Task CoreAddTorrentMagnet_AppliesSavePath_AndDelugeOptions()
+    {
+        var magnet = "magnet:?xt=urn:btih:aabbccddeeff00112233445566778899aabbccdd&dn=Test";
+        var torrent = new Torrent
+        {
+            Id = 5,
+            InfoHash = "aabbccddeeff00112233445566778899aabbccdd",
+            Name = "Test",
+        };
+        _torrentImportService.ImportFromMagnet(magnet).Returns(torrent);
+
+        var json = "{\"method\": \"core.add_torrent_magnet\", \"params\": [\"" + magnet + "\", {\"save_path\": \"/custom/save/path\", \"prioritize_first_last_pieces\": true, \"sequential_download\": true, \"add_paused\": true}], \"id\": 33}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+
+        Assert.That(resDoc.RootElement.GetProperty("result").GetString(), Is.EqualTo("aabbccddeeff00112233445566778899aabbccdd"));
+        Assert.That(torrent.SavePath, Is.EqualTo("/custom/save/path"));
+        Assert.That(torrent.SourcePath, Is.EqualTo("/custom/save/path"));
+        Assert.That(torrent.FirstLastPiecePrio, Is.True);
+        Assert.That(torrent.SequentialDownload, Is.True);
+        Assert.That(torrent.Status, Is.EqualTo(TorrentStatus.Paused));
+        _torrentService.Received(1).Update(torrent);
+    }
+
+    [Test]
+    public async Task WebGetTorrentInfo_WithExistingFilePath_ParsesFromDisk()
+    {
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            await File.WriteAllBytesAsync(tempFile, new byte[] { 1, 2, 3, 4 });
+            _torrentFileParser.Parse(Arg.Any<Stream>()).Returns(new ParsedTorrent
+            {
+                Name = "DiskTorrent",
+                TotalSize = 12345L,
+                Files = new List<ParsedTorrentFile>
+                {
+                    new ParsedTorrentFile { Path = "sub/file1.mkv", Size = 12345L },
+                },
+            });
+
+            var escapedPath = tempFile.Replace("\\", "\\\\");
+            var json = $"{{\"method\": \"web.get_torrent_info\", \"params\": [\"{escapedPath}\"], \"id\": 34}}";
+            using var doc = JsonDocument.Parse(json);
+
+            var actionResult = await _controller.HandleRpc(doc.RootElement);
+            var jsonResult = (JsonResult)actionResult;
+            var serialized = JsonSerializer.Serialize(jsonResult.Value);
+            using var resDoc = JsonDocument.Parse(serialized);
+            var result = resDoc.RootElement.GetProperty("result");
+
+            Assert.That(result.GetProperty("name").GetString(), Is.EqualTo("DiskTorrent"));
+            Assert.That(result.GetProperty("size").GetInt64(), Is.EqualTo(12345L));
+            var filesTree = result.GetProperty("files_tree");
+            Assert.That(filesTree.TryGetProperty("sub", out var subTree), Is.True);
+            Assert.That(subTree.TryGetProperty("file1.mkv", out var fileProp), Is.True);
+            Assert.That(fileProp.GetArrayLength(), Is.EqualTo(3));
+            Assert.That(fileProp[0].GetInt32(), Is.EqualTo(0));
+            Assert.That(fileProp[1].GetInt64(), Is.EqualTo(12345L));
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
+    }
+
+    [Test]
+    public async Task CoreSetConfig_SavesQueueLimits()
+    {
+        var json = "{\"method\": \"core.set_config\", \"params\": [{\"max_active_limit\": 20, \"max_active_downloading\": 8, \"max_active_seeding\": 12}], \"id\": 35}";
+        using var doc = JsonDocument.Parse(json);
+
+        var actionResult = await _controller.HandleRpc(doc.RootElement);
+        var jsonResult = (JsonResult)actionResult;
+        var serialized = JsonSerializer.Serialize(jsonResult.Value);
+        using var resDoc = JsonDocument.Parse(serialized);
+
+        Assert.That(resDoc.RootElement.GetProperty("result").GetBoolean(), Is.True);
+        _configService.Received(1).SaveConfigDictionary(Arg.Is<Dictionary<string, object>>(d =>
+            d.ContainsKey("MaxActiveLimit") && (int)d["MaxActiveLimit"] == 20 &&
+            d.ContainsKey("MaxActiveDownloads") && (int)d["MaxActiveDownloads"] == 8 &&
+            d.ContainsKey("MaxActiveUploads") && (int)d["MaxActiveUploads"] == 12));
     }
 }
