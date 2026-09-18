@@ -21,10 +21,13 @@ public interface IConnectionManager
     void Remove(PeerConnection connection);
     List<PeerConnection> GetConnections(string infoHash);
     int ActiveCount { get; }
+    int Count { get; }
     bool CanAddConnectionForTorrent(string infoHash);
     int GetUploadSlotCount();
     int GetDynamicUploadSlotCount(string infoHash = null);
     List<PeerConnection> GetAllConnections();
+    List<PeerConnection> GetAll();
+    List<PeerConnection> GetForTorrent(string infoHash);
     void DisconnectAll();
     Task DisconnectAllAsync();
     void DisconnectByInfoHash(string infoHash);
@@ -61,6 +64,12 @@ public class ConnectionManager : IConnectionManager,
             }
         }
     }
+
+    public int Count => ActiveCount;
+
+    public List<PeerConnection> GetAll() => GetAllConnections();
+
+    public List<PeerConnection> GetForTorrent(string infoHash) => GetConnections(infoHash);
 
     public ConnectionManager(
         IConfigService configService,
@@ -219,12 +228,17 @@ public class ConnectionManager : IConnectionManager,
 
     public void Remove(PeerConnection connection)
     {
+        if (connection == null)
+        {
+            return;
+        }
+
         lock (_lock)
         {
             _connections.Remove(connection);
         }
 
-        _fastExtensionHandler.UnregisterPeer(connection);
+        _fastExtensionHandler?.UnregisterPeer(connection);
         connection.Dispose();
         LogDisconnect(connection);
     }

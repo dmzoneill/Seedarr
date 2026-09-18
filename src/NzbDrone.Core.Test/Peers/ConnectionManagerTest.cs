@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
+using System.Threading.Tasks;
 using NSubstitute;
 using NUnit.Framework;
 using NzbDrone.Core.Configuration;
@@ -868,5 +872,242 @@ public class ConnectionManagerTest
         _manager.Add(conn3);
         Assert.That(_manager.ActiveCount, Is.EqualTo(2));
         Assert.That(_manager.GetConnections("hashA").Count, Is.EqualTo(2));
+    }
+
+    [TestCase(0, 0)]
+    [TestCase(-1, -1)]
+    [TestCase(0, 50)]
+    [TestCase(-1, 50)]
+    public void Add_when_MaxGlobalConnections_is_zero_or_negative_allows_unlimited_connections_without_eviction(int maxGlobal, int maxPerTorrent)
+    {
+        _configService.MaxGlobalConnections.Returns(maxGlobal);
+        _configService.MaxPerTorrentConnections.Returns(maxPerTorrent);
+
+        for (var i = 1; i <= 10; i++)
+        {
+            var conn = new PeerConnection(new MemoryStream(), "127.0.0.1", 2000 + i) { InfoHash = "hash1" };
+            _createdConnections.Add(conn);
+            Assert.DoesNotThrow(() => _manager.Add(conn));
+        }
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(10));
+        Assert.That(_manager.Count, Is.EqualTo(10));
+        _fastExtensionHandler.DidNotReceive().UnregisterPeer(Arg.Any<PeerConnection>());
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void CanAddConnectionForTorrent_when_MaxPerTorrentConnections_is_zero_or_negative_returns_true(int maxPerTorrent)
+    {
+        _configService.MaxPerTorrentConnections.Returns(maxPerTorrent);
+        _configService.MaxGlobalConnections.Returns(100);
+
+        for (var i = 1; i <= 5; i++)
+        {
+            var conn = new PeerConnection(new MemoryStream(), "127.0.0.1", 3000 + i) { InfoHash = "hashA" };
+            _createdConnections.Add(conn);
+            _manager.Add(conn);
+        }
+
+        Assert.That(_manager.CanAddConnectionForTorrent("hashA"), Is.True);
+    }
+
+    [TestCase(0)]
+    [TestCase(-1)]
+    public void CanAddConnectionForTorrent_when_MaxGlobalConnections_is_zero_or_negative_returns_true(int maxGlobal)
+    {
+        _configService.MaxGlobalConnections.Returns(maxGlobal);
+        _configService.MaxPerTorrentConnections.Returns(100);
+
+        for (var i = 1; i <= 5; i++)
+        {
+            var conn = new PeerConnection(new MemoryStream(), "127.0.0.1", 4000 + i) { InfoHash = "hashB" };
+            _createdConnections.Add(conn);
+            _manager.Add(conn);
+        }
+
+        Assert.That(_manager.CanAddConnectionForTorrent("hashB"), Is.True);
+    }
+
+    [TestCase(0, 0)]
+    [TestCase(-1, -1)]
+    public void TryReserveSlot_when_limits_are_zero_or_negative_allows_reservations(int maxGlobal, int maxPerTorrent)
+    {
+        _configService.MaxGlobalConnections.Returns(maxGlobal);
+        _configService.MaxPerTorrentConnections.Returns(maxPerTorrent);
+
+        for (var i = 1; i <= 5; i++)
+        {
+            Assert.That(_manager.TryReserveSlot("hashUnlimited", false, out var res), Is.True);
+            Assert.That(res, Is.Not.Null);
+        }
+    }
+
+    [Test]
+    public void Add_when_torrent_limit_reached_evicts_from_same_torrent_without_evicting_other_torrents()
+    {
+        _configService.MaxPerTorrentConnections.Returns(2);
+        _configService.MaxGlobalConnections.Returns(10);
+
+        var connA1 = new PeerConnection(new MemoryStream(), "127.0.0.1", 5001) { InfoHash = "hashA", ConnectedAt = DateTime.UtcNow.AddMinutes(-10), LastActivity = DateTime.UtcNow.AddMinutes(-10) };
+        var connA2 = new PeerConnection(new MemoryStream(), "127.0.0.1", 5002) { InfoHash = "hashA", ConnectedAt = DateTime.UtcNow.AddMinutes(-5), LastActivity = DateTime.UtcNow.AddMinutes(-5) };
+        var connB1 = new PeerConnection(new MemoryStream(), "127.0.0.1", 5003) { InfoHash = "hashB", ConnectedAt = DateTime.UtcNow.AddMinutes(-2), LastActivity = DateTime.UtcNow.AddMinutes(-2) };
+        _createdConnections.AddRange(new[] { connA1, connA2, connB1 });
+
+        _manager.Add(connA1);
+        _manager.Add(connA2);
+        _manager.Add(connB1);
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(3));
+        Assert.That(_manager.GetConnections("hashA").Count, Is.EqualTo(2));
+        Assert.That(_manager.GetConnections("hashB").Count, Is.EqualTo(1));
+
+        var connA3 = new PeerConnection(new MemoryStream(), "127.0.0.1", 5004) { InfoHash = "hashA", ConnectedAt = DateTime.UtcNow, LastActivity = DateTime.UtcNow };
+        _createdConnections.Add(connA3);
+
+        _manager.Add(connA3);
+
+        Assert.That(_manager.ActiveCount, Is.EqualTo(3));
+        Assert.That(_manager.GetConnections("hashA").Count, Is.EqualTo(2));
+        var hashBConnections = _manager.GetConnections("hashB");
+        Assert.That(hashBConnections.Count, Is.EqualTo(1));
+        Assert.That(hashBConnections[0], Is.SameAs(connB1));
+        _fastExtensionHandler.Received(1).UnregisterPeer(connA1);
+        _fastExtensionHandler.DidNotReceive().UnregisterPeer(connB1);
+    }
+
+    [Test]
+    public void Concurrent_enumerations_and_modifications_do_not_throw_InvalidOperationException()
+    {
+        _configService.MaxGlobalConnections.Returns(50);
+        _configService.MaxPerTorrentConnections.Returns(10);
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        cancellationTokenSource.CancelAfter(TimeSpan.FromSeconds(2));
+        var token = cancellationTokenSource.Token;
+
+        var exceptions = new ConcurrentBag<Exception>();
+
+        for (var i = 1; i <= 20; i++)
+        {
+            var c = new PeerConnection(new MemoryStream(), "127.0.0.1", 6000 + i) { InfoHash = "hash" + (i % 3) };
+            _createdConnections.Add(c);
+            _manager.Add(c);
+        }
+
+        var tasks = new List<Task>();
+
+        tasks.Add(Task.Run(() =>
+        {
+            var counter = 7000;
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    var id = Interlocked.Increment(ref counter);
+                    var conn = new PeerConnection(new MemoryStream(), "127.0.0.1", (id % 60000) + 1024)
+                    {
+                        InfoHash = "hash" + (id % 3)
+                    };
+                    _manager.Add(conn);
+                    _manager.Remove(conn);
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add(ex);
+                }
+            }
+        }));
+
+        tasks.Add(Task.Run(() =>
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    var all1 = _manager.GetAll();
+                    foreach (var c in all1)
+                    {
+                        _ = c.RemotePort;
+                    }
+
+                    var all2 = _manager.GetAllConnections();
+                    foreach (var c in all2)
+                    {
+                        _ = c.RemotePort;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add(ex);
+                }
+            }
+        }));
+
+        tasks.Add(Task.Run(() =>
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    var tor1 = _manager.GetForTorrent("hash0");
+                    foreach (var c in tor1)
+                    {
+                        _ = c.RemotePort;
+                    }
+
+                    var tor2 = _manager.GetConnections("hash1");
+                    foreach (var c in tor2)
+                    {
+                        _ = c.RemotePort;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add(ex);
+                }
+            }
+        }));
+
+        tasks.Add(Task.Run(() =>
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    _ = _manager.Count;
+                    _ = _manager.ActiveCount;
+                    _ = _manager.CanAddConnectionForTorrent("hash0");
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add(ex);
+                }
+            }
+        }));
+
+        Task.WaitAll(tasks.ToArray());
+
+        Assert.That(exceptions, Is.Empty, $"Exceptions encountered during concurrent operations: {string.Join(", ", exceptions.Select(e => e.ToString()))}");
+    }
+
+    [Test]
+    public void GetAll_and_GetForTorrent_and_Count_should_return_consistent_values()
+    {
+        var conn1 = new PeerConnection(new MemoryStream(), "127.0.0.1", 8001) { InfoHash = "hashAlpha" };
+        var conn2 = new PeerConnection(new MemoryStream(), "127.0.0.1", 8002) { InfoHash = "hashBeta" };
+        _createdConnections.Add(conn1);
+        _createdConnections.Add(conn2);
+
+        _manager.Add(conn1);
+        _manager.Add(conn2);
+
+        Assert.That(_manager.Count, Is.EqualTo(2));
+        Assert.That(_manager.ActiveCount, Is.EqualTo(2));
+        Assert.That(_manager.GetAll().Count, Is.EqualTo(2));
+        Assert.That(_manager.GetForTorrent("hashAlpha").Count, Is.EqualTo(1));
+        Assert.That(_manager.GetForTorrent("hashAlpha")[0], Is.SameAs(conn1));
+        Assert.That(_manager.GetForTorrent("hashBeta").Count, Is.EqualTo(1));
+        Assert.That(_manager.GetForTorrent("hashBeta")[0], Is.SameAs(conn2));
     }
 }
