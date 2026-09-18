@@ -812,8 +812,10 @@ public class UdpTrackerProviderTest
             server.Send(connectResp, connectResp.Length, ep);
 
             // Respond to Scrape with too-short response (< 20 bytes)
-            server.Receive(ref ep);
-            server.Send(new byte[10], 10, ep);
+            var scrapeReq = server.Receive(ref ep);
+            var scrapeResp = new byte[10];
+            Array.Copy(scrapeReq, 12, scrapeResp, 4, 4);
+            server.Send(scrapeResp, scrapeResp.Length, ep);
         });
 
         var result = _provider.Scrape(
@@ -848,5 +850,249 @@ public class UdpTrackerProviderTest
         Assert.That(client.Client, Is.Not.Null);
         Assert.That(client.Client.ReceiveTimeout, Is.EqualTo(3000));
         Assert.That(client.Client.SendTimeout, Is.EqualTo(3000));
+    }
+
+    [Test]
+    public void GetTimeout_should_calculate_exponential_backoff_according_to_bep15()
+    {
+        Assert.That(_provider.GetTimeout(0), Is.EqualTo(TimeSpan.FromSeconds(5)));
+        Assert.That(_provider.GetTimeout(1), Is.EqualTo(TimeSpan.FromSeconds(10)));
+        Assert.That(_provider.GetTimeout(2), Is.EqualTo(TimeSpan.FromSeconds(20)));
+        Assert.That(_provider.GetTimeout(3), Is.EqualTo(TimeSpan.FromSeconds(40)));
+        Assert.That(_provider.GetTimeout(4), Is.EqualTo(TimeSpan.FromSeconds(80)));
+    }
+
+    [Test]
+    public void GetTimeout_should_use_configured_timeout_seconds()
+    {
+        _configService.UdpTrackerTimeoutSeconds.Returns(15);
+
+        Assert.That(_provider.GetTimeout(0), Is.EqualTo(TimeSpan.FromSeconds(15)));
+        Assert.That(_provider.GetTimeout(1), Is.EqualTo(TimeSpan.FromSeconds(30)));
+        Assert.That(_provider.GetTimeout(2), Is.EqualTo(TimeSpan.FromSeconds(60)));
+    }
+
+    [Test]
+    public void Announce_should_retry_and_recover_when_first_packet_is_dropped()
+    {
+        var provider = new FastTimeoutUdpTrackerProvider(_configService);
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var attempts = 0;
+        var firstTxId = 0;
+        var secondTxId = 0;
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            // Connect request attempt 0: drop it
+            var connectReq1 = server.Receive(ref ep);
+            firstTxId = ReadInt32BigEndian(connectReq1, 12);
+            attempts++;
+
+            // Connect request attempt 1 (retransmitted): respond successfully
+            var connectReq2 = server.Receive(ref ep);
+            secondTxId = ReadInt32BigEndian(connectReq2, 12);
+            attempts++;
+
+            var connectResp = new byte[16];
+            WriteInt32BigEndian(connectResp, 0, 0);
+            Array.Copy(connectReq2, 12, connectResp, 4, 4);
+            WriteInt64BigEndian(connectResp, 8, 42L);
+            server.Send(connectResp, connectResp.Length, ep);
+
+            // Announce request: respond successfully
+            var announceReq = server.Receive(ref ep);
+            var announceResp = new byte[20];
+            WriteInt32BigEndian(announceResp, 0, 1);
+            Array.Copy(announceReq, 12, announceResp, 4, 4);
+            WriteInt32BigEndian(announceResp, 8, 1800);
+            WriteInt32BigEndian(announceResp, 12, 5);
+            WriteInt32BigEndian(announceResp, 16, 10);
+            server.Send(announceResp, announceResp.Length, ep);
+        });
+
+        var request = new TrackerAnnounceRequest
+        {
+            TrackerUrl = $"udp://127.0.0.1:{serverPort}/announce",
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            PeerId = "-qB4420-abcdefghijkl",
+            Port = 6881
+        };
+
+        var result = provider.Announce(request);
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(attempts, Is.EqualTo(2));
+        Assert.That(secondTxId, Is.EqualTo(firstTxId));
+        Assert.That(result.Interval, Is.EqualTo(1800));
+    }
+
+    [Test]
+    public void Announce_should_discard_mismatched_transaction_id_and_accept_matching_response()
+    {
+        var provider = new FastTimeoutUdpTrackerProvider(_configService);
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            // Connect request
+            var connectReq = server.Receive(ref ep);
+            var txId = ReadInt32BigEndian(connectReq, 12);
+
+            // Send a packet with wrong/stale transaction ID
+            var staleResp = new byte[16];
+            WriteInt32BigEndian(staleResp, 0, 0);
+            WriteInt32BigEndian(staleResp, 4, txId + 999);
+            WriteInt64BigEndian(staleResp, 8, 999L);
+            server.Send(staleResp, staleResp.Length, ep);
+
+            // Now send the packet with correct transaction ID
+            var validResp = new byte[16];
+            WriteInt32BigEndian(validResp, 0, 0);
+            WriteInt32BigEndian(validResp, 4, txId);
+            WriteInt64BigEndian(validResp, 8, 55L);
+            server.Send(validResp, validResp.Length, ep);
+
+            // Announce request
+            var announceReq = server.Receive(ref ep);
+            var announceResp = new byte[20];
+            WriteInt32BigEndian(announceResp, 0, 1);
+            Array.Copy(announceReq, 12, announceResp, 4, 4);
+            WriteInt32BigEndian(announceResp, 8, 3600);
+            WriteInt32BigEndian(announceResp, 12, 1);
+            WriteInt32BigEndian(announceResp, 16, 2);
+            server.Send(announceResp, announceResp.Length, ep);
+        });
+
+        var request = new TrackerAnnounceRequest
+        {
+            TrackerUrl = $"udp://127.0.0.1:{serverPort}/announce",
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            PeerId = "-qB4420-abcdefghijkl",
+            Port = 6881
+        };
+
+        var result = provider.Announce(request);
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.Interval, Is.EqualTo(3600));
+    }
+
+    [Test]
+    public void Announce_should_fail_gracefully_when_max_retries_exceeded()
+    {
+        var provider = new FastTimeoutUdpTrackerProvider(_configService)
+        {
+            MaxRetries = 2
+        };
+
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var receivedAttempts = 0;
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+            while (receivedAttempts < 3)
+            {
+                server.Receive(ref ep);
+                receivedAttempts++;
+            }
+        });
+
+        var request = new TrackerAnnounceRequest
+        {
+            TrackerUrl = $"udp://127.0.0.1:{serverPort}/announce",
+            InfoHash = "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            PeerId = "-qB4420-abcdefghijkl",
+            Port = 6881
+        };
+
+        var result = provider.Announce(request);
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result.Success, Is.False);
+        Assert.That(result.FailureReason, Does.Contain("timed out after 2 retries"));
+        Assert.That(receivedAttempts, Is.EqualTo(3));
+    }
+
+    [Test]
+    public void Scrape_should_retry_and_recover_when_first_scrape_packet_is_dropped()
+    {
+        var provider = new FastTimeoutUdpTrackerProvider(_configService);
+        using var server = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var serverPort = ((IPEndPoint)server.Client.LocalEndPoint!).Port;
+
+        var scrapeAttempts = 0;
+        var firstScrapeTxId = 0;
+        var secondScrapeTxId = 0;
+
+        var serverTask = Task.Run(() =>
+        {
+            var ep = new IPEndPoint(IPAddress.Any, 0);
+
+            // Handle Connect
+            var connectReq = server.Receive(ref ep);
+            var connectResp = new byte[16];
+            WriteInt32BigEndian(connectResp, 0, 0);
+            Array.Copy(connectReq, 12, connectResp, 4, 4);
+            WriteInt64BigEndian(connectResp, 8, 100L);
+            server.Send(connectResp, connectResp.Length, ep);
+
+            // Scrape attempt 0: drop it
+            var scrapeReq1 = server.Receive(ref ep);
+            firstScrapeTxId = ReadInt32BigEndian(scrapeReq1, 12);
+            scrapeAttempts++;
+
+            // Scrape attempt 1 (retransmitted): respond successfully
+            var scrapeReq2 = server.Receive(ref ep);
+            secondScrapeTxId = ReadInt32BigEndian(scrapeReq2, 12);
+            scrapeAttempts++;
+
+            var scrapeResp = new byte[20];
+            WriteInt32BigEndian(scrapeResp, 0, 2);
+            Array.Copy(scrapeReq2, 12, scrapeResp, 4, 4);
+            WriteInt32BigEndian(scrapeResp, 8, 25);
+            WriteInt32BigEndian(scrapeResp, 12, 150);
+            WriteInt32BigEndian(scrapeResp, 16, 5);
+            server.Send(scrapeResp, scrapeResp.Length, ep);
+        });
+
+        var result = provider.Scrape(
+            "AABBCCDDEE112233445566778899AABBCCDDEEFF",
+            $"udp://127.0.0.1:{serverPort}/announce");
+
+        serverTask.Wait(TimeSpan.FromSeconds(5));
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(scrapeAttempts, Is.EqualTo(2));
+        Assert.That(secondScrapeTxId, Is.EqualTo(firstScrapeTxId));
+        Assert.That(result.Complete, Is.EqualTo(25));
+        Assert.That(result.Downloaded, Is.EqualTo(150));
+        Assert.That(result.Incomplete, Is.EqualTo(5));
+    }
+
+    private sealed class FastTimeoutUdpTrackerProvider : UdpTrackerProvider
+    {
+        public TimeSpan BaseTimeout { get; set; } = TimeSpan.FromMilliseconds(50);
+
+        public FastTimeoutUdpTrackerProvider(IConfigService configService)
+            : base(configService)
+        {
+        }
+
+        internal override TimeSpan GetTimeout(int attempt)
+        {
+            var multiplier = 1 << Math.Min(attempt, 30);
+            return BaseTimeout * multiplier;
+        }
     }
 }
