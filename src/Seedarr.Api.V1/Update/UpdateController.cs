@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Update;
 using Seedarr.Http;
 
@@ -16,13 +17,19 @@ public class UpdateController : Controller
 {
     private readonly IUpdateService _updateService;
     private readonly IPostUpdateVerificationService _postUpdateVerificationService;
+    private readonly IUpdatePackageProvider _updatePackageProvider;
+    private readonly IConfigService _configService;
 
     public UpdateController(
         IUpdateService updateService = null,
-        IPostUpdateVerificationService postUpdateVerificationService = null)
+        IPostUpdateVerificationService postUpdateVerificationService = null,
+        IUpdatePackageProvider updatePackageProvider = null,
+        IConfigService configService = null)
     {
         _updateService = updateService ?? new UpdateService();
         _postUpdateVerificationService = postUpdateVerificationService;
+        _updatePackageProvider = updatePackageProvider ?? new UpdatePackageProvider();
+        _configService = configService;
     }
 
     [HttpGet("status")]
@@ -34,6 +41,10 @@ public class UpdateController : Controller
             State = UpdateLifecycleState.Idle,
         };
 
+        var mechanism = _updatePackageProvider?.UpdateMechanism ??
+                        (!string.IsNullOrEmpty(state.Mechanism) ? state.Mechanism : "BuiltIn");
+        var channel = _configService?.UpdateBranch ?? state.ReleaseChannel ?? "main";
+
         return Ok(new UpdateStatusResource
         {
             PreviousVersion = state.PreviousVersion,
@@ -43,6 +54,10 @@ public class UpdateController : Controller
             VerificationTimeoutSeconds = state.VerificationTimeoutSeconds,
             BackupDirectory = state.BackupDirectory,
             ErrorMessage = state.ErrorMessage,
+            Mechanism = mechanism,
+            PackageUrl = state.PackageUrl ?? _updateService?.CachedUpdateInfo?.PackageUrl,
+            PackageFileName = state.PackageFileName ?? _updateService?.CachedUpdateInfo?.PackageFileName,
+            ReleaseChannel = channel,
         });
     }
 
@@ -53,6 +68,8 @@ public class UpdateController : Controller
         var currentVersion = BuildInfo.Version?.ToString() ?? "1.0.0";
         var results = new List<UpdateResource>();
         var currentFound = false;
+        var mechanism = _updatePackageProvider?.UpdateMechanism ?? (info?.IsContainerized == true ? "Docker" : "BuiltIn");
+        var channel = _configService?.UpdateBranch ?? info?.ReleaseChannel ?? "main";
 
         var releases = info.Releases;
         if (releases == null || releases.Count == 0)
@@ -78,6 +95,7 @@ public class UpdateController : Controller
                 isFirst = false;
 
                 var changes = ParseReleaseNotes(release.Body);
+                var package = _updatePackageProvider?.ResolvePackage(release.Assets);
 
                 results.Add(new UpdateResource
                 {
@@ -88,6 +106,10 @@ public class UpdateController : Controller
                     Url = release.Url ?? $"https://github.com/dmzoneill/Seedarr/releases/tag/v{release.Version}",
                     Changes = changes,
                     IsContainerized = info.IsContainerized,
+                    Mechanism = mechanism,
+                    PackageUrl = package?.DownloadUrl ?? (isLatest ? info.PackageUrl : null),
+                    PackageFileName = package?.FileName ?? (isLatest ? info.PackageFileName : null),
+                    ReleaseChannel = channel,
                 });
             }
         }
@@ -109,6 +131,10 @@ public class UpdateController : Controller
                         Fixed = new List<string>(),
                     },
                     IsContainerized = info.IsContainerized,
+                    Mechanism = mechanism,
+                    PackageUrl = null,
+                    PackageFileName = null,
+                    ReleaseChannel = channel,
                 });
             }
             else

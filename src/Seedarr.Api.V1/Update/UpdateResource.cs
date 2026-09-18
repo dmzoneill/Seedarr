@@ -12,6 +12,10 @@ public class UpdateResource
     public string Url { get; set; }
     public UpdateChanges Changes { get; set; }
     public bool IsContainerized { get; set; }
+    public string Mechanism { get; set; }
+    public string PackageUrl { get; set; }
+    public string PackageFileName { get; set; }
+    public string ReleaseChannel { get; set; }
 }
 
 public class UpdateChanges

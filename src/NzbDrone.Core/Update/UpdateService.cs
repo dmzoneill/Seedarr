@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NLog;
 using NzbDrone.Common.EnvironmentInfo;
+using NzbDrone.Core.Configuration;
 
 namespace NzbDrone.Core.Update;
 
@@ -22,6 +23,11 @@ public class UpdateInfo
     public string ReleaseNotes { get; set; }
     public List<ReleaseInfo> Releases { get; set; } = new();
     public bool IsContainerized { get; set; }
+    public string Mechanism { get; set; }
+    public string PackageUrl { get; set; }
+    public string PackageFileName { get; set; }
+    public string ReleaseChannel { get; set; }
+    public UpdatePackage Package { get; set; }
 }
 
 public class ReleaseInfo
@@ -30,6 +36,8 @@ public class ReleaseInfo
     public DateTime PublishedAt { get; set; }
     public string Body { get; set; }
     public string Url { get; set; }
+    public bool Prerelease { get; set; }
+    public List<ReleaseAsset> Assets { get; set; } = new();
 }
 
 public interface IUpdateService
@@ -49,18 +57,27 @@ public class UpdateService : IUpdateService
 
     private readonly HttpClient _client;
     private readonly ISystemClock _clock;
+    private readonly IConfigService _configService;
+    private readonly IUpdatePackageProvider _updatePackageProvider;
     private readonly Logger _logger;
     private readonly object _cacheLock = new();
     private UpdateInfo _cachedResult;
     private DateTime _cacheExpiry = DateTime.MinValue;
+    private string _cachedChannel;
     private Task<UpdateInfo> _ongoingAsyncFetch;
 
     internal static Func<List<ReleaseInfo>> ChangelogProvider { get; set; }
 
-    public UpdateService(HttpClient httpClient = null, ISystemClock clock = null)
+    public UpdateService(
+        HttpClient httpClient = null,
+        ISystemClock clock = null,
+        IConfigService configService = null,
+        IUpdatePackageProvider updatePackageProvider = null)
     {
         _client = httpClient ?? new HttpClient { Timeout = DefaultTimeout };
         _clock = clock ?? new SystemClock();
+        _configService = configService;
+        _updatePackageProvider = updatePackageProvider ?? new UpdatePackageProvider();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -88,23 +105,27 @@ public class UpdateService : IUpdateService
 
     public UpdateInfo CheckForUpdate(bool force = false)
     {
+        var channel = GetReleaseChannel();
+
         lock (_cacheLock)
         {
-            if (!force && _cachedResult != null && _clock.UtcNow < _cacheExpiry)
+            if (!force && _cachedResult != null && _clock.UtcNow < _cacheExpiry && _cachedChannel == channel)
             {
                 return _cachedResult;
             }
         }
 
-        var fetchResult = FetchUpdateInfo();
-        return UpdateCacheWithFetchResult(fetchResult);
+        var fetchResult = FetchUpdateInfo(channel);
+        return UpdateCacheWithFetchResult(fetchResult, channel);
     }
 
     public Task<UpdateInfo> CheckForUpdateAsync(bool force = false, CancellationToken cancellationToken = default)
     {
+        var channel = GetReleaseChannel();
+
         lock (_cacheLock)
         {
-            if (!force && _cachedResult != null && _clock.UtcNow < _cacheExpiry)
+            if (!force && _cachedResult != null && _clock.UtcNow < _cacheExpiry && _cachedChannel == channel)
             {
                 return Task.FromResult(_cachedResult);
             }
@@ -114,17 +135,17 @@ public class UpdateService : IUpdateService
                 return _ongoingAsyncFetch;
             }
 
-            _ongoingAsyncFetch = ExecuteAsyncFetch(cancellationToken);
+            _ongoingAsyncFetch = ExecuteAsyncFetch(channel, cancellationToken);
             return _ongoingAsyncFetch;
         }
     }
 
-    private async Task<UpdateInfo> ExecuteAsyncFetch(CancellationToken cancellationToken)
+    private async Task<UpdateInfo> ExecuteAsyncFetch(string channel, CancellationToken cancellationToken)
     {
         try
         {
-            var fetchResult = await FetchUpdateInfoAsync(cancellationToken).ConfigureAwait(false);
-            return UpdateCacheWithFetchResult(fetchResult);
+            var fetchResult = await FetchUpdateInfoAsync(channel, cancellationToken).ConfigureAwait(false);
+            return UpdateCacheWithFetchResult(fetchResult, channel);
         }
         finally
         {
@@ -135,10 +156,12 @@ public class UpdateService : IUpdateService
         }
     }
 
-    private UpdateInfo UpdateCacheWithFetchResult(FetchResult fetchResult)
+    private UpdateInfo UpdateCacheWithFetchResult(FetchResult fetchResult, string channel)
     {
         lock (_cacheLock)
         {
+            _cachedChannel = channel;
+
             if (fetchResult.IsSuccess && fetchResult.Info.Releases.Count > 0)
             {
                 _cachedResult = fetchResult.Info;
@@ -197,6 +220,11 @@ public class UpdateService : IUpdateService
         return Version.TryParse(info.LatestVersion, out var version) ? version : null;
     }
 
+    public string GetReleaseChannel()
+    {
+        return _configService?.UpdateBranch ?? "main";
+    }
+
     private DateTime CalculateRateLimitExpiry(HttpResponseMessage response)
     {
         if (response?.Headers == null)
@@ -248,7 +276,7 @@ public class UpdateService : IUpdateService
         public DateTime? RateLimitExpiry { get; set; }
     }
 
-    private FetchResult FetchUpdateInfo()
+    private FetchResult FetchUpdateInfo(string channel)
     {
         var currentVersion = BuildInfo.Version?.ToString() ?? "1.0.0";
 
@@ -292,27 +320,27 @@ public class UpdateService : IUpdateService
                 }
 
                 var expiry = CalculateRateLimitExpiry(response);
-                var fallbackInfo = LoadFromChangelogOrFallback(currentVersion);
+                var fallbackInfo = LoadFromChangelogOrFallbackWithContext(currentVersion, channel);
 
                 return new FetchResult
                 {
                     Info = fallbackInfo,
                     IsSuccess = false,
                     IsRateLimited = isRateLimited,
-                    RateLimitExpiry = expiry
+                    RateLimitExpiry = expiry,
                 };
             }
 
             using var stream = response.Content.ReadAsStream();
             using var doc = JsonDocument.Parse(stream);
-            var info = ParseReleasesDocument(doc, currentVersion);
+            var info = ParseReleasesDocument(doc, currentVersion, channel);
 
             return new FetchResult
             {
                 Info = info,
                 IsSuccess = true,
                 IsRateLimited = false,
-                RateLimitExpiry = null
+                RateLimitExpiry = null,
             };
         }
         catch (HttpRequestException ex)
@@ -320,10 +348,10 @@ public class UpdateService : IUpdateService
             _logger.Error(ex, "Failed to check for updates");
             return new FetchResult
             {
-                Info = LoadFromChangelogOrFallback(currentVersion),
+                Info = LoadFromChangelogOrFallbackWithContext(currentVersion, channel),
                 IsSuccess = false,
                 IsRateLimited = false,
-                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30),
             };
         }
         catch (JsonException ex)
@@ -331,10 +359,10 @@ public class UpdateService : IUpdateService
             _logger.Error(ex, "Failed to parse GitHub releases response");
             return new FetchResult
             {
-                Info = LoadFromChangelogOrFallback(currentVersion),
+                Info = LoadFromChangelogOrFallbackWithContext(currentVersion, channel),
                 IsSuccess = false,
                 IsRateLimited = false,
-                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30),
             };
         }
         catch (Exception ex)
@@ -342,15 +370,15 @@ public class UpdateService : IUpdateService
             _logger.Error(ex, "Unexpected error checking for updates");
             return new FetchResult
             {
-                Info = LoadFromChangelogOrFallback(currentVersion),
+                Info = LoadFromChangelogOrFallbackWithContext(currentVersion, channel),
                 IsSuccess = false,
                 IsRateLimited = false,
-                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30),
             };
         }
     }
 
-    private async Task<FetchResult> FetchUpdateInfoAsync(CancellationToken cancellationToken)
+    private async Task<FetchResult> FetchUpdateInfoAsync(string channel, CancellationToken cancellationToken)
     {
         var currentVersion = BuildInfo.Version?.ToString() ?? "1.0.0";
 
@@ -398,27 +426,27 @@ public class UpdateService : IUpdateService
                 }
 
                 var expiry = CalculateRateLimitExpiry(response);
-                var fallbackInfo = LoadFromChangelogOrFallback(currentVersion);
+                var fallbackInfo = LoadFromChangelogOrFallbackWithContext(currentVersion, channel);
 
                 return new FetchResult
                 {
                     Info = fallbackInfo,
                     IsSuccess = false,
                     IsRateLimited = isRateLimited,
-                    RateLimitExpiry = expiry
+                    RateLimitExpiry = expiry,
                 };
             }
 
             var json = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
             using var doc = JsonDocument.Parse(json);
-            var info = ParseReleasesDocument(doc, currentVersion);
+            var info = ParseReleasesDocument(doc, currentVersion, channel);
 
             return new FetchResult
             {
                 Info = info,
                 IsSuccess = true,
                 IsRateLimited = false,
-                RateLimitExpiry = null
+                RateLimitExpiry = null,
             };
         }
         catch (HttpRequestException ex)
@@ -426,10 +454,10 @@ public class UpdateService : IUpdateService
             _logger.Error(ex, "Failed to check for updates");
             return new FetchResult
             {
-                Info = LoadFromChangelogOrFallback(currentVersion),
+                Info = LoadFromChangelogOrFallbackWithContext(currentVersion, channel),
                 IsSuccess = false,
                 IsRateLimited = false,
-                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30),
             };
         }
         catch (JsonException ex)
@@ -437,10 +465,10 @@ public class UpdateService : IUpdateService
             _logger.Error(ex, "Failed to parse GitHub releases response");
             return new FetchResult
             {
-                Info = LoadFromChangelogOrFallback(currentVersion),
+                Info = LoadFromChangelogOrFallbackWithContext(currentVersion, channel),
                 IsSuccess = false,
                 IsRateLimited = false,
-                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30),
             };
         }
         catch (Exception ex)
@@ -448,12 +476,19 @@ public class UpdateService : IUpdateService
             _logger.Error(ex, "Unexpected error checking for updates");
             return new FetchResult
             {
-                Info = LoadFromChangelogOrFallback(currentVersion),
+                Info = LoadFromChangelogOrFallbackWithContext(currentVersion, channel),
                 IsSuccess = false,
                 IsRateLimited = false,
-                RateLimitExpiry = _clock.UtcNow.AddMinutes(30)
+                RateLimitExpiry = _clock.UtcNow.AddMinutes(30),
             };
         }
+    }
+
+    private UpdateInfo LoadFromChangelogOrFallbackWithContext(string currentVersion, string channel)
+    {
+        var info = LoadFromChangelogOrFallback(currentVersion);
+        PopulatePackageDetails(info, channel);
+        return info;
     }
 
     private static UpdateInfo LoadFromChangelogOrFallback(string currentVersion)
@@ -593,12 +628,14 @@ public class UpdateService : IUpdateService
         return releaseList;
     }
 
-    private static UpdateInfo ParseReleasesDocument(JsonDocument doc, string currentVersion)
+    private UpdateInfo ParseReleasesDocument(JsonDocument doc, string currentVersion, string channel)
     {
         var releases = doc.RootElement;
         if (releases.ValueKind != JsonValueKind.Array)
         {
-            return BuildResult(currentVersion, null, new List<ReleaseInfo>());
+            var fallback = BuildResult(currentVersion, null, new List<ReleaseInfo>());
+            PopulatePackageDetails(fallback, channel);
+            return fallback;
         }
 
         var releaseList = new List<ReleaseInfo>();
@@ -616,6 +653,12 @@ public class UpdateService : IUpdateService
             var versionString = tagName.TrimStart('v', 'V');
 
             if (release.TryGetProperty("draft", out var draft) && draft.GetBoolean())
+            {
+                continue;
+            }
+
+            var isPrerelease = release.TryGetProperty("prerelease", out var preProp) && preProp.GetBoolean();
+            if (_updatePackageProvider != null && !_updatePackageProvider.IsReleaseApplicable(isPrerelease, channel))
             {
                 continue;
             }
@@ -668,12 +711,37 @@ public class UpdateService : IUpdateService
             var body = release.TryGetProperty("body", out var notes) ? notes.GetString() : string.Empty;
             var htmlUrl = release.TryGetProperty("html_url", out var url) ? url.GetString() : null;
 
+            var assetList = new List<ReleaseAsset>();
+            if (release.TryGetProperty("assets", out var assetsProp) && assetsProp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var asset in assetsProp.EnumerateArray())
+                {
+                    var name = asset.TryGetProperty("name", out var n) ? n.GetString() : null;
+                    var downloadUrl = asset.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
+                    var size = asset.TryGetProperty("size", out var s) && s.TryGetInt64(out var sz) ? sz : 0L;
+                    var contentType = asset.TryGetProperty("content_type", out var ct) ? ct.GetString() : null;
+
+                    if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(downloadUrl))
+                    {
+                        assetList.Add(new ReleaseAsset
+                        {
+                            Name = name,
+                            DownloadUrl = downloadUrl,
+                            Size = size,
+                            ContentType = contentType,
+                        });
+                    }
+                }
+            }
+
             releaseList.Add(new ReleaseInfo
             {
                 Version = versionString,
                 PublishedAt = publishedAt,
                 Body = body,
                 Url = htmlUrl,
+                Prerelease = isPrerelease,
+                Assets = assetList,
             });
 
             if (latestSemVer == null || parsedVer > latestSemVer.Value)
@@ -683,7 +751,32 @@ public class UpdateService : IUpdateService
             }
         }
 
-        return BuildResult(currentVersion, latestVersionString, releaseList);
+        var result = BuildResult(currentVersion, latestVersionString, releaseList);
+        PopulatePackageDetails(result, channel);
+        return result;
+    }
+
+    private void PopulatePackageDetails(UpdateInfo info, string channel)
+    {
+        if (info == null)
+        {
+            return;
+        }
+
+        info.ReleaseChannel = channel;
+        info.Mechanism = _updatePackageProvider?.UpdateMechanism ?? (info.IsContainerized ? "Docker" : "BuiltIn");
+
+        var latestRelease = info.Releases.FirstOrDefault(r => r.Version == info.LatestVersion) ?? info.Releases.FirstOrDefault();
+        if (latestRelease?.Assets != null && latestRelease.Assets.Count > 0 && _updatePackageProvider != null)
+        {
+            var package = _updatePackageProvider.ResolvePackage(latestRelease.Assets);
+            if (package != null)
+            {
+                info.Package = package;
+                info.PackageUrl = package.DownloadUrl;
+                info.PackageFileName = package.FileName;
+            }
+        }
     }
 
     private static UpdateInfo BuildResult(string currentVersion, string latestVersion, List<ReleaseInfo> releases)
@@ -697,35 +790,22 @@ public class UpdateService : IUpdateService
             }
         }
 
+        var isContainerized = IsRunningInContainer();
+
         return new UpdateInfo
         {
             CurrentVersion = currentVersion ?? "1.0.0",
             LatestVersion = latestVersion,
             UpdateAvailable = updateAvailable,
             Releases = releases,
-            IsContainerized = IsRunningInContainer(),
+            IsContainerized = isContainerized,
+            Mechanism = isContainerized ? "Docker" : "BuiltIn",
+            ReleaseChannel = "main",
         };
     }
 
     public static bool IsRunningInContainer()
     {
-        try
-        {
-            if (string.Equals(Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"), "true", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            if (File.Exists("/.dockerenv"))
-            {
-                return true;
-            }
-        }
-        catch
-        {
-            // Ignore file access or environment exceptions
-        }
-
-        return false;
+        return EnvironmentProvider.CheckIsDocker();
     }
 }

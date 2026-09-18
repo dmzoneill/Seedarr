@@ -4,7 +4,9 @@ using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Threading.Tasks;
+using NSubstitute;
 using NUnit.Framework;
+using NzbDrone.Core.Configuration;
 using NzbDrone.Core.Test.TestHelpers;
 using NzbDrone.Core.Update;
 
@@ -481,9 +483,12 @@ public class UpdateServiceTest
 
     // --- FetchUpdateInfo tests via HTTP injection ---
 
-    private static UpdateService CreateWithHandler(MockHttpMessageHandler handler)
+    private static UpdateService CreateWithHandler(
+        MockHttpMessageHandler handler,
+        IConfigService configService = null,
+        IUpdatePackageProvider packageProvider = null)
     {
-        return new UpdateService(new HttpClient(handler));
+        return new UpdateService(new HttpClient(handler), null, configService, packageProvider);
     }
 
     private static UpdateService CreateWithThrowingHandler(Exception ex)
@@ -1419,5 +1424,123 @@ public class UpdateServiceTest
 
         SetCachedResult(cached, DateTime.UtcNow.AddMinutes(10));
         Assert.That(_subject.IsCacheExpired, Is.False);
+    }
+
+    [Test]
+    public void CheckForUpdate_should_exclude_prerelease_on_stable_channel()
+    {
+        var json = """
+            [
+                {
+                    "tag_name": "v2.0.0-beta.1",
+                    "draft": false,
+                    "prerelease": true,
+                    "published_at": "2024-02-01T00:00:00Z",
+                    "body": "Beta release",
+                    "html_url": "https://github.com/test/releases/tag/v2.0.0-beta.1"
+                },
+                {
+                    "tag_name": "v1.9.0",
+                    "draft": false,
+                    "prerelease": false,
+                    "published_at": "2024-01-01T00:00:00Z",
+                    "body": "Stable release",
+                    "html_url": "https://github.com/test/releases/tag/v1.9.0"
+                }
+            ]
+            """;
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, json);
+
+        var config = Substitute.For<IConfigService>();
+        config.UpdateBranch.Returns("stable");
+
+        var subject = CreateWithHandler(handler, config);
+
+        var result = subject.CheckForUpdate();
+
+        Assert.That(result.Releases, Has.Count.EqualTo(1));
+        Assert.That(result.Releases[0].Version, Is.EqualTo("1.9.0"));
+        Assert.That(result.LatestVersion, Is.EqualTo("1.9.0"));
+    }
+
+    [Test]
+    public void CheckForUpdate_should_include_prerelease_on_develop_channel()
+    {
+        var json = """
+            [
+                {
+                    "tag_name": "v2.0.0-beta.1",
+                    "draft": false,
+                    "prerelease": true,
+                    "published_at": "2024-02-01T00:00:00Z",
+                    "body": "Beta release",
+                    "html_url": "https://github.com/test/releases/tag/v2.0.0-beta.1"
+                },
+                {
+                    "tag_name": "v1.9.0",
+                    "draft": false,
+                    "prerelease": false,
+                    "published_at": "2024-01-01T00:00:00Z",
+                    "body": "Stable release",
+                    "html_url": "https://github.com/test/releases/tag/v1.9.0"
+                }
+            ]
+            """;
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, json);
+
+        var config = Substitute.For<IConfigService>();
+        config.UpdateBranch.Returns("develop");
+
+        var subject = CreateWithHandler(handler, config);
+
+        var result = subject.CheckForUpdate();
+
+        Assert.That(result.Releases, Has.Count.EqualTo(2));
+        Assert.That(result.LatestVersion, Is.EqualTo("2.0.0-beta.1"));
+    }
+
+    [Test]
+    public void CheckForUpdate_should_resolve_package_and_checksum_details()
+    {
+        var json = """
+            [
+                {
+                    "tag_name": "v1.5.0",
+                    "draft": false,
+                    "prerelease": false,
+                    "published_at": "2024-01-01T00:00:00Z",
+                    "body": "Stable release",
+                    "html_url": "https://github.com/test/releases/tag/v1.5.0",
+                    "assets": [
+                        {
+                            "name": "seedarr-linux-x64.tar.gz",
+                            "browser_download_url": "https://github.com/test/download/seedarr-linux-x64.tar.gz",
+                            "size": 52428800
+                        },
+                        {
+                            "name": "seedarr-linux-x64.tar.gz.sha256",
+                            "browser_download_url": "https://github.com/test/download/seedarr-linux-x64.tar.gz.sha256",
+                            "size": 64
+                        }
+                    ]
+                }
+            ]
+            """;
+        var handler = new MockHttpMessageHandler();
+        handler.Enqueue(HttpStatusCode.OK, json);
+
+        var packageProvider = new UpdatePackageProvider(platformOverride: "linux-x64");
+        var subject = CreateWithHandler(handler, packageProvider: packageProvider);
+
+        var result = subject.CheckForUpdate();
+
+        Assert.That(result.Package, Is.Not.Null);
+        Assert.That(result.Package.FileName, Is.EqualTo("seedarr-linux-x64.tar.gz"));
+        Assert.That(result.Package.DownloadUrl, Is.EqualTo("https://github.com/test/download/seedarr-linux-x64.tar.gz"));
+        Assert.That(result.Package.Sha256ChecksumUrl, Is.EqualTo("https://github.com/test/download/seedarr-linux-x64.tar.gz.sha256"));
+        Assert.That(result.PackageUrl, Is.EqualTo("https://github.com/test/download/seedarr-linux-x64.tar.gz"));
+        Assert.That(result.PackageFileName, Is.EqualTo("seedarr-linux-x64.tar.gz"));
     }
 }

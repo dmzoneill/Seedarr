@@ -46,6 +46,14 @@ public record UpdateState
 
     public string ErrorMessage { get; init; }
 
+    public string Mechanism { get; init; } = "BuiltIn";
+
+    public string PackageUrl { get; init; }
+
+    public string PackageFileName { get; init; }
+
+    public string ReleaseChannel { get; init; } = "main";
+
     public UpdateState()
     {
     }
@@ -57,7 +65,11 @@ public record UpdateState
         DateTime? initiatedAt = null,
         int verificationTimeoutSeconds = 60,
         string backupDirectory = null,
-        string errorMessage = null)
+        string errorMessage = null,
+        string mechanism = "BuiltIn",
+        string packageUrl = null,
+        string packageFileName = null,
+        string releaseChannel = "main")
     {
         PreviousVersion = previousVersion ?? string.Empty;
         TargetVersion = targetVersion ?? string.Empty;
@@ -66,6 +78,10 @@ public record UpdateState
         VerificationTimeoutSeconds = verificationTimeoutSeconds;
         BackupDirectory = backupDirectory ?? string.Empty;
         ErrorMessage = errorMessage;
+        Mechanism = mechanism ?? "BuiltIn";
+        PackageUrl = packageUrl;
+        PackageFileName = packageFileName;
+        ReleaseChannel = releaseChannel ?? "main";
     }
 
     public void Deconstruct(
