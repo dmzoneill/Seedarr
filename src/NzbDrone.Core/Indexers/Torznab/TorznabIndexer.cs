@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Xml;
 using NLog;
 using NzbDrone.Core.Validation;
@@ -460,6 +462,11 @@ public class TorznabIndexer : IIndexer
             return results;
         }
 
+        if (xml.Contains("&nbsp;"))
+        {
+            xml = xml.Replace("&nbsp;", "&#160;");
+        }
+
         var doc = new XmlDocument();
         var settings = new XmlReaderSettings
         {
@@ -493,6 +500,8 @@ public class TorznabIndexer : IIndexer
             foreach (System.Xml.XmlNode item in items)
             {
                 var titleNode = item.SelectSingleNode("title");
+                var descriptionNode = item.SelectSingleNode("description");
+                var commentsNode = item.SelectSingleNode("comments") ?? item.SelectSingleNode("details");
                 var linkNode = item.SelectSingleNode("link");
                 var enclosureNode = item.SelectSingleNode("enclosure");
                 var sizeNode = item.SelectSingleNode("size");
@@ -510,11 +519,22 @@ public class TorznabIndexer : IIndexer
                     magnetUrl = linkNode.InnerText;
                 }
 
+                var rawTitle = titleNode?.InnerText ?? string.Empty;
+                var decodedTitle = DecodeAndNormalize(rawTitle);
+
+                var rawDescription = descriptionNode?.InnerText;
+                var decodedDescription = rawDescription != null ? DecodeAndNormalize(rawDescription) : null;
+
+                var rawComments = commentsNode?.InnerText;
+                var decodedComments = rawComments != null ? DecodeAndNormalize(rawComments) : null;
+
                 var release = new ReleaseInfo
                 {
                     IndexerId = definition?.Id ?? 0,
                     Indexer = definition?.Name,
-                    Title = titleNode?.InnerText ?? string.Empty,
+                    Title = decodedTitle,
+                    Description = decodedDescription,
+                    Comments = decodedComments,
                     DownloadUrl = downloadUrl,
                     MagnetUrl = magnetUrl,
                     ResponseOffset = responseOffset,
@@ -680,5 +700,39 @@ public class TorznabIndexer : IIndexer
             || title.IndexOf("[FL]", StringComparison.OrdinalIgnoreCase) >= 0
             || title.IndexOf("(Freeleech)", StringComparison.OrdinalIgnoreCase) >= 0
             || title.IndexOf("(FL)", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    public static string DecodeAndNormalize(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return string.Empty;
+        }
+
+        var decoded = input;
+        for (var i = 0; i < 2; i++)
+        {
+            var next = WebUtility.HtmlDecode(decoded);
+            if (next.Contains("&apos;"))
+            {
+                next = next.Replace("&apos;", "'");
+            }
+
+            if (next == decoded)
+            {
+                break;
+            }
+
+            decoded = next;
+        }
+
+        if (decoded.Contains("&nbsp;"))
+        {
+            decoded = decoded.Replace("&nbsp;", " ");
+        }
+
+        decoded = decoded.Replace('\u00A0', ' ');
+
+        return Regex.Replace(decoded, @"\s+", " ").Trim();
     }
 }

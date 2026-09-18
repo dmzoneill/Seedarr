@@ -7,6 +7,8 @@ public class ReleaseInfo
 {
     public string Guid { get; set; }
     public string Title { get; set; }
+    public string Description { get; set; }
+    public string Comments { get; set; }
     public int IndexerId { get; set; }
     public string Indexer { get; set; }
     public long Size { get; set; }

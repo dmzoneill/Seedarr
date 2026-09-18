@@ -228,5 +228,74 @@ namespace NzbDrone.Core.Test.Indexers.Newznab
             Assert.That(url, Does.Contain("author=Asimov"));
             Assert.That(url, Does.Contain("title=Foundation"));
         }
+
+        [Test]
+        public void ParseResponse_should_decode_html_entities_and_normalize_whitespace_in_title_and_description()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:newznab=""http://www.newznab.com/DTD/2010/feeds/attributes/"">
+    <channel>
+        <title>Newznab Feed</title>
+        <item>
+            <title><![CDATA[Fast&nbsp;&amp;&nbsp;Furious&#39;s&quot;Cut&quot;]]></title>
+            <description><![CDATA[Fast&nbsp;&amp;&nbsp;Furious&#39;s&quot;Cut&quot;]]></description>
+            <comments><![CDATA[https://newznab.local/details/123&amp;view=1]]></comments>
+            <link>https://newznab.local/nzb/123.nzb</link>
+            <size>1048576</size>
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].Title, Is.EqualTo("Fast & Furious's\"Cut\""));
+            Assert.That(results[0].Description, Is.EqualTo("Fast & Furious's\"Cut\""));
+            Assert.That(results[0].Comments, Is.EqualTo("https://newznab.local/details/123&view=1"));
+        }
+
+        [Test]
+        public void ParseResponse_should_decode_cdata_character_references_and_entities()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:newznab=""http://www.newznab.com/DTD/2010/feeds/attributes/"">
+    <channel>
+        <item>
+            <title><![CDATA[  Tom&apos;s&nbsp;&amp;&nbsp;Jerry&#x27;s&#x2F;Movie   2026   ]]></title>
+            <description><![CDATA[  Release &amp; details &nbsp; with &quot;quotes&quot;  ]]></description>
+            <link>https://newznab.local/nzb/456.nzb</link>
+            <size>2048</size>
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].Title, Is.EqualTo("Tom's & Jerry's/Movie 2026"));
+            Assert.That(results[0].Description, Is.EqualTo("Release & details with \"quotes\""));
+        }
+
+        [Test]
+        public void ParseResponse_should_decode_raw_html_entities_without_cdata()
+        {
+            var xml = @"<?xml version=""1.0"" encoding=""UTF-8""?>
+<rss version=""2.0"" xmlns:newznab=""http://www.newznab.com/DTD/2010/feeds/attributes/"">
+    <channel>
+        <item>
+            <title>Fast&nbsp;&amp;&nbsp;Furious&#39;s&quot;Cut&quot;</title>
+            <description>Fast&nbsp;&amp;&nbsp;Furious&#39;s&quot;Cut&quot;</description>
+            <link>https://newznab.local/nzb/789.nzb</link>
+            <size>1048576</size>
+        </item>
+    </channel>
+</rss>";
+
+            var results = _subject.ParseResponse(xml);
+
+            Assert.That(results, Has.Count.EqualTo(1));
+            Assert.That(results[0].Title, Is.EqualTo("Fast & Furious's\"Cut\""));
+            Assert.That(results[0].Description, Is.EqualTo("Fast & Furious's\"Cut\""));
+        }
     }
 }
