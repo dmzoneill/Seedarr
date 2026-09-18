@@ -49,5 +49,6 @@ public static class TableRegistration
         TableMapping.Register<AutomationScript>("AutomationScripts");
         TableMapping.Register<TorrentEventLog>("TorrentEventLogs");
         TableMapping.Register<ScheduledTaskHistory>("ScheduledTaskHistory");
+        TableMapping.Register<RssSeenRelease>("RssSeenReleases");
     }
 }
