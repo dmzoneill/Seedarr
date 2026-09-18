@@ -31,3 +31,19 @@ public class SeedingStoppedEvent : IEvent
         TorrentId = torrentId;
     }
 }
+
+public class SuperSeedingExitedEvent : IEvent
+{
+    public Torrents.Torrent Torrent { get; set; }
+    public string Reason { get; set; }
+
+    public SuperSeedingExitedEvent()
+    {
+    }
+
+    public SuperSeedingExitedEvent(Torrents.Torrent torrent, string reason)
+    {
+        Torrent = torrent;
+        Reason = reason;
+    }
+}

@@ -29,6 +29,7 @@ public class SeedingEngine : BackgroundService
     private TimeSpan TickInterval => TimeSpan.FromSeconds(Math.Max(1, _configService.UiRefreshRateSec));
 
     private readonly ITorrentService _torrentService;
+    private readonly ITorrentRepository _torrentRepository;
     private readonly ISpeedDistributionManager _distributionManager;
     private readonly ISpeedScheduler _speedScheduler;
     private readonly IConfigService _configService;
@@ -78,9 +79,11 @@ public class SeedingEngine : BackgroundService
         IClientBehaviorSimulator clientBehaviorSimulator = null,
         ISwarmAnalyzer swarmAnalyzer = null,
         ICategoryService categoryService = null,
-        ITagService tagService = null)
+        ITagService tagService = null,
+        ITorrentRepository torrentRepository = null)
     {
         _torrentService = torrentService;
+        _torrentRepository = torrentRepository;
         _distributionManager = distributionManager;
         _speedScheduler = speedScheduler;
         _configService = configService;
@@ -230,6 +233,8 @@ public class SeedingEngine : BackgroundService
         var seedingTorrents = allTorrents
             .Where(t => t.Status == TorrentStatus.Seeding && (autoStart || t.ForceStart))
             .ToList();
+
+        EvaluateSuperSeeding(allTorrents.Where(t => (t.Status == TorrentStatus.Seeding || t.Status == TorrentStatus.Downloading) && t.SuperSeeding));
 
         if (_categoryService != null && autoStart)
         {
@@ -631,4 +636,133 @@ public class SeedingEngine : BackgroundService
     }
 
     private static double GetPriorityWeight(int priority) => SpeedPolicy.GetPriorityWeight(priority);
+
+    public static double CalculateCumulativeAvailability(IEnumerable<PeerConnection> peers, int pieceCount)
+    {
+        if (peers == null)
+        {
+            return 0.0;
+        }
+
+        var peerList = peers.Where(p => p != null).ToList();
+        if (peerList.Count == 0)
+        {
+            return 0.0;
+        }
+
+        if (peerList.Any(p => p.IsSeed || p.Progress >= 1.0))
+        {
+            return 1.0;
+        }
+
+        if (pieceCount <= 0)
+        {
+            var sumProgress = peerList.Sum(p => Math.Clamp(p.Progress, 0.0, 1.0));
+            return Math.Min(1.0, sumProgress);
+        }
+
+        var coveredPieces = new bool[pieceCount];
+        var hasAnyBitfield = false;
+
+        foreach (var peer in peerList)
+        {
+            if (peer.PeerPieces != null && peer.PeerPieces.Length > 0)
+            {
+                hasAnyBitfield = true;
+                var max = Math.Min(pieceCount, peer.PeerPieces.Length);
+                for (var i = 0; i < max; i++)
+                {
+                    if (peer.PeerPieces[i])
+                    {
+                        coveredPieces[i] = true;
+                    }
+                }
+            }
+        }
+
+        if (hasAnyBitfield)
+        {
+            var coveredCount = coveredPieces.Count(c => c);
+            return (double)coveredCount / pieceCount;
+        }
+
+        var totalProgress = peerList.Sum(p => Math.Clamp(p.Progress, 0.0, 1.0));
+        return Math.Min(1.0, totalProgress);
+    }
+
+    public void EvaluateSuperSeeding(Torrent torrent)
+    {
+        if (torrent == null || !torrent.SuperSeeding || string.IsNullOrEmpty(torrent.InfoHash) || _connectionManager == null)
+        {
+            return;
+        }
+
+        var connectedPeers = _connectionManager.GetConnections(torrent.InfoHash);
+        if (connectedPeers == null || connectedPeers.Count == 0)
+        {
+            return;
+        }
+
+        var hasOtherSeed = connectedPeers.Any(p => p != null && (p.IsSeed || p.Progress >= 1.0));
+        var swarmAvailability = CalculateCumulativeAvailability(connectedPeers, torrent.PieceCount);
+
+        if (hasOtherSeed || swarmAvailability >= 1.0)
+        {
+            var reason = hasOtherSeed ? "secondary seed joined" : "swarm availability >= 1.0";
+            ExitSuperSeeding(torrent, reason, connectedPeers);
+        }
+    }
+
+    public void EvaluateSuperSeeding(IEnumerable<Torrent> torrents)
+    {
+        if (torrents == null)
+        {
+            return;
+        }
+
+        foreach (var torrent in torrents)
+        {
+            EvaluateSuperSeeding(torrent);
+        }
+    }
+
+    internal void ExitSuperSeeding(Torrent torrent, string reason, List<PeerConnection> connectedPeers = null)
+    {
+        torrent.SuperSeeding = false;
+
+        _torrentRepository?.Update(torrent);
+        _torrentService?.Update(torrent);
+
+        var message = $"Super-seeding completed: {reason}";
+        _eventLogService?.Info(torrent.Id, "SuperSeeding", message);
+        _logger.Info("Torrent '{0}' (Id: {1}) - {2}", torrent.Name, torrent.Id, message);
+
+        _eventAggregator?.PublishEvent(new SuperSeedingExitedEvent(torrent, reason));
+        _eventAggregator?.PublishEvent(new TorrentUpdatedEvent(torrent));
+
+        if (connectedPeers != null && torrent.PieceCount > 0)
+        {
+            foreach (var peer in connectedPeers)
+            {
+                try
+                {
+                    if (peer != null)
+                    {
+                        if (peer.SupportsFastExtension)
+                        {
+                            peer.SendMessage(new PeerMessage { Type = PeerMessageType.HaveAll });
+                        }
+                        else
+                        {
+                            peer.SendBitfield(torrent.PieceCount);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Error sending full availability to peer {0}:{1} after exiting super-seeding", peer?.RemoteIp, peer?.RemotePort);
+                }
+            }
+        }
+    }
 }
