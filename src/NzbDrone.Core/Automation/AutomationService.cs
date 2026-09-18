@@ -1,6 +1,8 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,6 +16,8 @@ using NzbDrone.Core.Messaging.Events;
 using NzbDrone.Core.Notifications;
 using NzbDrone.Core.Tags;
 using NzbDrone.Core.Torrents;
+using NzbDrone.Core.TrackerBoost;
+using NzbDrone.Core.Trackers;
 
 namespace NzbDrone.Core.Automation;
 
@@ -36,6 +40,8 @@ public class AutomationService : IAutomationService
     private readonly INotificationRepository? _notificationRepository;
     private readonly IWebhookDispatcher? _webhookDispatcher;
     private readonly IArchiveExtractorService? _archiveExtractorService;
+    private readonly ITrackerBoostService? _trackerBoostService;
+    private readonly ITrackerAnnounceService? _trackerAnnounceService;
     private readonly Logger _logger;
     private readonly JintScriptRunner _jintRunner;
     private readonly YamlScriptRunner _yamlRunner;
@@ -50,7 +56,9 @@ public class AutomationService : IAutomationService
         ICustomScriptService? customScriptService = null,
         INotificationRepository? notificationRepository = null,
         IWebhookDispatcher? webhookDispatcher = null,
-        IArchiveExtractorService? archiveExtractorService = null)
+        IArchiveExtractorService? archiveExtractorService = null,
+        ITrackerBoostService? trackerBoostService = null,
+        ITrackerAnnounceService? trackerAnnounceService = null)
     {
         _scriptRepository = scriptRepository;
         _torrentRepository = torrentRepository;
@@ -61,6 +69,8 @@ public class AutomationService : IAutomationService
         _notificationRepository = notificationRepository;
         _webhookDispatcher = webhookDispatcher;
         _archiveExtractorService = archiveExtractorService;
+        _trackerBoostService = trackerBoostService;
+        _trackerAnnounceService = trackerAnnounceService;
         _logger = LogManager.GetCurrentClassLogger();
         _jintRunner = new JintScriptRunner(commandQueue, configFileProvider);
         _yamlRunner = new YamlScriptRunner(commandQueue);
@@ -242,6 +252,145 @@ public class AutomationService : IAutomationService
                     }
                 });
             }
+            else if (result.Success && result.ShouldExtractArchive && _archiveExtractorService == null)
+            {
+                _logger.Warn("Archive extraction requested for torrent '{0}', but IArchiveExtractorService is not available", torrent?.Name);
+            }
+
+            // Side-effects: Reannounce
+            if (result.Success && result.ShouldReannounce && torrent != null)
+            {
+                if (_trackerAnnounceService != null)
+                {
+                    Task.Run(() =>
+                    {
+                        try
+                        {
+                            _trackerAnnounceService.AnnounceTorrent(torrent, force: true);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.Error(ex, "Failed to reannounce torrent '{0}'", torrent.Name);
+                        }
+                    });
+                }
+
+                if (_trackerBoostService != null && !string.IsNullOrWhiteSpace(torrent.InfoHash))
+                {
+                    try
+                    {
+                        _trackerBoostService.ReannounceDownloadClients(torrent.InfoHash);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Failed to reannounce download clients for torrent '{0}'", torrent.Name);
+                    }
+                }
+            }
+
+            if (result.Success && result.ShouldReannounceAll)
+            {
+                Task.Run(() =>
+                {
+                    try
+                    {
+                        var allTorrents = _torrentRepository.All();
+                        foreach (var t in allTorrents)
+                        {
+                            _trackerAnnounceService?.AnnounceTorrent(t, force: true);
+                            if (!string.IsNullOrWhiteSpace(t.InfoHash))
+                            {
+                                _trackerBoostService?.ReannounceDownloadClients(t.InfoHash);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Failed to reannounce all torrents");
+                    }
+                });
+            }
+
+            // Side-effects: Tracker Boost
+            if (result.Success && result.ShouldBoostTracker && torrent != null && _trackerBoostService != null)
+            {
+                Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _trackerBoostService.BoostTorrentAsync(torrent.Id).ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Failed to boost tracker for torrent '{0}'", torrent.Name);
+                    }
+                });
+            }
+            else if (result.Success && result.ShouldBoostTracker && _trackerBoostService == null)
+            {
+                _logger.Warn("Tracker boost requested for torrent '{0}', but ITrackerBoostService is not available", torrent?.Name);
+            }
+
+            // Side-effects: Ban Peers
+            if (result.Success && result.PeersToBan.Count > 0)
+            {
+                foreach (var peerIp in result.PeersToBan)
+                {
+                    if (!string.IsNullOrWhiteSpace(peerIp))
+                    {
+                        _logger.Info("Banning peer IP '{0}' for torrent '{1}' from automation script", peerIp, torrent?.Name);
+                        _eventAggregator.PublishEvent(new PeerBannedEvent(peerIp.Trim(), "Banned by automation script", torrent?.InfoHash ?? string.Empty));
+                    }
+                }
+            }
+
+            // Side-effects: Clean unwanted files
+            if (result.Success && result.CleanFilePatterns.Count > 0 && torrent != null && !string.IsNullOrWhiteSpace(torrent.SavePath))
+            {
+                var savePath = torrent.SavePath;
+                var patterns = new List<string>(result.CleanFilePatterns);
+                Task.Run(() =>
+                {
+                    try
+                    {
+                        if (!Directory.Exists(savePath))
+                        {
+                            return;
+                        }
+
+                        foreach (var pattern in patterns)
+                        {
+                            if (string.IsNullOrWhiteSpace(pattern))
+                            {
+                                continue;
+                            }
+
+                            var cleanPattern = pattern.Trim();
+                            var searchPattern = cleanPattern.Contains('*') || cleanPattern.Contains('?')
+                                ? cleanPattern
+                                : (cleanPattern.StartsWith('.') ? $"*{cleanPattern}" : $"*.{cleanPattern}");
+
+                            var matchedFiles = Directory.GetFiles(savePath, searchPattern, SearchOption.AllDirectories);
+                            foreach (var file in matchedFiles)
+                            {
+                                try
+                                {
+                                    File.Delete(file);
+                                    _logger.Info("Cleaned unwanted file '{0}' matching pattern '{1}' for torrent '{2}'", file, cleanPattern, torrent.Name);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.Warn(ex, "Failed to delete cleaned file '{0}'", file);
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error(ex, "Failed to clean unwanted files for torrent '{0}'", torrent.Name);
+                    }
+                });
+            }
 
             // Side-effects: Notifications to send
             if (result.Success && result.NotificationsToSend.Count > 0 && _notificationRepository != null && _webhookDispatcher != null)
@@ -270,6 +419,200 @@ public class AutomationService : IAutomationService
                             catch (Exception ex)
                             {
                                 _logger.Error(ex, "Failed to dispatch automation notification via {0}", n.Implementation);
+                            }
+                        });
+                    }
+                }
+            }
+
+            // Side-effects: Direct Webhooks
+            if (result.Success && _webhookDispatcher != null)
+            {
+                if (result.DiscordWebhooksToSend.Count > 0)
+                {
+                    foreach (var d in result.DiscordWebhooksToSend)
+                    {
+                        if (string.IsNullOrWhiteSpace(d.Url))
+                        {
+                            continue;
+                        }
+
+                        int? colorInt = null;
+                        if (!string.IsNullOrWhiteSpace(d.Color))
+                        {
+                            var hex = d.Color.Trim().TrimStart('#');
+                            if (int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var parsedHex))
+                            {
+                                colorInt = parsedHex;
+                            }
+                            else if (int.TryParse(d.Color, out var parsedInt))
+                            {
+                                colorInt = parsedInt;
+                            }
+                        }
+
+                        var embed = new Dictionary<string, object?>
+                        {
+                            ["title"] = string.IsNullOrWhiteSpace(d.Title) ? null : d.Title,
+                            ["description"] = string.IsNullOrWhiteSpace(d.Description) ? null : d.Description,
+                            ["timestamp"] = DateTime.UtcNow.ToString("o")
+                        };
+
+                        if (colorInt.HasValue)
+                        {
+                            embed["color"] = colorInt.Value;
+                        }
+
+                        if (d.Fields != null && d.Fields.Count > 0)
+                        {
+                            embed["fields"] = d.Fields.Select(f => new { name = f.Key, value = f.Value, @inline = true }).ToArray();
+                        }
+
+                        var payload = new Dictionary<string, object?>
+                        {
+                            ["username"] = "Seedarr",
+                            ["embeds"] = new[] { embed }
+                        };
+
+                        Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _webhookDispatcher.DispatchAsync(d.Url, payload).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(ex, "Failed to dispatch Discord webhook to {0}", d.Url);
+                            }
+                        });
+                    }
+                }
+
+                if (result.TelegramMessagesToSend.Count > 0)
+                {
+                    foreach (var tg in result.TelegramMessagesToSend)
+                    {
+                        if (string.IsNullOrWhiteSpace(tg.Token) || string.IsNullOrWhiteSpace(tg.ChatId))
+                        {
+                            continue;
+                        }
+
+                        var url = $"https://api.telegram.org/bot{tg.Token}/sendMessage";
+                        var payload = new Dictionary<string, object?>
+                        {
+                            ["chat_id"] = tg.ChatId,
+                            ["text"] = tg.Message,
+                            ["parse_mode"] = string.IsNullOrWhiteSpace(tg.ParseMode) ? "Markdown" : tg.ParseMode
+                        };
+
+                        Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _webhookDispatcher.DispatchAsync(url, payload).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(ex, "Failed to dispatch Telegram message to chat {0}", tg.ChatId);
+                            }
+                        });
+                    }
+                }
+
+                if (result.NtfyMessagesToSend.Count > 0)
+                {
+                    foreach (var nf in result.NtfyMessagesToSend)
+                    {
+                        if (string.IsNullOrWhiteSpace(nf.Topic))
+                        {
+                            continue;
+                        }
+
+                        var server = string.IsNullOrWhiteSpace(nf.Server) ? "https://ntfy.sh" : nf.Server.TrimEnd('/');
+                        var url = $"{server}/{nf.Topic}";
+                        var payload = new Dictionary<string, object?>
+                        {
+                            ["topic"] = nf.Topic,
+                            ["message"] = nf.Message,
+                        };
+
+                        if (!string.IsNullOrWhiteSpace(nf.Title))
+                        {
+                            payload["title"] = nf.Title;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(nf.Priority))
+                        {
+                            if (int.TryParse(nf.Priority, out var pInt))
+                            {
+                                payload["priority"] = pInt;
+                            }
+                            else
+                            {
+                                payload["priority"] = nf.Priority;
+                            }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(nf.Tags))
+                        {
+                            payload["tags"] = nf.Tags.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(nf.Click))
+                        {
+                            payload["click"] = nf.Click;
+                        }
+
+                        Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _webhookDispatcher.DispatchAsync(url, payload).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(ex, "Failed to dispatch Ntfy message to topic {0}", nf.Topic);
+                            }
+                        });
+                    }
+                }
+
+                if (result.PushoverMessagesToSend.Count > 0)
+                {
+                    foreach (var po in result.PushoverMessagesToSend)
+                    {
+                        if (string.IsNullOrWhiteSpace(po.Token) || string.IsNullOrWhiteSpace(po.User))
+                        {
+                            continue;
+                        }
+
+                        var url = "https://api.pushover.net/1/messages.json";
+                        var payload = new Dictionary<string, object?>
+                        {
+                            ["token"] = po.Token,
+                            ["user"] = po.User,
+                            ["message"] = po.Message
+                        };
+
+                        if (!string.IsNullOrWhiteSpace(po.Priority) && int.TryParse(po.Priority, out var prioInt))
+                        {
+                            payload["priority"] = prioInt;
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(po.Sound))
+                        {
+                            payload["sound"] = po.Sound;
+                        }
+
+                        Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await _webhookDispatcher.DispatchAsync(url, payload).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.Error(ex, "Failed to dispatch Pushover message for user {0}", po.User);
                             }
                         });
                     }
@@ -455,14 +798,43 @@ public class AutomationService : IAutomationService
             changed = true;
         }
 
-        // Tracker add/remove
+        // Tracker remove
+        if (result.TrackersToRemove.Count > 0 && !string.IsNullOrWhiteSpace(torrent.TrackerUrl))
+        {
+            foreach (var trackerToRemove in result.TrackersToRemove)
+            {
+                if (!string.IsNullOrWhiteSpace(trackerToRemove) &&
+                    (string.Equals(torrent.TrackerUrl, trackerToRemove, StringComparison.OrdinalIgnoreCase) ||
+                    torrent.TrackerUrl.Contains(trackerToRemove, StringComparison.OrdinalIgnoreCase)))
+                {
+                    torrent.TrackerUrl = string.Empty;
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        // Tracker replace
+        if (result.TrackersToReplace.Count > 0 && !string.IsNullOrWhiteSpace(torrent.TrackerUrl))
+        {
+            foreach (var kvp in result.TrackersToReplace)
+            {
+                if (!string.IsNullOrWhiteSpace(kvp.Key) && torrent.TrackerUrl.Contains(kvp.Key, StringComparison.OrdinalIgnoreCase))
+                {
+                    torrent.TrackerUrl = torrent.TrackerUrl.Replace(kvp.Key, kvp.Value ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+                    changed = true;
+                }
+            }
+        }
+
+        // Tracker add
         if (result.TrackersToAdd.Count > 0 && string.IsNullOrWhiteSpace(torrent.TrackerUrl))
         {
             torrent.TrackerUrl = result.TrackersToAdd[0];
             changed = true;
         }
 
-        // Status mutations (pause, resume, remove)
+        // Status mutations (recheck, pause, resume, remove)
         if (result.ShouldRemove)
         {
             _logger.Info("Automation script requested removal of torrent '{0}' (deleteData={1})", torrent.Name, result.DeleteDataOnRemove);
@@ -472,7 +844,15 @@ public class AutomationService : IAutomationService
             return;
         }
 
-        if (result.ShouldPause)
+        if (result.ShouldRecheck)
+        {
+            var oldStatus = torrent.Status;
+            torrent.Status = TorrentStatus.Checking;
+            torrent.Progress = 0;
+            _eventAggregator.PublishEvent(new TorrentStatusChangedEvent(torrent, oldStatus, TorrentStatus.Checking));
+            changed = true;
+        }
+        else if (result.ShouldPause)
         {
             var oldStatus = torrent.Status;
             torrent.Status = TorrentStatus.Paused;

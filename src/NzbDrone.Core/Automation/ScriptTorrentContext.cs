@@ -45,6 +45,8 @@ public class ScriptTorrentContext
 
     public double progress => _torrent.Progress;
 
+    public double progressPercent => _torrent.Progress * 100.0;
+
     public long uploadSpeed => _torrent.UploadSpeed;
 
     public long downloadSpeed => _torrent.DownloadSpeed;
