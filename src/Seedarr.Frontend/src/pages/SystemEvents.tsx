@@ -595,15 +595,20 @@ function SystemEvents() {
   const [searchText, setSearchText] = useState("");
   const [pageSize, setPageSize] = useState<number>(50);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [cleared, setCleared] = useState(false);
+  const [clearedAt, setClearedAt] = useState<number | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<EventEntry | null>(null);
   const tableBodyRef = useRef<HTMLDivElement>(null);
 
   const filteredEntries = useMemo(() => {
-    if (cleared) return [];
     if (!entries) return [];
 
     let result = entries;
+
+    if (clearedAt !== null) {
+      result = result.filter(
+        (entry) => new Date(entry.timestamp).getTime() > clearedAt,
+      );
+    }
 
     if (levelFilter !== "All") {
       result = result.filter(
@@ -629,7 +634,7 @@ function SystemEvents() {
     });
 
     return sorted;
-  }, [entries, sortDirection, cleared, levelFilter, searchText]);
+  }, [entries, sortDirection, clearedAt, levelFilter, searchText]);
 
   const totalPages = Math.max(1, Math.ceil(filteredEntries.length / pageSize));
   const activePage = Math.min(Math.max(1, currentPage), totalPages);
@@ -645,12 +650,12 @@ function SystemEvents() {
   }, [activePage, totalPages]);
 
   const handleRefresh = useCallback(() => {
-    setCleared(false);
+    setClearedAt(null);
     queryClient.invalidateQueries({ queryKey: ["system", "events"] });
   }, [queryClient]);
 
   const handleClear = useCallback(() => {
-    setCleared(true);
+    setClearedAt(Date.now());
     setCurrentPage(1);
   }, []);
 
@@ -752,7 +757,6 @@ function SystemEvents() {
                 onClick={() => {
                   setLevelFilter(level);
                   setCurrentPage(1);
-                  setCleared(false);
                 }}
               >
                 {level}
@@ -769,7 +773,6 @@ function SystemEvents() {
               onChange={(e) => {
                 setSearchText(e.target.value);
                 setCurrentPage(1);
-                setCleared(false);
               }}
               style={{ width: "220px" }}
             />
