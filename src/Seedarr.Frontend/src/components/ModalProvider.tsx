@@ -43,6 +43,7 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
       if (idx === -1) return prev;
       const removed = prev[idx];
       const next = prev.filter((m) => m.id !== id);
+      stackRef.current = next;
 
       // Restore focus to triggerElement if this modal had one and was closed
       if (
@@ -68,7 +69,9 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
       setStack((prev) => {
         // Remove existing instance with the same id if already present, then push to top
         const filtered = prev.filter((m) => m.id !== instance.id);
-        return [...filtered, instance];
+        const next = [...filtered, instance];
+        stackRef.current = next;
+        return next;
       });
 
       return () => {
@@ -92,23 +95,44 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const currentStack = stackRef.current;
-      if (currentStack.length === 0) return;
+      const hasRegisteredModals = currentStack.length > 0;
+      const modalOverlays =
+        typeof document !== "undefined"
+          ? Array.from(
+              document.querySelectorAll<HTMLElement>(
+                'dialog[open], [role="dialog"], [aria-modal="true"], .modal-overlay',
+              ),
+            )
+          : [];
+      const hasDomModals = modalOverlays.length > 0;
 
-      const top = currentStack[currentStack.length - 1];
+      if (!hasRegisteredModals && !hasDomModals) return;
+
+      const top = hasRegisteredModals
+        ? currentStack[currentStack.length - 1]
+        : null;
 
       // Handle Escape: Dismiss ONLY the topmost modal
       if (e.key === "Escape") {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        top.onClose();
-        return;
+        if (top) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+          top.onClose();
+          return;
+        }
       }
 
       // Handle Tab: Trap focus inside the topmost modal
       if (e.key === "Tab") {
+        const topmostOverlay =
+          modalOverlays.length > 0
+            ? modalOverlays[modalOverlays.length - 1]
+            : null;
+
         const container =
-          top.modalRef?.current ??
+          top?.modalRef?.current ??
+          topmostOverlay ??
           (document.querySelector(`[role="dialog"]`) as HTMLElement | null);
 
         if (!container) return;
@@ -139,6 +163,9 @@ export function ModalProvider({ children }: { children: React.ReactNode }) {
 
         if (focusables.length === 0) {
           e.preventDefault();
+          if (container.tabIndex < 0) {
+            container.setAttribute("tabindex", "-1");
+          }
           container.focus?.();
           return;
         }

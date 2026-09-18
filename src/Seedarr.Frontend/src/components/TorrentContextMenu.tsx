@@ -74,7 +74,12 @@ function TorrentContextMenu({
     if (promptConfig) return;
     const handleClick = () => onClose();
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        onClose();
+      }
     };
     document.addEventListener("click", handleClick);
     document.addEventListener("keydown", handleKeyDown);
