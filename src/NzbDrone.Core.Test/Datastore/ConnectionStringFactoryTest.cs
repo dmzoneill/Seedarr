@@ -71,13 +71,13 @@ public class ConnectionStringFactoryTest
     }
 
     [Test]
-    public void MainDbConnectionString_should_include_cache_shared_for_sqlite()
+    public void MainDbConnectionString_should_not_include_cache_shared_for_sqlite()
     {
         _configFileProvider.PostgresHost.Returns(string.Empty);
 
         var subject = BuildSubject();
 
-        Assert.That(subject.MainDbConnectionString, Does.Contain("Cache=Shared"));
+        Assert.That(subject.MainDbConnectionString, Does.Not.Contain("Cache=Shared"));
     }
 
     [Test]
@@ -130,6 +130,7 @@ public class ConnectionStringFactoryTest
 
         Assert.That(migrationConnStr, Does.Contain("Default Timeout=30"));
         Assert.That(migrationConnStr, Does.Contain("Foreign Keys=True"));
+        Assert.That(migrationConnStr, Does.Not.Contain("Cache=Shared"));
     }
 
     [Test]

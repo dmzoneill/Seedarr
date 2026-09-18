@@ -126,6 +126,12 @@ public class DbFactory : IDbFactory
         var cleaned = Regex.Replace(
             connectionString,
             @"(?i)Busy\s+Timeout\s*=\s*[^;]+;?",
+            "");
+
+        // Remove Cache=Shared to restore WAL fine-grained page-level multi-reader concurrency
+        cleaned = Regex.Replace(
+            cleaned,
+            @"(?i)Cache\s*=\s*Shared\s*;?",
             "").Trim();
 
         var timeoutSeconds = 30;
