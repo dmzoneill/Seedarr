@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -38,14 +39,46 @@ public class WebhookReceiverController : Controller
     // authentication is disabled (e.g. test environments).
     private bool IsApiKeyValid()
     {
+        var expected = _configFileProvider?.ApiKey;
+
+        if (string.IsNullOrWhiteSpace(expected))
+        {
+            return true;
+        }
+
         var provided = Request.Headers[ApiKeyHeader].FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(provided) && Request.Headers.TryGetValue("ApiKey", out var altHeader))
+        {
+            provided = altHeader.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(provided) && Request.Query.TryGetValue("apikey", out var qKey))
+        {
+            provided = qKey.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(provided) && Request.Query.TryGetValue("api_key", out var qKey2))
+        {
+            provided = qKey2.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(provided) && Request.Query.TryGetValue("access_token", out var qToken))
+        {
+            provided = qToken.FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(provided) &&
+            Request.Headers.TryGetValue("Authorization", out var authHeader) &&
+            authHeader.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            provided = authHeader.ToString()["Bearer ".Length..].Trim();
+        }
 
         if (string.IsNullOrWhiteSpace(provided))
         {
             return false;
         }
-
-        var expected = _configFileProvider.ApiKey ?? string.Empty;
 
         return CryptographicOperations.FixedTimeEquals(
             Encoding.UTF8.GetBytes(provided),
