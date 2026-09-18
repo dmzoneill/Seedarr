@@ -128,6 +128,19 @@ public class UtpConnection : IUtpConnection
         ReceiveId = _connectionId;
         _sequenceNumber = 1;
         _connectionTimeoutSeconds = connectionTimeoutSeconds;
+
+        if (_ownsUdpClient)
+        {
+            try
+            {
+                _udpClient.Client.ReceiveTimeout = _connectionTimeoutSeconds > 0 ? _connectionTimeoutSeconds * 1000 : 3000;
+                _udpClient.Client.SendTimeout = _connectionTimeoutSeconds > 0 ? _connectionTimeoutSeconds * 1000 : 3000;
+            }
+            catch (Exception ex)
+            {
+                _logger.Debug(ex, "Failed to set socket timeouts");
+            }
+        }
     }
 
     public UtpConnection(UdpClient udpClient, ushort connectionId, IPEndPoint remoteEndpoint, int connectionTimeoutSeconds = 30, string bindInterface = null, IPAddress localIp = null)
@@ -231,6 +244,17 @@ public class UtpConnection : IUtpConnection
                         _expectedSeqNr = header.SequenceNumber;
                         IsConnected = true;
                         _sequenceNumber = (ushort)(synSeq + 1);
+                        if (_ownsUdpClient)
+                        {
+                            try
+                            {
+                                _udpClient.Client.ReceiveTimeout = _connectionTimeoutSeconds > 0 ? _connectionTimeoutSeconds * 1000 : 3000;
+                            }
+                            catch
+                            {
+                            }
+                        }
+
                         _logger.Debug("uTP connected to {0}", endpoint);
                         OnConnected?.Invoke(this);
                         return;
@@ -432,6 +456,19 @@ public class UtpConnection : IUtpConnection
         }
 
         var receiveEndpoint = new IPEndPoint(IPAddress.Any, 0);
+        if (_ownsUdpClient && _udpClient?.Client != null)
+        {
+            try
+            {
+                if (_udpClient.Client.ReceiveTimeout <= 0)
+                {
+                    _udpClient.Client.ReceiveTimeout = timeoutMs;
+                }
+            }
+            catch
+            {
+            }
+        }
 
         while (IsConnected && !_hasReceivedFin)
         {

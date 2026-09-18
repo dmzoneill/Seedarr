@@ -1881,7 +1881,7 @@ public class UtpConnectionTest
     [Test]
     public void HandleIncomingPacket_with_truncated_extension_header_should_not_throw_or_corrupt_stream()
     {
-        using var connection = new UtpConnection();
+        using var connection = new UtpConnection(connectionTimeoutSeconds: 1);
         var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
         SetConnected(connection, true);
         SetRemoteEndpoint(connection, remoteEp);
