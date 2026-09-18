@@ -2123,6 +2123,332 @@ public class UtpConnectionTest
         Assert.That(retransmittedSeq, Is.EqualTo(65535));
     }
 
+    [Test]
+    public void Initial_rto_should_be_1000ms()
+    {
+        using var connection = new UtpConnection();
+
+        Assert.That(connection.RtoMs, Is.EqualTo(UtpConnection.InitialRtoMs));
+        Assert.That(connection.RtoMs, Is.EqualTo(1000));
+        Assert.That(connection.Srtt, Is.EqualTo(0.0));
+        Assert.That(connection.RttVar, Is.EqualTo(0.0));
+        Assert.That(connection.HasRttSample, Is.False);
+    }
+
+    [Test]
+    public void Initial_rto_with_custom_endpoint_should_be_1000ms()
+    {
+        using var udpClient = new UdpClient();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        using var connection = new UtpConnection(udpClient, 1234, remoteEp);
+
+        Assert.That(connection.RtoMs, Is.EqualTo(1000));
+    }
+
+    [Test]
+    public void UpdateRtt_first_measurement_should_set_srtt_and_rttvar_and_compute_rto()
+    {
+        using var connection = new UtpConnection();
+
+        // R' = 400ms:
+        // SRTT = 400ms
+        // RTTVAR = 400 / 2 = 200ms
+        // RTO = 400 + max(10, 4 * 200) = 400 + 800 = 1200ms
+        connection.UpdateRttSample(400.0, retries: 0);
+
+        Assert.That(connection.HasRttSample, Is.True);
+        Assert.That(connection.Srtt, Is.EqualTo(400.0));
+        Assert.That(connection.RttVar, Is.EqualTo(200.0));
+        Assert.That(connection.RtoMs, Is.EqualTo(1200));
+    }
+
+    [Test]
+    public void UpdateRtt_subsequent_measurement_should_update_per_jacobson_karels()
+    {
+        using var connection = new UtpConnection();
+
+        // First sample: R' = 400ms
+        connection.UpdateRttSample(400.0, retries: 0);
+
+        // Subsequent sample: R' = 200ms
+        // RTTVAR = 0.75 * 200 + 0.25 * |400 - 200| = 150 + 50 = 200ms
+        // SRTT = 0.875 * 400 + 0.125 * 200 = 350 + 25 = 375ms
+        // RTO = 375 + max(10, 4 * 200) = 375 + 800 = 1175ms
+        connection.UpdateRttSample(200.0, retries: 0);
+
+        Assert.That(connection.Srtt, Is.EqualTo(375.0));
+        Assert.That(connection.RttVar, Is.EqualTo(200.0));
+        Assert.That(connection.RtoMs, Is.EqualTo(1175));
+    }
+
+    [Test]
+    public void Karns_algorithm_should_prevent_rtt_updates_for_retransmitted_packets()
+    {
+        using var connection = new UtpConnection();
+
+        // First sample: R' = 400ms
+        connection.UpdateRttSample(400.0, retries: 0);
+        Assert.That(connection.Srtt, Is.EqualTo(400.0));
+        Assert.That(connection.RttVar, Is.EqualTo(200.0));
+        Assert.That(connection.RtoMs, Is.EqualTo(1200));
+
+        // Attempt update with retransmitted packet (retries = 1)
+        connection.UpdateRttSample(200.0, retries: 1);
+
+        // Values must remain completely unchanged
+        Assert.That(connection.Srtt, Is.EqualTo(400.0));
+        Assert.That(connection.RttVar, Is.EqualTo(200.0));
+        Assert.That(connection.RtoMs, Is.EqualTo(1200));
+
+        // Attempt update with retries = 2
+        connection.UpdateRttSample(100.0, retries: 2);
+        Assert.That(connection.Srtt, Is.EqualTo(400.0));
+        Assert.That(connection.RttVar, Is.EqualTo(200.0));
+        Assert.That(connection.RtoMs, Is.EqualTo(1200));
+    }
+
+    [Test]
+    public void ProcessAck_with_retransmitted_packet_should_not_update_rtt_per_karns_algorithm()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        connection.PacketDropFilter = (_, _) => true;
+
+        // Send packet seq 1
+        connection.Send(new byte[50], 0, 50);
+
+        // Mark as retransmitted
+        var inFlight = connection.InFlightPackets[1];
+        inFlight.Retries = 1;
+        inFlight.SentTimestamp = Environment.TickCount64 - 300;
+
+        // ACK packet 1
+        var ack = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 1);
+        connection.HandleIncomingPacket(ack, remoteEp);
+
+        // Karn's algorithm must discard this sample
+        Assert.That(connection.HasRttSample, Is.False);
+        Assert.That(connection.RtoMs, Is.EqualTo(1000));
+        Assert.That(connection.Srtt, Is.EqualTo(0.0));
+        Assert.That(connection.RttVar, Is.EqualTo(0.0));
+    }
+
+    [Test]
+    public void ProcessAck_with_unretransmitted_packet_should_update_rtt()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        connection.PacketDropFilter = (_, _) => true;
+
+        // Send packet seq 1
+        connection.Send(new byte[50], 0, 50);
+
+        var inFlight = connection.InFlightPackets[1];
+        inFlight.Retries = 0;
+        inFlight.SentTimestamp = Environment.TickCount64 - 400;
+
+        // ACK packet 1
+        var ack = CreatePacket(UtpPacketType.State, connection.ReceiveId, 1, 1);
+        connection.HandleIncomingPacket(ack, remoteEp);
+
+        // Sample must be accepted
+        Assert.That(connection.HasRttSample, Is.True);
+        Assert.That(connection.Srtt, Is.GreaterThanOrEqualTo(350.0));
+        Assert.That(connection.RtoMs, Is.GreaterThanOrEqualTo(500));
+    }
+
+    [Test]
+    public void UpdateRtt_should_clamp_to_minimum_floor_500ms()
+    {
+        using var connection = new UtpConnection();
+
+        // R' = 20ms:
+        // SRTT = 20ms
+        // RTTVAR = 10ms
+        // RTO = 20 + max(10, 4 * 10) = 20 + 40 = 60ms
+        // Clamped to MinRtoMs = 500ms
+        connection.UpdateRttSample(20.0, retries: 0);
+
+        Assert.That(connection.Srtt, Is.EqualTo(20.0));
+        Assert.That(connection.RttVar, Is.EqualTo(10.0));
+        Assert.That(connection.RtoMs, Is.EqualTo(UtpConnection.MinRtoMs));
+        Assert.That(connection.RtoMs, Is.EqualTo(500));
+    }
+
+    [Test]
+    public void UpdateRtt_should_clamp_to_maximum_ceiling_10000ms()
+    {
+        using var connection = new UtpConnection();
+
+        // R' = 5000ms:
+        // SRTT = 5000ms
+        // RTTVAR = 2500ms
+        // RTO = 5000 + max(10, 4 * 2500) = 5000 + 10000 = 15000ms
+        // Clamped to MaxRtoMs = 10000ms
+        connection.UpdateRttSample(5000.0, retries: 0);
+
+        Assert.That(connection.Srtt, Is.EqualTo(5000.0));
+        Assert.That(connection.RttVar, Is.EqualTo(2500.0));
+        Assert.That(connection.RtoMs, Is.EqualTo(UtpConnection.MaxRtoMs));
+        Assert.That(connection.RtoMs, Is.EqualTo(10000));
+    }
+
+    [Test]
+    public void RetransmitUnackedPackets_should_apply_exponential_backoff_on_timeout()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        var sentPackets = new List<byte[]>();
+        connection.PacketDropFilter = (data, _) =>
+        {
+            lock (sentPackets)
+            {
+                sentPackets.Add(data.ToArray());
+            }
+
+            return true;
+        };
+
+        // Send packet 1
+        connection.Send(new byte[50], 0, 50);
+        sentPackets.Clear();
+
+        Assert.That(connection.RtoMs, Is.EqualTo(1000));
+
+        var head = connection.InFlightPackets[1];
+
+        // 1. Elapsed time < RTO (500ms < 1000ms): should not retransmit or backoff
+        head.SentTimestamp = Environment.TickCount64 - 500;
+        connection.RetransmitUnackedPackets();
+
+        Assert.That(connection.RtoMs, Is.EqualTo(1000));
+        Assert.That(head.Retries, Is.EqualTo(0));
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+
+        // 2. Timeout expires (>= 1000ms): should retransmit and double RTO to 2000ms
+        head.SentTimestamp = Environment.TickCount64 - 1000;
+        connection.RetransmitUnackedPackets();
+
+        Assert.That(connection.RtoMs, Is.EqualTo(2000));
+        Assert.That(head.Retries, Is.EqualTo(1));
+        Assert.That(sentPackets.Count, Is.EqualTo(1));
+
+        // 3. Before 2000ms elapsed: should not retransmit
+        sentPackets.Clear();
+        head.SentTimestamp = Environment.TickCount64 - 1500;
+        connection.RetransmitUnackedPackets();
+
+        Assert.That(connection.RtoMs, Is.EqualTo(2000));
+        Assert.That(head.Retries, Is.EqualTo(1));
+        Assert.That(sentPackets.Count, Is.EqualTo(0));
+
+        // 4. 2nd timeout expires (>= 2000ms): double RTO to 4000ms
+        head.SentTimestamp = Environment.TickCount64 - 2000;
+        connection.RetransmitUnackedPackets();
+
+        Assert.That(connection.RtoMs, Is.EqualTo(4000));
+        Assert.That(head.Retries, Is.EqualTo(2));
+        Assert.That(sentPackets.Count, Is.EqualTo(1));
+
+        // 5. 3rd timeout expires (>= 4000ms): double RTO to 8000ms
+        sentPackets.Clear();
+        head.SentTimestamp = Environment.TickCount64 - 4000;
+        connection.RetransmitUnackedPackets();
+
+        Assert.That(connection.RtoMs, Is.EqualTo(8000));
+        Assert.That(head.Retries, Is.EqualTo(3));
+        Assert.That(sentPackets.Count, Is.EqualTo(1));
+
+        // 6. 4th timeout expires (>= 8000ms): double to 16000ms clamped to MaxRtoMs (10000ms)
+        sentPackets.Clear();
+        head.SentTimestamp = Environment.TickCount64 - 8000;
+        connection.RetransmitUnackedPackets();
+
+        Assert.That(connection.RtoMs, Is.EqualTo(10000));
+        Assert.That(head.Retries, Is.EqualTo(4));
+        Assert.That(sentPackets.Count, Is.EqualTo(1));
+
+        // 7. 5th timeout expires (>= 10000ms): stays capped at 10000ms
+        sentPackets.Clear();
+        head.SentTimestamp = Environment.TickCount64 - 10000;
+        connection.RetransmitUnackedPackets();
+
+        Assert.That(connection.RtoMs, Is.EqualTo(10000));
+        Assert.That(head.Retries, Is.EqualTo(5));
+        Assert.That(sentPackets.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ProcessSackBitmask_should_update_rtt_for_unretransmitted_packet()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        connection.PacketDropFilter = (_, _) => true;
+
+        // Send seq 1, 2
+        connection.Send(new byte[50], 0, 50);
+        connection.Send(new byte[50], 0, 50);
+
+        connection.InFlightPackets[2].SentTimestamp = Environment.TickCount64 - 250;
+        connection.InFlightPackets[2].Retries = 0;
+
+        // SACK bitmask for packet 2 (ackNr = 0, bit 0 -> seq 0 + 2 = 2)
+        var sackExtension = new byte[]
+        {
+            0, 4,
+            0x01, 0x00, 0x00, 0x00
+        };
+
+        var ackPacket = CreatePacketWithExtensions(UtpPacketType.State, connection.ReceiveId, 1, 0, 1, sackExtension);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        Assert.That(connection.HasRttSample, Is.True);
+        Assert.That(connection.Srtt, Is.GreaterThanOrEqualTo(200.0));
+    }
+
+    [Test]
+    public void ProcessSackBitmask_should_not_update_rtt_for_retransmitted_packet()
+    {
+        using var connection = new UtpConnection();
+        var remoteEp = new IPEndPoint(IPAddress.Loopback, 54321);
+        SetConnected(connection, true);
+        SetRemoteEndpoint(connection, remoteEp);
+
+        connection.PacketDropFilter = (_, _) => true;
+
+        // Send seq 1, 2
+        connection.Send(new byte[50], 0, 50);
+        connection.Send(new byte[50], 0, 50);
+
+        connection.InFlightPackets[2].SentTimestamp = Environment.TickCount64 - 250;
+        connection.InFlightPackets[2].Retries = 1;
+
+        // SACK bitmask for packet 2
+        var sackExtension = new byte[]
+        {
+            0, 4,
+            0x01, 0x00, 0x00, 0x00
+        };
+
+        var ackPacket = CreatePacketWithExtensions(UtpPacketType.State, connection.ReceiveId, 1, 0, 1, sackExtension);
+        connection.HandleIncomingPacket(ackPacket, remoteEp);
+
+        Assert.That(connection.HasRttSample, Is.False);
+        Assert.That(connection.RtoMs, Is.EqualTo(1000));
+    }
+
     // ---- helpers ----
 
     private static byte[] CreatePacket(UtpPacketType type, ushort connectionId, ushort seqNr, ushort ackNr, byte[] payload = null)

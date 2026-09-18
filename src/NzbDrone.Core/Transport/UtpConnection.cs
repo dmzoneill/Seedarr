@@ -53,6 +53,10 @@ public class UtpConnection : IUtpConnection
 {
     public const uint MaxBufferSize = 1024 * 1024;
     public const int MaxOutOfOrderPackets = 64;
+    public const int InitialRtoMs = 1000;
+    public const int MinRtoMs = 500;
+    public const int MaxRtoMs = 10000;
+    public const int GranularityMs = 10;
     private const int HeaderSize = 20;
     private const uint DefaultWindowSize = 65535;
     private const int MaxPayloadSize = 1360;
@@ -84,6 +88,10 @@ public class UtpConnection : IUtpConnection
     private bool _hasReceivedFin;
     private bool _isClosing;
     private bool _isDisposed;
+    private double _srtt;
+    private double _rttVar;
+    private int _rtoMs = InitialRtoMs;
+    private bool _hasRttSample;
 
     public static Func<uint> MicrosecondProvider { get; set; }
     public Func<byte[], IPEndPoint, bool> PacketDropFilter { get; set; }
@@ -104,6 +112,11 @@ public class UtpConnection : IUtpConnection
     public bool OwnsUdpClient => _ownsUdpClient;
     public ushort ReceiveId { get; private set; }
     public ushort SendId => _connectionId;
+    public int RtoMs { get => _rtoMs; internal set => _rtoMs = value; }
+    public double Srtt { get => _srtt; internal set => _srtt = value; }
+    public double RttVar { get => _rttVar; internal set => _rttVar = value; }
+    internal bool HasRttSample { get => _hasRttSample; set => _hasRttSample = value; }
+    internal ConcurrentDictionary<ushort, InFlightPacket> InFlightPackets => _inFlightPackets;
 
     public UtpConnection(int connectionTimeoutSeconds = 30, string bindInterface = null, IPAddress localIp = null)
     {
@@ -810,14 +823,26 @@ public class UtpConnection : IUtpConnection
         }
 
         var anyRemoved = false;
+        var ackedKeys = new List<ushort>();
         foreach (var key in _inFlightPackets.Keys)
         {
             if (IsAcked(key, ackNr))
             {
-                if (_inFlightPackets.TryRemove(key, out _))
-                {
-                    anyRemoved = true;
-                }
+                ackedKeys.Add(key);
+            }
+        }
+
+        if (ackedKeys.Count > 1)
+        {
+            ackedKeys.Sort((a, b) => (short)(a - b));
+        }
+
+        foreach (var key in ackedKeys)
+        {
+            if (_inFlightPackets.TryRemove(key, out var packet))
+            {
+                anyRemoved = true;
+                UpdateRtt(packet);
             }
         }
 
@@ -840,10 +865,11 @@ public class UtpConnection : IUtpConnection
                 if ((b & (1 << bitIdx)) != 0)
                 {
                     var sackSeq = (ushort)(ackNr + 2 + (byteIdx * 8) + bitIdx);
-                    if (_inFlightPackets.TryRemove(sackSeq, out _))
+                    if (_inFlightPackets.TryRemove(sackSeq, out var packet))
                     {
                         anyRemoved = true;
                         newlyAckedSeqNrs.Add(sackSeq);
+                        UpdateRtt(packet);
                         _logger.Trace("SACK acknowledged in-flight packet {0}", sackSeq);
                     }
                 }
@@ -902,7 +928,37 @@ public class UtpConnection : IUtpConnection
         }
     }
 
-    private void RetransmitUnackedPackets()
+    internal void UpdateRttSample(double rtt, int retries = 0)
+    {
+        if (retries > 0)
+        {
+            return;
+        }
+
+        if (!_hasRttSample)
+        {
+            _hasRttSample = true;
+            _srtt = rtt;
+            _rttVar = rtt / 2.0;
+        }
+        else
+        {
+            _rttVar = (0.75 * _rttVar) + (0.25 * Math.Abs(_srtt - rtt));
+            _srtt = (0.875 * _srtt) + (0.125 * rtt);
+        }
+
+        var calculatedRto = _srtt + Math.Max(GranularityMs, 4 * _rttVar);
+        _rtoMs = (int)Math.Clamp(calculatedRto, MinRtoMs, MaxRtoMs);
+    }
+
+    private void UpdateRtt(InFlightPacket packet)
+    {
+        var now = Environment.TickCount64;
+        var rtt = (double)Math.Max(0, now - packet.SentTimestamp);
+        UpdateRttSample(rtt, packet.Retries);
+    }
+
+    internal void RetransmitUnackedPackets()
     {
         if (_inFlightPackets.IsEmpty || (!IsConnected && !_isClosing) || _remoteEndpoint == null)
         {
@@ -919,8 +975,9 @@ public class UtpConnection : IUtpConnection
         unacked.Sort((a, b) => (short)(a.SequenceNumber - b.SequenceNumber));
 
         var head = unacked[0];
-        if (now - head.SentTimestamp >= 200)
+        if (now - head.SentTimestamp >= _rtoMs)
         {
+            _rtoMs = Math.Min(_rtoMs * 2, MaxRtoMs);
             head.Retries++;
             head.SentTimestamp = now;
             SendUdpPacket(head.PacketData, head.PacketData.Length, _remoteEndpoint);
@@ -1054,7 +1111,7 @@ public class UtpConnection : IUtpConnection
         }
     }
 
-    private class InFlightPacket
+    internal class InFlightPacket
     {
         public ushort SequenceNumber { get; set; }
         public byte[] PacketData { get; set; }
