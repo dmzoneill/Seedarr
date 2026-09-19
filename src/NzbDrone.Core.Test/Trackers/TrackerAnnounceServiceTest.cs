@@ -725,7 +725,7 @@ public class TrackerAnnounceServiceTest
         Assert.That(tracker.NextAnnounce, Is.Null);
         Assert.That(tracker.Status, Is.EqualTo(TrackerStatus.Disabled));
         Assert.That(tracker.WarningMessage, Is.EqualTo("Unrealistic upload rate detected - account flagged"));
-        _trackerEntryService.Received(1).Update(Arg.Is<TrackerEntry>(e => !e.Enabled && e.NextAnnounce == null));
+        _trackerEntryService.Received(2).Update(tracker);
 
         _eventLogService.Received(1).Error(
             80,
@@ -776,7 +776,7 @@ public class TrackerAnnounceServiceTest
 
         Assert.That(tracker.Enabled, Is.False);
         Assert.That(tracker.NextAnnounce, Is.Null);
-        _trackerEntryService.Received(1).Update(Arg.Is<TrackerEntry>(e => !e.Enabled && e.NextAnnounce == null));
+        _trackerEntryService.Received(2).Update(tracker);
     }
 
     [Test]

@@ -38,6 +38,12 @@ public class BasicRepositoryRetryTest
         public override bool IsTransient => true;
     }
 
+    [OneTimeSetUp]
+    public void OneTimeSetUp()
+    {
+        TableRegistration.RegisterTables();
+    }
+
     [SetUp]
     public void SetUp()
     {

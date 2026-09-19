@@ -792,7 +792,11 @@ public class ArrWebhookServiceTest
     [Test]
     public void ProcessWebhook_should_handle_download_event_type()
     {
-        var payload = new ArrWebhookPayload { EventType = "Download" };
+        var payload = new ArrWebhookPayload
+        {
+            EventType = "Download",
+            DownloadId = "0102030405060708091011121314151617181920"
+        };
 
         var result = _service.ProcessWebhook(payload);
 

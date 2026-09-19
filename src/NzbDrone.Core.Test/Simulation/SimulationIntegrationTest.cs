@@ -230,6 +230,15 @@ public class SimulationIntegrationTest
 
         _configService.SwarmIntelligenceEnabled.Returns(true);
         _configService.SwarmAdaptationRate.Returns(1.0);
+        _configService.MaxUploadSpeedKbps.Returns(2000);
+        _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
+        {
+            MaxUploadSpeed = 2_000_000,
+            MaxDownloadSpeed = 2_048_000,
+            IsScheduleActive = false
+        });
+        _distributionManager.DistributeUploadSpeeds(1, Arg.Any<long>(), Arg.Any<double[]>())
+            .Returns(new long[] { 1_024_000 });
 
         CallTick();
 

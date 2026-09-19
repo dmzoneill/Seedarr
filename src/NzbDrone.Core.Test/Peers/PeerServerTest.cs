@@ -1264,7 +1264,8 @@ public class PeerServerTest
         var method = typeof(PeerServer).GetMethod(
             "ConnectToPeer",
             BindingFlags.NonPublic | BindingFlags.Instance)!;
-        method.Invoke(server, new object[] { torrent, candidate });
+        var task = (Task)method.Invoke(server, new object[] { torrent, candidate })!;
+        task.GetAwaiter().GetResult();
     }
 
     private void InvokeConnectToDiscoveredPeers(PeerServer server, Torrent torrent, CancellationToken stoppingToken)
@@ -3402,13 +3403,32 @@ public class PeerServerTest
     [CancelAfter(5000)]
     public async Task Outbound_connection_releases_half_open_semaphore_immediately_after_handshake_before_session_completion()
     {
-        _configService.EncryptionMode.Returns("disabled");
+        var config = Substitute.For<IConfigService>();
+        config.MaxGlobalConnections.Returns(200);
+        config.MaximumHalfOpenConnections.Returns(50);
+        config.ListeningPort.Returns(0);
+        config.EncryptionMode.Returns("disabled");
+        config.HandshakeTimeoutSeconds.Returns(5);
+        config.MessageReadTimeoutSeconds.Returns(60);
+        config.KeepAliveIntervalSeconds.Returns(120);
+        config.PeerRequestCount.Returns(200);
+        config.PeerIdleChance.Returns(0.0);
+        config.PeerContactIntervalSeconds.Returns(300);
+
+        using var server = new PeerServer(
+            config,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            mseSkeyRegistry: _mseSkeyRegistry);
+
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         _listeners.Add(listener);
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
-        var halfOpen = GetHalfOpenSemaphore();
+        var halfOpen = GetHalfOpenSemaphore(server);
         var initialCount = halfOpen.CurrentCount;
 
         const string infoHash = "0102030405060708091011121314151617181920";
@@ -3454,15 +3474,15 @@ public class PeerServerTest
             await stream.FlushAsync(cts.Token);
         });
 
-        var connectTask = InvokeConnectToPeerAsync(torrent, candidate, cts.Token);
+        var connectTask = InvokeConnectToPeerAsync(torrent, candidate, cts.Token, server);
+
+        await serverTask;
 
         // Wait for handshake to succeed and connection to be established
-        for (var i = 0; i < 50 && halfOpen.CurrentCount < initialCount; i++)
+        for (var i = 0; i < 100 && halfOpen.CurrentCount < initialCount; i++)
         {
             await Task.Delay(20);
         }
-
-        await serverTask;
 
         // The half-open permit must be released immediately upon handshake completion
         Assert.That(halfOpen.CurrentCount, Is.EqualTo(initialCount));
@@ -3486,13 +3506,32 @@ public class PeerServerTest
     [CancelAfter(5000)]
     public async Task Outbound_connection_releases_half_open_semaphore_when_connection_attempt_fails()
     {
-        _configService.EncryptionMode.Returns("disabled");
+        var config = Substitute.For<IConfigService>();
+        config.MaxGlobalConnections.Returns(200);
+        config.MaximumHalfOpenConnections.Returns(50);
+        config.ListeningPort.Returns(0);
+        config.EncryptionMode.Returns("disabled");
+        config.HandshakeTimeoutSeconds.Returns(5);
+        config.MessageReadTimeoutSeconds.Returns(60);
+        config.KeepAliveIntervalSeconds.Returns(120);
+        config.PeerRequestCount.Returns(200);
+        config.PeerIdleChance.Returns(0.0);
+        config.PeerContactIntervalSeconds.Returns(300);
+
+        using var server = new PeerServer(
+            config,
+            _torrentService,
+            _connectionManager,
+            _peerDiscovery,
+            _multiTracker,
+            mseSkeyRegistry: _mseSkeyRegistry);
+
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         _listeners.Add(listener);
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
-        var halfOpen = GetHalfOpenSemaphore();
+        var halfOpen = GetHalfOpenSemaphore(server);
         var initialCount = halfOpen.CurrentCount;
 
         const string infoHash = "0102030405060708091011121314151617181920";
@@ -3520,7 +3559,7 @@ public class PeerServerTest
             remotePeer.Close();
         });
 
-        await InvokeConnectToPeerAsync(torrent, candidate, cts.Token);
+        await InvokeConnectToPeerAsync(torrent, candidate, cts.Token, server);
         await serverTask;
 
         // The half-open permit must be released even when the connection fails

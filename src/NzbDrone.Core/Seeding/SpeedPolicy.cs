@@ -166,7 +166,7 @@ public class SpeedPolicy : ISpeedPolicy,
         var maxDownloadSpeed = limits.MaxDownloadSpeed;
         if (maxDownloadSpeed != SpeedLimits.Unlimited && effectiveFactor > 0)
         {
-            maxDownloadSpeed = (long)Math.Floor(maxDownloadSpeed / (1.0 + effectiveFactor));
+            maxDownloadSpeed = (long)Math.Round(maxDownloadSpeed / (1.0 + effectiveFactor));
             if (OutOfBandOverheadBytesPerSec > 0)
             {
                 maxDownloadSpeed = Math.Max(0L, maxDownloadSpeed - OutOfBandOverheadBytesPerSec);
@@ -266,7 +266,7 @@ public class SpeedPolicy : ISpeedPolicy,
             else
             {
                 var effectiveUploadSpeed = effectiveFactor > 0
-                    ? (long)Math.Floor(limits.MaxUploadSpeed / (1.0 + effectiveFactor))
+                    ? (long)Math.Round(limits.MaxUploadSpeed / (1.0 + effectiveFactor))
                     : limits.MaxUploadSpeed;
 
                 if (OutOfBandOverheadBytesPerSec > 0)

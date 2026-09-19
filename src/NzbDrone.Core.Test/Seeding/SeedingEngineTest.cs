@@ -854,7 +854,8 @@ public class SeedingEngineTest
     [Test]
     public void Tick_should_use_config_upload_speed_min_with_scheduler()
     {
-        _configService.MaxUploadSpeedKbps.Returns(50);
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        _configService.AltUploadSpeedKbps.Returns(50);
         _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
         {
             MaxUploadSpeed = 100 * 1024,
@@ -1086,7 +1087,8 @@ public class SeedingEngineTest
     [Test]
     public void Tick_should_cap_download_speed_when_config_download_speed_set()
     {
-        _configService.MaxDownloadSpeedKbps.Returns(50);
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        _configService.AltDownloadSpeedKbps.Returns(50);
         _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
         {
             MaxUploadSpeed = 1_048_576,
@@ -1144,7 +1146,8 @@ public class SeedingEngineTest
     [Test]
     public void Tick_should_use_min_of_config_and_scheduler_for_download_speed()
     {
-        _configService.MaxDownloadSpeedKbps.Returns(80);
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        _configService.AltDownloadSpeedKbps.Returns(80);
         _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
         {
             MaxUploadSpeed = 1_048_576,
@@ -1173,7 +1176,8 @@ public class SeedingEngineTest
     [Test]
     public void Tick_should_use_min_of_config_and_scheduler_for_upload_speed()
     {
-        _configService.MaxUploadSpeedKbps.Returns(60);
+        _configService.AlternativeSpeedEnabled.Returns(true);
+        _configService.AltUploadSpeedKbps.Returns(60);
         _speedScheduler.GetCurrentLimits().Returns(new SpeedLimits
         {
             MaxUploadSpeed = 200 * 1024,

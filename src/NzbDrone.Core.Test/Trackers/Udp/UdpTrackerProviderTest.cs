@@ -816,6 +816,7 @@ public class UdpTrackerProviderTest
             // Respond to Scrape with too-short response (< 20 bytes)
             var scrapeReq = server.Receive(ref ep);
             var scrapeResp = new byte[10];
+            WriteInt32BigEndian(scrapeResp, 0, 2);
             Array.Copy(scrapeReq, 12, scrapeResp, 4, 4);
             server.Send(scrapeResp, scrapeResp.Length, ep);
         });
