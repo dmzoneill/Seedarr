@@ -38,7 +38,8 @@ RUN dotnet publish src/NzbDrone.Console/Seedarr.Console.csproj \
     -p:RunAnalyzers=false \
     -p:DebugType=none \
     -p:DebugSymbols=false \
-    --no-restore
+    --no-restore && \
+    rm -rf /app/runtimes/win* /app/runtimes/osx* /app/runtimes/maccatalyst* /app/runtimes/browser-wasm /app/clidriver
 
 # Install coverage tools in build stage (has SDK) — only when requested
 RUN mkdir -p /root/.dotnet/tools && \
@@ -46,13 +47,13 @@ RUN mkdir -p /root/.dotnet/tools && \
       dotnet tool install --global dotnet-coverage; \
     fi
 
-# Stage 3: Runtime
+# Stage 3: Base runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 
 # hadolint ignore=DL3008
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /var/cache/apt/* /usr/share/doc/* /usr/share/man/*
 
 RUN mkdir -p /config /data /app/fixtures
 
@@ -66,19 +67,26 @@ WORKDIR /app
 
 COPY --from=backend /app ./
 COPY --from=frontend /build/src/NzbDrone.Host/wwwroot/ ./wwwroot/
-COPY --from=backend /root/.dotnet/tools /root/.dotnet/tools
 COPY version ./
 COPY CHANGELOG.md ./
 COPY tests/fixtures/ /app/fixtures/
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+COPY --chmod=755 docker-entrypoint.sh /docker-entrypoint.sh
 
 ENV SEEDARR__APP_DATA=/config
 ENV DOTNET_gcServer=0
-ENV PATH="$PATH:/root/.dotnet/tools"
 
 EXPOSE 9898
 
 VOLUME ["/config", "/data"]
 
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 CMD curl -f http://localhost:9898/api/v1/system/status || exit 1
+
 ENTRYPOINT ["/docker-entrypoint.sh"]
+
+# Stage 4: Test image with coverage tools
+FROM runtime AS test
+COPY --chmod=755 --from=backend /root/.dotnet/tools /opt/dotnet-tools
+ENV PATH="$PATH:/opt/dotnet-tools"
+
+# Stage 5: Final production release image (default target when building without --target)
+FROM runtime AS release

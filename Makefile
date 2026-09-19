@@ -1,7 +1,7 @@
 .PHONY: setup test-setup test integration build clean restore frontend \
        stack-init stack-build stack-up stack-down stack-configure stack-healthy stack-rebuild stack-clean \
        test-unit test-integration test-integration-rerun test-integration-only test-all \
-       coverage-report
+       coverage-report container-build container-build-test
 
 SOLUTION := src/Seedarr.sln
 UNIT_TEST := src/NzbDrone.Core.Test/Seedarr.Core.Test.csproj
@@ -188,3 +188,10 @@ test-integration-only:
 # --- Combined ---
 
 test-all: test integration
+
+container-build:
+	podman build -t seedarr:latest -f Containerfile . || docker build -t seedarr:latest -f Containerfile .
+
+container-build-test:
+	podman build --target test --build-arg COVERAGE_TOOLS=true -t seedarr:test -f Containerfile . || docker build --target test --build-arg COVERAGE_TOOLS=true -t seedarr:test -f Containerfile .
+
