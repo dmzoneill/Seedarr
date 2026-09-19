@@ -459,7 +459,10 @@ public class FastResumeService : IFastResumeService
             _logger.Debug(ex, "Recheck call on torrent {0} caught exception", torrent.Id);
         }
 
-        _ = ScheduleBackgroundRecheck(torrent, data);
+        if (_torrentService == null)
+        {
+            _ = ScheduleBackgroundRecheck(torrent, data);
+        }
     }
 
     public Task ScheduleBackgroundRecheck(Torrent torrent, FastResumeData data = null)

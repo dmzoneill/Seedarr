@@ -92,11 +92,21 @@ public class ScriptHttpContext
 
         if (options != null)
         {
-            if (options.TryGetValue("headers", out var rawHeaders) && rawHeaders is IDictionary<string, object> headersDict)
+            if (options.TryGetValue("headers", out var rawHeaders))
             {
-                foreach (var kvp in headersDict)
+                if (rawHeaders is IDictionary<string, object> headersDict)
                 {
-                    request.Headers.TryAddWithoutValidation(kvp.Key, kvp.Value?.ToString());
+                    foreach (var kvp in headersDict)
+                    {
+                        request.Headers.TryAddWithoutValidation(kvp.Key, kvp.Value?.ToString());
+                    }
+                }
+                else if (rawHeaders is IDictionary<string, string> headersStrDict)
+                {
+                    foreach (var kvp in headersStrDict)
+                    {
+                        request.Headers.TryAddWithoutValidation(kvp.Key, kvp.Value);
+                    }
                 }
             }
 
@@ -115,7 +125,28 @@ public class ScriptHttpContext
                         cookieHeader.Append($"{kvp.Key}={kvp.Value}");
                     }
 
-                    request.Headers.TryAddWithoutValidation("Cookie", cookieHeader.ToString());
+                    if (cookieHeader.Length > 0)
+                    {
+                        request.Headers.TryAddWithoutValidation("Cookie", cookieHeader.ToString());
+                    }
+                }
+                else if (rawCookies is IDictionary<string, string> cookiesStrDict)
+                {
+                    var cookieHeader = new StringBuilder();
+                    foreach (var kvp in cookiesStrDict)
+                    {
+                        if (cookieHeader.Length > 0)
+                        {
+                            cookieHeader.Append("; ");
+                        }
+
+                        cookieHeader.Append($"{kvp.Key}={kvp.Value}");
+                    }
+
+                    if (cookieHeader.Length > 0)
+                    {
+                        request.Headers.TryAddWithoutValidation("Cookie", cookieHeader.ToString());
+                    }
                 }
                 else if (rawCookies is string cookieStr)
                 {

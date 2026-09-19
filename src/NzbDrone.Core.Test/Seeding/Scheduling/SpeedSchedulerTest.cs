@@ -23,6 +23,7 @@ public class SpeedSchedulerTest
         _scheduler = new SpeedScheduler(_repository, _configService);
 
         _configService.SchedulerEnabled.Returns(false);
+        _configService.TimeZone.Returns("UTC");
     }
 
     [Test]

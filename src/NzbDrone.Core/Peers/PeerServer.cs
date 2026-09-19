@@ -1496,6 +1496,7 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
         CancellationToken stoppingToken,
         IConnectionReservation reservation = null)
     {
+        await Task.Yield();
         using var reservationScope = reservation;
 
         if (_vpnKillSwitchService?.IsFailClosedActive == true)

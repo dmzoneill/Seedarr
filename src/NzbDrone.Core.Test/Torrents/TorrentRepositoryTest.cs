@@ -180,7 +180,7 @@ public class TorrentRepositoryTest
             connection.Execute(
                 @"INSERT INTO ""TorrentMediaMetadata"" (""TorrentId"") VALUES (1), (2)");
             connection.Execute(
-                @"INSERT INTO ""PeerConnectionLogs"" (""InfoHash"") VALUES ('hash1', 'hash2')");
+                @"INSERT INTO ""PeerConnectionLogs"" (""InfoHash"") VALUES ('hash1'), ('hash2')");
             connection.Execute(
                 @"INSERT INTO ""TorrentFiles"" (""TorrentId"") VALUES (1), (2)");
             connection.Execute(

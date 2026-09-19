@@ -345,6 +345,7 @@ public class BackupServiceTest
     [Test]
     public void RestoreBackup_should_stage_config_restore_and_not_overwrite_active_config()
     {
+        _connectionStringFactory.DatabaseType.Returns(DatabaseType.PostgreSQL);
         var backupDir = Path.Combine(_tempDir, "Backups");
         Directory.CreateDirectory(backupDir);
         var backupPath = Path.Combine(backupDir, "restore_config_stage_test.zip");

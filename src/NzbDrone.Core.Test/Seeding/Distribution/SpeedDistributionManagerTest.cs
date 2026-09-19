@@ -700,7 +700,7 @@ public class SpeedDistributionManagerTest
     [Test]
     public void ApplyPriorityWeights_largest_remainder_redistributes_fractional_tokens_accurately()
     {
-        var speeds = new long[] { 50, 50, 50 };
+        var speeds = new long[] { 34, 33, 33 };
         var total = 100L;
         var weights = new double[] { 1.0, 1.0, 1.0 }; // 100 / 3 = 33.333 each -> remainder 1
 

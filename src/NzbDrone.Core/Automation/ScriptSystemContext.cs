@@ -191,7 +191,8 @@ public class ScriptSystemContext
         }
 
         return arg.Replace("\0", string.Empty)
-            .Replace("\r", string.Empty)
+            .Replace("\r\n", " ")
+            .Replace("\r", " ")
             .Replace("\n", " ");
     }
 
