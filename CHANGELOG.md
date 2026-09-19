@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.6.11](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.11) - 2026-09-19
+
+### ✨ Features
+- feat(blocklist): implement HTTP conditional caching and rate-limit backoff (Closes #382)
+- feat(fastresume): implement libtorrent-compliant bencode schema for FastResume state serialization (Closes #403)
+- feat(portmapping): implement native NAT-PMP client (RFC 6886) (Closes #418)
+
+### 🐛 Bug Fixes
+- fix(test): set explicit timeout in UtpConnection deadlock test to prevent timeout
+
+### 🔧 Maintenance & Improvements
+- perf(docker): optimize release container size and separate test stage with coverage tools
+- perf(lpd): implement paced multicast announcement rate limiting (Closes #401)
+
 ## [v1.6.10](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.10) - 2026-09-19
 
 ### ✨ Features
