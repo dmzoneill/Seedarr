@@ -55,12 +55,21 @@ public class WebhookControllerTests : IntegrationTestBase
     }
 
     [Test]
-    public async Task PostWebhook_with_Download_event_returns_ignored_message()
+    public async Task PostWebhook_with_unhandled_event_returns_ignored_message()
+    {
+        var (status, result) = await PostWebhookAsync(new { eventType = "Test", instanceName = "Sonarr" });
+
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(result["message"].ToString(), Does.Contain("Ignored event type"));
+    }
+
+    [Test]
+    public async Task PostWebhook_with_Download_event_and_no_downloadId_returns_error_message()
     {
         var (status, result) = await PostWebhookAsync(new { eventType = "Download", instanceName = "Sonarr" });
 
         Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That(result["message"].ToString(), Does.Contain("Ignored event type"));
+        Assert.That(result["message"].ToString(), Does.Contain("No downloadId"));
     }
 
     [Test]
