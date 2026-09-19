@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.7.0](https://github.com/dmzoneill/Seedarr/releases/tag/v1.7.0) - 2026-09-19
+
+### ✨ Features
+- feat(peers): implement LAN peer detection, correct I flag semantics, and health-based peer eviction (Closes #402)
+
 ## [v1.6.11](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.11) - 2026-09-19
 
 ### ✨ Features
