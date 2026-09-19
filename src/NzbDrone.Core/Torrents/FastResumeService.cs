@@ -16,18 +16,21 @@ public class FastResumeService : IFastResumeService
     private readonly IPieceStorage _pieceStorage;
     private readonly IAppFolderInfo _appFolderInfo;
     private readonly ITorrentFileService _torrentFileService;
+    private readonly IFastResumeBencodeSerializer _bencodeSerializer;
     private readonly Logger _logger;
 
     public FastResumeService(
         ITorrentService torrentService,
         IPieceStorage pieceStorage = null,
         IAppFolderInfo appFolderInfo = null,
-        ITorrentFileService torrentFileService = null)
+        ITorrentFileService torrentFileService = null,
+        IFastResumeBencodeSerializer bencodeSerializer = null)
     {
         _torrentService = torrentService;
         _pieceStorage = pieceStorage;
         _appFolderInfo = appFolderInfo;
         _torrentFileService = torrentFileService;
+        _bencodeSerializer = bencodeSerializer ?? new FastResumeBencodeSerializer();
         _logger = LogManager.GetCurrentClassLogger();
     }
 
@@ -81,7 +84,7 @@ public class FastResumeService : IFastResumeService
         }
 
         var bitfield = _pieceStorage?.GetVerifiedPieces(torrent.InfoHash);
-        if (bitfield == null && torrent.Progress >= 1.0 && torrent.PieceCount > 0)
+        if ((bitfield == null || bitfield.Length == 0) && torrent.Progress >= 1.0 && torrent.PieceCount > 0)
         {
             bitfield = new bool[torrent.PieceCount];
             Array.Fill(bitfield, true);
@@ -101,8 +104,23 @@ public class FastResumeService : IFastResumeService
             Status = torrent.Status.ToString(),
             SavedAt = DateTime.UtcNow,
             SavePath = torrent.SavePath,
+            SequentialDownload = torrent.SequentialDownload,
+            SeedingTime = torrent.SeedingTime,
+            Allocation = "sparse",
             Files = new List<FastResumeFileEntry>()
         };
+
+        if (torrent.Status == TorrentStatus.Seeding || torrent.Progress >= 1.0)
+        {
+            resumeData.FinishedTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        }
+
+        if (torrent.Priority > 0 && bitfield != null && bitfield.Length > 0)
+        {
+            var pp = new byte[bitfield.Length];
+            Array.Fill(pp, (byte)torrent.Priority);
+            resumeData.PiecePriority = pp;
+        }
 
         var torrentFiles = torrent.Files;
         if ((torrentFiles == null || torrentFiles.Count == 0) && torrent.Id > 0 && _torrentFileService != null)
@@ -127,6 +145,8 @@ public class FastResumeService : IFastResumeService
                 {
                     continue;
                 }
+
+                resumeData.FilePriority.Add(tf.Wanted ? (tf.Priority > 0 ? tf.Priority : 1) : 0);
 
                 var diskPath = ResolveFileDiskPath(basePath, torrent.Name, tf.Path);
                 DateTime? mtime = null;
@@ -192,8 +212,7 @@ public class FastResumeService : IFastResumeService
 
         var filePath = Path.Combine(resumeDir, $"{torrent.InfoHash.ToLowerInvariant()}.fastresume");
         var tempPath = $"{filePath}.tmp";
-        var json = STJson.ToJson(resumeData);
-        var bytes = Encoding.UTF8.GetBytes(json);
+        var bytes = _bencodeSerializer.Serialize(resumeData);
 
         try
         {
@@ -257,7 +276,7 @@ public class FastResumeService : IFastResumeService
             return null;
         }
 
-        FastResumeData data;
+        FastResumeData data = null;
         try
         {
             var bytes = File.ReadAllBytes(filePath);
@@ -266,8 +285,24 @@ public class FastResumeService : IFastResumeService
                 throw new InvalidOperationException("FastResume file is empty");
             }
 
-            var json = Encoding.UTF8.GetString(bytes);
-            data = STJson.FromJson<FastResumeData>(json);
+            if (_bencodeSerializer.IsBencode(bytes))
+            {
+                try
+                {
+                    data = _bencodeSerializer.Deserialize(bytes);
+                }
+                catch (Exception ex)
+                {
+                    _logger.Debug(ex, "Failed to parse FastResume as Bencode for {0}, checking JSON fallback", infoHash);
+                }
+            }
+
+            if (data == null)
+            {
+                var json = Encoding.UTF8.GetString(bytes);
+                data = STJson.FromJson<FastResumeData>(json);
+            }
+
             if (data == null)
             {
                 throw new InvalidOperationException("Deserialized FastResume data was null");
@@ -358,7 +393,7 @@ public class FastResumeService : IFastResumeService
 
     private List<FastResumeFileEntry> GetFilesToCheck(Torrent torrent, FastResumeData data)
     {
-        if (data?.Files != null && data.Files.Count > 0)
+        if (data?.Files != null && data.Files.Count > 0 && data.Files.All(f => !string.IsNullOrWhiteSpace(f.Path)))
         {
             return data.Files;
         }
@@ -379,19 +414,43 @@ public class FastResumeService : IFastResumeService
 
         if (torrentFiles != null && torrentFiles.Count > 0)
         {
-            foreach (var tf in torrentFiles)
+            var nonPadding = torrentFiles.Where(tf => !tf.IsPaddingFile).ToList();
+            for (var i = 0; i < nonPadding.Count; i++)
             {
-                if (tf.IsPaddingFile)
+                var tf = nonPadding[i];
+                var length = tf.Size;
+                DateTime? mtime = null;
+
+                if (data?.Files != null && i < data.Files.Count)
                 {
-                    continue;
+                    if (data.Files[i].Length > 0)
+                    {
+                        length = data.Files[i].Length;
+                    }
+
+                    mtime = data.Files[i].Mtime;
                 }
 
                 list.Add(new FastResumeFileEntry
                 {
                     Path = tf.Path,
-                    Length = tf.Size
+                    Length = length,
+                    Mtime = mtime
                 });
             }
+
+            return list;
+        }
+
+        if (data?.Files != null && data.Files.Count > 0)
+        {
+            var first = data.Files[0];
+            if (string.IsNullOrWhiteSpace(first.Path) && !string.IsNullOrWhiteSpace(torrent?.Name))
+            {
+                first.Path = torrent.Name;
+            }
+
+            return data.Files;
         }
 
         return list;
