@@ -12,6 +12,11 @@ import { formatBytes, formatDate } from "../utils/formatters";
 import { useToast } from "../context/ToastContext";
 import { validateTorrentFile, parseMagnetUri } from "../utils/magnetParser";
 import type { ReleaseInfo } from "../api/types";
+import {
+  trackTorrentAdd,
+  trackIndexerSearch,
+  trackReleaseGrab,
+} from "../utils/analytics";
 
 export interface AddTorrentFormProps {
   initialMode?: "file" | "magnet" | "search";
@@ -173,6 +178,7 @@ export function AddTorrentForm({
         },
         {
           onSuccess: (result: AddTorrentResult) => {
+            trackTorrentAdd("file", result.added.length, finalCategory);
             if (result.failed.length === 0) {
               showToast(`Added ${result.added.length} torrent(s)`, "success");
               if (onSuccess) onSuccess();
@@ -201,6 +207,7 @@ export function AddTorrentForm({
         },
         {
           onSuccess: () => {
+            trackTorrentAdd("magnet", 1, finalCategory);
             showToast("Magnet link added successfully", "success");
             setMagnetLink("");
             if (onSuccess) onSuccess();
@@ -214,6 +221,7 @@ export function AddTorrentForm({
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (searchQuery.trim()) {
+      trackIndexerSearch(searchQuery.trim());
       setActiveSearchTerm(searchQuery.trim());
     }
   };
@@ -233,6 +241,7 @@ export function AddTorrentForm({
       },
       {
         onSuccess: () => {
+          trackReleaseGrab(release.title, release.indexer);
           setDownloadingGuid(null);
           showToast(
             `Added "${release.title}" to active seeding library`,

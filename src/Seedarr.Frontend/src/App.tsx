@@ -88,6 +88,7 @@ import {
 } from "./i18n";
 import LanguageSelector from "./components/LanguageSelector";
 import { SETTINGS_GROUPS } from "./pages/settings/settingsNavData";
+import { trackPageView, trackThemeChange } from "./utils/analytics";
 
 const systemSubItems = [
   { path: "/system/status", label: "Status" },
@@ -120,6 +121,18 @@ function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+
+  const handleToggleTheme = useCallback(() => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    trackThemeChange(nextTheme);
+    toggleTheme();
+  }, [theme, toggleTheme]);
+
+  useEffect(() => {
+    const pagePath = location.pathname + location.search;
+    trackPageView(pagePath);
+  }, [location.pathname, location.search]);
+
   const { connected, isReconnecting, reconnect } = useSignalR();
   const [currentUser, setCurrentUser] = useState<import("./api/types").CurrentUser | null>(null);
 
@@ -1024,7 +1037,7 @@ function App() {
             )}
             <button
               className="topbar-btn"
-              onClick={toggleTheme}
+              onClick={handleToggleTheme}
               title={
                 theme === "dark"
                   ? t("topbar.switchLight", undefined, "Switch to light theme")

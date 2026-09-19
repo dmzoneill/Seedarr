@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import AddTorrentForm, { InputMode } from "./AddTorrentForm";
 import { useModalRegistration } from "./ModalProvider";
+import { trackModalOpen } from "../utils/analytics";
 
 interface AddTorrentModalProps {
   initialMode?: InputMode;
@@ -14,6 +15,10 @@ function AddTorrentModal({
   onClose,
 }: AddTorrentModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    trackModalOpen("add_torrent");
+  }, []);
 
   useModalRegistration({
     id: "add-torrent-modal",

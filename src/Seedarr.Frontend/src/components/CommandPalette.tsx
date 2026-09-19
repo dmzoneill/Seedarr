@@ -18,6 +18,7 @@ import { useTheme } from "../context/ThemeContext";
 import { useToast } from "../context/ToastContext";
 import { apiClient } from "../api/client";
 import { formatBytes } from "../utils/formatters";
+import { trackModalOpen } from "../utils/analytics";
 
 interface CommandItem {
   id: string;
@@ -59,6 +60,12 @@ export function CommandPalette({
     onClose,
     modalRef,
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      trackModalOpen("command_palette");
+    }
+  }, [isOpen]);
 
   const { data: torrents } = useTorrents();
   const { data: history } = useDownloadHistory();
