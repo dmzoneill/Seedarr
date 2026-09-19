@@ -179,24 +179,19 @@ public static class TorrentResourceMapper
     public static PeerResource ToPeerResource(PeerConnection connection, int id, NzbDrone.Core.Network.GeoIp.GeoLocationInfo geo = null)
     {
         var flags = string.Empty;
-        if (connection.IsEncrypted)
+
+        if (connection.AmInterested)
         {
-            flags += "E";
+            flags += connection.PeerChoking ? "d" : "D";
         }
 
         if (connection.PeerInterested)
         {
-            flags += "I";
+            flags += connection.AmChoking ? "u" : "U";
         }
-
-        if (!connection.AmChoking)
+        else if (!connection.AmChoking)
         {
             flags += "U";
-        }
-
-        if (connection.SupportsFastExtension)
-        {
-            flags += "H";
         }
 
         if (connection.IsOptimisticUnchoked)
@@ -207,6 +202,31 @@ public static class TorrentResourceMapper
         if (connection.IsSnubbed)
         {
             flags += "S";
+        }
+
+        if (connection.IsInbound)
+        {
+            flags += "I";
+        }
+
+        if (connection.IsEncrypted)
+        {
+            flags += "E";
+        }
+
+        if (connection.SupportsFastExtension)
+        {
+            flags += "H";
+        }
+
+        if (string.Equals(connection.DiscoverySource, "pex", StringComparison.OrdinalIgnoreCase))
+        {
+            flags += "X";
+        }
+
+        if (connection.IsLocalPeer || string.Equals(connection.DiscoverySource, "lpd", StringComparison.OrdinalIgnoreCase))
+        {
+            flags += "L";
         }
 
         return new PeerResource

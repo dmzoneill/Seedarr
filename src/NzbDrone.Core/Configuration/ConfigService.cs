@@ -198,6 +198,7 @@ public interface IConfigService
     string DhtNodeIdHex { get; set; }
 
     // Simulation
+    bool SimulationModeEnabled { get; }
     bool ClientBehaviorEngineEnabled { get; }
     string PrimaryClient { get; }
     double BehaviorVariation { get; }
@@ -618,6 +619,7 @@ public class ConfigService : IConfigService
     }
 
     // Simulation
+    public bool SimulationModeEnabled => GetValueBoolean("SimulationModeEnabled", false);
     public bool ClientBehaviorEngineEnabled => GetValueBoolean("ClientBehaviorEngineEnabled", true);
     public string PrimaryClient => GetValue("PrimaryClient", "qBittorrent");
     public double BehaviorVariation => GetValueDouble("BehaviorVariation", 0.3);

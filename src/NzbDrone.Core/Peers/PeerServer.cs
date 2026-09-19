@@ -1628,6 +1628,8 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
                     return;
                 }
 
+                connection.DiscoverySource = candidate.Source;
+                connection.IsInbound = false;
                 connection.HandshakeTimeoutMs = Math.Min(_configService.HandshakeTimeoutSeconds * 1000, OutgoingConnectTimeoutMs);
                 connection.MessageReadTimeoutMs = _configService.MessageReadTimeoutSeconds * 1000;
                 connection.KeepAliveIntervalSeconds = _configService.KeepAliveIntervalSeconds;
@@ -2003,7 +2005,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
             return;
         }
 
-        using var connection = new PeerConnection(stream, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, _dhKeyPool);
+        using var connection = new PeerConnection(stream, remoteEndPoint.Address.ToString(), remoteEndPoint.Port, _dhKeyPool)
+        {
+            IsInbound = true,
+            DiscoverySource = "inbound"
+        };
         await HandleInboundPeerConnectionAsync(connection, stoppingToken, onHandshakeSuccess);
     }
 
@@ -2036,7 +2042,11 @@ public class PeerServer : BackgroundService, IPeerServer, IHandle<VpnInterfaceRe
 
     private async Task HandleConnectionAsync(TcpClient client, CancellationToken stoppingToken, Action onHandshakeSuccess = null)
     {
-        using var connection = new PeerConnection(client, _dhKeyPool);
+        using var connection = new PeerConnection(client, _dhKeyPool)
+        {
+            IsInbound = true,
+            DiscoverySource = "inbound"
+        };
 
         if (client.Client != null)
         {

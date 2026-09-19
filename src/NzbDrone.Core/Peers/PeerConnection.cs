@@ -35,6 +35,10 @@ public class PeerConnection : IDisposable
     public string InfoHash { get; set; }
     public Torrent MatchedTorrent { get; set; }
     public string PeerId { get; set; }
+    public bool IsInbound { get; set; }
+    public string DiscoverySource { get; set; }
+    public bool IsLocalPeer => IPAddressExtensions.IsLocalSubnet(RemoteIp) || string.Equals(DiscoverySource, "lpd", StringComparison.OrdinalIgnoreCase);
+    public DateTime LastBytesReceived { get; set; } = DateTime.UtcNow;
     public bool IsConnected => !_isDisposed && (_client != null ? _client.Connected : (_activeStream != null));
     public bool IsEncrypted { get; private set; }
     public CryptoMethod EncryptionMethod { get; private set; }
@@ -183,6 +187,7 @@ public class PeerConnection : IDisposable
         if (bytes > 0)
         {
             BytesDownloaded += bytes;
+            LastBytesReceived = DateTime.UtcNow;
         }
     }
 
