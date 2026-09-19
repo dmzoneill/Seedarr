@@ -109,7 +109,7 @@ public class UpdateService : IUpdateService
 
         lock (_cacheLock)
         {
-            if (!force && _cachedResult != null && _clock.UtcNow < _cacheExpiry && _cachedChannel == channel)
+            if (!force && _cachedResult != null && _clock.UtcNow < _cacheExpiry && (_cachedChannel == null || _cachedChannel == channel))
             {
                 return _cachedResult;
             }
@@ -125,7 +125,7 @@ public class UpdateService : IUpdateService
 
         lock (_cacheLock)
         {
-            if (!force && _cachedResult != null && _clock.UtcNow < _cacheExpiry && _cachedChannel == channel)
+            if (!force && _cachedResult != null && _clock.UtcNow < _cacheExpiry && (_cachedChannel == null || _cachedChannel == channel))
             {
                 return Task.FromResult(_cachedResult);
             }
