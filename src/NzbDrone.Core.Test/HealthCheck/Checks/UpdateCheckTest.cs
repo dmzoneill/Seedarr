@@ -72,6 +72,7 @@ public class UpdateCheckTest
         var result = _subject.Check();
 
         Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
+        System.Threading.Thread.Sleep(50);
         _updateService.Received().CheckForUpdateAsync(Arg.Any<bool>());
         _updateService.DidNotReceive().CheckForUpdate(Arg.Any<bool>());
     }
@@ -90,6 +91,7 @@ public class UpdateCheckTest
         var result = _subject.Check();
 
         Assert.That(result.Type, Is.EqualTo(HealthCheckResultType.Ok));
+        System.Threading.Thread.Sleep(50);
         _updateService.Received().CheckForUpdateAsync(Arg.Any<bool>());
     }
 }

@@ -77,11 +77,11 @@ public class WebhookTests : ApiTestBase
     }
 
     [Test]
-    public async Task Download_event_is_ignored()
+    public async Task Download_event_without_downloadId_is_rejected()
     {
         var response = await PostWebhookAsync(new { eventType = "Download" });
         using var doc = JsonDocument.Parse(response);
-        Assert.That(doc.RootElement.GetProperty("message").GetString(), Is.EqualTo("Ignored event type: Download"));
+        Assert.That(doc.RootElement.GetProperty("message").GetString(), Is.EqualTo("No downloadId in webhook payload"));
     }
 
     [Test]

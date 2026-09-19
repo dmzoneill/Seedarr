@@ -20,7 +20,14 @@ public class UpdateServiceTest
     [SetUp]
     public void SetUp()
     {
+        UpdateService.ChangelogProvider = () => new List<ReleaseInfo>();
         _subject = new UpdateService();
+    }
+
+    [TearDown]
+    public void TearDown()
+    {
+        UpdateService.ChangelogProvider = null;
     }
 
     // --- BuildResult tests (private static, via reflection) ---
@@ -138,12 +145,14 @@ public class UpdateServiceTest
 
     // --- Caching tests (via reflection to manipulate private fields) ---
 
-    private void SetCachedResult(UpdateInfo info, DateTime expiry)
+    private void SetCachedResult(UpdateInfo info, DateTime expiry, string channel = "main")
     {
         var cachedField = typeof(UpdateService).GetField("_cachedResult", BindingFlags.NonPublic | BindingFlags.Instance);
         var expiryField = typeof(UpdateService).GetField("_cacheExpiry", BindingFlags.NonPublic | BindingFlags.Instance);
+        var channelField = typeof(UpdateService).GetField("_cachedChannel", BindingFlags.NonPublic | BindingFlags.Instance);
         cachedField.SetValue(_subject, info);
         expiryField.SetValue(_subject, expiry);
+        channelField?.SetValue(_subject, channel);
     }
 
     [Test]
