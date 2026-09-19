@@ -6,6 +6,95 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
+## [v1.6.10](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.10) - 2026-09-19
+
+### ✨ Features
+- feat(analytics): integrate Google Analytics (GA4) G-KTFS19RQ76
+- feat(update): implement UpdatePackageProvider and channel selection (Closes #413)
+- feat(rss): implement persistent release deduplication store (Closes #414)
+- feat(pieces): implement incremental SwarmPieceHistogram with rarity buckets (Closes #519)
+- feat(update): implement PostUpdateVerificationService and update status API (Closes #416)
+- feat(portmapping): implement cross-platform gateway discovery and protocol probing hierarchy (Closes #417)
+- feat(notifications): implement custom payload templates, HTTP method selection, and Basic Auth in Webhooks (Closes #406)
+- feat(superseeding): implement automated exit criteria on swarm availability and secondary seed detection (Closes #426)
+- feat(rss): respect feed TTL and enforce indexer rate-limit backoff (Closes #412)
+- feat(trackers): implement BEP 15 multi-infohash UDP scrape batching (Closes #410)
+
+### 🐛 Bug Fixes
+- fix(tests): resolve hanging peer connections and fix remaining unit test failures
+- fix(ci): fix editorconfig continuation indentation in NotificationController and GatewayDiscoveryServiceTests
+- fix(fastresume): reconcile file size and mtime on boot with background recheck fallback (Closes #405)
+- fix(backup): implement automated retention pruning and pre-restore SQLite integrity verification (Closes #250)
+- fix(bandwidth): prevent starvation with largest-remainder distribution and account for transport overhead (Closes #391)
+- fix(ci): remove undeclared workflow input VALIDATE_CSS_PRETTIER
+- fix(ci): format App.css with prettier, fix editorconfig continuation indents, and disable CSS_PRETTIER in super-linter
+- fix(trackers): set TrackerStatus.Announcing during in-flight announces and broadcast via SignalR (Closes #354)
+- fix(datastore): extend Polly retry policy to derived repositories and PostgreSQL (Closes #303)
+- fix(indexers): parse Torznab & Newznab XML error codes and prevent false connection success (Closes #361)
+- fix(transport): add optional timeoutMs parameter to IUtpConnection.Receive
+- fix(statemachine): persist stopped status when ratio limit is reached (Closes #197)
+- fix(emulation): implement file priority persistence in QBittorrentApiController and FilesTab (Closes #348)
+- fix(ci): use non-blocking socket Poll in UtpConnection.Receive to prevent unit test hang
+- fix(pex): wire PeerExchange to PeerServer Extended message handler (Closes #225)
+- fix(downloadclients): optimize batch import and normalize client type casing (Closes #178)
+- fix(automation): execute banPeer action and publish PeerBannedEvent (Closes #263)
+- fix(seeding): prevent StartAll from corrupting download states and fix StopAll (Closes #200)
+- fix(ci): configure socket receive timeouts in uTP connection to prevent unit test deadlock
+- fix(settings): integrate navigation blocker to prevent unsaved changes loss (Closes #204)
+- fix(telemetry): eliminate duplicate SignalR invalidations and fix speed delta calculation (Closes #196)
+- fix(automation): execute dropped pipeline actions and normalize progress percentage (Closes #161)
+- fix(ui): bind BandwidthCard sliders to alternative limits in Turtle Mode (Closes #209)
+- fix(bandwidth): prevent scheduled speed boost suppression and enforce aggregate caps (Closes #208)
+- fix(navigation): support select query parameter in TorrentIndex (Closes #217)
+- fix(signalr): wire accessTokenFactory and prevent 401 reconnection storm (Closes #298)
+- fix(trackers): parse BEP 15 error string in UdpTrackerProvider (Closes #165)
+- fix(categories): wire category SavePath override to torrent storage and support string category in setcategory (Closes #270)
+- fix(scripts): remove duplicate script execution and fix env vars and path resolution (Closes #157)
+- fix(shortcuts): suppress global hotkeys during open modals and prevent Escape event leakage (Closes #218)
+- fix(ui): resolve NaN comparator breakdown and invert inactive ETA in TorrentTable (Closes #364)
+- fix(ci): fix indentation, binary character encoding, and test string formatting
+- fix(trackerserver): support BEP 7 IPv6 compact peers and peers6 key (Closes #241)
+- fix(utp): implement dynamic RTO calculation and exponential backoff (Closes #271)
+- fix(arrintegration): support query/bearer auth and case-insensitive ArrType (Closes #185)
+- fix(notifications): escape reserved MarkdownV2 characters in Telegram notifications (Closes #324)
+- fix(indexers): decode HTML entities and CDATA references in release titles (Closes #363)
+- fix(palette): add global Pause/Resume/Turtle actions and fix navigation conflicts (Closes #357)
+- fix(signalr): broadcast TaskCompleted and CommandCompleted events and invalidate SystemTasks queries (Closes #299)
+- fix(torrents): cascade delete TorrentMediaMetadata and add delete confirmation modal (Closes #224)
+- fix(mediaenrichment): prevent DeleteLocalFile from deleting files outside AppData (Closes #171)
+- fix(speedschedule): enforce rule priority precedence in SpeedScheduler and WeeklyCalendar (Closes #279)
+- fix(restore): prevent premature live config overwrite before database swap (Closes #183)
+- fix(emulation): resolve duplicate torrent mismatch, label clearing, and SavePath mapping in TransmissionRpcController (Closes #186)
+- fix(notifications): handle string boolean in EmailNotificationSender SSL settings and use Category fallback (Closes #184)
+- fix(update): prevent synchronous network blocking and handle rate limits in UpdateService (Closes #187)
+- fix(proxy): add dynamic handler reconfiguration to HttpTrackerProvider (Closes #214)
+- fix(lpd): implement multihomed interface multicast and client cookie loopback filtering (Closes #400)
+- fix(sqlite): remove Cache=Shared from connection string to restore WAL concurrency (Closes #155)
+- fix(restore): prevent cross-device link failure in MainDatabase.ApplyPendingRestore (Closes #182)
+- fix(torrents): batch queue reordering and stabilize sort order on collision (Closes #202)
+- fix(peers): release halfOpenSemaphore immediately after handshake (Closes #228)
+- fix(seeding): prevent SeedingTime incrementing during download and debounce events (Closes #199)
+- fix(peers): prevent concurrent modification and enforce per-torrent limits in ConnectionManager (Closes #164)
+- fix(lpd): prevent broadcasting and ingesting private torrents (Closes #163)
+- fix(trackermetrics): record delta bytes instead of compounding cumulative totals (Closes #162)
+- fix(utp): wire inbound uTP connections to PeerServer session loop (Closes #264)
+- fix(history): exclude active and seeding torrents from retention pruning (Closes #236)
+- fix(utp): bound out-of-order packet buffer and match send/receive connection IDs (Closes #272)
+- fix(trackers): implement BEP 15 exponential retransmission and non-blocking sockets (Closes #409)
+- fix(utp): parse BEP 29 extension headers and SACK bitmask in uTP decoder (Closes #268)
+- fix(trackers): support BEP 15 compact 18-byte IPv6 peer list parsing (Closes #411)
+- fix(deluge): resolve dynamic free space and parse save_path in add_torrent (Closes #297)
+- fix(notifications): enforce Discord embed limits and dynamic colors (Closes #407)
+
+### 🔧 Maintenance & Improvements
+- test(webhook): fix automation webhook test and update service test isolation
+- test(webhook): update webhook integration test to expect unhandled event type
+- style: format index.html and analytics.ts with prettier
+- perf(trackers): implement BEP 15 UDP connection ID caching with 60s expiry (Closes #408)
+- security(automation): enforce script sandboxing, SSRF guards, and strict TLS in automation runner (Closes #513)
+- perf(encryption): configure 160-bit DH private key length per BEP 8 (Closes #429)
+- security(extraction): enforce Zip-Slip path sanitization and disk space verification (Closes #492)
+
 ## [v1.6.9](https://github.com/dmzoneill/Seedarr/releases/tag/v1.6.9) - 2026-09-18
 
 ### 🐛 Bug Fixes
